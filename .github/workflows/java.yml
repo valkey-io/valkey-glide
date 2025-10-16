@@ -155,7 +155,7 @@ jobs:
 
             - name: Build java client
               working-directory: java
-              run: ./gradlew --build-cache --continue build -x javadoc
+              run: ./gradlew --build-cache --continue build -x javadoc --info --console=plain
 
             - name: Ensure no skipped files by linter
               working-directory: java

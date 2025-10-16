@@ -630,30 +630,34 @@ public class TestUtilities {
             return;
         }
 
-        String githubActions = System.getenv("GITHUB_ACTIONS");
-        String runnerOS = System.getenv("RUNNER_OS");
-        String runnerName = System.getenv("RUNNER_NAME");
+        // String githubActions = System.getenv("GITHUB_ACTIONS");
+        // String runnerOS = System.getenv("RUNNER_OS");
+        // String runnerName = System.getenv("RUNNER_NAME");
 
-        // Only run if this is a github actions test running on a self hosted runner
-        boolean isSelfHostedCirrusMac = false;
-        if (githubActions != null && runnerOS != null && runnerName != null) {
-            isSelfHostedCirrusMac =
-                    "true".equalsIgnoreCase(githubActions)
-                            && "macOS".equalsIgnoreCase(runnerOS)
-                            && runnerName.startsWith("cirrus-");
-        }
+        // // Only run if this is a github actions test running on a self hosted runner
+        // boolean isSelfHostedCirrusMac = false;
+        // if (githubActions != null && runnerOS != null && runnerName != null) {
+        //     isSelfHostedCirrusMac =
+        //             "true".equalsIgnoreCase(githubActions)
+        //                     && "macOS".equalsIgnoreCase(runnerOS)
+        //                     && runnerName.startsWith("cirrus-");
+        // }
 
-        if (!isSelfHostedCirrusMac) {
-            System.out.println("⚠️ Skipping loopback cleanup: not a self-hosted macOS runner.");
-            return;
-        }
+        // if (!isSelfHostedCirrusMac) {
+        //     System.out.println("⚠️ Skipping loopback cleanup: not a self-hosted macOS runner.");
+        //     return;
+        // }
 
         try {
             ProcessBuilder[] commands =
                     new ProcessBuilder[] {
+                        new ProcessBuilder("sudo", "purge"), // clear file caches
+                        new ProcessBuilder("sudo", "find", "/tmp", "-maxdepth", "1", "-name", "glide*", "-delete"),
                         new ProcessBuilder("sudo", "ifconfig", "lo0", "down"),
                         new ProcessBuilder("sudo", "ifconfig", "lo0", "up"),
                     };
+
+            System.out.println("starting to run tcp refresh");
 
             commands[0].inheritIO().start().waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
             Thread.sleep(1000);
