@@ -23,10 +23,6 @@ EXCLUDED_API_FUNCTIONS = {
         "pubsub_channels",
         "get_pubsub_message",
         "try_get_pubsub_message",
-        # cluster scan
-        "scan",
-        "get_cursor",
-        "is_finished",
         # _CompatFuture
         "done",
         "result",
@@ -78,7 +74,6 @@ EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
         "test_opentelemetry.py",
         "test_pubsub.py",
-        "test_scan.py",
     ],
     "sync_only": [],
 }
