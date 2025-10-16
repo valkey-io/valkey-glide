@@ -643,10 +643,8 @@ class GlideClusterClient(BaseClient, ClusterCommands):
             # Inline _encode_arg logic
             if isinstance(match, str):
                 encoded_match = match.encode(ENCODING)
-            elif isinstance(match, bytes):
-                encoded_match = match
             else:
-                encoded_match = str(match).encode(ENCODING)
+                encoded_match = match
             args.extend([b"MATCH", encoded_match])
 
         if count is not None:
@@ -654,7 +652,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
         if type is not None:
             args.extend([b"TYPE", type.value.encode(ENCODING)])
         if allow_non_covered_slots:
-            args.extend([b"ALLOW_NON_COVERED_SLOTS", b"true"])
+            args.extend([b"ALLOW_NON_COVERED_SLOTS"])
 
         return args
 
@@ -689,72 +687,35 @@ class GlideClusterClient(BaseClient, ClusterCommands):
 
         # Prepare FFI arguments
         if args:
-            arg_buffers = []
-            arg_ptrs = []
-            arg_lens = []
-
-            for arg in args:
-                if isinstance(arg, str):
-                    arg = arg.encode(ENCODING)
-                temp_buffers.append(arg)  # Keep reference
-                arg_buffer = self._ffi.from_buffer(arg)
-                arg_buffers.append(arg_buffer)
-                arg_ptrs.append(self._ffi.cast("size_t", arg_buffer))
-                arg_lens.append(len(arg))
-
-            args_array = self._ffi.new("const size_t[]", arg_ptrs)
-            args_len_array = self._ffi.new("const unsigned long[]", arg_lens)
-            temp_buffers.extend([args_array, args_len_array, arg_buffers])
+            args_array, args_len_array, arg_buffers = self._to_c_strings(args)
+            temp_buffers.extend(arg_buffers)  # Keep references alive
             arg_count = len(args)
         else:
             args_array = self._ffi.NULL
             args_len_array = self._ffi.NULL
             arg_count = 0
 
-        try:
-            result_ptr = self._lib.request_cluster_scan(
-                client_adapter_ptr,
-                0,
-                cursor_buffer,
-                arg_count,
-                args_array,
-                args_len_array,
-            )
+        result_ptr = self._lib.request_cluster_scan(
+            client_adapter_ptr,
+            0,
+            cursor_buffer,
+            arg_count,
+            args_array,
+            args_len_array,
+        )
 
-            if result_ptr == self._ffi.NULL:
-                raise RequestError("Cluster scan returned null result")
+        response_data = self._handle_cmd_result(result_ptr)
 
-            command_result = result_ptr[0]
+        if not isinstance(response_data, list) or len(response_data) != 2:
+            raise RequestError("Unexpected cluster scan response format")
 
-            if command_result.command_error != self._ffi.NULL:
-                error = command_result.command_error[0]
-                error_message = self._ffi.string(error.command_error_message).decode(
-                    ENCODING
-                )
-                error_class = get_request_error_class(error.command_error_type)
-                raise error_class(error_message)
+        new_cursor = response_data[0]
+        if isinstance(new_cursor, bytes):
+            new_cursor = new_cursor.decode(ENCODING)
 
-            if command_result.response == self._ffi.NULL:
-                raise RequestError("Cluster scan returned null response")
+        keys_list = response_data[1] if response_data[1] is not None else []
 
-            response_data = self._handle_response(command_result.response)
-
-            if not isinstance(response_data, list) or len(response_data) != 2:
-                raise RequestError(
-                    f"Unexpected cluster scan response format: {response_data}"
-                )
-
-            new_cursor = response_data[0]
-            if isinstance(new_cursor, bytes):
-                new_cursor = new_cursor.decode(ENCODING)
-
-            keys_list = response_data[1] if response_data[1] is not None else []
-
-            return [ClusterScanCursor(new_cursor), keys_list]
-
-        finally:
-            if result_ptr != self._ffi.NULL:
-                self._lib.free_command_result(result_ptr)
+        return [ClusterScanCursor(new_cursor), keys_list]
 
 
 class GlideClient(BaseClient, StandaloneCommands):
