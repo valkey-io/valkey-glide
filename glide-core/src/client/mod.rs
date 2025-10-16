@@ -1369,14 +1369,35 @@ impl Client {
 
     /// Enable client-side caching with tracking
     pub async fn enable_client_tracking(&mut self, config: ClientCacheConfig) -> RedisResult<()> {
-        // Build CLIENT TRACKING command
+        // Build CLIENT TRACKING command with all options
         let mut cmd = redis::cmd("CLIENT");
         cmd.arg("TRACKING").arg("ON");
         
+        // Add tracking mode
         match config.tracking_mode {
             TrackingMode::OptIn => { cmd.arg("OPTIN"); },
             TrackingMode::OptOut => { cmd.arg("OPTOUT"); },
             TrackingMode::Default => {},
+        }
+
+        // Add redirect client ID if specified
+        if let Some(client_id) = config.redirect_client_id {
+            cmd.arg("REDIRECT").arg(client_id.to_string());
+        }
+
+        // Add prefixes if specified
+        for prefix in &config.prefixes {
+            cmd.arg("PREFIX").arg(prefix);
+        }
+
+        // Add broadcast mode if enabled
+        if config.broadcast_mode {
+            cmd.arg("BCAST");
+        }
+
+        // Add no-loop if enabled
+        if config.no_loop {
+            cmd.arg("NOLOOP");
         }
 
         // Send command to server

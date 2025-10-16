@@ -9,6 +9,10 @@ pub struct ClientCacheConfig {
     pub max_size: usize,
     pub ttl_seconds: Option<u64>,
     pub tracking_mode: TrackingMode,
+    pub redirect_client_id: Option<u64>,
+    pub prefixes: Vec<String>,
+    pub broadcast_mode: bool,
+    pub no_loop: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -25,6 +29,10 @@ impl Default for ClientCacheConfig {
             max_size: 1000,
             ttl_seconds: None,
             tracking_mode: TrackingMode::Default,
+            redirect_client_id: None,
+            prefixes: Vec::new(),
+            broadcast_mode: false,
+            no_loop: false,
         }
     }
 }

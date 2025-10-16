@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Configuration for client-side caching with tracking.
@@ -16,6 +17,10 @@ public class ClientCacheConfig {
     private final Optional<Long> ttlSeconds;
     private final TrackingMode trackingMode;
     private final Consumer<List<String>> invalidationCallback;
+    private final Optional<Long> redirectClientId;
+    private final List<String> prefixes;
+    private final boolean broadcastMode;
+    private final boolean noLoop;
 
     /**
      * Tracking modes for client-side caching.
@@ -45,6 +50,10 @@ public class ClientCacheConfig {
         this.ttlSeconds = builder.ttlSeconds;
         this.trackingMode = builder.trackingMode;
         this.invalidationCallback = builder.invalidationCallback;
+        this.redirectClientId = builder.redirectClientId;
+        this.prefixes = new ArrayList<>(builder.prefixes);
+        this.broadcastMode = builder.broadcastMode;
+        this.noLoop = builder.noLoop;
     }
 
     /**
@@ -56,6 +65,10 @@ public class ClientCacheConfig {
         private Optional<Long> ttlSeconds = Optional.empty();
         private TrackingMode trackingMode = TrackingMode.DEFAULT;
         private Consumer<List<String>> invalidationCallback;
+        private Optional<Long> redirectClientId = Optional.empty();
+        private List<String> prefixes = new ArrayList<>();
+        private boolean broadcastMode = false;
+        private boolean noLoop = false;
 
         public Builder enabled(boolean enabled) {
             this.enabled = enabled;
@@ -82,6 +95,51 @@ public class ClientCacheConfig {
             return this;
         }
 
+        /**
+         * Redirect invalidation messages to another client.
+         * @param clientId The client ID to redirect invalidations to
+         */
+        public Builder redirectTo(long clientId) {
+            this.redirectClientId = Optional.of(clientId);
+            return this;
+        }
+
+        /**
+         * Add a prefix to track. Only keys with these prefixes will be tracked.
+         * @param prefix The key prefix to track
+         */
+        public Builder addPrefix(String prefix) {
+            this.prefixes.add(prefix);
+            return this;
+        }
+
+        /**
+         * Add multiple prefixes to track.
+         * @param prefixes The key prefixes to track
+         */
+        public Builder addPrefixes(List<String> prefixes) {
+            this.prefixes.addAll(prefixes);
+            return this;
+        }
+
+        /**
+         * Enable broadcast mode for invalidations.
+         * In broadcast mode, every key modification is notified.
+         */
+        public Builder broadcastMode(boolean enabled) {
+            this.broadcastMode = enabled;
+            return this;
+        }
+
+        /**
+         * Enable no-loop mode.
+         * Don't send invalidations for keys modified by this client.
+         */
+        public Builder noLoop(boolean enabled) {
+            this.noLoop = enabled;
+            return this;
+        }
+
         public ClientCacheConfig build() {
             return new ClientCacheConfig(this);
         }
@@ -93,4 +151,8 @@ public class ClientCacheConfig {
     public Optional<Long> getTtlSeconds() { return ttlSeconds; }
     public TrackingMode getTrackingMode() { return trackingMode; }
     public Consumer<List<String>> getInvalidationCallback() { return invalidationCallback; }
+    public Optional<Long> getRedirectClientId() { return redirectClientId; }
+    public List<String> getPrefixes() { return new ArrayList<>(prefixes); }
+    public boolean isBroadcastMode() { return broadcastMode; }
+    public boolean isNoLoop() { return noLoop; }
 }
