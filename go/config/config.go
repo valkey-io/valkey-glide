@@ -570,13 +570,6 @@ func (config *AdvancedClusterClientConfiguration) WithConnectionTimeout(
 // refreshes triggered by topology changes) will query only the initial nodes provided when
 // creating the client, rather than using the internal cluster view.
 //
-// This is useful in scenarios where:
-//   - You connect via DNS that resolves to multiple cluster nodes and want to re-resolve DNS
-//     on each topology refresh
-//   - You're in dynamic IP environments (e.g., Kubernetes) where node IPs change but seed
-//     addresses remain stable
-//   - You want the client to always see the cluster from the initial nodes' perspective
-//
 // If not set, defaults to false (uses internal cluster view for topology refresh).
 func (config *AdvancedClusterClientConfiguration) WithRefreshTopologyFromInitialNodes(
 	refreshTopologyFromInitialNodes bool,
