@@ -196,6 +196,18 @@ public class JedisTest {
     }
 
     @Test
+    void register_client_name_and_version() {
+        String minVersion = "7.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String info = (String) jedis.sendCommand(Protocol.Command.CLIENT, "INFO");
+        assertTrue(info.contains("lib-name=GlideJedisAdapter"));
+        assertTrue(info.contains("lib-ver=unknown"));
+    }
+
+    @Test
     void basic_get_set_operations() {
         String testKey = UUID.randomUUID().toString();
         String testValue = "test_value_123";

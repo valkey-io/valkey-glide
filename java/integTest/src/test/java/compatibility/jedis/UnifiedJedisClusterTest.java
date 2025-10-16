@@ -3,6 +3,7 @@ package compatibility.jedis;
 
 import static glide.TestConfiguration.SERVER_VERSION;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.*;
 
 import glide.TestConfiguration;
 import java.util.HashMap;
@@ -94,6 +95,18 @@ public class UnifiedJedisClusterTest {
 
         String getResult = unifiedJedis.get(testKey);
         assertEquals(testValue, getResult, "GET should return the set value in cluster mode");
+    }
+
+    @Test
+    void register_client_name_and_version() {
+        String minVersion = "7.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String info = unifiedJedis.clientInfo();
+        assertTrue(info.contains("lib-name=GlideJedisAdapter"));
+        assertTrue(info.contains("lib-ver=unknown"));
     }
 
     @Test
