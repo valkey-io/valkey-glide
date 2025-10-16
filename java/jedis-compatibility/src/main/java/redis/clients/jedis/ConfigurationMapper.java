@@ -20,6 +20,7 @@ import redis.clients.jedis.exceptions.JedisException;
 public class ConfigurationMapper {
 
     private static final Logger logger = Logger.getLogger(ConfigurationMapper.class.getName());
+    private static final String JEDIS_ADAPTER_LIB_NAME = "GlideJedisAdapter";
 
     /**
      * Convert Jedis client configuration to GLIDE client configuration with comprehensive SSL/TLS
@@ -51,6 +52,9 @@ public class ConfigurationMapper {
 
         // Map advanced settings
         mapAdvancedSettings(jedisConfig, builder);
+
+        // Set libName for Jedis compatibility layer
+        builder.libName(JEDIS_ADAPTER_LIB_NAME);
 
         return builder.build();
     }

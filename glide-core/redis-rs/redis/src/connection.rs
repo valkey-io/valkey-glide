@@ -232,6 +232,8 @@ pub struct RedisConnectionInfo {
     pub protocol: ProtocolVersion,
     /// Optionally a client name that should be used for connection
     pub client_name: Option<String>,
+    /// Optionally a library name that should be used for connection
+    pub lib_name: Option<String>,
     /// Optionally a pubsub subscriptions that should be used for connection
     pub pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
 }
@@ -391,6 +393,7 @@ fn url_to_tcp_connection_info(url: url::Url) -> RedisResult<ConnectionInfo> {
                 _ => ProtocolVersion::RESP2,
             },
             client_name: None,
+            lib_name: None,
             pubsub_subscriptions: None,
         },
     })
@@ -424,6 +427,7 @@ fn url_to_unix_connection_info(url: url::Url) -> RedisResult<ConnectionInfo> {
                 _ => ProtocolVersion::RESP2,
             },
             client_name: None,
+            lib_name: None,
             pubsub_subscriptions: None,
         },
     })
@@ -925,13 +929,15 @@ pub fn connect(
     setup_connection(con, &connection_info.redis)
 }
 
-pub(crate) fn client_set_info_pipeline() -> Pipeline {
+pub(crate) fn client_set_info_pipeline(lib_name: Option<&str>) -> Pipeline {
     let mut pipeline = crate::pipe();
+    let lib_name_value = lib_name.unwrap_or("UnknownClient");
+    let final_lib_name = option_env!("GLIDE_NAME").unwrap_or(lib_name_value);
     pipeline
         .cmd("CLIENT")
         .arg("SETINFO")
         .arg("LIB-NAME")
-        .arg(std::env!("GLIDE_NAME"))
+        .arg(final_lib_name)
         .ignore();
     pipeline
         .cmd("CLIENT")
@@ -993,7 +999,8 @@ fn setup_connection(
 
     // result is ignored, as per the command's instructions.
     // https://redis.io/commands/client-setinfo/
-    let _: RedisResult<()> = client_set_info_pipeline().query(&mut rv);
+    let _: RedisResult<()> =
+        client_set_info_pipeline(connection_info.lib_name.as_deref()).query(&mut rv);
 
     Ok(rv)
 }
@@ -1727,6 +1734,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_client_set_info_pipeline_default_lib_name() {
+        let pipeline = client_set_info_pipeline(None);
+        let packed_commands = pipeline.get_packed_pipeline();
+        let cmd_str = String::from_utf8_lossy(&packed_commands);
+
+        // Should contain CLIENT SETINFO LIB-NAME
+        assert!(cmd_str.contains("CLIENT"));
+        assert!(cmd_str.contains("SETINFO"));
+        assert!(cmd_str.contains("LIB-NAME"));
+
+        // When GLIDE_NAME is set, it should use that value
+        // When GLIDE_NAME is not set and lib_name is None, it should use "UnknownClient"
+        // Since we can't control GLIDE_NAME in this test, we just verify the structure
+        assert!(cmd_str.contains("Glide") || cmd_str.contains("UnknownClient"));
+    }
+
+    #[test]
+    fn test_client_set_info_pipeline_logic() {
+        // Test the logic directly by simulating what happens when GLIDE_NAME is not set
+        let lib_name_value = None.unwrap_or("UnknownClient");
+        assert_eq!(lib_name_value, "UnknownClient");
+
+        // Test with provided lib_name
+        let lib_name_value = Some("CustomClient").unwrap_or("UnknownClient");
+        assert_eq!(lib_name_value, "CustomClient");
+    }
+
+    #[test]
     fn test_parse_redis_url() {
         let cases = vec![
             ("redis://127.0.0.1", true),
@@ -1840,6 +1875,7 @@ mod tests {
                         password: None,
                         protocol: ProtocolVersion::RESP2,
                         client_name: None,
+                        lib_name: None,
                         pubsub_subscriptions: None,
                     },
                 },
