@@ -956,35 +956,45 @@ class ClusterCommands(CoreCommands):
         self,
         source: TEncodable,
         destination: TEncodable,
+        # TODO next major release the arguments replace and destinationDB must have their order
+        # swapped to align with the standalone order.
+        # At the moment of the patch release 2.1.1. we can't have a breaking change
         replace: Optional[bool] = None,
+        destinationDB: Optional[int] = None,
     ) -> bool:
         """
-        Copies the value stored at the `source` to the `destination` key. When `replace` is True,
-        removes the `destination` key first if it already exists, otherwise performs no action.
+        Copies the value stored at the `source` to the `destination` key. If `destinationDB`
+        is specified, the value will be copied to the database specified by `destinationDB`,
+        otherwise the current database will be used. When `replace` is True, removes the
+        `destination` key first if it already exists, otherwise performs no action.
 
         See [valkey.io](https://valkey.io/commands/copy) for more details.
-
-        Note:
-            Both `source` and `destination` must map to the same hash slot.
 
         Args:
             source (TEncodable): The key to the source value.
             destination (TEncodable): The key where the value should be copied to.
             replace (Optional[bool]): If the destination key should be removed before copying the value to it.
+            destinationDB (Optional[int]): The alternative logical database index for the destination key.
 
         Returns:
-            bool: True if the source was copied. Otherwise, returns False.
+            bool: True if the source was copied. Otherwise, return False.
 
         Examples:
             >>> client.set("source", "sheep")
-            >>> client.copy(b"source", b"destination")
-                True # Source was copied
+            >>> client.copy(b"source", b"destination", destinationDB=1)
+                True # Source was copied to DB 1
+            >>> client.select(1)
             >>> client.get("destination")
                 b"sheep"
 
         Since: Valkey version 6.2.0.
+               The destinationDB argument is available since Valkey 9.0.0
         """
+
+        # Build command arguments
         args: List[TEncodable] = [source, destination]
+        if destinationDB is not None:
+            args.extend(["DB", str(destinationDB)])
         if replace is True:
             args.append("REPLACE")
         return cast(
