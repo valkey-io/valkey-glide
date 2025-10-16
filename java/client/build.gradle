@@ -25,8 +25,8 @@ dependencies {
     compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.6'
 
     // junit
-    testImplementation group: 'org.mockito', name: 'mockito-inline', version: '5.2.0'
-    testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '5.2.0'
+    testImplementation group: 'org.mockito', name: 'mockito-inline', version: '5.20.0'
+    testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '5.20.0'
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
 
     //lombok
