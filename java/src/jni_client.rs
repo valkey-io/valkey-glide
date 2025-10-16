@@ -783,3 +783,219 @@ fn get_glide_core_client_cache(env: &mut JNIEnv) -> Result<GlideCoreClientCache>
     }
     Ok(cache)
 }
+
+// ==================== CLIENT-SIDE CACHING JNI FUNCTIONS ====================
+
+use glide_core::client_cache::{ClientCacheConfig, TrackingMode};
+use jni::sys::{jboolean, jint};
+
+/// Enable client-side caching with tracking
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_enableClientTracking(
+    _env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    enabled: jboolean,
+    max_size: jint,
+    ttl_seconds: jlong,
+    tracking_mode: jint,
+) -> jboolean {
+    let client_ptr = client_ptr as u64;
+    let handle_table = get_handle_table();
+    
+    let config = ClientCacheConfig {
+        enabled: enabled != 0,
+        max_size: max_size as usize,
+        ttl_seconds: if ttl_seconds > 0 { Some(ttl_seconds as u64) } else { None },
+        tracking_mode: match tracking_mode {
+            0 => TrackingMode::Default,
+            1 => TrackingMode::OptIn,
+            2 => TrackingMode::OptOut,
+            _ => TrackingMode::Default,
+        },
+    };
+
+    let runtime = get_runtime();
+    
+    // Get mutable reference to client and call enable_client_tracking
+    if let Some(mut client_entry) = handle_table.get_mut(&client_ptr) {
+        match runtime.block_on(async {
+            client_entry.enable_client_tracking(config).await
+        }) {
+            Ok(_) => 1, // true
+            Err(_) => 0, // false
+        }
+    } else {
+        0 // false - client not found
+    }
+}
+
+/// Disable client-side caching
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_disableClientTracking(
+    _env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+) -> jboolean {
+    let client_ptr = client_ptr as u64;
+    let handle_table = get_handle_table();
+
+    let runtime = get_runtime();
+    
+    if let Some(mut client_entry) = handle_table.get_mut(&client_ptr) {
+        match runtime.block_on(async {
+            client_entry.disable_client_tracking().await
+        }) {
+            Ok(_) => 1, // true
+            Err(_) => 0, // false
+        }
+    } else {
+        0 // false - client not found
+    }
+}
+
+/// Get value with client-side caching (async)
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_getWithCacheAsync(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    key: jstring,
+    callback_id: jlong,
+) {
+    let client_ptr = client_ptr as u64;
+    let handle_table = get_handle_table();
+    
+    let key_str: String = unsafe {
+        let js = jni::objects::JString::from_raw(key);
+        match env.get_string(&js) {
+            Ok(s) => s.to_str().unwrap_or("").to_string(),
+            Err(_) => {
+                complete_callback_with_error(callback_id, "Invalid key string".to_string());
+                return;
+            }
+        }
+    };
+
+    if let Some(client_entry) = handle_table.get(&client_ptr) {
+        let client = client_entry.clone();
+        let runtime = get_runtime();
+        
+        runtime.spawn(async move {
+            let result = {
+                let mut client_mut = client;
+                client_mut.get_with_cache(&key_str).await
+            };
+            
+            match result {
+                Ok(Some(value)) => complete_callback_with_value(callback_id, value),
+                Ok(None) => complete_callback_with_null(callback_id),
+                Err(e) => complete_callback_with_error(callback_id, format!("{:?}", e)),
+            }
+        });
+    } else {
+        complete_callback_with_error(callback_id, "Client not found".to_string());
+    }
+}
+
+/// Handle invalidation messages from server
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_handleInvalidation(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    keys_array: JObject,
+) {
+    let client_ptr = client_ptr as u64;
+    let handle_table = get_handle_table();
+    
+    // Convert Java String[] to Vec<String>
+    let keys = match convert_java_string_array_to_vec(&mut env, keys_array) {
+        Ok(keys) => keys,
+        Err(_) => return,
+    };
+
+    if let Some(client_entry) = handle_table.get(&client_ptr) {
+        let client = client_entry.clone();
+        let runtime = get_runtime();
+        
+        runtime.spawn(async move {
+            let client_mut = client;
+            client_mut.handle_invalidation(keys).await;
+        });
+    }
+}
+
+/// Clear entire cache
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_clearCache(
+    _env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+) {
+    let client_ptr = client_ptr as u64;
+    let handle_table = get_handle_table();
+
+    if let Some(client_entry) = handle_table.get(&client_ptr) {
+        let client = client_entry.clone();
+        let runtime = get_runtime();
+        
+        runtime.spawn(async move {
+            let client_mut = client;
+            client_mut.clear_cache().await;
+        });
+    }
+}
+
+// Helper functions for JNI client-side caching
+
+fn convert_java_string_array_to_vec(env: &mut JNIEnv, array: JObject) -> Result<Vec<String>> {
+    use jni::objects::JObjectArray;
+    
+    let array: JObjectArray = array.into();
+    let array_length = env.get_array_length(&array)?;
+    let mut keys = Vec::with_capacity(array_length as usize);
+    
+    for i in 0..array_length {
+        let element = env.get_object_array_element(&array, i)?;
+        let element_jstring = jni::objects::JString::from(element);
+        let java_str = env.get_string(&element_jstring)?;
+        let key_str: String = java_str.to_str().unwrap_or("").to_string();
+        keys.push(key_str);
+    }
+    
+    Ok(keys)
+}
+
+fn complete_callback_with_value(callback_id: jlong, value: redis::Value) {
+    if let Some(jvm) = JVM.get() {
+        complete_callback(
+            jvm.clone(),
+            callback_id,
+            Ok(value),
+            false, // UTF-8 mode
+        );
+    }
+}
+
+fn complete_callback_with_null(callback_id: jlong) {
+    if let Some(jvm) = JVM.get() {
+        complete_callback(
+            jvm.clone(),
+            callback_id,
+            Ok(redis::Value::Nil),
+            false, // UTF-8 mode
+        );
+    }
+}
+
+fn complete_callback_with_error(callback_id: jlong, error: String) {
+    if let Some(jvm) = JVM.get() {
+        complete_callback(
+            jvm.clone(),
+            callback_id,
+            Err(redis::RedisError::from((redis::ErrorKind::ResponseError, "Cache error", error))),
+            false, // UTF-8 mode
+        );
+    }
+}
