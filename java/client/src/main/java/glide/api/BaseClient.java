@@ -5901,13 +5901,12 @@ public abstract class BaseClient
      * @return A CompletableFuture that completes when tracking is enabled
      */
     public CompletableFuture<Void> enableClientTracking(@NonNull ClientCacheConfig config) {
-        return CompletableFuture.supplyAsync(() -> {
-            boolean success = commandManager.getGlideCoreClient().enableClientTracking(
-                    config.isEnabled(),
-                    config.getMaxSize(),
-                    config.getTtlSeconds().orElse(-1L),
-                    config.getTrackingMode().getValue()
-            );
+        return commandManager.enableClientTracking(
+                config.isEnabled(),
+                config.getMaxSize(),
+                config.getTtlSeconds().orElse(-1L),
+                config.getTrackingMode().getValue()
+        ).thenApply(success -> {
             
             if (success) {
                 this.cacheConfig = config;
@@ -5925,8 +5924,7 @@ public abstract class BaseClient
      * @return A CompletableFuture that completes when tracking is disabled
      */
     public CompletableFuture<Void> disableClientTracking() {
-        return CompletableFuture.supplyAsync(() -> {
-            boolean success = commandManager.getGlideCoreClient().disableClientTracking();
+        return commandManager.disableClientTracking().thenApply(success -> {
             
             if (success) {
                 this.cacheConfig = null;
@@ -5940,8 +5938,8 @@ public abstract class BaseClient
     /**
      * Clear the entire client-side cache.
      */
-    public void clearCache() {
-        commandManager.getGlideCoreClient().clearCache();
+    public CompletableFuture<Void> clearCache() {
+        return commandManager.clearCache();
     }
 
     /**

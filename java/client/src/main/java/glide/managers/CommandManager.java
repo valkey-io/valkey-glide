@@ -1089,6 +1089,28 @@ public class CommandManager {
         return builder;
     }
 
+    /** Enable client tracking with the specified configuration. */
+    public CompletableFuture<Boolean> enableClientTracking(
+            boolean enabled, int maxSize, long ttlSeconds, int trackingMode) {
+        return CompletableFuture.supplyAsync(() -> 
+            coreClient.enableClientTracking(enabled, maxSize, ttlSeconds, trackingMode));
+    }
+
+    /** Disable client tracking. */
+    public CompletableFuture<Boolean> disableClientTracking() {
+        return CompletableFuture.supplyAsync(() -> coreClient.disableClientTracking());
+    }
+
+    /** Get value with caching support. */
+    public CompletableFuture<Object> getWithCache(String key) {
+        return coreClient.getWithCache(key);
+    }
+
+    /** Clear the client cache. */
+    public CompletableFuture<Void> clearCache() {
+        return CompletableFuture.runAsync(() -> coreClient.clearCache());
+    }
+
     /** Add the given set of arguments to the output Command.Builder. */
     public static <ArgType> void populateCommandWithArgs(
             ArgType[] arguments, Command.Builder outputBuilder) {
