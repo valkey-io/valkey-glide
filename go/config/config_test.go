@@ -391,3 +391,37 @@ func TestConfig_DatabaseId_BaseConfiguration(t *testing.T) {
 	assert.Equal(t, uint32(3), clusterResult.DatabaseId)
 	assert.True(t, clusterResult.ClusterModeEnabled)
 }
+
+func TestClusterConfig_RefreshTopologyFromInitialNodes(t *testing.T) {
+	// Test that refreshTopologyFromInitialNodes defaults to false
+	defaultConfig := NewClusterClientConfiguration()
+	defaultResult, err := defaultConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert default cluster config to protobuf: %v", err)
+	}
+	assert.False(t, defaultResult.RefreshTopologyFromInitialNodes)
+
+	// Test that refreshTopologyFromInitialNodes can be set to true
+	enabledConfig := NewClusterClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClusterClientConfiguration().
+				WithRefreshTopologyFromInitialNodes(true),
+		)
+	enabledResult, err := enabledConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert enabled cluster config to protobuf: %v", err)
+	}
+	assert.True(t, enabledResult.RefreshTopologyFromInitialNodes)
+
+	// Test that refreshTopologyFromInitialNodes can be explicitly set to false
+	disabledConfig := NewClusterClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClusterClientConfiguration().
+				WithRefreshTopologyFromInitialNodes(false),
+		)
+	disabledResult, err := disabledConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert disabled cluster config to protobuf: %v", err)
+	}
+	assert.False(t, disabledResult.RefreshTopologyFromInitialNodes)
+}
