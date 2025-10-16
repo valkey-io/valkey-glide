@@ -4,6 +4,7 @@
 
 * Added in documentation to how to use Lua scripts with Glide 
 * GO: add RefreshTopologyFromInitialNodes configuration option ([#4871](https://github.com/valkey-io/valkey-glide/pull/4871))
+* Node: add refreshTopologyFromInitialNodes configuration option ([#4872](https://github.com/valkey-io/valkey-glide/pull/4872))
 
 #### Fixes
 
