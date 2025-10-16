@@ -207,6 +207,16 @@ public class ConnectionManager {
                         // Set cluster mode
                         requestBuilder.setClusterModeEnabled(isCluster);
 
+                        // Set refresh topology from initial nodes for cluster mode
+                        if (isCluster) {
+                            GlideClusterClientConfiguration clusterConfig =
+                                    (GlideClusterClientConfiguration) configuration;
+                            if (clusterConfig.getAdvancedConfiguration() != null) {
+                                requestBuilder.setRefreshTopologyFromInitialNodes(
+                                        clusterConfig.getAdvancedConfiguration().isRefreshTopologyFromInitialNodes());
+                            }
+                        }
+
                         // Set timeouts
                         requestBuilder.setRequestTimeout(requestTimeoutMs);
                         requestBuilder.setConnectionTimeout(connectionTimeoutMs);
