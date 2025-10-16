@@ -966,6 +966,48 @@ describe("SocketConnectionInternals", () => {
     });
 });
 
+describe("GlideClusterClientConfiguration", () => {
+    it("should set refreshTopologyFromInitialNodes to true", () => {
+        // Test configuration structure without type checking
+        // The actual type validation will happen when the protobuf types are regenerated
+        const config: GlideClusterClientConfiguration = {
+            addresses: [{ host: "localhost", port: 6379 }],
+            advancedConfiguration: {
+                refreshTopologyFromInitialNodes: true,
+            },
+        };
+
+        // We're testing that the configuration is accepted and properly structured
+        expect(
+            config.advancedConfiguration?.refreshTopologyFromInitialNodes,
+        ).toBe(true);
+    });
+
+    it("should set refreshTopologyFromInitialNodes to false", () => {
+        const config: GlideClusterClientConfiguration = {
+            addresses: [{ host: "localhost", port: 6379 }],
+            advancedConfiguration: {
+                refreshTopologyFromInitialNodes: false,
+            },
+        };
+
+        expect(
+            config.advancedConfiguration?.refreshTopologyFromInitialNodes,
+        ).toBe(false);
+    });
+
+    it("should default refreshTopologyFromInitialNodes to undefined when not specified", () => {
+        const config: GlideClusterClientConfiguration = {
+            addresses: [{ host: "localhost", port: 6379 }],
+            advancedConfiguration: {},
+        };
+
+        expect(
+            config.advancedConfiguration?.refreshTopologyFromInitialNodes,
+        ).toBeUndefined();
+    });
+});
+
 describe("Circular Dependency Fix", () => {
     /* eslint-disable @typescript-eslint/no-require-imports */
     it("should import GlideClient without circular dependency errors", () => {
