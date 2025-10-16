@@ -81,20 +81,13 @@ public class GlideNativeBridge {
 
     /** Enable client-side caching with tracking */
     public static native boolean enableClientTracking(
-            long clientPtr,
-            boolean enabled,
-            int maxSize,
-            long ttlSeconds,
-            int trackingMode);
+            long clientPtr, boolean enabled, int maxSize, long ttlSeconds, int trackingMode);
 
     /** Disable client-side caching */
     public static native boolean disableClientTracking(long clientPtr);
 
     /** Get value with client-side caching */
-    public static native void getWithCacheAsync(
-            long clientPtr,
-            String key,
-            long callbackId);
+    public static native void getWithCacheAsync(long clientPtr, String key, long callbackId);
 
     /** Handle invalidation messages from server */
     public static native void handleInvalidation(long clientPtr, String[] keys);

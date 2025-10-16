@@ -225,8 +225,8 @@ import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
 import glide.api.logging.Logger;
-import glide.api.models.ClusterValue;
 import glide.api.models.ClientCacheConfig;
+import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
@@ -366,7 +366,7 @@ public abstract class BaseClient
     protected final ConnectionManager connectionManager;
     protected final MessageHandler messageHandler;
     protected final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
-    
+
     // Client-side caching
     private volatile ClientCacheConfig cacheConfig;
 
@@ -1014,7 +1014,7 @@ public abstract class BaseClient
         // Check if caching is enabled
         if (cacheConfig != null && cacheConfig.isEnabled()) {
             // Use cache-aware get
-            return commandManager.getGlideCoreClient()
+            return commandManager
                     .getWithCache(key)
                     .thenApply(result -> result != null ? result.toString() : null);
         } else {
@@ -1029,7 +1029,7 @@ public abstract class BaseClient
         // Check if caching is enabled
         if (cacheConfig != null && cacheConfig.isEnabled()) {
             // Use cache-aware get
-            return commandManager.getGlideCoreClient()
+            return commandManager
                     .getWithCache(key.toString())
                     .thenApply(result -> result != null ? GlideString.of(result.toString()) : null);
         } else {
@@ -5901,21 +5901,22 @@ public abstract class BaseClient
      * @return A CompletableFuture that completes when tracking is enabled
      */
     public CompletableFuture<Void> enableClientTracking(@NonNull ClientCacheConfig config) {
-        return commandManager.enableClientTracking(
-                config.isEnabled(),
-                config.getMaxSize(),
-                config.getTtlSeconds().orElse(-1L),
-                config.getTrackingMode().getValue()
-        ).thenApply(success -> {
-            
-            if (success) {
-                this.cacheConfig = config;
-                startInvalidationListener();
-                return null;
-            } else {
-                throw new RuntimeException("Failed to enable client tracking");
-            }
-        });
+        return commandManager
+                .enableClientTracking(
+                        config.isEnabled(),
+                        config.getMaxSize(),
+                        config.getTtlSeconds().orElse(-1L),
+                        config.getTrackingMode().getValue())
+                .thenApply(
+                        success -> {
+                            if (success) {
+                                this.cacheConfig = config;
+                                startInvalidationListener();
+                                return null;
+                            } else {
+                                throw new RuntimeException("Failed to enable client tracking");
+                            }
+                        });
     }
 
     /**
@@ -5924,20 +5925,20 @@ public abstract class BaseClient
      * @return A CompletableFuture that completes when tracking is disabled
      */
     public CompletableFuture<Void> disableClientTracking() {
-        return commandManager.disableClientTracking().thenApply(success -> {
-            
-            if (success) {
-                this.cacheConfig = null;
-                return null;
-            } else {
-                throw new RuntimeException("Failed to disable client tracking");
-            }
-        });
+        return commandManager
+                .disableClientTracking()
+                .thenApply(
+                        success -> {
+                            if (success) {
+                                this.cacheConfig = null;
+                                return null;
+                            } else {
+                                throw new RuntimeException("Failed to disable client tracking");
+                            }
+                        });
     }
 
-    /**
-     * Clear the entire client-side cache.
-     */
+    /** Clear the entire client-side cache. */
     public CompletableFuture<Void> clearCache() {
         return commandManager.clearCache();
     }
@@ -5961,14 +5962,14 @@ public abstract class BaseClient
     }
 
     /**
-     * Handle invalidation messages from the server.
-     * This method is called internally when the server sends invalidation messages.
+     * Handle invalidation messages from the server. This method is called internally when the server
+     * sends invalidation messages.
      *
      * @param keys The keys that have been invalidated
      */
     protected void handleInvalidationMessage(String[] keys) {
         commandManager.getGlideCoreClient().handleInvalidation(keys);
-        
+
         // Call user callback if configured
         if (cacheConfig != null && cacheConfig.getInvalidationCallback() != null) {
             try {
@@ -5980,8 +5981,8 @@ public abstract class BaseClient
     }
 
     /**
-     * Start listening for invalidation messages.
-     * This integrates with the existing PubSub infrastructure.
+     * Start listening for invalidation messages. This integrates with the existing PubSub
+     * infrastructure.
      */
     private void startInvalidationListener() {
         // This would integrate with existing connection handling

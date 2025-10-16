@@ -1,16 +1,13 @@
-// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
-import java.util.List;
-import java.util.ArrayList;
 
-/**
- * Configuration for client-side caching with tracking.
- */
+/** Configuration for client-side caching with tracking. */
 public class ClientCacheConfig {
     private final boolean enabled;
     private final int maxSize;
@@ -22,25 +19,23 @@ public class ClientCacheConfig {
     private final boolean broadcastMode;
     private final boolean noLoop;
 
-    /**
-     * Tracking modes for client-side caching.
-     */
+    /** Tracking modes for client-side caching. */
     public enum TrackingMode {
         /** Track all keys accessed by the client */
         DEFAULT(0),
         /** Only track keys explicitly requested */
-        OPTIN(1), 
+        OPTIN(1),
         /** Track all keys except explicitly excluded ones */
         OPTOUT(2);
-        
+
         private final int value;
-        
-        TrackingMode(int value) { 
-            this.value = value; 
+
+        TrackingMode(int value) {
+            this.value = value;
         }
-        
-        public int getValue() { 
-            return value; 
+
+        public int getValue() {
+            return value;
         }
     }
 
@@ -56,9 +51,7 @@ public class ClientCacheConfig {
         this.noLoop = builder.noLoop;
     }
 
-    /**
-     * Builder for ClientCacheConfig.
-     */
+    /** Builder for ClientCacheConfig. */
     public static class Builder {
         private boolean enabled = false;
         private int maxSize = 1000;
@@ -97,6 +90,7 @@ public class ClientCacheConfig {
 
         /**
          * Redirect invalidation messages to another client.
+         *
          * @param clientId The client ID to redirect invalidations to
          */
         public Builder redirectTo(long clientId) {
@@ -106,6 +100,7 @@ public class ClientCacheConfig {
 
         /**
          * Add a prefix to track. Only keys with these prefixes will be tracked.
+         *
          * @param prefix The key prefix to track
          */
         public Builder addPrefix(String prefix) {
@@ -115,6 +110,7 @@ public class ClientCacheConfig {
 
         /**
          * Add multiple prefixes to track.
+         *
          * @param prefixes The key prefixes to track
          */
         public Builder addPrefixes(List<String> prefixes) {
@@ -123,18 +119,15 @@ public class ClientCacheConfig {
         }
 
         /**
-         * Enable broadcast mode for invalidations.
-         * In broadcast mode, every key modification is notified.
+         * Enable broadcast mode for invalidations. In broadcast mode, every key modification is
+         * notified.
          */
         public Builder broadcastMode(boolean enabled) {
             this.broadcastMode = enabled;
             return this;
         }
 
-        /**
-         * Enable no-loop mode.
-         * Don't send invalidations for keys modified by this client.
-         */
+        /** Enable no-loop mode. Don't send invalidations for keys modified by this client. */
         public Builder noLoop(boolean enabled) {
             this.noLoop = enabled;
             return this;
@@ -146,13 +139,39 @@ public class ClientCacheConfig {
     }
 
     // Getters
-    public boolean isEnabled() { return enabled; }
-    public int getMaxSize() { return maxSize; }
-    public Optional<Long> getTtlSeconds() { return ttlSeconds; }
-    public TrackingMode getTrackingMode() { return trackingMode; }
-    public Consumer<List<String>> getInvalidationCallback() { return invalidationCallback; }
-    public Optional<Long> getRedirectClientId() { return redirectClientId; }
-    public List<String> getPrefixes() { return new ArrayList<>(prefixes); }
-    public boolean isBroadcastMode() { return broadcastMode; }
-    public boolean isNoLoop() { return noLoop; }
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public int getMaxSize() {
+        return maxSize;
+    }
+
+    public Optional<Long> getTtlSeconds() {
+        return ttlSeconds;
+    }
+
+    public TrackingMode getTrackingMode() {
+        return trackingMode;
+    }
+
+    public Consumer<List<String>> getInvalidationCallback() {
+        return invalidationCallback;
+    }
+
+    public Optional<Long> getRedirectClientId() {
+        return redirectClientId;
+    }
+
+    public List<String> getPrefixes() {
+        return new ArrayList<>(prefixes);
+    }
+
+    public boolean isBroadcastMode() {
+        return broadcastMode;
+    }
+
+    public boolean isNoLoop() {
+        return noLoop;
+    }
 }

@@ -387,7 +387,8 @@ public class GlideCoreClient implements AutoCloseable {
         if (handle == 0) {
             return false;
         }
-        return GlideNativeBridge.enableClientTracking(handle, enabled, maxSize, ttlSeconds, trackingMode);
+        return GlideNativeBridge.enableClientTracking(
+                handle, enabled, maxSize, ttlSeconds, trackingMode);
     }
 
     /** Disable client-side caching */

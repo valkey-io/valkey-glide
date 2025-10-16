@@ -1092,8 +1092,8 @@ public class CommandManager {
     /** Enable client tracking with the specified configuration. */
     public CompletableFuture<Boolean> enableClientTracking(
             boolean enabled, int maxSize, long ttlSeconds, int trackingMode) {
-        return CompletableFuture.supplyAsync(() -> 
-            coreClient.enableClientTracking(enabled, maxSize, ttlSeconds, trackingMode));
+        return CompletableFuture.supplyAsync(
+                () -> coreClient.enableClientTracking(enabled, maxSize, ttlSeconds, trackingMode));
     }
 
     /** Disable client tracking. */
