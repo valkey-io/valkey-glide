@@ -52,7 +52,6 @@ EXCLUDED_API_FUNCTIONS = {
         "create_leaked_value",
         "start_socket_listener_external",
         "value_from_pointer",
-        "select",
     ],
     "sync_only": [],
 }
@@ -68,7 +67,6 @@ EXCLUDED_TESTS = {
     "async_only": [
         "test_inflight_request_limit",
         "test_statistics",
-        "test_select",
         "test_UDS_socket_connection_failure",
     ],
     "sync_only": ["test_sync_fork"],
@@ -79,6 +77,7 @@ EXCLUDED_TESTS_FILENAMES = {
         "test_opentelemetry.py",
         "test_pubsub.py",
         "test_scan.py",
+        "test_deprecation_warnings.py",
     ],
     "sync_only": [],
 }

@@ -20,7 +20,7 @@ dependencies {
 **After (Valkey GLIDE):**
 ```gradle
 dependencies {
-    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'osx-aarch_64'
+    implementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: '2.+', classifier: 'osx-aarch_64'
 }
 ```
 
@@ -49,64 +49,16 @@ Change the application's classpath such that it does not have the Jedis JAR and 
 
 ### Configuration Mapping Overview
 
-The compatibility layer provides varying levels of support for Jedis configuration parameters, based on detailed analysis of `DefaultJedisClientConfig` fields:
+The compatibility layer supports the following Jedis configuration parameters:
 
-#### ✅ Successfully Mapped
-- `user` → `ServerCredentials.username`
-- `password` → `ServerCredentials.password`
-- `clientName` → `BaseClientConfiguration.clientName`
-- `ssl` → `BaseClientConfiguration.useTLS`
-- `redisProtocol` → `BaseClientConfiguration.protocol`
-- `connectionTimeoutMillis` → `AdvancedBaseClientConfiguration.connectionTimeout`
-- `socketTimeoutMillis` → `BaseClientConfiguration.requestTimeout`
-- `database` → Handled via SELECT command after connection
+#### Successfully Mapped
+user, password, clientName, ssl, redisProtocol, connectionTimeoutMillis, socketTimeoutMillis, database
 
-#### 🔶 Partially Mapped
-- `sslSocketFactory` → Requires SSL/TLS migration to system certificate store
-- `sslParameters` → Limited mapping; custom protocols/ciphers not supported
-- `hostnameVerifier` → Standard verification works; custom verifiers require `useInsecureTLS`
+#### Partially Mapped
+sslSocketFactory, sslParameters, hostnameVerifier
 
-#### ❌ Not Mapped
-- `blockingSocketTimeoutMillis` → No equivalent (GLIDE uses async I/O model)
-
-### SSL/TLS Configuration Complexity
-
-#### Internal SSL Fields Analysis (21 sub-fields total):
-- **SSLParameters**: 3/9 fields partially mapped
-- **SSLSocketFactory**: 1/8 fields directly mapped
-- **HostnameVerifier**: 2/4 verification types mapped
-
-#### Migration Requirements by Complexity:
-
-**Low Complexity**
-- Direct parameter mapping
-- No code changes required
-- Examples: Basic auth, timeouts, protocol selection
-
-**Medium Complexity**
-- SSL/TLS certificate migration required
-- System certificate store installation needed
-- Custom SSL configurations → GLIDE secure defaults
-
-**High Complexity**
-- No GLIDE equivalent
-- Architectural differences (async vs blocking I/O)
-- Requires application redesign
-
-### Overall Migration Success Rate
-
-**Including SSL/TLS Internal Fields:**
-- **Total analyzable fields**: 33 (12 main + 21 SSL internal)
-- **Successfully mapped**: 9/33
-- **Partially mapped with migration**: 11/33
-- **Not mappable**: 13/33
-
-### Key Migration Insights
-
-1. **GLIDE Architecture Shift**: From application-managed SSL to system-managed SSL with secure defaults
-2. **Certificate Management**: Custom keystores/truststores require migration to system certificate store
-3. **Protocol Selection**: GLIDE auto-selects TLS 1.2+ and secure cipher suites
-4. **Client Authentication**: Client certificates not supported; use username/password authentication
+#### Not Mapped
+blockingSocketTimeoutMillis
 
 ## Supported Features
 
@@ -136,37 +88,38 @@ The compatibility layer provides varying levels of support for Jedis configurati
 ## Drawbacks and Unsupported Features
 
 ### Connection Management
-- ❌ **JedisPool advanced configurations**: Complex pool settings not fully supported
-- ❌ **JedisPooled**: Advanced pooled connection features unavailable
-- ❌ **Connection pooling**: Native Jedis pooling mechanisms not implemented
-- ❌ **Failover configurations**: Jedis-specific failover logic not supported
+- **JedisPool advanced configurations**: Complex pool settings not fully supported
+- **JedisPooled**: Advanced pooled connection features unavailable
+- **Connection pooling**: Native Jedis pooling mechanisms not implemented
+- **Failover configurations**: Jedis-specific failover logic not supported
 
 ### Advanced Features
-- ❌ **Transactions**: MULTI/EXEC transaction blocks not supported
-- ❌ **Pipelining**: Jedis pipelining functionality unavailable
-- ❌ **Pub/Sub**: Redis publish/subscribe not implemented
-- ❌ **Lua scripting**: EVAL/EVALSHA commands not supported
-- ❌ **Modules**: Redis module commands not available
-- ⚠️ **Typed set/sorted set methods**: No dedicated methods like `sadd()`, `zadd()` - use `sendCommand()` instead
+- **Transactions**: MULTI/EXEC transaction blocks not supported
+- **Pipelining**: Jedis pipelining functionality unavailable
+- **Pub/Sub**: Redis publish/subscribe not implemented
+- **Lua scripting**: EVAL/EVALSHA commands not supported
+- **Modules**: Redis module commands not available
+- **Typed set/sorted set methods**: No dedicated methods like `sadd()`, `zadd()` - use `sendCommand()` instead
 
 ### Configuration Limitations
-- ❌ **Complex SSL configurations**: Jedis `JedisClientConfig` SSL parameters cannot be mapped to Valkey GLIDE `GlideClientConfiguration`
-- ❌ **Custom trust stores**: SSL trust store configurations require manual migration
-- ❌ **Client certificates**: SSL client certificate authentication not supported in compatibility layer
-- ❌ **SSL protocols and cipher suites**: Advanced SSL protocol settings cannot be automatically converted
-- ❌ **Custom serializers**: Jedis serialization options not supported
-- ❌ **Connection validation**: Jedis connection health checks unavailable
-- ❌ **Retry mechanisms**: Jedis-specific retry logic not implemented
+- **Complex SSL configurations**: Jedis `JedisClientConfig` SSL parameters cannot be mapped to Valkey GLIDE `GlideClientConfiguration`
+- **Custom trust stores**: SSL trust store configurations require manual migration
+- **Client certificates**: SSL client certificate authentication not supported in compatibility layer
+- **SSL protocols and cipher suites**: Advanced SSL protocol settings cannot be automatically converted
+- **Custom serializers**: Jedis serialization options not supported
+- **Connection validation**: Jedis connection health checks unavailable
+- **Retry mechanisms**: Jedis-specific retry logic not implemented
 
 ### Cluster Support
-- ❌ **JedisCluster**: Cluster client not supported in compatibility layer
-- ❌ **Cluster failover**: Automatic cluster failover not available
-- ❌ **Hash slot management**: Manual slot management not supported
+- ✅ **JedisCluster**: Basic cluster client supported via compatibility layer
+- ✅ **Cluster operations**: Standard Redis commands work in cluster mode
+- ✅ **Multiple node configuration**: Supports Set<HostAndPort> initialization
+- ⚠️ **Advanced cluster features**: Some Jedis-specific cluster management features may have limitations
 
 ### Performance Features
-- ❌ **Async operations**: Jedis async methods not implemented
-- ❌ **Batch operations**: Bulk operation optimizations unavailable
-- ❌ **Custom protocols**: Protocol customization not supported
+- **Async operations**: Jedis async methods not implemented
+- **Batch operations**: Bulk operation optimizations unavailable
+- **Custom protocols**: Protocol customization not supported
 
 ## Migration Considerations
 
@@ -205,18 +158,6 @@ try (GlideClient client = GlideClient.createClient(config).get()) {
 - Check [integration tests](./integTest/src/test/java/glide) for examples
 - Report compatibility issues through the project's issue tracker
 
-## Known Challenges and Limitations
-
-### Version Compatibility Issues
-- ❌ **Jedis version incompatibility**: The compatibility layer targets latest Jedis versions, but many projects use older versions (e.g., 4.4.3)
-- ❌ **Backward compatibility**: Jedis itself is not backward compatible across major versions
-- ⚠️ **Multiple version support**: No clear strategy for supporting multiple Jedis versions simultaneously
-
-### Implementation Gaps
-- ⚠️ **Generic command support**: `sendCommand()` is implemented but only supports `Protocol.Command` types
-- ❌ **Stub implementations**: Many classes exist but lack full functionality, creating false expectations
-- ❌ **Runtime failures**: Build-time success doesn't guarantee runtime compatibility
-
 ## Migration Warnings
 
 ### Before You Start
@@ -232,11 +173,29 @@ try (GlideClient client = GlideClient.createClient(config).get()) {
 3. **Monitor for runtime exceptions** from stub implementations
 4. **Have rollback plan** ready for incompatible features
 
-## Next Steps
+## Appendix: Detailed Configuration Mapping
 
-The compatibility layer is under active development. Priority improvements include:
-- Multi-version Jedis support strategy
-- Enhanced JedisPool support
-- Complete `sendCommand()` implementation
-- Runtime compatibility validation
-- Clear documentation of stub vs. implemented features
+###  Mapped Parameters
+- `user` → `ServerCredentials.username`
+- `password` → `ServerCredentials.password`
+- `clientName` → `BaseClientConfiguration.clientName`
+- `ssl` → `BaseClientConfiguration.useTLS`
+- `redisProtocol` → `BaseClientConfiguration.protocol`
+- `connectionTimeoutMillis` → `AdvancedBaseClientConfiguration.connectionTimeout`
+- `socketTimeoutMillis` → `BaseClientConfiguration.requestTimeout`
+- `database` → Handled via SELECT command after connection
+
+### Partially Mapped Parameters
+- `sslSocketFactory` → Requires SSL/TLS migration to system certificate store
+- `sslParameters` → Limited mapping; custom protocols/ciphers not supported
+- `hostnameVerifier` → Standard verification works; custom verifiers require `useInsecureTLS`
+
+### Unsupported Parameters
+- `blockingSocketTimeoutMillis` → No equivalent (GLIDE uses async I/O model)
+
+### Key Migration Insights
+
+1. **GLIDE Architecture Shift**: From application-managed SSL to system-managed SSL with secure defaults
+2. **Certificate Management**: Custom keystores/truststores require migration to system certificate store
+3. **Protocol Selection**: GLIDE auto-selects TLS 1.2+ and secure cipher suites
+4. **Client Authentication**: Client certificates not supported; use username/password authentication

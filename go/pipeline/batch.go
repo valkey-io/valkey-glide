@@ -139,25 +139,6 @@ func (b *StandaloneBatch) Select(index int64) *StandaloneBatch {
 	return b.addCmdAndTypeChecker(C.Select, []string{utils.IntToString(index)}, reflect.String, false)
 }
 
-// Moves key from the currently selected database to the database specified by `dbIndex`.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	key - The key to move.
-//	dbIndex - The index of the database to move key to.
-//
-// Command Response:
-//
-//	`true` if `key` was moved, or `false` if the `key` already exists in the destination
-//	database or does not exist in the source database.
-//
-// [valkey.io]: https://valkey.io/commands/move/
-func (b *StandaloneBatch) Move(key string, dbIndex int64) *StandaloneBatch {
-	return b.addCmdAndTypeChecker(C.Move, []string{key, utils.IntToString(dbIndex)}, reflect.Bool, false)
-}
-
 // Iterates incrementally over a database for matching keys.
 //
 // See [valkey.io] for details.

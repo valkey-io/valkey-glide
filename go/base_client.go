@@ -942,6 +942,35 @@ func (client *baseClient) MSetNX(ctx context.Context, keyValueMap map[string]str
 	return handleBoolResponse(result)
 }
 
+// Move key from the currently selected database to the database specified by `dbIndex`.
+//
+// Note:
+//
+//	In cluster mode move is available since Valkey 9.0.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	key - The key to move.
+//	dbIndex - The index of the database to move key to.
+//
+// Return value:
+//
+//	`true` if `key` was moved, or `false` if the `key` already exists in the destination
+//	database or does not exist in the source database.
+//
+// [valkey.io]: https://valkey.io/commands/move/
+func (client *baseClient) Move(ctx context.Context, key string, dbIndex int64) (bool, error) {
+	result, err := client.executeCommand(ctx, C.Move, []string{key, utils.IntToString(dbIndex)})
+	if err != nil {
+		return models.DefaultBoolResponse, err
+	}
+
+	return handleBoolResponse(result)
+}
+
 // Retrieves the values of multiple keys.
 //
 // Note:
