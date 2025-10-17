@@ -201,6 +201,29 @@ public class ConnectionManager {
                             if (credentials.getPassword() != null) {
                                 authBuilder.setPassword(credentials.getPassword());
                             }
+                            // Set IAM credentials if present
+                            if (credentials.getIamConfig() != null) {
+                                var iamConfig = credentials.getIamConfig();
+                                IamCredentials.Builder iamBuilder = IamCredentials.newBuilder();
+                                iamBuilder.setClusterName(iamConfig.getClusterName());
+                                iamBuilder.setRegion(iamConfig.getRegion());
+
+                                // Map ServiceType enum to protobuf ServiceType
+                                if (iamConfig.getService()
+                                        == glide.api.models.configuration.ServiceType.ELASTICACHE) {
+                                    iamBuilder.setServiceType(ServiceType.ELASTICACHE);
+                                } else if (iamConfig.getService()
+                                        == glide.api.models.configuration.ServiceType.MEMORYDB) {
+                                    iamBuilder.setServiceType(ServiceType.MEMORYDB);
+                                }
+
+                                // Set optional refresh interval
+                                if (iamConfig.getRefreshIntervalSeconds() != null) {
+                                    iamBuilder.setRefreshIntervalSeconds(iamConfig.getRefreshIntervalSeconds());
+                                }
+
+                                authBuilder.setIamCredentials(iamBuilder.build());
+                            }
                             requestBuilder.setAuthenticationInfo(authBuilder.build());
                         }
 
@@ -420,6 +443,10 @@ public class ConnectionManager {
     /** Update the cached password after a successful rotation (used by BaseClient). */
     public void updateStoredPassword(String password) {
         if (credentials == null) {
+            return;
+        }
+        // Don't update password if using IAM authentication
+        if (credentials.getIamConfig() != null) {
             return;
         }
         credentials =
