@@ -731,6 +731,93 @@ func (client *baseClient) ResetConnectionPassword(ctx context.Context) (string, 
 	return client.submitConnectionPasswordUpdate(ctx, "", false)
 }
 
+func (client *baseClient) submitRefreshIamToken(ctx context.Context) (string, error) {
+	// Check if context is already done
+	select {
+	case <-ctx.Done():
+		return models.DefaultStringResponse, ctx.Err()
+	default:
+		// Continue with execution
+	}
+
+	// Create a channel to receive the result
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return models.DefaultStringResponse, NewClosingError("RefreshIamToken failed. The client is closed.")
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+
+	C.refresh_iam_token(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
+	)
+	client.mu.Unlock()
+
+	// Wait for result or context cancellation
+	var payload payload
+	select {
+	case <-ctx.Done():
+		client.mu.Lock()
+		if client.pending != nil {
+			delete(client.pending, resultChannelPtr)
+		}
+		client.mu.Unlock()
+		// Start cleanup goroutine
+		go func() {
+			// Wait for payload on separate channel
+			if payload := <-resultChannel; payload.value != nil {
+				C.free_command_response(payload.value)
+			}
+		}()
+		return models.DefaultStringResponse, ctx.Err()
+	case payload = <-resultChannel:
+		// Continue with normal processing
+	}
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return models.DefaultStringResponse, payload.error
+	}
+
+	return handleOkResponse(payload.value)
+}
+
+// RefreshIamToken manually refreshes the IAM token for the current connection.
+//
+// This method is only available if the client was created with IAM authentication.
+// It triggers an immediate refresh of the IAM token and updates the connection.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// Example:
+//
+//	result, err := client.RefreshIamToken(context.Background())
+//	if err != nil {
+//	    // handle error
+//	}
+func (client *baseClient) RefreshIamToken(ctx context.Context) (string, error) {
+	return client.submitRefreshIamToken(ctx)
+}
+
 // Set the given key with the given value. The return value is a response from Valkey containing the string "OK".
 //
 // See [valkey.io] for details.
