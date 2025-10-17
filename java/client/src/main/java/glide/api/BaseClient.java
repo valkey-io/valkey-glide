@@ -286,6 +286,7 @@ import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
+import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
 import glide.connectors.handlers.MessageHandler;
@@ -948,6 +949,13 @@ public abstract class BaseClient
      */
     public CompletableFuture<String> updateConnectionPassword(
             @NonNull String password, boolean immediateAuth) {
+        // Check if using IAM authentication
+        ServerCredentials creds = connectionManager.getCredentials();
+        if (creds != null && creds.getIamConfig() != null) {
+            throw new ConfigurationError(
+                    "updateConnectionPassword is not supported when IAM authentication is enabled.");
+        }
+
         return commandManager
                 .submitPasswordUpdate(Optional.of(password), immediateAuth, this::handleStringResponse)
                 .thenApply(
@@ -977,6 +985,7 @@ public abstract class BaseClient
      *     will be returned. <br>
      *     The default is `false`.
      * @return <code>"OK"</code>.
+     * @throws ConfigurationError if the client is using IAM authentication.
      * @example
      *     <pre>{@code
      * String response = client.resetConnectionPassword(true).get();
@@ -984,6 +993,13 @@ public abstract class BaseClient
      * }</pre>
      */
     public CompletableFuture<String> updateConnectionPassword(boolean immediateAuth) {
+        // Check if using IAM authentication
+        ServerCredentials creds = connectionManager.getCredentials();
+        if (creds != null && creds.getIamConfig() != null) {
+            throw new ConfigurationError(
+                    "updateConnectionPassword is not supported when IAM authentication is enabled.");
+        }
+
         return commandManager
                 .submitPasswordUpdate(Optional.empty(), immediateAuth, this::handleStringResponse)
                 .thenApply(
@@ -993,6 +1009,46 @@ public abstract class BaseClient
                             }
                             return result;
                         });
+    }
+
+    /**
+     * Manually refresh the IAM token for the current connection.
+     *
+     * <p>This method is only available if the client was created with IAM authentication. It triggers
+     * an immediate refresh of the IAM token and updates the connection.
+     *
+     * @return A CompletableFuture that resolves to <code>"OK"</code> on success.
+     * @throws ConfigurationError if the client is not using IAM authentication.
+     * @example
+     *     <pre>{@code
+     * // Create client with IAM authentication
+     * GlideClientConfiguration config = GlideClientConfiguration.builder()
+     *     .address(NodeAddress.builder().host("my-cluster.amazonaws.com").port(6379).build())
+     *     .credentials(ServerCredentials.builder()
+     *         .username("myUser")
+     *         .iamConfig(IamAuthConfig.builder()
+     *             .clusterName("my-cluster")
+     *             .service(ServiceType.ELASTICACHE)
+     *             .region("us-east-1")
+     *             .build())
+     *         .build())
+     *     .build();
+     * GlideClient client = GlideClient.createClient(config).get();
+     *
+     * // Manually refresh the IAM token
+     * String response = client.refreshIamToken().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    public CompletableFuture<String> refreshIamToken() {
+        // Check if using IAM authentication
+        ServerCredentials creds = connectionManager.getCredentials();
+        if (creds == null || creds.getIamConfig() == null) {
+            throw new ConfigurationError(
+                    "refreshIamToken is only available when IAM authentication is enabled.");
+        }
+
+        return commandManager.submitRefreshIamToken(this::handleStringResponse);
     }
 
     @Override
