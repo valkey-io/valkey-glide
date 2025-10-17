@@ -197,6 +197,75 @@ func TestServerCredentials(t *testing.T) {
 		},
 	}
 
+	for _, param := range parameters {
+		result := param.input.toProtobuf()
+		assert.Equal(t, param.expected, result)
+	}
+}
+
+func TestServerCredentialsWithIam(t *testing.T) {
+	iamConfig := NewIamAuthConfig("my-cluster", Elasticache, "us-east-1")
+	creds, err := NewServerCredentialsWithIam("myUser", iamConfig)
+	
+	assert.Nil(t, err)
+	assert.NotNil(t, creds)
+	assert.True(t, creds.IsIamAuth())
+	
+	authInfo := creds.toProtobuf()
+	assert.Equal(t, "myUser", authInfo.Username)
+	assert.Equal(t, "", authInfo.Password)
+	assert.NotNil(t, authInfo.IamCredentials)
+	assert.Equal(t, "my-cluster", authInfo.IamCredentials.ClusterName)
+	assert.Equal(t, "us-east-1", authInfo.IamCredentials.Region)
+	assert.Equal(t, protobuf.ServiceType_ELASTICACHE, authInfo.IamCredentials.ServiceType)
+	assert.Equal(t, uint32(300), *authInfo.IamCredentials.RefreshIntervalSeconds)
+}
+
+func TestServerCredentialsWithIamCustomRefresh(t *testing.T) {
+	iamConfig := NewIamAuthConfig("my-cluster", MemoryDB, "us-west-2").
+		WithRefreshIntervalSeconds(600)
+	creds, err := NewServerCredentialsWithIam("myUser", iamConfig)
+	
+	assert.Nil(t, err)
+	assert.NotNil(t, creds)
+	
+	authInfo := creds.toProtobuf()
+	assert.Equal(t, protobuf.ServiceType_MEMORYDB, authInfo.IamCredentials.ServiceType)
+	assert.Equal(t, uint32(600), *authInfo.IamCredentials.RefreshIntervalSeconds)
+}
+
+func TestServerCredentialsWithIamRequiresUsername(t *testing.T) {
+	iamConfig := NewIamAuthConfig("my-cluster", Elasticache, "us-east-1")
+	creds, err := NewServerCredentialsWithIam("", iamConfig)
+	
+	assert.NotNil(t, err)
+	assert.Nil(t, creds)
+	assert.Contains(t, err.Error(), "username is required")
+}
+
+func TestServerCredentialsWithIamRequiresConfig(t *testing.T) {
+	creds, err := NewServerCredentialsWithIam("myUser", nil)
+	
+	assert.NotNil(t, err)
+	assert.Nil(t, creds)
+	assert.Contains(t, err.Error(), "iamConfig cannot be nil")
+}
+
+func TestOldServerCredentialsTests(t *testing.T) {
+	parameters := []struct {
+		input    *ServerCredentials
+		expected *protobuf.AuthenticationInfo
+	}{
+		{
+			NewServerCredentials("username", "password"),
+			&protobuf.AuthenticationInfo{Username: "username", Password: "password"},
+		},
+		{
+			NewServerCredentialsWithDefaultUsername("password"),
+			&protobuf.AuthenticationInfo{Password: "password"},
+		},
+	}
+
 	for i, parameter := range parameters {
 		t.Run(fmt.Sprintf("Testing [%v]", i), func(t *testing.T) {
 			result := parameter.input.toProtobuf()

@@ -34,18 +34,86 @@ func (addr *NodeAddress) toProtobuf() *protobuf.NodeAddress {
 	return &protobuf.NodeAddress{Host: addr.Host, Port: uint32(addr.Port)}
 }
 
+// ServiceType represents the types of AWS services that can be used for IAM authentication.
+type ServiceType int
+
+const (
+	// Elasticache represents Amazon ElastiCache service.
+	Elasticache ServiceType = iota
+	// MemoryDB represents Amazon MemoryDB service.
+	MemoryDB
+)
+
+// IamAuthConfig represents configuration settings for IAM authentication.
+type IamAuthConfig struct {
+	// The name of the ElastiCache/MemoryDB cluster.
+	clusterName string
+	// The type of service being used (ElastiCache or MemoryDB).
+	service ServiceType
+	// The AWS region where the ElastiCache/MemoryDB cluster is located.
+	region string
+	// Optional refresh interval in seconds for renewing IAM authentication tokens.
+	// If not provided, defaults to 300 seconds (5 min).
+	refreshIntervalSeconds *uint32
+}
+
+// NewIamAuthConfig returns an [IamAuthConfig] struct with the given configuration.
+func NewIamAuthConfig(clusterName string, service ServiceType, region string) *IamAuthConfig {
+	defaultRefresh := uint32(300)
+	return &IamAuthConfig{
+		clusterName:            clusterName,
+		service:                service,
+		region:                 region,
+		refreshIntervalSeconds: &defaultRefresh,
+	}
+}
+
+// WithRefreshIntervalSeconds sets the refresh interval in seconds for IAM token renewal.
+func (config *IamAuthConfig) WithRefreshIntervalSeconds(seconds uint32) *IamAuthConfig {
+	config.refreshIntervalSeconds = &seconds
+	return config
+}
+
+func (config *IamAuthConfig) toProtobuf() *protobuf.IamCredentials {
+	iamCreds := &protobuf.IamCredentials{
+		ClusterName: config.clusterName,
+		Region:      config.region,
+	}
+
+	if config.service == Elasticache {
+		iamCreds.ServiceType = protobuf.ServiceType_ELASTICACHE
+	} else {
+		iamCreds.ServiceType = protobuf.ServiceType_MEMORYDB
+	}
+
+	if config.refreshIntervalSeconds != nil {
+		iamCreds.RefreshIntervalSeconds = config.refreshIntervalSeconds
+	}
+
+	return iamCreds
+}
+
 // ServerCredentials represents the credentials for connecting to servers.
+// Supports two authentication modes:
+//   - Password-based authentication: Use username and password
+//   - IAM authentication: Use username (required) and iamConfig
+//
+// These modes are mutually exclusive.
 type ServerCredentials struct {
 	// The username that will be used for authenticating connections to the servers. If not supplied, "default"
-	// will be used.
+	// will be used for password-based authentication. Required for IAM authentication.
 	username string
 	// The password that will be used for authenticating connections to the servers.
+	// Mutually exclusive with iamConfig.
 	password string
+	// IAM authentication configuration. Mutually exclusive with password.
+	// The client will automatically generate and refresh the authentication token based on the provided configuration.
+	iamConfig *IamAuthConfig
 }
 
 // NewServerCredentials returns a [ServerCredentials] struct with the given username and password.
 func NewServerCredentials(username string, password string) *ServerCredentials {
-	return &ServerCredentials{username, password}
+	return &ServerCredentials{username: username, password: password}
 }
 
 // NewServerCredentialsWithDefaultUsername returns a [ServerCredentials] struct with a default username of "default" and the
@@ -54,8 +122,34 @@ func NewServerCredentialsWithDefaultUsername(password string) *ServerCredentials
 	return &ServerCredentials{password: password}
 }
 
+// NewServerCredentialsWithIam returns a [ServerCredentials] struct configured for IAM authentication.
+// The username is required for IAM authentication.
+func NewServerCredentialsWithIam(username string, iamConfig *IamAuthConfig) (*ServerCredentials, error) {
+	if username == "" {
+		return nil, errors.New("username is required for IAM authentication")
+	}
+	if iamConfig == nil {
+		return nil, errors.New("iamConfig cannot be nil")
+	}
+	return &ServerCredentials{username: username, iamConfig: iamConfig}, nil
+}
+
 func (creds *ServerCredentials) toProtobuf() *protobuf.AuthenticationInfo {
-	return &protobuf.AuthenticationInfo{Username: creds.username, Password: creds.password}
+	authInfo := &protobuf.AuthenticationInfo{
+		Username: creds.username,
+		Password: creds.password,
+	}
+
+	if creds.iamConfig != nil {
+		authInfo.IamCredentials = creds.iamConfig.toProtobuf()
+	}
+
+	return authInfo
+}
+
+// IsIamAuth returns true if this credential is configured for IAM authentication.
+func (creds *ServerCredentials) IsIamAuth() bool {
+	return creds.iamConfig != nil
 }
 
 // ReadFrom represents the client's read from strategy.

@@ -1587,6 +1587,46 @@ pub unsafe extern "C-unwind" fn update_connection_password(
     })
 }
 
+/// Manually refresh the IAM authentication token.
+///
+/// This function triggers an immediate refresh of the IAM token and updates the connection.
+/// It is only available if the client was created with IAM authentication.
+///
+/// # Parameters
+///
+/// * `client_adapter_ptr`: Pointer to a valid client returned from [`create_client`].
+/// * `request_id`: Unique identifier for a valid payload buffer created in the calling language.
+///
+/// # Returns
+///
+/// * A pointer to a [`CommandResult`] containing "OK" on success, or an error if:
+///   - The client is not using IAM authentication
+///   - Token generation fails
+///   - Authentication with the new token fails
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`].
+/// * `request_id` must be valid until it is passed in a call to [`free_command_response`].
+/// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn refresh_iam_token(
+    client_adapter_ptr: *const c_void,
+    request_id: usize,
+) -> *mut CommandResult {
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
+
+    let mut client = client_adapter.core.client.clone();
+    client_adapter.execute_request(request_id, async move {
+        client.refresh_iam_token().await.map(|_| Value::Okay)
+    })
+}
+
 /// Executes a Lua script.
 ///
 /// # Parameters
