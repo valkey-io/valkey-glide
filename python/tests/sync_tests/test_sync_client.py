@@ -288,24 +288,6 @@ class TestGlideClients:
         assert b"db=4" in client_info
         glide_sync_client.close()
 
-    @pytest.mark.parametrize("cluster_mode", [True])
-    def test_sync_select_database_id_custom_command(self, request, cluster_mode):
-        if cluster_mode:
-            # Check version using a temporary standalone client
-            temp_client = create_sync_client(request, cluster_mode=False)
-            if sync_check_if_server_version_lt(temp_client, "9.0.0"):
-                temp_client.close()
-                return pytest.skip(
-                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
-                )
-            temp_client.close()
-
-        glide_sync_client = create_sync_client(request, cluster_mode=cluster_mode)
-        assert glide_sync_client.custom_command(["SELECT", "4"]) == OK
-        client_info = glide_sync_client.custom_command(["CLIENT", "INFO"])
-        assert b"db=4" in client_info
-        glide_sync_client.close()
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_sync_select_database_id_custom_command(self, request, cluster_mode):
         if cluster_mode:
