@@ -652,7 +652,8 @@ public class TestUtilities {
             ProcessBuilder[] commands =
                     new ProcessBuilder[] {
                         new ProcessBuilder("sudo", "purge"), // clear file caches
-                        new ProcessBuilder("sudo", "find", "/tmp", "-maxdepth", "1", "-name", "glide*", "-delete"),
+                        new ProcessBuilder(
+                                "sudo", "find", "/tmp", "-maxdepth", "1", "-name", "glide*", "-delete"),
                         new ProcessBuilder("sudo", "ifconfig", "lo0", "down"),
                         new ProcessBuilder("sudo", "ifconfig", "lo0", "up"),
                     };

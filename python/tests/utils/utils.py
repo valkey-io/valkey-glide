@@ -1646,27 +1646,32 @@ def cleanup_local_sockets_mac():
     if "darwin" not in system:
         return
 
-    github_actions = os.getenv("GITHUB_ACTIONS")
-    runner_os = os.getenv("RUNNER_OS")
-    runner_name = os.getenv("RUNNER_NAME")
+    # github_actions = os.getenv("GITHUB_ACTIONS")
+    # runner_os = os.getenv("RUNNER_OS")
+    # runner_name = os.getenv("RUNNER_NAME")
 
-    # Only run if this is a github actions test running on a self hosted runner
-    if github_actions and runner_os and runner_name:
-        is_self_hosted_cirrus_mac = (
-            github_actions.lower() == "true"
-            and runner_os.lower() == "macos"
-            and runner_name.startswith("cirrus-")
-        )
-    else:
-        is_self_hosted_cirrus_mac = False
+    # # Only run if this is a github actions test running on a self hosted runner
+    # if github_actions and runner_os and runner_name:
+    #     is_self_hosted_cirrus_mac = (
+    #         github_actions.lower() == "true"
+    #         and runner_os.lower() == "macos"
+    #         and runner_name.startswith("cirrus-")
+    #     )
+    # else:
+    #     is_self_hosted_cirrus_mac = False
 
-    if not is_self_hosted_cirrus_mac:
-        print("⚠️ Skipping loopback cleanup: not a self-hosted macOS runner.")
-        return
+    # if not is_self_hosted_cirrus_mac:
+    #     print("⚠️ Skipping loopback cleanup: not a self-hosted macOS runner.")
+    #     return
 
     try:
+        subprocess.run(["sudo", "purge"], check=False)
         subprocess.run(["sudo", "ifconfig", "lo0", "down"], check=True)
+        subprocess.run(["sudo", "find", "/tmp", "-maxdepth", "1", "-name", "glide*", "-delete"], check=False)
         time.sleep(1)
         subprocess.run(["sudo", "ifconfig", "lo0", "up"], check=True)
+        time.sleep(1)
+        subprocess.run(["sudo", "ipconfig", "flushcache"], check=False)
     except Exception as e:
-        print(f"⚠️ Warning: pre-test cleanup failed: {e}")
+        print(f"Warning: pre-test cleanup failed: {e}")
+                
