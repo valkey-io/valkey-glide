@@ -68,11 +68,9 @@ runs:
           shell: pwsh
           if: "${{ inputs.os == 'windows' }}"
           run: |
-              # Verify build tools are available (windows-latest should have these)
-              Write-Host "Checking build tools..."
+              # Verify Rust toolchain is available
               rustc --version
               cargo --version
-              cl.exe 2>&1 | Select-String "Microsoft"
 
         - name: Setup WSL and install Valkey (Windows)
           shell: pwsh
