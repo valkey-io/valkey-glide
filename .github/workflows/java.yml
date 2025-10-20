@@ -155,11 +155,36 @@ jobs:
 
             - name: Build java client
               working-directory: java
-              run: ./gradlew --build-cache --continue build -x javadoc
+              shell: bash
+              run: |
+                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                      ./gradlew.bat --build-cache --continue build -x javadoc
+                  else
+                      ./gradlew --build-cache --continue build -x javadoc
+                  fi
+
+            - name: Setup WSL networking for tests (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              shell: pwsh
+              run: |
+                  # Get WSL IP address and set environment variable for tests
+                  $wslIp = wsl -d Ubuntu-22.04 -- hostname -I | ForEach-Object { $_.Trim().Split(' ')[0] }
+                  echo "WSL_IP=$wslIp" >> $env:GITHUB_ENV
+                  echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
+                  echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
+                  
+                  # Verify Valkey is running in WSL
+                  wsl -d Ubuntu-22.04 -- redis-cli ping
 
             - name: Ensure no skipped files by linter
               working-directory: java
-              run: ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+              shell: bash
+              run: |
+                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                      ./gradlew.bat --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+                  else
+                      ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+                  fi
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
@@ -239,9 +264,28 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
+            - name: Setup WSL networking for PubSub tests (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              shell: pwsh
+              run: |
+                  # Get WSL IP address and set environment variable for tests
+                  $wslIp = wsl -d Ubuntu-22.04 -- hostname -I | ForEach-Object { $_.Trim().Split(' ')[0] }
+                  echo "WSL_IP=$wslIp" >> $env:GITHUB_ENV
+                  echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
+                  echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
+                  
+                  # Verify Valkey is running in WSL
+                  wsl -d Ubuntu-22.04 -- redis-cli ping
+
             - name: Test pubsub
               working-directory: java
-              run: ./gradlew --build-cache :integTest:pubsubTest
+              shell: bash
+              run: |
+                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                      ./gradlew.bat --build-cache :integTest:pubsubTest
+                  else
+                      ./gradlew --build-cache :integTest:pubsubTest
+                  fi
 
             - name: Upload test & spotbugs reports
               if: always()
