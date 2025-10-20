@@ -27,6 +27,10 @@ inputs:
         description: "Engine version to install"
         required: false
         type: string
+    language:
+        description: "The language being built (optional, for language-specific setup)"
+        required: false
+        type: string
     github-token:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true
@@ -72,25 +76,29 @@ runs:
               rustc --version
               cargo --version
 
-        - name: Setup WSL and install Valkey (Windows)
+        - name: Setup WSL and install Valkey (Windows + Java)
           shell: pwsh
-          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
+          if: "${{ inputs.os == 'windows' && inputs.engine-version && inputs.language == 'java' }}"
           run: |
               # Install WSL2 with Ubuntu
               wsl --install --no-launch Ubuntu-22.04
               wsl --set-default-version 2
               
               # Wait for WSL to be ready
-              Start-Sleep -Seconds 10
+              Start-Sleep -Seconds 15
+              
+              # Get the actual distribution name
+              $distroName = (wsl -l -q | Where-Object { $_ -match "Ubuntu" } | Select-Object -First 1).Trim()
+              Write-Host "Using WSL distribution: $distroName"
               
               # Install dependencies and Valkey in WSL
-              wsl -d Ubuntu-22.04 -- sudo apt update
-              wsl -d Ubuntu-22.04 -- sudo apt install -y build-essential git pkg-config libssl-dev
-              wsl -d Ubuntu-22.04 -- git clone https://github.com/valkey-io/valkey.git
-              wsl -d Ubuntu-22.04 -- bash -c "cd valkey && git checkout ${{ inputs.engine-version }} && make BUILD_TLS=yes && sudo make install"
+              wsl -d $distroName -- sudo apt update
+              wsl -d $distroName -- sudo apt install -y build-essential git pkg-config libssl-dev
+              wsl -d $distroName -- git clone https://github.com/valkey-io/valkey.git
+              wsl -d $distroName -- bash -c "cd valkey && git checkout ${{ inputs.engine-version }} && make BUILD_TLS=yes && sudo make install"
               
               # Start Valkey server in WSL background
-              wsl -d Ubuntu-22.04 -- redis-server --daemonize yes --bind 0.0.0.0 --port 6379
+              wsl -d $distroName -- redis-server --daemonize yes --bind 0.0.0.0 --port 6379
 
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
