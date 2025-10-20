@@ -152,6 +152,7 @@ jobs:
 
             - name: Install & build & test
               working-directory: go
+              shell: bash
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
@@ -384,6 +385,7 @@ jobs:
 
             - name: Build and test
               working-directory: ./go
+              shell: bash
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
@@ -457,6 +459,7 @@ jobs:
 
             - name: Install & build & test
               working-directory: go
+              shell: bash
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
