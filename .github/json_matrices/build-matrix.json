@@ -81,5 +81,15 @@
         "IMAGE": "amazonlinux:latest",
         "PACKAGE_MANAGERS": [],
         "languages": ["python", "node", "java", "go"]
+    },
+    {
+        "OS": "windows",
+        "NAMED_OS": "windows",
+        "RUNNER": "windows-latest",
+        "ARCH": "x64",
+        "TARGET": "x86_64-pc-windows-msvc",
+        "PACKAGE_MANAGERS": ["maven"],
+        "languages": ["java"],
+        "run": "always"
     }
 ]
