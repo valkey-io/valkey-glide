@@ -206,11 +206,11 @@ func TestServerCredentials(t *testing.T) {
 func TestServerCredentialsWithIam(t *testing.T) {
 	iamConfig := NewIamAuthConfig("my-cluster", Elasticache, "us-east-1")
 	creds, err := NewServerCredentialsWithIam("myUser", iamConfig)
-	
+
 	assert.Nil(t, err)
 	assert.NotNil(t, creds)
 	assert.True(t, creds.IsIamAuth())
-	
+
 	authInfo := creds.toProtobuf()
 	assert.Equal(t, "myUser", authInfo.Username)
 	assert.Equal(t, "", authInfo.Password)
@@ -225,10 +225,10 @@ func TestServerCredentialsWithIamCustomRefresh(t *testing.T) {
 	iamConfig := NewIamAuthConfig("my-cluster", MemoryDB, "us-west-2").
 		WithRefreshIntervalSeconds(600)
 	creds, err := NewServerCredentialsWithIam("myUser", iamConfig)
-	
+
 	assert.Nil(t, err)
 	assert.NotNil(t, creds)
-	
+
 	authInfo := creds.toProtobuf()
 	assert.Equal(t, protobuf.ServiceType_MEMORYDB, authInfo.IamCredentials.ServiceType)
 	assert.Equal(t, uint32(600), *authInfo.IamCredentials.RefreshIntervalSeconds)
@@ -237,7 +237,7 @@ func TestServerCredentialsWithIamCustomRefresh(t *testing.T) {
 func TestServerCredentialsWithIamRequiresUsername(t *testing.T) {
 	iamConfig := NewIamAuthConfig("my-cluster", Elasticache, "us-east-1")
 	creds, err := NewServerCredentialsWithIam("", iamConfig)
-	
+
 	assert.NotNil(t, err)
 	assert.Nil(t, creds)
 	assert.Contains(t, err.Error(), "username is required")
@@ -245,7 +245,7 @@ func TestServerCredentialsWithIamRequiresUsername(t *testing.T) {
 
 func TestServerCredentialsWithIamRequiresConfig(t *testing.T) {
 	creds, err := NewServerCredentialsWithIam("myUser", nil)
-	
+
 	assert.NotNil(t, err)
 	assert.Nil(t, creds)
 	assert.Contains(t, err.Error(), "iamConfig cannot be nil")

@@ -19,7 +19,7 @@ use redis::ErrorKind;
 use redis::ObjectType;
 use redis::ScanStateRC;
 use redis::cluster_routing::{
-    MultipleNodeRoutingInfo, Route, RoutingInfo, ResponsePolicy, SingleNodeRoutingInfo, SlotAddr,
+    MultipleNodeRoutingInfo, ResponsePolicy, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
 use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, Pipeline, PipelineRetryStrategy, RedisResult, Value};
