@@ -651,7 +651,7 @@ public class TestUtilities {
         try {
             ProcessBuilder[] commands =
                     new ProcessBuilder[] {
-                        new ProcessBuilder("sudo", "purge"), // clear file caches
+                        // new ProcessBuilder("sudo", "purge"), // clear file caches
                         new ProcessBuilder(
                                 "sudo", "find", "/tmp", "-maxdepth", "1", "-name", "glide*", "-delete"),
                         new ProcessBuilder("sudo", "ifconfig", "lo0", "down"),
@@ -661,8 +661,9 @@ public class TestUtilities {
             System.out.println("starting to run tcp refresh");
 
             commands[0].inheritIO().start().waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
-            Thread.sleep(1000);
             commands[1].inheritIO().start().waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+            Thread.sleep(1000);
+            commands[2].inheritIO().start().waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
 
         } catch (Exception e) {
             System.err.println("⚠️  Warning: pre-test cleanup failed: " + e.getMessage());

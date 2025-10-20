@@ -1665,13 +1665,15 @@ def cleanup_local_sockets_mac():
     #     return
 
     try:
-        subprocess.run(["sudo", "purge"], check=False)
-        subprocess.run(["sudo", "ifconfig", "lo0", "down"], check=True)
-        subprocess.run(["sudo", "find", "/tmp", "-maxdepth", "1", "-name", "glide*", "-delete"], check=False)
-        time.sleep(1)
+        # subprocess.run(["sudo", "purge"], check=False)
+        # subprocess.run(["sudo", "ifconfig", "lo0", "down"], check=True)
+        subprocess.run(
+            ["sudo", "find", "/tmp", "-maxdepth", "1", "-name", "glide*", "-delete"],
+            check=False,
+        )
+        # time.sleep(1)
         subprocess.run(["sudo", "ifconfig", "lo0", "up"], check=True)
         time.sleep(1)
         subprocess.run(["sudo", "ipconfig", "flushcache"], check=False)
     except Exception as e:
         print(f"Warning: pre-test cleanup failed: {e}")
-                
