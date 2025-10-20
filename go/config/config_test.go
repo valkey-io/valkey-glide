@@ -251,30 +251,6 @@ func TestServerCredentialsWithIamRequiresConfig(t *testing.T) {
 	assert.Contains(t, err.Error(), "iamConfig cannot be nil")
 }
 
-func TestOldServerCredentialsTests(t *testing.T) {
-	parameters := []struct {
-		input    *ServerCredentials
-		expected *protobuf.AuthenticationInfo
-	}{
-		{
-			NewServerCredentials("username", "password"),
-			&protobuf.AuthenticationInfo{Username: "username", Password: "password"},
-		},
-		{
-			NewServerCredentialsWithDefaultUsername("password"),
-			&protobuf.AuthenticationInfo{Password: "password"},
-		},
-	}
-
-	for i, parameter := range parameters {
-		t.Run(fmt.Sprintf("Testing [%v]", i), func(t *testing.T) {
-			result := parameter.input.toProtobuf()
-
-			assert.Equal(t, parameter.expected, result)
-		})
-	}
-}
-
 func TestConfig_AzAffinity(t *testing.T) {
 	hosts := []string{"host1", "host2"}
 	ports := []int{1234, 5678}
