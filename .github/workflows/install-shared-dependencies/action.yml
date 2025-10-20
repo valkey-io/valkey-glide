@@ -9,6 +9,7 @@ inputs:
             - amazon-linux
             - macos
             - ubuntu
+            - windows
     target:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
         type: string
@@ -21,6 +22,7 @@ inputs:
             - aarch64-apple-darwin
             - aarch64-unknown-linux-musl
             - x86_64-unknown-linux-musl
+            - x86_64-pc-windows-msvc
     engine-version:
         description: "Engine version to install"
         required: false
@@ -62,6 +64,36 @@ runs:
           run: |
               yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
+        - name: Install software dependencies for Windows
+          shell: pwsh
+          if: "${{ inputs.os == 'windows' }}"
+          run: |
+              # Verify build tools are available (windows-latest should have these)
+              Write-Host "Checking build tools..."
+              rustc --version
+              cargo --version
+              cl.exe 2>&1 | Select-String "Microsoft"
+
+        - name: Setup WSL and install Valkey (Windows)
+          shell: pwsh
+          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
+          run: |
+              # Install WSL2 with Ubuntu
+              wsl --install --no-launch Ubuntu-22.04
+              wsl --set-default-version 2
+              
+              # Wait for WSL to be ready
+              Start-Sleep -Seconds 10
+              
+              # Install dependencies and Valkey in WSL
+              wsl -d Ubuntu-22.04 -- sudo apt update
+              wsl -d Ubuntu-22.04 -- sudo apt install -y build-essential git pkg-config libssl-dev
+              wsl -d Ubuntu-22.04 -- git clone https://github.com/valkey-io/valkey.git
+              wsl -d Ubuntu-22.04 -- bash -c "cd valkey && git checkout ${{ inputs.engine-version }} && make BUILD_TLS=yes && sudo make install"
+              
+              # Start Valkey server in WSL background
+              wsl -d Ubuntu-22.04 -- redis-server --daemonize yes --bind 0.0.0.0 --port 6379
+
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
           uses: ./.github/workflows/install-rust-and-protoc
@@ -70,7 +102,7 @@ runs:
               github-token: ${{ inputs.github-token }}
 
         - name: Install engine
-          if: "${{ inputs.engine-version }}"
+          if: "${{ inputs.engine-version && inputs.os != 'windows' }}"
           uses: ./.github/workflows/install-engine
           with:
               engine-version: ${{ inputs.engine-version }}
