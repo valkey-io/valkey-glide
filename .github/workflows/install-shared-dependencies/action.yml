@@ -78,18 +78,16 @@ runs:
 
         - name: Setup WSL (Windows only)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
-          uses: Vampire/setup-wsl@v3
+          uses: Vampire/setup-wsl@v6
           with:
               distribution: Ubuntu-22.04
               use-cache: true
-              update: true
 
         - name: Install engine
           shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
           if: "${{ inputs.engine-version }}"
           run: |
               # Install dependencies and Valkey
-              sudo apt update
               sudo apt install -y build-essential git pkg-config libssl-dev
               git clone https://github.com/valkey-io/valkey.git
               cd valkey && git checkout ${{ inputs.engine-version }} && make BUILD_TLS=yes && sudo make install
