@@ -168,35 +168,8 @@ jobs:
               if: ${{ matrix.host.OS == 'windows' }}
               shell: pwsh
               run: |
-                  # Get the actual distribution name - try multiple approaches
-                  $distroName = $null
-                  try {
-                      $distros = wsl -l -q 2>$null | Where-Object { $_ -and $_.Trim() -match "Ubuntu" }
-                      if ($distros) {
-                          $distroName = $distros[0].Trim()
-                      }
-                  } catch {
-                      Write-Host "Failed to get distro list, trying default names..."
-                  }
-                  
-                  # Fallback to common names if detection fails
-                  if (-not $distroName) {
-                      $possibleNames = @("Ubuntu-22.04", "Ubuntu 22.04 LTS", "Ubuntu")
-                      foreach ($name in $possibleNames) {
-                          try {
-                              wsl -d $name -- echo "test" 2>$null
-                              $distroName = $name
-                              break
-                          } catch {
-                              continue
-                          }
-                      }
-                  }
-                  
-                  if (-not $distroName) {
-                      throw "Could not find Ubuntu WSL distribution"
-                  }
-                  
+                  # Use the known distribution name from installation
+                  $distroName = "Ubuntu 22.04 LTS"
                   Write-Host "Using WSL distribution: $distroName"
                   
                   # Get WSL IP address and set environment variable for tests
@@ -301,35 +274,8 @@ jobs:
               if: ${{ matrix.host.OS == 'windows' }}
               shell: pwsh
               run: |
-                  # Get the actual distribution name - try multiple approaches
-                  $distroName = $null
-                  try {
-                      $distros = wsl -l -q 2>$null | Where-Object { $_ -and $_.Trim() -match "Ubuntu" }
-                      if ($distros) {
-                          $distroName = $distros[0].Trim()
-                      }
-                  } catch {
-                      Write-Host "Failed to get distro list, trying default names..."
-                  }
-                  
-                  # Fallback to common names if detection fails
-                  if (-not $distroName) {
-                      $possibleNames = @("Ubuntu-22.04", "Ubuntu 22.04 LTS", "Ubuntu")
-                      foreach ($name in $possibleNames) {
-                          try {
-                              wsl -d $name -- echo "test" 2>$null
-                              $distroName = $name
-                              break
-                          } catch {
-                              continue
-                          }
-                      }
-                  }
-                  
-                  if (-not $distroName) {
-                      throw "Could not find Ubuntu WSL distribution"
-                  }
-                  
+                  # Use the known distribution name from installation
+                  $distroName = "Ubuntu 22.04 LTS"
                   Write-Host "Using WSL distribution: $distroName"
                   
                   # Get WSL IP address and set environment variable for tests
