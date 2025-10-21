@@ -111,7 +111,9 @@ runs:
               # Check if Valkey binaries are cached
               if [ "${{ steps.cache-valkey.outputs.cache-hit }}" = "true" ]; then
                   echo "Using cached Valkey binaries"
-                  cd valkey && sudo make install
+                  # Clone repo for make install to work
+                  git clone https://github.com/valkey-io/valkey.git
+                  cd valkey && git checkout ${{ inputs.engine-version }} && sudo make install
               else
                   echo "Building Valkey from source"
                   # Install dependencies (only needed on Linux, Windows handled by Vampire)
