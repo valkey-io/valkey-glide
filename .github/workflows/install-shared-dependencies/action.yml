@@ -112,6 +112,8 @@ runs:
               OS_TYPE: ${{ inputs.os }}
           run: |
               echo "Using cached Valkey binaries"
+              echo "OS_TYPE: '$OS_TYPE'"
+              echo "ENGINE_VERSION: '$ENGINE_VERSION'"
               # Clone repo fresh
               git clone https://github.com/valkey-io/valkey.git
               cd valkey && git checkout "$ENGINE_VERSION"
@@ -127,8 +129,11 @@ runs:
           env:
               ENGINE_VERSION: ${{ inputs.engine-version }}
               OS_TYPE: ${{ inputs.os }}
+              WSLENV: ENGINE_VERSION:OS_TYPE
           run: |
               echo "Building Valkey from source"
+              echo "OS_TYPE: '$OS_TYPE'"
+              echo "ENGINE_VERSION: '$ENGINE_VERSION'"
               # Install dependencies (only needed on Linux, Windows handled by Vampire)
               if [ "$OS_TYPE" != "windows" ]; then
                   sudo apt install -y build-essential git pkg-config libssl-dev
@@ -155,6 +160,8 @@ runs:
           env:
               OS_TYPE: ${{ inputs.os }}
           run: |
+              echo "Starting Valkey server"
+              echo "OS_TYPE: '$OS_TYPE'"
 
               # Start Valkey server in background
               redis-server --daemonize yes --bind 0.0.0.0 --port 6379
