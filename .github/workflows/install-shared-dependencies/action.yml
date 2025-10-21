@@ -107,28 +107,32 @@ runs:
         - name: Install engine
           shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
           if: "${{ inputs.engine-version }}"
+          env:
+              CACHE_HIT: ${{ steps.cache-valkey.outputs.cache-hit }}
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+              OS_TYPE: ${{ inputs.os }}
           run: |
               # Check if Valkey binaries are cached
-              if [ "${{ steps.cache-valkey.outputs.cache-hit }}" = "true" ]; then
+              if [ "$CACHE_HIT" = "true" ]; then
                   echo "Using cached Valkey binaries"
                   # Clone repo for make install to work
                   git clone https://github.com/valkey-io/valkey.git
-                  cd valkey && git checkout ${{ inputs.engine-version }} && sudo make install
+                  cd valkey && git checkout "$ENGINE_VERSION" && sudo make install
               else
                   echo "Building Valkey from source"
                   # Install dependencies (only needed on Linux, Windows handled by Vampire)
-                  if [ "${{ inputs.os }}" != "windows" ]; then
+                  if [ "$OS_TYPE" != "windows" ]; then
                       sudo apt install -y build-essential git pkg-config libssl-dev
                   fi
                   git clone https://github.com/valkey-io/valkey.git
-                  cd valkey && git checkout ${{ inputs.engine-version }} && make -j$(nproc) BUILD_TLS=yes && sudo make install
+                  cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes && sudo make install
               fi
               
               # Start Valkey server in background
               redis-server --daemonize yes --bind 0.0.0.0 --port 6379
               
               # For Windows, write IP to a file that PowerShell can read
-              if [ "${{ inputs.os }}" = "windows" ]; then
+              if [ "$OS_TYPE" = "windows" ]; then
                   hostname -I | awk '{print $1}' > /tmp/wsl_ip.txt
               fi
 
