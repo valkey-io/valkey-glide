@@ -115,7 +115,8 @@ runs:
               # Check if Valkey binaries are cached
               if [ "$CACHE_HIT" = "true" ]; then
                   echo "Using cached Valkey binaries"
-                  # Clone repo for make install to work
+                  # Remove any existing valkey directory and clone fresh
+                  rm -rf valkey
                   git clone https://github.com/valkey-io/valkey.git
                   cd valkey && git checkout "$ENGINE_VERSION" && sudo make install
               else
