@@ -73,6 +73,8 @@ excluded_sync_symbols = [
     "CoreCommands",  # ClassDef
     # python/glide-sync/glide_sync/sync_commands/standalone_commands.py
     "StandaloneCommands",  # ClassDef
+    # python/glide-sync/glide_sync/sync_commands/cluster_scan_cursor.py
+    "FINISHED_SCAN_CURSOR",  # Assignment
 ]
 
 excluded_shared_symbols = [
