@@ -97,9 +97,9 @@ runs:
           id: cache-valkey
           with:
               path: |
-                  valkey/src/redis-server
-                  valkey/src/redis-cli
-                  valkey/src/redis-benchmark
+                  valkey-cache/redis-server
+                  valkey-cache/redis-cli
+                  valkey-cache/redis-benchmark
               key: valkey-${{ inputs.engine-version }}-${{ inputs.os }}-${{ inputs.target }}-${{ github.sha }}
               restore-keys: |
                   valkey-${{ inputs.engine-version }}-${{ inputs.os }}-${{ inputs.target }}-
@@ -115,10 +115,14 @@ runs:
               # Check if Valkey binaries are cached
               if [ "$CACHE_HIT" = "true" ]; then
                   echo "Using cached Valkey binaries"
-                  # Remove any existing valkey directory and clone fresh
-                  rm -rf valkey
+                  # Clone repo fresh
                   git clone https://github.com/valkey-io/valkey.git
-                  cd valkey && git checkout "$ENGINE_VERSION" && sudo make install
+                  cd valkey && git checkout "$ENGINE_VERSION"
+                  # Move cached binaries to correct location (force overwrite)
+                  mkdir -p src
+                  cp -f ../valkey-cache/* src/ 2>/dev/null || true
+                  # Install the cached binaries
+                  sudo make install
               else
                   echo "Building Valkey from source"
                   # Install dependencies (only needed on Linux, Windows handled by Vampire)
@@ -126,7 +130,12 @@ runs:
                       sudo apt install -y build-essential git pkg-config libssl-dev
                   fi
                   git clone https://github.com/valkey-io/valkey.git
-                  cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes && sudo make install
+                  cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes
+                  # Cache the built binaries
+                  mkdir -p ../valkey-cache
+                  cp -f src/redis-server src/redis-cli src/redis-benchmark ../valkey-cache/
+                  # Install the binaries
+                  sudo make install
               fi
 
               # Start Valkey server in background
