@@ -96,6 +96,11 @@ runs:
               
               # Start Valkey server in background
               redis-server --daemonize yes --bind 0.0.0.0 --port 6379
+              
+              # For Windows, write IP to a file that PowerShell can read
+              if [ "${{ inputs.os }}" = "windows" ]; then
+                  hostname -I | awk '{print $1}' > /tmp/wsl_ip.txt
+              fi
 
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
