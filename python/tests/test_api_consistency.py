@@ -62,6 +62,9 @@ EXCLUDED_TESTS = {
 EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
         "test_opentelemetry.py",
+        "test_pubsub.py",
+        "test_scan.py",
+        "test_deprecation_warnings.py",
     ],
     "sync_only": [],
 }
