@@ -97,9 +97,9 @@ runs:
           id: cache-valkey
           with:
               path: |
-                  valkey-cache/redis-server
-                  valkey-cache/redis-cli
-                  valkey-cache/redis-benchmark
+                  valkey-cache/valkey-server
+                  valkey-cache/valkey-cli
+                  valkey-cache/valkey-benchmark
               key: valkey-${{ inputs.engine-version }}-${{ inputs.os }}-${{ inputs.target }}-${{ github.sha }}
               restore-keys: |
                   valkey-${{ inputs.engine-version }}-${{ inputs.os }}-${{ inputs.target }}-
@@ -133,7 +133,7 @@ runs:
                   cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes
                   # Cache the built binaries
                   mkdir -p ../valkey-cache
-                  cp -f src/redis-server src/redis-cli src/redis-benchmark ../valkey-cache/
+                  cp -f src/valkey-server src/valkey-cli src/valkey-benchmark ../valkey-cache/
                   # Install the binaries
                   sudo make install
               fi
