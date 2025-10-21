@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
+import platform
 import re
 import time
 from datetime import date, timedelta
@@ -218,6 +219,12 @@ class TestBatch:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("is_atomic", [True, False])
     async def test_batch_large_values(self, request, cluster_mode, protocol, is_atomic):
+        # Skip on macOS - the macOS tests run on self hosted VMs which have resource limits
+        # making this test flaky with "no buffer space available" errors. See - https://github.com/valkey-io/valkey-glide/issues/4902
+        system = platform.system().lower()
+        if "darwin" in system:
+            return
+
         glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
