@@ -113,6 +113,8 @@ tasks.register('buildRust', Exec) {
             target = "${arch}-unknown-linux-gnu.2.17"
         } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
             target = "${arch}-unknown-linux-musl"
+        } else if (osdetector.os == 'windows') {
+            target = "${arch}-pc-windows-msvc"
         } else {
             target = ""
         }
@@ -124,6 +126,8 @@ tasks.register('buildRust', Exec) {
     } else if (target.contains("musl")) {
         commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
         environment RUSTFLAGS: '-C target-feature=-crt-static'
+    } else if (target.contains("windows")) {
+        commandLine 'cargo', 'build', '--target', "$target", '--release'
     } else {
         commandLine 'cargo', 'build', '--release'
     }
@@ -158,6 +162,8 @@ tasks.register('copyNativeLib', Copy) {
         from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
+    } else if (osdetector.os == 'windows') {
+        from "${projectDir}/../target/${arch}-pc-windows-msvc/release/"
     } else {
         from "${projectDir}/../target/release/"
     }
@@ -264,6 +270,8 @@ tasks.withType(Test) {
         jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-unknown-linux-gnu/release"
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-unknown-linux-musl/release"
+    } else if (osdetector.os == 'windows') {
+        jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-pc-windows-msvc/release"
     } else {
         jvmArgs "-Djava.library.path=${projectDir}/../target/release"
     }
