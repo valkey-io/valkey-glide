@@ -168,18 +168,17 @@ jobs:
               if: ${{ matrix.host.OS == 'windows' }}
               shell: pwsh
               run: |
-                  # Use the known distribution name from installation
-                  $distroName = "Ubuntu 22.04 LTS"
-                  Write-Host "Using WSL distribution: $distroName"
+                  # Use default WSL distribution (no -d flag needed)
+                  Write-Host "Using WSL default distribution"
                   
                   # Get WSL IP address and set environment variable for tests
-                  $wslIp = wsl -d $distroName -- hostname -I | ForEach-Object { $_.Trim().Split(' ')[0] }
+                  $wslIp = wsl -- hostname -I | ForEach-Object { $_.Trim().Split(' ')[0] }
                   echo "WSL_IP=$wslIp" >> $env:GITHUB_ENV
                   echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
                   echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
                   
                   # Verify Valkey is running in WSL
-                  wsl -d $distroName -- redis-cli ping
+                  wsl -- redis-cli ping
 
             - name: Ensure no skipped files by linter
               working-directory: java
@@ -274,18 +273,17 @@ jobs:
               if: ${{ matrix.host.OS == 'windows' }}
               shell: pwsh
               run: |
-                  # Use the known distribution name from installation
-                  $distroName = "Ubuntu 22.04 LTS"
-                  Write-Host "Using WSL distribution: $distroName"
+                  # Use default WSL distribution (no -d flag needed)
+                  Write-Host "Using WSL default distribution"
                   
                   # Get WSL IP address and set environment variable for tests
-                  $wslIp = wsl -d $distroName -- hostname -I | ForEach-Object { $_.Trim().Split(' ')[0] }
+                  $wslIp = wsl -- hostname -I | ForEach-Object { $_.Trim().Split(' ')[0] }
                   echo "WSL_IP=$wslIp" >> $env:GITHUB_ENV
                   echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
                   echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
                   
                   # Verify Valkey is running in WSL
-                  wsl -d $distroName -- redis-cli ping
+                  wsl -- redis-cli ping
 
             - name: Test pubsub
               working-directory: java

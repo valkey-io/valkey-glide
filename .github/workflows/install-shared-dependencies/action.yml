@@ -85,32 +85,23 @@ runs:
               wsl --set-default-version 2
               
               # Wait for WSL to be ready
-              Start-Sleep -Seconds 15
+              Start-Sleep -Seconds 20
               
-              # The distribution is installed as "Ubuntu 22.04 LTS" based on the output
-              $distroName = "Ubuntu 22.04 LTS"
-              Write-Host "Using WSL distribution: $distroName"
+              # Set Ubuntu as default distribution to avoid name issues
+              wsl --set-default "Ubuntu 22.04 LTS"
               
-              # Verify the distribution exists
-              try {
-                  wsl -d $distroName -- echo "WSL distribution verified"
-              } catch {
-                  # If that fails, try to find it dynamically
-                  Write-Host "Trying to find Ubuntu distribution..."
-                  $allDistros = wsl -l -v 2>$null
-                  Write-Host "Available distributions:"
-                  Write-Host $allDistros
-                  throw "Could not connect to Ubuntu WSL distribution"
-              }
+              # Verify WSL is working by using default (no -d flag needed)
+              Write-Host "Testing WSL connection..."
+              wsl -- echo "WSL connection successful"
               
-              # Install dependencies and Valkey in WSL
-              wsl -d $distroName -- sudo apt update
-              wsl -d $distroName -- sudo apt install -y build-essential git pkg-config libssl-dev
-              wsl -d $distroName -- git clone https://github.com/valkey-io/valkey.git
-              wsl -d $distroName -- bash -c "cd valkey && git checkout ${{ inputs.engine-version }} && make BUILD_TLS=yes && sudo make install"
+              # Install dependencies and Valkey in WSL (using default distribution)
+              wsl -- sudo apt update
+              wsl -- sudo apt install -y build-essential git pkg-config libssl-dev
+              wsl -- git clone https://github.com/valkey-io/valkey.git
+              wsl -- bash -c "cd valkey && git checkout ${{ inputs.engine-version }} && make BUILD_TLS=yes && sudo make install"
               
               # Start Valkey server in WSL background
-              wsl -d $distroName -- redis-server --daemonize yes --bind 0.0.0.0 --port 6379
+              wsl -- redis-server --daemonize yes --bind 0.0.0.0 --port 6379
 
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
