@@ -76,6 +76,12 @@ runs:
               rustc --version
               cargo --version
 
+        - name: Setup Python for Windows
+          if: "${{ inputs.os == 'windows' }}"
+          uses: actions/setup-python@v5
+          with:
+              python-version: '3.x'
+
         - name: Setup WSL (Windows only)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
           uses: Vampire/setup-wsl@v6
