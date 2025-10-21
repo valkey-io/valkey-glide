@@ -76,32 +76,26 @@ runs:
               rustc --version
               cargo --version
 
-        - name: Setup WSL (Windows + Java)
-          if: "${{ inputs.os == 'windows' && inputs.engine-version && inputs.language == 'java' }}"
+        - name: Setup WSL (Windows only)
+          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
           uses: Vampire/setup-wsl@v3
           with:
               distribution: Ubuntu-22.04
               use-cache: true
               update: true
-          env:
-              GITHUB_TOKEN: ${{ inputs.github-token }}
 
-        - name: Install Valkey in WSL (Windows + Java)
-          shell: pwsh
-          if: "${{ inputs.os == 'windows' && inputs.engine-version && inputs.language == 'java' }}"
+        - name: Install engine
+          shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
+          if: "${{ inputs.engine-version }}"
           run: |
-              # Verify WSL is working
-              Write-Host "Testing WSL connection..."
-              wsl -d Ubuntu-22.04 -- echo "WSL connection successful"
+              # Install dependencies and Valkey
+              sudo apt update
+              sudo apt install -y build-essential git pkg-config libssl-dev
+              git clone https://github.com/valkey-io/valkey.git
+              cd valkey && git checkout ${{ inputs.engine-version }} && make BUILD_TLS=yes && sudo make install
               
-              # Install dependencies and Valkey in WSL
-              wsl -d Ubuntu-22.04 -- sudo apt update
-              wsl -d Ubuntu-22.04 -- sudo apt install -y build-essential git pkg-config libssl-dev
-              wsl -d Ubuntu-22.04 -- git clone https://github.com/valkey-io/valkey.git
-              wsl -d Ubuntu-22.04 -- bash -c "cd valkey && git checkout ${{ inputs.engine-version }} && make BUILD_TLS=yes && sudo make install"
-              
-              # Start Valkey server in WSL background
-              wsl -d Ubuntu-22.04 -- redis-server --daemonize yes --bind 0.0.0.0 --port 6379
+              # Start Valkey server in background
+              redis-server --daemonize yes --bind 0.0.0.0 --port 6379
 
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
@@ -109,13 +103,6 @@ runs:
           with:
               target: ${{ inputs.target }}
               github-token: ${{ inputs.github-token }}
-
-        - name: Install engine
-          if: "${{ inputs.engine-version && inputs.os != 'windows' }}"
-          uses: ./.github/workflows/install-engine
-          with:
-              engine-version: ${{ inputs.engine-version }}
-              target: ${{ inputs.target }}
 
         - name: Install zig
           if: ${{ contains(inputs.target, 'linux-gnu') }}
