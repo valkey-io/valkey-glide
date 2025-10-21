@@ -42,9 +42,11 @@ public class NativeUtils {
                 NativeUtils.loadLibraryFromJar(glideLib + ".dylib");
             } else if (osName.contains("linux")) {
                 NativeUtils.loadLibraryFromJar(glideLib + ".so");
+            } else if (osName.contains("windows")) {
+                NativeUtils.loadLibraryFromJar("/glide_rs.dll");
             } else {
                 throw new UnsupportedOperationException(
-                        "OS not supported. Glide is only available on Mac OS and Linux systems.");
+                        "OS not supported. Glide is only available on Mac OS, Linux, and Windows systems.");
             }
         } catch (java.io.IOException e) {
             e.printStackTrace();
