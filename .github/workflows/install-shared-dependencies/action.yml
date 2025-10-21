@@ -83,15 +83,38 @@ runs:
               distribution: Ubuntu-22.04
               use-cache: true
               update: true
+              additional-packages: build-essential git pkg-config libssl-dev
+
+        - name: Cache Valkey build
+          if: "${{ inputs.engine-version }}"
+          uses: actions/cache@v4
+          id: cache-valkey
+          with:
+              path: |
+                  valkey/src/redis-server
+                  valkey/src/redis-cli
+                  valkey/src/redis-benchmark
+              key: valkey-${{ inputs.engine-version }}-${{ inputs.os }}-${{ inputs.target }}-${{ github.sha }}
+              restore-keys: |
+                  valkey-${{ inputs.engine-version }}-${{ inputs.os }}-${{ inputs.target }}-
 
         - name: Install engine
           shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
           if: "${{ inputs.engine-version }}"
           run: |
-              # Install dependencies and Valkey
-              sudo apt install -y build-essential git pkg-config libssl-dev
-              git clone https://github.com/valkey-io/valkey.git
-              cd valkey && git checkout ${{ inputs.engine-version }} && make BUILD_TLS=yes && sudo make install
+              # Check if Valkey binaries are cached
+              if [ "${{ steps.cache-valkey.outputs.cache-hit }}" = "true" ]; then
+                  echo "Using cached Valkey binaries"
+                  cd valkey && sudo make install
+              else
+                  echo "Building Valkey from source"
+                  # Install dependencies (only needed on Linux, Windows handled by Vampire)
+                  if [ "${{ inputs.os }}" != "windows" ]; then
+                      sudo apt install -y build-essential git pkg-config libssl-dev
+                  fi
+                  git clone https://github.com/valkey-io/valkey.git
+                  cd valkey && git checkout ${{ inputs.engine-version }} && make -j$(nproc) BUILD_TLS=yes && sudo make install
+              fi
               
               # Start Valkey server in background
               redis-server --daemonize yes --bind 0.0.0.0 --port 6379
