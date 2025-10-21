@@ -82,6 +82,7 @@ runs:
           with:
               distribution: Ubuntu-22.04
               use-cache: true
+              update: true
 
         - name: Install engine
           shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
