@@ -106,45 +106,55 @@ runs:
 
         - name: Install engine
           shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
-          if: "${{ inputs.engine-version }}"
+          if: "${{ inputs.engine-version && steps.cache-valkey.outputs.cache-hit == 'true' }}"
           env:
-              CACHE_HIT: ${{ steps.cache-valkey.outputs.cache-hit || 'false' }}
               ENGINE_VERSION: ${{ inputs.engine-version }}
               OS_TYPE: ${{ inputs.os }}
           run: |
-              # Check if Valkey binaries are cached
-              if [ "$CACHE_HIT" = "true" ]; then
-                  echo "Using cached Valkey binaries"
-                  # Clone repo fresh
-                  git clone https://github.com/valkey-io/valkey.git
-                  cd valkey && git checkout "$ENGINE_VERSION"
-                  # Move cached binaries to correct location (force overwrite)
-                  mkdir -p src
-                  cp -f ../valkey-cache/* src/ 2>/dev/null || true
-                  # Install the cached binaries
-                  sudo make install
-              else
-                  echo "Building Valkey from source"
-                  # Install dependencies (only needed on Linux, Windows handled by Vampire)
-                  if [ "$OS_TYPE" != "windows" ]; then
-                      sudo apt install -y build-essential git pkg-config libssl-dev
-                  fi
-                  git clone https://github.com/valkey-io/valkey.git
-                  cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes
-                  # Cache the built binaries - detect which naming convention is used
-                  mkdir -p ../valkey-cache
-                  if [ -f "src/valkey-server" ]; then
-                      echo "Found Valkey binaries"
-                      cp -f src/valkey-server src/valkey-cli src/valkey-benchmark ../valkey-cache/ 2>/dev/null || true
-                  elif [ -f "src/redis-server" ]; then
-                      echo "Found Redis binaries"
-                      cp -f src/redis-server src/redis-cli src/redis-benchmark ../valkey-cache/ 2>/dev/null || true
-                  else
-                      echo "Warning: No server binaries found to cache"
-                  fi
-                  # Install the binaries
-                  sudo make install
+              echo "Using cached Valkey binaries"
+              # Clone repo fresh
+              git clone https://github.com/valkey-io/valkey.git
+              cd valkey && git checkout "$ENGINE_VERSION"
+              # Move cached binaries to correct location (force overwrite)
+              mkdir -p src
+              cp -f ../valkey-cache/* src/ 2>/dev/null || true
+              # Install the cached binaries
+              sudo make install
+
+        - name: Build engine from source
+          shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
+          if: "${{ inputs.engine-version && steps.cache-valkey.outputs.cache-hit != 'true' }}"
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+              OS_TYPE: ${{ inputs.os }}
+          run: |
+              echo "Building Valkey from source"
+              # Install dependencies (only needed on Linux, Windows handled by Vampire)
+              if [ "$OS_TYPE" != "windows" ]; then
+                  sudo apt install -y build-essential git pkg-config libssl-dev
               fi
+              git clone https://github.com/valkey-io/valkey.git
+              cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes
+              # Cache the built binaries - detect which naming convention is used
+              mkdir -p ../valkey-cache
+              if [ -f "src/valkey-server" ]; then
+                  echo "Found Valkey binaries"
+                  cp -f src/valkey-server src/valkey-cli src/valkey-benchmark ../valkey-cache/ 2>/dev/null || true
+              elif [ -f "src/redis-server" ]; then
+                  echo "Found Redis binaries"
+                  cp -f src/redis-server src/redis-cli src/redis-benchmark ../valkey-cache/ 2>/dev/null || true
+              else
+                  echo "Warning: No server binaries found to cache"
+              fi
+              # Install the binaries
+              sudo make install
+
+        - name: Start engine server
+          shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
+          if: "${{ inputs.engine-version }}"
+          env:
+              OS_TYPE: ${{ inputs.os }}
+          run: |
 
               # Start Valkey server in background
               redis-server --daemonize yes --bind 0.0.0.0 --port 6379
