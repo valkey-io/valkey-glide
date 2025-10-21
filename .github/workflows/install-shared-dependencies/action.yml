@@ -80,7 +80,7 @@ runs:
           if: "${{ inputs.os == 'windows' }}"
           uses: actions/setup-python@v5
           with:
-              python-version: '3.x'
+              python-version: "3.x"
 
         - name: Setup WSL (Windows only)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
@@ -127,10 +127,10 @@ runs:
                   git clone https://github.com/valkey-io/valkey.git
                   cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes && sudo make install
               fi
-              
+
               # Start Valkey server in background
               redis-server --daemonize yes --bind 0.0.0.0 --port 6379
-              
+
               # For Windows, write IP to a file that PowerShell can read
               if [ "$OS_TYPE" = "windows" ]; then
                   hostname -I | awk '{print $1}' > /tmp/wsl_ip.txt
