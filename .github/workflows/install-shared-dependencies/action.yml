@@ -110,6 +110,7 @@ runs:
           env:
               ENGINE_VERSION: ${{ inputs.engine-version }}
               OS_TYPE: ${{ inputs.os }}
+              WSLENV: ENGINE_VERSION:OS_TYPE
           run: |
               echo "Using cached Valkey binaries"
               echo "OS_TYPE: '$OS_TYPE'"
@@ -159,6 +160,7 @@ runs:
           if: "${{ inputs.engine-version }}"
           env:
               OS_TYPE: ${{ inputs.os }}
+              WSLENV: OS_TYPE
           run: |
               echo "Starting Valkey server"
               echo "OS_TYPE: '$OS_TYPE'"
