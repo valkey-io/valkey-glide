@@ -155,6 +155,7 @@ jobs:
               shell: bash
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  CARGO_BUILD_JOBS: 1
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
@@ -224,6 +225,8 @@ jobs:
 
             - name: Install and run linters
               working-directory: go
+              env:
+                  CARGO_BUILD_JOBS: 1
               run: |
                   make install-dev-tools install-build-tools gen-c-bindings generate-protobuf lint-ci
 
