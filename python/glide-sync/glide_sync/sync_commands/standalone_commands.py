@@ -638,6 +638,27 @@ class StandaloneCommands(CoreCommands):
             self._execute_command(RequestType.Move, [key, str(db_index)]),
         )
 
+    def publish(self, message: TEncodable, channel: TEncodable) -> int:
+        """
+        Publish a message on pubsub channel.
+
+        See [valkey.io](https://valkey.io/commands/publish) for more details.
+
+        Args:
+            message (TEncodable): Message to publish
+            channel (TEncodable): Channel to publish the message on.
+
+        Returns:
+            int: Number of subscriptions in primary node that received the message.
+
+            **Note:** this value does not include subscriptions that configured on replicas.
+
+        Examples:
+            >>> client.publish("Hi all!", "global-channel")
+                1 # This message was posted to 1 subscription which is configured on primary node
+        """
+        return cast(int, self._execute_command(RequestType.Publish, [channel, message]))
+
     def flushall(self, flush_mode: Optional[FlushMode] = None) -> TOK:
         """
         Deletes all the keys of all the existing databases. This command never fails.

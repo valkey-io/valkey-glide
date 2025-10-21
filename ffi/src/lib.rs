@@ -1107,6 +1107,31 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             // Return as Ok to continue transaction processing
             Ok(command_response)
         }
+        Value::Push { kind, data } => {
+            // Create kind entry
+            let mut kind_entry = CommandResponse::default();
+            let map_key =
+                valkey_value_to_command_response(Value::SimpleString("kind".to_string()))?;
+            kind_entry.map_key = Box::into_raw(Box::new(map_key));
+            let map_val =
+                valkey_value_to_command_response(Value::SimpleString(format!("{:?}", kind)))?;
+            kind_entry.map_value = Box::into_raw(Box::new(map_val));
+
+            // Create values entry
+            let mut values_entry = CommandResponse::default();
+            let map_key =
+                valkey_value_to_command_response(Value::SimpleString("values".to_string()))?;
+            values_entry.map_key = Box::into_raw(Box::new(map_key));
+            let map_val = valkey_value_to_command_response(Value::Array(data))?;
+            values_entry.map_value = Box::into_raw(Box::new(map_val));
+
+            let (map_ptr, map_len) = convert_vec_to_pointer(vec![kind_entry, values_entry]);
+            command_response.array_value = map_ptr;
+            command_response.array_value_len = map_len;
+            command_response.response_type = ResponseType::Map;
+
+            Ok(command_response)
+        }
         // TODO: Add support for other return types.
         _ => todo!(),
     };

@@ -890,6 +890,101 @@ class ClusterCommands(CoreCommands):
             self._execute_command(RequestType.LastSave, [], route),
         )
 
+    def publish(
+        self,
+        message: TEncodable,
+        channel: TEncodable,
+        sharded: bool = False,
+    ) -> int:
+        """
+        Publish a message on pubsub channel.
+        This command aggregates PUBLISH and SPUBLISH commands functionalities.
+        The mode is selected using the 'sharded' parameter.
+        For both sharded and non-sharded mode, request is routed using hashed channel as key.
+
+        See [PUBLISH](https://valkey.io/commands/publish) and [SPUBLISH](https://valkey.io/commands/spublish)
+        for more details.
+
+        Args:
+            message (TEncodable): Message to publish.
+            channel (TEncodable): Channel to publish the message on.
+            sharded (bool): Use sharded pubsub mode. Available since Valkey version 7.0.
+
+        Returns:
+            int: Number of subscriptions in that node that received the message.
+
+        Examples:
+            >>> client.publish("Hi all!", "global-channel", False)
+                1  # Published 1 instance of "Hi all!" message on global-channel channel using non-sharded mode
+            >>> client.publish(b"Hi to sharded channel1!", b"channel1", True)
+                2  # Published 2 instances of "Hi to sharded channel1!" message on channel1 using sharded mode
+        """
+        result = self._execute_command(
+            RequestType.SPublish if sharded else RequestType.Publish, [channel, message]
+        )
+        return cast(int, result)
+
+    def pubsub_shardchannels(self, pattern: Optional[TEncodable] = None) -> List[bytes]:
+        """
+        Lists the currently active shard channels.
+        The command is routed to all nodes, and aggregates the response to a single array.
+
+        See [valkey.io](https://valkey.io/commands/pubsub-shardchannels) for more details.
+
+        Args:
+            pattern (Optional[TEncodable]): A glob-style pattern to match active shard channels.
+                If not provided, all active shard channels are returned.
+
+        Returns:
+            List[bytes]: A list of currently active shard channels matching the given pattern.
+            If no pattern is specified, all active shard channels are returned.
+
+        Examples:
+            >>> client.pubsub_shardchannels()
+                [b'channel1', b'channel2']
+
+            >>> client.pubsub_shardchannels("channel*")
+                [b'channel1', b'channel2']
+        """
+        command_args = [pattern] if pattern is not None else []
+        return cast(
+            List[bytes],
+            self._execute_command(RequestType.PubSubShardChannels, command_args),
+        )
+
+    def pubsub_shardnumsub(
+        self, channels: Optional[List[TEncodable]] = None
+    ) -> Mapping[bytes, int]:
+        """
+        Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
+
+        Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+        The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of
+        subscriptions.
+
+        See [valkey.io](https://valkey.io/commands/pubsub-shardnumsub) for more details.
+
+        Args:
+            channels (Optional[List[TEncodable]]): The list of shard channels to query for the number of subscribers.
+                If not provided, returns an empty map.
+
+        Returns:
+            Mapping[bytes, int]: A map where keys are the shard channel names and values are the number of subscribers.
+
+        Examples:
+            >>> client.pubsub_shardnumsub(["channel1", "channel2"])
+                {b'channel1': 3, b'channel2': 5}
+
+            >>> client.pubsub_shardnumsub()
+                {}
+        """
+        return cast(
+            Mapping[bytes, int],
+            self._execute_command(
+                RequestType.PubSubShardNumSub, channels if channels else []
+            ),
+        )
+
     def flushall(
         self, flush_mode: Optional[FlushMode] = None, route: Optional[Route] = None
     ) -> TOK:
