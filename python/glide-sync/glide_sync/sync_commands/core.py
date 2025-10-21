@@ -577,6 +577,34 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.MSetNX, parameters),
         )
 
+    def move(self, key: TEncodable, db_index: int) -> bool:
+        """
+        Move `key` from the currently selected database to the database specified by `db_index`.
+
+        Note:
+            For cluster mode move command is supported since Valkey 9.0.0
+
+        See [valkey.io](https://valkey.io/commands/move/) for more details.
+
+        Args:
+            key (TEncodable): The key to move.
+            db_index (int): The index of the database to move `key` to.
+
+        Returns:
+            bool: `True` if `key` was moved.
+
+            `False` if the `key` already exists in the destination database
+            or does not exist in the source database.
+
+        Example:
+            >>> client.move("some_key", 1)
+                True
+        """
+        return cast(
+            bool,
+            self._execute_command(RequestType.Move, [key, str(db_index)]),
+        )
+
     def mget(self, keys: List[TEncodable]) -> List[Optional[bytes]]:
         """
         Retrieve the values of multiple keys.
@@ -2201,6 +2229,20 @@ class CoreCommands(Protocol):
                 2
         """
         return cast(int, self._execute_command(RequestType.SAdd, [key] + members))
+
+    def select(self, index: int) -> TOK:
+        """
+        Change the currently selected database.
+
+        See [valkey.io](https://valkey.io/commands/select/) for details.
+
+        Args:
+            index (int): The index of the database to select.
+
+        Returns:
+            A simple OK response.
+        """
+        return cast(TOK, self._execute_command(RequestType.Select, [str(index)]))
 
     def srem(self, key: TEncodable, members: List[TEncodable]) -> int:
         """

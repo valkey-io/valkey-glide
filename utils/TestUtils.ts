@@ -4,10 +4,6 @@
 
 import { execFile } from "child_process";
 import { lt } from "semver";
-import {
-    GlideClientConfiguration,
-    GlideClusterClientConfiguration,
-} from "../node/build-ts";
 
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
 

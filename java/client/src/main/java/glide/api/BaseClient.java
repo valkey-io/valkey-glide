@@ -82,6 +82,7 @@ import static command_request.CommandRequestOuterClass.RequestType.LTrim;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectIdleTime;
@@ -1116,6 +1117,18 @@ public abstract class BaseClient
     public CompletableFuture<String> msetBinary(@NonNull Map<GlideString, GlideString> keyValueMap) {
         GlideString[] args = convertMapToKeyValueGlideStringArray(keyValueMap);
         return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> move(@NonNull String key, long dbIndex) {
+        return commandManager.submitNewCommand(
+                Move, new String[] {key, Long.toString(dbIndex)}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> move(@NonNull GlideString key, long dbIndex) {
+        return commandManager.submitNewCommand(
+                Move, new GlideString[] {key, gs(Long.toString(dbIndex))}, this::handleBooleanResponse);
     }
 
     @Override
@@ -4975,6 +4988,51 @@ public abstract class BaseClient
     public CompletableFuture<Boolean> copy(
             @NonNull GlideString source, @NonNull GlideString destination) {
         GlideString[] arguments = new GlideString[] {source, destination};
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull String source, @NonNull String destination, long destinationDB) {
+        String[] arguments =
+                new String[] {source, destination, DB_VALKEY_API, Long.toString(destinationDB)};
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull GlideString source, @NonNull GlideString destination, long destinationDB) {
+        GlideString[] arguments =
+                new GlideString[] {
+                    source, destination, gs(DB_VALKEY_API), gs(Long.toString(destinationDB))
+                };
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull String source, @NonNull String destination, long destinationDB, boolean replace) {
+        String[] arguments =
+                new String[] {source, destination, DB_VALKEY_API, Long.toString(destinationDB)};
+        if (replace) {
+            arguments = ArrayUtils.add(arguments, REPLACE_VALKEY_API);
+        }
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull GlideString source,
+            @NonNull GlideString destination,
+            long destinationDB,
+            boolean replace) {
+        GlideString[] arguments =
+                new GlideString[] {
+                    source, destination, gs(DB_VALKEY_API), gs(Long.toString(destinationDB))
+                };
+        if (replace) {
+            arguments = ArrayUtils.add(arguments, gs(REPLACE_VALKEY_API));
+        }
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
 
