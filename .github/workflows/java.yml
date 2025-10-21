@@ -166,19 +166,16 @@ jobs:
 
             - name: Setup WSL networking for tests (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
-              shell: pwsh
+              shell: wsl-bash {0}
               run: |
-                  # Use Ubuntu-22.04 distribution name
-                  Write-Host "Using WSL distribution: Ubuntu-22.04"
+                  # Get WSL IP address from within WSL and set environment variables
+                  WSL_IP=$(hostname -I | awk '{print $1}')
+                  echo "WSL_IP=$WSL_IP" >> $GITHUB_ENV
+                  echo "REDIS_HOST=$WSL_IP" >> $GITHUB_ENV
+                  echo "REDIS_PORT=6379" >> $GITHUB_ENV
                   
-                  # Get WSL IP address and set environment variable for tests
-                  $wslIp = wsl -d Ubuntu-22.04 -- hostname -I | ForEach-Object { $_.Trim().Split(' ')[0] }
-                  echo "WSL_IP=$wslIp" >> $env:GITHUB_ENV
-                  echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
-                  echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
-                  
-                  # Verify Valkey is running in WSL
-                  wsl -d Ubuntu-22.04 -- redis-cli ping
+                  # Verify Valkey is running
+                  redis-cli ping
 
             - name: Ensure no skipped files by linter
               working-directory: java
@@ -271,19 +268,16 @@ jobs:
 
             - name: Setup WSL networking for PubSub tests (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
-              shell: pwsh
+              shell: wsl-bash {0}
               run: |
-                  # Use Ubuntu-22.04 distribution name
-                  Write-Host "Using WSL distribution: Ubuntu-22.04"
+                  # Get WSL IP address from within WSL and set environment variables
+                  WSL_IP=$(hostname -I | awk '{print $1}')
+                  echo "WSL_IP=$WSL_IP" >> $GITHUB_ENV
+                  echo "REDIS_HOST=$WSL_IP" >> $GITHUB_ENV
+                  echo "REDIS_PORT=6379" >> $GITHUB_ENV
                   
-                  # Get WSL IP address and set environment variable for tests
-                  $wslIp = wsl -d Ubuntu-22.04 -- hostname -I | ForEach-Object { $_.Trim().Split(' ')[0] }
-                  echo "WSL_IP=$wslIp" >> $env:GITHUB_ENV
-                  echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
-                  echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
-                  
-                  # Verify Valkey is running in WSL
-                  wsl -d Ubuntu-22.04 -- redis-cli ping
+                  # Verify Valkey is running
+                  redis-cli ping
 
             - name: Test pubsub
               working-directory: java
