@@ -20,6 +20,20 @@ inputs:
 runs:
     using: "composite"
     steps:
+        - name: Cache Rust toolchain
+          uses: actions/cache@v4
+          id: cache-rust
+          with:
+              path: |
+                  ~/.rustup
+                  ~/.cargo/bin
+                  ~/.cargo/registry/index
+                  ~/.cargo/registry/cache
+                  ~/.cargo/git
+              key: rust-${{ inputs.target }}-${{ runner.os }}-v1
+              restore-keys: |
+                  rust-${{ inputs.target }}-${{ runner.os }}-
+
         - name: Install Rust toolchain
           uses: dtolnay/rust-toolchain@stable
           with:
@@ -27,7 +41,6 @@ runs:
               components: rustfmt, clippy
 
         - name: Install protoc (protobuf)
-          uses: arduino/setup-protoc@v3
+          uses: ./.github/workflows/install-protoc-cached
           with:
               version: "25.1"
-              repo-token: ${{ inputs.github-token }}

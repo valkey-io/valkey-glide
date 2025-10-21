@@ -1,0 +1,26 @@
+name: Install protoc with caching
+
+inputs:
+    version:
+        description: "Protoc version to install"
+        required: true
+        type: string
+        default: "29.1"
+
+runs:
+    using: "composite"
+    steps:
+        - name: Cache protoc
+          uses: actions/cache@v4
+          id: cache-protoc
+          with:
+              path: |
+                  ~/.local/bin/protoc
+                  ~/.local/include/google
+              key: protoc-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}
+
+        - name: Install protoc (protobuf)
+          uses: arduino/setup-protoc@v3
+          with:
+              version: ${{ inputs.version }}
+              repo-token: ${{ github.token }}
