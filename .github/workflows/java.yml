@@ -164,18 +164,19 @@ jobs:
                       ./gradlew --build-cache --continue build -x javadoc
                   fi
 
-            - name: Setup WSL networking for tests (Windows)
+            - name: Setup networking and verify Valkey (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
-              shell: wsl-bash {0}
+              shell: pwsh
               run: |
-                  # Get WSL IP address from within WSL and set environment variables
-                  WSL_IP=$(hostname -I | awk '{print $1}')
-                  echo "WSL_IP=$WSL_IP" >> $GITHUB_ENV
-                  echo "REDIS_HOST=$WSL_IP" >> $GITHUB_ENV
-                  echo "REDIS_PORT=6379" >> $GITHUB_ENV
+                  # Read WSL IP from file written by engine installation
+                  $wslIp = wsl -c "cat /tmp/wsl_ip.txt"
+                  echo "WSL_IP=$wslIp" >> $env:GITHUB_ENV
+                  echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
+                  echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
+                  Write-Host "WSL IP address: $wslIp"
                   
                   # Verify Valkey is running
-                  redis-cli ping
+                  wsl -c "redis-cli ping"
 
             - name: Ensure no skipped files by linter
               working-directory: java
@@ -266,18 +267,19 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
-            - name: Setup WSL networking for PubSub tests (Windows)
+            - name: Setup networking and verify Valkey for PubSub (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
-              shell: wsl-bash {0}
+              shell: pwsh
               run: |
-                  # Get WSL IP address from within WSL and set environment variables
-                  WSL_IP=$(hostname -I | awk '{print $1}')
-                  echo "WSL_IP=$WSL_IP" >> $GITHUB_ENV
-                  echo "REDIS_HOST=$WSL_IP" >> $GITHUB_ENV
-                  echo "REDIS_PORT=6379" >> $GITHUB_ENV
+                  # Read WSL IP from file written by engine installation
+                  $wslIp = wsl -c "cat /tmp/wsl_ip.txt"
+                  echo "WSL_IP=$wslIp" >> $env:GITHUB_ENV
+                  echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
+                  echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
+                  Write-Host "WSL IP address: $wslIp"
                   
                   # Verify Valkey is running
-                  redis-cli ping
+                  wsl -c "redis-cli ping"
 
             - name: Test pubsub
               working-directory: java
