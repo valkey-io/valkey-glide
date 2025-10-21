@@ -108,7 +108,7 @@ runs:
           shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
           if: "${{ inputs.engine-version }}"
           env:
-              CACHE_HIT: ${{ steps.cache-valkey.outputs.cache-hit }}
+              CACHE_HIT: ${{ steps.cache-valkey.outputs.cache-hit || 'false' }}
               ENGINE_VERSION: ${{ inputs.engine-version }}
               OS_TYPE: ${{ inputs.os }}
           run: |
