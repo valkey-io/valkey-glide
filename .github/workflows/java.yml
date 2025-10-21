@@ -169,14 +169,14 @@ jobs:
               shell: pwsh
               run: |
                   # Read WSL IP from file written by engine installation
-                  $wslIp = wsl -c "cat /tmp/wsl_ip.txt"
+                  $wslIp = wsl -- cat /tmp/wsl_ip.txt
                   echo "WSL_IP=$wslIp" >> $env:GITHUB_ENV
                   echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
                   echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
                   Write-Host "WSL IP address: $wslIp"
                   
                   # Verify Valkey is running
-                  wsl -c "redis-cli ping"
+                  wsl -- redis-cli ping
 
             - name: Ensure no skipped files by linter
               working-directory: java
@@ -272,14 +272,14 @@ jobs:
               shell: pwsh
               run: |
                   # Read WSL IP from file written by engine installation
-                  $wslIp = wsl -c "cat /tmp/wsl_ip.txt"
+                  $wslIp = wsl -- cat /tmp/wsl_ip.txt
                   echo "WSL_IP=$wslIp" >> $env:GITHUB_ENV
                   echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
                   echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
                   Write-Host "WSL IP address: $wslIp"
                   
                   # Verify Valkey is running
-                  wsl -c "redis-cli ping"
+                  wsl -- redis-cli ping
 
             - name: Test pubsub
               working-directory: java
