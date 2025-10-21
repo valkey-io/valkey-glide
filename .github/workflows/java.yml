@@ -176,7 +176,7 @@ jobs:
                   echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
                   echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
                   Write-Host "WSL IP address: $wslIp"
-                  
+
                   # Verify Valkey is running
                   wsl -- redis-cli ping
 
@@ -279,7 +279,7 @@ jobs:
                   echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
                   echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
                   Write-Host "WSL IP address: $wslIp"
-                  
+
                   # Verify Valkey is running
                   wsl -- redis-cli ping
 
