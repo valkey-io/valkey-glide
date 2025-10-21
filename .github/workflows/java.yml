@@ -168,17 +168,17 @@ jobs:
               if: ${{ matrix.host.OS == 'windows' }}
               shell: pwsh
               run: |
-                  # Use default WSL distribution (no -d flag needed)
-                  Write-Host "Using WSL default distribution"
+                  # Use Ubuntu-22.04 distribution name
+                  Write-Host "Using WSL distribution: Ubuntu-22.04"
                   
                   # Get WSL IP address and set environment variable for tests
-                  $wslIp = wsl -- hostname -I | ForEach-Object { $_.Trim().Split(' ')[0] }
+                  $wslIp = wsl -d Ubuntu-22.04 -- hostname -I | ForEach-Object { $_.Trim().Split(' ')[0] }
                   echo "WSL_IP=$wslIp" >> $env:GITHUB_ENV
                   echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
                   echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
                   
                   # Verify Valkey is running in WSL
-                  wsl -- redis-cli ping
+                  wsl -d Ubuntu-22.04 -- redis-cli ping
 
             - name: Ensure no skipped files by linter
               working-directory: java
@@ -273,17 +273,17 @@ jobs:
               if: ${{ matrix.host.OS == 'windows' }}
               shell: pwsh
               run: |
-                  # Use default WSL distribution (no -d flag needed)
-                  Write-Host "Using WSL default distribution"
+                  # Use Ubuntu-22.04 distribution name
+                  Write-Host "Using WSL distribution: Ubuntu-22.04"
                   
                   # Get WSL IP address and set environment variable for tests
-                  $wslIp = wsl -- hostname -I | ForEach-Object { $_.Trim().Split(' ')[0] }
+                  $wslIp = wsl -d Ubuntu-22.04 -- hostname -I | ForEach-Object { $_.Trim().Split(' ')[0] }
                   echo "WSL_IP=$wslIp" >> $env:GITHUB_ENV
                   echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
                   echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
                   
                   # Verify Valkey is running in WSL
-                  wsl -- redis-cli ping
+                  wsl -d Ubuntu-22.04 -- redis-cli ping
 
             - name: Test pubsub
               working-directory: java
