@@ -9,7 +9,7 @@ from glide_shared.commands.bitmap import (
     _create_bitfield_args,
     _create_bitfield_read_only_args,
 )
-from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
+from glide_shared.commands.command_args import Limit, ListDirection, ObjectType, OrderBy
 from glide_shared.commands.core_options import (
     ConditionalChange,
     ExpireOptions,
@@ -61,6 +61,8 @@ from glide_shared.exceptions import RequestError
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
 
+from .cluster_scan_cursor import ClusterScanCursor
+
 
 class CoreCommands(Protocol):
     def _execute_command(
@@ -87,6 +89,15 @@ class CoreCommands(Protocol):
         keys: Optional[List[TEncodable]] = None,
         args: Optional[List[TEncodable]] = None,
         route: Optional[Route] = None,
+    ) -> TResult: ...
+
+    def _cluster_scan(
+        self,
+        cursor: ClusterScanCursor,
+        match: Optional[TEncodable] = ...,
+        count: Optional[int] = ...,
+        type: Optional[ObjectType] = ...,
+        allow_non_covered_slots: bool = ...,
     ) -> TResult: ...
 
     def _update_connection_password(
@@ -6138,7 +6149,7 @@ class CoreCommands(Protocol):
             If the script is not found in the cache, an error is thrown.
 
         Example:
-            >>> await client.script_show(script.get_hash())
+            >>> client.script_show(script.get_hash())
                 b"return { KEYS[1], ARGV[1] }"
 
         Since: Valkey version 8.0.0.
@@ -7361,6 +7372,93 @@ class CoreCommands(Protocol):
         return cast(
             Union[int, List[int], None],
             self._execute_command(RequestType.LPos, args),
+        )
+
+    def pubsub_channels(self, pattern: Optional[TEncodable] = None) -> List[bytes]:
+        """
+        Lists the currently active channels.
+        The command is routed to all nodes, and aggregates the response to a single array.
+
+        See [valkey.io](https://valkey.io/commands/pubsub-channels) for more details.
+
+        Args:
+            pattern (Optional[TEncodable]): A glob-style pattern to match active channels.
+                If not provided, all active channels are returned.
+
+        Returns:
+            List[bytes]: A list of currently active channels matching the given pattern.
+
+            If no pattern is specified, all active channels are returned.
+
+        Examples:
+            >>> client.pubsub_channels()
+                [b"channel1", b"channel2"]
+
+            >>> client.pubsub_channels("news.*")
+                [b"news.sports", "news.weather"]
+        """
+
+        return cast(
+            List[bytes],
+            self._execute_command(
+                RequestType.PubSubChannels, [pattern] if pattern else []
+            ),
+        )
+
+    def pubsub_numpat(self) -> int:
+        """
+        Returns the number of unique patterns that are subscribed to by clients.
+
+        Note:
+            This is the total number of unique patterns all the clients are subscribed to,
+            not the count of clients subscribed to patterns.
+
+            The command is routed to all nodes, and aggregates the response the sum of all pattern subscriptions.
+
+        See [valkey.io](https://valkey.io/commands/pubsub-numpat) for more details.
+
+        Returns:
+            int: The number of unique patterns.
+
+        Examples:
+            >>> client.pubsub_numpat()
+                3
+        """
+        return cast(int, self._execute_command(RequestType.PubSubNumPat, []))
+
+    def pubsub_numsub(
+        self, channels: Optional[List[TEncodable]] = None
+    ) -> Mapping[bytes, int]:
+        """
+        Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
+
+        Note:
+            It is valid to call this command without channels. In this case, it will just return an empty map.
+
+            The command is routed to all nodes, and aggregates the response to a single map of the channels and their number
+            of subscriptions.
+
+        See [valkey.io](https://valkey.io/commands/pubsub-numsub) for more details.
+
+        Args:
+            channels (Optional[List[TEncodable]]): The list of channels to query for the number of subscribers.
+                If not provided, returns an empty map.
+
+        Returns:
+            Mapping[bytes, int]: A map where keys are the channel names and values are the number of subscribers.
+
+        Examples:
+            >>> client.pubsub_numsub(["channel1", "channel2"])
+                {b'channel1': 3, b'channel2': 5}
+
+            >>> client.pubsub_numsub()
+                {}
+        """
+        return cast(
+            Mapping[bytes, int],
+            self._execute_command(
+                RequestType.PubSubNumSub, channels if channels else []
+            ),
         )
 
     def sort(

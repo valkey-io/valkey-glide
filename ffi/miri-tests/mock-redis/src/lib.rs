@@ -109,6 +109,11 @@ impl ClusterScanArgsBuilder {
     pub fn with_match_pattern<T: Into<Vec<u8>>>(self, _pattern: T) -> Self {
         self
     }
+
+    pub fn allow_non_covered_slots(self, _allow: bool) -> Self {
+        self
+    }
+
 }
 
 pub struct PushInfo {
