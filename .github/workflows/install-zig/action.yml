@@ -10,7 +10,19 @@ inputs:
 runs:
     using: "composite"
     steps:
+        - name: Cache zig installation
+          uses: actions/cache@v4
+          id: cache-zig
+          with:
+              path: |
+                  ~/.local/bin/zig
+                  ~/.cargo/bin/cargo-zigbuild
+              key: zig-${{ runner.os }}-${{ runner.arch }}-v1
+              restore-keys: |
+                  zig-${{ runner.os }}-${{ runner.arch }}-
+
         - name: Install zig
+          if: steps.cache-zig.outputs.cache-hit != 'true'
           shell: bash
           env:
               TARGET: ${{ inputs.target }}
@@ -27,6 +39,11 @@ runs:
               fi
               cargo install --locked cargo-zigbuild
 
+        - name: Set zig environment
+          shell: bash
+          env:
+              TARGET: ${{ inputs.target }}
+          run: |
               # Set environment variable to prevent cargo-zigbuild from auto-detecting malformed targets
               # This will be available for subsequent steps in the workflow
               echo "CARGO_ZIGBUILD_TARGET=$TARGET" >> $GITHUB_ENV

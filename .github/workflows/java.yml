@@ -129,10 +129,9 @@ jobs:
                   language: java
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: ./.github/workflows/install-protoc-cached
               with:
                   version: "29.1"
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - uses: actions/cache@v4
               with:
@@ -244,10 +243,9 @@ jobs:
                   language: java
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: ./.github/workflows/install-protoc-cached
               with:
                   version: "29.1"
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - uses: actions/cache@v4
               with:
@@ -373,21 +371,36 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: ./.github/workflows/install-protoc-cached
               with:
                   version: "29.1"
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             # Ensure Rust is in PATH for container environments
+            - name: Cache zig installation (musl)
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              uses: actions/cache@v4
+              id: cache-zig-musl
+              with:
+                  path: |
+                      ~/.local/bin/zig
+                      ~/.cargo/bin/cargo-zigbuild
+                  key: zig-musl-${{ runner.os }}-${{ runner.arch }}-v1
+                  restore-keys: |
+                      zig-musl-${{ runner.os }}-${{ runner.arch }}-
+
             - name: Setup Rust Build
               if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              env:
+                  CACHE_HIT: ${{ steps.cache-zig-musl.outputs.cache-hit }}
               run: |
                   export PATH="$HOME/.cargo/bin:$PATH"
                   echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
 
-                  # Install ziglang and zigbuild
-                  pip3 install ziglang --break-system-packages
-                  cargo install --locked cargo-zigbuild
+                  # Install ziglang and zigbuild (only if not cached)
+                  if [ "$CACHE_HIT" != "true" ]; then
+                      pip3 install ziglang --break-system-packages
+                      cargo install --locked cargo-zigbuild
+                  fi
 
             - uses: actions/cache@v4
               with:
@@ -468,10 +481,9 @@ jobs:
                   java-version: 17
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: ./.github/workflows/install-protoc-cached
               with:
                   version: "29.1"
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - uses: actions/cache@v4
               with:
