@@ -39,7 +39,7 @@
     {
         "OS": "macos",
         "NAMED_OS": "darwin",
-        "RUNNER": "macos-13",
+        "RUNNER": "macos-15-intel",
         "CD_RUNNER": "macos-15",
         "ARCH": "x64",
         "TARGET": "x86_64-apple-darwin",

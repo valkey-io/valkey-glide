@@ -19,4 +19,5 @@ module glide.api {
     requires java.logging; // required by shadowed protobuf
     requires static lombok;
     requires org.apache.commons.lang3;
+    requires com.google.protobuf;
 }

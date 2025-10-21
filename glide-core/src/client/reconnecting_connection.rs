@@ -315,6 +315,9 @@ impl ReconnectingConnection {
         // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
         // background, regardless of whether the calling task is dropped or not.
         task::spawn(async move {
+            // Get a clone of the client with the current connection info
+            // updates made via update_connection_database(). This ensures reconnection uses the
+            // correct database as selected by previous SELECT commands.
             let client = {
                 let guard = connection_clone.inner.backend.get_backend_client();
                 guard.clone()
@@ -392,6 +395,36 @@ impl ReconnectingConnection {
             .write()
             .expect(WRITE_LOCK_ERR);
         client.update_password(new_password);
+    }
+
+    /// Updates the database ID that's saved inside connection_info, that will be used in case of disconnection from the server.
+    ///
+    /// This method is called when a SELECT command is successfully executed to track the current database.
+    /// During reconnection, the stored database ID will be automatically used to re-select the correct
+    /// database via a SELECT command during connection establishment.
+    ///
+    /// # Arguments
+    /// * `new_database_id` - The database ID to store for future reconnections
+    ///
+    pub(crate) fn update_connection_database(&self, new_database_id: i64) {
+        let mut client = self
+            .inner
+            .backend
+            .connection_info
+            .write()
+            .expect(WRITE_LOCK_ERR);
+        client.update_database(new_database_id);
+    }
+
+    /// Updates the client name that's saved inside connection_info, that will be used in case of disconnection from the server.
+    pub(crate) fn update_connection_client_name(&self, new_client_name: Option<String>) {
+        let mut client = self
+            .inner
+            .backend
+            .connection_info
+            .write()
+            .expect(WRITE_LOCK_ERR);
+        client.update_client_name(new_client_name);
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
