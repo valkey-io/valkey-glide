@@ -68,7 +68,7 @@ public class ValkeyCluster implements AutoCloseable {
             if (host == null || host.isEmpty()) {
                 host = "127.0.0.1";
             }
-            command.add("-H");
+            command.add("--host");
             command.add(host);
 
             if (clusterMode) {
@@ -201,7 +201,7 @@ public class ValkeyCluster implements AutoCloseable {
             if (host == null || host.isEmpty()) {
                 host = "127.0.0.1";
             }
-            command.add("-H");
+            command.add("--host");
             command.add(host);
             
             command.add("--cluster-folder");

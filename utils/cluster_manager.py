@@ -1084,15 +1084,6 @@ def stop_cluster(
 def main():
     parser = argparse.ArgumentParser(description="Cluster manager tool")
     parser.add_argument(
-        "-H",
-        "--host",
-        type=str,
-        help="Host address (default: %(default)s)",
-        required=False,
-        default="127.0.0.1",
-    )
-
-    parser.add_argument(
         "--tls",
         default=False,
         action="store_true",
@@ -1186,6 +1177,15 @@ def main():
         required=False,
     )
 
+    parser_start.add_argument(
+        "-H",
+        "--host",
+        type=str,
+        help="Host address (default: %(default)s)",
+        required=False,
+        default="127.0.0.1",
+    )
+
     # Stop parser
     parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
     parser_stop.add_argument(
@@ -1223,6 +1223,15 @@ def main():
         type=str,
         help="Optionally, provide comma separated list of process IDs to terminate",
         default="",
+    )
+
+    parser_stop.add_argument(
+        "-H",
+        "--host",
+        type=str,
+        help="Host address (default: %(default)s)",
+        required=False,
+        default="127.0.0.1",
     )
 
     args = parser.parse_args()
