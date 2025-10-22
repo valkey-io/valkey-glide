@@ -6,6 +6,7 @@ import argparse
 import json
 import logging
 import os
+import platform
 import random
 import re
 import signal
@@ -60,6 +61,9 @@ def get_command(commands: List[str]) -> str:
                 text=True,
             )
             if result.returncode == 0:
+                # Mark that we used 'where' to find the command (Windows wrapper scripts)
+                global _USING_WINDOWS_WRAPPERS
+                _USING_WINDOWS_WRAPPERS = True
                 return result.stdout.strip().split('\n')[0]  # Return first full path
         except Exception as e:
             logging.debug(f"'where' failed for {command}: {e}")
@@ -70,6 +74,7 @@ def get_command(commands: List[str]) -> str:
 # Global variables for caching server commands (set lazily)
 _SERVER_COMMAND = None
 _CLI_COMMAND = None
+_USING_WINDOWS_WRAPPERS = False
 
 
 def get_server_command() -> str:
@@ -360,6 +365,34 @@ def create_cluster_folder(path: str, prefix: str) -> str:
     return cluster_folder
 
 
+def windows_path_to_wsl(path: str) -> str:
+    """Convert Windows path to WSL path format when using Windows wrapper scripts.
+    
+    This should only be used when launching cluster_manager.py from a normal Windows 
+    shell to launch wrapper scripts that run WSL builds of servers (detected by 
+    using 'where' command to find server executables).
+    
+    Args:
+        path: Windows path (e.g., 'D:\\folder\\file')
+        
+    Returns:
+        WSL path (e.g., '/mnt/d/folder/file') if using Windows wrappers, otherwise original path
+    """
+    global _USING_WINDOWS_WRAPPERS
+    if not _USING_WINDOWS_WRAPPERS:
+        return path
+    
+    # Convert backslashes to forward slashes
+    wsl_path = path.replace('\\', '/')
+    
+    # Convert drive letter (e.g., 'D:' -> '/mnt/d')
+    if len(wsl_path) >= 2 and wsl_path[1] == ':':
+        drive_letter = wsl_path[0].lower()
+        wsl_path = f'/mnt/{drive_letter}{wsl_path[2:]}'
+    
+    return wsl_path
+
+
 def start_server(
     host: str,
     port: Optional[int],
@@ -394,6 +427,11 @@ def start_server(
 
     # Define command arguments
     logfile = f"{node_folder}/server.log"
+    
+    # Convert paths to WSL format if on Windows
+    wsl_node_folder = windows_path_to_wsl(node_folder)
+    wsl_logfile = windows_path_to_wsl(logfile)
+    
     cmd_args = [
         get_server_command(),
         f"{'--tls-port' if tls else '--port'}",
@@ -401,11 +439,11 @@ def start_server(
         "--cluster-enabled",
         f"{'yes' if cluster_mode else 'no'}",
         "--dir",
-        node_folder,
+        wsl_node_folder,
         "--daemonize",
         "yes",
         "--logfile",
-        logfile,
+        wsl_logfile,
         "--protected-mode",
         "no",
         "--appendonly",
