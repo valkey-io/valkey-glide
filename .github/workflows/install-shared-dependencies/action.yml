@@ -173,6 +173,57 @@ runs:
                   hostname -I | awk '{print $1}' > /tmp/wsl_ip.txt
               fi
 
+        - name: Create WSL wrapper scripts for Valkey binaries (Windows)
+          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
+          shell: pwsh
+          run: |
+              # Create wrapper batch files that call WSL binaries
+              $wrapperDir = "C:\valkey-wrappers"
+              New-Item -ItemType Directory -Force -Path $wrapperDir
+              
+              # Check and create valkey-server.bat
+              if (wsl which valkey-server 2>$null) {
+                  @"
+              @echo off
+              wsl valkey-server %*
+              "@ | Out-File -FilePath "$wrapperDir\valkey-server.bat" -Encoding ASCII
+                  Write-Host "Created valkey-server.bat wrapper"
+              }
+              
+              # Check and create redis-server.bat
+              if (wsl which redis-server 2>$null) {
+                  @"
+              @echo off
+              wsl redis-server %*
+              "@ | Out-File -FilePath "$wrapperDir\redis-server.bat" -Encoding ASCII
+                  Write-Host "Created redis-server.bat wrapper"
+              }
+              
+              # Check and create valkey-cli.bat
+              if (wsl which valkey-cli 2>$null) {
+                  @"
+              @echo off
+              wsl valkey-cli %*
+              "@ | Out-File -FilePath "$wrapperDir\valkey-cli.bat" -Encoding ASCII
+                  Write-Host "Created valkey-cli.bat wrapper"
+              }
+              
+              # Check and create redis-cli.bat
+              if (wsl which redis-cli 2>$null) {
+                  @"
+              @echo off
+              wsl redis-cli %*
+              "@ | Out-File -FilePath "$wrapperDir\redis-cli.bat" -Encoding ASCII
+                  Write-Host "Created redis-cli.bat wrapper"
+              }
+              
+              # Add to PATH for subsequent steps
+              echo "$wrapperDir" >> $env:GITHUB_PATH
+              
+              # List created wrappers
+              Write-Host "Created wrapper scripts:"
+              Get-ChildItem "$wrapperDir\*.bat" | ForEach-Object { Write-Host "  $($_.Name)" }
+
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
           uses: ./.github/workflows/install-rust-and-protoc
