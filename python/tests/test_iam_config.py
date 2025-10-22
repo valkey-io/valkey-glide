@@ -17,7 +17,7 @@ class TestIamAuthConfig:
         assert iam_config.cluster_name == "my-cluster"
         assert iam_config.service == ServiceType.ELASTICACHE
         assert iam_config.region == "us-east-1"
-        assert iam_config.refresh_interval_seconds == 300  # Default
+        assert iam_config.refresh_interval_seconds is None  # Core will use default
 
     def test_iam_auth_config_memorydb(self):
         """Test IAM config creation for MemoryDB."""

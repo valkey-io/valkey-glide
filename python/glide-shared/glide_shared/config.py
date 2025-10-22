@@ -127,7 +127,7 @@ class IamAuthConfig:
         service (ServiceType): The type of service being used (ElastiCache or MemoryDB).
         region (str): The AWS region where the ElastiCache/MemoryDB cluster is located.
         refresh_interval_seconds (Optional[int]): Optional refresh interval in seconds for renewing IAM authentication tokens.
-            If not provided, defaults to 300 seconds (5 min).
+            If not provided, the core will use a default value of 300 seconds (5 min).
     """
 
     def __init__(
@@ -135,7 +135,7 @@ class IamAuthConfig:
         cluster_name: str,
         service: ServiceType,
         region: str,
-        refresh_interval_seconds: Optional[int] = 300,
+        refresh_interval_seconds: Optional[int] = None,
     ):
         self.cluster_name = cluster_name
         self.service = service
