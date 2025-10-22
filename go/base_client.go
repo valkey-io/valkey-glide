@@ -731,6 +731,21 @@ func (client *baseClient) ResetConnectionPassword(ctx context.Context) (string, 
 	return client.submitConnectionPasswordUpdate(ctx, "", false)
 }
 
+// submitRefreshIamToken is the internal implementation for manually refreshing the IAM authentication token.
+//
+// This method sends a refresh request to the core client to generate a new IAM token and update
+// the connection. It handles context cancellation and manages the asynchronous communication with
+// the underlying C client.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns "OK" on successful token refresh, or an error if the operation fails.
+//
+// Note: This is an internal method. Use RefreshIamToken() for the public API.
 func (client *baseClient) submitRefreshIamToken(ctx context.Context) (string, error) {
 	// Check if context is already done
 	select {
@@ -795,25 +810,49 @@ func (client *baseClient) submitRefreshIamToken(ctx context.Context) (string, er
 	return handleOkResponse(payload.value)
 }
 
-// RefreshIamToken manually refreshes the IAM token for the current connection.
+// RefreshIamToken manually refreshes the IAM authentication token for the current connection.
 //
-// This method is only available if the client was created with IAM authentication.
-// It triggers an immediate refresh of the IAM token and updates the connection.
+// This method is only available if the client was created with IAM authentication
+// (using [ServerCredentials] with [IamAuthConfig]). It triggers an immediate refresh of the
+// IAM token and updates the connection with the new token.
+//
+// Normally, IAM tokens are refreshed automatically based on the refresh interval configured
+// in [IamAuthConfig]. Use this method when you need to force an immediate token refresh,
+// such as when credentials have been rotated or when troubleshooting authentication issues.
 //
 // Parameters:
 //
-//	ctx - The context for controlling the command execution.
+//	ctx - The context for controlling the command execution and cancellation.
 //
 // Return value:
 //
-//	`"OK"` response on success.
+//	Returns "OK" on successful token refresh.
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - The client was not configured with IAM authentication
+//	  - The token refresh operation fails
+//	  - The context is cancelled
+//	  - The client is closed
 //
 // Example:
 //
+//	// Create client with IAM authentication
+//	iamConfig := config.NewIamAuthConfig("my-cluster", config.ElastiCache, "us-east-1")
+//	creds, _ := config.NewServerCredentialsWithIam("myuser", iamConfig)
+//	clientConfig := config.NewClientConfiguration().WithCredentials(creds)
+//	client, _ := glide.NewClient(clientConfig)
+//
+//	// Manually refresh the token
 //	result, err := client.RefreshIamToken(context.Background())
 //	if err != nil {
-//	    // handle error
+//	    log.Printf("Token refresh failed: %v", err)
+//	    return
 //	}
+//	log.Printf("Token refreshed: %s", result) // "OK"
+//
+// See also: [IamAuthConfig], [ServerCredentials], [NewServerCredentialsWithIam]
 func (client *baseClient) RefreshIamToken(ctx context.Context) (string, error) {
 	return client.submitRefreshIamToken(ctx)
 }

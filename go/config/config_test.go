@@ -197,9 +197,12 @@ func TestServerCredentials(t *testing.T) {
 		},
 	}
 
-	for _, param := range parameters {
-		result := param.input.toProtobuf()
-		assert.Equal(t, param.expected, result)
+	for i, parameter := range parameters {
+		t.Run(fmt.Sprintf("Testing [%v]", i), func(t *testing.T) {
+			result := parameter.input.toProtobuf()
+
+			assert.Equal(t, parameter.expected, result)
+		})
 	}
 }
 

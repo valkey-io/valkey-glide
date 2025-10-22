@@ -53,18 +53,16 @@ type IamAuthConfig struct {
 	// The AWS region where the ElastiCache/MemoryDB cluster is located.
 	region string
 	// Optional refresh interval in seconds for renewing IAM authentication tokens.
-	// If not provided, defaults to 300 seconds (5 min).
+	// If not provided, the core will use its default value.
 	refreshIntervalSeconds *uint32
 }
 
 // NewIamAuthConfig returns an [IamAuthConfig] struct with the given configuration.
 func NewIamAuthConfig(clusterName string, service ServiceType, region string) *IamAuthConfig {
-	defaultRefresh := uint32(300)
 	return &IamAuthConfig{
-		clusterName:            clusterName,
-		service:                service,
-		region:                 region,
-		refreshIntervalSeconds: &defaultRefresh,
+		clusterName: clusterName,
+		service:     service,
+		region:      region,
 	}
 }
 
