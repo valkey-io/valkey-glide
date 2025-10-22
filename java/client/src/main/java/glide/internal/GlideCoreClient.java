@@ -306,14 +306,14 @@ public class GlideCoreClient implements AutoCloseable {
 
     /** Refresh IAM token (for compatibility with CommandManager) */
     public CompletableFuture<String> refreshIamToken() {
+        CompletableFuture<String> future = new CompletableFuture<>();
+        
         long handle = nativeClientHandle.get();
         if (handle == 0) {
-            CompletableFuture<String> f = new CompletableFuture<>();
-            f.completeExceptionally(new glide.api.models.exceptions.ClosingException("Client is closed"));
-            return f;
+            future.completeExceptionally(new glide.api.models.exceptions.ClosingException("Client is closed"));
+            return future;
         }
 
-        CompletableFuture<String> future = new CompletableFuture<>();
         long correlationId;
         try {
             correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
