@@ -63,6 +63,14 @@ public class ValkeyCluster implements AutoCloseable {
 
             command.add("start");
 
+            // Add host parameter - use environment variable or default to localhost
+            String host = System.getenv("VALKEY_INTEG_TEST_IP");
+            if (host == null || host.isEmpty()) {
+                host = "127.0.0.1";
+            }
+            command.add("-H");
+            command.add(host);
+
             if (clusterMode) {
                 command.add("--cluster-mode");
             }
@@ -187,6 +195,15 @@ public class ValkeyCluster implements AutoCloseable {
             }
 
             command.add("stop");
+            
+            // Add host parameter - use environment variable or default to localhost
+            String host = System.getenv("VALKEY_INTEG_TEST_IP");
+            if (host == null || host.isEmpty()) {
+                host = "127.0.0.1";
+            }
+            command.add("-H");
+            command.add(host);
+            
             command.add("--cluster-folder");
             command.add(clusterFolder);
 
