@@ -8,6 +8,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -20,10 +21,14 @@ public class ValkeyCluster implements AutoCloseable {
                     .resolve("utils")
                     .resolve("cluster_manager.py");
 
-    /** Get platform-specific Python executable */
-    private static String getPythonExecutable() {
+    /** Get platform-specific Python command with WSL support */
+    private static List<String> getPythonCommand() {
         String osName = System.getProperty("os.name").toLowerCase();
-        return osName.contains("windows") ? "python" : "python3";
+        if (osName.contains("windows")) {
+            return Arrays.asList("wsl", "--", "python3");
+        } else {
+            return Arrays.asList("python3");
+        }
     }
 
     private boolean tls = false;
@@ -54,7 +59,7 @@ public class ValkeyCluster implements AutoCloseable {
         } else {
             this.tls = tls;
             List<String> command = new ArrayList<>();
-            command.add(getPythonExecutable());
+            command.addAll(getPythonCommand());
             command.add(SCRIPT_FILE.toString());
 
             if (tls) {
@@ -187,7 +192,7 @@ public class ValkeyCluster implements AutoCloseable {
     public void close() throws IOException {
         if (clusterFolder != null && !clusterFolder.isEmpty()) {
             List<String> command = new ArrayList<>();
-            command.add(getPythonExecutable());
+            command.addAll(getPythonCommand());
             command.add(SCRIPT_FILE.toString());
 
             if (tls) {
