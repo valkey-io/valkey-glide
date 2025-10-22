@@ -180,7 +180,7 @@ runs:
               # Create wrapper batch files that call WSL binaries
               $wrapperDir = "C:\valkey-wrappers"
               New-Item -ItemType Directory -Force -Path $wrapperDir
-              
+
               # Check and create valkey-server.bat
               if (wsl which valkey-server 2>$null) {
                   @"
@@ -189,7 +189,7 @@ runs:
               "@ | Out-File -FilePath "$wrapperDir\valkey-server.bat" -Encoding ASCII
                   Write-Host "Created valkey-server.bat wrapper"
               }
-              
+
               # Check and create redis-server.bat
               if (wsl which redis-server 2>$null) {
                   @"
@@ -198,7 +198,7 @@ runs:
               "@ | Out-File -FilePath "$wrapperDir\redis-server.bat" -Encoding ASCII
                   Write-Host "Created redis-server.bat wrapper"
               }
-              
+
               # Check and create valkey-cli.bat
               if (wsl which valkey-cli 2>$null) {
                   @"
@@ -207,7 +207,7 @@ runs:
               "@ | Out-File -FilePath "$wrapperDir\valkey-cli.bat" -Encoding ASCII
                   Write-Host "Created valkey-cli.bat wrapper"
               }
-              
+
               # Check and create redis-cli.bat
               if (wsl which redis-cli 2>$null) {
                   @"
@@ -216,7 +216,7 @@ runs:
               "@ | Out-File -FilePath "$wrapperDir\redis-cli.bat" -Encoding ASCII
                   Write-Host "Created redis-cli.bat wrapper"
               }
-              
+
               # Add to PATH for subsequent steps
               echo "$wrapperDir" >> $env:GITHUB_PATH
               Write-Host "Added $wrapperDir to PATH"
