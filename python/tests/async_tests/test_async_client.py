@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import platform
 import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union, cast
@@ -125,6 +126,12 @@ class TestGlideClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_send_and_receive_large_values(self, request, cluster_mode, protocol):
+        # Skip on macOS - the macOS tests run on self hosted VMs which have resource limits
+        # making this test flaky with "no buffer space available" errors. See - https://github.com/valkey-io/valkey-glide/issues/4902
+        system = platform.system().lower()
+        if "darwin" in system:
+            return
+
         glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
