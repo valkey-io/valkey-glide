@@ -47,7 +47,7 @@ def get_command(commands: List[str]) -> str:
                 text=True,
             )
             if result.returncode == 0:
-                return command
+                return result.stdout.strip()  # Return full path
         except Exception as e:
             logging.debug(f"'which' failed for {command}: {e}")
         
@@ -60,7 +60,7 @@ def get_command(commands: List[str]) -> str:
                 text=True,
             )
             if result.returncode == 0:
-                return command
+                return result.stdout.strip().split('\n')[0]  # Return first full path
         except Exception as e:
             logging.debug(f"'where' failed for {command}: {e}")
             
