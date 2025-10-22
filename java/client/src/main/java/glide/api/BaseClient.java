@@ -941,6 +941,7 @@ public abstract class BaseClient
      *     password rotation on the server side.
      * @param password A new password to set.
      * @return <code>"OK"</code>.
+     * @throws ConfigurationError if the client is using IAM authentication.
      * @example
      *     <pre>{@code
      * String response = client.resetConnectionPassword("new_password", RE_AUTHENTICATE).get();

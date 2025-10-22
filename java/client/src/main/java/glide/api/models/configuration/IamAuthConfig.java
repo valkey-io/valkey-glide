@@ -34,5 +34,5 @@ public class IamAuthConfig {
      * Optional refresh interval in seconds for renewing IAM authentication tokens. If not provided,
      * defaults to 300 seconds (5 min).
      */
-    @Builder.Default private final Integer refreshIntervalSeconds = 300;
+    private final Integer refreshIntervalSeconds;
 }

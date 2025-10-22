@@ -445,10 +445,6 @@ public class ConnectionManager {
         if (credentials == null) {
             return;
         }
-        // Don't update password if using IAM authentication
-        if (credentials.getIamConfig() != null) {
-            return;
-        }
         credentials =
                 ServerCredentials.builder()
                         .username(credentials.getUsername())
