@@ -221,7 +221,7 @@ func TestServerCredentialsWithIam(t *testing.T) {
 	assert.Equal(t, "my-cluster", authInfo.IamCredentials.ClusterName)
 	assert.Equal(t, "us-east-1", authInfo.IamCredentials.Region)
 	assert.Equal(t, protobuf.ServiceType_ELASTICACHE, authInfo.IamCredentials.ServiceType)
-	assert.Equal(t, uint32(300), *authInfo.IamCredentials.RefreshIntervalSeconds)
+	assert.Nil(t, authInfo.IamCredentials.RefreshIntervalSeconds)
 }
 
 func TestServerCredentialsWithIamCustomRefresh(t *testing.T) {
