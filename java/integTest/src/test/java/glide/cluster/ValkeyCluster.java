@@ -20,6 +20,12 @@ public class ValkeyCluster implements AutoCloseable {
                     .resolve("utils")
                     .resolve("cluster_manager.py");
 
+    /** Get platform-specific Python executable */
+    private static String getPythonExecutable() {
+        String osName = System.getProperty("os.name").toLowerCase();
+        return osName.contains("windows") ? "python" : "python3";
+    }
+
     private boolean tls = false;
     private String clusterFolder;
     private List<NodeAddress> nodesAddr;
@@ -48,7 +54,7 @@ public class ValkeyCluster implements AutoCloseable {
         } else {
             this.tls = tls;
             List<String> command = new ArrayList<>();
-            command.add("python3");
+            command.add(getPythonExecutable());
             command.add(SCRIPT_FILE.toString());
 
             if (tls) {
@@ -173,7 +179,7 @@ public class ValkeyCluster implements AutoCloseable {
     public void close() throws IOException {
         if (clusterFolder != null && !clusterFolder.isEmpty()) {
             List<String> command = new ArrayList<>();
-            command.add("python3");
+            command.add(getPythonExecutable());
             command.add(SCRIPT_FILE.toString());
 
             if (tls) {
