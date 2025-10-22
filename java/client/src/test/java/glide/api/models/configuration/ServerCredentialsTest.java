@@ -44,7 +44,7 @@ public class ServerCredentialsTest {
         assertEquals("my-cluster", credentials.getIamConfig().getClusterName());
         assertEquals(ServiceType.ELASTICACHE, credentials.getIamConfig().getService());
         assertEquals("us-east-1", credentials.getIamConfig().getRegion());
-        assertEquals(300, credentials.getIamConfig().getRefreshIntervalSeconds());
+        assertEquals(null, credentials.getIamConfig().getRefreshIntervalSeconds());
     }
 
     @Test
