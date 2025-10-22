@@ -678,11 +678,13 @@ def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
         )
         output, err = p.communicate(timeout=5)
         if err:
+            logging.error(f"CLI command failed: {' '.join(cmd_args[:3])}... - Error: {err}")
             raise Exception(
                 f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
             )
         return output
     except subprocess.TimeoutExpired:
+        logging.error(f"CLI command timed out: {' '.join(cmd_args[:3])}...")
         return None
 
 
@@ -737,6 +739,8 @@ def wait_for_all_topology_views(
                     break
             else:
                 retries -= 1
+                if retries == 0:
+                    logging.error(f"Topology wait failed for {server.host}:{server.port} - no CLI output received")
                 time.sleep(1)
                 continue
 
