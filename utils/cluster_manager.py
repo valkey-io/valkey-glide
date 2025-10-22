@@ -662,11 +662,13 @@ def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
         )
         output, err = p.communicate(timeout=5)
         if err:
+            logging.error(f"CLI command failed: {' '.join(cmd_args[:3])}... - Error: {err}")
             raise Exception(
                 f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
             )
         return output
     except subprocess.TimeoutExpired:
+        logging.error(f"CLI command timed out: {' '.join(cmd_args[:3])}...")
         return None
 
 
@@ -692,7 +694,10 @@ def wait_for_all_topology_views(
         retries = 160
         while retries >= 0:
             output = redis_cli_run_command(cmd_args)
-            if output is not None and output.count(f"{server.host}") == len(servers):
+            if output is not None:
+                host_count = output.count(f"{server.host}")
+                if host_count == len(servers):
+                    # Server is ready, get the node's role
                 # Server is ready, get the node's role
                 cmd_args = [
                     get_cli_command(),
@@ -710,8 +715,16 @@ def wait_for_all_topology_views(
                     server.set_primary(node_info["is_primary"])
                 logging.debug(f"Server {server} is ready!")
                 break
+                else:
+                    if retries % 40 == 0:  # Log every 40 retries to avoid spam
+                        logging.info(f"Waiting for {server.host}:{server.port} - found {host_count}/{len(servers)} nodes")
+                    retries -= 1
+                    time.sleep(1)
+                    continue
             else:
                 retries -= 1
+                if retries == 0:
+                    logging.error(f"Topology wait failed for {server.host}:{server.port} - no CLI output received")
                 time.sleep(1)
                 continue
 
