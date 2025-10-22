@@ -195,69 +195,7 @@ pub async fn get_valkey_connection_info(
 
 
 
-use rustls::RootCertStore;
-use rustls_pki_types::{CertificateDer, PrivateKeyDer};
-use std::io::{BufRead, Error, ErrorKind as IOErrorKind};
-
-/// Client TLS parameters (copied from redis-rs)
-#[derive(Debug)]
-struct ClientTlsParams {
-    client_cert_chain: Vec<CertificateDer<'static>>,
-    client_key: PrivateKeyDer<'static>,
-}
-
-impl Clone for ClientTlsParams {
-    fn clone(&self) -> Self {
-        use rustls_pki_types::PrivateKeyDer::*;
-        Self {
-            client_cert_chain: self.client_cert_chain.clone(),
-            client_key: match &self.client_key {
-                Pkcs1(key) => Pkcs1(key.secret_pkcs1_der().to_vec().into()),
-                Pkcs8(key) => Pkcs8(key.secret_pkcs8_der().to_vec().into()),
-                Sec1(key) => Sec1(key.secret_sec1_der().to_vec().into()),
-                _ => unreachable!(),
-            },
-        }
-    }
-}
-
-/// TLS connection parameters (copied from redis-rs)
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-struct TlsConnParams {
-    client_tls_params: Option<ClientTlsParams>,
-    root_cert_store: Option<RootCertStore>,
-}
-
-/// Parse root certificates from PEM data
-fn parse_root_certs(root_cert_data: Vec<u8>) -> RedisResult<TlsConnParams> {
-    if root_cert_data.is_empty() {
-        return Err(Error::new(IOErrorKind::InvalidInput, "Root certificate data cannot be empty").into());
-    }
-    
-    let buf = &mut root_cert_data.as_slice() as &mut dyn BufRead;
-    let certs = rustls_pemfile::certs(buf);
-    let mut root_cert_store = RootCertStore::empty();
-    let mut cert_count = 0;
-    
-    for result in certs {
-        if root_cert_store.add(result?.to_owned()).is_err() {
-            return Err(Error::new(IOErrorKind::Other, "Unable to parse TLS trust anchors").into());
-        }
-        cert_count += 1;
-    }
-    
-    if cert_count == 0 {
-        return Err(Error::new(IOErrorKind::InvalidInput, "No valid certificates found in root certificate data").into());
-    }
-    
-    log_debug("parse_root_certs", format!("Successfully parsed {} root certificates", cert_count));
-    
-    Ok(TlsConnParams {
-        client_tls_params: None,
-        root_cert_store: Some(root_cert_store),
-    })
-}
+use redis::{TlsCertificates, retrieve_tls_certificates};
 
 pub(super) fn get_connection_info(
     address: &NodeAddress,
@@ -267,10 +205,12 @@ pub(super) fn get_connection_info(
 ) -> RedisResult<redis::ConnectionInfo> {
     let addr = if tls_mode != TlsMode::NoTls {
         let tls_params = if let Some(certs) = root_certs {
-            log_debug("get_connection_info", "Using custom root certificates for TLS connection");
-            Some(unsafe { std::mem::transmute(parse_root_certs(certs)?) })
+            let tls_certificates = TlsCertificates {
+                client_tls: None,
+                root_cert: Some(certs),
+            };
+            Some(retrieve_tls_certificates(tls_certificates)?)
         } else {
-            log_debug("get_connection_info", "No custom root certificates provided, using platform verifier");
             None
         };
         redis::ConnectionAddr::TcpTls {
@@ -1489,7 +1429,6 @@ mod tests {
 
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, RequestTimeoutOption, TimeUnit, get_request_timeout,
-        parse_root_certs,
     };
 
     use super::get_timeout_from_cmd_arg;
@@ -1642,62 +1581,5 @@ mod tests {
         assert_eq!(result.unwrap(), Some(Duration::from_millis(100)));
     }
 
-    #[test]
-    fn test_parse_root_certs_with_certificate_data() {
-        // Test with certificate-like data (may or may not parse successfully)
-        let cert_data = b"-----BEGIN CERTIFICATE-----
-MIIDXTCCAkWgAwIBAgIJAKoK/heBjcOuMA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNV
-BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX
-aWRnaXRzIFB0eSBMdGQwHhcNMTIwOTEyMjE1MjAyWhcNMTUwOTEyMjE1MjAyWjBF
-MQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50
-ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
-CgKCAQEAwuqTiuGqAHFBXk+w/uoP5RfvnifrqSeXqNJScastR5h5+qX9DNQNUP6T
-ZW9RaWh4bqNaXeAJSu/szhkTjn0hBUAhpihkHt5aEkuGL1ApHuRlMqSdaJ26C+eQ
-g2MoXJRblX/BXLvvB0Q7gM1w9T9+Zw==
------END CERTIFICATE-----".to_vec();
-        
-        let result = parse_root_certs(cert_data);
-        // The function should either succeed or fail with a meaningful error
-        // but not fail due to empty data
-        match result {
-            Ok(_) => {}, // Success case
-            Err(e) => {
-                let error_msg = e.to_string();
-                assert!(!error_msg.contains("cannot be empty"));
-            }
-        }
-    }
 
-    #[test]
-    fn test_parse_root_certs_invalid_pem() {
-        let invalid_pem = b"-----BEGIN CERTIFICATE-----
-InvalidCertificateData
------END CERTIFICATE-----".to_vec();
-        
-        let result = parse_root_certs(invalid_pem);
-        assert!(result.is_err());
-        // The error might be about parsing, not specifically "certificate"
-        let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("parse") || error_msg.contains("certificate") || error_msg.contains("invalid"));
-    }
-
-    #[test]
-    fn test_parse_root_certs_empty_data() {
-        let empty_data = b"".to_vec();
-        
-        let result = parse_root_certs(empty_data);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("certificate"));
-    }
-
-    #[test]
-    fn test_parse_root_certs_no_certificates_found() {
-        // Data that looks like it might contain certificates but doesn't
-        let no_certs = b"some random data without certificates".to_vec();
-        
-        let result = parse_root_certs(no_certs);
-        // This should fail because no valid certificates were found
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No valid certificates found"));
-    }
 }

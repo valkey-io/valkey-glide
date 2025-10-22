@@ -444,7 +444,7 @@ pub mod sentinel;
 
 mod tls;
 
-pub use crate::tls::{ClientTlsConfig, TlsCertificates};
+pub use crate::tls::{ClientTlsConfig, TlsCertificates, TlsConnParams, retrieve_tls_certificates};
 
 mod client;
 mod cmd;
