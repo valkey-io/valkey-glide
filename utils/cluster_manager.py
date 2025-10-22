@@ -472,7 +472,7 @@ def create_servers(
             "--tls-auth-clients",  # Make it so client doesn't have to send cert
             "no",
             "--bind",
-            "0.0.0.0",  # Bind to all interfaces so both WSL IP and localhost work
+            host,  # Bind to WSL IP for external access
             "--port",
             "0",
         ]
@@ -480,6 +480,7 @@ def create_servers(
             tls_args.append("--tls-replication")
             tls_args.append("yes")
     servers_to_check = set()
+    logging.info(f"Starting {nodes_count} nodes (shard_count={shard_count}, replica_count={replica_count})")
     # Start all servers
     for i in range(nodes_count):
         port = ports[i] if ports else None
