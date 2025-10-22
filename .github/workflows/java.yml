@@ -154,6 +154,13 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
+            - name: Setup Python3 for Windows
+              if: ${{ matrix.host.OS == 'windows' }}
+              shell: bash
+              run: |
+                  # Create python3 symlink for Windows
+                  ln -sf $(which python) /usr/bin/python3
+
             - name: Build java client
               working-directory: java
               env:
