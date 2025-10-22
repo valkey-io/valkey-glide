@@ -50,8 +50,9 @@ def standaloneHosts = ''
 def clusterHosts = ''
 def azClusterHosts = ''
 
-// Platform-specific Python executable
-def pythonExecutable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3'
+// Platform-specific Python executable and WSL handling
+def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+def pythonCmd = isWindows ? ['wsl', '--', 'python3'] : ['python3']
 
 // Use integration test IP from environment variable if available, otherwise default to localhost
 def clusterHost = System.getenv('VALKEY_INTEG_TEST_IP') ?: '127.0.0.1'
@@ -70,7 +71,7 @@ ext {
 
 tasks.register('stopAllAfterTests', Exec) {
     workingDir "${project.rootDir}/../utils"
-    commandLine pythonExecutable, 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder', '--host', clusterHost
+    commandLine(*pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder', '--host', clusterHost)
 }
 
 // We need to call for stop before and after the test, but gradle doesn't support executing a task
@@ -78,7 +79,7 @@ tasks.register('stopAllAfterTests', Exec) {
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
 tasks.register('stopAllBeforeTests', Exec) {
     workingDir "${project.rootDir}/../utils"
-    commandLine pythonExecutable, 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--host', clusterHost
+    commandLine(*pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--host', clusterHost)
     ignoreExitValue true // ignore fail if servers are stopped before
 }
 
@@ -93,7 +94,7 @@ tasks.register('startCluster') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = [pythonExecutable, 'cluster_manager.py', 'start', '--cluster-mode', '--host', clusterHost]
+                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '--host', clusterHost]
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine args
                     standardOutput = os
@@ -112,7 +113,7 @@ tasks.register('startClusterForAz') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = [pythonExecutable, 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4', '--host', clusterHost]
+                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4', '--host', clusterHost]
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine args
                     standardOutput = os
@@ -133,7 +134,7 @@ tasks.register('startStandalone') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = [pythonExecutable, 'cluster_manager.py', 'start', '-r', '0', '--host', clusterHost]
+                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '-r', '0', '--host', clusterHost]
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine args
                     standardOutput = os
