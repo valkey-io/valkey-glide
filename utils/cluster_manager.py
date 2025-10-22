@@ -710,10 +710,12 @@ def wait_for_a_message_in_logs(
         if not dir.is_dir():
             continue
         log_file = f"{dir}/server.log"
+        # Normalize log file path for client reading when using wrapper scripts
+        readable_log_file = normalize_path_for_client(normalize_path_for_server(log_file))
 
         if server_ports and os.path.basename(os.path.normpath(dir)) not in server_ports:
             continue
-        if not wait_for_message(log_file, message, 10):
+        if not wait_for_message(readable_log_file, message, 10):
             raise Exception(
                 f"During the timeout duration, the server logs associated with port {dir} did not contain the message:{message}."
                 f"See {dir}/server.log for more information"
