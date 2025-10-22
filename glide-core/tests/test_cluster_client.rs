@@ -581,4 +581,9 @@ mod cluster_client_tests {
             );
         });
     }
+
+    // Note: Cluster TLS tests with custom certificates would require
+    // extending the cluster manager script to support custom TLS paths.
+    // For now, the custom root certificate functionality is tested
+    // in standalone mode, and the same code path is used for cluster mode.
 }

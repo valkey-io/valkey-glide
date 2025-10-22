@@ -124,6 +124,24 @@ impl RedisCluster {
         shards: Option<u16>,
         replicas: Option<u16>,
     ) -> RedisCluster {
+        Self::new_with_tls_paths(use_tls, conn_info, shards, replicas, None)
+    }
+
+    pub fn new_with_tls(
+        shards: u16,
+        replicas: u16,
+        tls_paths: Option<super::TlsFilePaths>,
+    ) -> RedisCluster {
+        Self::new_with_tls_paths(true, &None, Some(shards), Some(replicas), tls_paths)
+    }
+
+    fn new_with_tls_paths(
+        use_tls: bool,
+        conn_info: &Option<RedisConnectionInfo>,
+        shards: Option<u16>,
+        replicas: Option<u16>,
+        _tls_paths: Option<super::TlsFilePaths>,
+    ) -> RedisCluster {
         let mut script_args = vec!["start", "--cluster-mode"];
         let shards_num: String;
         let replicas_num: String;

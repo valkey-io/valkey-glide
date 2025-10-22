@@ -395,8 +395,8 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
         .wait()
         .expect("failed to create CA cert");
 
-    // Build x509v3 extensions file
-    fs::write(&ext_file, b"keyUsage = digitalSignature, keyEncipherment")
+    // Build x509v3 extensions file with SAN for 127.0.0.1
+    fs::write(&ext_file, b"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,DNS:localhost")
         .expect("failed to create x509v3 extensions file");
 
     // Read redis key

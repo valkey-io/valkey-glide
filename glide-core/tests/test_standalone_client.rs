@@ -680,6 +680,7 @@ mod standalone_client_tests {
                     ..Default::default()
                 },
             );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
             connection_request.root_certs = vec![ca_cert_bytes.into()];
             
             // Test that connection works with custom root cert
@@ -738,6 +739,7 @@ mod standalone_client_tests {
                     ..Default::default()
                 },
             );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
             connection_request.root_certs = vec![wrong_ca_cert_bytes.into()];
             
             // Connection should fail due to certificate mismatch
