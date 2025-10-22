@@ -723,7 +723,7 @@ def wait_for_all_topology_views(
                 host_count = output.count(f"{server.host}")
                 logging.debug(f"Found {host_count} occurrences of '{server.host}' in output, need {len(servers)}")
                 if host_count == len(servers):
-                # Server is ready, get the node's role
+                    # Server is ready, get the node's role
                 cmd_args = [
                     get_cli_command(),
                     "-h",
