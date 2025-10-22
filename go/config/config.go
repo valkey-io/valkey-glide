@@ -38,10 +38,10 @@ func (addr *NodeAddress) toProtobuf() *protobuf.NodeAddress {
 type ServiceType int
 
 const (
-	// Elasticache represents Amazon ElastiCache service.
-	Elasticache ServiceType = iota
-	// MemoryDB represents Amazon MemoryDB service.
-	MemoryDB
+	// Amazon ElastiCache service.
+	ElastiCache ServiceType = iota
+	// Amazon MemoryDB service.
+	MemoryDb
 )
 
 // IamAuthConfig represents configuration settings for IAM authentication.
