@@ -195,7 +195,7 @@ public class ValkeyCluster implements AutoCloseable {
             }
 
             command.add("stop");
-            
+
             // Add host parameter - use environment variable or default to localhost
             String host = System.getenv("VALKEY_INTEG_TEST_IP");
             if (host == null || host.isEmpty()) {
@@ -203,7 +203,7 @@ public class ValkeyCluster implements AutoCloseable {
             }
             command.add("--host");
             command.add(host);
-            
+
             command.add("--cluster-folder");
             command.add(clusterFolder);
 
