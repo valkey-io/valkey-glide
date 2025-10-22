@@ -472,7 +472,7 @@ def create_servers(
             "--tls-auth-clients",  # Make it so client doesn't have to send cert
             "no",
             "--bind",
-            host,
+            "0.0.0.0",  # Bind to all interfaces so both WSL IP and localhost work
             "--port",
             "0",
         ]

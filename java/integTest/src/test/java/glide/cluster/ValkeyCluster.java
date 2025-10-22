@@ -66,6 +66,11 @@ public class ValkeyCluster implements AutoCloseable {
                 command.add("--tls");
             }
 
+            command.add("-n");
+            command.add(String.valueOf(shardCount));
+            command.add("-r");
+            command.add(String.valueOf(replicaCount));
+
             command.add("start");
 
             // Add host parameter - use environment variable or default to localhost
@@ -86,11 +91,6 @@ public class ValkeyCluster implements AutoCloseable {
                     command.add(module);
                 }
             }
-
-            command.add("-n");
-            command.add(String.valueOf(shardCount));
-            command.add("-r");
-            command.add(String.valueOf(replicaCount));
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
