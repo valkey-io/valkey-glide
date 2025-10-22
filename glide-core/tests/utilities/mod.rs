@@ -448,6 +448,12 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
     }
 }
 
+impl TlsFilePaths {
+    pub fn read_ca_cert_as_bytes(&self) -> Vec<u8> {
+        fs::read(&self.ca_crt).expect("Failed to read CA certificate file")
+    }
+}
+
 pub async fn wait_for_server_to_become_ready(server_address: &ConnectionAddr) {
     let millisecond = Duration::from_millis(1);
     let mut retries = 0;

@@ -641,4 +641,108 @@ mod standalone_client_tests {
             );
         });
     }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_tls_connection_with_custom_root_cert() {
+        block_on_all(async move {
+            // Create a dedicated TLS server with custom certificates
+            let tempdir = tempfile::Builder::new()
+                .prefix("tls_test")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+            
+            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                redis::ConnectionAddr::TcpTls {
+                    host: "127.0.0.1".to_string(),
+                    port: get_available_port(),
+                    insecure: false,
+                    tls_params: None,
+                },
+                Some(tls_paths),
+                &[],
+                |cmd| cmd.spawn().expect("Failed to spawn server"),
+            );
+            
+            let server_addr = server.get_client_addr();
+            // Skip wait_for_server_to_become_ready since it uses default OS verifier
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await; // Give server time to start
+            
+            // Create connection request with custom root certificate
+            let mut connection_request = create_connection_request(
+                &[server_addr],
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+            connection_request.root_certs = vec![ca_cert_bytes.into()];
+            
+            // Test that connection works with custom root cert
+            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
+                .await
+                .expect("Failed to create client with custom root cert");
+            
+            // Verify connection works by sending a command
+            let ping_result = client.send_command(&redis::cmd("PING")).await;
+            assert_eq!(ping_result.unwrap(), Value::SimpleString("PONG".to_string()));
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_tls_connection_fails_with_wrong_root_cert() {
+        block_on_all(async move {
+            // Create a TLS server with one set of certificates
+            let tempdir1 = tempfile::Builder::new()
+                .prefix("tls_test_server")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let server_tls_paths = build_keys_and_certs_for_tls(&tempdir1);
+            
+            // Create different CA certificate for client
+            let tempdir2 = tempfile::Builder::new()
+                .prefix("tls_test_client")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let client_tls_paths = build_keys_and_certs_for_tls(&tempdir2);
+            let wrong_ca_cert_bytes = client_tls_paths.read_ca_cert_as_bytes();
+            
+            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                redis::ConnectionAddr::TcpTls {
+                    host: "127.0.0.1".to_string(),
+                    port: get_available_port(),
+                    insecure: false,
+                    tls_params: None,
+                },
+                Some(server_tls_paths),
+                &[],
+                |cmd| cmd.spawn().expect("Failed to spawn server"),
+            );
+            
+            let server_addr = server.get_client_addr();
+            // Skip wait_for_server_to_become_ready since it would also fail with wrong certificates
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await; // Give server time to start
+            
+            // Try to connect with wrong root certificate
+            let mut connection_request = create_connection_request(
+                &[server_addr],
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+            connection_request.root_certs = vec![wrong_ca_cert_bytes.into()];
+            
+            // Connection should fail due to certificate mismatch
+            let client_result = StandaloneClient::create_client(connection_request.into(), None, None).await;
+            assert!(client_result.is_err(), "Expected connection to fail with wrong root certificate");
+        });
+    }
 }
