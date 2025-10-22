@@ -64,7 +64,6 @@ def get_cli_command() -> str:
     global _CLI_COMMAND
     if _CLI_COMMAND is None:
         _CLI_COMMAND = get_command(["valkey-cli", "redis-cli"])
-        logging.debug(f"Using CLI command: {_CLI_COMMAND}")
     return _CLI_COMMAND
 
 
@@ -671,7 +670,6 @@ def parse_cluster_nodes(command_output: Optional[str]) -> Optional[dict]:
 
 def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
     try:
-        logging.debug(f"Executing CLI command: {' '.join(cmd_args)}")
         p = subprocess.Popen(
             cmd_args,
             stdout=subprocess.PIPE,
@@ -679,15 +677,12 @@ def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
             text=True,
         )
         output, err = p.communicate(timeout=5)
-        logging.debug(f"CLI output: {output}")
-        logging.debug(f"CLI stderr: {err}")
         if err:
             raise Exception(
                 f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
             )
         return output
     except subprocess.TimeoutExpired:
-        logging.debug("CLI command timed out")
         return None
 
 
