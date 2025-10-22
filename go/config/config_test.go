@@ -207,7 +207,7 @@ func TestServerCredentials(t *testing.T) {
 }
 
 func TestServerCredentialsWithIam(t *testing.T) {
-	iamConfig := NewIamAuthConfig("my-cluster", Elasticache, "us-east-1")
+	iamConfig := NewIamAuthConfig("my-cluster", ElastiCache, "us-east-1")
 	creds, err := NewServerCredentialsWithIam("myUser", iamConfig)
 
 	assert.Nil(t, err)
@@ -238,7 +238,7 @@ func TestServerCredentialsWithIamCustomRefresh(t *testing.T) {
 }
 
 func TestServerCredentialsWithIamRequiresUsername(t *testing.T) {
-	iamConfig := NewIamAuthConfig("my-cluster", Elasticache, "us-east-1")
+	iamConfig := NewIamAuthConfig("my-cluster", ElastiCache, "us-east-1")
 	creds, err := NewServerCredentialsWithIam("", iamConfig)
 
 	assert.NotNil(t, err)

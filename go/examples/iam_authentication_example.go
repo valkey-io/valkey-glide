@@ -17,12 +17,12 @@ import (
 //   - Create a client with IAM credentials
 //   - Manually refresh IAM tokens
 
-// ElasticacheExample demonstrates connecting to ElastiCache with IAM authentication
-func ElasticacheExample() {
+// ElastiCacheExample demonstrates connecting to ElastiCache with IAM authentication
+func ElastiCacheExample() {
 	// Configure IAM authentication
 	iamConfig := config.NewIamAuthConfig(
 		"my-elasticache-cluster",
-		config.Elasticache,
+		config.ElastiCache,
 		"us-east-1",
 	) // Uses default 300 second refresh interval
 
@@ -108,7 +108,7 @@ func MemoryDBExample() {
 func ManualRefreshExample() {
 	iamConfig := config.NewIamAuthConfig(
 		"my-cluster",
-		config.Elasticache,
+		config.ElastiCache,
 		"us-east-1",
 	)
 
@@ -161,7 +161,7 @@ func ManualRefreshExample() {
 func ClusterExample() {
 	iamConfig := config.NewIamAuthConfig(
 		"my-cluster",
-		config.Elasticache,
+		config.ElastiCache,
 		"us-east-1",
 	)
 

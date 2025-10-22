@@ -41,7 +41,7 @@ const (
 	// Amazon ElastiCache service.
 	ElastiCache ServiceType = iota
 	// Amazon MemoryDB service.
-	MemoryDb
+	MemoryDB
 )
 
 // IamAuthConfig represents configuration settings for IAM authentication.
@@ -78,7 +78,7 @@ func (config *IamAuthConfig) toProtobuf() *protobuf.IamCredentials {
 		Region:      config.region,
 	}
 
-	if config.service == Elasticache {
+	if config.service == ElastiCache {
 		iamCreds.ServiceType = protobuf.ServiceType_ELASTICACHE
 	} else {
 		iamCreds.ServiceType = protobuf.ServiceType_MEMORYDB
