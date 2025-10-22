@@ -365,32 +365,56 @@ def create_cluster_folder(path: str, prefix: str) -> str:
     return cluster_folder
 
 
-def windows_path_to_wsl(path: str) -> str:
-    """Convert Windows path to WSL path format when using Windows wrapper scripts.
+def normalize_path_for_server(path: str) -> str:
+    """Normalize path for server when using wrapper scripts.
     
     This should only be used when launching cluster_manager.py from a normal Windows 
     shell to launch wrapper scripts that run WSL builds of servers (detected by 
     using 'where' command to find server executables).
     
     Args:
-        path: Windows path (e.g., 'D:\\folder\\file')
+        path: Original path (e.g., 'D:\\folder\\file')
         
     Returns:
-        WSL path (e.g., '/mnt/d/folder/file') if using Windows wrappers, otherwise original path
+        Normalized path (e.g., '/mnt/d/folder/file') if using wrapper scripts, otherwise original path
     """
     global _USING_WINDOWS_WRAPPERS
     if not _USING_WINDOWS_WRAPPERS:
         return path
     
     # Convert backslashes to forward slashes
-    wsl_path = path.replace('\\', '/')
+    normalized_path = path.replace('\\', '/')
     
     # Convert drive letter (e.g., 'D:' -> '/mnt/d')
-    if len(wsl_path) >= 2 and wsl_path[1] == ':':
-        drive_letter = wsl_path[0].lower()
-        wsl_path = f'/mnt/{drive_letter}{wsl_path[2:]}'
+    if len(normalized_path) >= 2 and normalized_path[1] == ':':
+        drive_letter = normalized_path[0].lower()
+        normalized_path = f'/mnt/{drive_letter}{normalized_path[2:]}'
     
-    return wsl_path
+    return normalized_path
+
+
+def normalize_path_for_client(server_path: str) -> str:
+    """Normalize server path back to client-readable format when using wrapper scripts.
+    
+    Args:
+        server_path: Server path (e.g., '/mnt/d/folder/file')
+        
+    Returns:
+        Client-readable path (e.g., 'D:\\folder\\file') if using wrapper scripts, otherwise original path
+    """
+    global _USING_WINDOWS_WRAPPERS
+    if not _USING_WINDOWS_WRAPPERS:
+        return server_path
+    
+    # Convert WSL mount path back to Windows drive letter
+    if server_path.startswith('/mnt/') and len(server_path) > 5:
+        drive_letter = server_path[5].upper()
+        client_path = f'{drive_letter}:{server_path[6:]}'
+        # Convert forward slashes to backslashes
+        client_path = client_path.replace('/', '\\')
+        return client_path
+    
+    return server_path
 
 
 def start_server(
@@ -428,9 +452,9 @@ def start_server(
     # Define command arguments
     logfile = f"{node_folder}/server.log"
     
-    # Convert paths to WSL format if on Windows
-    wsl_node_folder = windows_path_to_wsl(node_folder)
-    wsl_logfile = windows_path_to_wsl(logfile)
+    # Convert paths to server format if using wrapper scripts
+    server_node_folder = normalize_path_for_server(node_folder)
+    server_logfile = normalize_path_for_server(logfile)
     
     cmd_args = [
         get_server_command(),
@@ -439,11 +463,11 @@ def start_server(
         "--cluster-enabled",
         f"{'yes' if cluster_mode else 'no'}",
         "--dir",
-        wsl_node_folder,
+        server_node_folder,
         "--daemonize",
         "yes",
         "--logfile",
-        wsl_logfile,
+        server_logfile,
         "--protected-mode",
         "no",
         "--appendonly",
@@ -550,7 +574,11 @@ def create_servers(
     while len(servers_to_check) > 0:
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
-        if is_address_already_in_use(server, f"{node_folder}/server.log"):
+        # Convert log file path: server format for server, client format for Python to read
+        log_file_path = f"{node_folder}/server.log"
+        server_log_file_path = normalize_path_for_server(log_file_path)
+        readable_log_file_path = normalize_path_for_client(server_log_file_path)
+        if is_address_already_in_use(server, readable_log_file_path):
             remove_folder(node_folder)
             if ports is not None:
                 # The user passed a taken port, exit with an error
