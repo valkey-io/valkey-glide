@@ -703,22 +703,22 @@ def wait_for_all_topology_views(
                 logging.debug(f"Found {host_count} occurrences of '{server.host}' in output, need {len(servers)}")
                 if host_count == len(servers):
                     # Server is ready, get the node's role
-                cmd_args = [
-                    get_cli_command(),
-                    "-h",
-                    server.host,
-                    "-p",
-                    str(server.port),
-                    *get_cli_option_args(cluster_folder, use_tls),
-                    "cluster",
-                    "nodes",
-                ]
-                cluster_slots_output = redis_cli_run_command(cmd_args)
-                node_info = parse_cluster_nodes(cluster_slots_output)
-                if node_info:
-                    server.set_primary(node_info["is_primary"])
-                logging.debug(f"Server {server} is ready!")
-                break
+                    cmd_args = [
+                        get_cli_command(),
+                        "-h",
+                        server.host,
+                        "-p",
+                        str(server.port),
+                        *get_cli_option_args(cluster_folder, use_tls),
+                        "cluster",
+                        "nodes",
+                    ]
+                    cluster_slots_output = redis_cli_run_command(cmd_args)
+                    node_info = parse_cluster_nodes(cluster_slots_output)
+                    if node_info:
+                        server.set_primary(node_info["is_primary"])
+                    logging.debug(f"Server {server} is ready!")
+                    break
             else:
                 retries -= 1
                 time.sleep(1)
