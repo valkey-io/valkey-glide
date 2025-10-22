@@ -39,34 +39,8 @@ SERVER_KEY = f"{TLS_FOLDER}/server.key"
 
 def get_command(commands: List[str]) -> str:
     for command in commands:
-        # Try 'which' first (Unix/Linux/macOS)
-        try:
-            result = subprocess.run(
-                ["which", command],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()  # Return full path
-        except Exception as e:
-            logging.debug(f"'which' failed for {command}: {e}")
-        
-        # Fallback to 'where' (Windows)
-        try:
-            result = subprocess.run(
-                ["where", command],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            if result.returncode == 0:
-                # Mark that we used 'where' to find the command (Windows wrapper scripts)
-                global _USING_WINDOWS_WRAPPERS
-                _USING_WINDOWS_WRAPPERS = True
-                return result.stdout.strip().split('\n')[0]  # Return first full path
-        except Exception as e:
-            logging.debug(f"'where' failed for {command}: {e}")
+        if shutil.which(command):
+            return command
             
     raise Exception(f"Neither {' nor '.join(commands)} found in the system.")
 
@@ -74,7 +48,6 @@ def get_command(commands: List[str]) -> str:
 # Global variables for caching server commands (set lazily)
 _SERVER_COMMAND = None
 _CLI_COMMAND = None
-_USING_WINDOWS_WRAPPERS = False
 
 
 def get_server_command() -> str:
@@ -363,58 +336,6 @@ def create_cluster_folder(path: str, prefix: str) -> str:
     logging.debug(f"## Creating cluster folder in {cluster_folder}")
     Path(cluster_folder).mkdir(exist_ok=True)
     return cluster_folder
-
-
-def normalize_path_for_server(path: str) -> str:
-    """Normalize path for server when using wrapper scripts.
-    
-    This should only be used when launching cluster_manager.py from a normal Windows 
-    shell to launch wrapper scripts that run WSL builds of servers (detected by 
-    using 'where' command to find server executables).
-    
-    Args:
-        path: Original path (e.g., 'D:\\folder\\file')
-        
-    Returns:
-        Normalized path (e.g., '/mnt/d/folder/file') if using wrapper scripts, otherwise original path
-    """
-    global _USING_WINDOWS_WRAPPERS
-    if not _USING_WINDOWS_WRAPPERS:
-        return path
-    
-    # Convert backslashes to forward slashes
-    normalized_path = path.replace('\\', '/')
-    
-    # Convert drive letter (e.g., 'D:' -> '/mnt/d')
-    if len(normalized_path) >= 2 and normalized_path[1] == ':':
-        drive_letter = normalized_path[0].lower()
-        normalized_path = f'/mnt/{drive_letter}{normalized_path[2:]}'
-    
-    return normalized_path
-
-
-def normalize_path_for_client(server_path: str) -> str:
-    """Normalize server path back to client-readable format when using wrapper scripts.
-    
-    Args:
-        server_path: Server path (e.g., '/mnt/d/folder/file')
-        
-    Returns:
-        Client-readable path (e.g., 'D:\\folder\\file') if using wrapper scripts, otherwise original path
-    """
-    global _USING_WINDOWS_WRAPPERS
-    if not _USING_WINDOWS_WRAPPERS:
-        return server_path
-    
-    # Convert WSL mount path back to Windows drive letter
-    if server_path.startswith('/mnt/') and len(server_path) > 5:
-        drive_letter = server_path[5].upper()
-        client_path = f'{drive_letter}:{server_path[6:]}'
-        # Convert forward slashes to backslashes
-        client_path = client_path.replace('/', '\\')
-        return client_path
-    
-    return server_path
 
 
 def start_server(
