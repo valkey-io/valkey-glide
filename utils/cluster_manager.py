@@ -9,6 +9,7 @@ import os
 import platform
 import random
 import re
+import shutil
 import signal
 import socket
 import string
@@ -373,10 +374,6 @@ def start_server(
     # Define command arguments
     logfile = f"{node_folder}/server.log"
     
-    # Convert paths to server format if using wrapper scripts
-    server_node_folder = normalize_path_for_server(node_folder)
-    server_logfile = normalize_path_for_server(logfile)
-    
     cmd_args = [
         get_server_command(),
         f"{'--tls-port' if tls else '--port'}",
@@ -384,11 +381,11 @@ def start_server(
         "--cluster-enabled",
         f"{'yes' if cluster_mode else 'no'}",
         "--dir",
-        server_node_folder,
+        node_folder,
         "--daemonize",
         "yes",
         "--logfile",
-        server_logfile,
+        logfile,
         "--protected-mode",
         "no",
         "--appendonly",
@@ -495,11 +492,7 @@ def create_servers(
     while len(servers_to_check) > 0:
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
-        # Convert log file path: server format for server, client format for Python to read
-        log_file_path = f"{node_folder}/server.log"
-        server_log_file_path = normalize_path_for_server(log_file_path)
-        readable_log_file_path = normalize_path_for_client(server_log_file_path)
-        if is_address_already_in_use(server, readable_log_file_path):
+        if is_address_already_in_use(server, f"{node_folder}/server.log"):
             remove_folder(node_folder)
             if ports is not None:
                 # The user passed a taken port, exit with an error
@@ -631,12 +624,10 @@ def wait_for_a_message_in_logs(
         if not dir.is_dir():
             continue
         log_file = f"{dir}/server.log"
-        # Normalize log file path for client reading when using wrapper scripts
-        readable_log_file = normalize_path_for_client(normalize_path_for_server(log_file))
 
         if server_ports and os.path.basename(os.path.normpath(dir)) not in server_ports:
             continue
-        if not wait_for_message(readable_log_file, message, 10):
+        if not wait_for_message(log_file, message, 10):
             raise Exception(
                 f"During the timeout duration, the server logs associated with port {dir} did not contain the message:{message}."
                 f"See {dir}/server.log for more information"
