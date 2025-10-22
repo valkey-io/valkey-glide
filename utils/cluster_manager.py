@@ -64,7 +64,6 @@ def get_cli_command() -> str:
     global _CLI_COMMAND
     if _CLI_COMMAND is None:
         _CLI_COMMAND = get_command(["valkey-cli", "redis-cli"])
-        logging.debug(f"Using CLI command: {_CLI_COMMAND}")
     return _CLI_COMMAND
 
 
@@ -655,7 +654,6 @@ def parse_cluster_nodes(command_output: Optional[str]) -> Optional[dict]:
 
 def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
     try:
-        logging.debug(f"Executing CLI command: {' '.join(cmd_args)}")
         p = subprocess.Popen(
             cmd_args,
             stdout=subprocess.PIPE,
@@ -663,15 +661,12 @@ def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
             text=True,
         )
         output, err = p.communicate(timeout=5)
-        logging.debug(f"CLI output: {output}")
-        logging.debug(f"CLI stderr: {err}")
         if err:
             raise Exception(
                 f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
             )
         return output
     except subprocess.TimeoutExpired:
-        logging.debug("CLI command timed out")
         return None
 
 
@@ -697,28 +692,24 @@ def wait_for_all_topology_views(
         retries = 160
         while retries >= 0:
             output = redis_cli_run_command(cmd_args)
-            logging.debug(f"Checking server {server.host}:{server.port}, output: {output}")
-            if output is not None:
-                host_count = output.count(f"{server.host}")
-                logging.debug(f"Found {host_count} occurrences of '{server.host}' in output, need {len(servers)}")
-                if host_count == len(servers):
-                    # Server is ready, get the node's role
-                    cmd_args = [
-                        get_cli_command(),
-                        "-h",
-                        server.host,
-                        "-p",
-                        str(server.port),
-                        *get_cli_option_args(cluster_folder, use_tls),
-                        "cluster",
-                        "nodes",
-                    ]
-                    cluster_slots_output = redis_cli_run_command(cmd_args)
-                    node_info = parse_cluster_nodes(cluster_slots_output)
-                    if node_info:
-                        server.set_primary(node_info["is_primary"])
-                    logging.debug(f"Server {server} is ready!")
-                    break
+            if output is not None and output.count(f"{server.host}") == len(servers):
+                # Server is ready, get the node's role
+                cmd_args = [
+                    get_cli_command(),
+                    "-h",
+                    server.host,
+                    "-p",
+                    str(server.port),
+                    *get_cli_option_args(cluster_folder, use_tls),
+                    "cluster",
+                    "nodes",
+                ]
+                cluster_slots_output = redis_cli_run_command(cmd_args)
+                node_info = parse_cluster_nodes(cluster_slots_output)
+                if node_info:
+                    server.set_primary(node_info["is_primary"])
+                logging.debug(f"Server {server} is ready!")
+                break
             else:
                 retries -= 1
                 time.sleep(1)
