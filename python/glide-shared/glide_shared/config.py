@@ -147,19 +147,20 @@ class ServerCredentials:
     """
     Represents the credentials for connecting to a server.
 
-    Supports two authentication modes:
+    Exactly one of the following authentication modes must be provided:
         - Password-based authentication: Use password (and optionally username)
         - IAM authentication: Use username (required) and iam_config
 
-    These modes are mutually exclusive.
+    These modes are mutually exclusive - you cannot use both simultaneously.
 
     Attributes:
         password (Optional[str]): The password that will be used for authenticating connections to the servers.
-            Mutually exclusive with iam_config.
+            Mutually exclusive with iam_config. Either password or iam_config must be provided.
         username (Optional[str]): The username that will be used for authenticating connections to the servers.
             If not supplied for password-based authentication, "default" will be used.
             Required for IAM authentication.
         iam_config (Optional[IamAuthConfig]): IAM authentication configuration. Mutually exclusive with password.
+            Either password or iam_config must be provided.
             The client will automatically generate and refresh the authentication token based on the provided configuration.
     """
 
