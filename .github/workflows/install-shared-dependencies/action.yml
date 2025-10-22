@@ -219,10 +219,7 @@ runs:
               
               # Add to PATH for subsequent steps
               echo "$wrapperDir" >> $env:GITHUB_PATH
-              
-              # List created wrappers
-              Write-Host "Created wrapper scripts:"
-              Get-ChildItem "$wrapperDir\*.bat" | ForEach-Object { Write-Host "  $($_.Name)" }
+              Write-Host "Added $wrapperDir to PATH"
 
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"

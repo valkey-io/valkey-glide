@@ -38,6 +38,7 @@ SERVER_KEY = f"{TLS_FOLDER}/server.key"
 
 def get_command(commands: List[str]) -> str:
     for command in commands:
+        # Try 'which' first (Unix/Linux/macOS)
         try:
             result = subprocess.run(
                 ["which", command],
@@ -48,7 +49,21 @@ def get_command(commands: List[str]) -> str:
             if result.returncode == 0:
                 return command
         except Exception as e:
-            logging.error(f"Error checking {command}: {e}")
+            logging.debug(f"'which' failed for {command}: {e}")
+        
+        # Fallback to 'where' (Windows)
+        try:
+            result = subprocess.run(
+                ["where", command],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if result.returncode == 0:
+                return command
+        except Exception as e:
+            logging.debug(f"'where' failed for {command}: {e}")
+            
     raise Exception(f"Neither {' nor '.join(commands)} found in the system.")
 
 
