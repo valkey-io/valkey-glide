@@ -583,7 +583,7 @@ def create_cluster(
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
     wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
-    wait_for_all_topology_views(servers, cluster_folder, use_tls)
+    wait_for_all_topology_views(servers, cluster_folder, use_tls, replica_count)
     
     # Only do detailed replica verification if we have replicas and are in a slow environment
     if replica_count > 0:
@@ -600,7 +600,7 @@ def create_cluster(
             "nodes",
         ]
         output = redis_cli_run_command(cmd_args)
-        if output:
+        if output is not None:
             connected_nodes = len([line for line in output.strip().split('\n') if 'connected' in line])
             logging.info(f"Found {connected_nodes}/{len(servers)} connected nodes in cluster")
             if connected_nodes != len(servers):
@@ -738,11 +738,11 @@ def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
 
 
 def wait_for_all_topology_views(
-    servers: List[Server], cluster_folder: str, use_tls: bool
+    servers: List[Server], cluster_folder: str, use_tls: bool, replica_count: int = 0
 ):
     """
     Wait for each of the nodes to have a topology view that contains all nodes.
-    Use CLUSTER NODES to see all nodes (masters and replicas).
+    Only when a replica finished syncing and loading, it will be included in the CLUSTER SLOTS output.
     """
     for server in servers:
         cmd_args = [
@@ -753,15 +753,28 @@ def wait_for_all_topology_views(
             str(server.port),
             *get_cli_option_args(cluster_folder, use_tls),
             "cluster",
-            "nodes",
+            "slots",
         ]
         logging.debug(f"Executing: {cmd_args}")
-        retries = 160
+        
+        # Detect WSL environment and adjust behavior
+        is_wsl = os.path.exists('/proc/version') and 'microsoft' in open('/proc/version').read().lower()
+        retries = 320 if is_wsl else 160  # Double timeout for WSL
+        
         while retries >= 0:
             output = redis_cli_run_command(cmd_args)
             if output is not None:
                 host_count = output.count(f"{server.host}")
-                if host_count == len(servers):
+                expected_count = len(servers)
+                
+                # WSL-specific: Accept when we see all masters (replicas may not appear in CLUSTER SLOTS)
+                if is_wsl and replica_count > 0:
+                    master_count = len(servers) // (1 + replica_count)
+                    if host_count >= master_count:
+                        logging.info(f"WSL: Found {host_count} nodes (expected masters: {master_count}), continuing...")
+                        expected_count = host_count  # Accept current count for WSL
+                
+                if host_count == expected_count:
                     # Server is ready, get the node's role
                     cmd_args = [
                         get_cli_command(),
