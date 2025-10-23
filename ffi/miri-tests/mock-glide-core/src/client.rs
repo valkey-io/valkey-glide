@@ -83,4 +83,8 @@ impl Client {
     ) -> RedisResult<Value> {
         todo!()
     }
+
+    pub async fn refresh_iam_token(&mut self) -> RedisResult<()> {
+        todo!()
+    }
 }
