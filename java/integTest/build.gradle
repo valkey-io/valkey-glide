@@ -94,7 +94,7 @@ tasks.register('startCluster') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '-r', '0', '--host', clusterHost]
+                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '-r', '1', '--host', clusterHost]
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine args
                     standardOutput = os
@@ -113,7 +113,7 @@ tasks.register('startClusterForAz') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '-r', '0', '--host', clusterHost]
+                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '-r', '1', '--host', clusterHost]
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine args
                     standardOutput = os

@@ -120,7 +120,7 @@ public class ValkeyCluster implements AutoCloseable {
 
     /** Constructor with default values */
     public ValkeyCluster(boolean tls) throws IOException, InterruptedException {
-        this(tls, false, 3, 0, null, null);
+        this(tls, false, 3, 1, null, null);
     }
 
     private void parseClusterScriptStartOutput(String output) {
