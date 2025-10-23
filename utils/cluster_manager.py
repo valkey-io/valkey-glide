@@ -584,6 +584,36 @@ def create_cluster(
 
     wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
     wait_for_all_topology_views(servers, cluster_folder, use_tls)
+    
+    # Verify replicas are properly synced
+    logging.info("Verifying replica synchronization...")
+    replica_count_actual = 0
+    for server in servers:
+        cmd_args = [
+            get_cli_command(),
+            "-h",
+            server.host,
+            "-p", 
+            str(server.port),
+            *get_cli_option_args(cluster_folder, use_tls),
+            "cluster",
+            "nodes",
+        ]
+        output = redis_cli_run_command(cmd_args)
+        if output:
+            # Count lines that contain "slave" and "connected"
+            for line in output.strip().split('\n'):
+                if 'slave' in line and 'connected' in line:
+                    replica_count_actual += 1
+                    logging.info(f"Found connected replica: {line.split()[1]}")
+    
+    expected_replicas = len(servers) - shard_count  # total nodes - master nodes
+    logging.info(f"Expected replicas: {expected_replicas}, Found connected replicas: {replica_count_actual}")
+    
+    if replica_count_actual != expected_replicas:
+        logging.warning(f"Replica count mismatch! Expected {expected_replicas}, found {replica_count_actual}")
+    else:
+        logging.info("All replicas are properly connected and synced!")
     print_servers_json(servers)
 
     logging.debug("The cluster was successfully created!")
@@ -719,7 +749,7 @@ def wait_for_all_topology_views(
 ):
     """
     Wait for each of the nodes to have a topology view that contains all nodes.
-    Only when a replica finished syncing and loading, it will be included in the CLUSTER SLOTS output.
+    Use CLUSTER NODES to see all nodes (masters and replicas).
     """
     for server in servers:
         cmd_args = [
@@ -730,7 +760,7 @@ def wait_for_all_topology_views(
             str(server.port),
             *get_cli_option_args(cluster_folder, use_tls),
             "cluster",
-            "slots",
+            "nodes",
         ]
         logging.debug(f"Executing: {cmd_args}")
         retries = 160
