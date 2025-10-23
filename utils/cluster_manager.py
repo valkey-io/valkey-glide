@@ -749,7 +749,7 @@ def wait_for_all_topology_views(
 ):
     """
     Wait for each of the nodes to have a topology view that contains all nodes.
-    Use CLUSTER NODES to see all nodes (masters and replicas).
+    Only when a replica finished syncing and loading, it will be included in the CLUSTER SLOTS output.
     """
     for server in servers:
         cmd_args = [
@@ -760,10 +760,14 @@ def wait_for_all_topology_views(
             str(server.port),
             *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
             "cluster",
-            "nodes",
+            "slots",
         ]
         logging.debug(f"Executing: {cmd_args}")
-        retries = 160
+        
+        # Detect WSL environment and adjust behavior
+        is_wsl = os.path.exists('/proc/version') and 'microsoft' in open('/proc/version').read().lower()
+        retries = 320 if is_wsl else 160  # Double timeout for WSL
+        
         while retries >= 0:
             output = redis_cli_run_command(cmd_args)
             logging.debug(f"Checking server {server.host}:{server.port}, output: {output}")
