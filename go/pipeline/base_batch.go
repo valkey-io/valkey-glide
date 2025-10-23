@@ -185,6 +185,29 @@ func (b *BaseBatch[T]) MSetNX(keyValueMap map[string]string) *T {
 	return b.addCmdAndTypeChecker(C.MSetNX, utils.MapToString(keyValueMap), reflect.Bool, false)
 }
 
+// Moves key from the currently selected database to the database specified by `dbIndex`.
+//
+// Note:
+//
+//	In cluster mode move is available since Valkey 9.0.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key to move.
+//	dbIndex - The index of the database to move key to.
+//
+// Command Response:
+//
+//	`true` if `key` was moved, or `false` if the `key` already exists in the destination
+//	database or does not exist in the source database.
+//
+// [valkey.io]: https://valkey.io/commands/move/
+func (b *BaseBatch[T]) Move(key string, dbIndex int64) *T {
+	return b.addCmdAndTypeChecker(C.Move, []string{key, utils.IntToString(dbIndex)}, reflect.Bool, false)
+}
+
 // Retrieves the values of multiple keys.
 //
 // See [valkey.io] for details.

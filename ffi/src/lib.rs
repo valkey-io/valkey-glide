@@ -1107,6 +1107,31 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             // Return as Ok to continue transaction processing
             Ok(command_response)
         }
+        Value::Push { kind, data } => {
+            // Create kind entry
+            let mut kind_entry = CommandResponse::default();
+            let map_key =
+                valkey_value_to_command_response(Value::SimpleString("kind".to_string()))?;
+            kind_entry.map_key = Box::into_raw(Box::new(map_key));
+            let map_val =
+                valkey_value_to_command_response(Value::SimpleString(format!("{:?}", kind)))?;
+            kind_entry.map_value = Box::into_raw(Box::new(map_val));
+
+            // Create values entry
+            let mut values_entry = CommandResponse::default();
+            let map_key =
+                valkey_value_to_command_response(Value::SimpleString("values".to_string()))?;
+            values_entry.map_key = Box::into_raw(Box::new(map_key));
+            let map_val = valkey_value_to_command_response(Value::Array(data))?;
+            values_entry.map_value = Box::into_raw(Box::new(map_val));
+
+            let (map_ptr, map_len) = convert_vec_to_pointer(vec![kind_entry, values_entry]);
+            command_response.array_value = map_ptr;
+            command_response.array_value_len = map_len;
+            command_response.response_type = ResponseType::Map;
+
+            Ok(command_response)
+        }
         // TODO: Add support for other return types.
         _ => todo!(),
     };
@@ -1422,6 +1447,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
         let mut pattern: &[u8] = &[];
         let mut object_type: &[u8] = &[];
         let mut count: &[u8] = &[];
+        let mut allow_non_covered_slots: bool = false;
 
         let mut iter = arg_vec.iter().peekable();
         while let Some(arg) = iter.next() {
@@ -1456,6 +1482,9 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
                         return unsafe { client_adapter.handle_redis_error(err, request_id) };
                     }
                 },
+                b"ALLOW_NON_COVERED_SLOTS" => {
+                    allow_non_covered_slots = true;
+                }
                 _ => {
                     // Unknown or unsupported arg — safely skip or log
                     continue;
@@ -1505,14 +1534,22 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
         if !object_type.is_empty() {
             cluster_scan_args_builder = cluster_scan_args_builder.with_object_type(converted_type);
         }
+        cluster_scan_args_builder =
+            cluster_scan_args_builder.allow_non_covered_slots(allow_non_covered_slots);
         cluster_scan_args_builder.build()
     } else {
         ClusterScanArgs::builder().build()
     };
 
-    let scan_state_cursor = match get_cluster_scan_cursor(cursor_id) {
-        Ok(existing_cursor) => existing_cursor,
-        Err(_error) => ScanStateRC::new(),
+    let scan_state_cursor = if cursor_id.is_empty() || cursor_id == "0" {
+        ScanStateRC::new()
+    } else {
+        match get_cluster_scan_cursor(cursor_id) {
+            Ok(existing_cursor) => existing_cursor,
+            Err(err) => {
+                return unsafe { client_adapter.handle_redis_error(err, request_id) };
+            }
+        }
     };
     let mut client = client_adapter.core.client.clone();
     client_adapter.execute_request(request_id, async move {
@@ -1584,6 +1621,46 @@ pub unsafe extern "C-unwind" fn update_connection_password(
         client
             .update_connection_password(password_option, immediate_auth)
             .await
+    })
+}
+
+/// Manually refresh the IAM authentication token.
+///
+/// This function triggers an immediate refresh of the IAM token and updates the connection.
+/// It is only available if the client was created with IAM authentication.
+///
+/// # Parameters
+///
+/// * `client_adapter_ptr`: Pointer to a valid client returned from [`create_client`].
+/// * `request_id`: Unique identifier for a valid payload buffer created in the calling language.
+///
+/// # Returns
+///
+/// * A pointer to a [`CommandResult`] containing "OK" on success, or an error if:
+///   - The client is not using IAM authentication
+///   - Token generation fails
+///   - Authentication with the new token fails
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`].
+/// * `request_id` must be valid until it is passed in a call to [`free_command_response`].
+/// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn refresh_iam_token(
+    client_adapter_ptr: *const c_void,
+    request_id: usize,
+) -> *mut CommandResult {
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
+
+    let mut client = client_adapter.core.client.clone();
+    client_adapter.execute_request(request_id, async move {
+        client.refresh_iam_token().await.map(|_| Value::Okay)
     })
 }
 
