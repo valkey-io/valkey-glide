@@ -852,8 +852,8 @@ public class CommandTests {
                 response.contains("ver") && response.contains(SERVER_VERSION.toString()),
                 "Expected LOLWUT output to contain version string");
 
-        response = clusterClient.lolwut(5, new int[] {30, 4, 4}).get();
-        System.out.printf("%nLOLWUT cluster client ver 5 response with params 30 4 4%n%s%n", response);
+        response = clusterClient.lolwut(5, new int[] {30, 4}).get();
+        System.out.printf("%nLOLWUT cluster client ver 5 response with params 30 4%n%s%n", response);
         assertTrue(
                 response.contains("ver") && response.contains(SERVER_VERSION.toString()),
                 "Expected LOLWUT output to contain version string");

@@ -446,9 +446,9 @@ public class CommandTests {
                 response.contains("ver") && response.contains(SERVER_VERSION.toString()),
                 "Expected LOLWUT output to contain version string");
 
-        response = regularClient.lolwut(new int[] {30, 4, 4}).get();
+        response = regularClient.lolwut(new int[] {30, 4}).get();
         System.out.printf(
-                "%nLOLWUT standalone client standard response with params 30 4 4%n%s%n", response);
+                "%nLOLWUT standalone client standard response with params 30 4%n%s%n", response);
         assertTrue(
                 response.contains("ver") && response.contains(SERVER_VERSION.toString()),
                 "Expected LOLWUT output to contain version string");
