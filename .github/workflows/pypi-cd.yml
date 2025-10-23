@@ -168,7 +168,6 @@ jobs:
                   # are added to the matrix for CD pipelines, update this step to conditionally use:
                   #     brew install python@3.14 && brew link python@3.14
                   if ! command -v python3.14 &> /dev/null; then
-                      sudo add-apt-repository ppa:deadsnakes/ppa -y
                       sudo apt update
                       sudo apt install -y python3.14 python3.14-dev
                   fi
