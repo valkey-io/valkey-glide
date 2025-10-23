@@ -599,7 +599,7 @@ def create_cluster(
             "cluster",
             "nodes",
         ]
-        output = redis_cli_run_command(cmd_args)
+        output: Optional[str] = redis_cli_run_command(cmd_args)
         if output is not None:
             connected_nodes = len([line for line in output.strip().split('\n') if 'connected' in line])
             logging.info(f"Found {connected_nodes}/{len(servers)} connected nodes in cluster")
