@@ -61,6 +61,8 @@ public class ValkeyCluster implements AutoCloseable {
             List<String> command = new ArrayList<>();
             command.addAll(getPythonCommand());
             command.add(SCRIPT_FILE.toString());
+            
+            command.add("start");  // Action must come first
 
             if (tls) {
                 command.add("--tls");
@@ -70,8 +72,6 @@ public class ValkeyCluster implements AutoCloseable {
             command.add(String.valueOf(shardCount));
             command.add("-r");
             command.add(String.valueOf(replicaCount));
-
-            command.add("start");
 
             // Add host parameter - use environment variable or default to localhost
             String host = System.getenv("VALKEY_INTEG_TEST_IP");
