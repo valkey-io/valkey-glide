@@ -537,7 +537,39 @@ def create_cluster(
 ):
     tic = time.perf_counter()
     servers_tuple = (str(server) for server in servers)
+    logging.info(f"Creating cluster with {len(servers)} servers: {list(str(s) for s in servers)}")
+    logging.info(f"Cluster replicas: {replica_count}")
+    
+    # Check cluster bus ports are accessible
+    logging.info("Checking cluster bus ports...")
+    for server in servers:
+        cluster_bus_port = server.port + 10000
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            result = sock.connect_ex((server.host, cluster_bus_port))
+            if result == 0:
+                logging.info(f"Cluster bus port {server.host}:{cluster_bus_port} is accessible")
+            else:
+                logging.warning(f"Cluster bus port {server.host}:{cluster_bus_port} is not accessible (result: {result})")
+            sock.close()
+        except Exception as e:
+            logging.warning(f"Failed to check cluster bus port {server.host}:{cluster_bus_port}: {e}")
+    
     logging.debug("## Starting cluster creation...")
+    
+    cmd_args = [
+        get_cli_command(),
+        *get_cli_option_args(cluster_folder, use_tls),
+        "--cluster",
+        "create",
+        *servers_tuple,
+        "--cluster-replicas",
+        str(replica_count),
+        "--cluster-yes",
+    ]
+    logging.info(f"Executing cluster create command: {' '.join(cmd_args)}")
+    
     p = subprocess.Popen(
         [
             get_cli_command(),
@@ -554,6 +586,24 @@ def create_cluster(
         text=True,
     )
     output, err = p.communicate(timeout=40)
+    logging.info(f"Cluster create output: {output}")
+    if err:
+        logging.error(f"Cluster create error: {err}")
+    
+    # Parse the output to see what happened
+    if ">>> Performing hash slots allocation on" in output:
+        logging.info("Cluster create command started slot allocation")
+    if ">>> Nodes configuration updated" in output:
+        logging.info("Cluster nodes configuration was updated")
+    if ">>> Assign a different config epoch to each node" in output:
+        logging.info("Config epochs assigned to nodes")
+    if ">>> Sending CLUSTER MEET messages to join the cluster" in output:
+        logging.info("CLUSTER MEET messages sent")
+    if "Waiting for the cluster to join" in output:
+        logging.info("Waiting for cluster to join...")
+    if ">>> Performing Cluster Check" in output:
+        logging.info("Performing cluster check")
+        
     if err or "[OK] All 16384 slots covered." not in output:
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
