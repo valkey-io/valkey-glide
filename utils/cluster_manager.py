@@ -749,7 +749,7 @@ def wait_for_all_topology_views(
 ):
     """
     Wait for each of the nodes to have a topology view that contains all nodes.
-    Only when a replica finished syncing and loading, it will be included in the CLUSTER SLOTS output.
+    Use CLUSTER NODES to see all nodes (masters and replicas).
     """
     for server in servers:
         cmd_args = [
@@ -760,7 +760,7 @@ def wait_for_all_topology_views(
             str(server.port),
             *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
             "cluster",
-            "slots",
+            "nodes",
         ]
         logging.debug(f"Executing: {cmd_args}")
         retries = 160
