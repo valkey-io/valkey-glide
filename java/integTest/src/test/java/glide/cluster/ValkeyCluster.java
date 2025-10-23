@@ -61,8 +61,8 @@ public class ValkeyCluster implements AutoCloseable {
             List<String> command = new ArrayList<>();
             command.addAll(getPythonCommand());
             command.add(SCRIPT_FILE.toString());
-            
-            command.add("start");  // Action must come first
+
+            command.add("start"); // Action must come first
 
             if (tls) {
                 command.add("--tls");
