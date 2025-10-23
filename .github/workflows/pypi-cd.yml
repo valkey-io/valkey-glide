@@ -161,6 +161,18 @@ jobs:
                     cat "./$package/pyproject.toml"
                   done
 
+            - name: Install Python 3.14 on persistent self-hosted runner
+              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && contains(matrix.build.RUNNER, 'persistent') }}
+              run: |
+                  # Note: We currently only have Linux persistent self-hosted runner. If persistent self-hosted macOS runners
+                  # are added to the matrix for CD pipelines, update this step to conditionally use:
+                  #     brew install python@3.14 && brew link python@3.14
+                  if ! command -v python3.14 &> /dev/null; then
+                      sudo add-apt-repository ppa:deadsnakes/ppa -y
+                      sudo apt update
+                      sudo apt install -y python3.14 python3.14-dev
+                  fi
+
             - name: Set up Python
               if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
               uses: actions/setup-python@v5
