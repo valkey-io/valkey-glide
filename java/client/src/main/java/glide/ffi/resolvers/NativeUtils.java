@@ -42,7 +42,7 @@ public class NativeUtils {
         if (glideLibLoaded) {
             return;
         }
-        
+
         String glideLib = "/libglide_rs";
         try {
             String osName = System.getProperty("os.name").toLowerCase();
