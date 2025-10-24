@@ -297,6 +297,12 @@ public class ConnectionManager {
                             requestBuilder.setConnectionRetryStrategy(retryBuilder.build());
                         }
 
+                        // Set root certificates if provided from user configuration
+                        byte[] rootCerts = extractRootCertificates(configuration);
+                        if (rootCerts != null) {
+                            requestBuilder.addRootCerts(com.google.protobuf.ByteString.copyFrom(rootCerts));
+                        }
+
                         // Set pubsub subscriptions
                         if (subExact.length > 0 || subPattern.length > 0 || subSharded.length > 0) {
                             PubSubSubscriptions.Builder subBuilder = PubSubSubscriptions.newBuilder();
@@ -482,6 +488,18 @@ public class ConnectionManager {
             return true;
         }
         return false;
+    }
+
+    private static byte[] extractRootCertificates(BaseClientConfiguration configuration) {
+        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+        if (advanced == null) {
+            return null;
+        }
+        TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
+        if (tlsConfig != null) {
+            return tlsConfig.getRootCertificates();
+        }
+        return null;
     }
 
     private static AdvancedBaseClientConfiguration extractAdvancedConfiguration(
