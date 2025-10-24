@@ -1424,6 +1424,17 @@ func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
 	}
 }
 
+func (suite *GlideTestSuite) TestMoveCluster() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	key := uuid.New().String()
+	suite.verifyOK(client.Set(context.Background(), key, "hello"))
+	result, err := client.Move(context.Background(), key, 2)
+	assert.Nil(t, err)
+	assert.True(suite.T(), result)
+}
+
 func (suite *GlideTestSuite) TestConfigRewriteCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -1522,6 +1533,29 @@ func (suite *GlideTestSuite) TestConfigRewriteWithOptions() {
 			break
 		}
 	}
+}
+
+func (suite *GlideTestSuite) TestCopyWithOptionsDBDestination() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+	client := suite.defaultClusterClient()
+	key := "{key}" + uuid.New().String()
+	key2 := "{key}" + uuid.New().String()
+	value := "hello"
+	t := suite.T()
+	suite.verifyOK(client.Set(context.Background(), key, value))
+	suite.verifyOK(client.Set(context.Background(), key2, "World"))
+
+	// Test 1: Check the copy command with options
+	optsCopy := options.NewCopyOptions().SetDBDestination(1)
+	resultCopy, err := client.CopyWithOptions(context.Background(), key, key2, *optsCopy)
+	assert.Nil(t, err)
+	assert.True(t, resultCopy)
+
+	// Test 2: Check if the value stored at the source is same with destination key.
+	client.Select(context.Background(), 1)
+	resultGet, err := client.Get(context.Background(), key2)
+	assert.Nil(t, err)
+	assert.Equal(t, value, resultGet.Value())
 }
 
 func (suite *GlideTestSuite) TestClusterRandomKey() {
@@ -2416,6 +2450,35 @@ func (suite *GlideTestSuite) TestScriptExistsWithRoute() {
 	script1.Close()
 	script2.Close()
 	script3.Close()
+}
+
+func (suite *GlideTestSuite) TestSelect_ClusterSwitchBetweenDatabases() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+	client := suite.defaultClusterClient()
+
+	key1 := uuid.New().String()
+	value1 := uuid.New().String()
+	suite.verifyOK(client.Select(context.Background(), 0))
+	suite.verifyOK(client.Set(context.Background(), key1, value1))
+
+	key2 := uuid.New().String()
+	value2 := uuid.New().String()
+	suite.verifyOK(client.Select(context.Background(), 1))
+	suite.verifyOK(client.Set(context.Background(), key2, value2))
+
+	result, err := client.Get(context.Background(), key1)
+	suite.NoError(err)
+	assert.Equal(suite.T(), "", result.Value())
+
+	suite.verifyOK(client.Select(context.Background(), 0))
+	result, err = client.Get(context.Background(), key2)
+	suite.NoError(err)
+	assert.Equal(suite.T(), "", result.Value())
+
+	suite.verifyOK(client.Select(context.Background(), 1))
+	result, err = client.Get(context.Background(), key2)
+	suite.NoError(err)
+	assert.Equal(suite.T(), value2, result.Value())
 }
 
 func (suite *GlideTestSuite) TestScriptFlushClusterClient() {

@@ -90,7 +90,7 @@ jobs:
               with:
                   language-name: node
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
-                  run-with-macos: ${{ github.event.run-with-macos }}
+                  run-with-macos: ${{ github.event.inputs.run-with-macos }}
 
     test-node:
         name: Node Tests - ${{ matrix.node }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}

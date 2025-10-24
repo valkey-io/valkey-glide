@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import platform
 import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union, cast
@@ -125,6 +126,12 @@ class TestGlideClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_send_and_receive_large_values(self, request, cluster_mode, protocol):
+        # Skip on macOS - the macOS tests run on self hosted VMs which have resource limits
+        # making this test flaky with "no buffer space available" errors. See - https://github.com/valkey-io/valkey-glide/issues/4902
+        system = platform.system().lower()
+        if "darwin" in system:
+            return
+
         glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
@@ -277,7 +284,7 @@ class TestGlideClients:
         assert b"db=4" in client_info
         await glide_client.close()
 
-    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_select_database_id_custom_command(self, request, cluster_mode):
         if cluster_mode:
             # Check version using a temporary standalone client
@@ -638,9 +645,15 @@ class TestCommands:
         info_result = get_first_result(info_result)
         assert b"# Memory" in info_result
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_select(self, glide_client: GlideClient):
+    async def test_select(self, glide_client: GlideClient, cluster_mode):
+        if cluster_mode:
+            if await check_if_server_version_lt(glide_client, "9.0.0"):
+                return pytest.mark.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+
         assert await glide_client.select(0) == OK
         key = get_random_string(10)
         value = get_random_string(10)
@@ -651,9 +664,15 @@ class TestCommands:
         assert await glide_client.select(0) == OK
         assert await glide_client.get(key) == value.encode()
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_move(self, glide_client: GlideClient):
+    async def test_move(self, glide_client: TGlideClient, cluster_mode):
+        if cluster_mode:
+            if await check_if_server_version_lt(glide_client, "9.0.0"):
+                return pytest.mark.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+
         key = get_random_string(10)
         value = get_random_string(10)
 
@@ -9201,6 +9220,84 @@ class TestCommands:
                 await glide_client.copy(source, destination, -1, replace=True)
         finally:
             assert await glide_client.select(0) == OK
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cluster_copy_database(self, glide_client: GlideClusterClient):
+        source = f"{{testKey}}-{get_random_string(10)}"
+        destination = f"{{testKey}}-{get_random_string(10)}"
+        value1 = get_random_string(5)
+        value2 = get_random_string(5)
+        value1_encoded = value1.encode()
+        value2_encoded = value2.encode()
+        index1 = 1
+        index2 = 2
+
+        try:
+            assert await glide_client.custom_command(["SELECT", "0"]) == OK
+
+            # neither key exists
+            assert (
+                await glide_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
+                is False
+            )
+
+            # source exists, destination does not
+            await glide_client.set(source, value1)
+            assert (
+                await glide_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
+                is True
+            )
+            assert await glide_client.custom_command(["SELECT", "1"]) == OK
+            assert await glide_client.get(destination) == value1_encoded
+
+            # new value for source key
+            assert await glide_client.custom_command(["SELECT", "0"]) == OK
+            await glide_client.set(source, value2)
+
+            # no REPLACE, copying to existing key on DB 0 & 1, non-existing key on DB 2
+            assert (
+                await glide_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
+                is False
+            )
+            assert (
+                await glide_client.copy(
+                    source, destination, destinationDB=index2, replace=False
+                )
+                is True
+            )
+
+            # new value only gets copied to DB 2
+            assert await glide_client.custom_command(["SELECT", "1"]) == OK
+            assert await glide_client.get(destination) == value1_encoded
+            assert await glide_client.custom_command(["SELECT", "2"]) == OK
+            assert await glide_client.get(destination) == value2_encoded
+
+            # both exists, with REPLACE, when value isn't the same, source always get copied to destination
+            assert await glide_client.custom_command(["SELECT", "0"]) == OK
+            assert (
+                await glide_client.copy(
+                    source, destination, destinationDB=index1, replace=True
+                )
+                is True
+            )
+            assert await glide_client.custom_command(["SELECT", "1"]) == OK
+            assert await glide_client.get(destination) == value2_encoded
+
+            # invalid DB index
+            with pytest.raises(RequestError):
+                await glide_client.copy(
+                    source, destination, destinationDB=-1, replace=True
+                )
+        finally:
+            assert await glide_client.custom_command(["SELECT", "0"]) == OK
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

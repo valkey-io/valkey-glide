@@ -430,6 +430,34 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.Del, keys))
 
+    async def move(self, key: TEncodable, db_index: int) -> bool:
+        """
+        Move key from the currently selected database to the specified destination database.
+
+        Note:
+            For cluster mode move command is supported since Valkey 9.0.0
+
+        See [valkey.io](https://valkey.io/commands/move/) for more details.
+
+        Args:
+            key (TEncodable): The key to move.
+            db_index (int): The destination database number.
+
+        Returns:
+            bool: True if the key was moved successfully, False if the key does not exist
+            or was already present in the destination database.
+
+        Examples:
+            >>> await client.move("some_key", 1)
+                True  # The key was successfully moved to database 1
+            >>> await client.move("nonexistent_key", 1)
+                False  # The key does not exist
+        """
+        return cast(
+            bool,
+            await self._execute_command(RequestType.Move, [key, str(db_index)]),
+        )
+
     async def incr(self, key: TEncodable) -> int:
         """
         Increments the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
@@ -2241,6 +2269,20 @@ class CoreCommands(Protocol):
                 2
         """
         return cast(int, await self._execute_command(RequestType.SAdd, [key] + members))
+
+    async def select(self, index: int) -> TOK:
+        """
+        Change the currently selected database.
+
+        See [valkey.io](https://valkey.io/commands/select/) for details.
+
+        Args:
+            index (int): The index of the database to select.
+
+        Returns:
+            A simple OK response.
+        """
+        return cast(TOK, await self._execute_command(RequestType.Select, [str(index)]))
 
     async def srem(self, key: TEncodable, members: List[TEncodable]) -> int:
         """
