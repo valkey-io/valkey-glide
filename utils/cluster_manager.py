@@ -594,6 +594,26 @@ def create_cluster(
     if err:
         logging.error(f"Cluster create error: {err}")
     
+    # IMMEDIATE debugging - check processes right after cluster create, before any waiting
+    if replica_count > 0:
+        logging.info("=== IMMEDIATE PROCESS CHECK (before waiting) ===")
+        running_count = 0
+        for i, server in enumerate(servers):
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(0.5)  # Very quick check
+                result = sock.connect_ex((server.host, server.port))
+                sock.close()
+                if result == 0:
+                    running_count += 1
+                    logging.info(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - RESPONSIVE")
+                else:
+                    logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - NOT RESPONSIVE")
+            except Exception as e:
+                logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - ERROR: {e}")
+        logging.info(f"IMMEDIATE STATUS: {running_count}/{len(servers)} servers responsive")
+        logging.info("=== END IMMEDIATE CHECK ===")
+    
     # Parse the output to see what happened
     if ">>> Performing hash slots allocation on" in output:
         logging.info("Cluster create command started slot allocation")
