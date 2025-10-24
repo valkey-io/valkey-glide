@@ -369,15 +369,24 @@ jobs:
 
             ### SYNC CLIENT ###
 
+            - name: Determine Python command
+              id: python_cmd
+              run: |
+                  if command -v python3.14 &> /dev/null; then
+                      echo "cmd=python3.14" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "cmd=python3" >> "$GITHUB_OUTPUT"
+                  fi
+
             - name: Install cibuildwheel
-              run: python3 -m pip install cibuildwheel
+              run: ${{ steps.python_cmd.outputs.cmd }} -m pip install cibuildwheel
 
             - name: Determine cibuildwheel version and set enable flags
               id: cibw_config
               run: |
-                  python3 -m pip install setuptools
+                  ${{ steps.python_cmd.outputs.cmd }} -m pip install setuptools
                   # PyPy builds are disabled by default from version 3
-                  CIBW_VERSION=$(python3 -c "import pkg_resources; print(pkg_resources.get_distribution('cibuildwheel').version)")
+                  CIBW_VERSION=$(${{ steps.python_cmd.outputs.cmd }} -c "import pkg_resources; print(pkg_resources.get_distribution('cibuildwheel').version)")
                   echo "Detected cibuildwheel version: $CIBW_VERSION"
 
                   ENABLE_FLAGS=""
@@ -390,7 +399,7 @@ jobs:
             - name: Build Python Sync client wheels
               run: |
                   # we call cibuildwheel from the root folder in order to copy the whole folder tree to the docker
-                  cibuildwheel python/glide-sync --output-dir python/glide-sync/wheels
+                  ${{ steps.python_cmd.outputs.cmd }} -m cibuildwheel python/glide-sync --output-dir python/glide-sync/wheels
               env:
                   CIBW_BUILD: ${{ github.event_name != 'pull_request' && 'cp39-* cp310-* cp311-* cp312-* cp313-* cp314-* pp39-* pp310-* pp311-*' || 'cp314-*' }}
                   CIBW_SKIP: "*-musl* *i686* *i386*"
