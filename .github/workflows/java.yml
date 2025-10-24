@@ -182,16 +182,7 @@ jobs:
                   wsl --shutdown
                   Start-Sleep -Seconds 3
 
-                  # Read WSL IP from file written by engine installation
-                  $wslIp = wsl -- cat /tmp/wsl_ip.txt
-                  echo "WSL_IP=$wslIp" >> $env:GITHUB_ENV
-                  echo "VALKEY_INTEG_TEST_IP=$wslIp" >> $env:GITHUB_ENV
-                  echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
-                  echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
-                  Write-Host "WSL IP address: $wslIp"
-
-                  # Verify Valkey is running
-                  wsl -- redis-cli ping
+                  Write-Host "WSL optimization complete"
 
             - name: Build java client
               working-directory: java
@@ -315,16 +306,7 @@ jobs:
                   wsl --shutdown
                   Start-Sleep -Seconds 3
 
-                  # Read WSL IP from file written by engine installation
-                  $wslIp = wsl -- cat /tmp/wsl_ip.txt
-                  echo "WSL_IP=$wslIp" >> $env:GITHUB_ENV
-                  echo "VALKEY_INTEG_TEST_IP=$wslIp" >> $env:GITHUB_ENV
-                  echo "REDIS_HOST=$wslIp" >> $env:GITHUB_ENV
-                  echo "REDIS_PORT=6379" >> $env:GITHUB_ENV
-                  Write-Host "WSL IP address: $wslIp"
-
-                  # Verify Valkey is running
-                  wsl -- redis-cli ping
+                  Write-Host "WSL optimization complete"
 
             - name: Test pubsub
               working-directory: java
