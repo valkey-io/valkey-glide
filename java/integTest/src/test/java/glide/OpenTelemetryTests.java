@@ -25,7 +25,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 @Timeout(30) // seconds
 public class OpenTelemetryTests {
 
-    private static final String VALID_ENDPOINT_TRACES = System.getProperty("java.io.tmpdir") + "spans.json";
+    private static final String VALID_ENDPOINT_TRACES =
+            System.getProperty("java.io.tmpdir") + "spans.json";
     private static final String VALID_FILE_ENDPOINT_TRACES = "file://" + VALID_ENDPOINT_TRACES;
     private static final String VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics";
     private static GlideClusterClient client;
