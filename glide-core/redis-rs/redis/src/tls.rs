@@ -57,12 +57,10 @@ pub(crate) fn inner_build_with_tls(
 }
 
 /// Retrieve TLS connection parameters from certificates.
-/// 
+///
 /// Parses the provided TLS certificates and returns connection parameters
 /// that can be used to establish secure connections.
-pub fn retrieve_tls_certificates(
-    certificates: TlsCertificates,
-) -> RedisResult<TlsConnParams> {
+pub fn retrieve_tls_certificates(certificates: TlsCertificates) -> RedisResult<TlsConnParams> {
     let TlsCertificates {
         client_tls,
         root_cert,

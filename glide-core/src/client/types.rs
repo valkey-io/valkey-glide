@@ -277,7 +277,11 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         let inflight_requests_limit = none_if_zero(value.inflight_requests_limit);
         let lazy_connect = value.lazy_connect;
         let refresh_topology_from_initial_nodes = value.refresh_topology_from_initial_nodes;
-        let root_certs = value.root_certs.into_iter().map(|cert| cert.to_vec()).collect();
+        let root_certs = value
+            .root_certs
+            .into_iter()
+            .map(|cert| cert.to_vec())
+            .collect();
 
         ConnectionRequest {
             read_from,

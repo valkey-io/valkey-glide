@@ -1054,7 +1054,14 @@ async fn create_cluster_client(
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
-        .map(|address| get_connection_info(&address, tls_mode, valkey_connection_info.clone(), root_certs.clone()))
+        .map(|address| {
+            get_connection_info(
+                &address,
+                tls_mode,
+                valkey_connection_info.clone(),
+                root_certs.clone(),
+            )
+        })
         .collect::<RedisResult<Vec<_>>>()?;
 
     let periodic_topology_checks = match request.periodic_checks {
@@ -1583,6 +1590,4 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), Some(Duration::from_millis(100)));
     }
-
-
 }
