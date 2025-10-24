@@ -9324,7 +9324,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lolwut(self, glide_client: TGlideClient):
         server_version = await get_version(glide_client)
-        server_version_bytes = server_version.encode()
+        server_version_bytes = server_version.encode()      
 
         result = await glide_client.lolwut()
         assert b"ver" in result and server_version_bytes in result
