@@ -17,7 +17,6 @@ use redis::{
     ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy, PushInfo, RedisError,
     RedisResult, RetryStrategy, ScanStateRC, Value,
 };
-// Remove manual TLS handling - use redis crate's safe TLS API instead
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::sync::Arc;
@@ -192,8 +191,6 @@ pub async fn get_valkey_connection_info(
         },
     }
 }
-
-
 
 use redis::{TlsCertificates, retrieve_tls_certificates};
 
@@ -1097,6 +1094,12 @@ async fn create_cluster_client(
             redis::cluster::TlsMode::Insecure
         };
         builder = builder.tls(tls);
+        if let Some(certs) = root_certs {
+            builder = builder.certs(TlsCertificates {
+                client_tls: None,
+                root_cert: Some(certs),
+            });
+        }
     }
     if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions.clone() {
         builder = builder.pubsub_subscriptions(pubsub_subscriptions);
