@@ -249,4 +249,18 @@ public interface ConnectionManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<ClusterValue<GlideString>> echo(GlideString message, Route route);
+
+    /**
+     * Changes the currently selected database.
+     *
+     * @see <a href="https://valkey.io/commands/select/">valkey.io</a> for details.
+     * @param index The index of the database to select.
+     * @return A simple <code>OK</code> response.
+     * @example
+     *     <pre>{@code
+     * String response = regularClient.select(0).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> select(long index);
 }

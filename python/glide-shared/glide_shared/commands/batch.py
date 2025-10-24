@@ -403,6 +403,27 @@ class BaseBatch:
         """
         return self.append_command(RequestType.ConfigResetStat, [])
 
+    def move(self: TBatch, key: TEncodable, db_index: int) -> "TBatch":
+        """
+        Move `key` from the currently selected database to the database specified by `db_index`.
+
+        Note:
+            For cluster mode move command is supported since Valkey 9.0.0
+
+        See [valkey.io](https://valkey.io/commands/move/) for more details.
+
+        Args:
+            key (TEncodable): The key to move.
+            db_index (int): The index of the database to move `key` to.
+
+        Commands response:
+            bool: True if `key` was moved.
+
+            False if the `key` already exists in the destination database
+            or does not exist in the source database.
+        """
+        return self.append_command(RequestType.Move, [key, str(db_index)])
+
     def mset(self: TBatch, key_value_map: Mapping[TEncodable, TEncodable]) -> TBatch:
         """
         Set multiple keys to multiple values in a single atomic operation.
@@ -5070,7 +5091,7 @@ class BaseBatch:
             args.extend(["VERSION", str(version)])
         if parameters:
             for var in parameters:
-                args.extend(str(var))
+                args.append(str(var))
         return self.append_command(RequestType.Lolwut, args)
 
     def random_key(self: TBatch) -> TBatch:
@@ -5754,25 +5775,6 @@ class Batch(BaseBatch):
 
     """
 
-    # TODO: add SLAVEOF and all SENTINEL commands
-    def move(self, key: TEncodable, db_index: int) -> "Batch":
-        """
-        Move `key` from the currently selected database to the database specified by `db_index`.
-
-        See [valkey.io](https://valkey.io/commands/move/) for more details.
-
-        Args:
-            key (TEncodable): The key to move.
-            db_index (int): The index of the database to move `key` to.
-
-        Commands response:
-            bool: True if `key` was moved.
-
-            False if the `key` already exists in the destination database
-            or does not exist in the source database.
-        """
-        return self.append_command(RequestType.Move, [key, str(db_index)])
-
     def select(self, index: int) -> "Batch":
         """
         Change the currently selected database.
@@ -5883,7 +5885,11 @@ class ClusterBatch(BaseBatch):
         self,
         source: TEncodable,
         destination: TEncodable,
+        # TODO next major release the arguments replace and destinationDB must have their order
+        # swapped to align with the standalone order.
+        # At the moment of the patch release 2.1.1. we can't have a breaking change
         replace: Optional[bool] = None,
+        destinationDB: Optional[int] = None,
     ) -> "ClusterBatch":
         """
         Copies the value stored at the `source` to the `destination` key. When `replace` is True,
@@ -5895,15 +5901,17 @@ class ClusterBatch(BaseBatch):
             source (TEncodable): The key to the source value.
             destination (TEncodable): The key where the value should be copied to.
             replace (Optional[bool]): If the destination key should be removed before copying the value to it.
-
+            destinationDB (Optional[int]): The alternative logical database index for the destination key.
         Command response:
             bool: True if the source was copied.
 
             Otherwise, return False.
 
-        Since: Valkey version 6.2.0.
+        Since: Valkey version 9.0.0.
         """
         args = [source, destination]
+        if destinationDB is not None:
+            args.extend(["DB", str(destinationDB)])
         if replace is not None:
             args.append("REPLACE")
 
