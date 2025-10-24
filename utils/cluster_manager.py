@@ -603,6 +603,17 @@ def create_cluster(
         if cluster_output is not None:
             connected_nodes = len([line for line in cluster_output.strip().split('\n') if 'connected' in line])
             logging.info(f"Found {connected_nodes}/{len(servers)} connected nodes in cluster")
+            
+            # Show detailed node status
+            logging.info("=== CLUSTER NODES STATUS ===")
+            for line in cluster_output.strip().split('\n'):
+                if 'master' in line:
+                    logging.info(f"MASTER: {line}")
+                elif 'slave' in line:
+                    status = "CONNECTED" if 'connected' in line else "DISCONNECTED"
+                    logging.info(f"REPLICA ({status}): {line}")
+            logging.info("=== END CLUSTER STATUS ===")
+            
             if connected_nodes != len(servers):
                 logging.warning(f"Not all nodes are connected! Expected {len(servers)}, found {connected_nodes}")
         else:
