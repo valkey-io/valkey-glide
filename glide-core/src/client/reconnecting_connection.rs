@@ -216,6 +216,7 @@ impl ConnectionBackend {
 }
 
 impl ReconnectingConnection {
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn new(
         address: &NodeAddress,
         connection_retry_strategy: RetryStrategy,
