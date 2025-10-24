@@ -654,6 +654,7 @@ impl StandaloneClient {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn get_connection_and_replication_info(
     address: &NodeAddress,
     retry_strategy: &RetryStrategy,
