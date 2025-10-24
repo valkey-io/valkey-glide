@@ -16,7 +16,7 @@ import string
 import subprocess
 import time
 try:
-    import psutil
+    import psutil  # type: ignore
 except ImportError:
     psutil = None
 from datetime import datetime, timezone
@@ -544,6 +544,10 @@ def create_cluster(
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
 ):
+    logging.info(f"DEBUG: create_cluster() called with {len(servers)} servers")
+    for i, server in enumerate(servers):
+        logging.info(f"DEBUG: create_cluster() server {i+1}: {server.host}:{server.port}")
+    
     tic = time.perf_counter()
     servers_tuple = (str(server) for server in servers)
     logging.info(f"Creating cluster with {len(servers)} servers: {list(str(s) for s in servers)}")
@@ -616,6 +620,76 @@ def create_cluster(
         except Exception as e:
             logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - ERROR: {e}")
     logging.info(f"IMMEDIATE STATUS: {running_count}/{len(servers)} servers responsive")
+    
+    # WSL NETWORKING DIAGNOSTICS (fast checks only)
+    if len(servers) > 6:  # Only run for high-replica clusters
+        logging.info("=== WSL NETWORKING DIAGNOSTICS ===")
+        
+        # 1. Cluster bus connectivity (sample only first 3 servers to save time)
+        logging.info("Testing cluster bus connectivity (sample)...")
+        for i in range(min(3, len(servers))):
+            server = servers[i]
+            cluster_bus_port = server.port + 10000
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(0.3)
+                result = sock.connect_ex((server.host, cluster_bus_port))
+                sock.close()
+                status = "ACCESSIBLE" if result == 0 else "NOT_ACCESSIBLE"
+                logging.info(f"Cluster bus {server.host}:{cluster_bus_port} - {status}")
+            except Exception as e:
+                logging.warning(f"Cluster bus {server.host}:{cluster_bus_port} - ERROR: {e}")
+        
+        # 2. Concurrent connection test (quick)
+        logging.info("Testing concurrent connections...")
+        open_sockets = []
+        max_concurrent = 0
+        for i, server in enumerate(servers):
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(0.2)
+                sock.connect((server.host, server.port))
+                open_sockets.append(sock)
+                max_concurrent = i + 1
+            except Exception as e:
+                logging.warning(f"Concurrent connection limit reached at {i+1}: {e}")
+                break
+        # Close all sockets
+        for sock in open_sockets:
+            try:
+                sock.close()
+            except:
+                pass
+        logging.info(f"Max concurrent connections: {max_concurrent}/{len(servers)}")
+        
+        # 3. WSL resource check (if psutil available)
+        if psutil is not None:
+            try:
+                mem = psutil.virtual_memory()
+                logging.info(f"WSL Memory: {mem.percent:.1f}% used ({mem.available // (1024*1024)} MB available)")
+                logging.info(f"WSL Process count: {len(psutil.pids())}")
+            except Exception as e:
+                logging.warning(f"Resource check failed: {e}")
+        
+        # 4. Individual server health (ping test - very fast)
+        logging.info("Testing individual server health...")
+        healthy_servers = 0
+        for i, server in enumerate(servers[:5]):  # Test first 5 only to save time
+            try:
+                ping_result: Optional[str] = redis_cli_run_command([
+                    get_cli_command(), "-h", server.host, "-p", str(server.port), 
+                    "--connect-timeout", "1", "ping"
+                ])
+                if ping_result is not None and "PONG" in ping_result:
+                    healthy_servers += 1
+                    logging.info(f"Server {i+1} health: OK")
+                else:
+                    logging.warning(f"Server {i+1} health: NO PONG")
+            except Exception as e:
+                logging.warning(f"Server {i+1} health: ERROR - {e}")
+        logging.info(f"Healthy servers (sample): {healthy_servers}/5")
+        logging.info("=== END WSL DIAGNOSTICS ===")
+    
     logging.info("=== END IMMEDIATE CHECK ===")
     
     # IMMEDIATE debugging - check processes right after cluster create, before any waiting
