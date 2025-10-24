@@ -747,4 +747,62 @@ mod standalone_client_tests {
             assert!(client_result.is_err(), "Expected connection to fail with wrong root certificate");
         });
     }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_tls_connection_with_multiple_root_certs_first_invalid() {
+        block_on_all(async move {
+            // Create server with valid certificates
+            let tempdir_server = tempfile::Builder::new()
+                .prefix("tls_test_server")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let server_tls_paths = build_keys_and_certs_for_tls(&tempdir_server);
+            let valid_ca_cert_bytes = server_tls_paths.read_ca_cert_as_bytes();
+            
+            // Create invalid CA certificate
+            let tempdir_invalid = tempfile::Builder::new()
+                .prefix("tls_test_invalid")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let invalid_tls_paths = build_keys_and_certs_for_tls(&tempdir_invalid);
+            let invalid_ca_cert_bytes = invalid_tls_paths.read_ca_cert_as_bytes();
+            
+            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                redis::ConnectionAddr::TcpTls {
+                    host: "127.0.0.1".to_string(),
+                    port: get_available_port(),
+                    insecure: false,
+                    tls_params: None,
+                },
+                Some(server_tls_paths),
+                &[],
+                |cmd| cmd.spawn().expect("Failed to spawn server"),
+            );
+            
+            let server_addr = server.get_client_addr();
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            
+            // Provide two root certs: first invalid, second valid
+            let mut connection_request = create_connection_request(
+                &[server_addr],
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            connection_request.root_certs = vec![invalid_ca_cert_bytes.into(), valid_ca_cert_bytes.into()];
+            
+            // Connection should succeed using the second (valid) certificate
+            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
+                .await
+                .expect("Failed to create client with multiple root certs");
+            
+            let ping_result = client.send_command(&redis::cmd("PING")).await;
+            assert_eq!(ping_result.unwrap(), Value::SimpleString("PONG".to_string()));
+        });
+    }
 }

@@ -664,7 +664,7 @@ async fn get_connection_and_replication_info(
         push_sender.clone(),
         discover_az,
         connection_timeout,
-        root_certs,
+        root_certs.as_ref(),
     )
     .await;
     let reconnecting_connection = match result {
