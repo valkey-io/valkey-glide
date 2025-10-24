@@ -3,4 +3,4 @@ numpy
 anyio
 
 # redis-py
-redis==5.0.3
+redis==6.4.0
