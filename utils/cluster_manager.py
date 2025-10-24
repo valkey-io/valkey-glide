@@ -569,6 +569,26 @@ def create_cluster(
     if err:
         logging.error(f"Cluster create error: {err}")
     
+    # IMMEDIATE debugging - check processes right after cluster create, before any waiting
+    if replica_count > 0:
+        logging.info("=== IMMEDIATE PROCESS CHECK (before waiting) ===")
+        running_count = 0
+        for i, server in enumerate(servers):
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(0.5)  # Very quick check
+                result = sock.connect_ex((server.host, server.port))
+                sock.close()
+                if result == 0:
+                    running_count += 1
+                    logging.info(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - RESPONSIVE")
+                else:
+                    logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - NOT RESPONSIVE")
+            except Exception as e:
+                logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - ERROR: {e}")
+        logging.info(f"IMMEDIATE STATUS: {running_count}/{len(servers)} servers responsive")
+        logging.info("=== END IMMEDIATE CHECK ===")
+    
     # Parse the output to see what happened
     if ">>> Performing hash slots allocation on" in output:
         logging.info("Cluster create command started slot allocation")
@@ -586,15 +606,9 @@ def create_cluster(
     if err or "[OK] All 16384 slots covered." not in output:
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
-    wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
-    wait_for_all_topology_views(servers, cluster_folder, use_tls, replica_count)
-    
-    # Only do detailed replica verification if we have replicas and are in a slow environment
+    # Check server processes immediately after cluster creation, before waiting for topology
     if replica_count > 0:
-        logging.info("Verifying replica synchronization...")
-        
-        # First, check if all server processes are still running
-        logging.info("=== CHECKING SERVER PROCESSES ===")
+        logging.info("=== CHECKING SERVER PROCESSES AFTER CLUSTER CREATE ===")
         running_servers = 0
         dead_servers = 0
         for i, server in enumerate(servers):
@@ -632,8 +646,15 @@ def create_cluster(
                 dead_servers += 1
                 logging.error(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} (PID {server.pid}) - ERROR: {e}")
         
-        logging.info(f"Process status: {running_servers} running, {dead_servers} dead/missing")
+        logging.info(f"Process status after cluster create: {running_servers} running, {dead_servers} dead/missing")
         logging.info("=== END PROCESS CHECK ===")
+
+    wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
+    wait_for_all_topology_views(servers, cluster_folder, use_tls, replica_count)
+    
+    # Only do detailed replica verification if we have replicas and are in a slow environment
+    if replica_count > 0:
+        logging.info("Verifying replica synchronization...")
         
         # Quick check - just verify we can see all nodes in cluster
         cmd_args = [
