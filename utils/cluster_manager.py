@@ -15,6 +15,10 @@ import socket
 import string
 import subprocess
 import time
+try:
+    import psutil
+except ImportError:
+    psutil = None
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -588,6 +592,49 @@ def create_cluster(
     # Only do detailed replica verification if we have replicas and are in a slow environment
     if replica_count > 0:
         logging.info("Verifying replica synchronization...")
+        
+        # First, check if all server processes are still running
+        logging.info("=== CHECKING SERVER PROCESSES ===")
+        running_servers = 0
+        dead_servers = 0
+        for i, server in enumerate(servers):
+            try:
+                # Check if process is still running
+                if psutil is not None:
+                    if psutil.pid_exists(server.pid):
+                        proc = psutil.Process(server.pid)
+                        if proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE:
+                            running_servers += 1
+                            logging.info(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} (PID {server.pid}) - RUNNING")
+                        else:
+                            dead_servers += 1
+                            logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} (PID {server.pid}) - ZOMBIE/DEAD")
+                    else:
+                        dead_servers += 1
+                        logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} (PID {server.pid}) - PROCESS NOT FOUND")
+                else:
+                    # Fallback: try to connect to the port to see if server is responsive
+                    try:
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.settimeout(1)
+                        result = sock.connect_ex((server.host, server.port))
+                        sock.close()
+                        if result == 0:
+                            running_servers += 1
+                            logging.info(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - RESPONSIVE")
+                        else:
+                            dead_servers += 1
+                            logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - NOT RESPONSIVE")
+                    except Exception as e:
+                        dead_servers += 1
+                        logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - CONNECTION ERROR: {e}")
+            except Exception as e:
+                dead_servers += 1
+                logging.error(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} (PID {server.pid}) - ERROR: {e}")
+        
+        logging.info(f"Process status: {running_servers} running, {dead_servers} dead/missing")
+        logging.info("=== END PROCESS CHECK ===")
+        
         # Quick check - just verify we can see all nodes in cluster
         cmd_args = [
             get_cli_command(),
