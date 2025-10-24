@@ -94,7 +94,7 @@ jobs:
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
-        timeout-minutes: 35
+        timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 35 }}
         strategy:
             fail-fast: false
             matrix:
@@ -219,7 +219,7 @@ jobs:
     test-pubsub:
         name: Java PubSubTests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
-        timeout-minutes: 35
+        timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 35 }}
         strategy:
             fail-fast: false
             matrix:
