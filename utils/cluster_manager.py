@@ -671,24 +671,70 @@ def create_cluster(
             except Exception as e:
                 logging.warning(f"Resource check failed: {e}")
         
-        # 4. Individual server health (ping test - very fast)
-        logging.info("Testing individual server health...")
-        healthy_servers = 0
-        for i, server in enumerate(servers[:5]):  # Test first 5 only to save time
+        # WSL NETWORKING DIAGNOSTICS (fast checks only)
+        if len(servers) > 6:  # Only run for high-replica clusters
+            logging.info("=== WSL NETWORKING DIAGNOSTICS ===")
+            
+            # 1. Detailed cluster nodes analysis
+            logging.info("Analyzing cluster topology...")
             try:
-                ping_result: Optional[str] = redis_cli_run_command([
-                    get_cli_command(), "-h", server.host, "-p", str(server.port), 
-                    "--connect-timeout", "1", "ping"
+                cluster_nodes_output = redis_cli_run_command([
+                    get_cli_command(), "-h", servers[0].host, "-p", str(servers[0].port),
+                    "cluster", "nodes"
                 ])
-                if ping_result is not None and "PONG" in ping_result:
-                    healthy_servers += 1
-                    logging.info(f"Server {i+1} health: OK")
+                if cluster_nodes_output:
+                    lines = cluster_nodes_output.strip().split('\n')
+                    logging.info(f"CLUSTER NODES returned {len(lines)} lines:")
+                    for i, line in enumerate(lines):
+                        if line.strip():
+                            # Parse node info: node_id host:port@cluster_port flags master/slave
+                            parts = line.split()
+                            if len(parts) >= 3:
+                                node_id = parts[0][:8]  # First 8 chars of node ID
+                                host_port = parts[1].split('@')[0]  # Remove cluster port
+                                flags = parts[2]
+                                logging.info(f"  Node {i+1}: {host_port} ({flags}) ID:{node_id}")
+                            else:
+                                logging.info(f"  Node {i+1}: {line.strip()}")
                 else:
-                    logging.warning(f"Server {i+1} health: NO PONG")
+                    logging.warning("CLUSTER NODES returned no output")
             except Exception as e:
-                logging.warning(f"Server {i+1} health: ERROR - {e}")
-        logging.info(f"Healthy servers (sample): {healthy_servers}/5")
-        logging.info("=== END WSL DIAGNOSTICS ===")
+                logging.error(f"Failed to get cluster nodes: {e}")
+            
+            # 2. Check cluster info from multiple nodes
+            logging.info("Checking cluster info from different nodes...")
+            for i in range(min(3, len(servers))):
+                server = servers[i]
+                try:
+                    cluster_info = redis_cli_run_command([
+                        get_cli_command(), "-h", server.host, "-p", str(server.port),
+                        "cluster", "info"
+                    ])
+                    if cluster_info and "cluster_known_nodes:" in cluster_info:
+                        known_nodes = [line for line in cluster_info.split('\n') if 'cluster_known_nodes:' in line]
+                        if known_nodes:
+                            logging.info(f"  Server {server.host}:{server.port} sees: {known_nodes[0]}")
+                except Exception as e:
+                    logging.warning(f"  Server {server.host}:{server.port} cluster info failed: {e}")
+            
+            # 3. Individual server health (ping test - very fast) - FIXED: Remove --connect-timeout
+            logging.info("Testing individual server health...")
+            healthy_servers = 0
+            for i, server in enumerate(servers[:5]):  # Test first 5 only to save time
+                try:
+                    ping_result: Optional[str] = redis_cli_run_command([
+                        get_cli_command(), "-h", server.host, "-p", str(server.port), 
+                        "ping"  # Removed --connect-timeout which caused the error
+                    ])
+                    if ping_result is not None and "PONG" in ping_result:
+                        healthy_servers += 1
+                        logging.info(f"Server {i+1} health: OK")
+                    else:
+                        logging.warning(f"Server {i+1} health: NO PONG")
+                except Exception as e:
+                    logging.warning(f"Server {i+1} health: ERROR - {e}")
+            logging.info(f"Healthy servers (sample): {healthy_servers}/5")
+            logging.info("=== END WSL DIAGNOSTICS ===")
     
     logging.info("=== END IMMEDIATE CHECK ===")
     
