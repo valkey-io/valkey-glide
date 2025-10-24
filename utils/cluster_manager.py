@@ -15,6 +15,10 @@ import socket
 import string
 import subprocess
 import time
+try:
+    import psutil
+except ImportError:
+    psutil = None
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
