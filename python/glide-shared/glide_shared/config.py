@@ -107,23 +107,92 @@ class BackoffStrategy:
         self.jitter_percent = jitter_percent
 
 
-class ServerCredentials:
+class ServiceType(Enum):
     """
-    Represents the credentials for connecting to a server.
+    Represents the types of AWS services that can be used for IAM authentication.
+    """
+
+    ELASTICACHE = 0
+    """Amazon ElastiCache service."""
+    MEMORYDB = 1
+    """Amazon MemoryDB service."""
+
+
+class IamAuthConfig:
+    """
+    Configuration settings for IAM authentication.
 
     Attributes:
-        password (str): The password that will be used for authenticating connections to the servers.
-        username (Optional[str]): The username that will be used for authenticating connections to the servers.
-            If not supplied, "default" will be used.
+        cluster_name (str): The name of the ElastiCache/MemoryDB cluster.
+        service (ServiceType): The type of service being used (ElastiCache or MemoryDB).
+        region (str): The AWS region where the ElastiCache/MemoryDB cluster is located.
+        refresh_interval_seconds (Optional[int]): Optional refresh interval in seconds for renewing IAM authentication tokens.
+            If not provided, the core will use a default value of 300 seconds (5 min).
     """
 
     def __init__(
         self,
-        password: str,
-        username: Optional[str] = None,
+        cluster_name: str,
+        service: ServiceType,
+        region: str,
+        refresh_interval_seconds: Optional[int] = None,
     ):
+        self.cluster_name = cluster_name
+        self.service = service
+        self.region = region
+        self.refresh_interval_seconds = refresh_interval_seconds
+
+
+class ServerCredentials:
+    """
+    Represents the credentials for connecting to a server.
+
+    Exactly one of the following authentication modes must be provided:
+        - Password-based authentication: Use password (and optionally username)
+        - IAM authentication: Use username (required) and iam_config
+
+    These modes are mutually exclusive - you cannot use both simultaneously.
+
+    Attributes:
+        password (Optional[str]): The password that will be used for authenticating connections to the servers.
+            Mutually exclusive with iam_config. Either password or iam_config must be provided.
+        username (Optional[str]): The username that will be used for authenticating connections to the servers.
+            If not supplied for password-based authentication, "default" will be used.
+            Required for IAM authentication.
+        iam_config (Optional[IamAuthConfig]): IAM authentication configuration. Mutually exclusive with password.
+            Either password or iam_config must be provided.
+            The client will automatically generate and refresh the authentication token based on the provided configuration.
+    """
+
+    def __init__(
+        self,
+        password: Optional[str] = None,
+        username: Optional[str] = None,
+        iam_config: Optional[IamAuthConfig] = None,
+    ):
+        # Validate mutual exclusivity
+        if password is not None and iam_config is not None:
+            raise ConfigurationError(
+                "password and iam_config are mutually exclusive. Use either password-based or IAM authentication, not both."
+            )
+
+        # Validate IAM requires username
+        if iam_config is not None and not username:
+            raise ConfigurationError("username is required for IAM authentication.")
+
+        # At least one authentication method must be provided
+        if password is None and iam_config is None:
+            raise ConfigurationError(
+                "Either password or iam_config must be provided for authentication."
+            )
+
         self.password = password
         self.username = username
+        self.iam_config = iam_config
+
+    def is_iam_auth(self) -> bool:
+        """Returns True if this credential is configured for IAM authentication."""
+        return self.iam_config is not None
 
 
 class PeriodicChecksManualInterval:
@@ -357,7 +426,41 @@ class BaseClientConfiguration:
 
         if self.credentials.username:
             request.authentication_info.username = self.credentials.username
-        request.authentication_info.password = self.credentials.password
+
+        if self.credentials.password:
+            request.authentication_info.password = self.credentials.password
+
+        # Set IAM credentials if present
+        if self.credentials.iam_config:
+            iam_config = self.credentials.iam_config
+            request.authentication_info.iam_credentials.cluster_name = (
+                iam_config.cluster_name
+            )
+            request.authentication_info.iam_credentials.region = iam_config.region
+
+            # Map ServiceType enum to protobuf ServiceType
+            if iam_config.service == ServiceType.ELASTICACHE:
+                from glide_shared.protobuf.connection_request_pb2 import (
+                    ServiceType as ProtobufServiceType,
+                )
+
+                request.authentication_info.iam_credentials.service_type = (
+                    ProtobufServiceType.ELASTICACHE
+                )
+            elif iam_config.service == ServiceType.MEMORYDB:
+                from glide_shared.protobuf.connection_request_pb2 import (
+                    ServiceType as ProtobufServiceType,
+                )
+
+                request.authentication_info.iam_credentials.service_type = (
+                    ProtobufServiceType.MEMORYDB
+                )
+
+            # Set optional refresh interval
+            if iam_config.refresh_interval_seconds is not None:
+                request.authentication_info.iam_credentials.refresh_interval_seconds = (
+                    iam_config.refresh_interval_seconds
+                )
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False

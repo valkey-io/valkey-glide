@@ -139,6 +139,27 @@ class CoreCommands(Protocol):
             TOK, await self._update_connection_password(password, immediate_auth)
         )
 
+    async def _refresh_iam_token(self) -> TResult: ...
+
+    async def refresh_iam_token(self) -> TOK:
+        """
+        Manually refresh the IAM token for the current connection.
+
+        This method is only available if the client was created with IAM authentication.
+        It triggers an immediate refresh of the IAM token and updates the connection.
+
+        Returns:
+            TOK: A simple OK response on success.
+
+        Raises:
+            ConfigurationError: If the client is not using IAM authentication.
+
+        Example:
+            >>> await client.refresh_iam_token()
+            'OK'
+        """
+        return cast(TOK, await self._refresh_iam_token())
+
     async def set(
         self,
         key: TEncodable,
