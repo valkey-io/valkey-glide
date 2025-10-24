@@ -16,7 +16,7 @@ repositories {
 dependencies {
     implementation('com.google.protobuf:protobuf-java') {
         version {
-            require '[4.29.1,5.0)'
+            require '[4.21.0,4.30.0)' // Compatible range: 4.21.x through 4.29.x
             prefer '4.29.1'
         }
     }
@@ -42,9 +42,11 @@ ext {
         def parts = output.split(" ")[1].split("\\.")
         int majorVersion = Integer.parseInt(parts[0].trim())
         int minorVersion = parts.length > 1 ? Integer.parseInt(parts[1].trim()) : 0
-        if (majorVersion < 4 || (majorVersion == 4 && minorVersion < 29)) {
+
+        // Protoc versions 21.x through 29.x are compatible (equivalent to Java lib 4.21.x-4.29.x)
+        if (majorVersion < 21 || majorVersion >= 30) {
             throw new GradleException(
-                    "Protobuf compiler (protoc) version 4.29 or newer is required. Current version: $output")
+                    "Protobuf compiler (protoc) version 21.x-29.x is required for compatibility. Current version: $output")
         }
         return output.split(" ")[1]
     }
@@ -66,7 +68,7 @@ tasks.register('protobuf', Exec) {
             }
         } catch (Exception e) {
             if (e.getMessage().startsWith("A problem occurred starting process")) {
-                throw new GradleException("No Protobuf compiler (protoc) found. Protobuf compiler version 4.29 or newer is required.");
+                throw new GradleException("No Protobuf compiler (protoc) found. Protobuf compiler version 21.x-29.x is required for compatibility.");
             }
             throw e
         }

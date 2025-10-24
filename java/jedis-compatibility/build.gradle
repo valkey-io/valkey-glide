@@ -23,7 +23,7 @@ dependencies {
 
     implementation('com.google.protobuf:protobuf-java') {
         version {
-            require '[4.29.1,5.0)'
+            require '[4.21.0,4.30.0)' // Compatible range: 4.21.x through 4.29.x
             prefer '4.29.1'
         }
     }

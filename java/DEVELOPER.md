@@ -18,7 +18,7 @@ The Valkey GLIDE Java wrapper consists of both Java and Rust code. Rust bindings
 - GCC
 - pkg-config
 - cmake
-- protoc (protobuf compiler) >= v29.1
+- protoc (protobuf compiler) >= v21.0, < v30.0
 - openssl
 - openssl-dev
 - rustup
@@ -69,9 +69,11 @@ It is not necessary to **Install `ziglang` and `zigbuild`** for MacOS.
 
 **Install protobuf compiler**
 
-Only protobuf v29.1 is supported. Other versions are not supported and may cause build issues.
+Only protobuf versions 21.0 through 29.x are supported for compatibility. Versions 30.0+ have breaking API changes that cause compilation failures.
 
-Various platform-specific zips can be found [here](https://github.com/protocolbuffers/protobuf/releases/tag/v29.1).
+**Note**: Protobuf versioning changed - `protoc --version` shows `29.1` while the Java library uses `4.29.1`. Both refer to the same version.
+
+Various platform-specific zips can be found [here](https://github.com/protocolbuffers/protobuf/releases/tag/v29.1) (or any compatible version 21.0-29.x).
 Choose the appropriate zip for your system and run the commands below, adjusting for the zip you chose:
 
 ```bash
@@ -79,7 +81,7 @@ PB_REL="https://github.com/protocolbuffers/protobuf/releases"
 curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
 unzip protoc-29.1-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler version 29.1 or higher is installed
+# Check that the protobuf compiler version is in the compatible range (21.0-29.x)
 protoc --version
 ```
 
