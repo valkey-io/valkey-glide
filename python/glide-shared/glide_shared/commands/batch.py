@@ -5091,7 +5091,7 @@ class BaseBatch:
             args.extend(["VERSION", str(version)])
         if parameters:
             for var in parameters:
-                args.extend(str(var))
+                args.append(str(var))
         return self.append_command(RequestType.Lolwut, args)
 
     def random_key(self: TBatch) -> TBatch:

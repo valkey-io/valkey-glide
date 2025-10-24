@@ -1222,6 +1222,52 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithRandomRoute() {
 		"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, singleValue)
 }
 
+func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_AllNodes() {
+	client := suite.defaultClusterClient()
+	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
+	if suite.serverVersion >= "9.0.0" {
+		options := options.ClusterLolwutOptions{
+			LolwutOptions: &options.LolwutOptions{
+				Version: 9,
+				Args:    []int{30, 4},
+			},
+			RouteOption: &options.RouteOption{Route: config.AllNodes},
+		}
+		result, err := client.LolwutWithOptions(context.Background(), options)
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), result.IsMultiValue())
+		multiValue := result.MultiValue()
+		for _, value := range multiValue {
+			hasVer := strings.Contains(value, "ver")
+			hasVersion := strings.Contains(value, suite.serverVersion)
+			assert.True(suite.T(), hasVer && hasVersion,
+				"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, value)
+		}
+	}
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_RandomNode() {
+	client := suite.defaultClusterClient()
+	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
+	if suite.serverVersion >= "9.0.0" {
+		options := options.ClusterLolwutOptions{
+			LolwutOptions: &options.LolwutOptions{
+				Version: 9,
+				Args:    []int{40, 20, 1, 2},
+			},
+			RouteOption: &options.RouteOption{Route: config.RandomRoute},
+		}
+		result, err := client.LolwutWithOptions(context.Background(), options)
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), result.IsSingleValue())
+		singleValue := result.SingleValue()
+		hasVer := strings.Contains(singleValue, "ver")
+		hasVersion := strings.Contains(singleValue, suite.serverVersion)
+		assert.True(suite.T(), hasVer && hasVersion,
+			"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, singleValue)
+	}
+}
+
 func (suite *GlideTestSuite) TestClientIdCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()

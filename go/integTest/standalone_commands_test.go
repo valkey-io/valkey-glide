@@ -814,6 +814,34 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
 		"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, res)
 }
 
+func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_TwoParams() {
+	client := suite.defaultClient()
+	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
+	if suite.serverVersion >= "9.0.0" {
+		opts := options.NewLolwutOptions(9).SetArgs([]int{30, 4})
+		res, err := client.LolwutWithOptions(context.Background(), *opts)
+		assert.NoError(suite.T(), err)
+		hasVer := strings.Contains(res, "ver")
+		hasVersion := strings.Contains(res, suite.serverVersion)
+		assert.True(suite.T(), hasVer && hasVersion,
+			"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, res)
+	}
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_FourParams() {
+	client := suite.defaultClient()
+	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
+	if suite.serverVersion >= "9.0.0" {
+		opts := options.NewLolwutOptions(9).SetArgs([]int{40, 20, 1, 2})
+		res, err := client.LolwutWithOptions(context.Background(), *opts)
+		assert.NoError(suite.T(), err)
+		hasVer := strings.Contains(res, "ver")
+		hasVersion := strings.Contains(res, suite.serverVersion)
+		assert.True(suite.T(), hasVer && hasVersion,
+			"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, res)
+	}
+}
+
 func (suite *GlideTestSuite) TestClientId() {
 	client := suite.defaultClient()
 	result, err := client.ClientId(context.Background())

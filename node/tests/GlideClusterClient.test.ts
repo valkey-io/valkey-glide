@@ -790,6 +790,33 @@ describe("GlideClusterClient", () => {
                     result4Str.includes(serverVersion),
             ).toBe(true);
 
+            // Test LOLWUT version 9 (available in Valkey 9.0.0+)
+            if (cluster.checkIfServerVersionLessThan("9.0.0") === false) {
+                // Test with version 9 and 2 parameters on all nodes
+                const result5 = await client.lolwut({
+                    version: 9,
+                    parameters: [30, 4],
+                    route: "allNodes",
+                });
+                const result5Str = intoString(result5);
+                expect(
+                    result5Str.includes("ver") &&
+                        result5Str.includes(serverVersion),
+                ).toBe(true);
+
+                // Test with version 9 and 4 parameters on random node
+                const result6 = await client.lolwut({
+                    version: 9,
+                    parameters: [40, 20, 1, 2],
+                    route: "randomNode",
+                });
+                const result6Str = intoString(result6);
+                expect(
+                    result6Str.includes("ver") &&
+                        result6Str.includes(serverVersion),
+                ).toBe(true);
+            }
+
             // batch tests
             for (const isAtomic of [true, false]) {
                 const batch = new ClusterBatch(isAtomic);

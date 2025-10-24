@@ -763,7 +763,7 @@ class StandaloneCommands(CoreCommands):
             args.extend(["VERSION", str(version)])
         if parameters:
             for var in parameters:
-                args.extend(str(var))
+                args.append(str(var))
         return cast(
             bytes,
             self._execute_command(RequestType.Lolwut, args),
