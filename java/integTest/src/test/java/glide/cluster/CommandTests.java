@@ -890,8 +890,7 @@ public class CommandTests {
             clusterResponse = clusterClient.lolwut(9, new int[] {30, 4}, ALL_NODES).get();
             for (var nodeResponse : clusterResponse.getMultiValue().values()) {
                 assertTrue(
-                        nodeResponse.contains("ver")
-                                && nodeResponse.contains(SERVER_VERSION.toString()),
+                        nodeResponse.contains("ver") && nodeResponse.contains(SERVER_VERSION.toString()),
                         "Expected LOLWUT output to contain version string");
             }
 

@@ -479,8 +479,7 @@ public class CommandTests {
             // Test with version 9 and 4 parameters (columns, rows, real, imaginary)
             response = regularClient.lolwut(9, new int[] {40, 20, 1, 2}).get();
             System.out.printf(
-                    "%nLOLWUT standalone client ver 9 response with params 40 20 1 2%n%s%n",
-                    response);
+                    "%nLOLWUT standalone client ver 9 response with params 40 20 1 2%n%s%n", response);
             assertTrue(
                     response.contains("ver") && response.contains(SERVER_VERSION.toString()),
                     "Expected LOLWUT output to contain version string");
