@@ -292,11 +292,11 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void clientGetName(GlideClient regularClient) {
-        // TODO replace with the corresponding command once implemented
-        regularClient.customCommand(new String[] {"client", "setname", "clientGetName"}).get();
+        String result = regularClient.clientSetName("clientGetName").get();
 
         var name = regularClient.clientGetName().get();
 
+        assertEquals("OK", result);
         assertEquals("clientGetName", name);
     }
 
