@@ -453,6 +453,8 @@ def create_servers(
     logging.debug("## Creating servers")
     ready_servers: List[Server] = []
     nodes_count = shard_count * (1 + replica_count)
+    logging.info(f"DEBUG: create_servers called with shard_count={shard_count}, replica_count={replica_count}")
+    logging.info(f"DEBUG: Expected nodes_count = {shard_count} * (1 + {replica_count}) = {nodes_count}")
     tls_args = []
     if tls is True:
         # Use custom TLS files if provided, otherwise use default ones
@@ -526,6 +528,9 @@ def create_servers(
     logging.debug("All servers are up!")
     toc = time.perf_counter()
     logging.debug(f"create_servers() Elapsed time: {toc - tic:0.4f}")
+    logging.info(f"DEBUG: create_servers returning {len(ready_servers)} servers (expected {nodes_count})")
+    for i, server in enumerate(ready_servers):
+        logging.info(f"DEBUG: Returning server {i+1}: {server.host}:{server.port}")
     return ready_servers
 
 
@@ -594,25 +599,30 @@ def create_cluster(
     if err:
         logging.error(f"Cluster create error: {err}")
     
+    # UNCONDITIONAL debugging - always check processes after cluster create
+    logging.info("=== IMMEDIATE PROCESS CHECK (ALWAYS RUNS) ===")
+    running_count = 0
+    for i, server in enumerate(servers):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(0.5)  # Very quick check
+            result = sock.connect_ex((server.host, server.port))
+            sock.close()
+            if result == 0:
+                running_count += 1
+                logging.info(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - RESPONSIVE")
+            else:
+                logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - NOT RESPONSIVE")
+        except Exception as e:
+            logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - ERROR: {e}")
+    logging.info(f"IMMEDIATE STATUS: {running_count}/{len(servers)} servers responsive")
+    logging.info("=== END IMMEDIATE CHECK ===")
+    
     # IMMEDIATE debugging - check processes right after cluster create, before any waiting
     if replica_count > 0:
-        logging.info("=== IMMEDIATE PROCESS CHECK (before waiting) ===")
-        running_count = 0
-        for i, server in enumerate(servers):
-            try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(0.5)  # Very quick check
-                result = sock.connect_ex((server.host, server.port))
-                sock.close()
-                if result == 0:
-                    running_count += 1
-                    logging.info(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - RESPONSIVE")
-                else:
-                    logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - NOT RESPONSIVE")
-            except Exception as e:
-                logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - ERROR: {e}")
-        logging.info(f"IMMEDIATE STATUS: {running_count}/{len(servers)} servers responsive")
-        logging.info("=== END IMMEDIATE CHECK ===")
+        logging.info("=== REPLICA-SPECIFIC CHECK ===")
+        logging.info(f"Expected: {len(servers)} total servers ({len(servers) // (1 + replica_count)} masters + {len(servers) - len(servers) // (1 + replica_count)} replicas)")
+        logging.info("=== END REPLICA CHECK ===")
     
     # Parse the output to see what happened
     if ">>> Performing hash slots allocation on" in output:
