@@ -31,10 +31,18 @@ public class NativeUtils {
     /** Temporary directory which will contain the dynamic library files. */
     private static File temporaryDir;
 
+    /** Track if the Glide library has already been loaded */
+    private static volatile boolean glideLibLoaded = false;
+
     /** Private constructor - this class will never be instanced */
     private NativeUtils() {}
 
-    public static void loadGlideLib() {
+    public static synchronized void loadGlideLib() {
+        // Check if already loaded to avoid multiple loads
+        if (glideLibLoaded) {
+            return;
+        }
+        
         String glideLib = "/libglide_rs";
         try {
             String osName = System.getProperty("os.name").toLowerCase();
@@ -48,6 +56,7 @@ public class NativeUtils {
                 throw new UnsupportedOperationException(
                         "OS not supported. Glide is only available on Mac OS, Linux, and Windows systems.");
             }
+            glideLibLoaded = true; // Mark as loaded after successful load
         } catch (java.io.IOException e) {
             e.printStackTrace();
         }
