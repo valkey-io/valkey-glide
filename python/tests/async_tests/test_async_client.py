@@ -9337,6 +9337,17 @@ class TestCommands:
         result = await glide_client.lolwut(5, [30, 4, 4])
         assert b"ver" in result and server_version_bytes in result
 
+        # Test LOLWUT version 9 (available in Valkey 9.0.0+)
+        min_version = "9.0.0"
+        if await check_if_server_version_lt(glide_client, min_version) is False:
+            # Test with version 9 and 2 parameters (columns, rows)
+            result = await glide_client.lolwut(9, [30, 4])
+            assert b"ver" in result and server_version_bytes in result
+
+            # Test with version 9 and 4 parameters (columns, rows, real, imaginary)
+            result = await glide_client.lolwut(9, [40, 20, 1, 2])
+            assert b"ver" in result and server_version_bytes in result
+
         if isinstance(glide_client, GlideClusterClient):
             # test with multi-node route
             result = await glide_client.lolwut(route=AllNodes())
@@ -9361,6 +9372,21 @@ class TestCommands:
             result = await glide_client.lolwut(2, [10, 20], RandomNode())
             assert isinstance(result, bytes)
             assert b"ver" in result and server_version_bytes in result
+
+            # Test LOLWUT version 9 with cluster routes (available in Valkey 9.0.0+)
+            if await check_if_server_version_lt(glide_client, min_version) is False:
+                # Test with version 9 and 2 parameters on all nodes
+                result = await glide_client.lolwut(9, [30, 4], AllNodes())
+                assert isinstance(result, dict)
+                result_decoded = cast(dict, convert_bytes_to_string_object(result))
+                assert result_decoded is not None
+                for node_result in result_decoded.values():
+                    assert "ver" in node_result and server_version in node_result
+
+                # Test with version 9 and 4 parameters on random node
+                result = await glide_client.lolwut(9, [40, 20, 1, 2], RandomNode())
+                assert isinstance(result, bytes)
+                assert b"ver" in result and server_version_bytes in result
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
