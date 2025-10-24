@@ -47,7 +47,9 @@ dependencies {
 }
 
 def standaloneHosts = ''
+def standaloneTlsHosts = ''
 def clusterHosts = ''
+def clusterTlsHosts = ''
 def azClusterHosts = ''
 
 ext {
@@ -62,18 +64,37 @@ ext {
     }
 }
 
-tasks.register('stopAllAfterTests', Exec) {
-    workingDir "${project.rootDir}/../utils"
-    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
+tasks.register('stopAllAfterTests') {
+    doLast {
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
+            ignoreExitValue true // ignore fail if servers are stopped before
+        }
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'tls-cluster', '--keep-folder'
+            ignoreExitValue true
+        }
+    }
 }
 
 // We need to call for stop before and after the test, but gradle doesn't support executing a task
 // twice. So there are two identical tasks with different names.
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
-tasks.register('stopAllBeforeTests', Exec) {
-    workingDir "${project.rootDir}/../utils"
-    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'
-    ignoreExitValue true // ignore fail if servers are stopped before
+tasks.register('stopAllBeforeTests') {
+    doLast {
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'
+            ignoreExitValue true // ignore fail if servers are stopped before
+        }
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'tls-cluster'
+            ignoreExitValue true
+        }
+    }
 }
 
 // delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
@@ -140,10 +161,38 @@ tasks.register('startStandalone') {
     }
 }
 
+tasks.register('startStandaloneTls') {
+    doLast {
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '-r', '0'
+                standardOutput = os
+            }
+            standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+        }
+    }
+}
+
+tasks.register('startClusterTls') {
+    doLast {
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '--cluster-mode'
+                standardOutput = os
+            }
+            clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+        }
+    }
+}
+
 beforeTests.dependsOn 'stopAllBeforeTests'
 stopAllBeforeTests.finalizedBy 'clearDirs'
 clearDirs.finalizedBy 'startStandalone'
+clearDirs.finalizedBy 'startStandaloneTls'
 clearDirs.finalizedBy 'startCluster'
+clearDirs.finalizedBy 'startClusterTls'
 clearDirs.finalizedBy 'startClusterForAz'
 afterTests.finalizedBy 'stopAllAfterTests'
 compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
@@ -158,7 +207,9 @@ tasks.withType(Test) {
 
     doFirst {
         systemProperty 'test.server.standalone', standaloneHosts
+        systemProperty 'test.server.standalone.tls', standaloneTlsHosts
         systemProperty 'test.server.cluster', clusterHosts
+        systemProperty 'test.server.cluster.tls', clusterTlsHosts
         systemProperty 'test.server.azcluster', azClusterHosts
         systemProperty 'test.server.tls', System.getProperty("tls")
     }
