@@ -462,6 +462,23 @@ public class CommandManager {
                         });
     }
 
+    /** Submit an IAM token refresh request to GLIDE core. */
+    public <T> CompletableFuture<T> submitRefreshIamToken(
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        return coreClient
+                .refreshIamToken()
+                .thenApply(
+                        result -> {
+                            // Convert JNI result to protobuf Response format
+                            Response.Builder responseBuilder = Response.newBuilder();
+                            if ("OK".equals(result)) {
+                                responseBuilder.setConstantResponse(ConstantResponse.OK);
+                            }
+                            return responseHandler.apply(responseBuilder.build());
+                        });
+    }
+
     /** Take a command request and submit it (backward compatibility). */
     protected <T> CompletableFuture<T> submitCommandToJni(
             CommandRequest.Builder command,
