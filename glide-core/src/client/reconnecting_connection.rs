@@ -123,7 +123,7 @@ async fn create_connection(
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     discover_az: bool,
     connection_timeout: Duration,
-) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
+) -> Result<ReconnectingConnection, (Option<ReconnectingConnection>, RedisError)> {
     let client = {
         let guard = connection_backend
             .connection_info
@@ -188,7 +188,7 @@ async fn create_connection(
                 connection_options,
             };
             connection.reconnect(ReconnectReason::CreateError);
-            Err((connection, err))
+            Err((Some(connection), err))
         }
     }
 }
@@ -197,13 +197,11 @@ fn get_client(
     address: &NodeAddress,
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
-) -> redis::Client {
-    redis::Client::open(super::get_connection_info(
-        address,
-        tls_mode,
-        redis_connection_info,
-    ))
-    .unwrap() // can unwrap, because [open] fails only on trying to convert input to ConnectionInfo, and we pass ConnectionInfo.
+    tls_params: Option<redis::TlsConnParams>,
+) -> RedisResult<redis::Client> {
+    let connection_info =
+        super::get_connection_info(address, tls_mode, redis_connection_info, tls_params)?;
+    Ok(redis::Client::open(connection_info).unwrap()) // can unwrap, because [open] fails only on trying to convert input to ConnectionInfo, and we pass ConnectionInfo.
 }
 
 impl ConnectionBackend {
@@ -214,6 +212,7 @@ impl ConnectionBackend {
 }
 
 impl ReconnectingConnection {
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn new(
         address: &NodeAddress,
         connection_retry_strategy: RetryStrategy,
@@ -222,13 +221,15 @@ impl ReconnectingConnection {
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         discover_az: bool,
         connection_timeout: Duration,
-    ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
+        tls_params: Option<redis::TlsConnParams>,
+    ) -> Result<ReconnectingConnection, (Option<ReconnectingConnection>, RedisError)> {
         log_debug(
             "connection creation",
             format!("Attempting connection to {address}"),
         );
 
-        let connection_info = get_client(address, tls_mode, redis_connection_info);
+        let connection_info = get_client(address, tls_mode, redis_connection_info, tls_params)
+            .map_err(|err| (None, err))?;
         let backend = ConnectionBackend {
             connection_info: RwLock::new(connection_info),
             connection_available_signal: ManualResetEvent::new(true),
