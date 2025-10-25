@@ -94,7 +94,7 @@ jobs:
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
-        timeout-minutes: 35
+        timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 35 }}
         strategy:
             fail-fast: false
             matrix:
@@ -126,6 +126,7 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+                  language: java
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -153,13 +154,34 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
+            - name: Setup Python3 for Windows
+              if: ${{ matrix.host.OS == 'windows' }}
+              shell: bash
+              run: |
+                  # Create python3 symlink for Windows
+                  ln -sf $(which python) /usr/bin/python3
+
             - name: Build java client
               working-directory: java
-              run: ./gradlew --build-cache --continue build -x javadoc
+              env:
+                  CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
+              shell: bash
+              run: |
+                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                      ./gradlew.bat --build-cache --continue build -x javadoc
+                  else
+                      ./gradlew --build-cache --continue build -x javadoc
+                  fi
 
             - name: Ensure no skipped files by linter
               working-directory: java
-              run: ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+              shell: bash
+              run: |
+                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                      ./gradlew.bat --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+                  else
+                      ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+                  fi
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
@@ -182,7 +204,7 @@ jobs:
     test-pubsub:
         name: Java PubSubTests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
-        timeout-minutes: 35
+        timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 35 }}
         strategy:
             fail-fast: false
             matrix:
@@ -212,6 +234,7 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+                  language: java
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -239,9 +262,38 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
+            - name: Setup networking and verify Valkey for PubSub (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              shell: pwsh
+              run: |
+                  # Optimize WSL for better performance (PubSub tests)
+                  Write-Host "Optimizing WSL configuration for PubSub tests..."
+
+                  # Create WSL config for better performance
+                  $wslConfig = @"
+                  [wsl2]
+                  memory=6GB
+                  processors=4
+                  swap=2GB
+                  localhostForwarding=true
+                  "@
+                  $wslConfig | Out-File -FilePath "$env:USERPROFILE\.wslconfig" -Encoding utf8
+
+                  # Restart WSL to apply config
+                  wsl --shutdown
+                  Start-Sleep -Seconds 3
+
+                  Write-Host "WSL optimization complete"
+
             - name: Test pubsub
               working-directory: java
-              run: ./gradlew --build-cache :integTest:pubsubTest
+              shell: bash
+              run: |
+                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                      ./gradlew.bat --build-cache :integTest:pubsubTest
+                  else
+                      ./gradlew --build-cache :integTest:pubsubTest
+                  fi
 
             - name: Upload test & spotbugs reports
               if: always()
@@ -319,6 +371,7 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  language: java
                   engine-version: ${{ matrix.engine.version }}
 
             - name: Install protoc (protobuf)
@@ -361,6 +414,7 @@ jobs:
               working-directory: java
               env:
                   GLIDE_CONTAINER_BUILD: true
+                  CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
               run: |
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
                       export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-amazon-corretto.x86_64

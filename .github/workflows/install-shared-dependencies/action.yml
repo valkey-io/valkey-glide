@@ -9,6 +9,7 @@ inputs:
             - amazon-linux
             - macos
             - ubuntu
+            - windows
     target:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
         type: string
@@ -21,8 +22,13 @@ inputs:
             - aarch64-apple-darwin
             - aarch64-unknown-linux-musl
             - x86_64-unknown-linux-musl
+            - x86_64-pc-windows-msvc
     engine-version:
         description: "Engine version to install"
+        required: false
+        type: string
+    language:
+        description: "The language being built (optional, for language-specific setup)"
         required: false
         type: string
     github-token:
@@ -62,19 +68,140 @@ runs:
           run: |
               yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
+        - name: Install software dependencies for Windows
+          shell: pwsh
+          if: "${{ inputs.os == 'windows' }}"
+          run: |
+              # Verify Rust toolchain is available
+              rustc --version
+              cargo --version
+
+        - name: Setup Python for Windows
+          if: "${{ inputs.os == 'windows' }}"
+          uses: actions/setup-python@v5
+          with:
+              python-version: "3.x"
+
+        - name: Setup WSL (Windows only)
+          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
+          uses: Vampire/setup-wsl@v6
+          with:
+              distribution: Ubuntu-22.04
+              use-cache: true
+              update: true
+              additional-packages: build-essential git pkg-config libssl-dev python3 python3-pip
+
+        - name: Optimize WSL for better performance (Windows)
+          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
+          shell: pwsh
+          run: |
+              # Optimize WSL for better performance before engine installation
+              Write-Host "Optimizing WSL configuration for engine build..."
+
+              # Create WSL config for better performance
+              $wslConfig = @"
+              [wsl2]
+              memory=6GB
+              processors=4
+              swap=2GB
+              localhostForwarding=true
+              "@
+              $wslConfig | Out-File -FilePath "$env:USERPROFILE\.wslconfig" -Encoding utf8
+
+              # Restart WSL to apply config
+              wsl --shutdown
+              Start-Sleep -Seconds 3
+
+              Write-Host "WSL optimization complete - ready for engine build"
+
+        - name: Cache Valkey build
+          if: "${{ inputs.engine-version }}"
+          uses: actions/cache@v4
+          id: cache-valkey
+          with:
+              path: |
+                  valkey-cache/valkey-server
+                  valkey-cache/valkey-cli
+                  valkey-cache/valkey-benchmark
+              key: valkey-${{ inputs.engine-version }}-${{ inputs.os }}-${{ inputs.target }}-${{ github.sha }}
+              restore-keys: |
+                  valkey-${{ inputs.engine-version }}-${{ inputs.os }}-${{ inputs.target }}-
+
+        - name: Install engine
+          shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
+          if: "${{ inputs.engine-version && steps.cache-valkey.outputs.cache-hit == 'true' }}"
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+              OS_TYPE: ${{ inputs.os }}
+              WSLENV: ENGINE_VERSION:OS_TYPE
+          run: |
+              echo "Using cached Valkey binaries"
+              echo "OS_TYPE: '$OS_TYPE'"
+              echo "ENGINE_VERSION: '$ENGINE_VERSION'"
+              # Clone repo fresh
+              git clone https://github.com/valkey-io/valkey.git
+              cd valkey && git checkout "$ENGINE_VERSION"
+              # Move cached binaries to correct location (force overwrite)
+              mkdir -p src
+              cp -f ../valkey-cache/* src/ 2>/dev/null || true
+              # Install the cached binaries
+              sudo make install
+
+        - name: Build engine from source
+          shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
+          if: "${{ inputs.engine-version && steps.cache-valkey.outputs.cache-hit != 'true' }}"
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+              OS_TYPE: ${{ inputs.os }}
+              WSLENV: ENGINE_VERSION:OS_TYPE
+          run: |
+              echo "Building Valkey from source"
+              echo "OS_TYPE: '$OS_TYPE'"
+              echo "ENGINE_VERSION: '$ENGINE_VERSION'"
+              # Install dependencies (only needed on Linux, Windows handled by Vampire)
+              if [ "$OS_TYPE" != "windows" ]; then
+                  sudo apt install -y build-essential git pkg-config libssl-dev
+              fi
+              git clone https://github.com/valkey-io/valkey.git
+              cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes
+              # Cache the built binaries - detect which naming convention is used
+              mkdir -p ../valkey-cache
+              if [ -f "src/valkey-server" ]; then
+                  echo "Found Valkey binaries"
+                  cp -f src/valkey-server src/valkey-cli src/valkey-benchmark ../valkey-cache/ 2>/dev/null || true
+              elif [ -f "src/redis-server" ]; then
+                  echo "Found Redis binaries"
+                  cp -f src/redis-server src/redis-cli src/redis-benchmark ../valkey-cache/ 2>/dev/null || true
+              else
+                  echo "Warning: No server binaries found to cache"
+              fi
+              # Install the binaries
+              sudo make install
+
+        - name: Start engine server
+          shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
+          if: "${{ inputs.engine-version }}"
+          env:
+              OS_TYPE: ${{ inputs.os }}
+              WSLENV: OS_TYPE
+          run: |
+              echo "Starting Valkey server"
+              echo "OS_TYPE: '$OS_TYPE'"
+
+              # Start Valkey server in background
+              redis-server --daemonize yes --bind 0.0.0.0 --port 6379
+
+              # For Windows, write IP to a file that PowerShell can read
+              if [ "$OS_TYPE" = "windows" ]; then
+                  hostname -I | awk '{print $1}' > /tmp/wsl_ip.txt
+              fi
+
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
           uses: ./.github/workflows/install-rust-and-protoc
           with:
               target: ${{ inputs.target }}
               github-token: ${{ inputs.github-token }}
-
-        - name: Install engine
-          if: "${{ inputs.engine-version }}"
-          uses: ./.github/workflows/install-engine
-          with:
-              engine-version: ${{ inputs.engine-version }}
-              target: ${{ inputs.target }}
 
         - name: Install zig
           if: ${{ contains(inputs.target, 'linux-gnu') }}

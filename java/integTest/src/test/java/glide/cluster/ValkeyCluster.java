@@ -8,6 +8,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -19,6 +20,16 @@ public class ValkeyCluster implements AutoCloseable {
                     .getParent()
                     .resolve("utils")
                     .resolve("cluster_manager.py");
+
+    /** Get platform-specific Python command with WSL support */
+    private static List<String> getPythonCommand() {
+        String osName = System.getProperty("os.name").toLowerCase();
+        if (osName.contains("windows")) {
+            return Arrays.asList("wsl", "--", "python3");
+        } else {
+            return Arrays.asList("python3");
+        }
+    }
 
     private boolean tls = false;
     private String clusterFolder;
@@ -48,14 +59,27 @@ public class ValkeyCluster implements AutoCloseable {
         } else {
             this.tls = tls;
             List<String> command = new ArrayList<>();
-            command.add("python3");
+            command.addAll(getPythonCommand());
             command.add(SCRIPT_FILE.toString());
+
+            command.add("start"); // Action must come first
 
             if (tls) {
                 command.add("--tls");
             }
 
-            command.add("start");
+            command.add("-n");
+            command.add(String.valueOf(shardCount));
+            command.add("-r");
+            command.add(String.valueOf(replicaCount));
+
+            // Add host parameter - use environment variable or default to localhost
+            String host = System.getenv("VALKEY_INTEG_TEST_IP");
+            if (host == null || host.isEmpty()) {
+                host = "127.0.0.1";
+            }
+            command.add("--host");
+            command.add(host);
 
             if (clusterMode) {
                 command.add("--cluster-mode");
@@ -67,11 +91,6 @@ public class ValkeyCluster implements AutoCloseable {
                     command.add(module);
                 }
             }
-
-            command.add("-n");
-            command.add(String.valueOf(shardCount));
-            command.add("-r");
-            command.add(String.valueOf(replicaCount));
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
@@ -173,7 +192,7 @@ public class ValkeyCluster implements AutoCloseable {
     public void close() throws IOException {
         if (clusterFolder != null && !clusterFolder.isEmpty()) {
             List<String> command = new ArrayList<>();
-            command.add("python3");
+            command.addAll(getPythonCommand());
             command.add(SCRIPT_FILE.toString());
 
             if (tls) {
@@ -181,6 +200,15 @@ public class ValkeyCluster implements AutoCloseable {
             }
 
             command.add("stop");
+
+            // Add host parameter - use environment variable or default to localhost
+            String host = System.getenv("VALKEY_INTEG_TEST_IP");
+            if (host == null || host.isEmpty()) {
+                host = "127.0.0.1";
+            }
+            command.add("--host");
+            command.add(host);
+
             command.add("--cluster-folder");
             command.add(clusterFolder);
 
