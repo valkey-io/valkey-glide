@@ -170,6 +170,8 @@ jobs:
                   if ! command -v python3.14 &> /dev/null; then
                       sudo apt update
                       sudo apt install -y python3.14 python3.14-dev
+                      python3.14 -m ensurepip --upgrade
+                      python3.14 -m pip install --upgrade pip
                   fi
 
             - name: Set up Python
