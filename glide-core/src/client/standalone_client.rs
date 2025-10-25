@@ -152,6 +152,16 @@ impl StandaloneClient {
             DEFAULT_CONNECTION_TIMEOUT,
         );
 
+        let root_certs = if !connection_request.root_certs.is_empty() {
+            let mut combined_certs = Vec::new();
+            for cert in &connection_request.root_certs {
+                combined_certs.extend_from_slice(cert);
+            }
+            Some(combined_certs)
+        } else {
+            None
+        };
+
         let mut stream = stream::iter(connection_request.addresses.into_iter())
             .map(move |address| {
                 let info = if address.host != pubsub_addr.host || address.port != pubsub_addr.port {
@@ -164,9 +174,10 @@ impl StandaloneClient {
                 let tls = tls_mode.unwrap_or(TlsMode::NoTls);
                 let discover = discover_az;
                 let timeout = connection_timeout;
+                let certs = root_certs.clone();
                 async move {
                     get_connection_and_replication_info(
-                        &address, &retry, &info, tls, &sender, discover, timeout,
+                        &address, &retry, &info, tls, &sender, discover, timeout, certs,
                     )
                     .await
                     .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -198,7 +209,9 @@ impl StandaloneClient {
                     }
                 }
                 Err((address, (connection, err))) => {
-                    nodes.push(connection);
+                    if let Some(connection) = connection {
+                        nodes.push(connection);
+                    }
                     addresses_and_errors.push((Some(address), err));
                 }
             }
@@ -654,6 +667,7 @@ impl StandaloneClient {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn get_connection_and_replication_info(
     address: &NodeAddress,
     retry_strategy: &RetryStrategy,
@@ -662,7 +676,8 @@ async fn get_connection_and_replication_info(
     push_sender: &Option<mpsc::UnboundedSender<PushInfo>>,
     discover_az: bool,
     connection_timeout: Duration,
-) -> Result<(ReconnectingConnection, Value), (ReconnectingConnection, RedisError)> {
+    root_certs: Option<Vec<u8>>,
+) -> Result<(ReconnectingConnection, Value), (Option<ReconnectingConnection>, RedisError)> {
     let result = ReconnectingConnection::new(
         address,
         *retry_strategy,
@@ -671,6 +686,7 @@ async fn get_connection_and_replication_info(
         push_sender.clone(),
         discover_az,
         connection_timeout,
+        root_certs.as_ref(),
     )
     .await;
     let reconnecting_connection = match result {
@@ -683,7 +699,7 @@ async fn get_connection_and_replication_info(
         Err(err) => {
             // NOTE: this block is never reached
             reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
-            return Err((reconnecting_connection, err));
+            return Err((Some(reconnecting_connection), err));
         }
     };
 
@@ -695,7 +711,7 @@ async fn get_connection_and_replication_info(
             // Connection established + we got the INFO output
             Ok((reconnecting_connection, replication_status))
         }
-        Err(err) => Err((reconnecting_connection, err)),
+        Err(err) => Err((Some(reconnecting_connection), err)),
     }
 }
 
