@@ -214,6 +214,15 @@ public class TestUtilities {
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
+
+        // WSL-specific configuration to fix routing issues
+        if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+            builder.advancedConfiguration(
+                    AdvancedGlideClusterClientConfiguration.builder()
+                            .refreshTopologyFromInitialNodes(true)
+                            .build());
+        }
+
         return builder.useTLS(TLS);
     }
 
@@ -225,6 +234,15 @@ public class TestUtilities {
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
+
+        // WSL-specific configuration to fix routing issues
+        if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+            builder.advancedConfiguration(
+                    AdvancedGlideClusterClientConfiguration.builder()
+                            .refreshTopologyFromInitialNodes(true)
+                            .build());
+        }
+
         return builder.useTLS(TLS);
     }
 
