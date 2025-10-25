@@ -91,6 +91,29 @@ runs:
               update: true
               additional-packages: build-essential git pkg-config libssl-dev python3 python3-pip
 
+        - name: Optimize WSL for better performance (Windows)
+          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
+          shell: pwsh
+          run: |
+              # Optimize WSL for better performance before engine installation
+              Write-Host "Optimizing WSL configuration for engine build..."
+
+              # Create WSL config for better performance
+              $wslConfig = @"
+              [wsl2]
+              memory=6GB
+              processors=4
+              swap=2GB
+              localhostForwarding=true
+              "@
+              $wslConfig | Out-File -FilePath "$env:USERPROFILE\.wslconfig" -Encoding utf8
+
+              # Restart WSL to apply config
+              wsl --shutdown
+              Start-Sleep -Seconds 3
+
+              Write-Host "WSL optimization complete - ready for engine build"
+
         - name: Cache Valkey build
           if: "${{ inputs.engine-version }}"
           uses: actions/cache@v4

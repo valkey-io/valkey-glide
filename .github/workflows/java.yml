@@ -161,29 +161,6 @@ jobs:
                   # Create python3 symlink for Windows
                   ln -sf $(which python) /usr/bin/python3
 
-            - name: Setup networking and verify Valkey (Windows)
-              if: ${{ matrix.host.OS == 'windows' }}
-              shell: pwsh
-              run: |
-                  # Optimize WSL for better performance
-                  Write-Host "Optimizing WSL configuration..."
-
-                  # Create WSL config for better performance
-                  $wslConfig = @"
-                  [wsl2]
-                  memory=6GB
-                  processors=4
-                  swap=2GB
-                  localhostForwarding=true
-                  "@
-                  $wslConfig | Out-File -FilePath "$env:USERPROFILE\.wslconfig" -Encoding utf8
-
-                  # Restart WSL to apply config
-                  wsl --shutdown
-                  Start-Sleep -Seconds 3
-
-                  Write-Host "WSL optimization complete"
-
             - name: Build java client
               working-directory: java
               env:
