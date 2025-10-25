@@ -198,18 +198,9 @@ pub(super) fn get_connection_info(
     address: &NodeAddress,
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
-    root_certs: Option<Vec<u8>>,
+    tls_params: Option<redis::TlsConnParams>,
 ) -> RedisResult<redis::ConnectionInfo> {
     let addr = if tls_mode != TlsMode::NoTls {
-        let tls_params = if let Some(certs) = root_certs {
-            let tls_certificates = TlsCertificates {
-                client_tls: None,
-                root_cert: Some(certs),
-            };
-            Some(retrieve_tls_certificates(tls_certificates)?)
-        } else {
-            None
-        };
         redis::ConnectionAddr::TcpTls {
             host: address.host.to_string(),
             port: get_port(address),
@@ -1036,7 +1027,7 @@ async fn create_cluster_client(
     let tls_mode = request.tls_mode.unwrap_or_default();
 
     let valkey_connection_info = get_valkey_connection_info(&request, iam_token_manager).await;
-    let root_certs = if !request.root_certs.is_empty() {
+    let (tls_params, tls_certificates) = if !request.root_certs.is_empty() {
         let mut combined_certs = Vec::new();
         for cert in &request.root_certs {
             if cert.is_empty() {
@@ -1047,9 +1038,14 @@ async fn create_cluster_client(
             }
             combined_certs.extend_from_slice(cert);
         }
-        Some(combined_certs)
+        let tls_certs = TlsCertificates {
+            client_tls: None,
+            root_cert: Some(combined_certs),
+        };
+        let params = retrieve_tls_certificates(tls_certs.clone())?;
+        (Some(params), Some(tls_certs))
     } else {
-        None
+        (None, None)
     };
     let initial_nodes: Vec<_> = request
         .addresses
@@ -1059,7 +1055,7 @@ async fn create_cluster_client(
                 &address,
                 tls_mode,
                 valkey_connection_info.clone(),
-                root_certs.clone(),
+                tls_params.clone(),
             )
         })
         .collect::<RedisResult<Vec<_>>>()?;
@@ -1101,11 +1097,8 @@ async fn create_cluster_client(
             redis::cluster::TlsMode::Insecure
         };
         builder = builder.tls(tls);
-        if let Some(certs) = root_certs {
-            builder = builder.certs(TlsCertificates {
-                client_tls: None,
-                root_cert: Some(certs),
-            });
+        if let Some(certs) = tls_certificates {
+            builder = builder.certs(certs);
         }
     }
     if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions.clone() {

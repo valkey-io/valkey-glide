@@ -197,14 +197,10 @@ fn get_client(
     address: &NodeAddress,
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
-    root_certs: Option<&Vec<u8>>,
+    tls_params: Option<redis::TlsConnParams>,
 ) -> RedisResult<redis::Client> {
-    let connection_info = super::get_connection_info(
-        address,
-        tls_mode,
-        redis_connection_info,
-        root_certs.cloned(),
-    )?;
+    let connection_info =
+        super::get_connection_info(address, tls_mode, redis_connection_info, tls_params)?;
     Ok(redis::Client::open(connection_info).unwrap()) // can unwrap, because [open] fails only on trying to convert input to ConnectionInfo, and we pass ConnectionInfo.
 }
 
@@ -225,14 +221,14 @@ impl ReconnectingConnection {
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         discover_az: bool,
         connection_timeout: Duration,
-        root_certs: Option<&Vec<u8>>,
+        tls_params: Option<redis::TlsConnParams>,
     ) -> Result<ReconnectingConnection, (Option<ReconnectingConnection>, RedisError)> {
         log_debug(
             "connection creation",
             format!("Attempting connection to {address}"),
         );
 
-        let connection_info = get_client(address, tls_mode, redis_connection_info, root_certs)
+        let connection_info = get_client(address, tls_mode, redis_connection_info, tls_params)
             .map_err(|err| (None, err))?;
         let backend = ConnectionBackend {
             connection_info: RwLock::new(connection_info),

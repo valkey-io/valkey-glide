@@ -152,12 +152,20 @@ impl StandaloneClient {
             DEFAULT_CONNECTION_TIMEOUT,
         );
 
-        let root_certs = if !connection_request.root_certs.is_empty() {
+        let tls_params = if !connection_request.root_certs.is_empty() {
             let mut combined_certs = Vec::new();
             for cert in &connection_request.root_certs {
                 combined_certs.extend_from_slice(cert);
             }
-            Some(combined_certs)
+            let tls_certificates = redis::TlsCertificates {
+                client_tls: None,
+                root_cert: Some(combined_certs),
+            };
+            Some(
+                redis::retrieve_tls_certificates(tls_certificates).map_err(|err| {
+                    StandaloneClientConnectionError::FailedConnection(vec![(None, err)])
+                })?,
+            )
         } else {
             None
         };
@@ -174,10 +182,10 @@ impl StandaloneClient {
                 let tls = tls_mode.unwrap_or(TlsMode::NoTls);
                 let discover = discover_az;
                 let timeout = connection_timeout;
-                let certs = root_certs.clone();
+                let params = tls_params.clone();
                 async move {
                     get_connection_and_replication_info(
-                        &address, &retry, &info, tls, &sender, discover, timeout, certs,
+                        &address, &retry, &info, tls, &sender, discover, timeout, params,
                     )
                     .await
                     .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -655,7 +663,7 @@ async fn get_connection_and_replication_info(
     push_sender: &Option<mpsc::UnboundedSender<PushInfo>>,
     discover_az: bool,
     connection_timeout: Duration,
-    root_certs: Option<Vec<u8>>,
+    tls_params: Option<redis::TlsConnParams>,
 ) -> Result<(ReconnectingConnection, Value), (Option<ReconnectingConnection>, RedisError)> {
     let result = ReconnectingConnection::new(
         address,
@@ -665,7 +673,7 @@ async fn get_connection_and_replication_info(
         push_sender.clone(),
         discover_az,
         connection_timeout,
-        root_certs.as_ref(),
+        tls_params,
     )
     .await;
     let reconnecting_connection = match result {
