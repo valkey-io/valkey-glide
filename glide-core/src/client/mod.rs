@@ -192,25 +192,37 @@ pub async fn get_valkey_connection_info(
     }
 }
 
+use redis::{TlsCertificates, retrieve_tls_certificates};
+
 pub(super) fn get_connection_info(
     address: &NodeAddress,
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
-) -> redis::ConnectionInfo {
+    root_certs: Option<Vec<u8>>,
+) -> RedisResult<redis::ConnectionInfo> {
     let addr = if tls_mode != TlsMode::NoTls {
+        let tls_params = if let Some(certs) = root_certs {
+            let tls_certificates = TlsCertificates {
+                client_tls: None,
+                root_cert: Some(certs),
+            };
+            Some(retrieve_tls_certificates(tls_certificates)?)
+        } else {
+            None
+        };
         redis::ConnectionAddr::TcpTls {
             host: address.host.to_string(),
             port: get_port(address),
             insecure: tls_mode == TlsMode::InsecureTls,
-            tls_params: None,
+            tls_params,
         }
     } else {
         redis::ConnectionAddr::Tcp(address.host.to_string(), get_port(address))
     };
-    redis::ConnectionInfo {
+    Ok(redis::ConnectionInfo {
         addr,
         redis: redis_connection_info,
-    }
+    })
 }
 
 #[derive(Clone)]
@@ -1157,11 +1169,34 @@ async fn create_cluster_client(
     let tls_mode = request.tls_mode.unwrap_or_default();
 
     let valkey_connection_info = get_valkey_connection_info(&request, iam_token_manager).await;
+    let root_certs = if !request.root_certs.is_empty() {
+        let mut combined_certs = Vec::new();
+        for cert in &request.root_certs {
+            if cert.is_empty() {
+                return Err(RedisError::from((
+                    ErrorKind::InvalidClientConfig,
+                    "Root certificate cannot be empty byte string",
+                )));
+            }
+            combined_certs.extend_from_slice(cert);
+        }
+        Some(combined_certs)
+    } else {
+        None
+    };
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
-        .map(|address| get_connection_info(&address, tls_mode, valkey_connection_info.clone()))
-        .collect();
+        .map(|address| {
+            get_connection_info(
+                &address,
+                tls_mode,
+                valkey_connection_info.clone(),
+                root_certs.clone(),
+            )
+        })
+        .collect::<RedisResult<Vec<_>>>()?;
+
     let periodic_topology_checks = match request.periodic_checks {
         Some(PeriodicCheck::Disabled) => None,
         Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
@@ -1199,6 +1234,12 @@ async fn create_cluster_client(
             redis::cluster::TlsMode::Insecure
         };
         builder = builder.tls(tls);
+        if let Some(certs) = root_certs {
+            builder = builder.certs(TlsCertificates {
+                client_tls: None,
+                root_cert: Some(certs),
+            });
+        }
     }
     if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions.clone() {
         builder = builder.pubsub_subscriptions(pubsub_subscriptions);
