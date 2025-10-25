@@ -698,8 +698,20 @@ def create_cluster(
                                 logging.info(f"  Node {i+1}: {line.strip()}")
                 else:
                     logging.warning("CLUSTER NODES returned no output")
+                    
+                # Also check CLUSTER SLOTS which is what Java client uses for routing
+                cluster_slots_output = redis_cli_run_command([
+                    get_cli_command(), "-h", servers[0].host, "-p", str(servers[0].port),
+                    "cluster", "slots"
+                ])
+                if cluster_slots_output:
+                    logging.info("CLUSTER SLOTS output:")
+                    logging.info(cluster_slots_output)
+                else:
+                    logging.warning("CLUSTER SLOTS returned no output - THIS IS THE ROUTING PROBLEM")
+                    
             except Exception as e:
-                logging.error(f"Failed to get cluster nodes: {e}")
+                logging.error(f"Failed to get cluster topology: {e}")
             
             # 2. Check cluster info from multiple nodes
             logging.info("Checking cluster info from different nodes...")
