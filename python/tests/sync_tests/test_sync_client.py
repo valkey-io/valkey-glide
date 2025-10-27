@@ -288,7 +288,7 @@ class TestGlideClients:
         assert b"db=4" in client_info
         glide_sync_client.close()
 
-    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_sync_select_database_id_custom_command(self, request, cluster_mode):
         if cluster_mode:
             # Check version using a temporary standalone client
@@ -305,6 +305,25 @@ class TestGlideClients:
         client_info = glide_sync_client.custom_command(["CLIENT", "INFO"])
         assert b"db=4" in client_info
         glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_select(self, glide_sync_client: GlideClient, cluster_mode):
+        if cluster_mode:
+            if sync_check_if_server_version_lt(glide_sync_client, "9.0.0"):
+                return pytest.mark.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+
+        assert glide_sync_client.select(0) == OK
+        key = get_random_string(10)
+        value = get_random_string(10)
+        assert glide_sync_client.set(key, value) == OK
+        assert glide_sync_client.get(key) == value.encode()
+        assert glide_sync_client.select(1) == OK
+        assert glide_sync_client.get(key) is None
+        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.get(key) == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -613,9 +632,15 @@ class TestCommands:
         info_result = get_first_result(info_result)
         assert b"# Memory" in info_result
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_move(self, glide_sync_client: GlideClient):
+    def test_sync_move(self, glide_sync_client: TGlideClient, cluster_mode):
+        if cluster_mode:
+            if sync_check_if_server_version_lt(glide_sync_client, "9.0.0"):
+                pytest.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+
         key = get_random_string(10)
         value = get_random_string(10)
 
@@ -9140,6 +9165,85 @@ class TestCommands:
         finally:
             assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
 
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_cluster_copy_database(self, glide_sync_client: GlideClusterClient):
+        source = f"{{testKey}}-{get_random_string(10)}"
+        destination = f"{{testKey}}-{get_random_string(10)}"
+        value1 = get_random_string(5)
+        value2 = get_random_string(5)
+        value1_encoded = value1.encode()
+        value2_encoded = value2.encode()
+        index0 = "0"
+        index1 = "1"
+        index2 = "2"
+
+        try:
+            assert glide_sync_client.custom_command(["SELECT", index0]) == OK
+
+            # neither key exists
+            assert (
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
+                is False
+            )
+
+            # source exists, destination does not
+            glide_sync_client.set(source, value1)
+            assert (
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
+                is True
+            )
+            assert glide_sync_client.custom_command(["SELECT", index1]) == OK
+            assert glide_sync_client.get(destination) == value1_encoded
+
+            # new value for source key
+            assert glide_sync_client.custom_command(["SELECT", index0]) == OK
+            glide_sync_client.set(source, value2)
+
+            # no REPLACE, copying to existing key on DB 0 & 1, non-existing key on DB 2
+            assert (
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
+                is False
+            )
+            assert (
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index2, replace=False
+                )
+                is True
+            )
+
+            # new value only gets copied to DB 2
+            assert glide_sync_client.custom_command(["SELECT", index1]) == OK
+            assert glide_sync_client.get(destination) == value1_encoded
+            assert glide_sync_client.custom_command(["SELECT", index2]) == OK
+            assert glide_sync_client.get(destination) == value2_encoded
+
+            # both exists, with REPLACE, when value isn't the same, source always get copied to destination
+            assert glide_sync_client.custom_command(["SELECT", index0]) == OK
+            assert (
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index1, replace=True
+                )
+                is True
+            )
+            assert glide_sync_client.custom_command(["SELECT", index1]) == OK
+            assert glide_sync_client.get(destination) == value2_encoded
+
+            # invalid DB index
+            with pytest.raises(RequestError):
+                glide_sync_client.copy(
+                    source, destination, destinationDB=-1, replace=True
+                )
+        finally:
+            assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_wait(self, glide_sync_client: TGlideClient):
@@ -9178,6 +9282,17 @@ class TestCommands:
         result = glide_sync_client.lolwut(5, [30, 4, 4])
         assert b"ver" in result and server_version_bytes in result
 
+        # Test LOLWUT version 9 (available in Valkey 9.0.0+)
+        min_version = "9.0.0"
+        if sync_check_if_server_version_lt(glide_sync_client, min_version) is False:
+            # Test with version 9 and 2 parameters (columns, rows)
+            result = glide_sync_client.lolwut(9, [30, 4])
+            assert b"ver" in result and server_version_bytes in result
+
+            # Test with version 9 and 4 parameters (columns, rows, real, imaginary)
+            result = glide_sync_client.lolwut(9, [40, 20, 1, 2])
+            assert b"ver" in result and server_version_bytes in result
+
         if isinstance(glide_sync_client, GlideClusterClient):
             # test with multi-node route
             result = glide_sync_client.lolwut(route=AllNodes())
@@ -9202,6 +9317,21 @@ class TestCommands:
             result = glide_sync_client.lolwut(2, [10, 20], RandomNode())
             assert isinstance(result, bytes)
             assert b"ver" in result and server_version_bytes in result
+
+            # Test LOLWUT version 9 with cluster routes (available in Valkey 9.0.0+)
+            if sync_check_if_server_version_lt(glide_sync_client, min_version) is False:
+                # Test with version 9 and 2 parameters on all nodes
+                result = glide_sync_client.lolwut(9, [30, 4], AllNodes())
+                assert isinstance(result, dict)
+                result_decoded = cast(dict, convert_bytes_to_string_object(result))
+                assert result_decoded is not None
+                for node_result in result_decoded.values():
+                    assert "ver" in node_result and server_version in node_result
+
+                # Test with version 9 and 4 parameters on random node
+                result = glide_sync_client.lolwut(9, [40, 20, 1, 2], RandomNode())
+                assert isinstance(result, bytes)
+                assert b"ver" in result and server_version_bytes in result
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

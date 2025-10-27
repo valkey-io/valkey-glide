@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
+import platform
 import re
 import time
 from datetime import date, timedelta
@@ -218,6 +219,12 @@ class TestBatch:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("is_atomic", [True, False])
     async def test_batch_large_values(self, request, cluster_mode, protocol, is_atomic):
+        # Skip on macOS - the macOS tests run on self hosted VMs which have resource limits
+        # making this test flaky with "no buffer space available" errors. See - https://github.com/valkey-io/valkey-glide/issues/4902
+        system = platform.system().lower()
+        if "darwin" in system:
+            return
+
         glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
@@ -308,6 +315,20 @@ class TestBatch:
         assert result is not None
         assert result[2] is True
         assert result[3] == value.encode()
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cluster_move_transaction(self, glide_client: GlideClusterClient):
+        keyslot = get_random_string(3)
+        key = "{{{}}}:{}".format(keyslot, get_random_string(10))  # to get the same slot
+        value = get_random_string(5)
+        transaction = ClusterBatch(is_atomic=True)
+        transaction.set(key, value)
+        transaction.move(key, 1)
+        result = await glide_client.exec(transaction, raise_on_error=True)
+        assert result is not None
+        assert result[1] is True
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

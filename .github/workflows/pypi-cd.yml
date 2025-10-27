@@ -383,6 +383,8 @@ jobs:
               env:
                   CIBW_BUILD: ${{ github.event_name != 'pull_request' && 'cp39-* cp310-* cp311-* cp312-* cp313-* pp39-* pp310-* pp311-*' || 'cp313-*' }}
                   CIBW_SKIP: "*-musl* *i686* *i386*"
+                  CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+                  CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
                   CIBW_ARCHS_LINUX: auto
                   CIBW_ARCHS_MACOS: auto
                   CIBW_ENABLE: ${{ steps.cibw_config.outputs.enable_flags }}

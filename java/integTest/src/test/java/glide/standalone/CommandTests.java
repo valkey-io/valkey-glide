@@ -446,9 +446,9 @@ public class CommandTests {
                 response.contains("ver") && response.contains(SERVER_VERSION.toString()),
                 "Expected LOLWUT output to contain version string");
 
-        response = regularClient.lolwut(new int[] {30, 4, 4}).get();
+        response = regularClient.lolwut(5, new int[] {30, 4, 4}).get();
         System.out.printf(
-                "%nLOLWUT standalone client standard response with params 30 4 4%n%s%n", response);
+                "%nLOLWUT standalone client ver 5 response with params 30 4 4%n%s%n", response);
         assertTrue(
                 response.contains("ver") && response.contains(SERVER_VERSION.toString()),
                 "Expected LOLWUT output to contain version string");
@@ -465,6 +465,25 @@ public class CommandTests {
         assertTrue(
                 response.contains("ver") && response.contains(SERVER_VERSION.toString()),
                 "Expected LOLWUT output to contain version string");
+
+        // Test LOLWUT version 9 (available in Valkey 9.0.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            // Test with version 9 and 2 parameters (columns, rows)
+            response = regularClient.lolwut(9, new int[] {30, 4}).get();
+            System.out.printf(
+                    "%nLOLWUT standalone client ver 9 response with params 30 4%n%s%n", response);
+            assertTrue(
+                    response.contains("ver") && response.contains(SERVER_VERSION.toString()),
+                    "Expected LOLWUT output to contain version string");
+
+            // Test with version 9 and 4 parameters (columns, rows, real, imaginary)
+            response = regularClient.lolwut(9, new int[] {40, 20, 1, 2}).get();
+            System.out.printf(
+                    "%nLOLWUT standalone client ver 9 response with params 40 20 1 2%n%s%n", response);
+            assertTrue(
+                    response.contains("ver") && response.contains(SERVER_VERSION.toString()),
+                    "Expected LOLWUT output to contain version string");
+        }
     }
 
     @ParameterizedTest

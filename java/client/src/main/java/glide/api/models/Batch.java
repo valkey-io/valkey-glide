@@ -1,12 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
-import static command_request.CommandRequestOuterClass.RequestType.Copy;
-import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
-import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
-import static glide.api.commands.GenericCommands.DB_VALKEY_API;
 import static glide.utils.ArgsBuilder.checkTypeOrThrow;
 import static glide.utils.ArgsBuilder.newArgsBuilder;
 
@@ -86,76 +82,6 @@ public class Batch extends BaseBatch<Batch> {
      */
     public Batch select(long index) {
         protobufBatch.addCommands(buildCommand(Select, newArgsBuilder().add(index)));
-        return this;
-    }
-
-    /**
-     * Move <code>key</code> from the currently selected database to the database specified by <code>
-     * dbIndex</code>.
-     *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
-     * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
-     * @param key The key to move.
-     * @param dbIndex The index of the database to move <code>key</code> to.
-     * @return Command Response - <code>true</code> if <code>key</code> was moved, or <code>false
-     *     </code> if the <code>key</code> already exists in the destination database or does not
-     *     exist in the source database.
-     */
-    public <ArgType> Batch move(ArgType key, long dbIndex) {
-        checkTypeOrThrow(key);
-        protobufBatch.addCommands(buildCommand(Move, newArgsBuilder().add(key).add(dbIndex)));
-        return this;
-    }
-
-    /**
-     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
-     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
-     * </code> key first if it already exists, otherwise performs no action.
-     *
-     * @since Valkey 6.2.0 and above.
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
-     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
-     * @param source The key to the source value.
-     * @param destination The key where the value should be copied to.
-     * @param destinationDB The alternative logical database index for the destination key.
-     * @return Command Response - <code>true</code> if <code>source</code> was copied, <code>false
-     *     </code> if <code>source</code> was not copied.
-     */
-    public <ArgType> Batch copy(
-            @NonNull ArgType source, @NonNull ArgType destination, long destinationDB) {
-        return copy(source, destination, destinationDB, false);
-    }
-
-    /**
-     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
-     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
-     * </code> key first if it already exists, otherwise performs no action.
-     *
-     * @since Valkey 6.2.0 and above.
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
-     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
-     * @param source The key to the source value.
-     * @param destination The key where the value should be copied to.
-     * @param destinationDB The alternative logical database index for the destination key.
-     * @param replace If the destination key should be removed before copying the value to it.
-     * @return Command Response - <code>true</code> if <code>source</code> was copied, <code>false
-     *     </code> if <code>source</code> was not copied.
-     */
-    public <ArgType> Batch copy(
-            @NonNull ArgType source, @NonNull ArgType destination, long destinationDB, boolean replace) {
-        checkTypeOrThrow(source);
-        protobufBatch.addCommands(
-                buildCommand(
-                        Copy,
-                        newArgsBuilder()
-                                .add(source)
-                                .add(destination)
-                                .add(DB_VALKEY_API)
-                                .add(destinationDB)
-                                .addIf(REPLACE_VALKEY_API, replace)));
         return this;
     }
 

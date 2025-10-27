@@ -69,6 +69,7 @@ from glide_shared import (
     GeoUnit,
     GlideError,
     HashFieldConditionalChange,
+    IamAuthConfig,
     IdBound,
     InfBound,
     InfoSection,
@@ -104,6 +105,7 @@ from glide_shared import (
     ScoreBoundary,
     ScoreFilter,
     ServerCredentials,
+    ServiceType,
     SignedEncoding,
     SlotIdRoute,
     SlotKeyRoute,
@@ -151,6 +153,7 @@ from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger
 from .sync_commands import ft, glide_json
+from .sync_commands.cluster_scan_cursor import ClusterScanCursor
 from .sync_commands.script import Script
 
 __all__ = [
@@ -175,6 +178,8 @@ __all__ = [
     "BackoffStrategy",
     "ReadFrom",
     "ServerCredentials",
+    "ServiceType",
+    "IamAuthConfig",
     "NodeAddress",
     "ProtocolVersion",
     "PeriodicChecksManualInterval",
@@ -319,4 +324,6 @@ __all__ = [
     "QueryType",
     # Script
     "Script",
+    # Cluster scan
+    "ClusterScanCursor",
 ]

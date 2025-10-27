@@ -119,12 +119,14 @@ from .config import (
     BackoffStrategy,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
+    IamAuthConfig,
     NodeAddress,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
     ProtocolVersion,
     ReadFrom,
     ServerCredentials,
+    ServiceType,
     TlsAdvancedConfiguration,
 )
 from .constants import (
@@ -186,6 +188,8 @@ __all__ = [
     "BackoffStrategy",
     "ReadFrom",
     "ServerCredentials",
+    "ServiceType",
+    "IamAuthConfig",
     "NodeAddress",
     "ProtocolVersion",
     "PeriodicChecksManualInterval",
