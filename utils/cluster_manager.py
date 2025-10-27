@@ -6,19 +6,13 @@ import argparse
 import json
 import logging
 import os
-import platform
 import random
 import re
-import shutil
 import signal
 import socket
 import string
 import subprocess
 import time
-try:
-    import psutil  # type: ignore
-except ImportError:
-    psutil = None
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -44,9 +38,17 @@ SERVER_KEY = f"{TLS_FOLDER}/server.key"
 
 def get_command(commands: List[str]) -> str:
     for command in commands:
-        if shutil.which(command):
-            return command
-            
+        try:
+            result = subprocess.run(
+                ["which", command],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if result.returncode == 0:
+                return command
+        except Exception as e:
+            logging.error(f"Error checking {command}: {e}")
     raise Exception(f"Neither {' nor '.join(commands)} found in the system.")
 
 
@@ -377,7 +379,6 @@ def start_server(
 
     # Define command arguments
     logfile = f"{node_folder}/server.log"
-    
     cmd_args = [
         get_server_command(),
         f"{'--tls-port' if tls else '--port'}",
@@ -453,8 +454,6 @@ def create_servers(
     logging.debug("## Creating servers")
     ready_servers: List[Server] = []
     nodes_count = shard_count * (1 + replica_count)
-    logging.info(f"DEBUG: create_servers called with shard_count={shard_count}, replica_count={replica_count}")
-    logging.info(f"DEBUG: Expected nodes_count = {shard_count} * (1 + {replica_count}) = {nodes_count}")
     tls_args = []
     if tls is True:
         # Use custom TLS files if provided, otherwise use default ones
@@ -478,7 +477,7 @@ def create_servers(
             "--tls-auth-clients",  # Make it so client doesn't have to send cert
             "no",
             "--bind",
-            host,  # Bind to WSL IP for external access
+            host,
             "--port",
             "0",
         ]
@@ -486,7 +485,6 @@ def create_servers(
             tls_args.append("--tls-replication")
             tls_args.append("yes")
     servers_to_check = set()
-    logging.info(f"Starting {nodes_count} nodes (shard_count={shard_count}, replica_count={replica_count})")
     # Start all servers
     for i in range(nodes_count):
         port = ports[i] if ports else None
@@ -528,9 +526,6 @@ def create_servers(
     logging.debug("All servers are up!")
     toc = time.perf_counter()
     logging.debug(f"create_servers() Elapsed time: {toc - tic:0.4f}")
-    logging.info(f"DEBUG: create_servers returning {len(ready_servers)} servers (expected {nodes_count})")
-    for i, server in enumerate(ready_servers):
-        logging.info(f"DEBUG: Returning server {i+1}: {server.host}:{server.port}")
     return ready_servers
 
 
@@ -544,45 +539,9 @@ def create_cluster(
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
 ):
-    logging.info(f"DEBUG: create_cluster() called with {len(servers)} servers")
-    for i, server in enumerate(servers):
-        logging.info(f"DEBUG: create_cluster() server {i+1}: {server.host}:{server.port}")
-    
     tic = time.perf_counter()
     servers_tuple = (str(server) for server in servers)
-    logging.info(f"Creating cluster with {len(servers)} servers: {list(str(s) for s in servers)}")
-    logging.info(f"Cluster replicas: {replica_count}")
-    
-    # Check cluster bus ports are accessible
-    logging.info("Checking cluster bus ports...")
-    for server in servers:
-        cluster_bus_port = server.port + 10000
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(1)
-            result = sock.connect_ex((server.host, cluster_bus_port))
-            if result == 0:
-                logging.info(f"Cluster bus port {server.host}:{cluster_bus_port} is accessible")
-            else:
-                logging.warning(f"Cluster bus port {server.host}:{cluster_bus_port} is not accessible (result: {result})")
-            sock.close()
-        except Exception as e:
-            logging.warning(f"Failed to check cluster bus port {server.host}:{cluster_bus_port}: {e}")
-    
     logging.debug("## Starting cluster creation...")
-    
-    cmd_args = [
-        get_cli_command(),
-        *get_cli_option_args(cluster_folder, use_tls),
-        "--cluster",
-        "create",
-        *servers_tuple,
-        "--cluster-replicas",
-        str(replica_count),
-        "--cluster-yes",
-    ]
-    logging.info(f"Executing cluster create command: {' '.join(cmd_args)}")
-    
     p = subprocess.Popen(
         [
             get_cli_command(),
@@ -599,177 +558,6 @@ def create_cluster(
         text=True,
     )
     output, err = p.communicate(timeout=40)
-    logging.info(f"Cluster create output: {output}")
-    if err:
-        logging.error(f"Cluster create error: {err}")
-    
-    # UNCONDITIONAL debugging - always check processes after cluster create
-    logging.info("=== IMMEDIATE PROCESS CHECK (ALWAYS RUNS) ===")
-    running_count = 0
-    for i, server in enumerate(servers):
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(0.5)  # Very quick check
-            result = sock.connect_ex((server.host, server.port))
-            sock.close()
-            if result == 0:
-                running_count += 1
-                logging.info(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - RESPONSIVE")
-            else:
-                logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - NOT RESPONSIVE")
-        except Exception as e:
-            logging.warning(f"Server {i+1}/{len(servers)}: {server.host}:{server.port} - ERROR: {e}")
-    logging.info(f"IMMEDIATE STATUS: {running_count}/{len(servers)} servers responsive")
-    
-    # WSL NETWORKING DIAGNOSTICS (fast checks only)
-    if len(servers) > 6:  # Only run for high-replica clusters
-        logging.info("=== WSL NETWORKING DIAGNOSTICS ===")
-        
-        # 1. Cluster bus connectivity (sample only first 3 servers to save time)
-        logging.info("Testing cluster bus connectivity (sample)...")
-        for i in range(min(3, len(servers))):
-            server = servers[i]
-            cluster_bus_port = server.port + 10000
-            try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(0.3)
-                result = sock.connect_ex((server.host, cluster_bus_port))
-                sock.close()
-                status = "ACCESSIBLE" if result == 0 else "NOT_ACCESSIBLE"
-                logging.info(f"Cluster bus {server.host}:{cluster_bus_port} - {status}")
-            except Exception as e:
-                logging.warning(f"Cluster bus {server.host}:{cluster_bus_port} - ERROR: {e}")
-        
-        # 2. Concurrent connection test (quick)
-        logging.info("Testing concurrent connections...")
-        open_sockets = []
-        max_concurrent = 0
-        for i, server in enumerate(servers):
-            try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(0.2)
-                sock.connect((server.host, server.port))
-                open_sockets.append(sock)
-                max_concurrent = i + 1
-            except Exception as e:
-                logging.warning(f"Concurrent connection limit reached at {i+1}: {e}")
-                break
-        # Close all sockets
-        for sock in open_sockets:
-            try:
-                sock.close()
-            except:
-                pass
-        logging.info(f"Max concurrent connections: {max_concurrent}/{len(servers)}")
-        
-        # 3. WSL resource check (if psutil available)
-        if psutil is not None:
-            try:
-                mem = psutil.virtual_memory()
-                logging.info(f"WSL Memory: {mem.percent:.1f}% used ({mem.available // (1024*1024)} MB available)")
-                logging.info(f"WSL Process count: {len(psutil.pids())}")
-            except Exception as e:
-                logging.warning(f"Resource check failed: {e}")
-        
-        # WSL NETWORKING DIAGNOSTICS (fast checks only)
-        if len(servers) > 6:  # Only run for high-replica clusters
-            logging.info("=== WSL NETWORKING DIAGNOSTICS ===")
-            
-            # 1. Detailed cluster nodes analysis
-            logging.info("Analyzing cluster topology...")
-            try:
-                cluster_nodes_output = redis_cli_run_command([
-                    get_cli_command(), "-h", servers[0].host, "-p", str(servers[0].port),
-                    "cluster", "nodes"
-                ])
-                if cluster_nodes_output:
-                    lines = cluster_nodes_output.strip().split('\n')
-                    logging.info(f"CLUSTER NODES returned {len(lines)} lines:")
-                    for i, line in enumerate(lines):
-                        if line.strip():
-                            # Parse node info: node_id host:port@cluster_port flags master/slave
-                            parts = line.split()
-                            if len(parts) >= 3:
-                                node_id = parts[0][:8]  # First 8 chars of node ID
-                                host_port = parts[1].split('@')[0]  # Remove cluster port
-                                flags = parts[2]
-                                logging.info(f"  Node {i+1}: {host_port} ({flags}) ID:{node_id}")
-                            else:
-                                logging.info(f"  Node {i+1}: {line.strip()}")
-                else:
-                    logging.warning("CLUSTER NODES returned no output")
-                    
-                # Also check CLUSTER SLOTS which is what Java client uses for routing
-                cluster_slots_output = redis_cli_run_command([
-                    get_cli_command(), "-h", servers[0].host, "-p", str(servers[0].port),
-                    "cluster", "slots"
-                ])
-                if cluster_slots_output:
-                    logging.info("CLUSTER SLOTS output:")
-                    logging.info(cluster_slots_output)
-                else:
-                    logging.warning("CLUSTER SLOTS returned no output - THIS IS THE ROUTING PROBLEM")
-                    
-            except Exception as e:
-                logging.error(f"Failed to get cluster topology: {e}")
-            
-            # 2. Check cluster info from multiple nodes
-            logging.info("Checking cluster info from different nodes...")
-            for i in range(min(3, len(servers))):
-                server = servers[i]
-                try:
-                    cluster_info = redis_cli_run_command([
-                        get_cli_command(), "-h", server.host, "-p", str(server.port),
-                        "cluster", "info"
-                    ])
-                    if cluster_info and "cluster_known_nodes:" in cluster_info:
-                        known_nodes = [line for line in cluster_info.split('\n') if 'cluster_known_nodes:' in line]
-                        if known_nodes:
-                            logging.info(f"  Server {server.host}:{server.port} sees: {known_nodes[0]}")
-                except Exception as e:
-                    logging.warning(f"  Server {server.host}:{server.port} cluster info failed: {e}")
-            
-            # 3. Individual server health (ping test - very fast) - FIXED: Remove --connect-timeout
-            logging.info("Testing individual server health...")
-            healthy_servers = 0
-            for i, server in enumerate(servers[:5]):  # Test first 5 only to save time
-                try:
-                    ping_result: Optional[str] = redis_cli_run_command([
-                        get_cli_command(), "-h", server.host, "-p", str(server.port), 
-                        "ping"  # Removed --connect-timeout which caused the error
-                    ])
-                    if ping_result is not None and "PONG" in ping_result:
-                        healthy_servers += 1
-                        logging.info(f"Server {i+1} health: OK")
-                    else:
-                        logging.warning(f"Server {i+1} health: NO PONG")
-                except Exception as e:
-                    logging.warning(f"Server {i+1} health: ERROR - {e}")
-            logging.info(f"Healthy servers (sample): {healthy_servers}/5")
-            logging.info("=== END WSL DIAGNOSTICS ===")
-    
-    logging.info("=== END IMMEDIATE CHECK ===")
-    
-    # IMMEDIATE debugging - check processes right after cluster create, before any waiting
-    if replica_count > 0:
-        logging.info("=== REPLICA-SPECIFIC CHECK ===")
-        logging.info(f"Expected: {len(servers)} total servers ({len(servers) // (1 + replica_count)} masters + {len(servers) - len(servers) // (1 + replica_count)} replicas)")
-        logging.info("=== END REPLICA CHECK ===")
-    
-    # Parse the output to see what happened
-    if ">>> Performing hash slots allocation on" in output:
-        logging.info("Cluster create command started slot allocation")
-    if ">>> Nodes configuration updated" in output:
-        logging.info("Cluster nodes configuration was updated")
-    if ">>> Assign a different config epoch to each node" in output:
-        logging.info("Config epochs assigned to nodes")
-    if ">>> Sending CLUSTER MEET messages to join the cluster" in output:
-        logging.info("CLUSTER MEET messages sent")
-    if "Waiting for the cluster to join" in output:
-        logging.info("Waiting for cluster to join...")
-    if ">>> Performing Cluster Check" in output:
-        logging.info("Performing cluster check")
-        
     if err or "[OK] All 16384 slots covered." not in output:
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
@@ -895,13 +683,11 @@ def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
         )
         output, err = p.communicate(timeout=5)
         if err:
-            logging.error(f"CLI command failed: {' '.join(cmd_args[:3])}... - Error: {err}")
             raise Exception(
                 f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
             )
         return output
     except subprocess.TimeoutExpired:
-        logging.error(f"CLI command timed out: {' '.join(cmd_args[:3])}...")
         return None
 
 
@@ -929,11 +715,7 @@ def wait_for_all_topology_views(
             "slots",
         ]
         logging.debug(f"Executing: {cmd_args}")
-        
-        # Detect WSL environment and adjust behavior
-        is_wsl = os.path.exists('/proc/version') and 'microsoft' in open('/proc/version').read().lower()
-        retries = 320 if is_wsl else 160  # Double timeout for WSL
-        
+        retries = 80
         while retries >= 0:
             output = redis_cli_run_command(cmd_args)
             logging.debug(f"Checking server {server.host}:{server.port}, output: {output}")
@@ -960,8 +742,6 @@ def wait_for_all_topology_views(
                     break
             else:
                 retries -= 1
-                if retries == 0:
-                    logging.error(f"Topology wait failed for {server.host}:{server.port} - no CLI output received")
                 time.sleep(1)
                 continue
 
@@ -1279,6 +1059,15 @@ def stop_cluster(
 def main():
     parser = argparse.ArgumentParser(description="Cluster manager tool")
     parser.add_argument(
+        "-H",
+        "--host",
+        type=str,
+        help="Host address (default: %(default)s)",
+        required=False,
+        default="127.0.0.1",
+    )
+
+    parser.add_argument(
         "--tls",
         default=False,
         action="store_true",
@@ -1393,15 +1182,6 @@ def main():
         required=False,
     )
 
-    parser_start.add_argument(
-        "-H",
-        "--host",
-        type=str,
-        help="Host address (default: %(default)s)",
-        required=False,
-        default="127.0.0.1",
-    )
-
     # Stop parser
     parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
     parser_stop.add_argument(
@@ -1439,15 +1219,6 @@ def main():
         type=str,
         help="Optionally, provide comma separated list of process IDs to terminate",
         default="",
-    )
-
-    parser_stop.add_argument(
-        "-H",
-        "--host",
-        type=str,
-        help="Host address (default: %(default)s)",
-        required=False,
-        default="127.0.0.1",
     )
 
     args = parser.parse_args()
