@@ -730,8 +730,7 @@ mod standalone_client_tests {
             );
 
             let server_addr = server.get_client_addr();
-            // Skip wait_for_server_to_become_ready since it would also fail with wrong certificates
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await; // Give server time to start
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
             // Try to connect with wrong root certificate
             let mut connection_request = create_connection_request(
@@ -744,6 +743,15 @@ mod standalone_client_tests {
             );
             connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
             connection_request.root_certs = vec![wrong_ca_cert_bytes.into()];
+            // Use minimal retries to fail fast
+            connection_request.connection_retry_strategy =
+                Some(glide_core::connection_request::ConnectionRetryStrategy {
+                    number_of_retries: 1,
+                    factor: 1,
+                    exponent_base: 1,
+                    ..Default::default()
+                })
+                .into();
 
             // Connection should fail due to certificate mismatch
             let client_result =
