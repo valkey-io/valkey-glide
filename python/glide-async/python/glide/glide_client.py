@@ -48,6 +48,7 @@ from glide_shared.exceptions import (
 from glide_shared.protobuf.command_request_pb2 import (
     Command,
     CommandRequest,
+    RefreshIamToken,
     RequestType,
 )
 from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
@@ -755,6 +756,15 @@ class BaseClient(CoreCommands):
             if self.config.credentials is None:
                 self.config.credentials = ServerCredentials(password=password or "")
                 self.config.credentials.password = password or ""
+        return response
+
+    async def _refresh_iam_token(self) -> TResult:
+        request = CommandRequest()
+        request.callback_idx = self._get_callback_index()
+        request.refresh_iam_token.CopyFrom(
+            RefreshIamToken()
+        )  # Empty message, just triggers the refresh
+        response = await self._write_request_await_response(request)
         return response
 
 

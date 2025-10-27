@@ -218,6 +218,29 @@ func (client *ClusterClient) CustomCommand(ctx context.Context, args []string) (
 	return models.CreateClusterValue[any](data), nil
 }
 
+// Select changes the currently selected database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	index - The index of the database to select.
+//
+// Return value:
+//
+//	A simple `"OK"` response.
+//
+// [valkey.io]: https://valkey.io/commands/select/
+func (client *ClusterClient) Select(ctx context.Context, index int64) (string, error) {
+	result, err := client.executeCommand(ctx, C.Select, []string{utils.IntToString(index)})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+
+	return handleOkResponse(result)
+}
+
 // Gets information and statistics about the server.
 // The command will be routed to all primary nodes.
 //
