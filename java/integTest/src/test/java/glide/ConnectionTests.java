@@ -251,7 +251,7 @@ public class ConnectionTests {
     public void test_az_affinity_non_existing_az() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
 
-        int nGetCalls = 3; // Match number of replicas
+        int nGetCalls = 4;
         int nReplicaCalls = 1;
         String getCmdstat = String.format("cmdstat_get:calls=%d", nReplicaCalls);
 
@@ -272,7 +272,7 @@ public class ConnectionTests {
         //  We expect the calls to be distributed evenly among the replicas
         long matchingEntries =
                 infoData.values().stream().filter(value -> value.contains(getCmdstat)).count();
-        assertEquals(3, matchingEntries); // 3 replicas (1 per shard) instead of 4
+        assertEquals(4, matchingEntries);
         azTestClient.close();
     }
 
