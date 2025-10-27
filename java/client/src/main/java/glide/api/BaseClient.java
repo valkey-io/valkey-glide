@@ -82,6 +82,7 @@ import static command_request.CommandRequestOuterClass.RequestType.LTrim;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectIdleTime;
@@ -286,6 +287,7 @@ import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
+import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
 import glide.connectors.handlers.MessageHandler;
@@ -940,6 +942,7 @@ public abstract class BaseClient
      *     password rotation on the server side.
      * @param password A new password to set.
      * @return <code>"OK"</code>.
+     * @throws ConfigurationError if the client is using IAM authentication.
      * @example
      *     <pre>{@code
      * String response = client.resetConnectionPassword("new_password", RE_AUTHENTICATE).get();
@@ -948,6 +951,13 @@ public abstract class BaseClient
      */
     public CompletableFuture<String> updateConnectionPassword(
             @NonNull String password, boolean immediateAuth) {
+        // Check if using IAM authentication
+        ServerCredentials creds = connectionManager.getCredentials();
+        if (creds != null && creds.getIamConfig() != null) {
+            throw new ConfigurationError(
+                    "updateConnectionPassword is not supported when IAM authentication is enabled.");
+        }
+
         return commandManager
                 .submitPasswordUpdate(Optional.of(password), immediateAuth, this::handleStringResponse)
                 .thenApply(
@@ -977,6 +987,7 @@ public abstract class BaseClient
      *     will be returned. <br>
      *     The default is `false`.
      * @return <code>"OK"</code>.
+     * @throws ConfigurationError if the client is using IAM authentication.
      * @example
      *     <pre>{@code
      * String response = client.resetConnectionPassword(true).get();
@@ -984,6 +995,13 @@ public abstract class BaseClient
      * }</pre>
      */
     public CompletableFuture<String> updateConnectionPassword(boolean immediateAuth) {
+        // Check if using IAM authentication
+        ServerCredentials creds = connectionManager.getCredentials();
+        if (creds != null && creds.getIamConfig() != null) {
+            throw new ConfigurationError(
+                    "updateConnectionPassword is not supported when IAM authentication is enabled.");
+        }
+
         return commandManager
                 .submitPasswordUpdate(Optional.empty(), immediateAuth, this::handleStringResponse)
                 .thenApply(
@@ -993,6 +1011,46 @@ public abstract class BaseClient
                             }
                             return result;
                         });
+    }
+
+    /**
+     * Manually refresh the IAM token for the current connection.
+     *
+     * <p>This method is only available if the client was created with IAM authentication. It triggers
+     * an immediate refresh of the IAM token and updates the connection.
+     *
+     * @return A CompletableFuture that resolves to <code>"OK"</code> on success.
+     * @throws ConfigurationError if the client is not using IAM authentication.
+     * @example
+     *     <pre>{@code
+     * // Create client with IAM authentication
+     * GlideClientConfiguration config = GlideClientConfiguration.builder()
+     *     .address(NodeAddress.builder().host("my-cluster.amazonaws.com").port(6379).build())
+     *     .credentials(ServerCredentials.builder()
+     *         .username("myUser")
+     *         .iamConfig(IamAuthConfig.builder()
+     *             .clusterName("my-cluster")
+     *             .service(ServiceType.ELASTICACHE)
+     *             .region("us-east-1")
+     *             .build())
+     *         .build())
+     *     .build();
+     * GlideClient client = GlideClient.createClient(config).get();
+     *
+     * // Manually refresh the IAM token
+     * String response = client.refreshIamToken().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    public CompletableFuture<String> refreshIamToken() {
+        // Check if using IAM authentication
+        ServerCredentials creds = connectionManager.getCredentials();
+        if (creds == null || creds.getIamConfig() == null) {
+            throw new ConfigurationError(
+                    "refreshIamToken is only available when IAM authentication is enabled.");
+        }
+
+        return commandManager.submitRefreshIamToken(this::handleStringResponse);
     }
 
     @Override
@@ -1116,6 +1174,18 @@ public abstract class BaseClient
     public CompletableFuture<String> msetBinary(@NonNull Map<GlideString, GlideString> keyValueMap) {
         GlideString[] args = convertMapToKeyValueGlideStringArray(keyValueMap);
         return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> move(@NonNull String key, long dbIndex) {
+        return commandManager.submitNewCommand(
+                Move, new String[] {key, Long.toString(dbIndex)}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> move(@NonNull GlideString key, long dbIndex) {
+        return commandManager.submitNewCommand(
+                Move, new GlideString[] {key, gs(Long.toString(dbIndex))}, this::handleBooleanResponse);
     }
 
     @Override
@@ -4975,6 +5045,51 @@ public abstract class BaseClient
     public CompletableFuture<Boolean> copy(
             @NonNull GlideString source, @NonNull GlideString destination) {
         GlideString[] arguments = new GlideString[] {source, destination};
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull String source, @NonNull String destination, long destinationDB) {
+        String[] arguments =
+                new String[] {source, destination, DB_VALKEY_API, Long.toString(destinationDB)};
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull GlideString source, @NonNull GlideString destination, long destinationDB) {
+        GlideString[] arguments =
+                new GlideString[] {
+                    source, destination, gs(DB_VALKEY_API), gs(Long.toString(destinationDB))
+                };
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull String source, @NonNull String destination, long destinationDB, boolean replace) {
+        String[] arguments =
+                new String[] {source, destination, DB_VALKEY_API, Long.toString(destinationDB)};
+        if (replace) {
+            arguments = ArrayUtils.add(arguments, REPLACE_VALKEY_API);
+        }
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull GlideString source,
+            @NonNull GlideString destination,
+            long destinationDB,
+            boolean replace) {
+        GlideString[] arguments =
+                new GlideString[] {
+                    source, destination, gs(DB_VALKEY_API), gs(Long.toString(destinationDB))
+                };
+        if (replace) {
+            arguments = ArrayUtils.add(arguments, gs(REPLACE_VALKEY_API));
+        }
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
 

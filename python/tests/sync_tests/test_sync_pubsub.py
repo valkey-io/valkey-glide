@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+import time
 from enum import IntEnum
 from typing import Any, List, Optional, Tuple, Union, cast
 
-import anyio
 import pytest
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (
     GlideClientConfiguration,
@@ -16,14 +15,16 @@ from glide_shared.config import (
 )
 from glide_shared.constants import OK
 from glide_shared.exceptions import ConfigurationError
+from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 
-from tests.async_tests.conftest import create_client
+from tests.sync_tests.conftest import create_sync_client
 from tests.utils.utils import (
-    check_if_server_version_lt,
     create_pubsub_subscription,
     decode_pubsub_msg,
     get_random_string,
     new_message,
+    run_sync_func_with_timeout_in_thread,
+    sync_check_if_server_version_lt,
 )
 
 
@@ -40,7 +41,7 @@ class MethodTesting(IntEnum):
     "Uses callback-based subscription method."
 
 
-async def create_two_clients_with_pubsub(
+def create_two_clients_with_pubsub(
     request,
     cluster_mode,
     client1_pubsub: Optional[Any] = None,
@@ -67,7 +68,7 @@ async def create_two_clients_with_pubsub(
         standalone_mode_pubsub1 = client1_pubsub
         standalone_mode_pubsub2 = client2_pubsub
 
-    client1 = await create_client(
+    client1 = create_sync_client(
         request,
         cluster_mode=cluster_mode,
         cluster_mode_pubsub=cluster_mode_pubsub1,
@@ -76,7 +77,7 @@ async def create_two_clients_with_pubsub(
         request_timeout=timeout,
     )
     try:
-        client2 = await create_client(
+        client2 = create_sync_client(
             request,
             cluster_mode=cluster_mode,
             cluster_mode_pubsub=cluster_mode_pubsub2,
@@ -85,27 +86,27 @@ async def create_two_clients_with_pubsub(
             request_timeout=timeout,
         )
     except Exception as e:
-        await client1.close()
+        client1.close()
         raise e
 
     return client1, client2
 
 
-async def get_message_by_method(
+def get_message_by_method(
     method: MethodTesting,
     client: TGlideClient,
     messages: Optional[List[PubSubMsg]] = None,
     index: Optional[int] = None,
 ):
     if method == MethodTesting.Async:
-        return decode_pubsub_msg(await client.get_pubsub_message())
+        return decode_pubsub_msg(client.get_pubsub_message())
     elif method == MethodTesting.Sync:
         return decode_pubsub_msg(client.try_get_pubsub_message())
     assert messages and (index is not None)
     return decode_pubsub_msg(messages[index])
 
 
-async def check_no_messages_left(
+def check_no_messages_left(
     method,
     client: TGlideClient,
     callback: Optional[List[Any]] = None,
@@ -114,8 +115,10 @@ async def check_no_messages_left(
     if method == MethodTesting.Async:
         # assert there are no messages to read
         with pytest.raises(TimeoutError):
-            with anyio.fail_after(3):
-                await client.get_pubsub_message()
+            run_sync_func_with_timeout_in_thread(
+                lambda: client.get_pubsub_message(),  # This blocks indefinitely
+                timeout=3.0,
+            )
     elif method == MethodTesting.Sync:
         assert client.try_get_pubsub_message() is None
     else:
@@ -123,7 +126,7 @@ async def check_no_messages_left(
         assert len(callback) == expected_callback_messages_count
 
 
-async def client_cleanup(
+def client_cleanup(
     client: Optional[Union[GlideClient, GlideClusterClient]],
     cluster_mode_subs: Optional[
         GlideClusterClientConfiguration.PubSubSubscriptions
@@ -153,28 +156,27 @@ async def client_cleanup(
                 == GlideClusterClientConfiguration.PubSubChannelModes.Pattern
             ):
                 cmd = "PUNSUBSCRIBE"
-            elif not await check_if_server_version_lt(client, "7.0.0"):
+            elif not sync_check_if_server_version_lt(client, "7.0.0"):
                 cmd = "SUNSUBSCRIBE"
             else:
                 # disregard sharded config for versions < 7.0.0
                 continue
 
             for channel_patern in channel_patterns:
-                await client.custom_command([cmd, channel_patern])
+                client.custom_command([cmd, channel_patern])
 
-    await client.close()
+    client.close()
     del client
     # The closure is not completed in the glide-core instantly
-    await anyio.sleep(1)
+    time.sleep(1)
 
 
-@pytest.mark.anyio
-class TestPubSub:
+class TestSyncPubSub:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_exact_happy_path(
+    def test_sync_pubsub_exact_happy_path(
         self,
         request,
         cluster_mode: bool,
@@ -206,17 +208,17 @@ class TestPubSub:
                 context=context,
             )
 
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
-            result = await publishing_client.publish(message, channel)
+            result = publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
             # allow the message to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
-            pubsub_msg = await get_message_by_method(
+            pubsub_msg = get_message_by_method(
                 method, listening_client, callback_messages, 0
             )
 
@@ -224,13 +226,13 @@ class TestPubSub:
             assert pubsub_msg.channel == channel
             assert pubsub_msg.pattern is None
 
-            await check_no_messages_left(method, listening_client, callback_messages, 1)
+            check_no_messages_left(method, listening_client, callback_messages, 1)
         finally:
-            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_pubsub_exact_happy_path_coexistence(
+    def test_sync_pubsub_exact_happy_path_coexistence(
         self, request, cluster_mode: bool
     ):
         """
@@ -252,19 +254,19 @@ class TestPubSub:
                 {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
             )
 
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
             for msg in [message, message2]:
-                result = await publishing_client.publish(msg, channel)
+                result = publishing_client.publish(msg, channel)
                 if cluster_mode:
                     assert result == 1
 
             # allow the message to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
-            async_msg_res = await listening_client.get_pubsub_message()
+            async_msg_res = listening_client.get_pubsub_message()
             sync_msg_res = listening_client.try_get_pubsub_message()
             assert sync_msg_res
             async_msg = decode_pubsub_msg(async_msg_res)
@@ -282,19 +284,20 @@ class TestPubSub:
 
             # assert there are no messages to read
             with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
+                run_sync_func_with_timeout_in_thread(
+                    lambda: listening_client.get_pubsub_message(), timeout=3.0
+                )
 
             assert listening_client.try_get_pubsub_message() is None
         finally:
-            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_exact_happy_path_many_channels(
+    def test_sync_pubsub_exact_happy_path_many_channels(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
@@ -336,22 +339,22 @@ class TestPubSub:
                 callback=callback,
                 context=context,
             )
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
             # Publish messages to each channel
             for channel, message in channels_and_messages.items():
-                result = await publishing_client.publish(message, channel)
+                result = publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
 
             # Allow the messages to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels_and_messages)):
-                pubsub_msg = await get_message_by_method(
+                pubsub_msg = get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
                 assert pubsub_msg.channel in channels_and_messages.keys()
@@ -362,16 +365,17 @@ class TestPubSub:
             # check that we received all messages
             assert channels_and_messages == {}
             # check no messages left
-            await check_no_messages_left(
+            check_no_messages_left(
                 method, listening_client, callback_messages, NUM_CHANNELS
             )
 
         finally:
-            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            client_cleanup(publishing_client, None)
+            pass
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_pubsub_exact_happy_path_many_channels_co_existence(
+    def test_sync_pubsub_exact_happy_path_many_channels_co_existence(
         self, request, cluster_mode: bool
     ):
         """
@@ -408,23 +412,23 @@ class TestPubSub:
                 },
             )
 
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
             # Publish messages to each channel
             for channel, message in channels_and_messages.items():
-                result = await publishing_client.publish(message, channel)
+                result = publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
 
             # Allow the messages to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
             # Check if all messages are received correctly by each method
             for index in range(len(channels_and_messages)):
                 method = MethodTesting.Async if index % 2 else MethodTesting.Sync
-                pubsub_msg = await get_message_by_method(method, listening_client)
+                pubsub_msg = get_message_by_method(method, listening_client)
 
                 assert pubsub_msg.channel in channels_and_messages.keys()
                 assert pubsub_msg.message == channels_and_messages[pubsub_msg.channel]
@@ -435,21 +439,22 @@ class TestPubSub:
             assert channels_and_messages == {}
             # assert there are no messages to read
             with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
+                run_sync_func_with_timeout_in_thread(
+                    lambda: listening_client.get_pubsub_message(), timeout=3.0
+                )
 
             assert listening_client.try_get_pubsub_message() is None
 
         finally:
-            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            client_cleanup(publishing_client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_sharded_pubsub(
+    def test_sync_sharded_pubsub(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
@@ -479,21 +484,21 @@ class TestPubSub:
                 context=context,
             )
 
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
             assert (
-                await cast(GlideClusterClient, publishing_client).publish(
+                cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
                 )
                 == publish_response
             )
 
             # allow the message to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
-            pubsub_msg = await get_message_by_method(
+            pubsub_msg = get_message_by_method(
                 method, listening_client, callback_messages, 0
             )
             assert pubsub_msg.message == message
@@ -501,15 +506,15 @@ class TestPubSub:
             assert pubsub_msg.pattern is None
 
             # assert there are no messages to read
-            await check_no_messages_left(method, listening_client, callback_messages, 1)
+            check_no_messages_left(method, listening_client, callback_messages, 1)
 
         finally:
-            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            client_cleanup(publishing_client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
-    async def test_sharded_pubsub_co_existence(self, request, cluster_mode: bool):
+    def test_sync_sharded_pubsub_co_existence(self, request, cluster_mode: bool):
         """
         Test sharded PUBSUB with co-existence of multiple messages.
 
@@ -533,27 +538,27 @@ class TestPubSub:
                 {},
             )
 
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
             assert (
-                await cast(GlideClusterClient, publishing_client).publish(
+                cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
                 )
                 == 1
             )
             assert (
-                await cast(GlideClusterClient, publishing_client).publish(
+                cast(GlideClusterClient, publishing_client).publish(
                     message2, channel, sharded=True
                 )
                 == 1
             )
 
             # allow the messages to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
-            async_msg_res = await listening_client.get_pubsub_message()
+            async_msg_res = listening_client.get_pubsub_message()
             sync_msg_res = listening_client.try_get_pubsub_message()
             assert sync_msg_res
             async_msg = decode_pubsub_msg(async_msg_res)
@@ -571,20 +576,21 @@ class TestPubSub:
 
             # assert there are no messages to read
             with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
+                run_sync_func_with_timeout_in_thread(
+                    lambda: listening_client.get_pubsub_message(), timeout=3.0
+                )
 
             assert listening_client.try_get_pubsub_message() is None
         finally:
-            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            client_cleanup(publishing_client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_sharded_pubsub_many_channels(
+    def test_sync_sharded_pubsub_many_channels(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
@@ -624,25 +630,25 @@ class TestPubSub:
                 context=context,
             )
 
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
             # Publish messages to each channel
             for channel, message in channels_and_messages.items():
                 assert (
-                    await cast(GlideClusterClient, publishing_client).publish(
+                    cast(GlideClusterClient, publishing_client).publish(
                         message, channel, sharded=True
                     )
                     == publish_response
                 )
 
             # Allow the messages to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels_and_messages)):
-                pubsub_msg = await get_message_by_method(
+                pubsub_msg = get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
                 assert pubsub_msg.channel in channels_and_messages.keys()
@@ -654,23 +660,21 @@ class TestPubSub:
             assert channels_and_messages == {}
 
             # Assert there are no more messages to read
-            await check_no_messages_left(
+            check_no_messages_left(
                 method, listening_client, callback_messages, NUM_CHANNELS
             )
 
         finally:
             if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub if cluster_mode else None
-                )
+                client_cleanup(listening_client, pub_sub if cluster_mode else None)
             if publishing_client:
-                await client_cleanup(publishing_client, None)
+                client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_pattern(
+    def test_sync_pubsub_pattern(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
@@ -704,21 +708,21 @@ class TestPubSub:
                 callback=callback,
                 context=context,
             )
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
             for channel, message in channels.items():
-                result = await publishing_client.publish(message, channel)
+                result = publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
 
             # allow the message to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels)):
-                pubsub_msg = await get_message_by_method(
+                pubsub_msg = get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
                 assert pubsub_msg.channel in channels.keys()
@@ -729,14 +733,14 @@ class TestPubSub:
             # check that we received all messages
             assert channels == {}
 
-            await check_no_messages_left(method, listening_client, callback_messages, 2)
+            check_no_messages_left(method, listening_client, callback_messages, 2)
 
         finally:
-            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_pubsub_pattern_co_existence(self, request, cluster_mode: bool):
+    def test_sync_pubsub_pattern_co_existence(self, request, cluster_mode: bool):
         """
         Tests the coexistence of async and sync message retrieval methods in pattern-based PUBSUB.
 
@@ -762,22 +766,22 @@ class TestPubSub:
                 {GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
             )
 
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
             for channel, message in channels.items():
-                result = await publishing_client.publish(message, channel)
+                result = publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
 
             # allow the message to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
             # Check if all messages are received correctly by each method
             for index in range(len(channels)):
                 method = MethodTesting.Async if index % 2 else MethodTesting.Sync
-                pubsub_msg = await get_message_by_method(method, listening_client)
+                pubsub_msg = get_message_by_method(method, listening_client)
 
                 assert pubsub_msg.channel in channels.keys()
                 assert pubsub_msg.message == channels[pubsub_msg.channel]
@@ -789,20 +793,21 @@ class TestPubSub:
 
             # assert there are no more messages to read
             with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
+                run_sync_func_with_timeout_in_thread(
+                    lambda: listening_client.get_pubsub_message(), timeout=3.0
+                )
 
             assert listening_client.try_get_pubsub_message() is None
 
         finally:
-            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_pattern_many_channels(
+    def test_sync_pubsub_pattern_many_channels(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
@@ -836,21 +841,21 @@ class TestPubSub:
                 callback=callback,
                 context=context,
             )
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
             for channel, message in channels.items():
-                result = await publishing_client.publish(message, channel)
+                result = publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
 
             # allow the message to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels)):
-                pubsub_msg = await get_message_by_method(
+                pubsub_msg = get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
                 assert pubsub_msg.channel in channels.keys()
@@ -861,19 +866,19 @@ class TestPubSub:
             # check that we received all messages
             assert channels == {}
 
-            await check_no_messages_left(
+            check_no_messages_left(
                 method, listening_client, callback_messages, NUM_CHANNELS
             )
 
         finally:
-            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_combined_exact_and_pattern_one_client(
+    def test_sync_pubsub_combined_exact_and_pattern_one_client(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
@@ -893,16 +898,16 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}:{}:{}".format("channel", get_random_string(5), i): get_random_string(
+                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
                     10
                 )
-                for i in range(NUM_CHANNELS)
+                for _ in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}:{}".format("pattern", get_random_string(5), i): get_random_string(
+                "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(
                     5
                 )
-                for i in range(NUM_CHANNELS)
+                for _ in range(NUM_CHANNELS)
             }
 
             all_channels_and_messages = {
@@ -938,7 +943,7 @@ class TestPubSub:
                 context=context,
             )
 
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request,
                 cluster_mode,
                 pub_sub_exact,
@@ -946,16 +951,16 @@ class TestPubSub:
 
             # Publish messages to all channels
             for channel, message in all_channels_and_messages.items():
-                result = await publishing_client.publish(message, channel)
+                result = publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
 
             # allow the message to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(all_channels_and_messages)):
-                pubsub_msg = await get_message_by_method(
+                pubsub_msg = get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
                 pattern = (
@@ -973,20 +978,18 @@ class TestPubSub:
             # check that we received all messages
             assert all_channels_and_messages == {}
 
-            await check_no_messages_left(
+            check_no_messages_left(
                 method, listening_client, callback_messages, NUM_CHANNELS * 2
             )
         finally:
-            await client_cleanup(
-                listening_client, pub_sub_exact if cluster_mode else None
-            )
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub_exact if cluster_mode else None)
+            client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_combined_exact_and_pattern_multiple_clients(
+    def test_sync_pubsub_combined_exact_and_pattern_multiple_clients(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
@@ -1013,16 +1016,16 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}:{}:{}".format("channel", get_random_string(5), i): get_random_string(
+                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
                     10
                 )
-                for i in range(NUM_CHANNELS)
+                for _ in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}:{}".format("pattern", get_random_string(5), i): get_random_string(
+                "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(
                     5
                 )
-                for i in range(NUM_CHANNELS)
+                for _ in range(NUM_CHANNELS)
             }
 
             all_channels_and_messages = {
@@ -1057,7 +1060,7 @@ class TestPubSub:
             (
                 listening_client_exact,
                 publishing_client,
-            ) = await create_two_clients_with_pubsub(
+            ) = create_two_clients_with_pubsub(
                 request,
                 cluster_mode,
                 pub_sub_exact,
@@ -1080,22 +1083,20 @@ class TestPubSub:
             (
                 listening_client_pattern,
                 client_dont_care,
-            ) = await create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub_pattern
-            )
+            ) = create_two_clients_with_pubsub(request, cluster_mode, pub_sub_pattern)
 
             # Publish messages to all channels
             for channel, message in all_channels_and_messages.items():
-                result = await publishing_client.publish(message, channel)
+                result = publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
 
             # allow the messages to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
             # Verify messages for exact PUBSUB
             for index in range(len(exact_channels_and_messages)):
-                pubsub_msg = await get_message_by_method(
+                pubsub_msg = get_message_by_method(
                     method, listening_client_exact, callback_messages, index
                 )
                 assert pubsub_msg.channel in exact_channels_and_messages.keys()
@@ -1111,7 +1112,7 @@ class TestPubSub:
 
             # Verify messages for pattern PUBSUB
             for index in range(len(pattern_channels_and_messages)):
-                pubsub_msg = await get_message_by_method(
+                pubsub_msg = get_message_by_method(
                     method, listening_client_pattern, callback_messages_pattern, index
                 )
                 assert pubsub_msg.channel in pattern_channels_and_messages.keys()
@@ -1125,10 +1126,10 @@ class TestPubSub:
             # check that we received all messages
             assert pattern_channels_and_messages == {}
 
-            await check_no_messages_left(
+            check_no_messages_left(
                 method, listening_client_exact, callback_messages, NUM_CHANNELS
             )
-            await check_no_messages_left(
+            check_no_messages_left(
                 method,
                 listening_client_pattern,
                 callback_messages_pattern,
@@ -1136,21 +1137,21 @@ class TestPubSub:
             )
 
         finally:
-            await client_cleanup(
+            client_cleanup(
                 listening_client_exact, pub_sub_exact if cluster_mode else None
             )
-            await client_cleanup(publishing_client, None)
-            await client_cleanup(
+            client_cleanup(publishing_client, None)
+            client_cleanup(
                 listening_client_pattern, pub_sub_pattern if cluster_mode else None
             )
-            await client_cleanup(client_dont_care, None)
+            client_cleanup(client_dont_care, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_combined_exact_pattern_and_sharded_one_client(
+    def test_sync_pubsub_combined_exact_pattern_and_sharded_one_client(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
@@ -1172,20 +1173,20 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}:{}:{}".format("channel", get_random_string(5), i): get_random_string(
+                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
                     10
                 )
-                for i in range(NUM_CHANNELS)
+                for _ in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}:{}".format("pattern", get_random_string(5), i): get_random_string(
+                "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(
                     5
                 )
-                for i in range(NUM_CHANNELS)
+                for _ in range(NUM_CHANNELS)
             }
             sharded_channels_and_messages = {
-                f"{SHARD_PREFIX}:{i}:{get_random_string(10)}": get_random_string(7)
-                for i in range(NUM_CHANNELS)
+                f"{SHARD_PREFIX}: {get_random_string(10)}": get_random_string(7)
+                for _ in range(NUM_CHANNELS)
             }
 
             publish_response = 1
@@ -1216,7 +1217,7 @@ class TestPubSub:
                 context=context,
             )
 
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request,
                 cluster_mode,
                 pub_sub_exact,
@@ -1227,22 +1228,19 @@ class TestPubSub:
                 **exact_channels_and_messages,
                 **pattern_channels_and_messages,
             }.items():
-                assert (
-                    await publishing_client.publish(message, channel)
-                    == publish_response
-                )
+                assert publishing_client.publish(message, channel) == publish_response
 
             # Publish sharded messages to all channels
             for channel, message in sharded_channels_and_messages.items():
                 assert (
-                    await cast(GlideClusterClient, publishing_client).publish(
+                    cast(GlideClusterClient, publishing_client).publish(
                         message, channel, sharded=True
                     )
                     == publish_response
                 )
 
             # allow the messages to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
             all_channels_and_messages = {
                 **exact_channels_and_messages,
@@ -1251,7 +1249,7 @@ class TestPubSub:
             }
             # Check if all messages are received correctly
             for index in range(len(all_channels_and_messages)):
-                pubsub_msg = await get_message_by_method(
+                pubsub_msg = get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
                 pattern = (
@@ -1269,22 +1267,20 @@ class TestPubSub:
             # check that we received all messages
             assert all_channels_and_messages == {}
 
-            await check_no_messages_left(
+            check_no_messages_left(
                 method, listening_client, callback_messages, NUM_CHANNELS * 3
             )
 
         finally:
-            await client_cleanup(
-                listening_client, pub_sub_exact if cluster_mode else None
-            )
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub_exact if cluster_mode else None)
+            client_cleanup(publishing_client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_combined_exact_pattern_and_sharded_multi_client(
+    def test_sync_pubsub_combined_exact_pattern_and_sharded_multi_client(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
@@ -1320,20 +1316,20 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}:{}:{}".format("channel", get_random_string(5), i): get_random_string(
+                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
                     10
                 )
-                for i in range(NUM_CHANNELS)
+                for _ in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}:{}".format("pattern", get_random_string(5), i): get_random_string(
+                "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(
                     5
                 )
-                for i in range(NUM_CHANNELS)
+                for _ in range(NUM_CHANNELS)
             }
             sharded_channels_and_messages = {
-                f"{SHARD_PREFIX}:{i}: {get_random_string(10)}": get_random_string(7)
-                for i in range(NUM_CHANNELS)
+                f"{SHARD_PREFIX}: {get_random_string(10)}": get_random_string(7)
+                for _ in range(NUM_CHANNELS)
             }
 
             publish_response = 1
@@ -1367,7 +1363,7 @@ class TestPubSub:
             (
                 listening_client_exact,
                 publishing_client,
-            ) = await create_two_clients_with_pubsub(
+            ) = create_two_clients_with_pubsub(
                 request,
                 cluster_mode,
                 pub_sub_exact,
@@ -1403,7 +1399,7 @@ class TestPubSub:
             (
                 listening_client_pattern,
                 listening_client_sharded,
-            ) = await create_two_clients_with_pubsub(
+            ) = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub_pattern, pub_sub_sharded
             )
 
@@ -1412,26 +1408,23 @@ class TestPubSub:
                 **exact_channels_and_messages,
                 **pattern_channels_and_messages,
             }.items():
-                assert (
-                    await publishing_client.publish(message, channel)
-                    == publish_response
-                )
+                assert publishing_client.publish(message, channel) == publish_response
 
             # Publish sharded messages to all channels
             for channel, message in sharded_channels_and_messages.items():
                 assert (
-                    await cast(GlideClusterClient, publishing_client).publish(
+                    cast(GlideClusterClient, publishing_client).publish(
                         message, channel, sharded=True
                     )
                     == publish_response
                 )
 
             # allow the messages to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
             # Verify messages for exact PUBSUB
             for index in range(len(exact_channels_and_messages)):
-                pubsub_msg = await get_message_by_method(
+                pubsub_msg = get_message_by_method(
                     method, listening_client_exact, callback_messages_exact, index
                 )
                 assert pubsub_msg.channel in exact_channels_and_messages.keys()
@@ -1447,7 +1440,7 @@ class TestPubSub:
 
             # Verify messages for pattern PUBSUB
             for index in range(len(pattern_channels_and_messages)):
-                pubsub_msg = await get_message_by_method(
+                pubsub_msg = get_message_by_method(
                     method, listening_client_pattern, callback_messages_pattern, index
                 )
                 assert pubsub_msg.channel in pattern_channels_and_messages.keys()
@@ -1463,7 +1456,7 @@ class TestPubSub:
 
             # Verify messages for shaded PUBSUB
             for index in range(len(sharded_channels_and_messages)):
-                pubsub_msg = await get_message_by_method(
+                pubsub_msg = get_message_by_method(
                     method, listening_client_sharded, callback_messages_sharded, index
                 )
                 assert pubsub_msg.channel in sharded_channels_and_messages.keys()
@@ -1477,16 +1470,16 @@ class TestPubSub:
             # check that we received all messages
             assert sharded_channels_and_messages == {}
 
-            await check_no_messages_left(
+            check_no_messages_left(
                 method, listening_client_exact, callback_messages_exact, NUM_CHANNELS
             )
-            await check_no_messages_left(
+            check_no_messages_left(
                 method,
                 listening_client_pattern,
                 callback_messages_pattern,
                 NUM_CHANNELS,
             )
-            await check_no_messages_left(
+            check_no_messages_left(
                 method,
                 listening_client_sharded,
                 callback_messages_sharded,
@@ -1494,14 +1487,14 @@ class TestPubSub:
             )
 
         finally:
-            await client_cleanup(
+            client_cleanup(
                 listening_client_exact, pub_sub_exact if cluster_mode else None
             )
-            await client_cleanup(publishing_client, None)
-            await client_cleanup(
+            client_cleanup(publishing_client, None)
+            client_cleanup(
                 listening_client_pattern, pub_sub_pattern if cluster_mode else None
             )
-            await client_cleanup(
+            client_cleanup(
                 listening_client_sharded, pub_sub_sharded if cluster_mode else None
             )
 
@@ -1510,7 +1503,7 @@ class TestPubSub:
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_combined_different_channels_with_same_name(
+    def test_sync_pubsub_combined_different_channels_with_same_name(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
@@ -1572,7 +1565,7 @@ class TestPubSub:
             (
                 listening_client_exact,
                 publishing_client,
-            ) = await create_two_clients_with_pubsub(
+            ) = create_two_clients_with_pubsub(
                 request,
                 cluster_mode,
                 pub_sub_exact,
@@ -1613,31 +1606,31 @@ class TestPubSub:
             (
                 listening_client_pattern,
                 listening_client_sharded,
-            ) = await create_two_clients_with_pubsub(
+            ) = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub_pattern, pub_sub_sharded
             )
 
             # Publish messages to each channel
-            assert await publishing_client.publish(MESSAGE_EXACT, CHANNEL_NAME) == 2
-            assert await publishing_client.publish(MESSAGE_PATTERN, CHANNEL_NAME) == 2
+            assert publishing_client.publish(MESSAGE_EXACT, CHANNEL_NAME) == 2
+            assert publishing_client.publish(MESSAGE_PATTERN, CHANNEL_NAME) == 2
             assert (
-                await cast(GlideClusterClient, publishing_client).publish(
+                cast(GlideClusterClient, publishing_client).publish(
                     MESSAGE_SHARDED, CHANNEL_NAME, sharded=True
                 )
                 == 1
             )
 
             # allow the message to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
             # Verify message for exact and pattern PUBSUB
             for client, callback, pattern in [  # type: ignore
                 (listening_client_exact, callback_messages_exact, None),
                 (listening_client_pattern, callback_messages_pattern, CHANNEL_NAME),
             ]:
-                pubsub_msg = await get_message_by_method(method, client, callback, 0)  # type: ignore
+                pubsub_msg = get_message_by_method(method, client, callback, 0)  # type: ignore
 
-                pubsub_msg2 = await get_message_by_method(method, client, callback, 1)  # type: ignore
+                pubsub_msg2 = get_message_by_method(method, client, callback, 1)  # type: ignore
                 assert not pubsub_msg.message == pubsub_msg2.message
                 assert pubsub_msg2.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
                 assert pubsub_msg.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
@@ -1645,32 +1638,32 @@ class TestPubSub:
                 assert pubsub_msg.pattern == pubsub_msg2.pattern == pattern
 
             # Verify message for sharded PUBSUB
-            pubsub_msg_sharded = await get_message_by_method(
+            pubsub_msg_sharded = get_message_by_method(
                 method, listening_client_sharded, callback_messages_sharded, 0
             )
             assert pubsub_msg_sharded.message == MESSAGE_SHARDED
             assert pubsub_msg_sharded.channel == CHANNEL_NAME
             assert pubsub_msg_sharded.pattern is None
 
-            await check_no_messages_left(
+            check_no_messages_left(
                 method, listening_client_exact, callback_messages_exact, 2
             )
-            await check_no_messages_left(
+            check_no_messages_left(
                 method, listening_client_pattern, callback_messages_pattern, 2
             )
-            await check_no_messages_left(
+            check_no_messages_left(
                 method, listening_client_sharded, callback_messages_sharded, 1
             )
 
         finally:
-            await client_cleanup(
+            client_cleanup(
                 listening_client_exact, pub_sub_exact if cluster_mode else None
             )
-            await client_cleanup(publishing_client, None)
-            await client_cleanup(
+            client_cleanup(publishing_client, None)
+            client_cleanup(
                 listening_client_pattern, pub_sub_pattern if cluster_mode else None
             )
-            await client_cleanup(
+            client_cleanup(
                 listening_client_sharded, pub_sub_sharded if cluster_mode else None
             )
 
@@ -1678,7 +1671,7 @@ class TestPubSub:
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_two_publishing_clients_same_name(
+    def test_sync_pubsub_two_publishing_clients_same_name(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
@@ -1734,52 +1727,46 @@ class TestPubSub:
                 context=context_pattern,
             )
 
-            client_exact, client_pattern = await create_two_clients_with_pubsub(
+            client_exact, client_pattern = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub_exact, pub_sub_pattern
             )
 
             # Publish messages to each channel - both clients publishing
             for msg in [MESSAGE_EXACT, MESSAGE_PATTERN]:
-                result = await client_pattern.publish(msg, CHANNEL_NAME)
+                result = client_pattern.publish(msg, CHANNEL_NAME)
                 if cluster_mode:
                     assert result == 2
 
             # allow the message to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
             # Verify message for exact and pattern PUBSUB
             for client, callback, pattern in [  # type: ignore
                 (client_exact, callback_messages_exact, None),
                 (client_pattern, callback_messages_pattern, CHANNEL_NAME),
             ]:
-                pubsub_msg = await get_message_by_method(method, client, callback, 0)  # type: ignore
+                pubsub_msg = get_message_by_method(method, client, callback, 0)  # type: ignore
 
-                pubsub_msg2 = await get_message_by_method(method, client, callback, 1)  # type: ignore
+                pubsub_msg2 = get_message_by_method(method, client, callback, 1)  # type: ignore
                 assert not pubsub_msg.message == pubsub_msg2.message
                 assert pubsub_msg2.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
                 assert pubsub_msg.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
                 assert pubsub_msg.channel == pubsub_msg2.channel == CHANNEL_NAME
                 assert pubsub_msg.pattern == pubsub_msg2.pattern == pattern
 
-            await check_no_messages_left(
-                method, client_pattern, callback_messages_pattern, 2
-            )
-            await check_no_messages_left(
-                method, client_exact, callback_messages_exact, 2
-            )
+            check_no_messages_left(method, client_pattern, callback_messages_pattern, 2)
+            check_no_messages_left(method, client_exact, callback_messages_exact, 2)
 
         finally:
-            await client_cleanup(client_exact, pub_sub_exact if cluster_mode else None)
-            await client_cleanup(
-                client_pattern, pub_sub_pattern if cluster_mode else None
-            )
+            client_cleanup(client_exact, pub_sub_exact if cluster_mode else None)
+            client_cleanup(client_pattern, pub_sub_pattern if cluster_mode else None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_three_publishing_clients_same_name_with_sharded(
+    def test_sync_pubsub_three_publishing_clients_same_name_with_sharded(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
@@ -1861,79 +1848,68 @@ class TestPubSub:
                 context=context_sharded,
             )
 
-            client_exact, client_pattern = await create_two_clients_with_pubsub(
+            client_exact, client_pattern = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub_exact, pub_sub_pattern
             )
-            client_sharded, client_dont_care = await create_two_clients_with_pubsub(
+            client_sharded, client_dont_care = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub_sharded
             )
 
             # Publish messages to each channel - both clients publishing
             assert (
-                await client_pattern.publish(MESSAGE_EXACT, CHANNEL_NAME)
+                client_pattern.publish(MESSAGE_EXACT, CHANNEL_NAME) == publish_response
+            )
+            assert (
+                client_sharded.publish(MESSAGE_PATTERN, CHANNEL_NAME)
                 == publish_response
             )
             assert (
-                await client_sharded.publish(MESSAGE_PATTERN, CHANNEL_NAME)
-                == publish_response
-            )
-            assert (
-                await cast(GlideClusterClient, client_exact).publish(
+                cast(GlideClusterClient, client_exact).publish(
                     MESSAGE_SHARDED, CHANNEL_NAME, sharded=True
                 )
                 == 1
             )
 
             # allow the message to propagate
-            await anyio.sleep(1)
+            time.sleep(1)
 
             # Verify message for exact and pattern PUBSUB
             for client, callback, pattern in [  # type: ignore
                 (client_exact, callback_messages_exact, None),
                 (client_pattern, callback_messages_pattern, CHANNEL_NAME),
             ]:
-                pubsub_msg = await get_message_by_method(method, client, callback, 0)  # type: ignore
+                pubsub_msg = get_message_by_method(method, client, callback, 0)  # type: ignore
 
-                pubsub_msg2 = await get_message_by_method(method, client, callback, 1)  # type: ignore
+                pubsub_msg2 = get_message_by_method(method, client, callback, 1)  # type: ignore
                 assert not pubsub_msg.message == pubsub_msg2.message
                 assert pubsub_msg2.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
                 assert pubsub_msg.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
                 assert pubsub_msg.channel == pubsub_msg2.channel == CHANNEL_NAME
                 assert pubsub_msg.pattern == pubsub_msg2.pattern == pattern
 
-            msg = await get_message_by_method(
+            msg = get_message_by_method(
                 method, client_sharded, callback_messages_sharded, 0
             )
             assert msg.message == MESSAGE_SHARDED
             assert msg.channel == CHANNEL_NAME
             assert msg.pattern is None
 
-            await check_no_messages_left(
-                method, client_pattern, callback_messages_pattern, 2
-            )
-            await check_no_messages_left(
-                method, client_exact, callback_messages_exact, 2
-            )
-            await check_no_messages_left(
-                method, client_sharded, callback_messages_sharded, 1
-            )
+            check_no_messages_left(method, client_pattern, callback_messages_pattern, 2)
+            check_no_messages_left(method, client_exact, callback_messages_exact, 2)
+            check_no_messages_left(method, client_sharded, callback_messages_sharded, 1)
 
         finally:
-            await client_cleanup(client_exact, pub_sub_exact if cluster_mode else None)
-            await client_cleanup(
-                client_pattern, pub_sub_pattern if cluster_mode else None
-            )
-            await client_cleanup(
-                client_sharded, pub_sub_sharded if cluster_mode else None
-            )
-            await client_cleanup(client_dont_care, None)
+            client_cleanup(client_exact, pub_sub_exact if cluster_mode else None)
+            client_cleanup(client_pattern, pub_sub_pattern if cluster_mode else None)
+            client_cleanup(client_sharded, pub_sub_sharded if cluster_mode else None)
+            client_cleanup(client_dont_care, None)
 
     @pytest.mark.skip(
         reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
         + "to vary across platforms and server versions"
     )
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_pubsub_exact_max_size_message(self, request, cluster_mode: bool):
+    def test_sync_pubsub_exact_max_size_message(self, request, cluster_mode: bool):
         """
         Tests publishing and receiving maximum size messages in PUBSUB.
 
@@ -1958,7 +1934,7 @@ class TestPubSub:
             {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
         )
 
-        listening_client, publishing_client = await create_two_clients_with_pubsub(
+        listening_client, publishing_client = create_two_clients_with_pubsub(
             request,
             cluster_mode,
             pub_sub,
@@ -1966,17 +1942,17 @@ class TestPubSub:
         )
 
         try:
-            result = await publishing_client.publish(message, channel)
+            result = publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
 
-            result = await publishing_client.publish(message2, channel)
+            result = publishing_client.publish(message2, channel)
             if cluster_mode:
                 assert result == 1
             # allow the message to propagate
-            await anyio.sleep(15)
+            time.sleep(15)
 
-            async_msg = await listening_client.get_pubsub_message()
+            async_msg = listening_client.get_pubsub_message()
             assert async_msg.message == message.encode()
             assert async_msg.channel == channel.encode()
             assert async_msg.pattern is None
@@ -1989,14 +1965,15 @@ class TestPubSub:
 
             # assert there are no messages to read
             with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
+                run_sync_func_with_timeout_in_thread(
+                    lambda: listening_client.get_pubsub_message(), timeout=3.0
+                )
 
             assert listening_client.try_get_pubsub_message() is None
 
         finally:
-            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            client_cleanup(publishing_client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.skip(
@@ -2004,7 +1981,7 @@ class TestPubSub:
         + "to vary across platforms and server versions"
     )
     @pytest.mark.parametrize("cluster_mode", [True])
-    async def test_pubsub_sharded_max_size_message(self, request, cluster_mode: bool):
+    def test_sync_pubsub_sharded_max_size_message(self, request, cluster_mode: bool):
         """
         Tests publishing and receiving maximum size messages in sharded PUBSUB.
 
@@ -2031,7 +2008,7 @@ class TestPubSub:
                 {},
             )
 
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request,
                 cluster_mode,
                 pub_sub,
@@ -2039,23 +2016,23 @@ class TestPubSub:
             )
 
             assert (
-                await cast(GlideClusterClient, publishing_client).publish(
+                cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
                 )
                 == 1
             )
 
             assert (
-                await cast(GlideClusterClient, publishing_client).publish(
+                cast(GlideClusterClient, publishing_client).publish(
                     message2, channel, sharded=True
                 )
                 == 1
             )
 
             # allow the message to propagate
-            await anyio.sleep(15)
+            time.sleep(15)
 
-            async_msg = await listening_client.get_pubsub_message()
+            async_msg = listening_client.get_pubsub_message()
             sync_msg = listening_client.try_get_pubsub_message()
             assert sync_msg
 
@@ -2069,21 +2046,22 @@ class TestPubSub:
 
             # assert there are no messages to read
             with pytest.raises(TimeoutError):
-                with anyio.fail_after(3):
-                    await listening_client.get_pubsub_message()
+                run_sync_func_with_timeout_in_thread(
+                    lambda: listening_client.get_pubsub_message(), timeout=3.0
+                )
 
             assert listening_client.try_get_pubsub_message() is None
 
         finally:
-            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            client_cleanup(publishing_client, None)
 
     @pytest.mark.skip(
         reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
         + "to vary across platforms and server versions"
     )
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_pubsub_exact_max_size_message_callback(
+    def test_sync_pubsub_exact_max_size_message_callback(
         self, request, cluster_mode: bool
     ):
         """
@@ -2115,15 +2093,15 @@ class TestPubSub:
                 context=context,
             )
 
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub, timeout=10000
             )
 
-            result = await publishing_client.publish(message, channel)
+            result = publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
             # allow the message to propagate
-            await anyio.sleep(15)
+            time.sleep(15)
 
             assert len(callback_messages) == 1
 
@@ -2132,8 +2110,8 @@ class TestPubSub:
             assert callback_messages[0].pattern is None
 
         finally:
-            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            client_cleanup(publishing_client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.skip(
@@ -2141,7 +2119,7 @@ class TestPubSub:
         + "to vary across platforms and server versions"
     )
     @pytest.mark.parametrize("cluster_mode", [True])
-    async def test_pubsub_sharded_max_size_message_callback(
+    def test_sync_pubsub_sharded_max_size_message_callback(
         self, request, cluster_mode: bool
     ):
         """
@@ -2173,19 +2151,19 @@ class TestPubSub:
                 context=context,
             )
 
-            listening_client, publishing_client = await create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub, timeout=10000
             )
 
             assert (
-                await cast(GlideClusterClient, publishing_client).publish(
+                cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
                 )
                 == 1
             )
 
             # allow the message to propagate
-            await anyio.sleep(15)
+            time.sleep(15)
 
             assert len(callback_messages) == 1
 
@@ -2194,11 +2172,11 @@ class TestPubSub:
             assert callback_messages[0].pattern is None
 
         finally:
-            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            await client_cleanup(publishing_client, None)
+            client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_pubsub_resp2_raise_an_error(self, request, cluster_mode: bool):
+    def test_sync_pubsub_resp2_raise_an_error(self, request, cluster_mode: bool):
         """Tests that when creating a resp2 client with PUBSUB - an error will be raised"""
         channel = get_random_string(5)
 
@@ -2209,12 +2187,12 @@ class TestPubSub:
         )
 
         with pytest.raises(ConfigurationError):
-            await create_two_clients_with_pubsub(
+            create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub_exact, protocol=ProtocolVersion.RESP2
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_pubsub_context_with_no_callback_raise_error(
+    def test_sync_pubsub_context_with_no_callback_raise_error(
         self, request, cluster_mode: bool
     ):
         """Tests that when creating a PUBSUB client in callback method with context but no callback raises an error"""
@@ -2228,10 +2206,10 @@ class TestPubSub:
         )
 
         with pytest.raises(ConfigurationError):
-            await create_two_clients_with_pubsub(request, cluster_mode, pub_sub_exact)
+            create_two_clients_with_pubsub(request, cluster_mode, pub_sub_exact)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_pubsub_channels(self, request, cluster_mode: bool):
+    def test_sync_pubsub_channels(self, request, cluster_mode: bool):
         """
         Tests the pubsub_channels command functionality.
 
@@ -2245,9 +2223,9 @@ class TestPubSub:
             channel3 = "some_channel3"
             pattern = "test_*"
 
-            client = await create_client(request, cluster_mode)
+            client = create_sync_client(request, cluster_mode)
             # Assert no channels exists yet
-            assert await client.pubsub_channels() == []
+            assert client.pubsub_channels() == []
 
             pub_sub = create_pubsub_subscription(
                 cluster_mode,
@@ -2271,29 +2249,29 @@ class TestPubSub:
             channel2_bytes = channel2.encode()
             channel3_bytes = channel3.encode()
 
-            client1, client2 = await create_two_clients_with_pubsub(
+            client1, client2 = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
             # Test pubsub_channels without pattern
-            channels = await client2.pubsub_channels()
+            channels = client2.pubsub_channels()
             assert set(channels) == {channel1_bytes, channel2_bytes, channel3_bytes}
 
             # Test pubsub_channels with pattern
-            channels_with_pattern = await client2.pubsub_channels(pattern)
+            channels_with_pattern = client2.pubsub_channels(pattern)
             assert set(channels_with_pattern) == {channel1_bytes, channel2_bytes}
 
             # Test with non-matching pattern
-            non_matching_channels = await client2.pubsub_channels("non_matching_*")
+            non_matching_channels = client2.pubsub_channels("non_matching_*")
             assert len(non_matching_channels) == 0
 
         finally:
-            await client_cleanup(client1, pub_sub if cluster_mode else None)
-            await client_cleanup(client2, None)
-            await client_cleanup(client, None)
+            client_cleanup(client1, pub_sub if cluster_mode else None)
+            client_cleanup(client2, None)
+            client_cleanup(client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_pubsub_numpat(self, request, cluster_mode: bool):
+    def test_sync_pubsub_numpat(self, request, cluster_mode: bool):
         """
         Tests the pubsub_numpat command functionality.
 
@@ -2306,8 +2284,8 @@ class TestPubSub:
             pattern2 = "another_*"
 
             # Create a client and check initial number of patterns
-            client = await create_client(request, cluster_mode)
-            assert await client.pubsub_numpat() == 0
+            client = create_sync_client(request, cluster_mode)
+            assert client.pubsub_numpat() == 0
 
             # Set up subscriptions with patterns
             pub_sub = create_pubsub_subscription(
@@ -2326,21 +2304,21 @@ class TestPubSub:
                 },
             )
 
-            client1, client2 = await create_two_clients_with_pubsub(
+            client1, client2 = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
             # Test pubsub_numpat
-            num_patterns = await client2.pubsub_numpat()
+            num_patterns = client2.pubsub_numpat()
             assert num_patterns == 2
 
         finally:
-            await client_cleanup(client1, pub_sub if cluster_mode else None)
-            await client_cleanup(client2, None)
-            await client_cleanup(client, None)
+            client_cleanup(client1, pub_sub if cluster_mode else None)
+            client_cleanup(client2, None)
+            client_cleanup(client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_pubsub_numsub(self, request, cluster_mode: bool):
+    def test_sync_pubsub_numsub(self, request, cluster_mode: bool):
         """
         Tests the pubsub_numsub command functionality.
 
@@ -2399,22 +2377,22 @@ class TestPubSub:
             channel4_bytes = channel4.encode()
 
             # Create a client and check initial subscribers
-            client = await create_client(request, cluster_mode)
-            assert await client.pubsub_numsub([channel1, channel2, channel3]) == {
+            client = create_sync_client(request, cluster_mode)
+            assert client.pubsub_numsub([channel1, channel2, channel3]) == {
                 channel1_bytes: 0,
                 channel2_bytes: 0,
                 channel3_bytes: 0,
             }
 
-            client1, client2 = await create_two_clients_with_pubsub(
+            client1, client2 = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub1, pub_sub2
             )
-            client3, client4 = await create_two_clients_with_pubsub(
+            client3, client4 = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub3
             )
 
             # Test pubsub_numsub
-            subscribers = await client2.pubsub_numsub(
+            subscribers = client2.pubsub_numsub(
                 [channel1_bytes, channel2_bytes, channel3_bytes, channel4_bytes]
             )
             assert subscribers == {
@@ -2425,19 +2403,19 @@ class TestPubSub:
             }
 
             # Test pubsub_numsub with no channels
-            empty_subscribers = await client2.pubsub_numsub()
+            empty_subscribers = client2.pubsub_numsub()
             assert empty_subscribers == {}
 
         finally:
-            await client_cleanup(client1, pub_sub1 if cluster_mode else None)
-            await client_cleanup(client2, pub_sub2 if cluster_mode else None)
-            await client_cleanup(client3, pub_sub3 if cluster_mode else None)
-            await client_cleanup(client4, None)
-            await client_cleanup(client, None)
+            client_cleanup(client1, pub_sub1 if cluster_mode else None)
+            client_cleanup(client2, pub_sub2 if cluster_mode else None)
+            client_cleanup(client3, pub_sub3 if cluster_mode else None)
+            client_cleanup(client4, None)
+            client_cleanup(client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
-    async def test_pubsub_shardchannels(self, request, cluster_mode: bool):
+    def test_sync_pubsub_shardchannels(self, request, cluster_mode: bool):
         """
         Tests the pubsub_shardchannels command functionality.
 
@@ -2451,10 +2429,10 @@ class TestPubSub:
             channel3 = "some_shardchannel3"
             pattern = "test_*"
 
-            client = await create_client(request, cluster_mode)
+            client = create_sync_client(request, cluster_mode)
             assert isinstance(client, GlideClusterClient)
             # Assert no sharded channels exist yet
-            assert await client.pubsub_shardchannels() == []
+            assert client.pubsub_shardchannels() == []
 
             pub_sub = create_pubsub_subscription(
                 cluster_mode,
@@ -2472,31 +2450,31 @@ class TestPubSub:
             channel2_bytes = channel2.encode()
             channel3_bytes = channel3.encode()
 
-            client1, client2 = await create_two_clients_with_pubsub(
+            client1, client2 = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
             assert isinstance(client2, GlideClusterClient)
 
             # Test pubsub_shardchannels without pattern
-            channels = await client2.pubsub_shardchannels()
+            channels = client2.pubsub_shardchannels()
             assert set(channels) == {channel1_bytes, channel2_bytes, channel3_bytes}
 
             # Test pubsub_shardchannels with pattern
-            channels_with_pattern = await client2.pubsub_shardchannels(pattern)
+            channels_with_pattern = client2.pubsub_shardchannels(pattern)
             assert set(channels_with_pattern) == {channel1_bytes, channel2_bytes}
 
             # Test with non-matching pattern
-            assert await client2.pubsub_shardchannels("non_matching_*") == []
+            assert client2.pubsub_shardchannels("non_matching_*") == []
 
         finally:
-            await client_cleanup(client1, pub_sub if cluster_mode else None)
-            await client_cleanup(client2, None)
-            await client_cleanup(client, None)
+            client_cleanup(client1, pub_sub if cluster_mode else None)
+            client_cleanup(client2, None)
+            client_cleanup(client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
-    async def test_pubsub_shardnumsub(self, request, cluster_mode: bool):
+    def test_sync_pubsub_shardnumsub(self, request, cluster_mode: bool):
         """
         Tests the pubsub_shardnumsub command functionality.
 
@@ -2548,27 +2526,27 @@ class TestPubSub:
             channel4_bytes = channel4.encode()
 
             # Create a client and check initial subscribers
-            client = await create_client(request, cluster_mode)
+            client = create_sync_client(request, cluster_mode)
 
             assert isinstance(client, GlideClusterClient)
-            assert await client.pubsub_shardnumsub([channel1, channel2, channel3]) == {
+            assert client.pubsub_shardnumsub([channel1, channel2, channel3]) == {
                 channel1_bytes: 0,
                 channel2_bytes: 0,
                 channel3_bytes: 0,
             }
 
-            client1, client2 = await create_two_clients_with_pubsub(
+            client1, client2 = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub1, pub_sub2
             )
 
-            client3, client4 = await create_two_clients_with_pubsub(
+            client3, client4 = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub3
             )
 
             assert isinstance(client4, GlideClusterClient)
 
             # Test pubsub_shardnumsub
-            subscribers = await client4.pubsub_shardnumsub(
+            subscribers = client4.pubsub_shardnumsub(
                 [channel1, channel2, channel3, channel4]
             )
             assert subscribers == {
@@ -2579,19 +2557,19 @@ class TestPubSub:
             }
 
             # Test pubsub_shardnumsub with no channels
-            empty_subscribers = await client4.pubsub_shardnumsub()
+            empty_subscribers = client4.pubsub_shardnumsub()
             assert empty_subscribers == {}
 
         finally:
-            await client_cleanup(client1, pub_sub1 if cluster_mode else None)
-            await client_cleanup(client2, pub_sub2 if cluster_mode else None)
-            await client_cleanup(client3, pub_sub3 if cluster_mode else None)
-            await client_cleanup(client4, None)
-            await client_cleanup(client, None)
+            client_cleanup(client1, pub_sub1 if cluster_mode else None)
+            client_cleanup(client2, pub_sub2 if cluster_mode else None)
+            client_cleanup(client3, pub_sub3 if cluster_mode else None)
+            client_cleanup(client4, None)
+            client_cleanup(client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
-    async def test_pubsub_channels_and_shardchannels_separation(
+    def test_sync_pubsub_channels_and_shardchannels_separation(
         self, request, cluster_mode: bool
     ):
         """
@@ -2621,24 +2599,24 @@ class TestPubSub:
                 shard_channel.encode(),
             )
 
-            client1, client2 = await create_two_clients_with_pubsub(
+            client1, client2 = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
             assert isinstance(client2, GlideClusterClient)
             # Test pubsub_channels
-            assert await client2.pubsub_channels() == [regular_channel_bytes]
+            assert client2.pubsub_channels() == [regular_channel_bytes]
 
             # Test pubsub_shardchannels
-            assert await client2.pubsub_shardchannels() == [shard_channel_bytes]
+            assert client2.pubsub_shardchannels() == [shard_channel_bytes]
 
         finally:
-            await client_cleanup(client1, pub_sub if cluster_mode else None)
-            await client_cleanup(client2, None)
+            client_cleanup(client1, pub_sub if cluster_mode else None)
+            client_cleanup(client2, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
-    async def test_pubsub_numsub_and_shardnumsub_separation(
+    def test_sync_pubsub_numsub_and_shardnumsub_separation(
         self, request, cluster_mode: bool
     ):
         """
@@ -2678,14 +2656,14 @@ class TestPubSub:
             regular_channel_bytes: bytes = regular_channel.encode()
             shard_channel_bytes: bytes = shard_channel.encode()
 
-            client1, client2 = await create_two_clients_with_pubsub(
+            client1, client2 = create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub1, pub_sub2
             )
 
             assert isinstance(client2, GlideClusterClient)
 
             # Test pubsub_numsub
-            regular_subscribers = await client2.pubsub_numsub(
+            regular_subscribers = client2.pubsub_numsub(
                 [regular_channel_bytes, shard_channel_bytes]
             )
 
@@ -2695,7 +2673,7 @@ class TestPubSub:
             }
 
             # Test pubsub_shardnumsub
-            shard_subscribers = await client2.pubsub_shardnumsub(
+            shard_subscribers = client2.pubsub_shardnumsub(
                 [regular_channel_bytes, shard_channel_bytes]
             )
 
@@ -2705,5 +2683,5 @@ class TestPubSub:
             }
 
         finally:
-            await client_cleanup(client1, pub_sub1 if cluster_mode else None)
-            await client_cleanup(client2, pub_sub2 if cluster_mode else None)
+            client_cleanup(client1, pub_sub1 if cluster_mode else None)
+            client_cleanup(client2, pub_sub2 if cluster_mode else None)

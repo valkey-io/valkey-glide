@@ -14,19 +14,6 @@ TESTS_SYNC_DIR = PYTHON_DIR / "tests" / "sync_tests"
 
 EXCLUDED_API_FUNCTIONS = {
     "async_only": [
-        # PubSub
-        "pubsub_shardchannels",
-        "pubsub_shardnumsub",
-        "pubsub_numsub",
-        "pubsub_numpat",
-        "publish",
-        "pubsub_channels",
-        "get_pubsub_message",
-        "try_get_pubsub_message",
-        # cluster scan
-        "scan",
-        "get_cursor",
-        "is_finished",
         # _CompatFuture
         "done",
         "result",
@@ -52,7 +39,6 @@ EXCLUDED_API_FUNCTIONS = {
         "create_leaked_value",
         "start_socket_listener_external",
         "value_from_pointer",
-        "select",
     ],
     "sync_only": [],
 }
@@ -68,7 +54,6 @@ EXCLUDED_TESTS = {
     "async_only": [
         "test_inflight_request_limit",
         "test_statistics",
-        "test_select",
         "test_UDS_socket_connection_failure",
     ],
     "sync_only": ["test_sync_fork"],
@@ -77,8 +62,7 @@ EXCLUDED_TESTS = {
 EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
         "test_opentelemetry.py",
-        "test_pubsub.py",
-        "test_scan.py",
+        "test_deprecation_warnings.py",
     ],
     "sync_only": [],
 }

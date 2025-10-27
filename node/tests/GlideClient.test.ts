@@ -613,6 +613,27 @@ describe("GlideClient", () => {
                 result5.includes("ver") && result5.includes(serverVersion),
             ).toBe(true);
 
+            // Test LOLWUT version 9 (available in Valkey 9.0.0+)
+            if (cluster.checkIfServerVersionLessThan("9.0.0") === false) {
+                // Test with version 9 and 2 parameters (columns, rows)
+                const result6 = await client.lolwut({
+                    version: 9,
+                    parameters: [30, 4],
+                });
+                expect(
+                    result6.includes("ver") && result6.includes(serverVersion),
+                ).toBe(true);
+
+                // Test with version 9 and 4 parameters (columns, rows, real, imaginary)
+                const result7 = await client.lolwut({
+                    version: 9,
+                    parameters: [40, 20, 1, 2],
+                });
+                expect(
+                    result7.includes("ver") && result7.includes(serverVersion),
+                ).toBe(true);
+            }
+
             // batch tests
             for (const isAtomic of [true, false]) {
                 const batch = new Batch(isAtomic);
