@@ -388,7 +388,7 @@ jobs:
               run: |
                   ${{ steps.python_cmd.outputs.cmd }} -m pip install setuptools
                   # PyPy builds are disabled by default from version 3
-                  CIBW_VERSION=$(${{ steps.python_cmd.outputs.cmd }} -c "import pkg_resources; print(pkg_resources.get_distribution('cibuildwheel').version)")
+                  CIBW_VERSION=$(python3.14 -c "from importlib.metadata import version; print(version('cibuildwheel'))")
                   echo "Detected cibuildwheel version: $CIBW_VERSION"
 
                   ENABLE_FLAGS=""
