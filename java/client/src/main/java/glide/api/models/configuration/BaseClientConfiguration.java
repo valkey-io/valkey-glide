@@ -67,6 +67,12 @@ public abstract class BaseClientConfiguration {
     private final String clientName;
 
     /**
+     * Library name to be used for the client. Will be used with CLIENT SETINFO LIB-NAME command
+     * during connection establishment.
+     */
+    private final String libName;
+
+    /**
      * Serialization protocol to be used with the server. If not set, {@link ProtocolVersion#RESP3}
      * will be used.
      */

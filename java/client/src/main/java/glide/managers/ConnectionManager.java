@@ -25,6 +25,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ConnectionManager {
 
+    /** Default library name for Java clients */
+    private static final String DEFAULT_LIB_NAME = "GlideJava";
+
     /** Native client handle for operations */
     private long nativeClientHandle = 0;
 
@@ -204,6 +207,16 @@ public class ConnectionManager {
                         // Set cluster mode
                         requestBuilder.setClusterModeEnabled(isCluster);
 
+                        // Set refresh topology from initial nodes for cluster mode
+                        if (isCluster) {
+                            GlideClusterClientConfiguration clusterConfig =
+                                    (GlideClusterClientConfiguration) configuration;
+                            if (clusterConfig.getAdvancedConfiguration() != null) {
+                                requestBuilder.setRefreshTopologyFromInitialNodes(
+                                        clusterConfig.getAdvancedConfiguration().isRefreshTopologyFromInitialNodes());
+                            }
+                        }
+
                         // Set timeouts
                         requestBuilder.setRequestTimeout(requestTimeoutMs);
                         requestBuilder.setConnectionTimeout(connectionTimeoutMs);
@@ -227,6 +240,11 @@ public class ConnectionManager {
                         }
                         if (configuration.getClientName() != null) {
                             requestBuilder.setClientName(configuration.getClientName());
+                        }
+                        if (configuration.getLibName() != null) {
+                            requestBuilder.setLibName(configuration.getLibName());
+                        } else {
+                            requestBuilder.setLibName(DEFAULT_LIB_NAME);
                         }
                         requestBuilder.setLazyConnect(configuration.isLazyConnect());
 
