@@ -893,15 +893,15 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}:{}:{}".format("channel", get_random_string(5), i): get_random_string(
-                    10
-                )
+                "{{{}}}:{}:{}".format(
+                    "channel", get_random_string(5), i
+                ): get_random_string(10)
                 for i in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}:{}".format("pattern", get_random_string(5), i): get_random_string(
-                    5
-                )
+                "{{{}}}:{}:{}".format(
+                    "pattern", get_random_string(5), i
+                ): get_random_string(5)
                 for i in range(NUM_CHANNELS)
             }
 
@@ -1013,15 +1013,15 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}:{}:{}".format("channel", get_random_string(5), i): get_random_string(
-                    10
-                )
+                "{{{}}}:{}:{}".format(
+                    "channel", get_random_string(5), i
+                ): get_random_string(10)
                 for i in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}:{}".format("pattern", get_random_string(5), i): get_random_string(
-                    5
-                )
+                "{{{}}}:{}:{}".format(
+                    "pattern", get_random_string(5), i
+                ): get_random_string(5)
                 for i in range(NUM_CHANNELS)
             }
 
@@ -1172,15 +1172,15 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}:{}:{}".format("channel", get_random_string(5), i): get_random_string(
-                    10
-                )
+                "{{{}}}:{}:{}".format(
+                    "channel", get_random_string(5), i
+                ): get_random_string(10)
                 for i in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}:{}".format("pattern", get_random_string(5), i): get_random_string(
-                    5
-                )
+                "{{{}}}:{}:{}".format(
+                    "pattern", get_random_string(5), i
+                ): get_random_string(5)
                 for i in range(NUM_CHANNELS)
             }
             sharded_channels_and_messages = {
@@ -1320,19 +1320,19 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}:{}:{}".format("channel", get_random_string(5), i): get_random_string(
-                    10
-                )
+                "{{{}}}:{}:{}".format(
+                    "channel", get_random_string(5), i
+                ): get_random_string(10)
                 for i in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}:{}".format("pattern", get_random_string(5), i): get_random_string(
-                    5
-                )
+                "{{{}}}:{}:{}".format(
+                    "pattern", get_random_string(5), i
+                ): get_random_string(5)
                 for i in range(NUM_CHANNELS)
             }
             sharded_channels_and_messages = {
-                f"{SHARD_PREFIX}:{i}: {get_random_string(10)}": get_random_string(7)
+                f"{SHARD_PREFIX}:{i}:{get_random_string(10)}": get_random_string(7)
                 for i in range(NUM_CHANNELS)
             }
 
