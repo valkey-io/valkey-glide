@@ -787,7 +787,9 @@ mod standalone_client_tests {
             // Provide invalid certificate bytes that will fail PEM parsing
             // Using a PEM-like structure but with invalid base64 content
             connection_request.root_certs = vec![
-                b"-----BEGIN CERTIFICATE-----\n!!!invalid base64!!!\n-----END CERTIFICATE-----".to_vec().into()
+                b"-----BEGIN CERTIFICATE-----\n!!!invalid base64!!!\n-----END CERTIFICATE-----"
+                    .to_vec()
+                    .into(),
             ];
 
             // Client creation should fail during certificate parsing
