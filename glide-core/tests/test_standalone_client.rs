@@ -766,6 +766,43 @@ mod standalone_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_tls_connection_fails_with_invalid_cert_bytes() {
+        block_on_all(async move {
+            let server_addr = redis::ConnectionAddr::TcpTls {
+                host: "127.0.0.1".to_string(),
+                port: get_available_port(),
+                insecure: false,
+                tls_params: None,
+            };
+
+            let mut connection_request = create_connection_request(
+                &[server_addr],
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            // Provide invalid certificate bytes that will fail PEM parsing
+            // Using a PEM-like structure but with invalid base64 content
+            connection_request.root_certs = vec![
+                b"-----BEGIN CERTIFICATE-----\n!!!invalid base64!!!\n-----END CERTIFICATE-----".to_vec().into()
+            ];
+
+            // Client creation should fail during certificate parsing
+            let client_result =
+                StandaloneClient::create_client(connection_request.into(), None, None).await;
+            assert!(
+                client_result.is_err(),
+                "Expected client creation to fail with invalid certificate bytes"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_tls_connection_with_multiple_root_certs_first_invalid() {
         block_on_all(async move {
             // Create server with valid certificates
