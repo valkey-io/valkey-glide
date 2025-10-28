@@ -1750,6 +1750,9 @@ describe("PubSub", () => {
                     pubSubPattern,
                 );
 
+                // Wait for subscriptions to be established in cluster mode
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
                 // Publish messages to all channels
                 for (const [channel, message] of allChannelsAndMessages) {
                     const result = await publishingClient.publish(
