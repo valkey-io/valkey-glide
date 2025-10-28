@@ -221,9 +221,25 @@ public final class AsyncRegistry {
         nextId.set(1);
     }
 
+    /** Shutdown hook thread reference for optional removal */
+    private static final Thread shutdownHook = new Thread(AsyncRegistry::shutdown, "AsyncRegistry-Shutdown");
+    
     /** Register shutdown hook for clean termination */
     static {
-        Runtime.getRuntime()
-                .addShutdownHook(new Thread(AsyncRegistry::shutdown, "AsyncRegistry-Shutdown"));
+        if (!"false".equalsIgnoreCase(System.getProperty("glide.autoShutdownHook", "true"))) {
+            Runtime.getRuntime().addShutdownHook(shutdownHook);
+        }
+    }
+    
+    /** 
+     * Remove the automatic shutdown hook, allowing users to manage shutdown manually.
+     * Call this if you want to control shutdown behavior yourself.
+     */
+    public static void removeShutdownHook() {
+        try {
+            Runtime.getRuntime().removeShutdownHook(shutdownHook);
+        } catch (IllegalStateException ignored) {
+            // Hook was never registered or already removed
+        }
     }
 }
