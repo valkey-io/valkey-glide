@@ -1367,7 +1367,7 @@ func (suite *GlideTestSuite) TestScriptKill() {
 
 			if !strings.Contains(strings.ToLower(err.Error()), "notbusy") {
 				assert.NoError(suite.T(), err) // Will fail the test if there's an unexpected error
-				killed = true // Stop polling on unexpected errors
+				killed = true                  // Stop polling on unexpected errors
 			}
 			// If it was "notbusy", loop continues naturally
 		}
