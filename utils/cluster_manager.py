@@ -61,7 +61,24 @@ def get_server_command() -> str:
     """Get server command, checking valkey-server first, then redis-server"""
     global _SERVER_COMMAND
     if _SERVER_COMMAND is None:
-        _SERVER_COMMAND = get_command(["valkey-server", "redis-server"])
+        # Check if ENGINE_PATH is set (for multi-engine setup)
+        engine_path = os.environ.get("ENGINE_PATH")
+        if engine_path:
+            # Try engine-specific binaries first
+            engine_valkey = f"{engine_path}/src/valkey-server"
+            engine_redis = f"{engine_path}/src/redis-server"
+
+            if os.path.exists(engine_valkey) and os.access(engine_valkey, os.X_OK):
+                _SERVER_COMMAND = engine_valkey
+            elif os.path.exists(engine_redis) and os.access(engine_redis, os.X_OK):
+                _SERVER_COMMAND = engine_redis
+            else:
+                raise Exception(
+                    f"No executable server binary found in {engine_path}/src/"
+                )
+        else:
+            # Fall back to PATH-based lookup
+            _SERVER_COMMAND = get_command(["valkey-server", "redis-server"])
     return _SERVER_COMMAND
 
 
@@ -69,7 +86,26 @@ def get_cli_command() -> str:
     """Get CLI command, checking valkey-cli first, then redis-cli"""
     global _CLI_COMMAND
     if _CLI_COMMAND is None:
-        _CLI_COMMAND = get_command(["valkey-cli", "redis-cli"])
+        # Check if ENGINE_PATH is set (for multi-engine setup)
+        engine_path = os.environ.get("ENGINE_PATH")
+        if engine_path:
+            # Try engine-specific binaries first
+            engine_valkey_cli = f"{engine_path}/src/valkey-cli"
+            engine_redis_cli = f"{engine_path}/src/redis-cli"
+
+            if os.path.exists(engine_valkey_cli) and os.access(
+                engine_valkey_cli, os.X_OK
+            ):
+                _CLI_COMMAND = engine_valkey_cli
+            elif os.path.exists(engine_redis_cli) and os.access(
+                engine_redis_cli, os.X_OK
+            ):
+                _CLI_COMMAND = engine_redis_cli
+            else:
+                raise Exception(f"No executable CLI binary found in {engine_path}/src/")
+        else:
+            # Fall back to PATH-based lookup
+            _CLI_COMMAND = get_command(["valkey-cli", "redis-cli"])
     return _CLI_COMMAND
 
 
@@ -304,8 +340,13 @@ def print_servers_json(servers: List[Server]):
 
 
 def next_free_port(
-    min_port: int = 6379, max_port: int = 55535, timeout: int = 60
+    min_port: int = None, max_port: int = 55535, timeout: int = 60
 ) -> int:
+    # Use BASE_PORT from environment if set (for multi-engine setup)
+    if min_port is None:
+        base_port = os.environ.get("BASE_PORT")
+        min_port = int(base_port) if base_port else 6379
+
     tic = time.perf_counter()
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     timeout_start = time.time()
@@ -856,7 +897,7 @@ def is_address_already_in_use(
         if not os.path.exists(log_file):
             time.sleep(0.1)
             continue
-        
+
         with open(log_file, "r") as f:
             server_log = f.read()
             # Check for known error message variants because different C libraries
