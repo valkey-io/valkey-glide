@@ -20,6 +20,10 @@ inputs:
             - use-self-hosted
             - use-github
         default: false
+    run-with-windows-self-hosted:
+        description: "Include self-hosted Windows runners"
+        type: boolean
+        default: false
     containers:
         description: "Run in containers"
         required: true
@@ -46,12 +50,14 @@ runs:
               EVENT_NAME: ${{ github.event_name }}
               RUN_FULL_MATRIX: ${{ inputs.run-full-matrix }}
               RUN_WITH_MACOS: ${{ inputs.run-with-macos }}
+              RUN_WITH_WINDOWS_SELF_HOSTED: ${{ inputs.run-with-windows-self-hosted }}
               CONTAINERS: ${{ inputs.containers }}
               LANGUAGE_NAME: ${{ inputs.language-name }}
           run: |
               echo "EVENT_NAME=$EVENT_NAME" >> $GITHUB_ENV
               echo "RUN_FULL_MATRIX=$RUN_FULL_MATRIX" >> $GITHUB_ENV
               echo "RUN_WITH_MACOS=$RUN_WITH_MACOS" >> $GITHUB_ENV
+              echo "RUN_WITH_WINDOWS_SELF_HOSTED=$RUN_WITH_WINDOWS_SELF_HOSTED" >> $GITHUB_ENV
               echo "CONTAINERS=$CONTAINERS" >> $GITHUB_ENV
               echo "LANGUAGE_NAME=$LANGUAGE_NAME" >> $GITHUB_ENV
 
@@ -96,6 +102,13 @@ runs:
                 FINAL_MATRIX=$(echo "$BASE_MATRIX" "$MAC_RUNNERS" | jq -sc 'add')
               else
                 FINAL_MATRIX="$BASE_MATRIX"
+              fi
+
+              # Add Windows self-hosted runners if specified
+              if [[ "$RUN_WITH_WINDOWS_SELF_HOSTED" == "true" ]]; then
+                echo "Including self-hosted Windows runners"
+                WIN_RUNNERS=$(jq --arg lang "$LANGUAGE_NAME" -c '[.[] | select(.languages? and any(.languages[] == $lang; .) and '"$CONDITION"' and .TARGET == "x86_64-pc-windows-msvc" and (.RUNNER == ["self-hosted","windows","x64"]))]' < .github/json_matrices/build-matrix.json)
+                FINAL_MATRIX=$(echo "$FINAL_MATRIX" "$WIN_RUNNERS" | jq -sc 'add')
               fi
                         
               echo "host-matrix=$(echo $FINAL_MATRIX | tr -d '\n')" >> $GITHUB_OUTPUT

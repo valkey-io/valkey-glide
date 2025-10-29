@@ -68,13 +68,18 @@ runs:
           run: |
               yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
-        - name: Install software dependencies for Windows
+        - name: Verify Rust toolchain (Windows)
           shell: pwsh
           if: "${{ inputs.os == 'windows' }}"
           run: |
-              # Verify Rust toolchain is available
-              rustc --version
-              cargo --version
+              # Check if Rust is already available (may be pre-installed on self-hosted runners)
+              try {
+                  rustc --version
+                  cargo --version
+                  Write-Host "✅ Rust toolchain already available"
+              } catch {
+                  Write-Host "ℹ️ Rust toolchain not found - will be installed by install-rust-and-protoc action"
+              }
 
         - name: Setup Python for Windows
           if: "${{ inputs.os == 'windows' }}"
@@ -82,8 +87,94 @@ runs:
           with:
               python-version: "3.x"
 
+        - name: Check Windows build dependencies
+          if: "${{ inputs.os == 'windows' }}"
+          id: check-deps
+          shell: pwsh
+          run: |
+              Write-Host "Checking Windows build dependencies..."
+
+              # Check Python3
+              $python3Available = $false
+              try {
+                  python3 --version
+                  $python3Available = $true
+                  Write-Host "✅ Python3 already available"
+              } catch {
+                  try {
+                      python --version
+                      Write-Host "✅ Python available, will create python3 symlink"
+                      $python3Available = $true
+                  } catch {
+                      Write-Host "❌ Python not found"
+                  }
+              }
+
+              # Check Rust (should be installed by install-rust-and-protoc action)
+              $rustAvailable = $false
+              try {
+                  rustc --version
+                  cargo --version
+                  $rustAvailable = $true
+                  Write-Host "✅ Rust toolchain already available"
+              } catch {
+                  Write-Host "ℹ️ Rust toolchain will be installed by install-rust-and-protoc action"
+              }
+
+              # Check SSH client
+              $sshAvailable = $false
+              try {
+                  ssh -V 2>$null
+                  $sshAvailable = $true
+                  Write-Host "✅ SSH client available"
+              } catch {
+                  Write-Host "❌ SSH client not found"
+              }
+
+              # Set outputs for conditional steps
+              echo "python3-available=$python3Available" >> $env:GITHUB_OUTPUT
+              echo "rust-available=$rustAvailable" >> $env:GITHUB_OUTPUT
+              echo "ssh-available=$sshAvailable" >> $env:GITHUB_OUTPUT
+
+              Write-Host "Dependency check complete"
+
+        - name: Setup Python3 symlink (Windows)
+          if: "${{ inputs.os == 'windows' && steps.check-deps.outputs.python3-available == 'true' }}"
+          shell: pwsh
+          run: |
+              # Create python3 symlink if python exists but python3 doesn't
+              if (-not (Get-Command python3 -ErrorAction SilentlyContinue)) {
+                  if (Get-Command python -ErrorAction SilentlyContinue) {
+                      Write-Host "Creating python3 symlink..."
+                      $pythonPath = (Get-Command python).Source
+                      $python3Path = Join-Path (Split-Path $pythonPath) "python3.exe"
+                      New-Item -ItemType HardLink -Path $python3Path -Target $pythonPath -Force
+                      Write-Host "✅ python3 symlink created"
+                  }
+              }
+
+        - name: Verify Windows dependencies for remote cluster mode
+          if: "${{ inputs.os == 'windows' }}"
+          shell: pwsh
+          run: |
+              Write-Host "Verifying Windows dependencies for remote cluster + build..."
+
+              # Verify Python3 (required for remote_cluster_manager.py)
+              python3 --version
+              Write-Host "✅ Python3 ready"
+
+              # Verify SSH (required for remote cluster access)
+              ssh -V
+              Write-Host "✅ SSH client ready"
+
+              # Note: Rust and protoc will be installed by subsequent actions
+              Write-Host "ℹ️ Rust toolchain and protoc will be installed by install-rust-and-protoc action"
+              Write-Host "ℹ️ JDK will be installed by setup-java action"
+
+              Write-Host "✅ Windows ready for Java client build + remote cluster testing"
+
         - name: Cache Valkey build
-          if: "${{ inputs.engine-version }}"
+          if: "${{ inputs.engine-version != '' }}"
           uses: actions/cache@v4
           id: cache-valkey
           with:
@@ -97,7 +188,7 @@ runs:
 
         - name: Install engine
           shell: bash
-          if: "${{ inputs.engine-version && steps.cache-valkey.outputs.cache-hit == 'true' && inputs.os != 'windows' }}"
+          if: "${{ inputs.engine-version != '' && steps.cache-valkey.outputs.cache-hit == 'true' && inputs.os != 'windows' }}"
           env:
               ENGINE_VERSION: ${{ inputs.engine-version }}
               OS_TYPE: ${{ inputs.os }}
@@ -116,7 +207,7 @@ runs:
 
         - name: Build engine from source
           shell: bash
-          if: "${{ inputs.engine-version && steps.cache-valkey.outputs.cache-hit != 'true' && inputs.os != 'windows' }}"
+          if: "${{ inputs.engine-version != '' && steps.cache-valkey.outputs.cache-hit != 'true' && inputs.os != 'windows' }}"
           env:
               ENGINE_VERSION: ${{ inputs.engine-version }}
               OS_TYPE: ${{ inputs.os }}
