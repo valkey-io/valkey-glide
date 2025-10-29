@@ -88,20 +88,23 @@ runs:
           run: |
               Write-Host "Checking Windows build dependencies..."
 
+              # Debug: Show PATH and available Python commands
+              Write-Host "PATH contains:"
+              $env:PATH -split ';' | Where-Object { $_ -like '*python*' -or $_ -like '*Python*' } | ForEach-Object { Write-Host "  $_" }
+
+              Write-Host "Available Python commands:"
+              Get-Command python* -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name) -> $($_.Source)" }
+
               # Check Python3
               $python3Available = $false
-              try {
-                  python3 --version
+              if (Get-Command python3 -ErrorAction SilentlyContinue) {
                   $python3Available = $true
                   Write-Host "Python3 already available"
-              } catch {
-                  try {
-                      python --version
-                      Write-Host "Python available, will create python3 symlink"
-                      $python3Available = $true
-                  } catch {
-                      Write-Host "Python not found"
-                  }
+              } elseif (Get-Command python -ErrorAction SilentlyContinue) {
+                  Write-Host "Python available, will create python3 symlink"
+                  $python3Available = $true
+              } else {
+                  Write-Host "Python not found"
               }
 
               # Check Rust (should be installed by install-rust-and-protoc action)
