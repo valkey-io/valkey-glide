@@ -292,7 +292,8 @@ jobs:
                   target: ${{ matrix.build.TARGET }}
                   args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.9 pypy3.10 pypy3.11' || 'python3.14' }}
                   manylinux: auto
-                  container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2_28' }}
+                  container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
+                  docker-options: --pull always
                   before-script-linux: |
                       # Install protobuf compiler
                       if [[ $(`which apt`) != '' ]]
