@@ -95,6 +95,54 @@ runs:
               Write-Host "Available Python commands:"
               Get-Command python* -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name) -> $($_.Source)" }
 
+              # Check Windows registry for Python installations
+              Write-Host "Checking Windows registry for Python..."
+              $regPaths = @(
+                  "HKLM:\SOFTWARE\Python\PythonCore\*\InstallPath",
+                  "HKCU:\SOFTWARE\Python\PythonCore\*\InstallPath",
+                  "HKLM:\SOFTWARE\WOW6432Node\Python\PythonCore\*\InstallPath"
+              )
+
+              foreach ($regPath in $regPaths) {
+                  try {
+                      Get-ItemProperty $regPath -ErrorAction SilentlyContinue | ForEach-Object {
+                          $installPath = $_.'(default)'
+                          if ($installPath -and (Test-Path $installPath)) {
+                              Write-Host "  Registry: $installPath"
+                              $pythonExe = Join-Path $installPath "python.exe"
+                              if (Test-Path $pythonExe) {
+                                  Write-Host "    Found: $pythonExe"
+                              }
+                          }
+                      }
+                  } catch { }
+              }
+
+              # Check common installation directories
+              Write-Host "Checking common Python installation paths..."
+              $commonPaths = @(
+                  "$env:LOCALAPPDATA\Programs\Python\Python*",
+                  "$env:PROGRAMFILES\Python*",
+                  "$env:PROGRAMFILES(x86)\Python*",
+                  "C:\Python*",
+                  "$env:APPDATA\Local\Programs\Python\Python*"
+              )
+
+              foreach ($pathPattern in $commonPaths) {
+                  Get-ChildItem $pathPattern -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                      $pythonExe = Join-Path $_.FullName "python.exe"
+                      if (Test-Path $pythonExe) {
+                          Write-Host "  Found: $pythonExe"
+                          try {
+                              $version = & $pythonExe --version 2>&1
+                              Write-Host "    Version: $version"
+                          } catch {
+                              Write-Host "    Version check failed"
+                          }
+                      }
+                  }
+              }
+
               # Check Python3
               $python3Available = $false
 
