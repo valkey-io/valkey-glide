@@ -126,9 +126,9 @@ sudo systemctl start valkey-multi-engine
 echo "Testing engine installations..."
 for engine in valkey-7.2 valkey-8.0 valkey-8.1 redis-6.2 redis-7.0 redis-7.2; do
     if [ -f "/opt/engines/$engine/src/redis-server" ] || [ -f "/opt/engines/$engine/src/valkey-server" ]; then
-        echo "✅ $engine: installed"
+        echo "[OK] $engine: installed"
     else
-        echo "❌ $engine: failed to build"
+        echo "[FAIL] $engine: failed to build"
     fi
 done
 

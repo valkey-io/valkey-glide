@@ -116,7 +116,7 @@ class RemoteClusterManager:
 
         # Test connection first
         if not self.test_connection():
-            print("❌ SSH connection failed")
+            print("[FAIL] SSH connection failed")
             return False
 
         # Check if repo exists, clone if not
@@ -317,10 +317,10 @@ def main():
 
         if args.command == "test":
             if manager.test_connection():
-                print("✅ SSH connection successful")
+                print("[OK] SSH connection successful")
                 return 0
             else:
-                print("❌ SSH connection failed")
+                print("[FAIL] SSH connection failed")
                 return 1
 
         elif args.command == "start":

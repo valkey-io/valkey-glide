@@ -99,14 +99,14 @@ runs:
               try {
                   python3 --version
                   $python3Available = $true
-                  Write-Host "✅ Python3 already available"
+                  Write-Host "Python3 already available"
               } catch {
                   try {
                       python --version
-                      Write-Host "✅ Python available, will create python3 symlink"
+                      Write-Host "Python available, will create python3 symlink"
                       $python3Available = $true
                   } catch {
-                      Write-Host "❌ Python not found"
+                      Write-Host "Python not found"
                   }
               }
 
@@ -116,9 +116,9 @@ runs:
                   rustc --version
                   cargo --version
                   $rustAvailable = $true
-                  Write-Host "✅ Rust toolchain already available"
+                  Write-Host "Rust toolchain already available"
               } catch {
-                  Write-Host "ℹ️ Rust toolchain will be installed by install-rust-and-protoc action"
+                  Write-Host "Rust toolchain will be installed by install-rust-and-protoc action"
               }
 
               # Check SSH client
@@ -126,9 +126,9 @@ runs:
               try {
                   ssh -V 2>$null
                   $sshAvailable = $true
-                  Write-Host "✅ SSH client available"
+                  Write-Host "SSH client available"
               } catch {
-                  Write-Host "❌ SSH client not found"
+                  Write-Host "SSH client not found"
               }
 
               # Set outputs for conditional steps
@@ -149,7 +149,7 @@ runs:
                       $pythonPath = (Get-Command python).Source
                       $python3Path = Join-Path (Split-Path $pythonPath) "python3.exe"
                       New-Item -ItemType HardLink -Path $python3Path -Target $pythonPath -Force
-                      Write-Host "✅ python3 symlink created"
+                      Write-Host "python3 symlink created"
                   }
               }
 
@@ -161,17 +161,17 @@ runs:
 
               # Verify Python3 (required for remote_cluster_manager.py)
               python3 --version
-              Write-Host "✅ Python3 ready"
+              Write-Host "Python3 ready"
 
               # Verify SSH (required for remote cluster access)
               ssh -V
-              Write-Host "✅ SSH client ready"
+              Write-Host "SSH client ready"
 
               # Note: Rust and protoc will be installed by subsequent actions
-              Write-Host "ℹ️ Rust toolchain and protoc will be installed by install-rust-and-protoc action"
-              Write-Host "ℹ️ JDK will be installed by setup-java action"
+              Write-Host "Rust toolchain and protoc will be installed by install-rust-and-protoc action"
+              Write-Host "JDK will be installed by setup-java action"
 
-              Write-Host "✅ Windows ready for Java client build + remote cluster testing"
+              Write-Host "Windows ready for Java client build + remote cluster testing"
 
         - name: Cache Valkey build
           if: "${{ inputs.engine-version != '' }}"

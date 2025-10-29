@@ -173,7 +173,7 @@ jobs:
               run: |
                   # Check configuration priority: VPC > Remote > Local
                   if [ -n "${{ vars.VALKEY_VPC_HOST }}" ]; then
-                      echo "🔧 Configuring VPC Valkey instance access..."
+                      echo "Configuring VPC Valkey instance access..."
                       
                       # Set up SSH key from GitHub secret
                       mkdir -p ~/.ssh
@@ -196,20 +196,20 @@ jobs:
                       chmod 600 ~/.ssh/config
                       
                       # Test SSH connection
-                      echo "🔍 Testing VPC SSH connection..."
+                      echo "Testing VPC SSH connection..."
                       ssh -i ~/.ssh/valkey_vpc_key ubuntu@${{ vars.VALKEY_VPC_HOST }} "echo 'VPC connection successful'" || {
-                          echo "❌ VPC SSH connection failed"
+                          echo "VPC SSH connection failed"
                           exit 1
                       }
                       
-                      echo "✅ VPC Valkey instance configured successfully"
+                      echo "VPC Valkey instance configured successfully"
                       
                       # Set environment variables for Gradle
                       echo "VALKEY_VPC_HOST=${{ vars.VALKEY_VPC_HOST }}" >> $GITHUB_ENV
                       echo "SSH_PRIVATE_KEY_CONTENT=${{ secrets.VALKEY_VPC_SSH_KEY }}" >> $GITHUB_ENV
                       
                   elif [ -n "${{ vars.VALKEY_REMOTE_HOST }}" ]; then
-                      echo "🔧 Configuring remote Valkey cluster access..."
+                      echo "Configuring remote Valkey cluster access..."
                       
                       # Set up SSH key from GitHub secret
                       mkdir -p ~/.ssh
@@ -232,13 +232,13 @@ jobs:
                       chmod 600 ~/.ssh/config
                       
                       # Test SSH connection
-                      echo "🔍 Testing SSH connection..."
+                      echo "Testing SSH connection..."
                       python3 utils/remote_cluster_manager.py test || {
-                          echo "❌ SSH connection test failed"
+                          echo "SSH connection test failed"
                           exit 1
                       }
                       
-                      echo "✅ Remote cluster access configured successfully"
+                      echo "Remote cluster access configured successfully"
                       
                       # Set environment variables for Gradle
                       echo "VALKEY_REMOTE_HOST=${{ vars.VALKEY_REMOTE_HOST }}" >> $GITHUB_ENV
