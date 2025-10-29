@@ -1,0 +1,150 @@
+name: "Setup Windows Dependencies"
+description: "Setup Python, SSH, and other Windows-specific dependencies"
+
+inputs:
+    github-token:
+        description: "GitHub token for authentication"
+        required: false
+        default: ${{ github.token }}
+
+outputs:
+    python-available:
+        description: "Whether Python is available"
+        value: ${{ steps.check.outputs.python-available }}
+    ssh-available:
+        description: "Whether SSH is available"
+        value: ${{ steps.check.outputs.ssh-available }}
+
+runs:
+    using: "composite"
+    steps:
+        - name: Check Windows dependencies
+          id: check
+          shell: powershell
+          run: |
+              Write-Host "Checking Windows dependencies..."
+
+              # Check for Python installations
+              $pythonAvailable = $false
+              $pythonPath = $null
+
+              # Method 1: Check PATH commands
+              if (Get-Command python3 -ErrorAction SilentlyContinue) {
+                  $pythonAvailable = $true
+                  $pythonPath = (Get-Command python3).Source
+                  Write-Host "Found python3 in PATH: $pythonPath"
+              } elseif (Get-Command python -ErrorAction SilentlyContinue) {
+                  $version = python --version 2>&1
+                  if ($version -match "Python 3\.") {
+                      $pythonAvailable = $true
+                      $pythonPath = (Get-Command python).Source
+                      Write-Host "Found Python 3.x via python command: $version"
+                  }
+              }
+
+              # Method 2: Check registry if not found in PATH
+              if (-not $pythonAvailable) {
+                  Write-Host "Checking Windows registry for Python..."
+                  $regPaths = @(
+                      "HKLM:\SOFTWARE\Python\PythonCore\*\InstallPath",
+                      "HKCU:\SOFTWARE\Python\PythonCore\*\InstallPath",
+                      "HKLM:\SOFTWARE\WOW6432Node\Python\PythonCore\*\InstallPath"
+                  )
+
+                  foreach ($regPath in $regPaths) {
+                      Get-ItemProperty $regPath -ErrorAction SilentlyContinue | ForEach-Object {
+                          $installPath = $_.'(default)'
+                          if ($installPath -and (Test-Path $installPath)) {
+                              $pythonExe = Join-Path $installPath "python.exe"
+                              if (Test-Path $pythonExe) {
+                                  $version = & $pythonExe --version 2>&1
+                                  if ($version -match "Python 3\.") {
+                                      $pythonAvailable = $true
+                                      $pythonPath = $pythonExe
+                                      Write-Host "Found Python 3.x in registry: $pythonExe ($version)"
+                                      break
+                                  }
+                              }
+                          }
+                      }
+                      if ($pythonAvailable) { break }
+                  }
+              }
+
+              # Method 3: Check common paths if still not found
+              if (-not $pythonAvailable) {
+                  Write-Host "Checking common installation paths..."
+                  $commonPaths = @(
+                      "$env:LOCALAPPDATA\Programs\Python\Python*",
+                      "$env:PROGRAMFILES\Python*",
+                      "$env:PROGRAMFILES(x86)\Python*",
+                      "C:\Python*"
+                  )
+
+                  foreach ($pathPattern in $commonPaths) {
+                      Get-ChildItem $pathPattern -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                          $pythonExe = Join-Path $_.FullName "python.exe"
+                          if (Test-Path $pythonExe) {
+                              $version = & $pythonExe --version 2>&1
+                              if ($version -match "Python 3\.") {
+                                  $pythonAvailable = $true
+                                  $pythonPath = $pythonExe
+                                  Write-Host "Found Python 3.x at: $pythonExe ($version)"
+                                  break
+                              }
+                          }
+                      }
+                      if ($pythonAvailable) { break }
+                  }
+              }
+
+              # Check SSH
+              $sshAvailable = $false
+              if (Get-Command ssh -ErrorAction SilentlyContinue) {
+                  $sshAvailable = $true
+                  Write-Host "SSH client available"
+              } else {
+                  Write-Host "SSH client not found"
+              }
+
+              # Set outputs
+              echo "python-available=$pythonAvailable" >> $env:GITHUB_OUTPUT
+              echo "ssh-available=$sshAvailable" >> $env:GITHUB_OUTPUT
+
+              Write-Host "Detection complete: Python=$pythonAvailable, SSH=$sshAvailable"
+
+        - name: Setup Python3 symlink
+          if: steps.check.outputs.python-available == 'true'
+          shell: powershell
+          run: |
+              if (-not (Get-Command python3 -ErrorAction SilentlyContinue)) {
+                  if (Get-Command python -ErrorAction SilentlyContinue) {
+                      Write-Host "Creating python3 symlink..."
+                      $pythonPath = (Get-Command python).Source
+                      $python3Path = Join-Path (Split-Path $pythonPath) "python3.exe"
+                      New-Item -ItemType HardLink -Path $python3Path -Target $pythonPath -Force
+                      Write-Host "python3 symlink created"
+                  }
+              } else {
+                  Write-Host "python3 command already exists"
+              }
+
+        - name: Install Python (GitHub-hosted only)
+          if: runner.environment == 'github-hosted' && steps.check.outputs.python-available != 'true'
+          uses: actions/setup-python@v5
+          with:
+              python-version: "3.x"
+
+        - name: Verify Python setup
+          shell: powershell
+          run: |
+              if (Get-Command python3 -ErrorAction SilentlyContinue) {
+                  python3 --version
+                  Write-Host "Python3 ready"
+              } elseif (Get-Command python -ErrorAction SilentlyContinue) {
+                  python --version
+                  Write-Host "Python ready"
+              } else {
+                  Write-Host "No Python available"
+                  exit 1
+              }
