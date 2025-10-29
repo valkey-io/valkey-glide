@@ -240,7 +240,7 @@ runs:
 
         - name: Start engine server
           shell: bash
-          if: "${{ inputs.engine-version && !env.VALKEY_VPC_HOST && !env.VALKEY_REMOTE_HOST }}"
+          if: "${{ inputs.engine-version && inputs.os != 'windows' }}"
           env:
               OS_TYPE: ${{ inputs.os }}
           run: |
@@ -257,7 +257,7 @@ runs:
 
         - name: Test remote Valkey connectivity
           shell: bash
-          if: "${{ inputs.engine-version && (env.VALKEY_VPC_HOST || env.VALKEY_REMOTE_HOST) }}"
+          if: "${{ inputs.engine-version && inputs.os == 'windows' }}"
           run: |
               echo "Testing remote Valkey connectivity..."
 
