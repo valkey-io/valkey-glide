@@ -36,6 +36,8 @@ jobs:
               id: setup
               env:
                   ACTION: ${{ github.event.inputs.action }}
+                  INSTANCE_TYPE: ${{ github.event.inputs.instance_type }}
+                  KEY_NAME: ${{ secrets.AWS_KEY_PAIR_NAME }}
               run: |
                   case "$ACTION" in
                     "start")
@@ -64,8 +66,8 @@ jobs:
                       # Launch instance
                       INSTANCE_ID=$(aws ec2 run-instances \
                         --image-id ami-0c02fb55956c7d316 \
-                        --instance-type ${{ github.event.inputs.instance_type }} \
-                        --key-name ${{ secrets.AWS_KEY_PAIR_NAME }} \
+                        --instance-type "$INSTANCE_TYPE" \
+                        --key-name "$KEY_NAME" \
                         --security-groups valkey-runner-sg \
                         --user-data file://<(cat << 'EOF'
                       #!/bin/bash
@@ -136,12 +138,14 @@ jobs:
 
             - name: Save runner info
               if: github.event.inputs.action == 'start'
+              env:
+                  RUNNER_IP: ${{ steps.setup.outputs.runner-ip }}
               run: |
                   echo "Linux runner started successfully!"
-                  echo "IP Address: ${{ steps.setup.outputs.runner-ip }}"
+                  echo "IP Address: $RUNNER_IP"
                   echo ""
                   echo "To use this runner in Windows tests, set environment variable:"
-                  echo "VALKEY_REMOTE_HOST=${{ steps.setup.outputs.runner-ip }}"
+                  echo "VALKEY_REMOTE_HOST=$RUNNER_IP"
                   echo ""
                   echo "SSH access:"
-                  echo "ssh -i ~/.ssh/your-key.pem ubuntu@${{ steps.setup.outputs.runner-ip }}"
+                  echo "ssh -i ~/.ssh/your-key.pem ubuntu@$RUNNER_IP"
