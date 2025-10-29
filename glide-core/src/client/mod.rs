@@ -194,6 +194,8 @@ pub async fn get_valkey_connection_info(
 
 use redis::{TlsCertificates, retrieve_tls_certificates};
 
+// tls_params should be only set if tls_mode is SecureTls
+// this should be validated before calling this function
 pub(super) fn get_connection_info(
     address: &NodeAddress,
     tls_mode: TlsMode,
