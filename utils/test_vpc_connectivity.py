@@ -23,16 +23,16 @@ def test_ssh_connection(host: str, user: str = "ubuntu", key_path: str = None) -
     try:
         result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=15)
         if result.returncode == 0 and "SSH connection successful" in result.stdout:
-            print("✅ SSH connection successful")
+            print("[OK] SSH connection successful")
             return True
         else:
-            print(f"❌ SSH connection failed: {result.stderr}")
+            print(f"[FAIL] SSH connection failed: {result.stderr}")
             return False
     except subprocess.TimeoutExpired:
-        print("❌ SSH connection timed out")
+        print("[FAIL] SSH connection timed out")
         return False
     except Exception as e:
-        print(f"❌ SSH connection error: {e}")
+        print(f"[FAIL] SSH connection error: {e}")
         return False
 
 
@@ -49,12 +49,12 @@ def test_port_connectivity(host: str, ports: List[int]) -> List[Tuple[int, bool]
             sock.close()
 
             success = result == 0
-            status = "✅ Open" if success else "❌ Closed"
+            status = "[OK] Open" if success else "[FAIL] Closed"
             print(f"  Port {port}: {status}")
             results.append((port, success))
 
         except Exception as e:
-            print(f"  Port {port}: ❌ Error - {e}")
+            print(f"  Port {port}: [FAIL] Error - {e}")
             results.append((port, False))
 
     return results
@@ -77,17 +77,17 @@ def test_multi_engine_manager(host: str, key_path: str = None) -> bool:
     try:
         result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=30)
         if result.returncode == 0:
-            print("✅ Multi-engine manager working")
+            print("[OK] Multi-engine manager working")
             print("Available engines:")
             for line in result.stdout.strip().split("\n"):
                 if line.strip():
                     print(f"  {line}")
             return True
         else:
-            print(f"❌ Multi-engine manager failed: {result.stderr}")
+            print(f"[FAIL] Multi-engine manager failed: {result.stderr}")
             return False
     except Exception as e:
-        print(f"❌ Multi-engine manager error: {e}")
+        print(f"[FAIL] Multi-engine manager error: {e}")
         return False
 
 
@@ -117,10 +117,10 @@ def get_instance_info(host: str, key_path: str = None) -> dict:
                     info[key.strip()] = value.strip()
             return info
         else:
-            print(f"❌ Failed to get instance info: {result.stderr}")
+            print(f"[FAIL] Failed to get instance info: {result.stderr}")
             return {}
     except Exception as e:
-        print(f"❌ Instance info error: {e}")
+        print(f"[FAIL] Instance info error: {e}")
         return {}
 
 
@@ -138,31 +138,31 @@ def main():
 
     args = parser.parse_args()
 
-    print("🔍 VPC Connectivity Test for Valkey GLIDE")
+    print("[TEST] VPC Connectivity Test for Valkey GLIDE")
     print("=" * 50)
 
     # Test SSH connectivity
     ssh_ok = test_ssh_connection(args.linux_host, key_path=args.key_path)
     if not ssh_ok:
-        print("\n❌ SSH connectivity failed. Check:")
+        print("\n[FAIL] SSH connectivity failed. Check:")
         print("1. Security group allows SSH (port 22) from Windows instance")
         print("2. SSH key is correct")
         print("3. Linux instance is running")
         return 1
 
     # Get instance information
-    print("\n📋 Instance Information:")
+    print("\n[INFO] Instance Information:")
     info = get_instance_info(args.linux_host, key_path=args.key_path)
     for key, value in info.items():
         print(f"  {key}: {value}")
 
     # Test multi-engine manager
-    print("\n🔧 Multi-Engine Manager Test:")
+    print("\n[CONFIG] Multi-Engine Manager Test:")
     manager_ok = test_multi_engine_manager(args.linux_host, key_path=args.key_path)
 
     # Test port connectivity if requested
     if args.test_ports:
-        print("\n🔌 Port Connectivity Test:")
+        print("\n[PORT] Port Connectivity Test:")
         test_ports = [
             6379,  # valkey-7.2
             6479,  # valkey-8.0
@@ -175,17 +175,17 @@ def main():
 
         open_ports = [port for port, success in port_results if success]
         if open_ports:
-            print(f"✅ {len(open_ports)} ports accessible")
+            print(f"[OK] {len(open_ports)} ports accessible")
         else:
             print("⚠️ No Valkey ports currently open (clusters not running)")
 
     # Summary
-    print("\n📊 Test Summary:")
-    print(f"  SSH Connection: {'✅ Pass' if ssh_ok else '❌ Fail'}")
-    print(f"  Multi-Engine Manager: {'✅ Pass' if manager_ok else '❌ Fail'}")
+    print("\n[SUMMARY] Test Summary:")
+    print(f"  SSH Connection: {'[OK] Pass' if ssh_ok else '[FAIL] Fail'}")
+    print(f"  Multi-Engine Manager: {'[OK] Pass' if manager_ok else '[FAIL] Fail'}")
 
     if ssh_ok and manager_ok:
-        print("\n🎉 VPC connectivity test passed!")
+        print("\n[SUCCESS] VPC connectivity test passed!")
         print("\nNext steps:")
         print("1. Configure GitHub variables:")
         print(f"   VALKEY_VPC_HOST={args.linux_host}")
@@ -194,7 +194,7 @@ def main():
         print("3. Run Java tests with VPC instance")
         return 0
     else:
-        print("\n❌ VPC connectivity test failed!")
+        print("\n[FAIL] VPC connectivity test failed!")
         return 1
 
 
