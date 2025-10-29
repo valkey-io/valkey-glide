@@ -23,7 +23,9 @@ VPC: Your AWS VPC
 **SSH to your Linux instance and run:**
 ```bash
 # Download and run VPC setup script
-curl -sSL https://raw.githubusercontent.com/valkey-io/valkey-glide/main/utils/setup_vpc_pair.sh | bash
+curl -sSL https://raw.githubusercontent.com/valkey-io/valkey-glide/main/utils/setup_vpc_pair.sh -o setup_vpc_pair.sh
+bash setup_vpc_pair.sh
+rm setup_vpc_pair.sh
 ```
 
 This will:

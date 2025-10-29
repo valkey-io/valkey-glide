@@ -34,8 +34,10 @@ jobs:
 
             - name: Setup Linux Runner
               id: setup
+              env:
+                  ACTION: ${{ github.event.inputs.action }}
               run: |
-                  case "${{ github.event.inputs.action }}" in
+                  case "$ACTION" in
                     "start")
                       echo "Starting Linux runner instance..."
                       

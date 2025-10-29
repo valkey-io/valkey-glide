@@ -69,7 +69,9 @@ VALKEY_REMOTE_HOST
 ssh -i your-key.pem ubuntu@<instance-ip>
 
 # Run setup script
-curl -sSL https://raw.githubusercontent.com/valkey-io/valkey-glide/main/utils/setup_linux_runner.sh | bash
+curl -sSL https://raw.githubusercontent.com/valkey-io/valkey-glide/main/utils/setup_linux_runner.sh -o setup_linux_runner.sh
+bash setup_linux_runner.sh
+rm setup_linux_runner.sh
 
 # Add public key to authorized_keys
 echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... valkey-runner@github-actions" >> ~/.ssh/authorized_keys

@@ -18,7 +18,15 @@ if [ -f /etc/os-release ] && grep -q "Ubuntu" /etc/os-release; then
     echo "Linux private IP: $LINUX_PRIVATE_IP"
     
     # Run the standard VPC setup
-    curl -sSL https://raw.githubusercontent.com/valkey-io/valkey-glide/main/utils/setup_vpc_instance.sh | bash
+    SETUP_SCRIPT_URL="https://raw.githubusercontent.com/valkey-io/valkey-glide/main/utils/setup_vpc_instance.sh"
+    TEMP_SCRIPT=$(mktemp)
+    
+    echo "Downloading VPC setup script..."
+    curl -sSL "$SETUP_SCRIPT_URL" -o "$TEMP_SCRIPT"
+    
+    echo "Executing VPC setup script..."
+    bash "$TEMP_SCRIPT"
+    rm -f "$TEMP_SCRIPT"
     
     # Additional VPC-specific configuration
     echo "Configuring VPC-specific settings..."

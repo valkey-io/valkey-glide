@@ -41,7 +41,9 @@ This guide explains how to set up a VPC Linux instance with multiple Valkey/Redi
 **SSH to instance and run setup:**
 ```bash
 ssh -i your-key.pem ubuntu@<vpc-instance-ip>
-curl -sSL https://raw.githubusercontent.com/valkey-io/valkey-glide/main/utils/setup_vpc_instance.sh | bash
+curl -sSL https://raw.githubusercontent.com/valkey-io/valkey-glide/main/utils/setup_vpc_instance.sh -o setup_vpc_instance.sh
+bash setup_vpc_instance.sh
+rm setup_vpc_instance.sh
 ```
 
 ### 2. Configure GitHub Repository
