@@ -199,7 +199,7 @@ pub(super) fn get_connection_info(
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
     tls_params: Option<redis::TlsConnParams>,
-) -> RedisResult<redis::ConnectionInfo> {
+) -> redis::ConnectionInfo {
     let addr = if tls_mode != TlsMode::NoTls {
         redis::ConnectionAddr::TcpTls {
             host: address.host.to_string(),
@@ -210,10 +210,10 @@ pub(super) fn get_connection_info(
     } else {
         redis::ConnectionAddr::Tcp(address.host.to_string(), get_port(address))
     };
-    Ok(redis::ConnectionInfo {
+    redis::ConnectionInfo {
         addr,
         redis: redis_connection_info,
-    })
+    }
 }
 
 #[derive(Clone)]
@@ -1161,6 +1161,12 @@ async fn create_cluster_client(
 
     let valkey_connection_info = get_valkey_connection_info(&request, iam_token_manager).await;
     let (tls_params, tls_certificates) = if !request.root_certs.is_empty() {
+        if tls_mode == TlsMode::NoTls {
+            return Err(RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Custom root certificates provided but TLS is disabled",
+            )));
+        }
         let mut combined_certs = Vec::new();
         for cert in &request.root_certs {
             if cert.is_empty() {
@@ -1191,7 +1197,7 @@ async fn create_cluster_client(
                 tls_params.clone(),
             )
         })
-        .collect::<RedisResult<Vec<_>>>()?;
+        .collect();
 
     let periodic_topology_checks = match request.periodic_checks {
         Some(PeriodicCheck::Disabled) => None,

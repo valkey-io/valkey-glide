@@ -153,6 +153,15 @@ impl StandaloneClient {
         );
 
         let tls_params = if !connection_request.root_certs.is_empty() {
+            if tls_mode.unwrap_or(TlsMode::NoTls) == TlsMode::NoTls {
+                return Err(StandaloneClientConnectionError::FailedConnection(vec![(
+                    None,
+                    RedisError::from((
+                        redis::ErrorKind::InvalidClientConfig,
+                        "Custom root certificates provided but TLS is disabled",
+                    )),
+                )]));
+            }
             let mut combined_certs = Vec::new();
             for cert in &connection_request.root_certs {
                 combined_certs.extend_from_slice(cert);
@@ -217,9 +226,7 @@ impl StandaloneClient {
                     }
                 }
                 Err((address, (connection, err))) => {
-                    if let Some(connection) = connection {
-                        nodes.push(connection);
-                    }
+                    nodes.push(connection);
                     addresses_and_errors.push((Some(address), err));
                 }
             }
@@ -685,8 +692,8 @@ async fn get_connection_and_replication_info(
     discover_az: bool,
     connection_timeout: Duration,
     tls_params: Option<redis::TlsConnParams>,
-) -> Result<(ReconnectingConnection, Value), (Option<ReconnectingConnection>, RedisError)> {
-    let result = ReconnectingConnection::new(
+) -> Result<(ReconnectingConnection, Value), (ReconnectingConnection, RedisError)> {
+    let reconnecting_connection = ReconnectingConnection::new(
         address,
         *retry_strategy,
         connection_info.clone(),
@@ -696,18 +703,13 @@ async fn get_connection_and_replication_info(
         connection_timeout,
         tls_params,
     )
-    .await;
-    let reconnecting_connection = match result {
-        Ok(reconnecting_connection) => reconnecting_connection,
-        Err(tuple) => return Err(tuple),
-    };
+    .await?;
 
     let mut multiplexed_connection = match reconnecting_connection.get_connection().await {
         Ok(multiplexed_connection) => multiplexed_connection,
         Err(err) => {
-            // NOTE: this block is never reached
             reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
-            return Err((Some(reconnecting_connection), err));
+            return Err((reconnecting_connection, err));
         }
     };
 
@@ -715,11 +717,8 @@ async fn get_connection_and_replication_info(
         .send_packed_command(redis::cmd("INFO").arg("REPLICATION"))
         .await
     {
-        Ok(replication_status) => {
-            // Connection established + we got the INFO output
-            Ok((reconnecting_connection, replication_status))
-        }
-        Err(err) => Err((Some(reconnecting_connection), err)),
+        Ok(replication_status) => Ok((reconnecting_connection, replication_status)),
+        Err(err) => Err((reconnecting_connection, err)),
     }
 }
 

@@ -805,6 +805,43 @@ mod standalone_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_tls_connection_fails_with_custom_certs_and_no_tls() {
+        block_on_all(async move {
+            let server_addr =
+                redis::ConnectionAddr::Tcp("127.0.0.1".to_string(), get_available_port());
+
+            let mut connection_request = create_connection_request(
+                &[server_addr],
+                &TestConfiguration {
+                    use_tls: false,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::NoTls.into();
+            // Provide custom root certs but with NoTls mode
+            connection_request.root_certs = vec![b"some certificate".to_vec().into()];
+
+            // Client creation should fail due to invalid configuration
+            let client_result =
+                StandaloneClient::create_client(connection_request.into(), None, None).await;
+            assert!(
+                client_result.is_err(),
+                "Expected client creation to fail when custom certs provided with NoTls mode"
+            );
+            let err = client_result.unwrap_err();
+            let err_msg = format!("{:?}", err).to_lowercase();
+            assert!(
+                err_msg.contains("tls") && err_msg.contains("disabled"),
+                "Error message should mention TLS being disabled, got: {}",
+                err_msg
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_tls_connection_with_multiple_root_certs_first_invalid() {
         block_on_all(async move {
             // Create server with valid certificates
