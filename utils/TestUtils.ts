@@ -38,6 +38,7 @@ function parseOutput(input: string): {
 export type TestTLSConfig = {useTLS: boolean; advancedConfiguration?: {
                     tlsAdvancedConfiguration?: {
                         insecure?: boolean,
+                        rootCertificates?: Buffer<ArrayBufferLike>,
                     },
                 },};
 

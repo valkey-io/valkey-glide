@@ -910,6 +910,18 @@ export interface AdvancedBaseClientConfiguration {
          * - Default: false (verification is enforced).
          */
         insecure?: boolean;
+
+        /**
+         * Custom root certificate data for TLS connections.
+         *
+         * - When provided, these certificates will be used instead of the system's default trust store.
+         *   If not provided, the system's default certificate trust store will be used.
+         *
+         * - The certificate data should be in PEM format as a string or Buffer.
+         *
+         * - This is useful when connecting to servers with self-signed certificates or custom certificate authorities.
+         */
+        rootCertificates?: string | Buffer;
     };
 }
 
@@ -9196,13 +9208,29 @@ export class BaseClient {
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
 
         // Apply TLS configuration if present
-        if (options.tlsAdvancedConfiguration?.insecure) {
-            if (request.tlsMode === connection_request.TlsMode.SecureTls) {
-                request.tlsMode = connection_request.TlsMode.InsecureTls;
-            } else if (request.tlsMode === connection_request.TlsMode.NoTls) {
+        if (options.tlsAdvancedConfiguration) {
+            // request.tlsMode is either SecureTls or InsecureTls here
+            if (request.tlsMode === connection_request.TlsMode.NoTls) {
                 throw new ConfigurationError(
-                    "InsecureTls cannot be enabled when useTLS is disabled.",
+                    "TLS advanced configuration cannot be set when useTLS is disabled.",
                 );
+            }
+
+            // If options.tlsAdvancedConfiguration.insecure is true then use InsecureTls mode
+            if (options.tlsAdvancedConfiguration.insecure) {
+                request.tlsMode = connection_request.TlsMode.InsecureTls;
+            }
+
+            if (options.tlsAdvancedConfiguration.rootCertificates) {
+                const certData =
+                    typeof options.tlsAdvancedConfiguration.rootCertificates ===
+                    "string"
+                        ? Buffer.from(
+                              options.tlsAdvancedConfiguration.rootCertificates,
+                              "utf-8",
+                          )
+                        : options.tlsAdvancedConfiguration.rootCertificates;
+                request.rootCerts = [new Uint8Array(certData)];
             }
         }
     }
