@@ -97,14 +97,54 @@ runs:
 
               # Check Python3
               $python3Available = $false
+
+              # Method 1: Check for python3 command
               if (Get-Command python3 -ErrorAction SilentlyContinue) {
                   $python3Available = $true
-                  Write-Host "Python3 already available"
-              } elseif (Get-Command python -ErrorAction SilentlyContinue) {
-                  Write-Host "Python available, will create python3 symlink"
-                  $python3Available = $true
-              } else {
-                  Write-Host "Python not found"
+                  Write-Host "Python3 command found"
+              }
+              # Method 2: Check for python command  
+              elseif (Get-Command python -ErrorAction SilentlyContinue) {
+                  try {
+                      $version = python --version 2>&1
+                      if ($version -match "Python 3\.") {
+                          $python3Available = $true
+                          Write-Host "Python 3.x found via python command: $version"
+                      } else {
+                          Write-Host "Python found but not version 3.x: $version"
+                      }
+                  } catch {
+                      Write-Host "Python command exists but version check failed"
+                  }
+              }
+              # Method 3: Check common installation paths
+              else {
+                  $commonPaths = @(
+                      "$env:LOCALAPPDATA\Programs\Python\Python*\python.exe",
+                      "$env:PROGRAMFILES\Python*\python.exe",
+                      "$env:PROGRAMFILES(x86)\Python*\python.exe",
+                      "C:\Python*\python.exe"
+                  )
+                  
+                  foreach ($path in $commonPaths) {
+                      $found = Get-ChildItem $path -ErrorAction SilentlyContinue | Select-Object -First 1
+                      if ($found) {
+                          try {
+                              $version = & $found.FullName --version 2>&1
+                              if ($version -match "Python 3\.") {
+                                  $python3Available = $true
+                                  Write-Host "Python 3.x found at: $($found.FullName) - $version"
+                                  break
+                              }
+                          } catch {
+                              Write-Host "Found Python at $($found.FullName) but version check failed"
+                          }
+                      }
+                  }
+              }
+
+              if (-not $python3Available) {
+                  Write-Host "No Python 3.x installation detected"
               }
 
               # Check Rust (should be installed by install-rust-and-protoc action)
@@ -143,10 +183,12 @@ runs:
               Write-Host "Python detection results:"
               Write-Host "  python3-available: ${{ steps.check-deps.outputs.python3-available }}"
               Write-Host "  Runner type: ${{ runner.name }}"
-              Write-Host "  Will install Python: ${{ runner.os == 'Windows' && !contains(runner.name, 'self-hosted') && steps.check-deps.outputs.python3-available != 'true' }}"
+              Write-Host "  Runner environment: ${{ runner.environment }}"
+              Write-Host "  Is GitHub-hosted: ${{ runner.environment == 'github-hosted' }}"
+              Write-Host "  Will install Python: ${{ runner.os == 'Windows' && runner.environment == 'github-hosted' && steps.check-deps.outputs.python3-available != 'true' }}"
 
         - name: Setup Python for Windows
-          if: "${{ runner.os == 'Windows' && !contains(runner.name, 'self-hosted') && steps.check-deps.outputs.python3-available != 'true' }}"
+          if: "${{ runner.os == 'Windows' && runner.environment == 'github-hosted' && steps.check-deps.outputs.python3-available != 'true' }}"
           uses: actions/setup-python@v5
           with:
               python-version: "3.x"
