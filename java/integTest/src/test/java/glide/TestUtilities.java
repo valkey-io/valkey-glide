@@ -23,6 +23,9 @@ import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.cluster.ValkeyCluster;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -183,6 +186,20 @@ public class TestUtilities {
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
         return builder.useTLS(TLS);
+    }
+
+    /**
+     * Reads the CA certificate from the cluster_manager's TLS certificates directory.
+     *
+     * @return The CA certificate bytes in PEM format
+     * @throws Exception if the certificate file cannot be read
+     */
+    @SneakyThrows
+    public static byte[] getCaCertificate() {
+        String glideHome =
+                System.getenv().getOrDefault("GLIDE_HOME_DIR", System.getProperty("user.dir") + "/../..");
+        Path caCertPath = Paths.get(glideHome, "utils/tls_crts/ca.crt");
+        return Files.readAllBytes(caCertPath);
     }
 
     public static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>

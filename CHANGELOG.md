@@ -9,6 +9,7 @@
 * PYTHON: Add IAM authentication support with manual token refresh ([#4890](https://github.com/valkey-io/valkey-glide/pull/4890))
 * JAVA: Add IAM authentication support for ElastiCache/MemoryDB ([#4891](https://github.com/valkey-io/valkey-glide/pull/4891/))
 * FFI/GO: Add IAM authentication support with automatic token refresh ([#4892](https://github.com/valkey-io/valkey-glide/pull/4892))
+* JAVA: Implement TLS support for Java client ([#4905](https://github.com/valkey-io/valkey-glide/pull/4905))
 
 #### Fixes
 
