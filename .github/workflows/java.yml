@@ -350,7 +350,7 @@ jobs:
 
             - name: Setup networking and verify Valkey for PubSub (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
-              shell: pwsh
+              shell: powershell
               run: |
                   # Optimize WSL for better performance (PubSub tests)
                   Write-Host "Optimizing WSL configuration for PubSub tests..."
