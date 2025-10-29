@@ -76,9 +76,9 @@ runs:
               try {
                   rustc --version
                   cargo --version
-                  Write-Host "✅ Rust toolchain already available"
+                  Write-Host "Rust toolchain already available"
               } catch {
-                  Write-Host "ℹ️ Rust toolchain not found - will be installed by install-rust-and-protoc action"
+                  Write-Host "Rust toolchain not found - will be installed by install-rust-and-protoc action"
               }
 
         - name: Setup Python for Windows
