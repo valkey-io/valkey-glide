@@ -1,0 +1,145 @@
+name: Setup Linux Runner for Valkey
+
+on:
+    workflow_dispatch:
+        inputs:
+            action:
+                description: "Action to perform"
+                required: true
+                default: "start"
+                type: choice
+                options:
+                    - start
+                    - stop
+                    - status
+            instance_type:
+                description: "EC2 instance type"
+                required: false
+                default: "t3.medium"
+                type: string
+
+jobs:
+    manage-linux-runner:
+        runs-on: ubuntu-latest
+        outputs:
+            runner-ip: ${{ steps.setup.outputs.runner-ip }}
+
+        steps:
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws-region: us-east-1
+
+            - name: Setup Linux Runner
+              id: setup
+              run: |
+                  case "${{ github.event.inputs.action }}" in
+                    "start")
+                      echo "Starting Linux runner instance..."
+                      
+                      # Create security group if it doesn't exist
+                      aws ec2 describe-security-groups --group-names valkey-runner-sg || \
+                      aws ec2 create-security-group \
+                        --group-name valkey-runner-sg \
+                        --description "Security group for Valkey test runner" \
+                        --vpc-id $(aws ec2 describe-vpcs --filters "Name=is-default,Values=true" --query 'Vpcs[0].VpcId' --output text)
+                      
+                      # Add SSH and Valkey port rules
+                      aws ec2 authorize-security-group-ingress \
+                        --group-name valkey-runner-sg \
+                        --protocol tcp \
+                        --port 22 \
+                        --cidr 0.0.0.0/0 || true
+                      
+                      aws ec2 authorize-security-group-ingress \
+                        --group-name valkey-runner-sg \
+                        --protocol tcp \
+                        --port 6379-6400 \
+                        --cidr 0.0.0.0/0 || true
+                      
+                      # Launch instance
+                      INSTANCE_ID=$(aws ec2 run-instances \
+                        --image-id ami-0c02fb55956c7d316 \
+                        --instance-type ${{ github.event.inputs.instance_type }} \
+                        --key-name ${{ secrets.AWS_KEY_PAIR_NAME }} \
+                        --security-groups valkey-runner-sg \
+                        --user-data file://<(cat << 'EOF'
+                      #!/bin/bash
+                      apt-get update
+                      apt-get install -y python3 python3-pip git build-essential pkg-config libssl-dev
+                      
+                      # Install Valkey
+                      cd /tmp
+                      git clone https://github.com/valkey-io/valkey.git
+                      cd valkey
+                      make -j$(nproc) BUILD_TLS=yes
+                      make install
+                      
+                      # Setup GitHub Actions runner
+                      mkdir -p /home/ubuntu/actions-runner
+                      cd /home/ubuntu/actions-runner
+                      curl -o actions-runner-linux-x64-2.311.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.311.0/actions-runner-linux-x64-2.311.0.tar.gz
+                      tar xzf ./actions-runner-linux-x64-2.311.0.tar.gz
+                      chown -R ubuntu:ubuntu /home/ubuntu/actions-runner
+                      
+                      # Configure runner (will be done manually or via API)
+                      echo "Runner setup complete"
+                      EOF
+                      ) \
+                        --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=valkey-runner},{Key=Purpose,Value=github-actions}]' \
+                        --query 'Instances[0].InstanceId' \
+                        --output text)
+                      
+                      echo "Instance ID: $INSTANCE_ID"
+                      echo "instance-id=$INSTANCE_ID" >> $GITHUB_OUTPUT
+                      
+                      # Wait for instance to be running
+                      aws ec2 wait instance-running --instance-ids $INSTANCE_ID
+                      
+                      # Get public IP
+                      PUBLIC_IP=$(aws ec2 describe-instances \
+                        --instance-ids $INSTANCE_ID \
+                        --query 'Reservations[0].Instances[0].PublicIpAddress' \
+                        --output text)
+                      
+                      echo "Runner IP: $PUBLIC_IP"
+                      echo "runner-ip=$PUBLIC_IP" >> $GITHUB_OUTPUT
+                      ;;
+                      
+                    "stop")
+                      echo "Stopping Linux runner instances..."
+                      INSTANCE_IDS=$(aws ec2 describe-instances \
+                        --filters "Name=tag:Purpose,Values=github-actions" "Name=instance-state-name,Values=running" \
+                        --query 'Reservations[].Instances[].InstanceId' \
+                        --output text)
+                      
+                      if [ -n "$INSTANCE_IDS" ]; then
+                        aws ec2 terminate-instances --instance-ids $INSTANCE_IDS
+                        echo "Terminated instances: $INSTANCE_IDS"
+                      else
+                        echo "No running instances found"
+                      fi
+                      ;;
+                      
+                    "status")
+                      echo "Checking Linux runner status..."
+                      aws ec2 describe-instances \
+                        --filters "Name=tag:Purpose,Values=github-actions" \
+                        --query 'Reservations[].Instances[].[InstanceId,State.Name,PublicIpAddress,InstanceType]' \
+                        --output table
+                      ;;
+                  esac
+
+            - name: Save runner info
+              if: github.event.inputs.action == 'start'
+              run: |
+                  echo "Linux runner started successfully!"
+                  echo "IP Address: ${{ steps.setup.outputs.runner-ip }}"
+                  echo ""
+                  echo "To use this runner in Windows tests, set environment variable:"
+                  echo "VALKEY_REMOTE_HOST=${{ steps.setup.outputs.runner-ip }}"
+                  echo ""
+                  echo "SSH access:"
+                  echo "ssh -i ~/.ssh/your-key.pem ubuntu@${{ steps.setup.outputs.runner-ip }}"

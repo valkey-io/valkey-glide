@@ -50,10 +50,6 @@ on:
                     - use-self-hosted
                     - use-github
                 default: false
-            use-windows-self-hosted:
-                description: "Use self-hosted Windows runner"
-                type: boolean
-                default: false
             name:
                 required: false
                 type: string
@@ -94,8 +90,6 @@ jobs:
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
                   run-with-macos: ${{ (github.event.inputs.run-with-macos) }}
-                  # Use Windows self-hosted runner with VPC Linux instance by default for code changes
-                  run-with-windows-self-hosted: ${{ github.event.inputs.use-windows-self-hosted == 'true' || github.event_name == 'push' || github.event_name == 'pull_request' }}
 
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
@@ -131,7 +125,7 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.host.OS == 'windows' && '' || matrix.engine.version }}
+                  engine-version: ${{ matrix.engine.version }}
                   language: java
 
             - name: Install protoc (protobuf)
@@ -167,85 +161,27 @@ jobs:
                   # Create python3 symlink for Windows
                   ln -sf $(which python) /usr/bin/python3
 
-            - name: Configure VPC/Remote Valkey instance (Windows)
+            - name: Configure remote Valkey cluster (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
               shell: bash
               run: |
-                  # Check configuration priority: VPC > Remote > Local
-                  if [ -n "${{ vars.VALKEY_VPC_HOST }}" ]; then
-                      echo "🔧 Configuring VPC Valkey instance access..."
-                      
-                      # Set up SSH key from GitHub secret
-                      mkdir -p ~/.ssh
-                      chmod 700 ~/.ssh
-                      
-                      # Write SSH key content to file
-                      echo "${{ secrets.VALKEY_VPC_SSH_KEY }}" > ~/.ssh/valkey_vpc_key
-                      chmod 600 ~/.ssh/valkey_vpc_key
-                      
-                      # Configure SSH client for VPC
-                      cat >> ~/.ssh/config << EOF
-                  Host valkey-vpc
-                      HostName ${{ vars.VALKEY_VPC_HOST }}
-                      User ubuntu
-                      IdentityFile ~/.ssh/valkey_vpc_key
-                      StrictHostKeyChecking no
-                      UserKnownHostsFile /dev/null
-                      LogLevel ERROR
-                  EOF
-                      chmod 600 ~/.ssh/config
-                      
-                      # Test SSH connection
-                      echo "🔍 Testing VPC SSH connection..."
-                      ssh -i ~/.ssh/valkey_vpc_key ubuntu@${{ vars.VALKEY_VPC_HOST }} "echo 'VPC connection successful'" || {
-                          echo "❌ VPC SSH connection failed"
-                          exit 1
-                      }
-                      
-                      echo "✅ VPC Valkey instance configured successfully"
-                      
-                      # Set environment variables for Gradle
-                      echo "VALKEY_VPC_HOST=${{ vars.VALKEY_VPC_HOST }}" >> $GITHUB_ENV
-                      echo "SSH_PRIVATE_KEY_CONTENT=${{ secrets.VALKEY_VPC_SSH_KEY }}" >> $GITHUB_ENV
-                      
-                  elif [ -n "${{ vars.VALKEY_REMOTE_HOST }}" ]; then
-                      echo "🔧 Configuring remote Valkey cluster access..."
-                      
-                      # Set up SSH key from GitHub secret
-                      mkdir -p ~/.ssh
-                      chmod 700 ~/.ssh
-                      
-                      # Write SSH key content to file
-                      echo "${{ secrets.VALKEY_RUNNER_SSH_KEY }}" > ~/.ssh/valkey_runner_key
-                      chmod 600 ~/.ssh/valkey_runner_key
-                      
-                      # Configure SSH client
-                      cat >> ~/.ssh/config << EOF
+                  # Set up SSH key for remote cluster access
+                  mkdir -p ~/.ssh
+                  echo "${{ secrets.VALKEY_RUNNER_SSH_KEY }}" > ~/.ssh/valkey_runner_key
+                  chmod 600 ~/.ssh/valkey_runner_key
+                  
+                  # Configure SSH
+                  cat >> ~/.ssh/config << EOF
                   Host valkey-runner
                       HostName ${{ vars.VALKEY_REMOTE_HOST }}
                       User ubuntu
                       IdentityFile ~/.ssh/valkey_runner_key
                       StrictHostKeyChecking no
-                      UserKnownHostsFile /dev/null
-                      LogLevel ERROR
                   EOF
-                      chmod 600 ~/.ssh/config
-                      
-                      # Test SSH connection
-                      echo "🔍 Testing SSH connection..."
-                      python3 utils/remote_cluster_manager.py test || {
-                          echo "❌ SSH connection test failed"
-                          exit 1
-                      }
-                      
-                      echo "✅ Remote cluster access configured successfully"
-                      
-                      # Set environment variables for Gradle
-                      echo "VALKEY_REMOTE_HOST=${{ vars.VALKEY_REMOTE_HOST }}" >> $GITHUB_ENV
-                      echo "SSH_PRIVATE_KEY_CONTENT=${{ secrets.VALKEY_RUNNER_SSH_KEY }}" >> $GITHUB_ENV
-                  else
-                      echo "⚠️ No VPC or remote cluster configured - will use local cluster"
-                  fi
+                  
+                  # Set environment variable for remote cluster
+                  echo "VALKEY_REMOTE_HOST=${{ vars.VALKEY_REMOTE_HOST }}" >> $GITHUB_ENV
+                  echo "SSH_PRIVATE_KEY_PATH=~/.ssh/valkey_runner_key" >> $GITHUB_ENV
 
             - name: Build java client
               working-directory: java
@@ -254,9 +190,9 @@ jobs:
               shell: bash
               run: |
                   if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
-                      ./gradlew.bat --build-cache --continue build test -x javadoc
+                      ./gradlew.bat --build-cache --continue build -x javadoc
                   else
-                      ./gradlew --build-cache --continue build test -x javadoc
+                      ./gradlew --build-cache --continue build -x javadoc
                   fi
 
             - name: Ensure no skipped files by linter
@@ -319,7 +255,7 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.host.OS == 'windows' && '' || matrix.engine.version }}
+                  engine-version: ${{ matrix.engine.version }}
                   language: java
 
             - name: Install protoc (protobuf)
@@ -458,7 +394,7 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   language: java
-                  engine-version: ${{ matrix.host.OS == 'windows' && '' || matrix.engine.version }}
+                  engine-version: ${{ matrix.engine.version }}
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3

@@ -1,0 +1,121 @@
+name: Java Tests (Windows Self-Hosted)
+
+on:
+    workflow_dispatch:
+        inputs:
+            java-version:
+                description: "Java version to test"
+                required: false
+                default: "17"
+                type: choice
+                options:
+                    - "11"
+                    - "17"
+            use-remote-cluster:
+                description: "Use remote Linux cluster"
+                required: false
+                default: true
+                type: boolean
+
+jobs:
+    test-windows-self-hosted:
+        name: Java ${{ github.event.inputs.java-version }} on Windows Self-Hosted
+        runs-on: [self-hosted, windows, valkey-runner] # Target Windows runner
+        timeout-minutes: 45
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up JDK ${{ github.event.inputs.java-version }}
+              uses: actions/setup-java@v4
+              with:
+                  distribution: "temurin"
+                  java-version: ${{ github.event.inputs.java-version }}
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "29.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: windows
+                  target: x86_64-pc-windows-msvc
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: "" # Skip Valkey installation on Windows
+                  language: java
+
+            - name: Configure remote Valkey cluster
+              if: ${{ github.event.inputs.use-remote-cluster == 'true' }}
+              shell: bash
+              run: |
+                  # Test if remote cluster is configured
+                  if [ -z "${{ vars.VALKEY_REMOTE_HOST }}" ]; then
+                      echo "⚠️ VALKEY_REMOTE_HOST not configured - will use local cluster"
+                      exit 0
+                  fi
+
+                  echo "🔧 Configuring remote Valkey cluster access..."
+
+                  # Set up SSH key from GitHub secret
+                  mkdir -p ~/.ssh
+                  chmod 700 ~/.ssh
+
+                  # Write SSH key content to file
+                  echo "${{ secrets.VALKEY_RUNNER_SSH_KEY }}" > ~/.ssh/valkey_runner_key
+                  chmod 600 ~/.ssh/valkey_runner_key
+
+                  # Configure SSH client
+                  cat >> ~/.ssh/config << EOF
+                  Host valkey-runner
+                      HostName ${{ vars.VALKEY_REMOTE_HOST }}
+                      User ubuntu
+                      IdentityFile ~/.ssh/valkey_runner_key
+                      StrictHostKeyChecking no
+                      UserKnownHostsFile /dev/null
+                      LogLevel ERROR
+                  EOF
+                  chmod 600 ~/.ssh/config
+
+                  # Test SSH connection
+                  echo "🔍 Testing SSH connection..."
+                  python3 utils/remote_cluster_manager.py test || {
+                      echo "❌ SSH connection test failed"
+                      exit 1
+                  }
+
+                  echo "✅ Remote cluster access configured successfully"
+
+                  # Set environment variables for Gradle
+                  echo "VALKEY_REMOTE_HOST=${{ vars.VALKEY_REMOTE_HOST }}" >> $GITHUB_ENV
+                  echo "SSH_PRIVATE_KEY_CONTENT=${{ secrets.VALKEY_RUNNER_SSH_KEY }}" >> $GITHUB_ENV
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.gradle/caches
+                      ~/.gradle/wrapper
+                  key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+                  restore-keys: |
+                      ${{ runner.os }}-gradle-
+
+            - name: Build Java client
+              working-directory: java
+              shell: bash
+              run: ./gradlew.bat --build-cache --continue build -x javadoc
+
+            - name: Run integration tests
+              working-directory: java
+              shell: bash
+              run: ./gradlew.bat --build-cache :integTest:test
+
+            - name: Upload test reports
+              uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: java-test-reports-windows-self-hosted
+                  path: |
+                      java/client/build/reports/**
+                      java/integTest/build/reports/**
