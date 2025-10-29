@@ -189,8 +189,8 @@ runs:
                   Write-Host "python3 command already exists"
               }
 
-        - name: Install Python (GitHub-hosted only)
-          if: runner.environment == 'github-hosted' && steps.check.outputs.python-available != 'true'
+        - name: Install Python (when missing)
+          if: steps.check.outputs.python-available != 'true'
           uses: actions/setup-python@v5
           with:
               python-version: "3.x"
