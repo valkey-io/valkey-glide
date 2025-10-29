@@ -236,12 +236,12 @@ runs:
               sudo make install
 
         - name: Start engine server
-          shell: ${{ runner.os == 'Windows' && 'wsl-bash {0}' || 'bash' }}
-          if: "${{ inputs.engine-version }}"
+          shell: bash
+          if: "${{ inputs.engine-version && !env.VALKEY_VPC_HOST && !env.VALKEY_REMOTE_HOST }}"
           env:
               OS_TYPE: ${{ inputs.os }}
           run: |
-              echo "Starting Valkey server"
+              echo "Starting Valkey server locally"
               echo "OS_TYPE: '$OS_TYPE'"
 
               # Start Valkey server in background
@@ -250,6 +250,28 @@ runs:
               # For Windows, write IP to a file that PowerShell can read
               if [ "$OS_TYPE" = "windows" ]; then
                   hostname -I | awk '{print $1}' > /tmp/wsl_ip.txt
+              fi
+
+        - name: Test remote Valkey connectivity
+          shell: bash
+          if: "${{ inputs.engine-version && (env.VALKEY_VPC_HOST || env.VALKEY_REMOTE_HOST) }}"
+          run: |
+              echo "Testing remote Valkey connectivity..."
+
+              # Determine target host
+              if [ -n "$VALKEY_VPC_HOST" ]; then
+                  TARGET_HOST="$VALKEY_VPC_HOST"
+                  echo "Testing VPC Valkey at: $TARGET_HOST"
+              elif [ -n "$VALKEY_REMOTE_HOST" ]; then
+                  TARGET_HOST="$VALKEY_REMOTE_HOST"
+                  echo "Testing remote Valkey at: $TARGET_HOST"
+              fi
+
+              # Test basic connectivity (port 6379)
+              if timeout 10 bash -c "</dev/tcp/$TARGET_HOST/6379"; then
+                  echo "[OK] Valkey port 6379 is accessible"
+              else
+                  echo "[INFO] Valkey not yet started on $TARGET_HOST:6379 (will be started by cluster manager)"
               fi
 
         - name: Install Rust toolchain and protoc
