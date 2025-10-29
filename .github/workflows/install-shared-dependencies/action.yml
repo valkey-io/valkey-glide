@@ -81,12 +81,6 @@ runs:
                   Write-Host "Rust toolchain not found - will be installed by install-rust-and-protoc action"
               }
 
-        - name: Setup Python for Windows
-          if: "${{ runner.os == 'Windows' }}"
-          uses: actions/setup-python@v5
-          with:
-              python-version: "3.x"
-
         - name: Check Windows build dependencies
           if: "${{ runner.os == 'Windows' }}"
           id: check-deps
@@ -137,6 +131,12 @@ runs:
               echo "ssh-available=$sshAvailable" >> $env:GITHUB_OUTPUT
 
               Write-Host "Dependency check complete"
+
+        - name: Setup Python for Windows
+          if: "${{ runner.os == 'Windows' && steps.check-deps.outputs.python3-available != 'true' }}"
+          uses: actions/setup-python@v5
+          with:
+              python-version: "3.x"
 
         - name: Setup Python3 symlink (Windows)
           if: "${{ runner.os == 'Windows' && steps.check-deps.outputs.python3-available == 'true' }}"
