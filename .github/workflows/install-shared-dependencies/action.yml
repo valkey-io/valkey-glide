@@ -134,9 +134,19 @@ runs:
               echo "ssh-available=$sshAvailable" >> $env:GITHUB_OUTPUT
 
               Write-Host "Dependency check complete"
+              Write-Host "Results: python3-available=$python3Available, rust-available=$rustAvailable, ssh-available=$sshAvailable"
+
+        - name: Show Python detection results
+          if: "${{ runner.os == 'Windows' }}"
+          shell: powershell
+          run: |
+              Write-Host "Python detection results:"
+              Write-Host "  python3-available: ${{ steps.check-deps.outputs.python3-available }}"
+              Write-Host "  Runner type: ${{ runner.name }}"
+              Write-Host "  Will install Python: ${{ runner.os == 'Windows' && !contains(runner.name, 'self-hosted') && steps.check-deps.outputs.python3-available != 'true' }}"
 
         - name: Setup Python for Windows
-          if: "${{ runner.os == 'Windows' && steps.check-deps.outputs.python3-available != 'true' }}"
+          if: "${{ runner.os == 'Windows' && !contains(runner.name, 'self-hosted') && steps.check-deps.outputs.python3-available != 'true' }}"
           uses: actions/setup-python@v5
           with:
               python-version: "3.x"
