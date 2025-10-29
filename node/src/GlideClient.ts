@@ -3,13 +3,22 @@
  */
 
 import * as net from "net";
+import { connection_request } from "../build-ts/ProtobufMessage";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
-    Batch,
-    BatchOptions,
     convertGlideRecordToRecord,
+    Decoder,
+    DecoderOption,
+    GlideRecord,
+    GlideReturnType,
+    GlideString,
+    PubSubMsg,
+} from "./BaseClient";
+import { Batch } from "./Batch";
+import {
+    BatchOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -41,22 +50,15 @@ import {
     createScriptKill,
     createTime,
     createUnWatch,
-    Decoder,
-    DecoderOption,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
     FunctionRestorePolicy,
     FunctionStatsFullResponse,
-    GlideRecord,
-    GlideReturnType,
-    GlideString,
     InfoOptions,
     LolwutOptions,
-    PubSubMsg,
     ScanOptions,
-} from ".";
-import { connection_request } from "../build-ts/ProtobufMessage";
+} from "./Commands";
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
 export namespace GlideClientConfiguration {
