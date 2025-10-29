@@ -194,18 +194,23 @@ runs:
               python-version: "3.x"
 
         - name: Setup Python3 symlink (Windows)
-          if: "${{ runner.os == 'Windows' && steps.check-deps.outputs.python3-available == 'true' }}"
+          if: "${{ runner.os == 'Windows' }}"
           shell: powershell
           run: |
-              # Create python3 symlink if python exists but python3 doesn't
+              # Check if python3 command exists
               if (-not (Get-Command python3 -ErrorAction SilentlyContinue)) {
+                  # Check if python command exists
                   if (Get-Command python -ErrorAction SilentlyContinue) {
                       Write-Host "Creating python3 symlink..."
                       $pythonPath = (Get-Command python).Source
                       $python3Path = Join-Path (Split-Path $pythonPath) "python3.exe"
                       New-Item -ItemType HardLink -Path $python3Path -Target $pythonPath -Force
                       Write-Host "python3 symlink created"
+                  } else {
+                      Write-Host "No Python installation found for symlink creation"
                   }
+              } else {
+                  Write-Host "python3 command already exists"
               }
 
         - name: Verify Windows dependencies for remote cluster mode
@@ -215,8 +220,16 @@ runs:
               Write-Host "Verifying Windows dependencies for remote cluster + build..."
 
               # Verify Python3 (required for remote_cluster_manager.py)
-              python3 --version
-              Write-Host "Python3 ready"
+              if (Get-Command python3 -ErrorAction SilentlyContinue) {
+                  python3 --version
+                  Write-Host "Python3 ready"
+              } elseif (Get-Command python -ErrorAction SilentlyContinue) {
+                  python --version
+                  Write-Host "Python ready (using python command)"
+              } else {
+                  Write-Host "No Python found"
+                  exit 1
+              }
 
               # Verify SSH (required for remote cluster access)
               ssh -V
