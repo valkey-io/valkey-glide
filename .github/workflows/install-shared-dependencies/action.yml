@@ -68,18 +68,11 @@ runs:
           run: |
               yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
-        - name: Verify Rust toolchain (Windows)
-          shell: powershell
+        - name: Setup Windows dependencies
           if: "${{ runner.os == 'Windows' }}"
-          run: |
-              # Check if Rust is already available (may be pre-installed on self-hosted runners)
-              try {
-                  rustc --version
-                  cargo --version
-                  Write-Host "Rust toolchain already available"
-              } catch {
-                  Write-Host "Rust toolchain not found - will be installed by install-rust-and-protoc action"
-              }
+          uses: ./.github/workflows/setup-windows-dependencies
+          with:
+              github-token: ${{ inputs.github-token }}
 
         - name: Check Windows build dependencies
           if: "${{ runner.os == 'Windows' }}"
