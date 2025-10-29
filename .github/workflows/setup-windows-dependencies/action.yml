@@ -191,9 +191,28 @@ runs:
 
         - name: Install Python (when missing)
           if: steps.check.outputs.python-available != 'true'
-          uses: actions/setup-python@v5
-          with:
-              python-version: "3.x"
+          shell: powershell
+          run: |
+              Write-Host "Installing Python 3.11..."
+
+              # Download Python installer
+              $pythonUrl = "https://www.python.org/ftp/python/3.11.7/python-3.11.7-amd64.exe"
+              $installerPath = "$env:TEMP\python-installer.exe"
+
+              Write-Host "Downloading Python installer..."
+              Invoke-WebRequest -Uri $pythonUrl -OutFile $installerPath
+
+              Write-Host "Installing Python (current user only)..."
+              # Install for current user only, add to PATH
+              Start-Process -FilePath $installerPath -ArgumentList "/quiet", "InstallAllUsers=0", "PrependPath=1", "Include_test=0" -Wait
+
+              Write-Host "Cleaning up installer..."
+              Remove-Item $installerPath -Force
+
+              Write-Host "Refreshing PATH..."
+              $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+
+              Write-Host "Python installation complete"
 
         - name: Verify Python setup
           shell: powershell
