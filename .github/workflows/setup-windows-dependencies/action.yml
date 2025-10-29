@@ -24,27 +24,62 @@ runs:
           run: |
               Write-Host "Checking Windows dependencies..."
 
+              # Debug: Show current PATH
+              Write-Host "Current PATH:"
+              $env:PATH -split ';' | ForEach-Object { Write-Host "  $_" }
+
+              # Debug: Show all executables that might be Python
+              Write-Host "All python-like executables in PATH:"
+              Get-Command python*, py -ErrorAction SilentlyContinue | ForEach-Object { 
+                  Write-Host "  $($_.Name) -> $($_.Source)"
+                  try {
+                      $version = & $_.Source --version 2>&1
+                      Write-Host "    Version: $version"
+                  } catch {
+                      Write-Host "    Version check failed: $_"
+                  }
+              }
+
               # Check for Python installations
               $pythonAvailable = $false
               $pythonPath = $null
 
               # Method 1: Check PATH commands
+              Write-Host "Method 1: Checking PATH commands..."
               if (Get-Command python3 -ErrorAction SilentlyContinue) {
                   $pythonAvailable = $true
                   $pythonPath = (Get-Command python3).Source
                   Write-Host "Found python3 in PATH: $pythonPath"
               } elseif (Get-Command python -ErrorAction SilentlyContinue) {
                   $version = python --version 2>&1
+                  Write-Host "Found python command, version: $version"
                   if ($version -match "Python 3\.") {
                       $pythonAvailable = $true
                       $pythonPath = (Get-Command python).Source
                       Write-Host "Found Python 3.x via python command: $version"
+                  } else {
+                      Write-Host "Python found but not version 3.x: $version"
                   }
+              } elseif (Get-Command py -ErrorAction SilentlyContinue) {
+                  Write-Host "Found py launcher, checking version..."
+                  try {
+                      $version = py --version 2>&1
+                      Write-Host "py launcher version: $version"
+                      if ($version -match "Python 3\.") {
+                          $pythonAvailable = $true
+                          $pythonPath = (Get-Command py).Source
+                          Write-Host "Found Python 3.x via py launcher: $version"
+                      }
+                  } catch {
+                      Write-Host "py launcher version check failed: $_"
+                  }
+              } else {
+                  Write-Host "No python commands found in PATH"
               }
 
               # Method 2: Check registry if not found in PATH
               if (-not $pythonAvailable) {
-                  Write-Host "Checking Windows registry for Python..."
+                  Write-Host "Method 2: Checking Windows registry for Python..."
                   $regPaths = @(
                       "HKLM:\SOFTWARE\Python\PythonCore\*\InstallPath",
                       "HKCU:\SOFTWARE\Python\PythonCore\*\InstallPath",
@@ -52,20 +87,36 @@ runs:
                   )
 
                   foreach ($regPath in $regPaths) {
-                      Get-ItemProperty $regPath -ErrorAction SilentlyContinue | ForEach-Object {
-                          $installPath = $_.'(default)'
-                          if ($installPath -and (Test-Path $installPath)) {
-                              $pythonExe = Join-Path $installPath "python.exe"
-                              if (Test-Path $pythonExe) {
-                                  $version = & $pythonExe --version 2>&1
-                                  if ($version -match "Python 3\.") {
-                                      $pythonAvailable = $true
-                                      $pythonPath = $pythonExe
-                                      Write-Host "Found Python 3.x in registry: $pythonExe ($version)"
-                                      break
+                      Write-Host "Checking registry path: $regPath"
+                      try {
+                          Get-ItemProperty $regPath -ErrorAction SilentlyContinue | ForEach-Object {
+                              $installPath = $_.'(default)'
+                              Write-Host "Registry entry found: $installPath"
+                              if ($installPath -and (Test-Path $installPath)) {
+                                  $pythonExe = Join-Path $installPath "python.exe"
+                                  Write-Host "Checking: $pythonExe"
+                                  if (Test-Path $pythonExe) {
+                                      try {
+                                          $version = & $pythonExe --version 2>&1
+                                          Write-Host "Found Python at $pythonExe - Version: $version"
+                                          if ($version -match "Python 3\.") {
+                                              $pythonAvailable = $true
+                                              $pythonPath = $pythonExe
+                                              Write-Host "Using Python 3.x from registry: $pythonExe"
+                                              break
+                                          }
+                                      } catch {
+                                          Write-Host "Version check failed for $pythonExe : $_"
+                                      }
+                                  } else {
+                                      Write-Host "python.exe not found at: $pythonExe"
                                   }
+                              } else {
+                                  Write-Host "Install path does not exist: $installPath"
                               }
                           }
+                      } catch {
+                          Write-Host "Registry check failed for $regPath : $_"
                       }
                       if ($pythonAvailable) { break }
                   }
@@ -73,7 +124,7 @@ runs:
 
               # Method 3: Check common paths if still not found
               if (-not $pythonAvailable) {
-                  Write-Host "Checking common installation paths..."
+                  Write-Host "Method 3: Checking common installation paths..."
                   $commonPaths = @(
                       "$env:LOCALAPPDATA\Programs\Python\Python*",
                       "$env:PROGRAMFILES\Python*",
@@ -82,16 +133,25 @@ runs:
                   )
 
                   foreach ($pathPattern in $commonPaths) {
+                      Write-Host "Checking pattern: $pathPattern"
                       Get-ChildItem $pathPattern -Directory -ErrorAction SilentlyContinue | ForEach-Object {
                           $pythonExe = Join-Path $_.FullName "python.exe"
+                          Write-Host "Checking: $pythonExe"
                           if (Test-Path $pythonExe) {
-                              $version = & $pythonExe --version 2>&1
-                              if ($version -match "Python 3\.") {
-                                  $pythonAvailable = $true
-                                  $pythonPath = $pythonExe
-                                  Write-Host "Found Python 3.x at: $pythonExe ($version)"
-                                  break
+                              try {
+                                  $version = & $pythonExe --version 2>&1
+                                  Write-Host "Found Python at $pythonExe - Version: $version"
+                                  if ($version -match "Python 3\.") {
+                                      $pythonAvailable = $true
+                                      $pythonPath = $pythonExe
+                                      Write-Host "Using Python 3.x from common path: $pythonExe"
+                                      break
+                                  }
+                              } catch {
+                                  Write-Host "Version check failed for $pythonExe : $_"
                               }
+                          } else {
+                              Write-Host "python.exe not found at: $pythonExe"
                           }
                       }
                       if ($pythonAvailable) { break }
