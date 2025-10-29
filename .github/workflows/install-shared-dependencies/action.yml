@@ -69,8 +69,8 @@ runs:
               yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
         - name: Verify Rust toolchain (Windows)
-          shell: pwsh
-          if: "${{ inputs.os == 'windows' }}"
+          shell: powershell
+          if: "${{ runner.os == 'Windows' }}"
           run: |
               # Check if Rust is already available (may be pre-installed on self-hosted runners)
               try {
@@ -82,15 +82,15 @@ runs:
               }
 
         - name: Setup Python for Windows
-          if: "${{ inputs.os == 'windows' }}"
+          if: "${{ runner.os == 'Windows' }}"
           uses: actions/setup-python@v5
           with:
               python-version: "3.x"
 
         - name: Check Windows build dependencies
-          if: "${{ inputs.os == 'windows' }}"
+          if: "${{ runner.os == 'Windows' }}"
           id: check-deps
-          shell: pwsh
+          shell: powershell
           run: |
               Write-Host "Checking Windows build dependencies..."
 
@@ -139,8 +139,8 @@ runs:
               Write-Host "Dependency check complete"
 
         - name: Setup Python3 symlink (Windows)
-          if: "${{ inputs.os == 'windows' && steps.check-deps.outputs.python3-available == 'true' }}"
-          shell: pwsh
+          if: "${{ runner.os == 'Windows' && steps.check-deps.outputs.python3-available == 'true' }}"
+          shell: powershell
           run: |
               # Create python3 symlink if python exists but python3 doesn't
               if (-not (Get-Command python3 -ErrorAction SilentlyContinue)) {
@@ -154,8 +154,8 @@ runs:
               }
 
         - name: Verify Windows dependencies for remote cluster mode
-          if: "${{ inputs.os == 'windows' }}"
-          shell: pwsh
+          if: "${{ runner.os == 'Windows' }}"
+          shell: powershell
           run: |
               Write-Host "Verifying Windows dependencies for remote cluster + build..."
 
@@ -236,7 +236,7 @@ runs:
               sudo make install
 
         - name: Start engine server
-          shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
+          shell: ${{ runner.os == 'Windows' && 'wsl-bash {0}' || 'bash' }}
           if: "${{ inputs.engine-version }}"
           env:
               OS_TYPE: ${{ inputs.os }}

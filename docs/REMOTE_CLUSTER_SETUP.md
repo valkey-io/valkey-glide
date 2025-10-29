@@ -32,7 +32,9 @@ This document describes how to set up external Linux infrastructure for running 
 
 # SSH to instance and run setup
 ssh -i your-key.pem ubuntu@<instance-ip>
-curl -sSL https://raw.githubusercontent.com/valkey-io/valkey-glide/main/utils/setup_linux_runner.sh | bash
+curl -sSL https://raw.githubusercontent.com/valkey-io/valkey-glide/main/utils/setup_linux_runner.sh -o setup_linux_runner.sh
+bash setup_linux_runner.sh
+rm setup_linux_runner.sh
 ```
 
 #### Option B: GitHub Workflow
