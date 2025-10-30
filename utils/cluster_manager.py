@@ -1143,6 +1143,15 @@ def main():
     # Start parser
     parser_start = subparsers.add_parser("start", help="Start a new cluster")
     parser_start.add_argument(
+        "-H",
+        "--host",
+        type=str,
+        help="Host address (default: %(default)s)",
+        required=False,
+        default="127.0.0.1",
+    )
+
+    parser_start.add_argument(
         "--cluster-mode",
         action="store_true",
         help="Create a Redis Cluster with cluster mode enabled. If not specified, a Standalone Redis cluster will be created.",
@@ -1225,6 +1234,15 @@ def main():
 
     # Stop parser
     parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
+    parser_stop.add_argument(
+        "-H",
+        "--host",
+        type=str,
+        help="Host address (default: %(default)s)",
+        required=False,
+        default="127.0.0.1",
+    )
+    
     parser_stop.add_argument(
         "--folder-path",
         type=dir_path,
