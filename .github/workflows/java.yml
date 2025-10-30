@@ -312,6 +312,8 @@ jobs:
               if: ${{ matrix.host.OS == 'windows' }}
               working-directory: java
               shell: powershell
+              env:
+                  VALKEY_REMOTE_HOST: ${{ runner.environment != 'github-hosted' && '172.31.34.123' || '' }}
               run: |
                   .\gradlew.bat --build-cache :integTest:pubsubTest
 
