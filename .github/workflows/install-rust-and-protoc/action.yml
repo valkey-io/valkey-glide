@@ -52,10 +52,14 @@ runs:
         - name: Install protoc (Linux/macOS)
           if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
           uses: arduino/setup-protoc@v3
+          with:
+              repo-token: ${{ inputs.github-token }}
 
         - name: Install protoc (Windows)
           if: ${{ runner.os == 'Windows' }}
           shell: powershell
+          env:
+              GITHUB_TOKEN: ${{ inputs.github-token }}
           run: |
               # Check if protoc is already available
               if (Get-Command protoc -ErrorAction SilentlyContinue) {
@@ -65,7 +69,7 @@ runs:
 
               Write-Host "Installing protoc on Windows..."
 
-              # Download protoc
+              # Download protoc with authentication
               $url = "https://github.com/protocolbuffers/protobuf/releases/download/v25.1/protoc-25.1-win64.zip"
               $zipPath = "$env:TEMP\protoc.zip"
               $extractPath = "$env:TEMP\protoc"
@@ -75,7 +79,13 @@ runs:
                   Remove-Item -Recurse -Force $extractPath
               }
 
-              Invoke-WebRequest -Uri $url -OutFile $zipPath
+              # Add authentication header if token is available
+              $headers = @{}
+              if ($env:GITHUB_TOKEN) {
+                  $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN"
+              }
+
+              Invoke-WebRequest -Uri $url -OutFile $zipPath -Headers $headers
 
               # Extract using .NET instead of Expand-Archive
               Add-Type -AssemblyName System.IO.Compression.FileSystem
