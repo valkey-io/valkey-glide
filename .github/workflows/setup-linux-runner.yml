@@ -18,6 +18,8 @@ on:
                 default: "t3.medium"
                 type: string
 
+permissions: {}
+
 jobs:
     manage-linux-runner:
         runs-on: ubuntu-latest

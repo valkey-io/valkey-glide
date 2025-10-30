@@ -17,6 +17,8 @@ on:
                 default: "8.0.1"
                 type: string
 
+permissions: {}
+
 jobs:
     test-self-hosted:
         name: Java ${{ github.event.inputs.java-version }} on Self-Hosted Linux
