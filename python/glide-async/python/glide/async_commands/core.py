@@ -160,7 +160,7 @@ class CoreCommands(Protocol):
         """
         return cast(TOK, await self._refresh_iam_token())
 
-    def _get_cache_metrics(self, metrics_type: CacheMetricsType) -> TResult: ...
+    async def _get_cache_metrics(self, metrics_type: CacheMetricsType) -> TResult: ...
 
     async def get_cache_hit_rate(self) -> float:
         """

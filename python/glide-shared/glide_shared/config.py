@@ -514,9 +514,12 @@ class BaseClientConfiguration:
 
         request.client_side_cache.cache_id = self.client_side_cache.cache_id
         request.client_side_cache.max_cache_kb = self.client_side_cache.max_cache_kb
-        request.client_side_cache.entry_ttl_seconds = (
-            self.client_side_cache.entry_ttl_seconds
-        )
+
+        if self.client_side_cache.entry_ttl_seconds:
+            request.client_side_cache.entry_ttl_seconds = (
+                self.client_side_cache.entry_ttl_seconds
+            )
+
         request.client_side_cache.enable_metrics = self.client_side_cache.enable_metrics
         if self.client_side_cache.eviction_policy:
             request.client_side_cache.eviction_policy = (
