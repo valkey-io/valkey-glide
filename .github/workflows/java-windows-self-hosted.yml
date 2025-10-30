@@ -51,48 +51,17 @@ jobs:
 
             - name: Configure remote Valkey cluster
               if: ${{ github.event.inputs.use-remote-cluster == 'true' }}
-              shell: bash
+              shell: powershell
               run: |
                   # Test if remote cluster is configured
-                  if [ -z "${{ vars.VALKEY_REMOTE_HOST }}" ]; then
-                      echo "⚠️ VALKEY_REMOTE_HOST not configured - will use local cluster"
+                  if ("${{ vars.VALKEY_REMOTE_HOST }}" -eq "") {
+                      Write-Host "⚠️ VALKEY_REMOTE_HOST not configured - will use local cluster"
                       exit 0
-                  fi
-
-                  echo "[CONFIG] Configuring remote Valkey cluster access..."
-
-                  # Set up SSH key from GitHub secret
-                  mkdir -p ~/.ssh
-                  chmod 700 ~/.ssh
-
-                  # Write SSH key content to file
-                  echo "${{ secrets.VALKEY_RUNNER_SSH_KEY }}" > ~/.ssh/valkey_runner_key
-                  chmod 600 ~/.ssh/valkey_runner_key
-
-                  # Configure SSH client
-                  cat >> ~/.ssh/config << EOF
-                  Host valkey-runner
-                      HostName ${{ vars.VALKEY_REMOTE_HOST }}
-                      User ubuntu
-                      IdentityFile ~/.ssh/valkey_runner_key
-                      StrictHostKeyChecking no
-                      UserKnownHostsFile /dev/null
-                      LogLevel ERROR
-                  EOF
-                  chmod 600 ~/.ssh/config
-
-                  # Test SSH connection
-                  echo "[TEST] Testing SSH connection..."
-                  python3 utils/remote_cluster_manager.py test || {
-                      echo "[FAIL] SSH connection test failed"
-                      exit 1
                   }
 
-                  echo "[OK] Remote cluster access configured successfully"
-
-                  # Set environment variables for Gradle
-                  echo "VALKEY_REMOTE_HOST=${{ vars.VALKEY_REMOTE_HOST }}" >> $GITHUB_ENV
-                  echo "SSH_PRIVATE_KEY_CONTENT=${{ secrets.VALKEY_RUNNER_SSH_KEY }}" >> $GITHUB_ENV
+                  Write-Host "[CONFIG] Configuring remote Valkey cluster access..."
+                  echo "VALKEY_REMOTE_HOST=${{ vars.VALKEY_REMOTE_HOST }}" >> $env:GITHUB_ENV
+                  Write-Host "Remote Valkey configured: ${{ vars.VALKEY_REMOTE_HOST }}"
 
             - uses: actions/cache@v4
               with:
@@ -105,13 +74,13 @@ jobs:
 
             - name: Build Java client
               working-directory: java
-              shell: bash
-              run: ./gradlew.bat --build-cache --continue build -x javadoc
+              shell: powershell
+              run: .\gradlew.bat --build-cache --continue build -x javadoc
 
             - name: Run integration tests
               working-directory: java
-              shell: bash
-              run: ./gradlew.bat --build-cache :integTest:test
+              shell: powershell
+              run: .\gradlew.bat --build-cache :integTest:test
 
             - name: Upload test reports
               uses: actions/upload-artifact@v4
