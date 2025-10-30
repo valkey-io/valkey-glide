@@ -14,6 +14,7 @@
 #### Fixes
 
 * Node: Resolved circular import dependency between `BaseClient.ts`, `GlideClient.ts`, and `GlideClusterClient.ts.` ([#4607](https://github.com/valkey-io/valkey-glide/issues/4607))
+* Java: Make shutdown hook optional ([#4935](https://github.com/valkey-io/valkey-glide/pull/4935))
 
 #### Operational Enhancements
 
