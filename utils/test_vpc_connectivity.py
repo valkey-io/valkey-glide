@@ -8,10 +8,10 @@ import socket
 import subprocess
 import sys
 import time
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 
-def test_ssh_connection(host: str, user: str = "ubuntu", key_path: str | None = None) -> bool:
+def test_ssh_connection(host: str, user: str = "ubuntu", key_path: Optional[str] = None) -> bool:
     """Test SSH connectivity"""
     print(f"Testing SSH connection to {host}...")
 
@@ -60,7 +60,7 @@ def test_port_connectivity(host: str, ports: List[int]) -> List[Tuple[int, bool]
     return results
 
 
-def test_multi_engine_manager(host: str, key_path: str | None = None) -> bool:
+def test_multi_engine_manager(host: str, key_path: Optional[str] = None) -> bool:
     """Test multi-engine manager functionality"""
     print(f"Testing multi-engine manager on {host}...")
 
@@ -91,7 +91,7 @@ def test_multi_engine_manager(host: str, key_path: str | None = None) -> bool:
         return False
 
 
-def get_instance_info(host: str, key_path: str | None = None) -> dict:
+def get_instance_info(host: str, key_path: Optional[str] = None) -> dict:
     """Get instance information"""
     print(f"Getting instance information from {host}...")
 

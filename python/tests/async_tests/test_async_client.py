@@ -2602,7 +2602,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_geoadd(self, glide_client: TGlideClient):
         key, key2 = get_random_string(10), get_random_string(10)
-        members_coordinates: Dict[str | bytes, GeospatialData] = {
+        members_coordinates: Dict[Union[str, bytes], GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
         }
