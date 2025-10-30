@@ -151,41 +151,44 @@ runs:
         - name: Install Visual Studio Build Tools
           shell: powershell
           run: |
-              Write-Host "Installing Visual Studio Build Tools..."
+              Write-Host "Installing C++ Build Tools..."
               
               if (Get-Command choco -ErrorAction SilentlyContinue) {
-                  # Install Visual Studio Build Tools with C++ workload and Windows SDK
-                  Write-Host "Installing Visual Studio 2022 Build Tools with C++ components..."
-                  choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows11SDK.22000 --add Microsoft.VisualStudio.Component.VC.CMake.Project" -y
+                  # Try the dedicated C++ build tools package first
+                  Write-Host "Installing Microsoft C++ Build Tools..."
+                  choco install microsoft-build-tools -y
                   
-                  if ($LASTEXITCODE -eq 0) {
-                      Write-Host "Visual Studio Build Tools installed successfully"
-                      
-                      # Verify MSVC installation
-                      Write-Host "Verifying MSVC compiler installation..."
-                      $msvcPaths = @(
-                          "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe",
-                          "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe"
-                      )
-                      
-                      $found = $false
-                      foreach ($path in $msvcPaths) {
-                          $compiler = Get-ChildItem $path -ErrorAction SilentlyContinue | Select-Object -First 1
-                          if ($compiler) {
-                              Write-Host "MSVC compiler found: $($compiler.FullName)"
-                              $found = $true
-                              break
-                          }
+                  if ($LASTEXITCODE -ne 0) {
+                      Write-Host "Microsoft Build Tools failed, trying Visual Studio Build Tools with C++ workload..."
+                      choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows11SDK.22000" -y
+                  }
+                  
+                  # Verify installation
+                  Write-Host "Verifying C++ compiler installation..."
+                  $msvcPaths = @(
+                      "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe",
+                      "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe",
+                      "${env:ProgramFiles}\Microsoft Visual Studio\*\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe",
+                      "${env:ProgramFiles(x86)}\Microsoft Visual Studio\*\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe"
+                  )
+                  
+                  $found = $false
+                  foreach ($path in $msvcPaths) {
+                      $compiler = Get-ChildItem $path -ErrorAction SilentlyContinue | Select-Object -First 1
+                      if ($compiler) {
+                          Write-Host "MSVC compiler found: $($compiler.FullName)"
+                          $found = $true
+                          break
                       }
-                      
-                      if (-not $found) {
-                          Write-Host "Warning: MSVC compiler not found after installation"
-                      }
-                  } else {
-                      Write-Host "Visual Studio Build Tools installation failed with exit code: $LASTEXITCODE"
+                  }
+                  
+                  if (-not $found) {
+                      Write-Host "Error: MSVC compiler not found after installation"
+                      Write-Host "C++ build tools are required for Rust compilation"
+                      exit 1
                   }
               } else {
-                  Write-Host "Chocolatey not available - skipping Visual Studio Build Tools"
+                  Write-Host "Chocolatey not available - skipping C++ Build Tools"
               }
               
-              Write-Host "Visual Studio Build Tools installation completed"
+              Write-Host "C++ Build Tools installation completed"
