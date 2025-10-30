@@ -25,27 +25,57 @@ runs:
               
               # Check if Chocolatey is already installed
               if (Get-Command choco -ErrorAction SilentlyContinue) {
-                  Write-Host "Chocolatey already installed"
+                  Write-Host "Chocolatey already installed and available in PATH"
                   choco --version
               } else {
-                  Write-Host "Installing Chocolatey..."
+                  Write-Host "Chocolatey not in PATH, searching for existing installation..."
                   
-                  # Set execution policy for current process
-                  Set-ExecutionPolicy Bypass -Scope Process -Force
+                  # Search for existing Chocolatey installation
+                  $searchPaths = @(
+                      "$env:ALLUSERSPROFILE\chocolatey\bin\choco.exe",
+                      "$env:PROGRAMDATA\chocolatey\bin\choco.exe",
+                      "C:\chocolatey\bin\choco.exe",
+                      "C:\ProgramData\chocolatey\bin\choco.exe"
+                  )
                   
-                  # Download and install Chocolatey
-                  [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-                  Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+                  $chocoFound = $false
+                  foreach ($path in $searchPaths) {
+                      if (Test-Path $path) {
+                          $chocoDir = Split-Path $path
+                          Write-Host "Found existing Chocolatey at: $chocoDir"
+                          
+                          # Add to PATH for current session
+                          $env:PATH = "$chocoDir;$env:PATH"
+                          # Persist for GitHub Actions
+                          echo $chocoDir >> $env:GITHUB_PATH
+                          
+                          Write-Host "Added Chocolatey to PATH"
+                          choco --version
+                          $chocoFound = $true
+                          break
+                      }
+                  }
                   
-                  # Refresh PATH for current session
-                  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
-                  
-                  # Verify installation
-                  if (Get-Command choco -ErrorAction SilentlyContinue) {
-                      Write-Host "Chocolatey installed successfully"
-                      choco --version
-                  } else {
-                      Write-Host "Warning: Chocolatey installation may have failed"
+                  if (-not $chocoFound) {
+                      Write-Host "No existing Chocolatey found, installing fresh..."
+                      
+                      # Set execution policy for current process
+                      Set-ExecutionPolicy Bypass -Scope Process -Force
+                      
+                      # Download and install Chocolatey
+                      [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+                      Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+                      
+                      # Refresh PATH for current session
+                      $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                      
+                      # Verify installation
+                      if (Get-Command choco -ErrorAction SilentlyContinue) {
+                          Write-Host "Chocolatey installed successfully"
+                          choco --version
+                      } else {
+                          Write-Host "Warning: Chocolatey installation may have failed"
+                      }
                   }
               }
 
