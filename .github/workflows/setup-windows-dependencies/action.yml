@@ -269,8 +269,8 @@ runs:
                   Write-Host "✓ link.exe found at: $($linkPath.Source)"
               } catch {
                   Write-Host "✗ link.exe not found in PATH"
-                  Write-Host "Current PATH:"
-                  $env:PATH -split ';' | ForEach-Object { Write-Host "  $_" }
+                  Write-Host "PATH environment variable:"
+                  Write-Host $env:PATH
               }
 
         - name: Setup Python3 symlink
