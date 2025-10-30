@@ -195,6 +195,38 @@ runs:
 
               if (-not $python3Available) {
                   Write-Host "No Python 3.x installation detected"
+                  
+                  # Try to install Python via Chocolatey on Windows
+                  if ($IsWindows -or $env:OS -eq "Windows_NT") {
+                      Write-Host "Attempting to install Python via Chocolatey..."
+                      
+                      # Check if Chocolatey is available
+                      if (Get-Command choco -ErrorAction SilentlyContinue) {
+                          Write-Host "Installing Python 3 via Chocolatey..."
+                          choco install python3 -y
+                          
+                          if ($LASTEXITCODE -eq 0) {
+                              Write-Host "Python installed successfully via Chocolatey"
+                              # Refresh PATH
+                              $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                              
+                              # Verify installation
+                              try {
+                                  $version = python --version 2>&1
+                                  if ($version -match "Python 3\.") {
+                                      $python3Available = $true
+                                      Write-Host "Python verification successful: $version"
+                                  }
+                              } catch {
+                                  Write-Host "Python installation verification failed"
+                              }
+                          } else {
+                              Write-Host "Chocolatey Python installation failed"
+                          }
+                      } else {
+                          Write-Host "Chocolatey not available for Python installation"
+                      }
+                  }
               }
 
               # Check Rust (should be installed by install-rust-and-protoc action)
