@@ -17,6 +17,8 @@ on:
                 default: true
                 type: boolean
 
+permissions: {}
+
 jobs:
     test-windows-self-hosted:
         name: Java ${{ github.event.inputs.java-version }} on Windows Self-Hosted
