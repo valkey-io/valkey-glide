@@ -289,78 +289,27 @@ public class ValkeyCluster implements AutoCloseable {
         }
     }
 
-    /** Constructor with default values */
-    public ValkeyCluster(boolean tls) throws IOException, InterruptedException {
-        this(tls, false, 3, 1, null, null);
-    }
-
-    private void parseClusterScriptStartOutput(String output) {
-        if (!output.contains("CLUSTER_FOLDER") || !output.contains("CLUSTER_NODES")) {
-            throw new IllegalArgumentException("Invalid cluster script output");
-        }
-
-        for (String line : output.split("\n")) {
-            if (line.contains("CLUSTER_FOLDER=")) {
-                String[] parts = line.split("CLUSTER_FOLDER=");
-                if (parts.length != 2) {
-                    throw new IllegalArgumentException("Invalid CLUSTER_FOLDER format");
-                }
-                this.clusterFolder = parts[1];
-            }
-
-            if (line.contains("CLUSTER_NODES=")) {
-                this.nodesAddr = new ArrayList<>();
-                String[] parts = line.split("CLUSTER_NODES=");
-                if (parts.length != 2) {
-                    throw new IllegalArgumentException("Invalid CLUSTER_NODES format");
-                }
-
-                String[] addresses = parts[1].split(",");
-                if (addresses.length == 0) {
-                    throw new IllegalArgumentException("No cluster nodes found");
-                }
-
-                for (String addr : addresses) {
-                    String[] hostPort = addr.split(":");
-                    if (hostPort.length != 2) {
-                        throw new IllegalArgumentException("Invalid node address format: " + addr);
-                    }
-                    this.nodesAddr.add(
-                            NodeAddress.builder().host(hostPort[0]).port(Integer.parseInt(hostPort[1])).build());
-                }
-            }
-        }
-    }
-
-    private void initFromExistingCluster(List<List<String>> addresses) {
-        this.tls = false;
-        this.clusterFolder = "";
-        this.nodesAddr = new ArrayList<>();
-
-        for (List<String> address : addresses) {
-            if (address.size() != 2) {
-                throw new IllegalArgumentException("Each address must contain host and port");
-            }
-            this.nodesAddr.add(
-                    NodeAddress.builder()
-                            .host(address.get(0))
-                            .port(Integer.parseInt(address.get(1)))
-                            .build());
-        }
-    }
-
-    /** Gets the list of node addresses in the cluster */
     public List<NodeAddress> getNodesAddr() {
         return nodesAddr;
     }
 
-    /** Gets the cluster folder path */
-    public String getClusterFolder() {
-        return clusterFolder;
+    private void initFromExistingCluster(List<List<String>> addresses) {
+        this.nodesAddr = new ArrayList<>();
+        for (List<String> address : addresses) {
+            if (address.size() >= 2) {
+                try {
+                    String host = address.get(0);
+                    int port = Integer.parseInt(address.get(1));
+                    this.nodesAddr.add(NodeAddress.builder().host(host).port(port).build());
+                } catch (NumberFormatException e) {
+                    throw new IllegalArgumentException("Invalid port number in address: " + address);
+                }
+            }
+        }
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() throws IOException, InterruptedException {
         if (clusterFolder != null && !clusterFolder.isEmpty()) {
             List<String> command = new ArrayList<>();
             command.addAll(getPythonCommand());
