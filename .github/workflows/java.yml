@@ -271,7 +271,25 @@ jobs:
               with:
                   distribution: "temurin"
                   java-version: ${{ matrix.java }}
-
+            - name: Verify Java installation (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              shell: powershell
+              run: |
+                  Write-Host "Verifying Java ${{ matrix.java }} installation..."
+                  
+                  try {
+                      $javaVersion = java -version 2>&1
+                      Write-Host "Java version: $javaVersion"
+                  } catch {
+                      Write-Host "Error: Java command not found"
+                      exit 1
+                  }
+                  
+                  if ($env:JAVA_HOME) {
+                      Write-Host "JAVA_HOME: $env:JAVA_HOME"
+                  } else {
+                      Write-Host "Warning: JAVA_HOME not set"
+                  }
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
               with:
