@@ -178,14 +178,30 @@ runs:
           env:
               GITHUB_TOKEN: ${{ inputs.github-token }}
           run: |
+              Write-Host "Checking for existing Visual Studio Build Tools..."
+              
               # Check if Visual Studio Build Tools are already installed
               $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
               if (Test-Path $vsWhere) {
+                  Write-Host "vswhere.exe found, checking for Build Tools..."
                   $buildTools = & $vsWhere -products Microsoft.VisualStudio.Product.BuildTools -format json | ConvertFrom-Json
                   if ($buildTools) {
-                      Write-Host "Visual Studio Build Tools already installed"
-                      return
+                      Write-Host "Visual Studio Build Tools already installed:"
+                      $buildTools | ForEach-Object { Write-Host "  Version: $($_.installationVersion), Path: $($_.installationPath)" }
+                      
+                      # Verify C++ tools are installed
+                      $cppTools = & $vsWhere -products Microsoft.VisualStudio.Product.BuildTools -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json
+                      if ($cppTools) {
+                          Write-Host "C++ build tools are installed"
+                          return
+                      } else {
+                          Write-Host "C++ build tools not found, will install..."
+                      }
+                  } else {
+                      Write-Host "No Build Tools found, will install..."
                   }
+              } else {
+                  Write-Host "vswhere.exe not found, Visual Studio installer not present"
               }
 
               Write-Host "Installing Visual Studio Build Tools..."
@@ -194,6 +210,8 @@ runs:
               $installerUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
               $installerPath = "$env:TEMP\vs_buildtools.exe"
 
+              Write-Host "Downloading installer from: $installerUrl"
+              
               # Add authentication header if token is available
               $headers = @{}
               if ($env:GITHUB_TOKEN) {
@@ -206,14 +224,69 @@ runs:
                   } else {
                       Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
                   }
+                  Write-Host "Installer downloaded successfully"
               } catch {
                   Write-Host "Failed to download with authentication, trying without: $_"
-                  Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+                  try {
+                      Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+                      Write-Host "Installer downloaded successfully (without auth)"
+                  } catch {
+                      Write-Host "Error: Failed to download installer: $_"
+                      exit 1
+                  }
               }
 
+              # Verify installer was downloaded
+              if (-not (Test-Path $installerPath)) {
+                  Write-Host "Error: Installer not found at $installerPath"
+                  exit 1
+              }
+
+              $installerSize = (Get-Item $installerPath).Length
+              Write-Host "Installer size: $installerSize bytes"
+
               # Install with C++ build tools
-              Write-Host "Installing C++ build tools..."
-              & $installerPath --quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.19041
+              Write-Host "Installing C++ build tools (this may take several minutes)..."
+              $installArgs = @(
+                  "--quiet",
+                  "--wait", 
+                  "--add", "Microsoft.VisualStudio.Workload.VCTools",
+                  "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                  "--add", "Microsoft.VisualStudio.Component.Windows10SDK.19041"
+              )
+              
+              Write-Host "Running: $installerPath $($installArgs -join ' ')"
+              $process = Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait -PassThru
+              
+              Write-Host "Installation process completed with exit code: $($process.ExitCode)"
+              
+              # Clean up installer
+              Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+
+              # Verify installation
+              Write-Host "Verifying installation..."
+              if (Test-Path $vsWhere) {
+                  $buildTools = & $vsWhere -products Microsoft.VisualStudio.Product.BuildTools -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json
+                  if ($buildTools) {
+                      Write-Host "Success: Visual Studio Build Tools with C++ support installed"
+                      $buildTools | ForEach-Object { Write-Host "  Version: $($_.installationVersion), Path: $($_.installationPath)" }
+                  } else {
+                      Write-Host "Error: Build Tools installation verification failed"
+                      
+                      # Show what was actually installed
+                      $allProducts = & $vsWhere -format json | ConvertFrom-Json
+                      if ($allProducts) {
+                          Write-Host "Installed Visual Studio products:"
+                          $allProducts | ForEach-Object { Write-Host "  $($_.productId) - $($_.displayName)" }
+                      } else {
+                          Write-Host "No Visual Studio products found"
+                      }
+                      exit 1
+                  }
+              } else {
+                  Write-Host "Error: vswhere.exe still not found after installation"
+                  exit 1
+              }
 
               Write-Host "Visual Studio Build Tools installation complete"
 
