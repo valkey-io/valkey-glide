@@ -333,9 +333,12 @@ jobs:
                               try {
                                   Write-Host "Downloading Java $javaVersion (attempt $i/3)..."
                                   
-                                  # Use more robust download with timeout and retry settings
+                                  # Configure ServicePointManager for better download reliability
+                                  [System.Net.ServicePointManager]::DefaultConnectionLimit = 10
+                                  [System.Net.ServicePointManager]::Expect100Continue = $false
+                                  
                                   $webClient = New-Object System.Net.WebClient
-                                  $webClient.Timeout = 300000  # 5 minutes
+                                  $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                                   $webClient.DownloadFile($javaUrl, $javaInstaller)
                                   $webClient.Dispose()
                                   
