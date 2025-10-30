@@ -275,6 +275,16 @@ runs:
           run: |
               Write-Host "Installing Python via Chocolatey for self-hosted runner..."
               
+              # Refresh PATH to pick up Chocolatey from previous step
+              $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+              
+              # Also add Chocolatey bin directory explicitly
+              $chocoPath = "C:\ProgramData\chocolatey\bin"
+              if (Test-Path $chocoPath) {
+                  $env:PATH = "$chocoPath;$env:PATH"
+                  Write-Host "Added Chocolatey to PATH: $chocoPath"
+              }
+              
               # Check if Chocolatey is available
               if (Get-Command choco -ErrorAction SilentlyContinue) {
                   Write-Host "Installing Python 3 via Chocolatey..."
@@ -282,7 +292,7 @@ runs:
                   
                   if ($LASTEXITCODE -eq 0) {
                       Write-Host "Python installed successfully via Chocolatey"
-                      # Refresh PATH
+                      # Refresh PATH again for Python
                       $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
                       
                       # Verify installation
@@ -298,6 +308,7 @@ runs:
                   }
               } else {
                   Write-Host "Error: Chocolatey not available for Python installation"
+                  Write-Host "Current PATH: $env:PATH"
                   exit 1
               }
 
