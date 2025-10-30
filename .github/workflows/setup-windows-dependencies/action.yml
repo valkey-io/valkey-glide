@@ -266,94 +266,92 @@ runs:
                       
                       # Fallback to direct installer if winget failed or unavailable
                       if ($LASTEXITCODE -ne 0 -or -not (Get-Command winget -ErrorAction SilentlyContinue)) {
-                          Write-Host "Downloading Visual Studio Build Tools installer..."
+                          Write-Host "Creating offline VS 2022 Build Tools installer..."
+                          
                           $installerUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
                           $installerPath = "$env:TEMP\vs_buildtools.exe"
+                          $offlineDir = "$env:TEMP\vs_offline"
                           
-                          try {
-                              Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-                              Write-Host "Installer downloaded successfully ($(((Get-Item $installerPath).Length / 1MB).ToString('F1')) MB)"
-                          } catch {
-                              Write-Host "Error downloading installer: $_"
-                              exit 1
-                          }
-                          
-                          # Check system requirements
-                          Write-Host "Checking system requirements..."
-                          Write-Host "OS Version: $([System.Environment]::OSVersion.VersionString)"
-                          Write-Host "Available disk space: $(((Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='C:'").FreeSpace / 1GB).ToString('F1')) GB"
-                          Write-Host "Total RAM: $(((Get-WmiObject -Class Win32_ComputerSystem).TotalPhysicalMemory / 1GB).ToString('F1')) GB"
-                          
-                          # Check for existing Visual Studio installations
-                          Write-Host "Checking for existing Visual Studio installations..."
-                          $existingVS = Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" -ErrorAction SilentlyContinue | 
-                              Get-ItemProperty | Where-Object { $_.DisplayName -like "*Visual Studio*" }
-                          if ($existingVS) {
-                              $existingVS | ForEach-Object { Write-Host "  Found: $($_.DisplayName) $($_.DisplayVersion)" }
-                          } else {
-                              Write-Host "  No existing Visual Studio installations found"
-                          }
-                          
-                          Write-Host "Installing Visual Studio Build Tools directly..."
-                          $logPath = "$env:TEMP\vs_install_log.txt"
-                          $installArgs = @(
-                              "--quiet",
-                              "--wait",
-                              "--norestart",
-                              "--logs", $logPath,
-                              "--add", "Microsoft.VisualStudio.Workload.VCTools",
-                              "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-                              "--add", "Microsoft.VisualStudio.Component.Windows11SDK.22000"
-                          )
-                          
-                          Write-Host "Running: $installerPath $($installArgs -join ' ')"
-                          Write-Host "Installation log will be written to: $logPath"
-                          
-                          $process = Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait -PassThru
-                          Write-Host "Installation completed with exit code: $($process.ExitCode)"
-                          
-                          # Show installation logs
-                          if (Test-Path $logPath) {
-                              Write-Host "Installation log contents:"
-                              Get-Content $logPath -Tail 50 | ForEach-Object { Write-Host "  $_" }
-                          } else {
-                              Write-Host "No installation log found at $logPath"
-                          }
-                          
-                          # Check for additional log files
-                          $logDir = "$env:TEMP"
-                          $logFiles = Get-ChildItem $logDir -Filter "*vs*log*" -ErrorAction SilentlyContinue
-                          if ($logFiles) {
-                              Write-Host "Additional log files found:"
-                              $logFiles | ForEach-Object { 
-                                  Write-Host "  $($_.Name) ($(($_.Length / 1KB).ToString('F1')) KB)"
-                                  if ($_.Length -lt 10KB) {
-                                      Write-Host "    Contents:"
-                                      Get-Content $_.FullName -Tail 20 | ForEach-Object { Write-Host "      $_" }
+                          # Download bootstrapper with retry
+                          $downloadSuccess = $false
+                          for ($i = 1; $i -le 3; $i++) {
+                              try {
+                                  Write-Host "Downloading VS 2022 Build Tools bootstrapper (attempt $i/3)..."
+                                  $webClient = New-Object System.Net.WebClient
+                                  $webClient.Timeout = 300000  # 5 minutes
+                                  $webClient.DownloadFile($installerUrl, $installerPath)
+                                  $webClient.Dispose()
+                                  
+                                  if (Test-Path $installerPath) {
+                                      $fileSize = (Get-Item $installerPath).Length
+                                      Write-Host "Bootstrapper download successful ($(($fileSize / 1MB).ToString('F1')) MB)"
+                                      $downloadSuccess = $true
+                                      break
                                   }
+                              } catch {
+                                  Write-Host "Download attempt $i failed: $_"
+                                  if ($i -lt 3) { Start-Sleep -Seconds 10 }
                               }
                           }
                           
-                          # Check for common exit codes
-                          switch ($process.ExitCode) {
-                              0 { Write-Host "Installation successful" }
-                              3010 { Write-Host "Installation successful (restart required)" }
-                              5007 { Write-Host "Installation blocked by policy or insufficient permissions" }
-                              5002 { 
-                                  Write-Host "Installation failed - possible causes:"
-                                  Write-Host "  - Invalid command line arguments"
-                                  Write-Host "  - Missing prerequisites (.NET Framework, etc.)"
-                                  Write-Host "  - Insufficient disk space"
-                                  Write-Host "  - Network connectivity issues"
-                                  Write-Host "  - Conflicting software"
+                          if ($downloadSuccess) {
+                              # Create offline installer layout
+                              Write-Host "Creating offline installer layout..."
+                              New-Item -ItemType Directory -Path $offlineDir -Force | Out-Null
+                              
+                              $layoutArgs = @(
+                                  "--layout", $offlineDir,
+                                  "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                                  "--add", "Microsoft.VisualStudio.Component.Windows11SDK.22000",
+                                  "--quiet",
+                                  "--lang", "en-US"
+                              )
+                              
+                              Write-Host "Downloading components to offline layout..."
+                              Write-Host "Running: $installerPath $($layoutArgs -join ' ')"
+                              $layoutProcess = Start-Process -FilePath $installerPath -ArgumentList $layoutArgs -Wait -PassThru
+                              Write-Host "Layout creation completed with exit code: $($layoutProcess.ExitCode)"
+                              
+                              if ($layoutProcess.ExitCode -eq 0) {
+                                  # Install from offline layout
+                                  Write-Host "Installing VS 2022 Build Tools from offline layout..."
+                                  $offlineInstaller = "$offlineDir\vs_buildtools.exe"
+                                  
+                                  if (Test-Path $offlineInstaller) {
+                                      $installArgs = @(
+                                          "--quiet",
+                                          "--wait",
+                                          "--norestart",
+                                          "--noweb",
+                                          "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                                          "--add", "Microsoft.VisualStudio.Component.Windows11SDK.22000"
+                                      )
+                                      
+                                      Write-Host "Running offline installation..."
+                                      $installProcess = Start-Process -FilePath $offlineInstaller -ArgumentList $installArgs -Wait -PassThru
+                                      Write-Host "Offline installation completed with exit code: $($installProcess.ExitCode)"
+                                      
+                                      if ($installProcess.ExitCode -eq 0 -or $installProcess.ExitCode -eq 3010) {
+                                          Write-Host "VS 2022 Build Tools offline installation successful"
+                                      } else {
+                                          Write-Host "VS 2022 Build Tools offline installation failed with exit code: $($installProcess.ExitCode)"
+                                      }
+                                  } else {
+                                      Write-Host "Error: Offline installer not found at $offlineInstaller"
+                                  }
+                              } else {
+                                  Write-Host "Failed to create offline layout with exit code: $($layoutProcess.ExitCode)"
                               }
-                              -1073741819 { Write-Host "Installation failed - access violation or corruption" }
-                              default { Write-Host "Installation failed with exit code: $($process.ExitCode)" }
+                              
+                              # Cleanup
+                              Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+                              Remove-Item $offlineDir -Recurse -Force -ErrorAction SilentlyContinue
+                          } else {
+                              Write-Host "Failed to download VS Build Tools bootstrapper after 3 attempts"
                           }
                           
-                          Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
-                          
-                          # Don't exit on failure, let verification handle it
+                          # Skip the rest of Visual Studio logic
+                          $skipChocolatey = $true
                       }
                       
                       # Skip the rest of Chocolatey logic
