@@ -23,12 +23,14 @@ runs:
         - name: Install Rust toolchain (Windows)
           if: runner.os == 'Windows'
           shell: powershell
+          env:
+              RUST_TARGET: ${{ inputs.target }}
           run: |
               Write-Host "Installing Rust on Windows..."
 
               # Download and install rustup
               Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "$env:TEMP\rustup-init.exe"
-              & "$env:TEMP\rustup-init.exe" -y --default-toolchain stable --target ${{ inputs.target }}
+              & "$env:TEMP\rustup-init.exe" -y --default-toolchain stable --target "$env:RUST_TARGET"
 
               # Add to PATH for current session
               $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
@@ -48,11 +50,11 @@ runs:
               components: rustfmt, clippy
 
         - name: Install protoc (Linux/macOS)
-          if: runner.os != 'Windows'
+          if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
           uses: arduino/setup-protoc@v3
 
         - name: Install protoc (Windows)
-          if: runner.os == 'Windows'
+          if: ${{ runner.os == 'Windows' }}
           shell: powershell
           run: |
               # Check if protoc is already available
