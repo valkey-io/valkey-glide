@@ -43,6 +43,66 @@ runs:
               rustc --version
               cargo --version
 
+        - name: Setup MSVC environment (Windows)
+          if: runner.os == 'Windows'
+          shell: powershell
+          run: |
+              Write-Host "Setting up MSVC environment for Rust..."
+
+              # Find Visual Studio installation
+              $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+              if (Test-Path $vsWhere) {
+                  $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+                  if ($vsPath) {
+                      Write-Host "Found Visual Studio at: $vsPath"
+                      
+                      # Setup MSVC environment
+                      $vcvarsPath = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
+                      if (Test-Path $vcvarsPath) {
+                          Write-Host "Setting up MSVC environment..."
+                          
+                          # Run vcvars64.bat and capture environment variables
+                          $tempBat = "$env:TEMP\setup_msvc.bat"
+                          @"
+              @echo off
+              call "$vcvarsPath"
+              echo VCINSTALLDIR=%VCINSTALLDIR%
+              echo WindowsSdkDir=%WindowsSdkDir%
+              echo PATH=%PATH%
+              echo LIB=%LIB%
+              echo LIBPATH=%LIBPATH%
+              echo INCLUDE=%INCLUDE%
+              "@ | Out-File -FilePath $tempBat -Encoding ASCII
+                          
+                          $output = & cmd /c $tempBat
+                          foreach ($line in $output) {
+                              if ($line -match "^(\w+)=(.*)$") {
+                                  $name = $matches[1]
+                                  $value = $matches[2]
+                                  [Environment]::SetEnvironmentVariable($name, $value, "Process")
+                                  echo "$name=$value" >> $env:GITHUB_ENV
+                              }
+                          }
+                          
+                          Remove-Item $tempBat -Force
+                          Write-Host "MSVC environment configured"
+                      } else {
+                          Write-Host "Warning: vcvars64.bat not found at $vcvarsPath"
+                      }
+                  } else {
+                      Write-Host "Warning: Visual Studio with C++ tools not found"
+                  }
+              } else {
+                  Write-Host "Warning: vswhere.exe not found"
+              }
+
+              # Verify link.exe is available
+              if (Get-Command link.exe -ErrorAction SilentlyContinue) {
+                  Write-Host "link.exe is available"
+              } else {
+                  Write-Host "Warning: link.exe not found in PATH"
+              }
+
         - name: Install Rust toolchain (Linux/macOS)
           if: runner.os != 'Windows'
           uses: dtolnay/rust-toolchain@stable
