@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 mod utilities;
+use glide_core::client::ClientSideCache;
 
 #[macro_export]
 /// Compare `$expected` with `$actual`. This macro, will exit the test process
@@ -1311,6 +1312,820 @@ pub(crate) mod shared_client_tests {
             let result = test_basics.client.send_command(&cmd, None).await;
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), Value::Nil);
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_basic_cache_hit_with_metrics(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    request_timeout: Some(1),
+                    shared_server: true,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: "test_cache".to_string(),
+                        max_cache_kb: 1,
+                        entry_ttl_seconds: None,
+                        eviction_policy: None,
+                        enable_metrics: true,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Reset command stats for a clean slate
+            let mut reset_cmd = redis::Cmd::new();
+            reset_cmd.arg("CONFIG").arg("RESETSTAT");
+            test_basics.client.send_command(&reset_cmd, None).await.ok();
+
+            // Set a key
+            let mut set_cmd = redis::Cmd::new();
+            set_cmd
+                .arg("SET")
+                .arg("cache_test_key")
+                .arg("cache_test_value");
+            let set_result = test_basics.client.send_command(&set_cmd, None).await;
+            assert!(set_result.is_ok());
+
+            // First GET - should hit the server (cache miss)
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("cache_test_key");
+            let get_result = test_basics.client.send_command(&get_cmd, None).await;
+            assert!(get_result.is_ok());
+            assert_eq!(
+                get_result.unwrap(),
+                Value::BulkString(b"cache_test_value".to_vec())
+            );
+
+            // Second GET - should come from cache, NOT hit server
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("cache_test_key");
+            let get_result = test_basics.client.send_command(&get_cmd, None).await;
+            assert!(get_result.is_ok());
+            assert_eq!(
+                get_result.unwrap(),
+                Value::BulkString(b"cache_test_value".to_vec())
+            );
+
+            // Third GET - should also come from cache
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("cache_test_key");
+            let get_result = test_basics.client.send_command(&get_cmd, None).await;
+            assert!(get_result.is_ok());
+            assert_eq!(
+                get_result.unwrap(),
+                Value::BulkString(b"cache_test_value".to_vec())
+            );
+
+            // Verify only 1 GET hit the server
+            assert_command_count(&mut test_basics.client, "GET", 1, use_cluster).await;
+
+            // Verify metrics
+            let hit_rate = test_basics.client.cache_hit_rate().unwrap();
+            let miss_rate = test_basics.client.cache_miss_rate().unwrap();
+
+            let hit_rate = match hit_rate {
+                Value::Double(d) => d,
+                _ => panic!("Expected Value::Double, got {:?}", hit_rate),
+            };
+            let miss_rate = match miss_rate {
+                Value::Double(d) => d,
+                _ => panic!("Expected Value::Double, got {:?}", miss_rate),
+            };
+
+            // 1 miss + 2 hits = 3 total
+            assert_eq!(hit_rate, 2.0 / 3.0, "Expected 66.67% hit rate");
+            assert_eq!(miss_rate, 1.0 / 3.0, "Expected 33.33% miss rate");
+            assert!(
+                (hit_rate + miss_rate - 1.0).abs() < 0.0001,
+                "Rates should sum to 1.0"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cache_without_metrics(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: "test_cache_no_metrics".to_string(),
+                        max_cache_kb: 10 * 1024,
+                        entry_ttl_seconds: Some(60),
+                        eviction_policy: None,
+                        enable_metrics: false, // Disabled
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Reset command stats for a clean slate
+            let mut reset_cmd = redis::Cmd::new();
+            reset_cmd.arg("CONFIG").arg("RESETSTAT");
+            test_basics.client.send_command(&reset_cmd, None).await.ok();
+
+            // Cache should work
+            let mut set_cmd = redis::Cmd::new();
+            set_cmd.arg("SET").arg("key").arg("value");
+            test_basics
+                .client
+                .send_command(&set_cmd, None)
+                .await
+                .unwrap();
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("key");
+            test_basics
+                .client
+                .send_command(&get_cmd, None)
+                .await
+                .unwrap();
+            test_basics
+                .client
+                .send_command(&get_cmd, None)
+                .await
+                .unwrap();
+
+            // Verify only 1 GET hit the server
+            assert_command_count(&mut test_basics.client, "GET", 1, use_cluster).await;
+
+            // But metrics should fail
+            let hit_rate = test_basics.client.cache_hit_rate();
+            assert!(hit_rate.is_err());
+            assert!(
+                hit_rate
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Cache metrics tracking is not enabled")
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cache_nil_values_not_cached(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: "test_cache_nil".to_string(),
+                        max_cache_kb: 10 * 1024,
+                        entry_ttl_seconds: Some(60),
+                        eviction_policy: None,
+                        enable_metrics: true,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut reset_cmd = redis::Cmd::new();
+            reset_cmd.arg("CONFIG").arg("RESETSTAT");
+            test_basics.client.send_command(&reset_cmd, None).await.ok();
+
+            // GET non-existent key (returns NIL)
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("nonexistent_key");
+            let result = test_basics
+                .client
+                .send_command(&get_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(result, Value::Nil);
+
+            // GET again - should NOT be cached (NIL values not cached)
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("nonexistent_key");
+            let result = test_basics
+                .client
+                .send_command(&get_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(result, Value::Nil);
+
+            // Both GETs should hit the server
+            assert_command_count(&mut test_basics.client, "GET", 2, use_cluster).await;
+
+            // Miss rate should be 100%
+            let miss_rate = test_basics.client.cache_miss_rate().unwrap();
+            let miss_rate = match miss_rate {
+                Value::Double(d) => d,
+                _ => panic!("Expected Value::Double, got {:?}", miss_rate),
+            };
+            assert_eq!(miss_rate, 1.0, "Expected 100% miss rate");
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cache_ttl_expiration(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: "test_cache_ttl".to_string(),
+                        max_cache_kb: 10 * 1024,
+                        entry_ttl_seconds: Some(2), // 2 seconds
+                        eviction_policy: None,
+                        enable_metrics: true,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut reset_cmd = redis::Cmd::new();
+            reset_cmd.arg("CONFIG").arg("RESETSTAT");
+            test_basics.client.send_command(&reset_cmd, None).await.ok();
+
+            // Set and GET
+            let mut set_cmd = redis::Cmd::new();
+            set_cmd.arg("SET").arg("ttl_key").arg("ttl_value");
+            test_basics
+                .client
+                .send_command(&set_cmd, None)
+                .await
+                .unwrap();
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("ttl_key");
+            test_basics
+                .client
+                .send_command(&get_cmd, None)
+                .await
+                .unwrap();
+
+            // Second GET - from cache
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("ttl_key");
+            test_basics
+                .client
+                .send_command(&get_cmd, None)
+                .await
+                .unwrap();
+
+            // Should have 1 GET so far
+            assert_command_count(&mut test_basics.client, "GET", 1, use_cluster).await;
+
+            // Wait for TTL to expire
+            tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
+            // GET after expiration - should hit server again
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("ttl_key");
+            test_basics
+                .client
+                .send_command(&get_cmd, None)
+                .await
+                .unwrap();
+
+            // Should now have 2 GETs
+            assert_command_count(&mut test_basics.client, "GET", 2, use_cluster).await;
+
+            // Miss rate should be 2 misses out of 3 total GETs = 66.67%
+            let miss_rate = test_basics.client.cache_miss_rate().unwrap();
+            let miss_rate = match miss_rate {
+                Value::Double(d) => d,
+                _ => panic!("Expected Value::Double, got {:?}", miss_rate),
+            };
+            assert_eq!(miss_rate, (2.0 / 3.0), "Expected 66.67% miss rate");
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cache_multiple_keys(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: false,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: "test_cache_multi".to_string(),
+                        max_cache_kb: 10 * 1024,
+                        entry_ttl_seconds: Some(60),
+                        eviction_policy: None,
+                        enable_metrics: true,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut reset_cmd = redis::Cmd::new();
+            reset_cmd.arg("CONFIG").arg("RESETSTAT");
+            test_basics.client.send_command(&reset_cmd, None).await.ok();
+
+            // Set 3 keys
+            for i in 1..=3 {
+                let mut set_cmd = redis::Cmd::new();
+                set_cmd
+                    .arg("SET")
+                    .arg(format!("key{}", i))
+                    .arg(format!("value{}", i));
+                test_basics
+                    .client
+                    .send_command(&set_cmd, None)
+                    .await
+                    .unwrap();
+            }
+
+            // GET each key twice (miss + hit)
+            for i in 1..=3 {
+                let mut get_cmd = redis::Cmd::new();
+                get_cmd.arg("GET").arg(format!("key{}", i));
+                test_basics
+                    .client
+                    .send_command(&get_cmd, None)
+                    .await
+                    .unwrap();
+                test_basics
+                    .client
+                    .send_command(&get_cmd, None)
+                    .await
+                    .unwrap();
+            }
+
+            // Should have 3 GETs (one per key, second GETs cached)
+            assert_command_count(&mut test_basics.client, "GET", 3, use_cluster).await;
+
+            // Verify metrics: 3 misses + 3 hits = 50% rate
+            let hit_rate = test_basics.client.cache_hit_rate().unwrap();
+            let hit_rate = match hit_rate {
+                Value::Double(d) => d,
+                _ => panic!("Expected Value::Double, got {:?}", hit_rate),
+            };
+            assert_eq!(hit_rate, 0.5);
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_no_cache_all_requests_hit_server(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: false,
+                    client_side_cache: None, // No cache
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut reset_cmd = redis::Cmd::new();
+            reset_cmd.arg("CONFIG").arg("RESETSTAT");
+            test_basics.client.send_command(&reset_cmd, None).await.ok();
+
+            let mut set_cmd = redis::Cmd::new();
+            set_cmd.arg("SET").arg("key").arg("value");
+            test_basics
+                .client
+                .send_command(&set_cmd, None)
+                .await
+                .unwrap();
+
+            // GET 3 times - all should hit server
+            for _ in 0..3 {
+                let mut get_cmd = redis::Cmd::new();
+                get_cmd.arg("GET").arg("key");
+                test_basics
+                    .client
+                    .send_command(&get_cmd, None)
+                    .await
+                    .unwrap();
+            }
+
+            // All 3 should hit server
+            assert_command_count(&mut test_basics.client, "GET", 3, use_cluster).await;
+
+            // Metrics should error
+            let result = test_basics.client.cache_hit_rate();
+            assert!(result.is_err());
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Client-side caching is not enabled")
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cache_eviction_policy_lru(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let cache_id = "test_cache_lru";
+
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: false,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: cache_id.to_string(),
+                        max_cache_kb: 1, // 1 KB = 1024 bytes
+                        entry_ttl_seconds: None,
+                        eviction_policy: Some(glidecachelib::EvictionPolicy::Lru),
+                        enable_metrics: true,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Use larger values to force eviction faster
+            // Each entry: key (~10 bytes) + value (~250 bytes) = ~260 bytes
+            // 1024 / 260 = ~3 entries before eviction
+            let value = "x".repeat(250);
+
+            // Set and cache 3 keys
+            for i in 1..=3 {
+                let mut set_cmd = redis::Cmd::new();
+                set_cmd.arg("SET").arg(format!("lru_key{}", i)).arg(&value);
+                test_basics
+                    .client
+                    .send_command(&set_cmd, None)
+                    .await
+                    .unwrap();
+
+                let mut get_cmd = redis::Cmd::new();
+                get_cmd.arg("GET").arg(format!("lru_key{}", i));
+                test_basics
+                    .client
+                    .send_command(&get_cmd, None)
+                    .await
+                    .unwrap();
+            }
+
+            // Check cache stats
+            let (entry_count, _weighted_size) =
+                get_cache_stats(cache_id).expect("Cache should exist");
+            assert!(entry_count == 3, "Should have exactly 3 entries");
+
+            // Access key1 to make it recently used (move to front in LRU)
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("lru_key1");
+            test_basics
+                .client
+                .send_command(&get_cmd, None)
+                .await
+                .unwrap();
+
+            // Add 2 more keys - should evict key2 and key3 (least recently used)
+            for i in 4..=5 {
+                let mut set_cmd = redis::Cmd::new();
+                set_cmd.arg("SET").arg(format!("lru_key{}", i)).arg(&value);
+                test_basics
+                    .client
+                    .send_command(&set_cmd, None)
+                    .await
+                    .unwrap();
+
+                let mut get_cmd = redis::Cmd::new();
+                get_cmd.arg("GET").arg(format!("lru_key{}", i));
+                test_basics
+                    .client
+                    .send_command(&get_cmd, None)
+                    .await
+                    .unwrap();
+            }
+
+            // Check cache after eviction
+            let (_entry_count, weighted_size) =
+                get_cache_stats(cache_id).expect("Cache should exist");
+
+            // Verify size is under limit
+            assert!(weighted_size <= 1024, "Cache size should not exceed 1 KB");
+
+            // Verify LRU behavior: key1 should still be cached (was accessed recently)
+            assert!(
+                is_key_cached(cache_id, b"lru_key1"),
+                "lru_key1 should still be cached (recently accessed)"
+            );
+
+            // key2 and key3 should be evicted (least recently used)
+            assert!(
+                !is_key_cached(cache_id, b"lru_key2") && !is_key_cached(cache_id, b"lru_key3"),
+                "lru_key2 and lru_key3 should be evicted"
+            );
+
+            // New keys should be in cache
+            assert!(
+                is_key_cached(cache_id, b"lru_key4") && is_key_cached(cache_id, b"lru_key5"),
+                "lru_key4 and lru_key5 should be in cache"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cache_eviction_policy_tiny_lfu(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let cache_id = "test_cache_tinylfu";
+
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: false,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: cache_id.to_string(),
+                        max_cache_kb: 1, // 1 KB
+                        entry_ttl_seconds: None,
+                        eviction_policy: Some(glidecachelib::EvictionPolicy::TinyLfu),
+                        enable_metrics: true,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let value = "x".repeat(250); // ~250 bytes per value
+
+            // Set a frequently accessed key and access it multiple times
+            let mut set_cmd = redis::Cmd::new();
+            set_cmd.arg("SET").arg("popular_key").arg(&value);
+            test_basics
+                .client
+                .send_command(&set_cmd, None)
+                .await
+                .unwrap();
+
+            // Access popular_key 3 times to build frequency
+            for _ in 0..3 {
+                let mut get_cmd = redis::Cmd::new();
+                get_cmd.arg("GET").arg("popular_key");
+                test_basics
+                    .client
+                    .send_command(&get_cmd, None)
+                    .await
+                    .unwrap();
+            }
+
+            // Add one-time access keys to fill cache
+            for i in 1..=4 {
+                let mut set_cmd = redis::Cmd::new();
+                set_cmd.arg("SET").arg(format!("temp_key{}", i)).arg(&value);
+                test_basics
+                    .client
+                    .send_command(&set_cmd, None)
+                    .await
+                    .unwrap();
+
+                // Access only once
+                let mut get_cmd = redis::Cmd::new();
+                get_cmd.arg("GET").arg(format!("temp_key{}", i));
+                test_basics
+                    .client
+                    .send_command(&get_cmd, None)
+                    .await
+                    .unwrap();
+            }
+
+            // Check cache stats
+            let (entry_count, weighted_size) =
+                get_cache_stats(cache_id).expect("Cache should exist");
+
+            assert!(weighted_size <= 1024, "Cache should respect size limit");
+            assert!(entry_count == 3, "Cache should have limited entries");
+
+            // Verify TinyLFU behavior: popular_key should be retained (high frequency)
+            assert!(
+                is_key_cached(cache_id, b"popular_key"),
+                "popular_key should be retained due to high frequency"
+            );
+
+            // Check that temp_key4 and temp_key3 are not cached
+            assert!(
+                !is_key_cached(cache_id, b"temp_key4") && !is_key_cached(cache_id, b"temp_key3"),
+                "temp_key4 and temp_key3 should be evicted due to low frequency"
+            );
+
+            // temp_key1 and temp_key2 should be cached
+            assert!(
+                is_key_cached(cache_id, b"temp_key1") && is_key_cached(cache_id, b"temp_key2"),
+                "temp_key1 and temp_key2 should be cached"
+            );
+
+            // Try to access temp_key4 again - should be cached now
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("temp_key4");
+            test_basics
+                .client
+                .send_command(&get_cmd, None)
+                .await
+                .unwrap();
+
+            assert!(
+                is_key_cached(cache_id, b"temp_key4"),
+                "temp_key4 should be cached after access"
+            );
+
+            assert!(
+                !is_key_cached(cache_id, b"popular_key"),
+                "popular_key should be evicted after cache is full and new accesses"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cache_max_memory_limit(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let cache_id = "test_cache_maxmem";
+
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: false,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: cache_id.to_string(),
+                        max_cache_kb: 2, // 2 KB = 2048 bytes
+                        entry_ttl_seconds: None,
+                        eviction_policy: None,
+                        enable_metrics: true,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Create values that are ~400 bytes each
+            // 2048 / 400 = ~5 entries max
+            let large_value = "x".repeat(400);
+
+            // Add 10 keys to force eviction
+            for i in 1..=10 {
+                let mut set_cmd = redis::Cmd::new();
+                set_cmd
+                    .arg("SET")
+                    .arg(format!("key{}", i))
+                    .arg(&large_value);
+                test_basics
+                    .client
+                    .send_command(&set_cmd, None)
+                    .await
+                    .unwrap();
+
+                let mut get_cmd = redis::Cmd::new();
+                get_cmd.arg("GET").arg(format!("key{}", i));
+                test_basics
+                    .client
+                    .send_command(&get_cmd, None)
+                    .await
+                    .unwrap();
+
+                // Check cache doesn't exceed limit
+                let (_entry_count, weighted_size) =
+                    get_cache_stats(cache_id).expect("Cache should exist");
+                assert!(
+                    weighted_size <= 2048,
+                    "Cache size {} should not exceed 2 KB (2048 bytes)",
+                    weighted_size
+                );
+            }
+
+            // Verify some entries were evicted
+            let (final_count, final_size) = get_cache_stats(cache_id).expect("Cache should exist");
+            assert!(
+                final_count < 10,
+                "Should have evicted entries, only {} of 10 remain",
+                final_count
+            );
+            assert!(
+                final_size <= 2048,
+                "Final size {} exceeds limit",
+                final_size
+            );
+
+            // Early keys should be evicted
+            assert!(!is_key_cached(cache_id, b"key1"), "key1 should be evicted");
+
+            // Recent keys should be cached
+            assert!(
+                is_key_cached(cache_id, b"key10"),
+                "key10 should be in cache"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_shared_cache_between_clients(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let shared_cache_id = "shared_test_cache";
+
+            // Create first client
+            let mut test_basics1 = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: false,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: shared_cache_id.to_string(),
+                        max_cache_kb: 10 * 1024,
+                        entry_ttl_seconds: Some(60),
+                        eviction_policy: None,
+                        enable_metrics: true,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Create second client with same cache_id
+            let mut test_basics2 = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: false,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: shared_cache_id.to_string(),
+                        max_cache_kb: 10 * 1024,
+                        entry_ttl_seconds: Some(60),
+                        eviction_policy: None,
+                        enable_metrics: true,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut reset_cmd = redis::Cmd::new();
+            reset_cmd.arg("CONFIG").arg("RESETSTAT");
+            test_basics1
+                .client
+                .send_command(&reset_cmd, None)
+                .await
+                .ok();
+
+            // Client 1 sets and gets a key (populates shared cache)
+            let mut set_cmd = redis::Cmd::new();
+            set_cmd.arg("SET").arg("shared_key").arg("shared_value");
+            test_basics1
+                .client
+                .send_command(&set_cmd, None)
+                .await
+                .unwrap();
+
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("shared_key");
+            let result = test_basics1
+                .client
+                .send_command(&get_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(result, Value::BulkString(b"shared_value".to_vec()));
+
+            // Client 2 gets the same key - should hit shared cache
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg("shared_key");
+            let result = test_basics2
+                .client
+                .send_command(&get_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(result, Value::BulkString(b"shared_value".to_vec()));
+
+            // Only 1 GET should have hit the server (both clients used shared cache)
+            assert_command_count(&mut test_basics1.client, "GET", 1, use_cluster).await;
+
+            // Both clients should show cache hits in their metrics
+            let hit_rate1 = test_basics1.client.cache_hit_rate().unwrap();
+            let hit_rate2 = test_basics2.client.cache_hit_rate().unwrap();
+
+            // Extract doubles
+            let hit_rate1 = match hit_rate1 {
+                Value::Double(d) => d,
+                _ => panic!("Expected Value::Double"),
+            };
+            let hit_rate2 = match hit_rate2 {
+                Value::Double(d) => d,
+                _ => panic!("Expected Value::Double"),
+            };
+
+            // Client 1: 1 miss (0%)
+            assert_eq!(hit_rate1, 0.0);
+            // Client 2: 1 hit (100%)
+            assert_eq!(hit_rate2, 1.0);
         });
     }
 

@@ -60,7 +60,7 @@ from glide_shared.constants import (
     TXInfoStreamResponse,
 )
 from glide_shared.exceptions import RequestError
-from glide_shared.protobuf.command_request_pb2 import RequestType
+from glide_shared.protobuf.command_request_pb2 import RequestType, CacheMetricsType
 from glide_shared.routes import Route
 
 
@@ -159,6 +159,42 @@ class CoreCommands(Protocol):
             'OK'
         """
         return cast(TOK, await self._refresh_iam_token())
+
+    def _get_cache_metrics(self, metrics_type: CacheMetricsType) -> TResult: ...
+
+    async def get_cache_hit_rate(self) -> float:
+        """
+        Get the cache hit rate (hits / total requests).
+
+        Returns:
+            The cache hit rate as a float between 0.0 and 1.0.
+
+        Raises:
+            RequestError: If client-side caching is not enabled or metrics tracking is disabled.
+
+        Example:
+            >>> hit_rate = await client.get_cache_hit_rate()
+            >>> print(f"Cache hit rate: {hit_rate:.2%}")
+            Cache hit rate: 85.50%
+        """
+        return cast(float, await self._get_cache_metrics(CacheMetricsType.HitRate))
+
+    async def get_cache_miss_rate(self) -> float:
+        """
+        Get the cache miss rate (misses / total requests).
+
+        Returns:
+            The cache miss rate as a float between 0.0 and 1.0.
+
+        Raises:
+            RequestError: If client-side caching is not enabled or metrics tracking is disabled.
+
+        Example:
+            >>> miss_rate = await client.get_cache_miss_rate()
+            >>> print(f"Cache miss rate: {miss_rate:.2%}")
+            Cache miss rate: 14.50%
+        """
+        return cast(float, await self._get_cache_metrics(CacheMetricsType.MissRate))
 
     async def set(
         self,

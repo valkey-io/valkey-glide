@@ -1,5 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use glidecachelib::EvictionPolicy;
 #[allow(unused_imports)]
 use logger_core::log_warn;
 #[allow(unused_imports)]
@@ -29,6 +30,16 @@ pub struct ConnectionRequest {
     pub inflight_requests_limit: Option<u32>,
     pub lazy_connect: bool,
     pub refresh_topology_from_initial_nodes: bool,
+    pub client_side_cache: Option<ClientSideCache>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClientSideCache {
+    pub cache_id: String,
+    pub max_cache_kb: u64,
+    pub entry_ttl_seconds: Option<u64>,
+    pub eviction_policy: Option<EvictionPolicy>,
+    pub enable_metrics: bool,
 }
 
 /// Authentication information for connecting to Redis/Valkey servers
@@ -276,6 +287,23 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         let inflight_requests_limit = none_if_zero(value.inflight_requests_limit);
         let lazy_connect = value.lazy_connect;
         let refresh_topology_from_initial_nodes = value.refresh_topology_from_initial_nodes;
+        let client_side_cache = if let Some(proto_cache) = value.client_side_cache.0 {
+            Some(ClientSideCache {
+                cache_id: chars_to_string_option(&proto_cache.cache_id).unwrap_or_default(),
+                max_cache_kb: proto_cache.max_cache_kb,
+                entry_ttl_seconds: proto_cache.entry_ttl_seconds,
+                eviction_policy: proto_cache
+                    .eviction_policy
+                    .and_then(|enum_or_unknown| enum_or_unknown.enum_value().ok())
+                    .map(|val| match val {
+                        protobuf::EvictionPolicy::LRU => EvictionPolicy::Lru,
+                        protobuf::EvictionPolicy::TINY_LFU => EvictionPolicy::TinyLfu,
+                    }),
+                enable_metrics: proto_cache.enable_metrics,
+            })
+        } else {
+            None
+        };
 
         ConnectionRequest {
             read_from,
@@ -295,6 +323,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             inflight_requests_limit,
             lazy_connect,
             refresh_topology_from_initial_nodes,
+            client_side_cache: client_side_cache,
         }
     }
 }
