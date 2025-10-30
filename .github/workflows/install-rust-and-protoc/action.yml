@@ -48,59 +48,97 @@ runs:
           shell: powershell
           run: |
               Write-Host "Setting up MSVC environment for Rust..."
-
+              
+              # Check if link.exe is already available
+              if (Get-Command link.exe -ErrorAction SilentlyContinue) {
+                  Write-Host "link.exe already available"
+                  return
+              }
+              
               # Find Visual Studio installation
               $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-              if (Test-Path $vsWhere) {
-                  $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-                  if ($vsPath) {
-                      Write-Host "Found Visual Studio at: $vsPath"
-                      
-                      # Setup MSVC environment
-                      $vcvarsPath = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
-                      if (Test-Path $vcvarsPath) {
-                          Write-Host "Setting up MSVC environment..."
-                          
-                          # Run vcvars64.bat and capture environment variables
-                          $tempBat = "$env:TEMP\setup_msvc.bat"
-                          @"
+              if (-not (Test-Path $vsWhere)) {
+                  Write-Host "Error: vswhere.exe not found. Visual Studio Build Tools may not be installed."
+                  exit 1
+              }
+              
+              $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+              if (-not $vsPath) {
+                  Write-Host "Error: Visual Studio with C++ tools not found"
+                  exit 1
+              }
+              
+              Write-Host "Found Visual Studio at: $vsPath"
+              
+              # Setup MSVC environment using vcvarsall.bat
+              $vcvarsPath = "$vsPath\VC\Auxiliary\Build\vcvarsall.bat"
+              if (-not (Test-Path $vcvarsPath)) {
+                  Write-Host "Error: vcvarsall.bat not found at $vcvarsPath"
+                  exit 1
+              }
+              
+              Write-Host "Configuring MSVC environment..."
+              
+              # Create a batch file to set up environment and export variables
+              $setupScript = @"
               @echo off
-              call "$vcvarsPath"
-              echo VCINSTALLDIR=%VCINSTALLDIR%
-              echo WindowsSdkDir=%WindowsSdkDir%
+              call "$vcvarsPath" x64
+              if errorlevel 1 (
+                  echo Failed to setup MSVC environment
+                  exit /b 1
+              )
               echo PATH=%PATH%
               echo LIB=%LIB%
               echo LIBPATH=%LIBPATH%
               echo INCLUDE=%INCLUDE%
-              "@ | Out-File -FilePath $tempBat -Encoding ASCII
-                          
-                          $output = & cmd /c $tempBat
-                          foreach ($line in $output) {
-                              if ($line -match "^(\w+)=(.*)$") {
-                                  $name = $matches[1]
-                                  $value = $matches[2]
-                                  [Environment]::SetEnvironmentVariable($name, $value, "Process")
-                                  echo "$name=$value" >> $env:GITHUB_ENV
-                              }
-                          }
-                          
-                          Remove-Item $tempBat -Force
-                          Write-Host "MSVC environment configured"
-                      } else {
-                          Write-Host "Warning: vcvars64.bat not found at $vcvarsPath"
-                      }
-                  } else {
-                      Write-Host "Warning: Visual Studio with C++ tools not found"
-                  }
-              } else {
-                  Write-Host "Warning: vswhere.exe not found"
+              echo VCINSTALLDIR=%VCINSTALLDIR%
+              echo WindowsSdkDir=%WindowsSdkDir%
+              "@
+              
+              $tempBat = "$env:TEMP\setup_msvc_env.bat"
+              $setupScript | Out-File -FilePath $tempBat -Encoding ASCII
+              
+              # Execute and capture environment
+              $output = & cmd /c $tempBat 2>&1
+              if ($LASTEXITCODE -ne 0) {
+                  Write-Host "Error: Failed to setup MSVC environment"
+                  Write-Host $output
+                  exit 1
               }
-
-              # Verify link.exe is available
+              
+              # Parse and set environment variables
+              foreach ($line in $output) {
+                  if ($line -match "^(\w+)=(.*)$") {
+                      $name = $matches[1]
+                      $value = $matches[2]
+                      
+                      # Set for current process
+                      [Environment]::SetEnvironmentVariable($name, $value, "Process")
+                      
+                      # Persist for GitHub Actions
+                      if ($name -eq "PATH") {
+                          # For PATH, we need to append to GITHUB_PATH
+                          $value -split ';' | Where-Object { $_ -and $_ -notmatch '^[A-Z]:[\\/]Windows[\\/]' } | ForEach-Object {
+                              echo $_ >> $env:GITHUB_PATH
+                          }
+                      } else {
+                          # For other variables, set in GITHUB_ENV
+                          echo "$name=$value" >> $env:GITHUB_ENV
+                      }
+                  }
+              }
+              
+              Remove-Item $tempBat -Force
+              
+              # Verify link.exe is now available
               if (Get-Command link.exe -ErrorAction SilentlyContinue) {
-                  Write-Host "link.exe is available"
+                  $linkPath = (Get-Command link.exe).Source
+                  Write-Host "Success: link.exe found at $linkPath"
               } else {
-                  Write-Host "Warning: link.exe not found in PATH"
+                  Write-Host "Error: link.exe still not found after MSVC setup"
+                  Write-Host "Current PATH entries containing 'VC' or 'Visual Studio':"
+                  $env:PATH -split ';' | Where-Object { $_ -match 'VC|Visual Studio' } | ForEach-Object { Write-Host "  $_" }
+                  exit 1
               }
 
         - name: Install Rust toolchain (Linux/macOS)
