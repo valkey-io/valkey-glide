@@ -41,8 +41,16 @@ runs:
                   [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
                   Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
                   
-                  # Refresh PATH
+                  # Refresh PATH properly - Chocolatey adds C:\ProgramData\chocolatey\bin
                   $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                  
+                  # Also add Chocolatey bin directory explicitly
+                  $chocoPath = "C:\ProgramData\chocolatey\bin"
+                  if (Test-Path $chocoPath) {
+                      $env:PATH = "$chocoPath;$env:PATH"
+                      echo $chocoPath >> $env:GITHUB_PATH
+                      Write-Host "Added Chocolatey to PATH: $chocoPath"
+                  }
                   
                   if (Get-Command choco -ErrorAction SilentlyContinue) {
                       Write-Host "Chocolatey installed successfully"
