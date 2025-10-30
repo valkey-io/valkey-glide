@@ -320,7 +320,51 @@ jobs:
                               Write-Host "winget Java installation failed with exit code: $LASTEXITCODE"
                           }
                       } else {
-                          Write-Host "winget not available for Java installation"
+                          Write-Host "winget not available, downloading Java directly..."
+                          
+                          # Direct download of Eclipse Temurin JDK
+                          $javaVersion = "${{ matrix.java }}"
+                          $javaUrl = "https://github.com/adoptium/temurin$javaVersion-binaries/releases/download/jdk-$javaVersion.0.2%2B9/OpenJDK$javaVersion`U-jdk_x64_windows_hotspot_$javaVersion.0.2_9.msi"
+                          $javaInstaller = "$env:TEMP\openjdk$javaVersion.msi"
+                          
+                          try {
+                              Write-Host "Downloading Java $javaVersion from: $javaUrl"
+                              Invoke-WebRequest -Uri $javaUrl -OutFile $javaInstaller
+                              
+                              Write-Host "Installing Java $javaVersion..."
+                              Start-Process -FilePath "msiexec.exe" -ArgumentList "/i", $javaInstaller, "/quiet", "/norestart" -Wait
+                              
+                              Remove-Item $javaInstaller -Force -ErrorAction SilentlyContinue
+                              
+                              # Find installed Java
+                              $javaInstalls = Get-ChildItem "C:\Program Files\Eclipse Adoptium" -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "jdk-$javaVersion*" }
+                              if (-not $javaInstalls) {
+                                  # Try alternative location
+                                  $javaInstalls = Get-ChildItem "C:\Program Files\Java" -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*$javaVersion*" }
+                              }
+                              
+                              if ($javaInstalls) {
+                                  $javaHome = $javaInstalls[0].FullName
+                                  Write-Host "Setting JAVA_HOME to: $javaHome"
+                                  echo "JAVA_HOME=$javaHome" >> $env:GITHUB_ENV
+                                  echo "$javaHome\bin" >> $env:GITHUB_PATH
+                                  $env:JAVA_HOME = $javaHome
+                                  $env:PATH = "$javaHome\bin;$env:PATH"
+                                  
+                                  # Verify installation
+                                  try {
+                                      $javaVersion = java -version 2>&1
+                                      Write-Host "Java installation successful: $javaVersion"
+                                      $javaFound = $true
+                                  } catch {
+                                      Write-Host "Error: Java still not available after direct installation"
+                                  }
+                              } else {
+                                  Write-Host "Error: Java installation directory not found after direct installation"
+                              }
+                          } catch {
+                              Write-Host "Error downloading/installing Java directly: $_"
+                          }
                       }
                       
                       if (-not $javaFound) {
