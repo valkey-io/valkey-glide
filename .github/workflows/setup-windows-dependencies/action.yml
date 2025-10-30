@@ -185,6 +185,14 @@ runs:
               echo "ssh-available=$sshAvailable" >> $env:GITHUB_OUTPUT
 
               Write-Host "Detection complete: Python=$pythonAvailable, SSH=$sshAvailable"
+              
+              # Install Python via Chocolatey if not found
+              if (-not $pythonAvailable) {
+                  Write-Host "Python not found, attempting installation via Chocolatey..."
+                  
+                  # Check if Chocolatey will be available (it gets installed in the next step)
+                  Write-Host "Python installation will be handled by Chocolatey in the next step"
+              }
 
         - name: Install Visual Studio Build Tools
           shell: powershell
@@ -532,6 +540,36 @@ runs:
               }
               
               Write-Host "Visual Studio Build Tools installation complete"
+
+        - name: Install Python if not available
+          if: steps.check-deps.outputs.python-available != 'true'
+          shell: powershell
+          run: |
+              Write-Host "Installing Python via Chocolatey..."
+              
+              # Check if Chocolatey is available
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  Write-Host "Installing Python 3 via Chocolatey..."
+                  choco install python3 -y
+                  
+                  if ($LASTEXITCODE -eq 0) {
+                      Write-Host "Python installed successfully via Chocolatey"
+                      # Refresh PATH
+                      $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                      
+                      # Verify installation
+                      try {
+                          $version = python --version 2>&1
+                          Write-Host "Python verification successful: $version"
+                      } catch {
+                          Write-Host "Python installation verification failed"
+                      }
+                  } else {
+                      Write-Host "Chocolatey Python installation failed"
+                  }
+              } else {
+                  Write-Host "Chocolatey not available for Python installation"
+              }
 
         - name: Setup Python3 symlink
           if: steps.check.outputs.python-available == 'true'
