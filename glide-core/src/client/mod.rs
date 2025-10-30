@@ -5,7 +5,9 @@ mod types;
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
+use glidecachelib::get_or_create_cache;
 use logger_core::{log_debug, log_error, log_info, log_warn};
+use moka::sync::Cache;
 use once_cell::sync::OnceCell;
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
@@ -20,7 +22,7 @@ use redis::{
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicU64, Ordering};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -232,6 +234,18 @@ pub struct LazyClient {
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
 }
 
+/// Client-side cache with optional metrics tracking
+struct ClientCacheConfig {
+    cache: Arc<Cache<Vec<u8>, Value>>,
+    metrics: Option<CacheMetrics>,
+}
+
+/// Cache hit/miss metrics
+struct CacheMetrics {
+    hits: AtomicU64,
+    misses: AtomicU64,
+}
+
 #[derive(Clone)]
 pub struct Client {
     internal_client: Arc<RwLock<ClientWrapper>>,
@@ -240,6 +254,7 @@ pub struct Client {
     inflight_requests_allowed: Arc<AtomicIsize>,
     // IAM token manager for automatic credential refresh
     iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
+    client_side_cache: Option<Arc<ClientCacheConfig>>,
 }
 
 async fn run_with_timeout<T>(
@@ -377,6 +392,37 @@ impl Client {
     /// Note: The underlying redis-rs library normalizes commands to uppercase.
     fn is_select_command(&self, cmd: &Cmd) -> bool {
         cmd.command().is_some_and(|bytes| bytes == b"SELECT")
+    }
+
+    /// Checks if the command is cacheable.
+    /// For now, only GET commands are cacheable.
+    fn is_cacheable_command(&self, cmd: &Cmd) -> bool {
+        let cmd_name = cmd.command();
+        if let Some(cmd) = cmd_name {
+            match cmd.as_slice() {
+                b"GET" => return true,
+                _ => return false,
+            }
+        }
+        false
+    }
+
+    /// Extracts the key from a command.
+    /// Returns Some(key) if the key can be extracted, None otherwise.
+    fn extract_key_from_command(&self, cmd: &Cmd) -> Option<Vec<u8>> {
+        let position = self.get_cacheable_key_position(cmd)?;
+        cmd.arg_idx(position).map(|bytes| bytes.to_vec())
+    }
+
+    /// Checks if the command is cacheable and returns the position of the key argument.
+    /// Returns Some(position) if the command is cacheable, None otherwise.
+    /// Position is 0-indexed (0 = command name, 1 = first argument, etc.)
+    fn get_cacheable_key_position(&self, cmd: &Cmd) -> Option<usize> {
+        let cmd_name = cmd.command()?;
+        match cmd_name.as_slice() {
+            b"GET" => Some(1),
+            _ => None,
+        }
     }
 
     /// Extracts the database ID from a SELECT command.
@@ -556,6 +602,25 @@ impl Client {
         Box::pin(async move {
             let client = self.get_or_initialize_client().await?;
 
+            // Check cache and track hit/miss
+            if let Some(cache_config) = &self.client_side_cache {
+                if self.is_cacheable_command(cmd) {
+                    if let Some(key) = self.extract_key_from_command(cmd) {
+                        if let Some(cached_value) = cache_config.cache.get(&key) {
+                            // Cache hit
+                            if let Some(metrics) = &cache_config.metrics {
+                                metrics.hits.fetch_add(1, Ordering::Relaxed);
+                            }
+                            return Ok(cached_value);
+                        }
+                        // Cache miss
+                        if let Some(metrics) = &cache_config.metrics {
+                            metrics.misses.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
+                }
+            }
+
             let expected_type = expected_type_for_cmd(cmd);
             let request_timeout = match get_request_timeout(cmd, self.request_timeout) {
                 Ok(request_timeout) => request_timeout,
@@ -599,6 +664,17 @@ impl Client {
             })
             .await?;
 
+            // Update cache after successful response (for cacheable commands only)
+            if let Some(client_side_cache) = &self.client_side_cache {
+                if self.is_cacheable_command(cmd) {
+                    if !matches!(result, Value::Nil) {
+                        if let Some(key) = self.extract_key_from_command(cmd) {
+                            client_side_cache.cache.insert(key, result.clone());
+                        }
+                    }
+                }
+            }
+
             // Intercept CLIENT SETNAME commands after regular processing
             // Only handle CLIENT SETNAME commands if they executed successfully (no error)
             if self.is_client_set_name_command(cmd) {
@@ -613,6 +689,66 @@ impl Client {
 
             Ok(result)
         })
+    }
+
+    /// Returns the cache hit rate (hits / total requests).
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_hit_rate(&self) -> RedisResult<Value> {
+        let cache_config = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache_config.metrics.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Cache metrics tracking is not enabled",
+            ))
+        })?;
+
+        let hits = metrics.hits.load(Ordering::Relaxed);
+        let misses = metrics.misses.load(Ordering::Relaxed);
+        let total = hits + misses;
+
+        let hit_rate = if total > 0 {
+            hits as f64 / total as f64
+        } else {
+            0.0
+        };
+
+        Ok(Value::Double(hit_rate))
+    }
+
+    /// Returns the cache miss rate (misses / total requests).
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_miss_rate(&self) -> RedisResult<Value> {
+        let cache_config = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache_config.metrics.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Cache metrics tracking is not enabled",
+            ))
+        })?;
+
+        let hits = metrics.hits.load(Ordering::Relaxed);
+        let misses = metrics.misses.load(Ordering::Relaxed);
+        let total = hits + misses;
+
+        let miss_rate = if total > 0 {
+            misses as f64 / total as f64
+        } else {
+            0.0
+        };
+
+        Ok(Value::Double(miss_rate))
     }
 
     // Cluster scan is not passed to redis-rs as a regular command, so we need to handle it separately.
@@ -1472,6 +1608,21 @@ impl Client {
             inflight_requests_limit.try_into().unwrap(),
         ));
 
+        let client_side_cache = request.client_side_cache.as_ref().map(|config| {
+            Arc::new(ClientCacheConfig {
+                cache: get_or_create_cache(
+                    &config.cache_id,
+                    config.max_cache_kb,
+                    config.entry_ttl_seconds,
+                    config.eviction_policy.map(Into::into),
+                ),
+                metrics: config.enable_metrics.then(|| CacheMetrics {
+                    hits: AtomicU64::new(0),
+                    misses: AtomicU64::new(0),
+                }),
+            })
+        });
+
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
@@ -1487,6 +1638,7 @@ impl Client {
                 request_timeout,
                 inflight_requests_allowed,
                 iam_token_manager: None,
+                client_side_cache: client_side_cache, // if cache_id !=null and get cache is null, raise an error
             };
 
             let client_arc = Arc::new(RwLock::new(client));
@@ -1830,6 +1982,7 @@ mod tests {
             request_timeout: Duration::from_millis(250),
             inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
             iam_token_manager: None,
+            client_side_cache: None,
         }
     }
 

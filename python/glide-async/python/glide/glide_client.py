@@ -50,6 +50,7 @@ from glide_shared.protobuf.command_request_pb2 import (
     CommandRequest,
     RefreshIamToken,
     RequestType,
+    CacheMetricsType,
 )
 from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
 from glide_shared.protobuf.response_pb2 import Response
@@ -764,6 +765,25 @@ class BaseClient(CoreCommands):
         request.refresh_iam_token.CopyFrom(
             RefreshIamToken()
         )  # Empty message, just triggers the refresh
+        response = await self._write_request_await_response(request)
+        return response
+
+    async def _get_cache_metrics(self, metrics_type: CacheMetricsType) -> TResult:
+        """
+        Get cache metrics (hit rate or miss rate).
+
+        Args:
+            metrics_type: Type of metric to retrieve (HitRate or MissRate)
+
+        Returns:
+            The requested cache metric rate as a float.
+
+        Raises:
+            RequestError: If client-side caching is not enabled or metrics tracking is disabled.
+        """
+        request = CommandRequest()
+        request.callback_idx = self._get_callback_index()
+        request.get_cache_metrics.metrics_types = metrics_type
         response = await self._write_request_await_response(request)
         return response
 

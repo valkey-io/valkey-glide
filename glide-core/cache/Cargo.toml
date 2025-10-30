@@ -1,0 +1,14 @@
+[package]
+name = "glidecachelib"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+authors = ["Valkey GLIDE Maintainers"]
+
+[dependencies]
+lazy_static = "1"
+redis = { path = "../redis-rs/redis", features = [] }
+moka = { version = "0.12", features = ["sync"] }
+dashmap = "6"
+logger_core = { path = "../../logger_core" }
+once_cell = "1"

@@ -6,6 +6,7 @@ use glide_core::{
     client::{Client, StandaloneClient},
     connection_request::{self, AuthenticationInfo, NodeAddress, ProtocolVersion},
 };
+use glidecachelib::get_cache;
 use once_cell::sync::Lazy;
 use rand::{Rng, distributions::Alphanumeric};
 use redis::{
@@ -14,8 +15,14 @@ use redis::{
 };
 use socket2::{Domain, Socket, Type};
 use std::{
-    env, fs, io, net::SocketAddr, net::TcpListener, ops::Deref, path::PathBuf, process,
-    sync::Mutex, time::Duration,
+    collections::HashMap,
+    env, fs, io,
+    net::{SocketAddr, TcpListener},
+    ops::Deref,
+    path::PathBuf,
+    process,
+    sync::Mutex,
+    time::Duration,
 };
 use tempfile::TempDir;
 use tokio::sync::mpsc;
@@ -671,6 +678,27 @@ pub fn create_connection_request(
     }
     connection_request.lazy_connect = configuration.lazy_connect;
     connection_request.protocol = configuration.protocol.into();
+
+    if let Some(cache) = &configuration.client_side_cache {
+        let eviction_policy = cache.eviction_policy.as_ref().map(|policy| {
+            let mapped = match policy {
+                glidecachelib::EvictionPolicy::Lru => connection_request::EvictionPolicy::LRU,
+                glidecachelib::EvictionPolicy::TinyLfu => {
+                    connection_request::EvictionPolicy::TINY_LFU
+                }
+            };
+            protobuf::EnumOrUnknown::new(mapped)
+        });
+        connection_request.client_side_cache =
+            protobuf::MessageField::from_option(Some(connection_request::ClientSideCache {
+                cache_id: (*cache.cache_id.deref()).into(),
+                max_cache_kb: cache.max_cache_kb,
+                entry_ttl_seconds: cache.entry_ttl_seconds,
+                eviction_policy: eviction_policy,
+                enable_metrics: cache.enable_metrics,
+                ..Default::default()
+            }));
+    }
     connection_request
 }
 
@@ -688,6 +716,7 @@ pub struct TestConfiguration {
     pub client_az: Option<String>,
     pub protocol: ProtocolVersion,
     pub lazy_connect: bool,
+    pub client_side_cache: Option<glide_core::client::ClientSideCache>,
 }
 
 pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
@@ -858,4 +887,88 @@ pub fn extract_client_id(client_info: &str) -> Option<String> {
         .find(|part| part.starts_with("id="))
         .and_then(|id_part| id_part.strip_prefix("id="))
         .map(|id| id.to_string())
+}
+
+/// Helper function to assert that a specific command was called a certain number of times
+pub async fn assert_command_count(
+    client: &mut Client,
+    command: &str,
+    expected_count: usize,
+    use_cluster: bool,
+) {
+    let mut info_cmd = redis::Cmd::new();
+    info_cmd.arg("INFO").arg("commandstats");
+
+    // Execute INFO commandstats
+    let routing = if use_cluster {
+        Some(RoutingInfo::MultiNode((
+            MultipleNodeRoutingInfo::AllNodes,
+            None,
+        )))
+    } else {
+        None
+    };
+
+    let res = client
+        .send_command(&info_cmd, routing)
+        .await
+        .expect("INFO commandstats command failed");
+
+    // Parse the INFO output based on mode
+    let info_strings: Vec<String> = if use_cluster {
+        // Cluster mode: returns HashMap<String, String>
+        let info_result: HashMap<String, String> =
+            redis::from_owned_redis_value(res).expect("Failed to parse INFO command result");
+        info_result.into_values().collect()
+    } else {
+        // Standalone mode: returns a single string
+        let info_str: String =
+            redis::from_owned_redis_value(res).expect("Failed to parse INFO command result");
+        vec![info_str]
+    };
+
+    // Search for the specified command across all info outputs
+    let mut command_count: usize = 0;
+    let command_prefix = format!("cmdstat_{}:calls=", command.to_lowercase());
+
+    for info in info_strings {
+        for line in info.lines() {
+            if line.starts_with(&command_prefix) {
+                if let Some(count_str) = line.strip_prefix(&command_prefix) {
+                    let count_val = count_str
+                        .split(',')
+                        .next()
+                        .unwrap_or("0")
+                        .parse::<usize>()
+                        .unwrap_or(0);
+                    command_count += count_val;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Assert that the found count matches the expected count
+    assert_eq!(
+        command_count, expected_count,
+        "Expected {} count {} but found {}",
+        command, expected_count, command_count
+    );
+}
+
+/// Helper to get cache stats
+pub fn get_cache_stats(cache_id: &str) -> Option<(u64, u64)> {
+    let cache = get_cache(cache_id)?;
+    cache.run_pending_tasks();
+    Some((cache.entry_count(), cache.weighted_size()))
+}
+
+/// Helper to check if a key is in cache
+pub fn is_key_cached(cache_id: &str, key: &[u8]) -> bool {
+    if let Some(cache) = get_cache(cache_id) {
+        cache.run_pending_tasks();
+        cache.get(&key.to_vec()).is_some()
+    } else {
+        false
+    }
 }
