@@ -39,10 +39,6 @@ runs:
                   } catch {
                       Write-Host "Error running choco --version: $_"
                   }
-              } else {
-                  Write-Host "Chocolatey command NOT found in PATH"
-              }
-              
               # Search filesystem for Chocolatey
               Write-Host "Searching for Chocolatey installations..."
               $searchPaths = @(
@@ -52,6 +48,7 @@ runs:
                   "C:\ProgramData\chocolatey"
               )
               
+              $chocoFound = $false
               foreach ($path in $searchPaths) {
                   if (Test-Path $path) {
                       Write-Host "Found Chocolatey directory: $path"
@@ -71,22 +68,56 @@ runs:
                               # Test again
                               if (Get-Command choco -ErrorAction SilentlyContinue) {
                                   Write-Host "  SUCCESS: Chocolatey now available in PATH"
-                                  exit 0
+                                  $chocoFound = $true
+                                  break
                               } else {
                                   Write-Host "  FAILED: Still not available after adding to PATH"
                               }
                           } catch {
                               Write-Host "  ERROR running choco.exe: $_"
+                              Write-Host "  This installation appears corrupted"
                           }
                       } else {
-                          Write-Host "  choco.exe NOT found in bin directory"
+                          Write-Host "  choco.exe NOT found in bin directory - corrupted installation"
                       }
                   } else {
                       Write-Host "Directory not found: $path"
                   }
               }
               
-              Write-Host "No working Chocolatey installation found - attempting fresh install"
+              if ($chocoFound) {
+                  Write-Host "Working Chocolatey installation found and configured"
+              } else {
+              
+              Write-Host "No working Chocolatey installation found - removing corrupted installation and installing fresh"
+              
+              # Remove corrupted Chocolatey installations
+              $chocolateyPaths = @(
+                  "$env:ALLUSERSPROFILE\chocolatey",
+                  "$env:PROGRAMDATA\chocolatey", 
+                  "C:\chocolatey",
+                  "C:\ProgramData\chocolatey"
+              )
+              
+              foreach ($path in $chocolateyPaths) {
+                  if (Test-Path $path) {
+                      Write-Host "Removing corrupted Chocolatey installation: $path"
+                      try {
+                          Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+                          Write-Host "  Removed: $path"
+                      } catch {
+                          Write-Host "  Failed to remove: $path - $_"
+                      }
+                  }
+              }
+              
+              # Also remove from registry if exists
+              try {
+                  Remove-Item "HKLM:\SOFTWARE\Chocolatey" -Recurse -Force -ErrorAction SilentlyContinue
+                  Write-Host "Removed Chocolatey registry entries"
+              } catch {
+                  Write-Host "No Chocolatey registry entries to remove"
+              }
               
               # Fresh installation with detailed error handling
               try {
@@ -105,10 +136,6 @@ runs:
                   
                   Write-Host "Install script completed"
                   
-              } catch {
-                  Write-Host "ERROR during Chocolatey installation: $_"
-                  Write-Host "Exception type: $($_.Exception.GetType().FullName)"
-                  Write-Host "Stack trace: $($_.ScriptStackTrace)"
               }
               
               # Final verification
@@ -119,6 +146,7 @@ runs:
               } else {
                   Write-Host "FAILED: Chocolatey still not available"
                   Write-Host "Final PATH: $env:PATH"
+                  Write-Host "This may cause issues with subsequent installations"
               }
 
         - name: Check Windows dependencies
@@ -305,7 +333,8 @@ runs:
           env:
               GITHUB_TOKEN: ${{ inputs.github-token }}
           run: |
-              Write-Host "=== Visual Studio Build Tools Installation ==="
+              Write-Host "=== STEP 3: Visual Studio Build Tools Installation STARTED ==="
+              Write-Host "This step should run after Windows dependency check"
               
               try {
                   # Use Chocolatey to install Visual Studio Build Tools
