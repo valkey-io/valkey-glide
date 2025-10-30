@@ -35,10 +35,54 @@ jobs:
                   java-version: ${{ github.event.inputs.java-version }}
 
             - name: Install protoc (protobuf)
+              if: runner.os != 'Windows'
               uses: arduino/setup-protoc@v3
               with:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Install protoc (Windows)
+              if: runner.os == 'Windows'
+              shell: powershell
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  # Check if protoc is already available
+                  if (Get-Command protoc -ErrorAction SilentlyContinue) {
+                      Write-Host "protoc already installed: $(protoc --version)"
+                      exit 0
+                  }
+                  
+                  Write-Host "Installing protoc on Windows..."
+                  
+                  # Download protoc with authentication
+                  $url = "https://github.com/protocolbuffers/protobuf/releases/download/v29.1/protoc-29.1-win64.zip"
+                  $zipPath = "$env:TEMP\protoc.zip"
+                  $extractPath = "$env:TEMP\protoc"
+                  
+                  # Clean up extraction directory if it exists
+                  if (Test-Path $extractPath) {
+                      Remove-Item -Recurse -Force $extractPath
+                  }
+                  
+                  # Add authentication header if token is available
+                  $headers = @{}
+                  if ($env:GITHUB_TOKEN) {
+                      $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN"
+                  }
+                  
+                  Invoke-WebRequest -Uri $url -OutFile $zipPath -Headers $headers
+                  
+                  # Extract using .NET
+                  Add-Type -AssemblyName System.IO.Compression.FileSystem
+                  [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $extractPath)
+                  
+                  # Add to PATH
+                  $protocPath = "$extractPath\bin"
+                  echo "$protocPath" >> $env:GITHUB_PATH
+                  
+                  # Verify installation
+                  & "$protocPath\protoc.exe" --version
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies

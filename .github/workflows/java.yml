@@ -135,6 +135,7 @@ jobs:
                   language: java
 
             - name: Install protoc (protobuf)
+              if: runner.os != 'Windows'
               uses: arduino/setup-protoc@v3
               with:
                   version: "29.1"
@@ -262,6 +263,7 @@ jobs:
                   language: java
 
             - name: Install protoc (protobuf)
+              if: runner.os != 'Windows'
               uses: arduino/setup-protoc@v3
               with:
                   version: "29.1"
@@ -400,6 +402,7 @@ jobs:
                   engine-version: ${{ matrix.host.OS == 'windows' && '' || matrix.engine.version }}
 
             - name: Install protoc (protobuf)
+              if: runner.os != 'Windows'
               uses: arduino/setup-protoc@v3
               with:
                   version: "29.1"
@@ -495,6 +498,7 @@ jobs:
                   java-version: 17
 
             - name: Install protoc (protobuf)
+              if: runner.os != 'Windows'
               uses: arduino/setup-protoc@v3
               with:
                   version: "29.1"
