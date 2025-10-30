@@ -217,43 +217,6 @@ runs:
 
               Write-Host "Visual Studio Build Tools installation complete"
 
-        - name: Verify and setup MSVC environment
-          shell: powershell
-          run: |
-              Write-Host "Verifying MSVC installation..."
-              
-              # Find Visual Studio installation
-              $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-              if (Test-Path $vsWhere) {
-                  $vsInstallation = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-                  if ($vsInstallation) {
-                      Write-Host "Found Visual Studio installation at: $vsInstallation"
-                      
-                      # Add MSVC tools to PATH
-                      $vcToolsPath = "$vsInstallation\VC\Tools\MSVC"
-                      if (Test-Path $vcToolsPath) {
-                          $latestMSVC = Get-ChildItem $vcToolsPath | Sort-Object Name -Descending | Select-Object -First 1
-                          if ($latestMSVC) {
-                              $msvcBinPath = "$($latestMSVC.FullName)\bin\Hostx64\x64"
-                              if (Test-Path $msvcBinPath) {
-                                  $env:PATH = "$msvcBinPath;$env:PATH"
-                                  echo "PATH=$env:PATH" >> $env:GITHUB_ENV
-                                  Write-Host "Added MSVC tools to PATH: $msvcBinPath"
-                              }
-                          }
-                      }
-                  }
-              }
-              
-              # Verify link.exe is available
-              try {
-                  $linkPath = Get-Command link.exe -ErrorAction Stop
-                  Write-Host "✓ link.exe found at: $($linkPath.Source)"
-              } catch {
-                  Write-Host "✗ link.exe not found in PATH"
-                  Write-Host "This will cause Rust compilation to fail"
-              }
-
         - name: Setup Python3 symlink
           if: steps.check.outputs.python-available == 'true'
           shell: powershell
