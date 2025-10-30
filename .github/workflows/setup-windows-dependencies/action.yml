@@ -243,15 +243,22 @@ runs:
                       
                       # Try winget first (more reliable on modern Windows)
                       if (Get-Command winget -ErrorAction SilentlyContinue) {
-                          Write-Host "Using winget to install Visual Studio Build Tools..."
-                          winget install Microsoft.VisualStudio.2022.BuildTools --silent --accept-package-agreements --accept-source-agreements
+                          Write-Host "Using winget to install Microsoft C++ Build Tools..."
+                          winget install Microsoft.VisualStudio.2022.BuildTools.MSBuild --silent --accept-package-agreements --accept-source-agreements
                           
                           if ($LASTEXITCODE -eq 0) {
                               Write-Host "winget installation successful"
                               $skipChocolatey = $true
                           } else {
-                              Write-Host "winget installation failed with exit code: $LASTEXITCODE"
-                              Write-Host "Falling back to direct installer..."
+                              Write-Host "winget installation failed, trying full Build Tools..."
+                              winget install Microsoft.VisualStudio.2022.BuildTools --silent --accept-package-agreements --accept-source-agreements
+                              if ($LASTEXITCODE -eq 0) {
+                                  Write-Host "Full Build Tools installation successful"
+                                  $skipChocolatey = $true
+                              } else {
+                                  Write-Host "winget installation failed with exit code: $LASTEXITCODE"
+                                  Write-Host "Falling back to direct installer..."
+                              }
                           }
                       } else {
                           Write-Host "winget not available, using direct installer..."
