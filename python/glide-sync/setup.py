@@ -48,8 +48,6 @@ class VendorFolder:
 
 ROOT = Path(__file__).resolve().parent  # glide-sync/
 
-long_description = (ROOT.parent / "README.md").read_text(encoding="utf-8")
-
 VENDORED_DEPENDENCIES = {
     "glide_shared": VendorFolder(
         source=ROOT.parent / "glide-shared" / "glide_shared",
@@ -248,6 +246,4 @@ setup(
         "sdist": sdist,
         "clean": CleanCommand,  # type: ignore
     },
-    long_description=long_description,
-    long_description_content_type="text/markdown",
 )

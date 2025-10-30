@@ -56,9 +56,11 @@ pub(crate) fn inner_build_with_tls(
     Ok(Client { connection_info })
 }
 
-pub(crate) fn retrieve_tls_certificates(
-    certificates: TlsCertificates,
-) -> RedisResult<TlsConnParams> {
+/// Retrieve TLS connection parameters from certificates.
+///
+/// Parses the provided TLS certificates and returns connection parameters
+/// that can be used to establish secure connections.
+pub fn retrieve_tls_certificates(certificates: TlsCertificates) -> RedisResult<TlsConnParams> {
     let TlsCertificates {
         client_tls,
         root_cert,
@@ -135,6 +137,7 @@ impl Clone for ClientTlsParams {
     }
 }
 
+/// TLS connection parameters containing client certificates and root certificate store.
 #[derive(Debug, Clone)]
 pub struct TlsConnParams {
     pub(crate) client_tls_params: Option<ClientTlsParams>,
