@@ -229,36 +229,18 @@ runs:
                   if ($vsInstallation) {
                       Write-Host "Found Visual Studio installation at: $vsInstallation"
                       
-                      # Setup MSVC environment
-                      $vcvarsPath = "$vsInstallation\VC\Auxiliary\Build\vcvars64.bat"
-                      if (Test-Path $vcvarsPath) {
-                          Write-Host "Setting up MSVC environment..."
-                          
-                          # Run vcvars64.bat and capture environment variables
-                          $tempBat = "$env:TEMP\setup_msvc.bat"
-                          $batLines = @(
-                              "@echo off",
-                              "call `"$vcvarsPath`"",
-                              "echo PATH=%PATH%",
-                              "echo LIB=%LIB%",
-                              "echo INCLUDE=%INCLUDE%"
-                          )
-                          $batLines | Out-File -FilePath $tempBat -Encoding ASCII
-                          
-                          $output = & cmd /c $tempBat
-                          
-                          # Parse and set environment variables
-                          foreach ($line in $output) {
-                              if ($line -match '^(PATH|LIB|INCLUDE)=(.*)$') {
-                                  $varName = $matches[1]
-                                  $varValue = $matches[2]
-                                  [Environment]::SetEnvironmentVariable($varName, $varValue, "Process")
-                                  echo "$varName=$varValue" >> $env:GITHUB_ENV
-                                  Write-Host "Set $varName"
+                      # Add MSVC tools to PATH
+                      $vcToolsPath = "$vsInstallation\VC\Tools\MSVC"
+                      if (Test-Path $vcToolsPath) {
+                          $latestMSVC = Get-ChildItem $vcToolsPath | Sort-Object Name -Descending | Select-Object -First 1
+                          if ($latestMSVC) {
+                              $msvcBinPath = "$($latestMSVC.FullName)\bin\Hostx64\x64"
+                              if (Test-Path $msvcBinPath) {
+                                  $env:PATH = "$msvcBinPath;$env:PATH"
+                                  echo "PATH=$env:PATH" >> $env:GITHUB_ENV
+                                  Write-Host "Added MSVC tools to PATH: $msvcBinPath"
                               }
                           }
-                          
-                          Remove-Item $tempBat -ErrorAction SilentlyContinue
                       }
                   }
               }
@@ -269,8 +251,7 @@ runs:
                   Write-Host "✓ link.exe found at: $($linkPath.Source)"
               } catch {
                   Write-Host "✗ link.exe not found in PATH"
-                  Write-Host "PATH environment variable:"
-                  Write-Host $env:PATH
+                  Write-Host "This will cause Rust compilation to fail"
               }
 
         - name: Setup Python3 symlink
