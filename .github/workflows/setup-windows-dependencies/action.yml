@@ -209,8 +209,41 @@ runs:
               Write-Host "Cleaning up installer..."
               Remove-Item $installerPath -Force
 
-              Write-Host "Refreshing PATH..."
-              $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+              Write-Host "Locating installed Python..."
+              # Check common installation locations for current user
+              $pythonPaths = @(
+                  "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
+                  "$env:LOCALAPPDATA\Programs\Python\Python311-32\python.exe",
+                  "$env:APPDATA\Local\Programs\Python\Python311\python.exe"
+              )
+
+              $foundPython = $null
+              foreach ($path in $pythonPaths) {
+                  if (Test-Path $path) {
+                      $foundPython = $path
+                      Write-Host "Found Python at: $path"
+                      break
+                  }
+              }
+
+              if ($foundPython) {
+                  # Add Python directory to current session PATH
+                  $pythonDir = Split-Path $foundPython
+                  $scriptsDir = Join-Path $pythonDir "Scripts"
+                  $env:PATH = "$pythonDir;$scriptsDir;$env:PATH"
+                  Write-Host "Added to PATH: $pythonDir"
+                  Write-Host "Added to PATH: $scriptsDir"
+
+                  # Verify installation
+                  try {
+                      $version = & $foundPython --version 2>&1
+                      Write-Host "Python installed successfully: $version"
+                  } catch {
+                      Write-Host "Python installation verification failed: $_"
+                  }
+              } else {
+                  Write-Host "Python installation may have failed - executable not found"
+              }
 
               Write-Host "Python installation complete"
 
