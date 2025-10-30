@@ -267,13 +267,39 @@ runs:
               Write-Host "  Runner type: ${{ runner.name }}"
               Write-Host "  Runner environment: ${{ runner.environment }}"
               Write-Host "  Is GitHub-hosted: ${{ runner.environment == 'github-hosted' }}"
-              Write-Host "  Will install Python: ${{ runner.os == 'Windows' && runner.environment == 'github-hosted' && steps.check-deps.outputs.python3-available != 'true' }}"
+              Write-Host "  Will install Python: ${{ runner.os == 'Windows' && steps.check-deps.outputs.python3-available != 'true' }}"
 
-        - name: Setup Python for Windows
-          if: "${{ runner.os == 'Windows' && runner.environment == 'github-hosted' && steps.check-deps.outputs.python3-available != 'true' }}"
-          uses: actions/setup-python@v5
-          with:
-              python-version: "3.x"
+        - name: Install Python for Windows (self-hosted)
+          if: "${{ runner.os == 'Windows' && steps.check-deps.outputs.python3-available != 'true' }}"
+          shell: powershell
+          run: |
+              Write-Host "Installing Python via Chocolatey for self-hosted runner..."
+              
+              # Check if Chocolatey is available
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  Write-Host "Installing Python 3 via Chocolatey..."
+                  choco install python3 -y
+                  
+                  if ($LASTEXITCODE -eq 0) {
+                      Write-Host "Python installed successfully via Chocolatey"
+                      # Refresh PATH
+                      $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                      
+                      # Verify installation
+                      try {
+                          $version = python --version 2>&1
+                          Write-Host "Python verification successful: $version"
+                      } catch {
+                          Write-Host "Python installation verification failed"
+                      }
+                  } else {
+                      Write-Host "Chocolatey Python installation failed"
+                      exit 1
+                  }
+              } else {
+                  Write-Host "Error: Chocolatey not available for Python installation"
+                  exit 1
+              }
 
         - name: Cache Valkey build
           if: "${{ inputs.engine-version != '' }}"
