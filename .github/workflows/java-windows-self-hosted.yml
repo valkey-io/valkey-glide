@@ -52,35 +52,35 @@ jobs:
                       Write-Host "protoc already installed: $(protoc --version)"
                       exit 0
                   }
-                  
+
                   Write-Host "Installing protoc on Windows..."
-                  
+
                   # Download protoc with authentication
                   $url = "https://github.com/protocolbuffers/protobuf/releases/download/v29.1/protoc-29.1-win64.zip"
                   $zipPath = "$env:TEMP\protoc.zip"
                   $extractPath = "$env:TEMP\protoc"
-                  
+
                   # Clean up extraction directory if it exists
                   if (Test-Path $extractPath) {
                       Remove-Item -Recurse -Force $extractPath
                   }
-                  
+
                   # Add authentication header if token is available
                   $headers = @{}
                   if ($env:GITHUB_TOKEN) {
                       $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN"
                   }
-                  
+
                   Invoke-WebRequest -Uri $url -OutFile $zipPath -Headers $headers
-                  
+
                   # Extract using .NET
                   Add-Type -AssemblyName System.IO.Compression.FileSystem
                   [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $extractPath)
-                  
+
                   # Add to PATH
                   $protocPath = "$extractPath\bin"
                   echo "$protocPath" >> $env:GITHUB_PATH
-                  
+
                   # Verify installation
                   & "$protocPath\protoc.exe" --version
 
