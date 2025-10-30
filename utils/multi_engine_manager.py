@@ -213,7 +213,8 @@ class MultiEngineManager:
         print(f"Starting {engine_version} cluster...")
 
         # Calculate port range for this engine
-        base_port = 6379 + int(config["port_offset"])
+        port_offset: int = config["port_offset"]
+        base_port = 6379 + port_offset
 
         # Get private IP for VPC communication
         get_private_ip_cmd = (
@@ -340,7 +341,8 @@ class MultiEngineManager:
 
         config = self.engines[engine_version]
         engine_path = f"{self.base_path}/{engine_version}"
-        base_port = 6379 + int(config["port_offset"])
+        port_offset: int = config["port_offset"]
+        base_port = 6379 + port_offset
 
         info_cmd = f"""
         cd {engine_path}/src
