@@ -196,27 +196,37 @@ jobs:
                       Write-Host "No remote Valkey configured - will use local cluster"
                   }
 
-            - name: Build java client
+            - name: Build java client (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              working-directory: java
+              env:
+                  CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
+              shell: powershell
+              run: |
+                  .\gradlew.bat --build-cache --continue build test -x javadoc
+
+            - name: Build java client (Linux/macOS)
+              if: ${{ matrix.host.OS != 'windows' }}
               working-directory: java
               env:
                   CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
               shell: bash
               run: |
-                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
-                      ./gradlew.bat --build-cache --continue build test -x javadoc
-                  else
-                      ./gradlew --build-cache --continue build test -x javadoc
-                  fi
+                  ./gradlew --build-cache --continue build test -x javadoc
 
-            - name: Ensure no skipped files by linter
+            - name: Ensure no skipped files by linter (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              working-directory: java
+              shell: powershell
+              run: |
+                  .\gradlew.bat --build-cache spotlessDiagnose | Select-String 'All formatters are well behaved for all files'
+
+            - name: Ensure no skipped files by linter (Linux/macOS)
+              if: ${{ matrix.host.OS != 'windows' }}
               working-directory: java
               shell: bash
               run: |
-                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
-                      ./gradlew.bat --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
-                  else
-                      ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
-                  fi
+                  ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
