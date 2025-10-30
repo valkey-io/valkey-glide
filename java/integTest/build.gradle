@@ -137,16 +137,40 @@ tasks.register('startCluster') {
                         }
                     }
                 } else {
-                    // Use local cluster manager (original behavior)
-                    new ByteArrayOutputStream().withStream { os ->
-                        exec {
-                            workingDir "${project.rootDir}/../utils"
-                            def args = [*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'start', '--cluster-mode', '-r', '1']
-                            if (System.getProperty("tls") == 'true') args.add(2, '--tls')
-                            commandLine args
-                            standardOutput = os
+                    // On Windows, use remote cluster manager with localhost as fallback
+                    // since Windows CI doesn't have valkey-server installed locally
+                    if (isWindows) {
+                        def windowsRemoteHost = System.getProperty('windows-remote-host') ?: 'localhost'
+                        println "Windows detected - using remote cluster manager with host: ${windowsRemoteHost}"
+                        new ByteArrayOutputStream().withStream { os ->
+                            exec {
+                                workingDir "${project.rootDir}/../utils"
+                                def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', windowsRemoteHost, 'start', '--cluster-mode', '-r', '1']
+                                if (System.getProperty("tls") == 'true') args.add('--tls')
+                                commandLine args
+                                standardOutput = os
+                            }
+                            // Parse remote cluster endpoints
+                            def output = os.toString()
+                            def endpointsLine = output.lines().find { it.startsWith("CLUSTER_ENDPOINTS=") }
+                            if (endpointsLine) {
+                                clusterHosts = endpointsLine.substring("CLUSTER_ENDPOINTS=".length()).split(",").collect { it.trim() }
+                            } else {
+                                throw new GradleException("Failed to get cluster endpoints from Windows remote host: ${output}")
+                            }
                         }
-                        clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                    } else {
+                        // Use local cluster manager (original behavior for non-Windows)
+                        new ByteArrayOutputStream().withStream { os ->
+                            exec {
+                                workingDir "${project.rootDir}/../utils"
+                                def args = [*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'start', '--cluster-mode', '-r', '1']
+                                if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                                commandLine args
+                                standardOutput = os
+                            }
+                            clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                        }
                     }
                 }
             }
@@ -205,16 +229,39 @@ tasks.register('startClusterForAz') {
                         }
                     }
                 } else {
-                    // Use local cluster manager (original behavior)
-                    new ByteArrayOutputStream().withStream { os ->
-                        exec {
-                            workingDir "${project.rootDir}/../utils"
-                            def args = [*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'start', '--cluster-mode', '-r', '4']
-                            if (System.getProperty("tls") == 'true') args.add(2, '--tls')
-                            commandLine args
-                            standardOutput = os
+                    // On Windows, use remote cluster manager with localhost as fallback
+                    if (isWindows) {
+                        def windowsRemoteHost = System.getProperty('windows-remote-host') ?: 'localhost'
+                        println "Windows detected - using remote cluster manager for AZ with host: ${windowsRemoteHost}"
+                        new ByteArrayOutputStream().withStream { os ->
+                            exec {
+                                workingDir "${project.rootDir}/../utils"
+                                def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', windowsRemoteHost, 'start', '--cluster-mode', '-r', '4']
+                                if (System.getProperty("tls") == 'true') args.add('--tls')
+                                commandLine args
+                                standardOutput = os
+                            }
+                            // Parse remote cluster endpoints
+                            def output = os.toString()
+                            def endpointsLine = output.lines().find { it.startsWith("CLUSTER_ENDPOINTS=") }
+                            if (endpointsLine) {
+                                azClusterHosts = endpointsLine.substring("CLUSTER_ENDPOINTS=".length()).split(",").collect { it.trim() }
+                            } else {
+                                throw new GradleException("Failed to get AZ cluster endpoints from Windows remote host: ${output}")
+                            }
                         }
-                        azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                    } else {
+                        // Use local cluster manager (original behavior for non-Windows)
+                        new ByteArrayOutputStream().withStream { os ->
+                            exec {
+                                workingDir "${project.rootDir}/../utils"
+                                def args = [*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'start', '--cluster-mode', '-r', '4']
+                                if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                                commandLine args
+                                standardOutput = os
+                            }
+                            azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                        }
                     }
                 }
             }
@@ -232,9 +279,18 @@ tasks.register('startStandalone') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = [*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'start', '-r', '0']
-                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
-                    commandLine args
+                    // On Windows, use remote cluster manager, otherwise use local
+                    if (isWindows) {
+                        def windowsRemoteHost = System.getProperty('windows-remote-host') ?: 'localhost'
+                        println "Windows detected - using remote cluster manager for standalone with host: ${windowsRemoteHost}"
+                        def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', windowsRemoteHost, 'start', '-r', '0']
+                        if (System.getProperty("tls") == 'true') args.add('--tls')
+                        commandLine args
+                    } else {
+                        def args = [*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'start', '-r', '0']
+                        if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                        commandLine args
+                    }
                     standardOutput = os
                 }
                 standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
