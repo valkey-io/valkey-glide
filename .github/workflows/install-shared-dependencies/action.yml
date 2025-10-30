@@ -141,8 +141,17 @@ runs:
 
               # Method 1: Check for python3 command
               if (Get-Command python3 -ErrorAction SilentlyContinue) {
-                  $python3Available = $true
-                  Write-Host "Python3 command found"
+                  try {
+                      $version = python3 --version 2>&1
+                      if ($version -match "Python 3\." -and $version -notmatch "Microsoft Store" -and $version -notmatch "not found") {
+                          $python3Available = $true
+                          Write-Host "Python3 command found: $version"
+                      } else {
+                          Write-Host "Python3 command exists but not functional: $version"
+                      }
+                  } catch {
+                      Write-Host "Python3 command exists but version check failed: $_"
+                  }
               }
               # Method 2: Check for python command  
               elseif (Get-Command python -ErrorAction SilentlyContinue) {
