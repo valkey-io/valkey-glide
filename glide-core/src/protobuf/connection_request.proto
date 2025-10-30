@@ -89,6 +89,7 @@ message ConnectionRequest {
     bool lazy_connect = 17;
     bool refresh_topology_from_initial_nodes = 18;
     string lib_name = 19;
+    repeated bytes root_certs = 20;
 }
 
 message ConnectionRetryStrategy {

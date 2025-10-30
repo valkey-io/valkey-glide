@@ -581,4 +581,93 @@ mod cluster_client_tests {
             );
         });
     }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_tls_connection_with_custom_root_cert() {
+        block_on_all(async move {
+            // Create a dedicated TLS cluster with custom certificates
+            let tempdir = tempfile::Builder::new()
+                .prefix("tls_cluster_test")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+
+            let cluster = utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
+            let cluster_addresses = cluster.get_server_addresses();
+
+            // Create connection request with custom root certificate
+            let mut connection_request = create_connection_request(
+                &cluster_addresses,
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    cluster_mode: ClusterMode::Enabled,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            connection_request.root_certs = vec![ca_cert_bytes.into()];
+
+            // Test that connection works with custom root cert
+            let mut client = Client::new(connection_request.into(), None)
+                .await
+                .expect("Failed to create cluster client with custom root cert");
+
+            // Verify connection works by sending a command
+            let ping_result = client.send_command(&redis::cmd("PING"), None).await;
+            assert_eq!(
+                ping_result.unwrap(),
+                Value::SimpleString("PONG".to_string())
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_tls_connection_fails_with_wrong_root_cert() {
+        block_on_all(async move {
+            // Create a TLS cluster with one set of certificates
+            let tempdir1 = tempfile::Builder::new()
+                .prefix("tls_cluster_server")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let server_tls_paths = build_keys_and_certs_for_tls(&tempdir1);
+
+            // Create different CA certificate for client
+            let tempdir2 = tempfile::Builder::new()
+                .prefix("tls_cluster_client")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let client_tls_paths = build_keys_and_certs_for_tls(&tempdir2);
+            let wrong_ca_cert_bytes = client_tls_paths.read_ca_cert_as_bytes();
+
+            let cluster =
+                utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(server_tls_paths));
+            let cluster_addresses = cluster.get_server_addresses();
+
+            // Try to connect with wrong root certificate
+            let mut connection_request = create_connection_request(
+                &cluster_addresses,
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    cluster_mode: ClusterMode::Enabled,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            connection_request.root_certs = vec![wrong_ca_cert_bytes.into()];
+
+            // Connection should fail due to certificate mismatch
+            let client_result = Client::new(connection_request.into(), None).await;
+            assert!(
+                client_result.is_err(),
+                "Expected cluster connection to fail with wrong root certificate"
+            );
+        });
+    }
 }
