@@ -277,12 +277,56 @@ jobs:
               run: |
                   Write-Host "Verifying Java ${{ matrix.java }} installation..."
                   
+                  $javaFound = $false
                   try {
                       $javaVersion = java -version 2>&1
                       Write-Host "Java version: $javaVersion"
+                      $javaFound = $true
                   } catch {
-                      Write-Host "Error: Java command not found"
-                      exit 1
+                      Write-Host "Java command not found, attempting manual installation..."
+                  }
+                  
+                  if (-not $javaFound) {
+                      # Try winget installation
+                      if (Get-Command winget -ErrorAction SilentlyContinue) {
+                          Write-Host "Installing Java ${{ matrix.java }} via winget..."
+                          winget install Eclipse.Temurin.${{ matrix.java }} --silent --accept-package-agreements --accept-source-agreements
+                          
+                          if ($LASTEXITCODE -eq 0) {
+                              Write-Host "Java installed successfully via winget"
+                              
+                              # Find and set JAVA_HOME
+                              $javaInstalls = Get-ChildItem "C:\Program Files\Eclipse Adoptium" -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "jdk-${{ matrix.java }}*" }
+                              if ($javaInstalls) {
+                                  $javaHome = $javaInstalls[0].FullName
+                                  Write-Host "Setting JAVA_HOME to: $javaHome"
+                                  echo "JAVA_HOME=$javaHome" >> $env:GITHUB_ENV
+                                  echo "$javaHome\bin" >> $env:GITHUB_PATH
+                                  $env:JAVA_HOME = $javaHome
+                                  $env:PATH = "$javaHome\bin;$env:PATH"
+                                  
+                                  # Verify installation
+                                  try {
+                                      $javaVersion = java -version 2>&1
+                                      Write-Host "Java installation successful: $javaVersion"
+                                      $javaFound = $true
+                                  } catch {
+                                      Write-Host "Error: Java still not available after winget installation"
+                                  }
+                              } else {
+                                  Write-Host "Error: Java installation directory not found after winget"
+                              }
+                          } else {
+                              Write-Host "winget Java installation failed with exit code: $LASTEXITCODE"
+                          }
+                      } else {
+                          Write-Host "winget not available for Java installation"
+                      }
+                      
+                      if (-not $javaFound) {
+                          Write-Host "Error: Java ${{ matrix.java }} installation failed"
+                          exit 1
+                      }
                   }
                   
                   if ($env:JAVA_HOME) {
@@ -290,6 +334,8 @@ jobs:
                   } else {
                       Write-Host "Warning: JAVA_HOME not set"
                   }
+                  
+                  Write-Host "Java verification complete"
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
               with:
