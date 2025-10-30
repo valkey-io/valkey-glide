@@ -47,9 +47,22 @@ runs:
               # Method 1: Check PATH commands
               Write-Host "Method 1: Checking PATH commands..."
               if (Get-Command python3 -ErrorAction SilentlyContinue) {
-                  $pythonAvailable = $true
                   $pythonPath = (Get-Command python3).Source
                   Write-Host "Found python3 in PATH: $pythonPath"
+                  
+                  # Validate it's not a Windows Store alias
+                  try {
+                      $version = python3 --version 2>&1
+                      Write-Host "python3 version check: $version"
+                      if ($version -match "Python 3\." -and $version -notmatch "Microsoft Store" -and $version -notmatch "not found") {
+                          $pythonAvailable = $true
+                          Write-Host "Valid Python 3.x found via python3 command: $version"
+                      } else {
+                          Write-Host "python3 command exists but not functional (likely Windows Store alias)"
+                      }
+                  } catch {
+                      Write-Host "python3 version check failed: $_"
+                  }
               } elseif (Get-Command python -ErrorAction SilentlyContinue) {
                   $version = python --version 2>&1
                   Write-Host "Found python command, version: $version"
