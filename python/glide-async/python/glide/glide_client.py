@@ -768,7 +768,9 @@ class BaseClient(CoreCommands):
         response = await self._write_request_await_response(request)
         return response
 
-    async def _get_cache_metrics(self, metrics_type: CacheMetricsType) -> TResult:
+    async def _get_cache_metrics(
+        self, metrics_type: CacheMetricsType.ValueType
+    ) -> TResult:
         """
         Get cache metrics (hit rate or miss rate).
 
