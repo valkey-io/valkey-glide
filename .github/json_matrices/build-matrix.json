@@ -85,22 +85,12 @@
     {
         "OS": "windows",
         "NAMED_OS": "windows",
-        "RUNNER": "windows-latest",
-        "ARCH": "x64",
-        "TARGET": "x86_64-pc-windows-msvc",
-        "PACKAGE_MANAGERS": ["maven"],
-        "languages": ["java"],
-        "run": "always"
-    },
-    {
-        "OS": "windows",
-        "NAMED_OS": "windows",
         "RUNNER": ["self-hosted", "windows", "x64"],
         "ARCH": "x64",
         "TARGET": "x86_64-pc-windows-msvc",
         "PACKAGE_MANAGERS": ["maven"],
         "languages": ["java"],
-        "run": "self-hosted-only",
+        "run": "always",
         "comment": "Self-hosted Windows runner for Java tests with remote Valkey cluster"
     }
 ]
