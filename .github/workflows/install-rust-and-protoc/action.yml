@@ -32,8 +32,9 @@ runs:
               Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "$env:TEMP\rustup-init.exe"
               & "$env:TEMP\rustup-init.exe" -y --default-toolchain stable --target "$env:RUST_TARGET"
 
-              # Add to PATH for current session
+              # Add to PATH for current session and persist for future steps
               $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+              echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
 
               # Install components
               rustup component add rustfmt clippy
