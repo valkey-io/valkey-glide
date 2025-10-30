@@ -50,9 +50,9 @@ def standaloneHosts = ''
 def clusterHosts = ''
 def azClusterHosts = ''
 
-// Platform-specific Python executable and WSL handling
+// Platform-specific Python executable
 def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
-def pythonCmd = isWindows ? ['wsl', '--', 'python3'] : ['python3']
+def pythonCmd = isWindows ? ['python3'] : ['python3']
 
 // Use integration test IP from environment variable if available, otherwise default to localhost
 def clusterHost = System.getenv('VALKEY_INTEG_TEST_IP') ?: '127.0.0.1'
