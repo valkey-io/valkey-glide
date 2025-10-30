@@ -180,6 +180,16 @@ runs:
           run: |
               Write-Host "Installing Visual Studio Build Tools via Chocolatey..."
               
+              # Check if running as administrator
+              $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+              if (-not $isAdmin) {
+                  Write-Host "Error: This script must be run as Administrator to install Visual Studio Build Tools"
+                  Write-Host "Please run the GitHub Actions runner service as Administrator or configure the runner with elevated privileges"
+                  exit 1
+              }
+              
+              Write-Host "Running with Administrator privileges"
+              
               # Check if Chocolatey is available in PATH
               if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
                   Write-Host "Chocolatey not found in PATH, searching system..."
@@ -231,9 +241,9 @@ runs:
                       # Install .NET Framework 4.8 (required for VS installer)
                       try {
                           Write-Host "Installing .NET Framework 4.8..."
-                          $netFrameworkUrl = "https://download.microsoft.com/download/9/4/1/941bcadcf2d5c19b8c5c7e6b8b5b8b8b/ndp48-web.exe"
-                          $netFrameworkPath = "$env:TEMP\ndp48-web.exe"
-                          Invoke-WebRequest -Uri $netFrameworkUrl -OutFile $netFrameworkPath
+                          $netFrameworkUrl = "https://download.microsoft.com/download/9/4/1/941bcadcf2d5c19b8c5c7e6b8b5b8b8b/ndp48-x86-x64-allos-enu.exe"
+                          $netFrameworkPath = "$env:TEMP\ndp48-installer.exe"
+                          Invoke-WebRequest -Uri $netFrameworkUrl -OutFile $netFrameworkPath -TimeoutSec 300
                           Start-Process -FilePath $netFrameworkPath -ArgumentList "/quiet" -Wait
                           Remove-Item $netFrameworkPath -Force -ErrorAction SilentlyContinue
                           Write-Host ".NET Framework installation completed"
@@ -277,8 +287,14 @@ runs:
                           for ($i = 1; $i -le 3; $i++) {
                               try {
                                   Write-Host "Downloading VS 2022 Build Tools bootstrapper (attempt $i/3)..."
+                                  
+                                  # Configure timeout via ServicePointManager (affects all WebClient instances)
+                                  [System.Net.ServicePointManager]::DefaultConnectionLimit = 10
+                                  [System.Net.ServicePointManager]::Expect100Continue = $false
+                                  
                                   $webClient = New-Object System.Net.WebClient
-                                  $webClient.Timeout = 300000  # 5 minutes
+                                  # Set headers to avoid issues
+                                  $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                                   $webClient.DownloadFile($installerUrl, $installerPath)
                                   $webClient.Dispose()
                                   
