@@ -223,28 +223,115 @@ runs:
                       Write-Host "Added Chocolatey to PATH"
                   } else {
                       Write-Host "No existing Chocolatey installation found"
-                      Write-Host "Using direct Visual Studio installer instead"
+                      Write-Host "Installing Visual Studio Build Tools via winget..."
                       
-                      # Skip Chocolatey and use direct installer
-                      Write-Host "Downloading Visual Studio Build Tools installer..."
-                      $installerUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
-                      $installerPath = "$env:TEMP\vs_buildtools.exe"
+                      # Try winget first (more reliable on modern Windows)
+                      if (Get-Command winget -ErrorAction SilentlyContinue) {
+                          Write-Host "Using winget to install Visual Studio Build Tools..."
+                          winget install Microsoft.VisualStudio.2022.BuildTools --silent --accept-package-agreements --accept-source-agreements
+                          
+                          if ($LASTEXITCODE -eq 0) {
+                              Write-Host "winget installation successful"
+                              $skipChocolatey = $true
+                          } else {
+                              Write-Host "winget installation failed with exit code: $LASTEXITCODE"
+                              Write-Host "Falling back to direct installer..."
+                          }
+                      } else {
+                          Write-Host "winget not available, using direct installer..."
+                      }
                       
-                      Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-                      
-                      Write-Host "Installing Visual Studio Build Tools directly..."
-                      $installArgs = @(
-                          "--quiet",
-                          "--wait", 
-                          "--add", "Microsoft.VisualStudio.Workload.VCTools",
-                          "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-                          "--add", "Microsoft.VisualStudio.Component.Windows10SDK.19041"
-                      )
-                      
-                      $process = Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait -PassThru
-                      Write-Host "Installation completed with exit code: $($process.ExitCode)"
-                      
-                      Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+                      # Fallback to direct installer if winget failed or unavailable
+                      if ($LASTEXITCODE -ne 0 -or -not (Get-Command winget -ErrorAction SilentlyContinue)) {
+                          Write-Host "Downloading Visual Studio Build Tools installer..."
+                          $installerUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
+                          $installerPath = "$env:TEMP\vs_buildtools.exe"
+                          
+                          try {
+                              Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+                              Write-Host "Installer downloaded successfully ($(((Get-Item $installerPath).Length / 1MB).ToString('F1')) MB)"
+                          } catch {
+                              Write-Host "Error downloading installer: $_"
+                              exit 1
+                          }
+                          
+                          # Check system requirements
+                          Write-Host "Checking system requirements..."
+                          Write-Host "OS Version: $([System.Environment]::OSVersion.VersionString)"
+                          Write-Host "Available disk space: $(((Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='C:'").FreeSpace / 1GB).ToString('F1')) GB"
+                          Write-Host "Total RAM: $(((Get-WmiObject -Class Win32_ComputerSystem).TotalPhysicalMemory / 1GB).ToString('F1')) GB"
+                          
+                          # Check for existing Visual Studio installations
+                          Write-Host "Checking for existing Visual Studio installations..."
+                          $existingVS = Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" -ErrorAction SilentlyContinue | 
+                              Get-ItemProperty | Where-Object { $_.DisplayName -like "*Visual Studio*" }
+                          if ($existingVS) {
+                              $existingVS | ForEach-Object { Write-Host "  Found: $($_.DisplayName) $($_.DisplayVersion)" }
+                          } else {
+                              Write-Host "  No existing Visual Studio installations found"
+                          }
+                          
+                          Write-Host "Installing Visual Studio Build Tools directly..."
+                          $logPath = "$env:TEMP\vs_install_log.txt"
+                          $installArgs = @(
+                              "--quiet",
+                              "--wait",
+                              "--norestart",
+                              "--logs", $logPath,
+                              "--add", "Microsoft.VisualStudio.Workload.VCTools",
+                              "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                              "--add", "Microsoft.VisualStudio.Component.Windows11SDK.22000"
+                          )
+                          
+                          Write-Host "Running: $installerPath $($installArgs -join ' ')"
+                          Write-Host "Installation log will be written to: $logPath"
+                          
+                          $process = Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait -PassThru
+                          Write-Host "Installation completed with exit code: $($process.ExitCode)"
+                          
+                          # Show installation logs
+                          if (Test-Path $logPath) {
+                              Write-Host "Installation log contents:"
+                              Get-Content $logPath -Tail 50 | ForEach-Object { Write-Host "  $_" }
+                          } else {
+                              Write-Host "No installation log found at $logPath"
+                          }
+                          
+                          # Check for additional log files
+                          $logDir = "$env:TEMP"
+                          $logFiles = Get-ChildItem $logDir -Filter "*vs*log*" -ErrorAction SilentlyContinue
+                          if ($logFiles) {
+                              Write-Host "Additional log files found:"
+                              $logFiles | ForEach-Object { 
+                                  Write-Host "  $($_.Name) ($(($_.Length / 1KB).ToString('F1')) KB)"
+                                  if ($_.Length -lt 10KB) {
+                                      Write-Host "    Contents:"
+                                      Get-Content $_.FullName -Tail 20 | ForEach-Object { Write-Host "      $_" }
+                                  }
+                              }
+                          }
+                          
+                          # Check for common exit codes
+                          switch ($process.ExitCode) {
+                              0 { Write-Host "Installation successful" }
+                              3010 { Write-Host "Installation successful (restart required)" }
+                              5007 { Write-Host "Installation blocked by policy or insufficient permissions" }
+                              5002 { 
+                                  Write-Host "Installation failed - possible causes:"
+                                  Write-Host "  - Invalid command line arguments"
+                                  Write-Host "  - Missing prerequisites (.NET Framework, etc.)"
+                                  Write-Host "  - Insufficient disk space"
+                                  Write-Host "  - Network connectivity issues"
+                                  Write-Host "  - Conflicting software"
+                              }
+                              -1073741819 { Write-Host "Installation failed - access violation or corruption" }
+                              default { Write-Host "Installation failed with exit code: $($process.ExitCode)" }
+                          }
+                          
+                          Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+                          
+                          # Don't exit on failure, let verification handle it
+                      }
                       
                       # Skip the rest of Chocolatey logic
                       $skipChocolatey = $true
