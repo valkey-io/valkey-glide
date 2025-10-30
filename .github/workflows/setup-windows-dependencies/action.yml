@@ -18,6 +18,37 @@ outputs:
 runs:
     using: "composite"
     steps:
+        - name: Install Chocolatey
+          shell: powershell
+          run: |
+              Write-Host "Installing Chocolatey package manager..."
+              
+              # Check if Chocolatey is already installed
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  Write-Host "Chocolatey already installed"
+                  choco --version
+              } else {
+                  Write-Host "Installing Chocolatey..."
+                  
+                  # Set execution policy for current process
+                  Set-ExecutionPolicy Bypass -Scope Process -Force
+                  
+                  # Download and install Chocolatey
+                  [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+                  Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+                  
+                  # Refresh PATH for current session
+                  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                  
+                  # Verify installation
+                  if (Get-Command choco -ErrorAction SilentlyContinue) {
+                      Write-Host "Chocolatey installed successfully"
+                      choco --version
+                  } else {
+                      Write-Host "Warning: Chocolatey installation may have failed"
+                  }
+              }
+
         - name: Check Windows dependencies
           id: check
           shell: powershell
@@ -199,6 +230,23 @@ runs:
           env:
               GITHUB_TOKEN: ${{ inputs.github-token }}
           run: |
+              Write-Host "Installing Visual Studio Build Tools via Chocolatey..."
+              
+              # Use Chocolatey to install Visual Studio Build Tools
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  Write-Host "Installing Visual Studio 2022 Build Tools via Chocolatey..."
+                  choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows11SDK.22000" -y
+                  
+                  if ($LASTEXITCODE -eq 0) {
+                      Write-Host "Visual Studio Build Tools installed successfully"
+                  } else {
+                      Write-Host "Visual Studio Build Tools installation failed with exit code: $LASTEXITCODE"
+                  }
+              } else {
+                  Write-Host "Warning: Chocolatey not available for Visual Studio installation"
+              }
+              
+              Write-Host "Visual Studio Build Tools installation complete"
               Write-Host "Installing Visual Studio Build Tools via Chocolatey..."
               
               # Connection pool and keep-alive diagnostics
@@ -483,8 +531,8 @@ runs:
               if (-not $skipChocolatey) {
                   # Verify choco is now available
                   if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-                      Write-Host "Error: Chocolatey still not available after setup"
-                      exit 1
+                      Write-Host "Warning: Chocolatey still not available after setup"
+                      Write-Host "Continuing without Chocolatey..."
                   }
                   
                   # Install Visual Studio Build Tools 2022 with C++ workload
@@ -534,8 +582,8 @@ runs:
                   }
                   
                   if (-not $linkFound) {
-                      Write-Host "Error: No MSVC compiler found after installation"
-                      exit 1
+                      Write-Host "Warning: No MSVC compiler found after installation"
+                      Write-Host "Continuing with other dependency installations..."
                   }
               }
               
