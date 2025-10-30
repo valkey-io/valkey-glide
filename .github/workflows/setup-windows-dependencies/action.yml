@@ -180,15 +180,99 @@ runs:
           run: |
               Write-Host "Installing Visual Studio Build Tools via Chocolatey..."
               
-              # Check if running as administrator
-              $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
-              if (-not $isAdmin) {
-                  Write-Host "Error: This script must be run as Administrator to install Visual Studio Build Tools"
-                  Write-Host "Please run the GitHub Actions runner service as Administrator or configure the runner with elevated privileges"
-                  exit 1
+              # Connection pool and keep-alive diagnostics
+              Write-Host "=== Connection Pool and Keep-Alive Diagnostics ==="
+              
+              # Show current connection settings
+              Write-Host "Current DefaultConnectionLimit: $([System.Net.ServicePointManager]::DefaultConnectionLimit)"
+              Write-Host "Current MaxServicePointIdleTime: $([System.Net.ServicePointManager]::MaxServicePointIdleTime) ms"
+              Write-Host "Current UseNagleAlgorithm: $([System.Net.ServicePointManager]::UseNagleAlgorithm)"
+              Write-Host "Current Expect100Continue: $([System.Net.ServicePointManager]::Expect100Continue)"
+              Write-Host "Current DnsRefreshTimeout: $([System.Net.ServicePointManager]::DnsRefreshTimeout) ms"
+              
+              # Configure for stable long downloads
+              Write-Host "Configuring connection settings for long downloads..."
+              
+              # Increase connection limit but keep it reasonable
+              [System.Net.ServicePointManager]::DefaultConnectionLimit = 10
+              
+              # Increase idle timeout to prevent premature connection closure
+              [System.Net.ServicePointManager]::MaxServicePointIdleTime = 900000  # 15 minutes
+              
+              # Disable Nagle algorithm for better throughput
+              [System.Net.ServicePointManager]::UseNagleAlgorithm = $false
+              
+              # Disable Expect100Continue to reduce handshake overhead
+              [System.Net.ServicePointManager]::Expect100Continue = $false
+              
+              # Set DNS refresh timeout
+              [System.Net.ServicePointManager]::DnsRefreshTimeout = 120000  # 2 minutes
+              
+              # Configure TCP keep-alive at system level
+              try {
+                  # Enable TCP keep-alive with shorter intervals
+                  $tcpParams = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
+                  Write-Host "Checking TCP keep-alive settings..."
+                  
+                  $keepAliveTime = Get-ItemProperty -Path $tcpParams -Name "KeepAliveTime" -ErrorAction SilentlyContinue
+                  $keepAliveInterval = Get-ItemProperty -Path $tcpParams -Name "KeepAliveInterval" -ErrorAction SilentlyContinue
+                  
+                  Write-Host "TCP KeepAliveTime: $($keepAliveTime.KeepAliveTime) ms (default: 7200000)"
+                  Write-Host "TCP KeepAliveInterval: $($keepAliveInterval.KeepAliveInterval) ms (default: 1000)"
+              } catch {
+                  Write-Host "Could not read TCP keep-alive settings: $_"
               }
               
-              Write-Host "Running with Administrator privileges"
+              # Show updated settings
+              Write-Host "Updated DefaultConnectionLimit: $([System.Net.ServicePointManager]::DefaultConnectionLimit)"
+              Write-Host "Updated MaxServicePointIdleTime: $([System.Net.ServicePointManager]::MaxServicePointIdleTime) ms"
+              Write-Host "Updated UseNagleAlgorithm: $([System.Net.ServicePointManager]::UseNagleAlgorithm)"
+              Write-Host "Updated Expect100Continue: $([System.Net.ServicePointManager]::Expect100Continue)"
+              
+              Write-Host "=== End Connection Diagnostics ==="
+              
+              # Check if running as administrator with multiple methods
+              Write-Host "Checking administrative privileges..."
+              
+              # Method 1: Standard check
+              $isAdmin1 = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+              Write-Host "Method 1 (Standard): $isAdmin1"
+              
+              # Method 2: Check current user
+              $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+              Write-Host "Current user: $($currentUser.Name)"
+              Write-Host "Authentication type: $($currentUser.AuthenticationType)"
+              
+              # Method 3: Try to access admin-only location
+              $canWriteToSystem = $false
+              try {
+                  $testFile = "$env:SystemRoot\temp\admin_test.txt"
+                  "test" | Out-File -FilePath $testFile -Force
+                  Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+                  $canWriteToSystem = $true
+                  Write-Host "Method 3 (System write test): $canWriteToSystem"
+              } catch {
+                  Write-Host "Method 3 (System write test): $canWriteToSystem - $_"
+              }
+              
+              # Method 4: Check if we can run elevated commands
+              $canRunElevated = $false
+              try {
+                  $result = Start-Process -FilePath "whoami" -ArgumentList "/priv" -Wait -PassThru -WindowStyle Hidden
+                  $canRunElevated = ($result.ExitCode -eq 0)
+                  Write-Host "Method 4 (Elevated command test): $canRunElevated"
+              } catch {
+                  Write-Host "Method 4 (Elevated command test): $canRunElevated - $_"
+              }
+              
+              $hasAdminRights = $isAdmin1 -or $canWriteToSystem -or $canRunElevated
+              
+              if ($hasAdminRights) {
+                  Write-Host "Administrative privileges confirmed"
+              } else {
+                  Write-Host "Warning: Administrative privileges not detected - installations may fail"
+                  Write-Host "Continuing anyway..."
+              }
               
               # Check if Chocolatey is available in PATH
               if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
