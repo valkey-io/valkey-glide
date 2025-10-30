@@ -289,11 +289,14 @@ jobs:
                   if (-not $javaFound) {
                       # Try winget installation
                       if (Get-Command winget -ErrorAction SilentlyContinue) {
-                          Write-Host "Installing Java ${{ matrix.java }} via winget..."
-                          winget install EclipseAdoptium.Temurin.${{ matrix.java }} --silent --accept-package-agreements --accept-source-agreements
+                          Write-Host "Installing Java ${{ matrix.java }} via Chocolatey..."
+                          choco install temurin${{ matrix.java }} -y
                           
                           if ($LASTEXITCODE -eq 0) {
-                              Write-Host "Java installed successfully via winget"
+                              Write-Host "Java installed successfully via Chocolatey"
+                              
+                              # Refresh PATH for Chocolatey installation
+                              $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
                               
                               # Find and set JAVA_HOME
                               $javaInstalls = Get-ChildItem "C:\Program Files\Eclipse Adoptium" -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "jdk-${{ matrix.java }}*" }
@@ -317,10 +320,10 @@ jobs:
                                   Write-Host "Error: Java installation directory not found after winget"
                               }
                           } else {
-                              Write-Host "winget Java installation failed with exit code: $LASTEXITCODE"
+                              Write-Host "Chocolatey Java installation failed with exit code: $LASTEXITCODE"
                           }
                       } else {
-                          Write-Host "winget not available, downloading Java directly..."
+                          Write-Host "Chocolatey not available, downloading Java directly..."
                           
                           # Direct download of Eclipse Temurin JDK with retry logic
                           $javaVersion = "${{ matrix.java }}"
