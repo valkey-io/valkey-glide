@@ -111,20 +111,20 @@ jobs:
               shell: powershell
               run: |
                   Write-Host "Verifying build environment..."
-                  
+
                   # Check Java
                   Write-Host "Java version:"
                   java -version
-                  
+
                   # Check protoc
                   Write-Host "Protoc version:"
                   protoc --version
-                  
+
                   # Check Rust
                   Write-Host "Rust version:"
                   rustc --version
                   cargo --version
-                  
+
                   # Check MSVC tools
                   Write-Host "Checking MSVC tools..."
                   try {
@@ -145,7 +145,7 @@ jobs:
                       }
                       throw "MSVC tools not available"
                   }
-                  
+
                   Write-Host "Build environment verification complete"
 
             - uses: actions/cache@v4
