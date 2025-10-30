@@ -313,28 +313,6 @@ runs:
                   hostname -I | awk '{print $1}' > /tmp/wsl_ip.txt
               fi
 
-        - name: Test remote Valkey connectivity
-          shell: bash
-          if: "${{ inputs.engine-version && inputs.os == 'windows' }}"
-          run: |
-              echo "Testing remote Valkey connectivity..."
-
-              # Determine target host
-              if [ -n "$VALKEY_VPC_HOST" ]; then
-                  TARGET_HOST="$VALKEY_VPC_HOST"
-                  echo "Testing VPC Valkey at: $TARGET_HOST"
-              elif [ -n "$VALKEY_REMOTE_HOST" ]; then
-                  TARGET_HOST="$VALKEY_REMOTE_HOST"
-                  echo "Testing remote Valkey at: $TARGET_HOST"
-              fi
-
-              # Test basic connectivity (port 6379)
-              if timeout 10 bash -c "</dev/tcp/$TARGET_HOST/6379"; then
-                  echo "[OK] Valkey port 6379 is accessible"
-              else
-                  echo "[INFO] Valkey not yet started on $TARGET_HOST:6379 (will be started by cluster manager)"
-              fi
-
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
           uses: ./.github/workflows/install-rust-and-protoc
