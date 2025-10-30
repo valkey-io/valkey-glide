@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
+from glide_shared.cache import ClientSideCache
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.exceptions import ConfigurationError
 from glide_shared.protobuf.connection_request_pb2 import (
@@ -334,7 +335,6 @@ class BaseClientConfiguration:
             If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed
             to nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedBaseClientConfiguration]): Advanced configuration settings for the client.
-
         lazy_connect (Optional[bool]): Enables lazy connection mode, where physical connections to the server(s)
             are deferred until the first command is sent. This can reduce startup latency and allow for client
             creation in disconnected environments.
@@ -353,6 +353,8 @@ class BaseClientConfiguration:
             attempted and connection fails (e.g., unreachable nodes), errors will surface at that point.
 
             If not set, connections are established immediately during client creation (equivalent to `False`).
+        client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
+            See `ClientSideCache` for more information.
     """
 
     def __init__(
@@ -370,6 +372,7 @@ class BaseClientConfiguration:
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedBaseClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        client_side_cache: Optional[ClientSideCache] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -384,6 +387,7 @@ class BaseClientConfiguration:
         self.client_az = client_az
         self.advanced_config = advanced_config
         self.lazy_connect = lazy_connect
+        self.client_side_cache = client_side_cache
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -462,6 +466,25 @@ class BaseClientConfiguration:
                     iam_config.refresh_interval_seconds
                 )
 
+    def _set_client_side_cache_in_request(self, request: ConnectionRequest) -> None:
+        """Set client-side cache in the protobuf request."""
+        if not self.client_side_cache:
+            return
+
+        request.client_side_cache.cache_id = self.client_side_cache.cache_id
+        request.client_side_cache.max_cache_kb = self.client_side_cache.max_cache_kb
+
+        if self.client_side_cache.entry_ttl_seconds:
+            request.client_side_cache.entry_ttl_seconds = (
+                self.client_side_cache.entry_ttl_seconds
+            )
+
+        request.client_side_cache.enable_metrics = self.client_side_cache.enable_metrics
+        if self.client_side_cache.eviction_policy:
+            request.client_side_cache.eviction_policy = (
+                self.client_side_cache.eviction_policy.value
+            )
+
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
     ) -> ConnectionRequest:
@@ -489,6 +512,7 @@ class BaseClientConfiguration:
 
         self._set_reconnect_strategy_in_request(request)
         self._set_credentials_in_request(request)
+        self._set_client_side_cache_in_request(request)
 
         if self.client_name:
             request.client_name = self.client_name
@@ -574,6 +598,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
             nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedGlideClientConfiguration]): Advanced configuration settings for the client,
             see `AdvancedGlideClientConfiguration`.
+        client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
+            See `ClientSideCache` for more information.
     """
 
     class PubSubChannelModes(IntEnum):
@@ -622,6 +648,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        client_side_cache: Optional[ClientSideCache] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -637,6 +664,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             client_az=client_az,
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
+            client_side_cache=client_side_cache,
         )
         self.pubsub_subscriptions = pubsub_subscriptions
 
@@ -767,7 +795,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration settings for the client,
             see `AdvancedGlideClusterClientConfiguration`.
-
+        client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
+            See `ClientSideCache` for more information.
 
     Note:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff
@@ -825,6 +854,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        client_side_cache: Optional[ClientSideCache] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -840,6 +870,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             client_az=client_az,
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
+            client_side_cache=client_side_cache,
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions
