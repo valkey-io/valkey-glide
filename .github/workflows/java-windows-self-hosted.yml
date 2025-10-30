@@ -107,6 +107,38 @@ jobs:
                   echo "VALKEY_REMOTE_HOST=${{ vars.VALKEY_REMOTE_HOST }}" >> $env:GITHUB_ENV
                   Write-Host "Remote Valkey configured: ${{ vars.VALKEY_REMOTE_HOST }}"
 
+            - name: Verify build environment
+              shell: powershell
+              run: |
+                  Write-Host "Verifying build environment..."
+                  
+                  # Check Java
+                  Write-Host "Java version:"
+                  java -version
+                  
+                  # Check protoc
+                  Write-Host "Protoc version:"
+                  protoc --version
+                  
+                  # Check Rust
+                  Write-Host "Rust version:"
+                  rustc --version
+                  cargo --version
+                  
+                  # Check MSVC tools
+                  Write-Host "Checking MSVC tools..."
+                  try {
+                      $linkPath = Get-Command link.exe -ErrorAction Stop
+                      Write-Host "✓ link.exe found at: $($linkPath.Source)"
+                  } catch {
+                      Write-Host "✗ link.exe not found - this will cause Rust compilation to fail"
+                      Write-Host "Current PATH:"
+                      $env:PATH -split ';' | Where-Object { $_ -like '*Visual Studio*' -or $_ -like '*VC*' -or $_ -like '*MSVC*' } | ForEach-Object { Write-Host "  $_" }
+                      throw "MSVC tools not available"
+                  }
+                  
+                  Write-Host "Build environment verification complete"
+
             - uses: actions/cache@v4
               with:
                   path: |
