@@ -340,7 +340,7 @@ def print_servers_json(servers: List[Server]):
 
 
 def next_free_port(
-    min_port: int | None = None, max_port: int = 55535, timeout: int = 60
+    min_port: Optional[int] = None, max_port: int = 55535, timeout: int = 60
 ) -> int:
     # Use BASE_PORT from environment if set (for multi-engine setup)
     if min_port is None:
