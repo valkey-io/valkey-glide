@@ -20,8 +20,29 @@ inputs:
 runs:
     using: "composite"
     steps:
-        - name: Install Rust toolchain
-          uses: dtolnay/rust-toolchain@1.82.0
+        - name: Install Rust toolchain (Windows)
+          if: runner.os == 'Windows'
+          shell: powershell
+          run: |
+              Write-Host "Installing Rust on Windows..."
+
+              # Download and install rustup
+              Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "$env:TEMP\rustup-init.exe"
+              & "$env:TEMP\rustup-init.exe" -y --default-toolchain stable --target ${{ inputs.target }}
+
+              # Add to PATH for current session
+              $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+
+              # Install components
+              rustup component add rustfmt clippy
+
+              # Verify installation
+              rustc --version
+              cargo --version
+
+        - name: Install Rust toolchain (Linux/macOS)
+          if: runner.os != 'Windows'
+          uses: dtolnay/rust-toolchain@stable
           with:
               targets: ${{ inputs.target }}
               components: rustfmt, clippy
