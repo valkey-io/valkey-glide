@@ -223,7 +223,23 @@ runs:
                       Write-Host "Added Chocolatey to PATH"
                   } else {
                       Write-Host "No existing Chocolatey installation found"
-                      Write-Host "Installing Visual Studio Build Tools via winget..."
+                      Write-Host "Installing prerequisites and Visual Studio Build Tools..."
+                      
+                      # Install prerequisites first to avoid exit code 5002
+                      Write-Host "Installing prerequisites..."
+                      
+                      # Install .NET Framework 4.8 (required for VS installer)
+                      try {
+                          Write-Host "Installing .NET Framework 4.8..."
+                          $netFrameworkUrl = "https://download.microsoft.com/download/9/4/1/941bcadcf2d5c19b8c5c7e6b8b5b8b8b/ndp48-web.exe"
+                          $netFrameworkPath = "$env:TEMP\ndp48-web.exe"
+                          Invoke-WebRequest -Uri $netFrameworkUrl -OutFile $netFrameworkPath
+                          Start-Process -FilePath $netFrameworkPath -ArgumentList "/quiet" -Wait
+                          Remove-Item $netFrameworkPath -Force -ErrorAction SilentlyContinue
+                          Write-Host ".NET Framework installation completed"
+                      } catch {
+                          Write-Host "Warning: .NET Framework installation failed: $_"
+                      }
                       
                       # Try winget first (more reliable on modern Windows)
                       if (Get-Command winget -ErrorAction SilentlyContinue) {
