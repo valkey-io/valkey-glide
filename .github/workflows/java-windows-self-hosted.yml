@@ -132,8 +132,17 @@ jobs:
                       Write-Host "✓ link.exe found at: $($linkPath.Source)"
                   } catch {
                       Write-Host "✗ link.exe not found - this will cause Rust compilation to fail"
-                      Write-Host "Current PATH:"
-                      $env:PATH -split ';' | Where-Object { $_ -like '*Visual Studio*' -or $_ -like '*VC*' -or $_ -like '*MSVC*' } | ForEach-Object { Write-Host "  $_" }
+                      Write-Host "Checking PATH for Visual Studio components..."
+                      $pathEntries = $env:PATH -split ';'
+                      $vsEntries = $pathEntries | Where-Object { $_ -like '*Visual Studio*' -or $_ -like '*VC*' -or $_ -like '*MSVC*' }
+                      if ($vsEntries.Count -gt 0) {
+                          Write-Host "Found Visual Studio paths:"
+                          foreach ($entry in $vsEntries) {
+                              Write-Host "  $entry"
+                          }
+                      } else {
+                          Write-Host "No Visual Studio paths found in PATH"
+                      }
                       throw "MSVC tools not available"
                   }
                   
