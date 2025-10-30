@@ -165,10 +165,19 @@ jobs:
               if: ${{ matrix.host.OS == 'windows' }}
               shell: powershell
               run: |
-                  # Create python3 symlink for Windows
-                  $pythonPath = (Get-Command python).Source
-                  $python3Path = Join-Path (Split-Path $pythonPath) "python3.exe"
-                  New-Item -ItemType HardLink -Path $python3Path -Target $pythonPath -Force
+                  # Create python3 symlink for Windows if python exists
+                  if (Get-Command python -ErrorAction SilentlyContinue) {
+                      $pythonPath = (Get-Command python).Source
+                      $python3Path = Join-Path (Split-Path $pythonPath) "python3.exe"
+                      if (-not (Test-Path $python3Path)) {
+                          New-Item -ItemType HardLink -Path $python3Path -Target $pythonPath -Force
+                          Write-Host "python3 symlink created"
+                      } else {
+                          Write-Host "python3 already exists"
+                      }
+                  } else {
+                      Write-Host "python command not found, skipping symlink creation"
+                  }
 
             - name: Configure VPC/Remote Valkey instance (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
@@ -289,15 +298,19 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
-            - name: Test pubsub
+            - name: Test pubsub (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              working-directory: java
+              shell: powershell
+              run: |
+                  .\gradlew.bat --build-cache :integTest:pubsubTest
+
+            - name: Test pubsub (Linux/macOS)
+              if: ${{ matrix.host.OS != 'windows' }}
               working-directory: java
               shell: bash
               run: |
-                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
-                      ./gradlew.bat --build-cache :integTest:pubsubTest
-                  else
-                      ./gradlew --build-cache :integTest:pubsubTest
-                  fi
+                  ./gradlew --build-cache :integTest:pubsubTest
 
             - name: Upload test & spotbugs reports
               if: always()
