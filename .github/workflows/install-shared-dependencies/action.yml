@@ -69,7 +69,7 @@ runs:
               yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
         - name: Setup Windows dependencies
-          if: "${{ runner.os == 'Windows' }}"
+          if: "${{ runner.os == 'Windows' && runner.environment != 'github-hosted' }}"
           uses: ./.github/workflows/setup-windows-dependencies
           with:
               github-token: ${{ inputs.github-token }}
