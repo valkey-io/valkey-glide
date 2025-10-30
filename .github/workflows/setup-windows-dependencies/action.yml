@@ -173,6 +173,50 @@ runs:
 
               Write-Host "Detection complete: Python=$pythonAvailable, SSH=$sshAvailable"
 
+        - name: Install Visual Studio Build Tools
+          shell: powershell
+          env:
+              GITHUB_TOKEN: ${{ inputs.github-token }}
+          run: |
+              # Check if Visual Studio Build Tools are already installed
+              $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+              if (Test-Path $vsWhere) {
+                  $buildTools = & $vsWhere -products Microsoft.VisualStudio.Product.BuildTools -format json | ConvertFrom-Json
+                  if ($buildTools) {
+                      Write-Host "Visual Studio Build Tools already installed"
+                      return
+                  }
+              }
+
+              Write-Host "Installing Visual Studio Build Tools..."
+
+              # Download Visual Studio Build Tools installer
+              $installerUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
+              $installerPath = "$env:TEMP\vs_buildtools.exe"
+
+              # Add authentication header if token is available
+              $headers = @{}
+              if ($env:GITHUB_TOKEN) {
+                  $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN"
+              }
+
+              try {
+                  if ($headers.Count -gt 0) {
+                      Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -Headers $headers
+                  } else {
+                      Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+                  }
+              } catch {
+                  Write-Host "Failed to download with authentication, trying without: $_"
+                  Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+              }
+
+              # Install with C++ build tools
+              Write-Host "Installing C++ build tools..."
+              & $installerPath --quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.19041
+
+              Write-Host "Visual Studio Build Tools installation complete"
+
         - name: Setup Python3 symlink
           if: steps.check.outputs.python-available == 'true'
           shell: powershell
