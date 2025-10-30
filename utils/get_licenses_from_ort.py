@@ -47,7 +47,8 @@ APPROVED_LICENSES = [
     "Apache-2.0 AND (Apache-2.0 OR MIT) AND MIT",
     "(Apache-2.0 OR ISC) AND ISC",
     "(Apache-2.0 OR ISC) AND ISC AND OpenSSL",
-    "CDLA-Permissive-2.0"
+    "CDLA-Permissive-2.0",
+    "Apache-2.0 AND (Apache-2.0 OR MIT)",
 ]
 
 # Packages with non-pre-approved licenses that received manual approval.

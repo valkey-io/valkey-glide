@@ -19,6 +19,7 @@ from typing import (
 import pytest
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
+from glide_shared.cache import ClientSideCache
 from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.commands.bitmap import (
     BitFieldGet,
@@ -93,7 +94,6 @@ from glide_sync.logger import Level as SyncLogLevel
 from packaging import version
 
 from tests.utils.cluster import ValkeyCluster
-from glide_shared.cache import ClientSideCache
 
 TAnyGlideClient = Union[TGlideClient, TSyncGlideClient]
 

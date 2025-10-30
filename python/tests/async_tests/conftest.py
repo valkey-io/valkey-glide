@@ -7,6 +7,7 @@ import pytest
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.logger import Logger
+from glide_shared.cache import ClientSideCache
 from glide_shared.config import (
     BackoffStrategy,
     GlideClientConfiguration,
@@ -17,7 +18,6 @@ from glide_shared.config import (
     ServerCredentials,
 )
 from glide_shared.exceptions import ClosingError
-from glide_shared.cache import ClientSideCache
 
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
