@@ -217,6 +217,62 @@ runs:
 
               Write-Host "Visual Studio Build Tools installation complete"
 
+        - name: Verify and setup MSVC environment
+          shell: powershell
+          run: |
+              Write-Host "Verifying MSVC installation..."
+              
+              # Find Visual Studio installation
+              $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+              if (Test-Path $vsWhere) {
+                  $vsInstallation = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+                  if ($vsInstallation) {
+                      Write-Host "Found Visual Studio installation at: $vsInstallation"
+                      
+                      # Setup MSVC environment
+                      $vcvarsPath = "$vsInstallation\VC\Auxiliary\Build\vcvars64.bat"
+                      if (Test-Path $vcvarsPath) {
+                          Write-Host "Setting up MSVC environment..."
+                          
+                          # Run vcvars64.bat and capture environment variables
+                          $tempBat = "$env:TEMP\setup_msvc.bat"
+                          $batLines = @(
+                              "@echo off",
+                              "call `"$vcvarsPath`"",
+                              "echo PATH=%PATH%",
+                              "echo LIB=%LIB%",
+                              "echo INCLUDE=%INCLUDE%"
+                          )
+                          $batLines | Out-File -FilePath $tempBat -Encoding ASCII
+                          
+                          $output = & cmd /c $tempBat
+                          
+                          # Parse and set environment variables
+                          foreach ($line in $output) {
+                              if ($line -match '^(PATH|LIB|INCLUDE)=(.*)$') {
+                                  $varName = $matches[1]
+                                  $varValue = $matches[2]
+                                  [Environment]::SetEnvironmentVariable($varName, $varValue, "Process")
+                                  echo "$varName=$varValue" >> $env:GITHUB_ENV
+                                  Write-Host "Set $varName"
+                              }
+                          }
+                          
+                          Remove-Item $tempBat -ErrorAction SilentlyContinue
+                      }
+                  }
+              }
+              
+              # Verify link.exe is available
+              try {
+                  $linkPath = Get-Command link.exe -ErrorAction Stop
+                  Write-Host "✓ link.exe found at: $($linkPath.Source)"
+              } catch {
+                  Write-Host "✗ link.exe not found in PATH"
+                  Write-Host "Current PATH:"
+                  $env:PATH -split ';' | ForEach-Object { Write-Host "  $_" }
+              }
+
         - name: Setup Python3 symlink
           if: steps.check.outputs.python-available == 'true'
           shell: powershell
