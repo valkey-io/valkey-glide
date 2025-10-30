@@ -47,8 +47,33 @@ runs:
               targets: ${{ inputs.target }}
               components: rustfmt, clippy
 
-        - name: Install protoc (protobuf)
+        - name: Install protoc (Linux/macOS)
+          if: runner.os != 'Windows'
           uses: arduino/setup-protoc@v3
+
+        - name: Install protoc (Windows)
+          if: runner.os == 'Windows'
+          shell: powershell
+          run: |
+              Write-Host "Installing protoc on Windows..."
+              
+              # Download protoc
+              $url = "https://github.com/protocolbuffers/protobuf/releases/download/v25.1/protoc-25.1-win64.zip"
+              $zipPath = "$env:TEMP\protoc.zip"
+              $extractPath = "$env:TEMP\protoc"
+              
+              Invoke-WebRequest -Uri $url -OutFile $zipPath
+              
+              # Extract using .NET instead of Expand-Archive
+              Add-Type -AssemblyName System.IO.Compression.FileSystem
+              [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $extractPath)
+              
+              # Add to PATH
+              $protocPath = "$extractPath\bin"
+              echo "$protocPath" >> $env:GITHUB_PATH
+              
+              # Verify installation
+              & "$protocPath\protoc.exe" --version
           with:
               version: "25.1"
               repo-token: ${{ inputs.github-token }}
