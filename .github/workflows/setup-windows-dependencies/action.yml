@@ -154,8 +154,38 @@ runs:
               Write-Host "Installing Visual Studio Build Tools..."
               
               if (Get-Command choco -ErrorAction SilentlyContinue) {
-                  choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools" -y
-                  Write-Host "Visual Studio Build Tools installation completed"
+                  # Install Visual Studio Build Tools with C++ workload and Windows SDK
+                  Write-Host "Installing Visual Studio 2022 Build Tools with C++ components..."
+                  choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows11SDK.22000 --add Microsoft.VisualStudio.Component.VC.CMake.Project" -y
+                  
+                  if ($LASTEXITCODE -eq 0) {
+                      Write-Host "Visual Studio Build Tools installed successfully"
+                      
+                      # Verify MSVC installation
+                      Write-Host "Verifying MSVC compiler installation..."
+                      $msvcPaths = @(
+                          "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe",
+                          "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe"
+                      )
+                      
+                      $found = $false
+                      foreach ($path in $msvcPaths) {
+                          $compiler = Get-ChildItem $path -ErrorAction SilentlyContinue | Select-Object -First 1
+                          if ($compiler) {
+                              Write-Host "MSVC compiler found: $($compiler.FullName)"
+                              $found = $true
+                              break
+                          }
+                      }
+                      
+                      if (-not $found) {
+                          Write-Host "Warning: MSVC compiler not found after installation"
+                      }
+                  } else {
+                      Write-Host "Visual Studio Build Tools installation failed with exit code: $LASTEXITCODE"
+                  }
               } else {
                   Write-Host "Chocolatey not available - skipping Visual Studio Build Tools"
               }
+              
+              Write-Host "Visual Studio Build Tools installation completed"
