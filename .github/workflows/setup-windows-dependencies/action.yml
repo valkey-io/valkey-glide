@@ -182,21 +182,36 @@ runs:
               
               # Check if Chocolatey is available in PATH
               if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-                  Write-Host "Chocolatey not found in PATH, checking for existing installation..."
+                  Write-Host "Chocolatey not found in PATH, searching system..."
                   
-                  # Check common Chocolatey installation paths
+                  # Systematic search for Chocolatey
                   $chocoPath = $null
-                  $possiblePaths = @(
-                      "$env:ProgramData\chocolatey\bin\choco.exe",
-                      "$env:ALLUSERSPROFILE\chocolatey\bin\choco.exe",
-                      "C:\ProgramData\chocolatey\bin\choco.exe"
-                  )
                   
-                  foreach ($path in $possiblePaths) {
-                      if (Test-Path $path) {
-                          $chocoPath = Split-Path $path
-                          Write-Host "Found existing Chocolatey at: $chocoPath"
-                          break
+                  # Method 1: Check environment variable
+                  if ($env:ChocolateyInstall -and (Test-Path "$env:ChocolateyInstall\bin\choco.exe")) {
+                      $chocoPath = "$env:ChocolateyInstall\bin"
+                      Write-Host "Found Chocolatey via environment variable: $chocoPath"
+                  }
+                  # Method 2: Search filesystem
+                  elseif (-not $chocoPath) {
+                      Write-Host "Searching filesystem for choco.exe..."
+                      $found = Get-ChildItem -Path "C:\" -Name "choco.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+                      if ($found) {
+                          $chocoPath = Split-Path $found.FullName
+                          Write-Host "Found Chocolatey via filesystem search: $chocoPath"
+                      }
+                  }
+                  # Method 3: Check registry
+                  elseif (-not $chocoPath) {
+                      Write-Host "Checking registry for Chocolatey..."
+                      try {
+                          $regPath = Get-ItemProperty -Path "HKLM:\SOFTWARE\Chocolatey" -Name "InstallLocation" -ErrorAction SilentlyContinue
+                          if ($regPath -and (Test-Path "$($regPath.InstallLocation)\bin\choco.exe")) {
+                              $chocoPath = "$($regPath.InstallLocation)\bin"
+                              Write-Host "Found Chocolatey via registry: $chocoPath"
+                          }
+                      } catch {
+                          Write-Host "Registry check failed: $_"
                       }
                   }
                   
@@ -207,35 +222,58 @@ runs:
                       echo $chocoPath >> $env:GITHUB_PATH
                       Write-Host "Added Chocolatey to PATH"
                   } else {
-                      Write-Host "Installing Chocolatey..."
-                      Set-ExecutionPolicy Bypass -Scope Process -Force
-                      [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-                      iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+                      Write-Host "No existing Chocolatey installation found"
+                      Write-Host "Using direct Visual Studio installer instead"
                       
-                      # Refresh environment
-                      $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                      # Skip Chocolatey and use direct installer
+                      Write-Host "Downloading Visual Studio Build Tools installer..."
+                      $installerUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
+                      $installerPath = "$env:TEMP\vs_buildtools.exe"
+                      
+                      Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+                      
+                      Write-Host "Installing Visual Studio Build Tools directly..."
+                      $installArgs = @(
+                          "--quiet",
+                          "--wait", 
+                          "--add", "Microsoft.VisualStudio.Workload.VCTools",
+                          "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                          "--add", "Microsoft.VisualStudio.Component.Windows10SDK.19041"
+                      )
+                      
+                      $process = Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait -PassThru
+                      Write-Host "Installation completed with exit code: $($process.ExitCode)"
+                      
+                      Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+                      
+                      # Skip the rest of Chocolatey logic
+                      $skipChocolatey = $true
                   }
               } else {
                   Write-Host "Chocolatey already available in PATH"
+                  $skipChocolatey = $false
               }
               
-              # Verify choco is now available
-              if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-                  Write-Host "Error: Chocolatey still not available after setup"
-                  exit 1
-              }
-              
-              # Install Visual Studio Build Tools 2022 with C++ workload
-              Write-Host "Installing Visual Studio Build Tools 2022..."
-              choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.19041" -y
-              
-              if ($LASTEXITCODE -ne 0) {
-                  Write-Host "Chocolatey installation failed with exit code: $LASTEXITCODE"
-                  Write-Host "Trying alternative approach..."
+              # Only proceed with Chocolatey if we found it or it was already in PATH
+              if (-not $skipChocolatey) {
+                  # Verify choco is now available
+                  if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+                      Write-Host "Error: Chocolatey still not available after setup"
+                      exit 1
+                  }
                   
-                  # Fallback: Install just the C++ compiler
-                  choco install microsoft-build-tools -y
-                  choco install visualcpp-build-tools -y
+                  # Install Visual Studio Build Tools 2022 with C++ workload
+                  Write-Host "Installing Visual Studio Build Tools 2022 via Chocolatey..."
+                  choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.19041" -y
+                  
+                  if ($LASTEXITCODE -ne 0) {
+                      Write-Host "Chocolatey installation failed with exit code: $LASTEXITCODE"
+                      Write-Host "Trying alternative approach..."
+                      
+                      # Fallback: Install just the C++ compiler
+                      choco install microsoft-build-tools -y
+                      choco install visualcpp-build-tools -y
+                  }
               }
               
               # Verify installation
