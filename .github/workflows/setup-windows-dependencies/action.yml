@@ -325,14 +325,23 @@ runs:
                       # Install .NET Framework 4.8 (required for VS installer)
                       try {
                           Write-Host "Installing .NET Framework 4.8..."
+                          # Use the correct offline installer URL
                           $netFrameworkUrl = "https://download.microsoft.com/download/9/4/1/941bcadcf2d5c19b8c5c7e6b8b5b8b8b/ndp48-x86-x64-allos-enu.exe"
                           $netFrameworkPath = "$env:TEMP\ndp48-installer.exe"
-                          Invoke-WebRequest -Uri $netFrameworkUrl -OutFile $netFrameworkPath -TimeoutSec 300
-                          Start-Process -FilePath $netFrameworkPath -ArgumentList "/quiet" -Wait
+                          
+                          # Download with WebClient (more reliable)
+                          $webClient = New-Object System.Net.WebClient
+                          $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                          $webClient.DownloadFile($netFrameworkUrl, $netFrameworkPath)
+                          $webClient.Dispose()
+                          
+                          # Install with NETWORK SERVICE compatible flags
+                          Start-Process -FilePath $netFrameworkPath -ArgumentList "/quiet", "/norestart" -Wait
                           Remove-Item $netFrameworkPath -Force -ErrorAction SilentlyContinue
                           Write-Host ".NET Framework installation completed"
                       } catch {
                           Write-Host "Warning: .NET Framework installation failed: $_"
+                          Write-Host "Continuing without .NET Framework - VS installer may still work"
                       }
                       
                       # Try winget first (more reliable on modern Windows)
@@ -395,57 +404,44 @@ runs:
                           }
                           
                           if ($downloadSuccess) {
-                              # Create offline installer layout
-                              Write-Host "Creating offline installer layout..."
-                              New-Item -ItemType Directory -Path $offlineDir -Force | Out-Null
+                              # NETWORK SERVICE account has limitations - try direct installation instead of layout
+                              Write-Host "NETWORK SERVICE detected - trying direct installation instead of offline layout..."
                               
-                              $layoutArgs = @(
-                                  "--layout", $offlineDir,
-                                  "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-                                  "--add", "Microsoft.VisualStudio.Component.Windows11SDK.22000",
+                              $installArgs = @(
                                   "--quiet",
-                                  "--lang", "en-US"
+                                  "--wait",
+                                  "--norestart",
+                                  "--nocache",
+                                  "--noUpdateInstaller",
+                                  "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                                  "--add", "Microsoft.VisualStudio.Component.Windows11SDK.22000"
                               )
                               
-                              Write-Host "Downloading components to offline layout..."
-                              Write-Host "Running: $installerPath $($layoutArgs -join ' ')"
-                              $layoutProcess = Start-Process -FilePath $installerPath -ArgumentList $layoutArgs -Wait -PassThru
-                              Write-Host "Layout creation completed with exit code: $($layoutProcess.ExitCode)"
+                              Write-Host "Running direct installation..."
+                              Write-Host "Command: $installerPath $($installArgs -join ' ')"
+                              $installProcess = Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait -PassThru
+                              Write-Host "Direct installation completed with exit code: $($installProcess.ExitCode)"
                               
-                              if ($layoutProcess.ExitCode -eq 0) {
-                                  # Install from offline layout
-                                  Write-Host "Installing VS 2022 Build Tools from offline layout..."
-                                  $offlineInstaller = "$offlineDir\vs_buildtools.exe"
-                                  
-                                  if (Test-Path $offlineInstaller) {
-                                      $installArgs = @(
-                                          "--quiet",
-                                          "--wait",
-                                          "--norestart",
-                                          "--noweb",
-                                          "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-                                          "--add", "Microsoft.VisualStudio.Component.Windows11SDK.22000"
-                                      )
-                                      
-                                      Write-Host "Running offline installation..."
-                                      $installProcess = Start-Process -FilePath $offlineInstaller -ArgumentList $installArgs -Wait -PassThru
-                                      Write-Host "Offline installation completed with exit code: $($installProcess.ExitCode)"
-                                      
-                                      if ($installProcess.ExitCode -eq 0 -or $installProcess.ExitCode -eq 3010) {
-                                          Write-Host "VS 2022 Build Tools offline installation successful"
-                                      } else {
-                                          Write-Host "VS 2022 Build Tools offline installation failed with exit code: $($installProcess.ExitCode)"
-                                      }
-                                  } else {
-                                      Write-Host "Error: Offline installer not found at $offlineInstaller"
-                                  }
+                              if ($installProcess.ExitCode -eq 0 -or $installProcess.ExitCode -eq 3010) {
+                                  Write-Host "VS 2022 Build Tools direct installation successful"
                               } else {
-                                  Write-Host "Failed to create offline layout with exit code: $($layoutProcess.ExitCode)"
+                                  Write-Host "VS 2022 Build Tools installation failed with exit code: $($installProcess.ExitCode)"
+                                  
+                                  # Try minimal components as fallback
+                                  Write-Host "Trying minimal component installation..."
+                                  $minimalArgs = @(
+                                      "--quiet",
+                                      "--wait", 
+                                      "--norestart",
+                                      "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+                                  )
+                                  
+                                  $minimalProcess = Start-Process -FilePath $installerPath -ArgumentList $minimalArgs -Wait -PassThru
+                                  Write-Host "Minimal installation completed with exit code: $($minimalProcess.ExitCode)"
                               }
                               
                               # Cleanup
                               Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
-                              Remove-Item $offlineDir -Recurse -Force -ErrorAction SilentlyContinue
                           } else {
                               Write-Host "Failed to download VS Build Tools bootstrapper after 3 attempts"
                           }
