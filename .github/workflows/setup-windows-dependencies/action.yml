@@ -180,15 +180,49 @@ runs:
           run: |
               Write-Host "Installing Visual Studio Build Tools via Chocolatey..."
               
-              # Check if Chocolatey is installed
+              # Check if Chocolatey is available in PATH
               if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-                  Write-Host "Installing Chocolatey..."
-                  Set-ExecutionPolicy Bypass -Scope Process -Force
-                  [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-                  iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+                  Write-Host "Chocolatey not found in PATH, checking for existing installation..."
                   
-                  # Refresh environment
-                  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                  # Check common Chocolatey installation paths
+                  $chocoPath = $null
+                  $possiblePaths = @(
+                      "$env:ProgramData\chocolatey\bin\choco.exe",
+                      "$env:ALLUSERSPROFILE\chocolatey\bin\choco.exe",
+                      "C:\ProgramData\chocolatey\bin\choco.exe"
+                  )
+                  
+                  foreach ($path in $possiblePaths) {
+                      if (Test-Path $path) {
+                          $chocoPath = Split-Path $path
+                          Write-Host "Found existing Chocolatey at: $chocoPath"
+                          break
+                      }
+                  }
+                  
+                  if ($chocoPath) {
+                      # Add to PATH for current session
+                      $env:PATH = "$chocoPath;$env:PATH"
+                      # Persist for GitHub Actions
+                      echo $chocoPath >> $env:GITHUB_PATH
+                      Write-Host "Added Chocolatey to PATH"
+                  } else {
+                      Write-Host "Installing Chocolatey..."
+                      Set-ExecutionPolicy Bypass -Scope Process -Force
+                      [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+                      iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+                      
+                      # Refresh environment
+                      $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                  }
+              } else {
+                  Write-Host "Chocolatey already available in PATH"
+              }
+              
+              # Verify choco is now available
+              if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+                  Write-Host "Error: Chocolatey still not available after setup"
+                  exit 1
               }
               
               # Install Visual Studio Build Tools 2022 with C++ workload
