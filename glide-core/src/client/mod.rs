@@ -603,21 +603,20 @@ impl Client {
             let client = self.get_or_initialize_client().await?;
 
             // Check cache and track hit/miss
-            if let Some(cache_config) = &self.client_side_cache {
-                if self.is_cacheable_command(cmd) {
-                    if let Some(key) = self.extract_key_from_command(cmd) {
-                        if let Some(cached_value) = cache_config.cache.get(&key) {
-                            // Cache hit
-                            if let Some(metrics) = &cache_config.metrics {
-                                metrics.hits.fetch_add(1, Ordering::Relaxed);
-                            }
-                            return Ok(cached_value);
-                        }
-                        // Cache miss
-                        if let Some(metrics) = &cache_config.metrics {
-                            metrics.misses.fetch_add(1, Ordering::Relaxed);
-                        }
+            if let Some(cache_config) = &self.client_side_cache
+                && self.is_cacheable_command(cmd)
+                && let Some(key) = self.extract_key_from_command(cmd)
+            {
+                if let Some(cached_value) = cache_config.cache.get(&key) {
+                    // Cache hit
+                    if let Some(metrics) = &cache_config.metrics {
+                        metrics.hits.fetch_add(1, Ordering::Relaxed);
                     }
+                    return Ok(cached_value);
+                }
+                // Cache miss
+                if let Some(metrics) = &cache_config.metrics {
+                    metrics.misses.fetch_add(1, Ordering::Relaxed);
                 }
             }
 
@@ -665,14 +664,12 @@ impl Client {
             .await?;
 
             // Update cache after successful response (for cacheable commands only)
-            if let Some(client_side_cache) = &self.client_side_cache {
-                if self.is_cacheable_command(cmd) {
-                    if !matches!(result, Value::Nil) {
-                        if let Some(key) = self.extract_key_from_command(cmd) {
-                            client_side_cache.cache.insert(key, result.clone());
-                        }
-                    }
-                }
+            if let Some(client_side_cache) = &self.client_side_cache
+                && self.is_cacheable_command(cmd)
+                && !matches!(result, Value::Nil)
+                && let Some(key) = self.extract_key_from_command(cmd)
+            {
+                client_side_cache.cache.insert(key, result.clone());
             }
 
             // Intercept CLIENT SETNAME commands after regular processing
@@ -1614,7 +1611,7 @@ impl Client {
                     &config.cache_id,
                     config.max_cache_kb,
                     config.entry_ttl_seconds,
-                    config.eviction_policy.map(Into::into),
+                    config.eviction_policy,
                 ),
                 metrics: config.enable_metrics.then(|| CacheMetrics {
                     hits: AtomicU64::new(0),
@@ -1638,7 +1635,7 @@ impl Client {
                 request_timeout,
                 inflight_requests_allowed,
                 iam_token_manager: None,
-                client_side_cache: client_side_cache, // if cache_id !=null and get cache is null, raise an error
+                client_side_cache,
             };
 
             let client_arc = Arc::new(RwLock::new(client));

@@ -60,7 +60,7 @@ from glide_shared.constants import (
     TXInfoStreamResponse,
 )
 from glide_shared.exceptions import RequestError
-from glide_shared.protobuf.command_request_pb2 import RequestType, CacheMetricsType
+from glide_shared.protobuf.command_request_pb2 import CacheMetricsType, RequestType
 from glide_shared.routes import Route
 
 

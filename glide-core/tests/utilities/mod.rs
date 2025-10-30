@@ -694,7 +694,7 @@ pub fn create_connection_request(
                 cache_id: (*cache.cache_id.deref()).into(),
                 max_cache_kb: cache.max_cache_kb,
                 entry_ttl_seconds: cache.entry_ttl_seconds,
-                eviction_policy: eviction_policy,
+                eviction_policy,
                 enable_metrics: cache.enable_metrics,
                 ..Default::default()
             }));
@@ -933,17 +933,17 @@ pub async fn assert_command_count(
 
     for info in info_strings {
         for line in info.lines() {
-            if line.starts_with(&command_prefix) {
-                if let Some(count_str) = line.strip_prefix(&command_prefix) {
-                    let count_val = count_str
-                        .split(',')
-                        .next()
-                        .unwrap_or("0")
-                        .parse::<usize>()
-                        .unwrap_or(0);
-                    command_count += count_val;
-                    break;
-                }
+            if line.starts_with(&command_prefix)
+                && let Some(count_str) = line.strip_prefix(&command_prefix)
+            {
+                let count_val = count_str
+                    .split(',')
+                    .next()
+                    .unwrap_or("0")
+                    .parse::<usize>()
+                    .unwrap_or(0);
+                command_count += count_val;
+                break;
             }
         }
     }

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
+from glide_shared.cache import ClientSideCache
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.exceptions import ConfigurationError
 from glide_shared.protobuf.connection_request_pb2 import (
@@ -18,7 +19,6 @@ from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufRea
 from glide_shared.protobuf.connection_request_pb2 import (
     TlsMode,
 )
-from glide_shared.cache import ClientSideCache
 
 
 class NodeAddress:
@@ -514,10 +514,14 @@ class BaseClientConfiguration:
 
         request.client_side_cache.cache_id = self.client_side_cache.cache_id
         request.client_side_cache.max_cache_kb = self.client_side_cache.max_cache_kb
-        request.client_side_cache.entry_ttl_seconds = self.client_side_cache.entry_ttl_seconds
+        request.client_side_cache.entry_ttl_seconds = (
+            self.client_side_cache.entry_ttl_seconds
+        )
         request.client_side_cache.enable_metrics = self.client_side_cache.enable_metrics
         if self.client_side_cache.eviction_policy:
-            request.client_side_cache.eviction_policy = self.client_side_cache.eviction_policy.value
+            request.client_side_cache.eviction_policy = (
+                self.client_side_cache.eviction_policy.value
+            )
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False

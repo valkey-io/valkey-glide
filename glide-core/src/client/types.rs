@@ -293,8 +293,10 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             .into_iter()
             .map(|cert| cert.to_vec())
             .collect();
-        let client_side_cache = if let Some(proto_cache) = value.client_side_cache.0 {
-            Some(ClientSideCache {
+        let client_side_cache = value
+            .client_side_cache
+            .0
+            .map(|proto_cache| ClientSideCache {
                 cache_id: chars_to_string_option(&proto_cache.cache_id).unwrap_or_default(),
                 max_cache_kb: proto_cache.max_cache_kb,
                 entry_ttl_seconds: proto_cache.entry_ttl_seconds,
@@ -306,10 +308,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                         protobuf::EvictionPolicy::TINY_LFU => EvictionPolicy::TinyLfu,
                     }),
                 enable_metrics: proto_cache.enable_metrics,
-            })
-        } else {
-            None
-        };
+            });
 
         ConnectionRequest {
             read_from,

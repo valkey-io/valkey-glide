@@ -46,11 +46,11 @@ from glide_shared.exceptions import (
     get_request_error_class,
 )
 from glide_shared.protobuf.command_request_pb2 import (
+    CacheMetricsType,
     Command,
     CommandRequest,
     RefreshIamToken,
     RequestType,
-    CacheMetricsType,
 )
 from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
 from glide_shared.protobuf.response_pb2 import Response

@@ -1,9 +1,10 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-from enum import Enum
 import threading
 import uuid
-from typing import Optional, ClassVar
 from dataclasses import dataclass
+from enum import Enum
+from typing import ClassVar, Optional
+
 from glide_shared.protobuf.connection_request_pb2 import (
     EvictionPolicy as ProtobufEvictionPolicy,
 )
