@@ -55,12 +55,23 @@ runs:
           if: runner.os == 'Windows'
           shell: powershell
           run: |
+              # Check if protoc is already available
+              if (Get-Command protoc -ErrorAction SilentlyContinue) {
+                  Write-Host "protoc already installed: $(protoc --version)"
+                  exit 0
+              }
+
               Write-Host "Installing protoc on Windows..."
 
               # Download protoc
               $url = "https://github.com/protocolbuffers/protobuf/releases/download/v25.1/protoc-25.1-win64.zip"
               $zipPath = "$env:TEMP\protoc.zip"
               $extractPath = "$env:TEMP\protoc"
+
+              # Clean up extraction directory if it exists
+              if (Test-Path $extractPath) {
+                  Remove-Item -Recurse -Force $extractPath
+              }
 
               Invoke-WebRequest -Uri $url -OutFile $zipPath
 
