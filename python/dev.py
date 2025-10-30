@@ -178,6 +178,19 @@ def generate_protobuf_files() -> None:
     print(f"[OK] Protobuf files (.py + .pyi) generated at: {proto_dst}/protobuf")
 
 
+def copy_readme_to_package(package_dir: Path) -> None:
+    """Copy README.md from python/ to the package directory"""
+    source = PYTHON_DIR / "README.md"
+    dest = package_dir / "README.md"
+
+    if not source.exists():
+        print(f"[WARN] README.md not found at {source}")
+        return
+
+    print(f"[INFO] Copying README.md: {source} → {dest}")
+    copy2(source, dest)
+
+
 def install_glide_shared(env: Dict[str, str]) -> None:
     shared_dir = PYTHON_DIR / "glide-shared"
     run_command(
@@ -238,6 +251,9 @@ def build_async_client(
     print(
         f"[INFO] Building async client with version={glide_version} in {'release' if release else 'debug'} mode..."
     )
+
+    # copying README.md is needed for it to be included in the sdist
+    copy_readme_to_package(GLIDE_ASYNC_DIR)
     env = activate_venv(no_cache)
     env.update(
         {  # Update it with your GLIDE variables
@@ -266,6 +282,9 @@ def build_async_client(
 
 def build_sync_client_wheel(env: Dict[str, str]) -> None:
     print("[INFO] Building sync client wheel with `python -m build`")
+
+    # copying README.md is needed for it to be included in the sdist
+    copy_readme_to_package(GLIDE_SYNC_DIR)
     run_command(
         [str(venv_ctx["python_exe"]), "-m", "build"],
         cwd=GLIDE_SYNC_DIR,

@@ -141,21 +141,7 @@ jobs:
                   # List of packages to update
                   for package in glide-async glide-sync glide-shared; do
                     echo "Patching version in $package/pyproject.toml"
-                    # Remove "version" from dynamic array (handles all positions and comma combinations)
-                    sed -i $SED_FOR_MACOS '/^dynamic = /s/"version",\s*//g' "./$package/pyproject.toml"  # Remove "version", 
-                    sed -i $SED_FOR_MACOS '/^dynamic = /s/,\s*"version"//g' "./$package/pyproject.toml"  # Remove ,"version"
-                    sed -i $SED_FOR_MACOS '/^dynamic = /s/"version"//g' "./$package/pyproject.toml"      # Remove "version"
-                    
-                    # Add version field after [project] line (handle macOS vs Linux differently)
-                    if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then
-                      # macOS requires backslash and newline
-                      sed -i '' '/^\[project\]/a\
-                  version = "${{ env.RELEASE_VERSION }}"
-                  ' "./$package/pyproject.toml"
-                    else
-                      # Linux syntax
-                      sed -i '/^\[project\]/a version = "${{ env.RELEASE_VERSION }}"' "./$package/pyproject.toml"
-                    fi
+                    sed -i $SED_FOR_MACOS "s/^dynamic = \[\s*\"version\"\s*\]/version = \"${{ env.RELEASE_VERSION }}\"/" "./$package/pyproject.toml"
 
                     # Log the updated file
                     cat "./$package/pyproject.toml"
@@ -429,21 +415,7 @@ jobs:
                   # List of packages to update
                   for package in glide-async glide-sync glide-shared; do
                     echo "Patching version in $package/pyproject.toml"
-                    # Remove "version" from dynamic array (handles all positions and comma combinations)
-                    sed -i $SED_FOR_MACOS '/^dynamic = /s/"version",\s*//g' "./$package/pyproject.toml"  # Remove "version", 
-                    sed -i $SED_FOR_MACOS '/^dynamic = /s/,\s*"version"//g' "./$package/pyproject.toml"  # Remove ,"version"
-                    sed -i $SED_FOR_MACOS '/^dynamic = /s/"version"//g' "./$package/pyproject.toml"      # Remove "version"
-                    
-                    # Add version field after [project] line (handle macOS vs Linux differently)
-                    if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then
-                      # macOS requires backslash and newline
-                      sed -i '' '/^\[project\]/a\
-                  version = "${{ env.RELEASE_VERSION }}"
-                  ' "./$package/pyproject.toml"
-                    else
-                      # Linux syntax
-                      sed -i '/^\[project\]/a version = "${{ env.RELEASE_VERSION }}"' "./$package/pyproject.toml"
-                    fi
+                    sed -i $SED_FOR_MACOS "s/^dynamic = \[\s*\"version\"\s*\]/version = \"${{ env.RELEASE_VERSION }}\"/" "./$package/pyproject.toml"
 
                     # Log the updated file
                     cat "./$package/pyproject.toml"
