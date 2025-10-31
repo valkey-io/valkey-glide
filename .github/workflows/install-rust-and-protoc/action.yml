@@ -49,13 +49,13 @@ runs:
           shell: powershell
           run: |
               Write-Host "Setting up MSVC environment for Rust..."
-              
+
               # Check if link.exe is already available
               if (Get-Command link.exe -ErrorAction SilentlyContinue) {
                   Write-Host "link.exe already available"
                   return
               }
-              
+
               # Find Visual Studio installation
               $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
               if (-not (Test-Path $vsWhere)) {
@@ -63,25 +63,25 @@ runs:
                   Write-Host "This step will be retried after dependencies are installed."
                   return
               }
-              
+
               $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
               if (-not $vsPath) {
                   Write-Host "Warning: Visual Studio with C++ tools not found"
                   Write-Host "This step will be retried after dependencies are installed."
                   return
               }
-              
+
               Write-Host "Found Visual Studio at: $vsPath"
-              
+
               # Setup MSVC environment using vcvarsall.bat
               $vcvarsPath = "$vsPath\VC\Auxiliary\Build\vcvarsall.bat"
               if (-not (Test-Path $vcvarsPath)) {
                   Write-Host "Warning: vcvarsall.bat not found at $vcvarsPath"
                   return
               }
-              
+
               Write-Host "Configuring MSVC environment..."
-              
+
               # Create a batch file to set up environment and export variables
               $setupScript = @"
               @echo off
@@ -97,10 +97,10 @@ runs:
               echo VCINSTALLDIR=%VCINSTALLDIR%
               echo WindowsSdkDir=%WindowsSdkDir%
               "@
-              
+
               $tempBat = "$env:TEMP\setup_msvc_env.bat"
               $setupScript | Out-File -FilePath $tempBat -Encoding ASCII
-              
+
               # Find cmd.exe
               $cmdPath = Get-Command cmd.exe -ErrorAction SilentlyContinue
               if (-not $cmdPath) {
@@ -119,14 +119,14 @@ runs:
               } else {
                   $cmdPath = $cmdPath.Source
               }
-              
+
               if (-not $cmdPath) {
                   Write-Host "Error: cmd.exe not found"
                   return
               }
-              
+
               Write-Host "Using cmd.exe at: $cmdPath"
-              
+
               # Execute and capture environment
               $output = & $cmdPath /c $tempBat 2>&1
               if ($LASTEXITCODE -ne 0) {
@@ -134,7 +134,7 @@ runs:
                   Write-Host $output
                   return
               }
-              
+
               # Parse and set environment variables
               foreach ($line in $output) {
                   if ($line -match "^(\w+)=(.*)$") {
@@ -156,9 +156,9 @@ runs:
                       }
                   }
               }
-              
+
               Remove-Item $tempBat -Force
-              
+
               # Verify link.exe is now available
               if (Get-Command link.exe -ErrorAction SilentlyContinue) {
                   $linkPath = (Get-Command link.exe).Source
@@ -178,33 +178,33 @@ runs:
                   Write-Host "link.exe is available"
                   exit 0
               }
-              
+
               Write-Host "Retrying MSVC environment setup..."
-              
+
               # Find Visual Studio installation
               $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
               if (-not (Test-Path $vsWhere)) {
                   Write-Host "Error: vswhere.exe still not found after dependency installation"
                   exit 1
               }
-              
+
               $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
               if (-not $vsPath) {
                   Write-Host "Error: Visual Studio with C++ tools not found after dependency installation"
                   exit 1
               }
-              
+
               Write-Host "Found Visual Studio at: $vsPath"
-              
+
               # Setup MSVC environment using vcvarsall.bat
               $vcvarsPath = "$vsPath\VC\Auxiliary\Build\vcvarsall.bat"
               if (-not (Test-Path $vcvarsPath)) {
                   Write-Host "Error: vcvarsall.bat not found at $vcvarsPath"
                   exit 1
               }
-              
+
               Write-Host "Configuring MSVC environment..."
-              
+
               # Create a batch file to set up environment and export variables
               $setupScript = @"
               @echo off
@@ -220,10 +220,10 @@ runs:
               echo VCINSTALLDIR=%VCINSTALLDIR%
               echo WindowsSdkDir=%WindowsSdkDir%
               "@
-              
+
               $tempBat = "$env:TEMP\setup_msvc_env_retry.bat"
               $setupScript | Out-File -FilePath $tempBat -Encoding ASCII
-              
+
               # Execute and capture environment
               $output = & cmd /c $tempBat 2>&1
               if ($LASTEXITCODE -ne 0) {
@@ -231,7 +231,7 @@ runs:
                   Write-Host $output
                   exit 1
               }
-              
+
               # Parse and set environment variables
               foreach ($line in $output) {
                   if ($line -match "^(\w+)=(.*)$") {
@@ -253,9 +253,9 @@ runs:
                       }
                   }
               }
-              
+
               Remove-Item $tempBat -Force
-              
+
               # Verify link.exe is now available
               if (Get-Command link.exe -ErrorAction SilentlyContinue) {
                   $linkPath = (Get-Command link.exe).Source
