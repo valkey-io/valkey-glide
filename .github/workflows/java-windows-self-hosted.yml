@@ -167,7 +167,12 @@ jobs:
               shell: powershell
               env:
                   VALKEY_REMOTE_SSH_KEY: ${{ secrets.VALKEY_REMOTE_SSH_KEY }}
-              run: .\gradlew.bat --build-cache :integTest:test -Dwindows-remote-host=${{ vars.VALKEY_REMOTE_HOST }}
+              run: |
+                  # Stop any existing Gradle daemons to avoid compatibility issues
+                  .\gradlew.bat --stop
+
+                  # Run the tests
+                  .\gradlew.bat --build-cache :integTest:test -Dwindows-remote-host=${{ vars.VALKEY_REMOTE_HOST }}
 
             - name: Upload test reports
               uses: actions/upload-artifact@v4
