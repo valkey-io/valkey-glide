@@ -159,6 +159,11 @@ runs:
               if (Test-Path $protocPath) {
                   Write-Host "protoc already installed - skipping installation"
                   & $protocPath --version
+                  
+                  # Ensure protoc is in PATH for subsequent steps
+                  $protocBin = "C:\protoc\bin"
+                  echo $protocBin >> $env:GITHUB_PATH
+                  $env:PATH = "$protocBin;$env:PATH"
               } else {
                   Write-Host "Installing protoc version 29.1 via direct download..."
 
@@ -218,7 +223,7 @@ runs:
           shell: powershell
           run: |
               Write-Host "Protoc version:"
-              
+
               # Check for protoc in the specific installation path we use
               $protocPath = "C:\protoc\bin\protoc.exe"
               if (Test-Path $protocPath) {

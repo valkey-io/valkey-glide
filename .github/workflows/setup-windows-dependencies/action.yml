@@ -131,12 +131,25 @@ runs:
           run: |
               Write-Host "Checking for existing Python installation..."
 
-              # Check for Chocolatey Python installation specifically
-              $pythonPath = "C:\Python312\python.exe"
-              if (Test-Path $pythonPath) {
-                  Write-Host "Python already installed - skipping installation"
-                  & $pythonPath --version
-              } else {
+              # Check for Chocolatey Python installation - check multiple versions
+              $pythonPaths = @(
+                  "C:\Python314\python.exe",
+                  "C:\Python313\python.exe", 
+                  "C:\Python312\python.exe",
+                  "C:\Python311\python.exe"
+              )
+
+              $pythonFound = $false
+              foreach ($pythonPath in $pythonPaths) {
+                  if (Test-Path $pythonPath) {
+                      Write-Host "Python already installed - skipping installation"
+                      & $pythonPath --version
+                      $pythonFound = $true
+                      break
+                  }
+              }
+
+              if (-not $pythonFound) {
                   Write-Host "Installing Python via Chocolatey..."
 
               if (Get-Command choco -ErrorAction SilentlyContinue) {
@@ -144,6 +157,17 @@ runs:
                   
                   # Refresh PATH
                   $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                  
+                  # Create python3 alias for Gradle compatibility
+                  $pythonExe = Get-Command python -ErrorAction SilentlyContinue
+                  if ($pythonExe) {
+                      $pythonDir = Split-Path $pythonExe.Source
+                      $python3Path = Join-Path $pythonDir "python3.exe"
+                      if (-not (Test-Path $python3Path)) {
+                          Copy-Item $pythonExe.Source $python3Path
+                          Write-Host "Created python3.exe alias"
+                      }
+                  }
                   
                   # Verify
                   if (Get-Command python -ErrorAction SilentlyContinue) {
@@ -155,6 +179,42 @@ runs:
               } else {
                   Write-Host "Chocolatey not available - cannot install Python"
               }
+              }
+
+        - name: Install build tools (NASM and CMake)
+          shell: powershell
+          run: |
+              Write-Host "Checking for existing build tools..."
+
+              # Check for NASM
+              $nasmFound = $false
+              if (Test-Path "C:\Program Files\NASM\nasm.exe") {
+                  Write-Host "NASM already installed"
+                  $nasmFound = $true
+              }
+
+              # Check for CMake
+              $cmakeFound = $false
+              if (Test-Path "C:\Program Files\CMake\bin\cmake.exe") {
+                  Write-Host "CMake already installed"
+                  $cmakeFound = $true
+              }
+
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  if (-not $nasmFound) {
+                      Write-Host "Installing NASM..."
+                      choco install nasm -y
+                  }
+                  
+                  if (-not $cmakeFound) {
+                      Write-Host "Installing CMake..."
+                      choco install cmake -y
+                  }
+                  
+                  # Refresh PATH
+                  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+              } else {
+                  Write-Host "Chocolatey not available - cannot install build tools"
               }
 
         - name: Install Visual Studio Build Tools
