@@ -324,6 +324,7 @@ jobs:
               working-directory: java
               shell: powershell
               env:
+                CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
                 SSH_PRIVATE_KEY_CONTENT: ${{ secrets.VALKEY_REMOTE_SSH_KEY }}
                 VALKEY_REMOTE_HOST: ${{ vars.VALKEY_REMOTE_HOST }}
               run: |
@@ -344,6 +345,8 @@ jobs:
               if: ${{ matrix.host.OS != 'windows' }}
               working-directory: java
               shell: bash
+              env:
+                CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
               run: |
                   ./gradlew --build-cache :integTest:pubsubTest
 
