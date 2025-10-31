@@ -153,85 +153,46 @@ runs:
           run: |
               Write-Host "Installing Visual Studio 2022 Build Tools..."
               
-              if (Get-Command choco -ErrorAction SilentlyContinue) {
-                  Write-Host "Installing Visual Studio 2022 Build Tools with C++ components..."
-                  choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows11SDK.22000" -y
-                  
-                  Write-Host "Verifying MSVC compiler installation..."
-                  
-                  # Use vswhere.exe to find Visual Studio installations
-                  $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-                  if (Test-Path $vswhere) {
-                      Write-Host "Using vswhere.exe to find Visual Studio installations..."
-                      
-                      # List all VS installations
-                      $installations = & $vswhere -all -format json | ConvertFrom-Json
-                      foreach ($install in $installations) {
-                          Write-Host "Found VS installation:"
-                          Write-Host "  Product: $($install.displayName)"
-                          Write-Host "  Version: $($install.installationVersion)"
-                          Write-Host "  Path: $($install.installationPath)"
-                      }
-                      
-                      # Look specifically for Build Tools with C++ components
-                      $buildToolsPath = & $vswhere -latest -products Microsoft.VisualStudio.Product.BuildTools -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-                      if ($buildToolsPath) {
-                          Write-Host "Found Build Tools with C++ components at: $buildToolsPath"
-                          
-                          # Look for MSVC compiler
-                          $msvcDir = Join-Path $buildToolsPath "VC\Tools\MSVC"
-                          if (Test-Path $msvcDir) {
-                              Write-Host "MSVC directory found: $msvcDir"
-                              $msvcVersions = Get-ChildItem $msvcDir -Directory | Sort-Object Name -Descending
-                              foreach ($version in $msvcVersions) {
-                                  Write-Host "  MSVC version: $($version.Name)"
-                                  $compilerPath = Join-Path $version.FullName "bin\Hostx64\x64\cl.exe"
-                                  if (Test-Path $compilerPath) {
-                                      Write-Host "  ✓ Compiler found: $compilerPath"
-                                      $found = $true
-                                      break
-                                  }
-                              }
-                          }
-                      } else {
-                          Write-Host "No Build Tools with C++ components found via vswhere"
-                          
-                          # Try to install C++ components manually
-                          Write-Host "Attempting to add C++ components to existing installation..."
-                          $vsInstaller = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
-                          if (Test-Path $vsInstaller) {
-                              Write-Host "Running VS installer to add C++ components..."
-                              & $vsInstaller modify --installPath $buildToolsPath --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows11SDK.22000 --quiet
-                          }
-                      }
-                  } else {
-                      Write-Host "vswhere.exe not found, using manual search..."
+              # Download and install VS Build Tools directly with known working parameters
+              $installerUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
+              $installerPath = "$env:TEMP\vs_buildtools.exe"
+              
+              Write-Host "Downloading VS Build Tools installer..."
+              Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+              
+              Write-Host "Installing VS Build Tools with C++ workload..."
+              $installArgs = @(
+                  "--quiet",
+                  "--wait",
+                  "--add", "Microsoft.VisualStudio.Workload.VCTools",
+                  "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                  "--add", "Microsoft.VisualStudio.Component.Windows11SDK.22000"
+              )
+              
+              $process = Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait -PassThru
+              Write-Host "VS Build Tools installer exit code: $($process.ExitCode)"
+              
+              # Clean up
+              Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+              
+              # Verify installation
+              Write-Host "Verifying MSVC compiler installation..."
+              $msvcPaths = @(
+                  "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe",
+                  "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe"
+              )
+              
+              $found = $false
+              foreach ($path in $msvcPaths) {
+                  $compiler = Get-ChildItem $path -ErrorAction SilentlyContinue | Select-Object -First 1
+                  if ($compiler) {
+                      Write-Host "MSVC compiler found: $($compiler.FullName)"
+                      $found = $true
+                      break
                   }
-                  
-                  # Fallback manual search
-                  if (-not $found) {
-                      $msvcPaths = @(
-                          "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe",
-                          "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe"
-                      )
-                      
-                      foreach ($path in $msvcPaths) {
-                          Write-Host "Checking: $path"
-                          $compiler = Get-ChildItem $path -ErrorAction SilentlyContinue | Select-Object -First 1
-                          if ($compiler) {
-                              Write-Host "MSVC compiler found: $($compiler.FullName)"
-                              $found = $true
-                              break
-                          }
-                      }
-                  }
-                  
-                  if (-not $found) {
-                      Write-Host "Error: MSVC compiler not found after installation"
-                      Write-Host "C++ build tools are required for Rust compilation"
-                      exit 1
-                  }
-              } else {
-                  Write-Host "Chocolatey not available - skipping Visual Studio Build Tools"
+              }
+              
+              if (-not $found) {
+                  Write-Host "Error: MSVC compiler not found after installation"
                   exit 1
               }
