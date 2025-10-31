@@ -167,6 +167,10 @@ runs:
                           Copy-Item $pythonExe.Source $python3Path
                           Write-Host "Created python3.exe alias"
                       }
+                      
+                      # Add Python directory to GITHUB_PATH
+                      echo $pythonDir >> $env:GITHUB_PATH
+                      $env:PATH = "$pythonDir;$env:PATH"
                   }
                   
                   # Verify
@@ -211,8 +215,22 @@ runs:
                       choco install cmake -y
                   }
                   
-                  # Refresh PATH
+                  # Refresh PATH and add to GITHUB_PATH
                   $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                  
+                  # Add NASM to PATH
+                  $nasmPath = "C:\Program Files\NASM"
+                  if (Test-Path $nasmPath) {
+                      echo $nasmPath >> $env:GITHUB_PATH
+                      $env:PATH = "$nasmPath;$env:PATH"
+                  }
+                  
+                  # Add CMake to PATH
+                  $cmakePath = "C:\Program Files\CMake\bin"
+                  if (Test-Path $cmakePath) {
+                      echo $cmakePath >> $env:GITHUB_PATH
+                      $env:PATH = "$cmakePath;$env:PATH"
+                  }
               } else {
                   Write-Host "Chocolatey not available - cannot install build tools"
               }
