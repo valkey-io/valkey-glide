@@ -165,7 +165,9 @@ jobs:
             - name: Run integration tests
               working-directory: java
               shell: powershell
-              run: .\gradlew.bat --build-cache :integTest:test
+              env:
+                  VALKEY_REMOTE_SSH_KEY: ${{ secrets.VALKEY_REMOTE_SSH_KEY }}
+              run: .\gradlew.bat --build-cache :integTest:test -Dwindows-remote-host=${{ vars.VALKEY_REMOTE_HOST }}
 
             - name: Upload test reports
               uses: actions/upload-artifact@v4
