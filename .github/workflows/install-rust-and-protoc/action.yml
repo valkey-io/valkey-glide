@@ -40,19 +40,19 @@ runs:
               }
 
         - name: Verify Rust installation
-          shell: bash
+          shell: powershell
           run: |
-              echo "Rust version:"
+              Write-Host "Rust version:"
               rustc --version
-              echo "Cargo version:"
+              Write-Host "Cargo version:"
               cargo --version
-              echo "Rustfmt version:"
+              Write-Host "Rustfmt version:"
               rustfmt --version
-              echo "Clippy version:"
+              Write-Host "Clippy version:"
               cargo clippy --version
 
         - name: Verify protoc installation
-          shell: bash
+          shell: powershell
           run: |
-              echo "Protoc version:"
+              Write-Host "Protoc version:"
               protoc --version
