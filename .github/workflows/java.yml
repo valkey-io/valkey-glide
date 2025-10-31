@@ -194,6 +194,7 @@ jobs:
                       Write-Host "Remote Valkey configured: ${{ vars.VALKEY_REMOTE_HOST }}"
                   } else {
                       Write-Host "No remote Valkey configured - will use local cluster"
+                      Write-Host "NPM_SCOPE=${{ vars.NPM_SCOPE }}"
                   }
 
             - name: Build java client (Windows)
@@ -203,6 +204,7 @@ jobs:
                   CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
                   SSH_PRIVATE_KEY_CONTENT: ${{ secrets.VALKEY_REMOTE_SSH_KEY }}
                   VALKEY_REMOTE_HOST: ${{ vars.VALKEY_REMOTE_HOST }}
+                  NPM_SCOPE: ${{ vars.NPM_SCOPE }"
               run: |
                 # Stop any existing Gradle daemons to avoid compatibility issues
                 .\gradlew.bat --stop
@@ -212,6 +214,7 @@ jobs:
                 Write-Host "VALKEY_REMOTE_HOST: '$env:VALKEY_REMOTE_HOST'"
                 Write-Host "VALKEY_REMOTE_HOST length: $($env:VALKEY_REMOTE_HOST.Length)"
                 Write-Host "PATH contains Python: $(if ($env:PATH -like '*Python*') { 'YES' } else { 'NO' })"
+                Write-Host "NPM_SCOPE= $env:NPM_SCOPE"
                 Write-Host "=== DEBUG END ==="
                 
                 .\gradlew.bat --build-cache --continue build -x javadoc
