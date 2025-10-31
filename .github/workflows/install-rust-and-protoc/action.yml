@@ -218,7 +218,15 @@ runs:
           shell: powershell
           run: |
               Write-Host "Protoc version:"
-              protoc --version
+              
+              # Check for protoc in the specific installation path we use
+              $protocPath = "C:\protoc\bin\protoc.exe"
+              if (Test-Path $protocPath) {
+                  & $protocPath --version
+              } else {
+                  Write-Host "protoc not found at expected location: $protocPath"
+                  exit 1
+              }
 
         - name: Verify protoc installation (Unix)
           if: runner.os != 'Windows'
