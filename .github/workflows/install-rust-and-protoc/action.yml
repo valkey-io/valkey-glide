@@ -17,6 +17,14 @@ runs:
                   # Refresh PATH
                   $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
                   
+                  # Add cargo bin directory to PATH (where rustfmt/clippy are installed)
+                  $cargoBin = "$env:USERPROFILE\.cargo\bin"
+                  if (Test-Path $cargoBin) {
+                      $env:PATH = "$cargoBin;$env:PATH"
+                      echo $cargoBin >> $env:GITHUB_PATH
+                      Write-Host "Added cargo bin to PATH: $cargoBin"
+                  }
+                  
                   # Verify installation
                   if (Get-Command rustc -ErrorAction SilentlyContinue) {
                       $version = rustc --version
