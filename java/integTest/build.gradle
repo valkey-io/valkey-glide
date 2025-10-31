@@ -73,7 +73,7 @@ tasks.register('stopAllAfterTests') {
         }
         exec {
             workingDir "${project.rootDir}/../utils"
-            commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'tls-cluster', '--keep-folder'
+            commandLine 'python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster', '--keep-folder'
             ignoreExitValue true
         }
     }
@@ -91,7 +91,7 @@ tasks.register('stopAllBeforeTests') {
         }
         exec {
             workingDir "${project.rootDir}/../utils"
-            commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'tls-cluster'
+            commandLine 'python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster'
             ignoreExitValue true
         }
     }

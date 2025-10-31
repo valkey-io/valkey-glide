@@ -4,6 +4,7 @@ package glide.standalone;
 import static glide.TestUtilities.getCaCertificate;
 import static org.junit.jupiter.api.Assertions.*;
 
+import glide.TestUtilities;
 import glide.api.GlideClient;
 import glide.api.models.configuration.AdvancedGlideClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
@@ -11,38 +12,38 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
+import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 public class StandaloneTlsCertificateTest {
 
-    private static String valkeyHost;
-    private static int valkeyPort;
+    public static NodeAddress nodeAddr;
     private static byte[] caCert;
 
     @BeforeAll
-    static void setup() throws Exception {
+    static void setup() throws IOException {
         String standaloneHosts = System.getProperty("test.server.standalone.tls", "");
         String firstHost = standaloneHosts.split(",")[0].trim();
         String[] hostPort = firstHost.split(":");
-        valkeyHost = hostPort[0];
-        valkeyPort = Integer.parseInt(hostPort[1]);
+        nodeAddr = NodeAddress.builder().host(hostPort[0]).port(Integer.parseInt(hostPort[1])).build();
         caCert = getCaCertificate();
     }
 
     @Test
-    void testStandaloneTlsWithoutCertificateFails() throws Exception {
+    void testStandaloneTlsWithoutCertificateFails() {
         GlideClientConfiguration config =
-                GlideClientConfiguration.builder()
-                        .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
-                        .useTLS(true)
-                        .build();
+                GlideClientConfiguration.builder().address(nodeAddr).useTLS(true).build();
 
         assertThrows(
                 Exception.class,
@@ -52,19 +53,10 @@ public class StandaloneTlsCertificateTest {
     }
 
     @Test
-    void testStandaloneTlsWithSelfSignedCertificateSucceeds() throws Exception {
-        TlsAdvancedConfiguration tlsConfig =
-                TlsAdvancedConfiguration.builder().rootCertificates(caCert).build();
-
-        AdvancedGlideClientConfiguration advancedConfig =
-                AdvancedGlideClientConfiguration.builder().tlsAdvancedConfiguration(tlsConfig).build();
-
+    void testStandaloneTlsWithSelfSignedCertificateSucceeds()
+            throws ExecutionException, InterruptedException {
         GlideClientConfiguration config =
-                GlideClientConfiguration.builder()
-                        .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
-                        .useTLS(true)
-                        .advancedConfiguration(advancedConfig)
-                        .build();
+                TestUtilities.createStandaloneConfigWithRootCert(caCert, nodeAddr);
 
         try (GlideClient client = GlideClient.createClient(config).get()) {
             String result = client.ping().get();
@@ -73,23 +65,13 @@ public class StandaloneTlsCertificateTest {
     }
 
     @Test
-    void testStandaloneTlsWithMultipleCertificatesSucceeds() throws Exception {
+    void testStandaloneTlsWithMultipleCertificatesSucceeds()
+            throws ExecutionException, InterruptedException {
         String caCertStr = new String(caCert, StandardCharsets.UTF_8);
         String multipleCerts = caCertStr + "\n" + caCertStr;
         byte[] certBundle = multipleCerts.getBytes(StandardCharsets.UTF_8);
-
-        TlsAdvancedConfiguration tlsConfig =
-                TlsAdvancedConfiguration.builder().rootCertificates(certBundle).build();
-
-        AdvancedGlideClientConfiguration advancedConfig =
-                AdvancedGlideClientConfiguration.builder().tlsAdvancedConfiguration(tlsConfig).build();
-
         GlideClientConfiguration config =
-                GlideClientConfiguration.builder()
-                        .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
-                        .useTLS(true)
-                        .advancedConfiguration(advancedConfig)
-                        .build();
+                TestUtilities.createStandaloneConfigWithRootCert(certBundle, nodeAddr);
 
         try (GlideClient client = GlideClient.createClient(config).get()) {
             String result = client.ping().get();
@@ -98,21 +80,10 @@ public class StandaloneTlsCertificateTest {
     }
 
     @Test
-    void testStandaloneTlsWithEmptyCertificateFails() throws Exception {
+    void testStandaloneTlsWithEmptyCertificateFails() {
         byte[] emptyCaCert = new byte[0];
-
-        TlsAdvancedConfiguration tlsConfig =
-                TlsAdvancedConfiguration.builder().rootCertificates(emptyCaCert).build();
-
-        AdvancedGlideClientConfiguration advancedConfig =
-                AdvancedGlideClientConfiguration.builder().tlsAdvancedConfiguration(tlsConfig).build();
-
         GlideClientConfiguration config =
-                GlideClientConfiguration.builder()
-                        .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
-                        .useTLS(true)
-                        .advancedConfiguration(advancedConfig)
-                        .build();
+                TestUtilities.createStandaloneConfigWithRootCert(emptyCaCert, nodeAddr);
 
         assertThrows(
                 Exception.class,
@@ -122,22 +93,11 @@ public class StandaloneTlsCertificateTest {
     }
 
     @Test
-    void testStandaloneTlsWithInvalidCertificateFails() throws Exception {
+    void testStandaloneTlsWithInvalidCertificateFails() {
         byte[] invalidCert =
                 "-----BEGIN CERTIFICATE-----\nINVALID\n-----END CERTIFICATE-----".getBytes();
-
-        TlsAdvancedConfiguration tlsConfig =
-                TlsAdvancedConfiguration.builder().rootCertificates(invalidCert).build();
-
-        AdvancedGlideClientConfiguration advancedConfig =
-                AdvancedGlideClientConfiguration.builder().tlsAdvancedConfiguration(tlsConfig).build();
-
         GlideClientConfiguration config =
-                GlideClientConfiguration.builder()
-                        .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
-                        .useTLS(true)
-                        .advancedConfiguration(advancedConfig)
-                        .build();
+                TestUtilities.createStandaloneConfigWithRootCert(invalidCert, nodeAddr);
 
         assertThrows(
                 Exception.class,
@@ -147,7 +107,13 @@ public class StandaloneTlsCertificateTest {
     }
 
     @Test
-    void testStandaloneTlsWithKeyStoreSucceeds() throws Exception {
+    void testStandaloneTlsWithKeyStoreSucceeds()
+            throws IOException,
+                    KeyStoreException,
+                    NoSuchAlgorithmException,
+                    CertificateException,
+                    ExecutionException,
+                    InterruptedException {
         Path keyStorePath = Files.createTempFile("test-keystore", ".jks");
         char[] password = "password".toCharArray();
 
@@ -171,10 +137,11 @@ public class StandaloneTlsCertificateTest {
 
             GlideClientConfiguration config =
                     GlideClientConfiguration.builder()
-                            .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
+                            .address(nodeAddr)
                             .useTLS(true)
                             .advancedConfiguration(advancedConfig)
                             .build();
+            ;
 
             try (GlideClient client = GlideClient.createClient(config).get()) {
                 String result = client.ping().get();

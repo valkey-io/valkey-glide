@@ -4,6 +4,7 @@ package glide.cluster;
 import static glide.TestUtilities.getCaCertificate;
 import static org.junit.jupiter.api.Assertions.*;
 
+import glide.TestUtilities;
 import glide.api.GlideClusterClient;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
@@ -18,14 +19,13 @@ import java.security.KeyStore;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 public class ClusterTlsCertificateTest {
 
-    private static NodeAddress[] clusterNodes;
+    private static List<NodeAddress> clusterNodes;
     private static byte[] caCert;
 
     @BeforeAll
@@ -33,25 +33,21 @@ public class ClusterTlsCertificateTest {
         String clusterHosts = System.getProperty("test.server.cluster.tls", "");
         String[] hosts = clusterHosts.split(",");
 
-        List<NodeAddress> nodes = new ArrayList<>();
+        clusterNodes = new ArrayList<>();
         for (String host : hosts) {
             String[] parts = host.trim().split(":");
             NodeAddress node =
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build();
-            nodes.add(node);
+            clusterNodes.add(node);
         }
 
-        clusterNodes = nodes.toArray(new NodeAddress[0]);
         caCert = getCaCertificate();
     }
 
     @Test
     void testClusterTlsWithoutCertificateFails() throws Exception {
         GlideClusterClientConfiguration config =
-                GlideClusterClientConfiguration.builder()
-                        .addresses(Arrays.asList(clusterNodes))
-                        .useTLS(true)
-                        .build();
+                GlideClusterClientConfiguration.builder().addresses(clusterNodes).useTLS(true).build();
 
         assertThrows(
                 Exception.class,
@@ -62,25 +58,10 @@ public class ClusterTlsCertificateTest {
 
     @Test
     void testClusterTlsWithSelfSignedCertificateSucceeds() throws Exception {
-        TlsAdvancedConfiguration tlsConfig =
-                TlsAdvancedConfiguration.builder().rootCertificates(caCert).build();
-
-        AdvancedGlideClusterClientConfiguration advancedConfig =
-                AdvancedGlideClusterClientConfiguration.builder()
-                        .tlsAdvancedConfiguration(tlsConfig)
-                        .build();
-
         GlideClusterClientConfiguration config =
-                GlideClusterClientConfiguration.builder()
-                        .addresses(Arrays.asList(clusterNodes))
-                        .useTLS(true)
-                        .advancedConfiguration(advancedConfig)
-                        .build();
+                TestUtilities.createClusterConfigWithRootCert(caCert, clusterNodes);
 
-        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
-            String result = client.ping().get();
-            assertEquals("PONG", result);
-        }
+        TestUtilities.createAndTestClient(config);
     }
 
     @Test
@@ -88,46 +69,17 @@ public class ClusterTlsCertificateTest {
         String caCertStr = new String(caCert, StandardCharsets.UTF_8);
         String multipleCerts = caCertStr + "\n" + caCertStr;
         byte[] certBundle = multipleCerts.getBytes(StandardCharsets.UTF_8);
-
-        TlsAdvancedConfiguration tlsConfig =
-                TlsAdvancedConfiguration.builder().rootCertificates(certBundle).build();
-
-        AdvancedGlideClusterClientConfiguration advancedConfig =
-                AdvancedGlideClusterClientConfiguration.builder()
-                        .tlsAdvancedConfiguration(tlsConfig)
-                        .build();
-
         GlideClusterClientConfiguration config =
-                GlideClusterClientConfiguration.builder()
-                        .addresses(Arrays.asList(clusterNodes))
-                        .useTLS(true)
-                        .advancedConfiguration(advancedConfig)
-                        .build();
+                TestUtilities.createClusterConfigWithRootCert(certBundle, clusterNodes);
 
-        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
-            String result = client.ping().get();
-            assertEquals("PONG", result);
-        }
+        TestUtilities.createAndTestClient(config);
     }
 
     @Test
     void testClusterTlsWithEmptyCertificateArrayFails() throws Exception {
         byte[] emptyCaCert = new byte[0];
-
-        TlsAdvancedConfiguration tlsConfig =
-                TlsAdvancedConfiguration.builder().rootCertificates(emptyCaCert).build();
-
-        AdvancedGlideClusterClientConfiguration advancedConfig =
-                AdvancedGlideClusterClientConfiguration.builder()
-                        .tlsAdvancedConfiguration(tlsConfig)
-                        .build();
-
         GlideClusterClientConfiguration config =
-                GlideClusterClientConfiguration.builder()
-                        .addresses(Arrays.asList(clusterNodes))
-                        .useTLS(true)
-                        .advancedConfiguration(advancedConfig)
-                        .build();
+                TestUtilities.createClusterConfigWithRootCert(emptyCaCert, clusterNodes);
 
         assertThrows(
                 Exception.class,
@@ -140,21 +92,8 @@ public class ClusterTlsCertificateTest {
     void testClusterTlsWithInvalidCertificateFails() throws Exception {
         byte[] invalidCert =
                 "-----BEGIN CERTIFICATE-----\nINVALID\n-----END CERTIFICATE-----".getBytes();
-
-        TlsAdvancedConfiguration tlsConfig =
-                TlsAdvancedConfiguration.builder().rootCertificates(invalidCert).build();
-
-        AdvancedGlideClusterClientConfiguration advancedConfig =
-                AdvancedGlideClusterClientConfiguration.builder()
-                        .tlsAdvancedConfiguration(tlsConfig)
-                        .build();
-
         GlideClusterClientConfiguration config =
-                GlideClusterClientConfiguration.builder()
-                        .addresses(Arrays.asList(clusterNodes))
-                        .useTLS(true)
-                        .advancedConfiguration(advancedConfig)
-                        .build();
+                TestUtilities.createClusterConfigWithRootCert(invalidCert, clusterNodes);
 
         assertThrows(
                 Exception.class,
@@ -190,15 +129,12 @@ public class ClusterTlsCertificateTest {
 
             GlideClusterClientConfiguration config =
                     GlideClusterClientConfiguration.builder()
-                            .addresses(Arrays.asList(clusterNodes))
+                            .addresses(clusterNodes)
                             .useTLS(true)
                             .advancedConfiguration(advancedConfig)
                             .build();
 
-            try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
-                String result = client.ping().get();
-                assertEquals("PONG", result);
-            }
+            TestUtilities.createAndTestClient(config);
         } finally {
             Files.deleteIfExists(keyStorePath);
         }

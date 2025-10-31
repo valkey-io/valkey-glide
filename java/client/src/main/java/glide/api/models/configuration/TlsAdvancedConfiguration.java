@@ -2,10 +2,15 @@
 package glide.api.models.configuration;
 
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
 import java.util.Base64;
+import java.util.Base64.Encoder;
 import java.util.Enumeration;
 import lombok.Builder;
 import lombok.Getter;
@@ -54,10 +59,14 @@ public class TlsAdvancedConfiguration {
      * @param keyStorePassword Password for the KeyStore
      * @param keyStoreType KeyStore type (e.g., "JKS", "PKCS12")
      * @return TlsAdvancedConfiguration with certificates from KeyStore
-     * @throws Exception if KeyStore cannot be loaded or processed
+     * @throws KeyStoreException if KeyStore type is not supported or KeyStore cannot be accessed
+     * @throws IOException if KeyStore file cannot be read
+     * @throws NoSuchAlgorithmException if integrity check algorithm is not available
+     * @throws CertificateException if certificates cannot be loaded or encoded
      */
     public static TlsAdvancedConfiguration fromKeyStore(
-            String keyStorePath, char[] keyStorePassword, String keyStoreType) throws Exception {
+            String keyStorePath, char[] keyStorePassword, String keyStoreType)
+            throws KeyStoreException, IOException, NoSuchAlgorithmException, CertificateException {
 
         KeyStore keyStore = KeyStore.getInstance(keyStoreType);
         try (FileInputStream fis = new FileInputStream(keyStorePath)) {
@@ -66,14 +75,17 @@ public class TlsAdvancedConfiguration {
 
         StringBuilder pemBuilder = new StringBuilder();
         Enumeration<String> aliases = keyStore.aliases();
+        Encoder base64Encoder = Base64.getEncoder();
+        final String BEGIN_CERT = "-----BEGIN CERTIFICATE-----\n";
+        final String END_CERT = "\n-----END CERTIFICATE-----\n";
 
         while (aliases.hasMoreElements()) {
             String alias = aliases.nextElement();
             if (keyStore.isCertificateEntry(alias)) {
                 Certificate cert = keyStore.getCertificate(alias);
-                pemBuilder.append("-----BEGIN CERTIFICATE-----\n");
-                pemBuilder.append(Base64.getEncoder().encodeToString(cert.getEncoded()));
-                pemBuilder.append("\n-----END CERTIFICATE-----\n");
+                pemBuilder.append(BEGIN_CERT);
+                pemBuilder.append(base64Encoder.encodeToString(cert.getEncoded()));
+                pemBuilder.append(END_CERT);
             }
         }
 

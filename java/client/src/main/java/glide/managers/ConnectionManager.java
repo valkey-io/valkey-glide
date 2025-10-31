@@ -496,10 +496,10 @@ public class ConnectionManager {
             return null;
         }
         TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
-        if (tlsConfig != null) {
-            return tlsConfig.getRootCertificates();
+        if (tlsConfig == null) {
+            return null;
         }
-        return null;
+        return tlsConfig.getRootCertificates();
     }
 
     private static AdvancedBaseClientConfiguration extractAdvancedConfiguration(

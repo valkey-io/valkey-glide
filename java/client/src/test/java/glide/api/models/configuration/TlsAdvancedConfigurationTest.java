@@ -3,11 +3,14 @@ package glide.api.models.configuration;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
 import org.junit.jupiter.api.Test;
 
 public class TlsAdvancedConfigurationTest {
@@ -32,13 +35,60 @@ public class TlsAdvancedConfigurationTest {
     }
 
     @Test
-    void testFromKeyStoreWithInvalidPath() {
+    void testFromKeyStoreWithInvalidPath() throws Exception {
         assertThrows(
-                Exception.class,
+                FileNotFoundException.class,
                 () -> {
                     TlsAdvancedConfiguration.fromKeyStore(
                             "/nonexistent/path/keystore.jks", "password".toCharArray(), "JKS");
                 });
+    }
+
+    @Test
+    void testFromKeyStoreWithKeyStoreNotSupported() throws Exception {
+        Path keyStorePath = Files.createTempFile("test-keystore", ".jks");
+        char[] password = "testpass".toCharArray();
+
+        try {
+            KeyStore keyStore = KeyStore.getInstance("JKS");
+            keyStore.load(null, password);
+
+            try (FileOutputStream fos = new FileOutputStream(keyStorePath.toFile())) {
+                keyStore.store(fos, password);
+            }
+
+            assertThrows(
+                    KeyStoreException.class,
+                    () -> {
+                        TlsAdvancedConfiguration.fromKeyStore(
+                                keyStorePath.toString(), password, "NotSupported");
+                    });
+        } finally {
+            Files.deleteIfExists(keyStorePath);
+        }
+    }
+
+    @Test
+    void testFromKeyStoreWithNullKeyStoreType() throws Exception {
+        Path keyStorePath = Files.createTempFile("test-keystore", ".jks");
+        char[] password = "testpass".toCharArray();
+
+        try {
+            KeyStore keyStore = KeyStore.getInstance("JKS");
+            keyStore.load(null, password);
+
+            try (FileOutputStream fos = new FileOutputStream(keyStorePath.toFile())) {
+                keyStore.store(fos, password);
+            }
+
+            assertThrows(
+                    NullPointerException.class,
+                    () -> {
+                        TlsAdvancedConfiguration.fromKeyStore(keyStorePath.toString(), password, null);
+                    });
+        } finally {
+            Files.deleteIfExists(keyStorePath);
+        }
     }
 
     @Test
@@ -55,7 +105,7 @@ public class TlsAdvancedConfigurationTest {
             }
 
             assertThrows(
-                    Exception.class,
+                    IOException.class,
                     () -> {
                         TlsAdvancedConfiguration.fromKeyStore(
                                 keyStorePath.toString(), "wrongpass".toCharArray(), "JKS");
