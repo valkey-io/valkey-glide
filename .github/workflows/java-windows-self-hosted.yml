@@ -172,8 +172,21 @@ jobs:
                   # Stop any existing Gradle daemons to avoid compatibility issues
                   .\gradlew.bat --stop
 
-                  # Run the tests
-                  .\gradlew.bat --build-cache :integTest:test -Dwindows-remote-host=${{ vars.VALKEY_REMOTE_HOST }}
+                  # Debug: Show environment variables
+                  Write-Host "VALKEY_REMOTE_HOST: $env:VALKEY_REMOTE_HOST"
+
+                  # Run the tests with info logging to see cluster startup
+                  .\gradlew.bat --build-cache --info :integTest:test -Dwindows-remote-host=${{ vars.VALKEY_REMOTE_HOST }}
+
+            - name: Run pubsub tests
+              working-directory: java
+              shell: powershell
+              env:
+                  SSH_PRIVATE_KEY_CONTENT: ${{ secrets.VALKEY_REMOTE_SSH_KEY }}
+                  VALKEY_REMOTE_HOST: ${{ vars.VALKEY_REMOTE_HOST }}
+              run: |
+                  # Run the pubsub tests
+                  .\gradlew.bat --build-cache :integTest:pubsubTest -Dwindows-remote-host=${{ vars.VALKEY_REMOTE_HOST }}
 
             - name: Upload test reports
               uses: actions/upload-artifact@v4
@@ -191,8 +204,8 @@ jobs:
               run: |
                   Write-Host "Cleaning up Gradle daemons..."
                   .\gradlew.bat --stop
-                  
+
                   # Force kill any remaining Gradle processes
                   Get-Process -Name "*gradle*" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-                  
+
                   Write-Host "Gradle daemon cleanup complete"
