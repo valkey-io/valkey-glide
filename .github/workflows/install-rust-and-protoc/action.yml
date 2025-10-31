@@ -101,8 +101,34 @@ runs:
               $tempBat = "$env:TEMP\setup_msvc_env.bat"
               $setupScript | Out-File -FilePath $tempBat -Encoding ASCII
               
+              # Find cmd.exe
+              $cmdPath = Get-Command cmd.exe -ErrorAction SilentlyContinue
+              if (-not $cmdPath) {
+                  # Try common locations
+                  $cmdLocations = @(
+                      "$env:SystemRoot\System32\cmd.exe",
+                      "$env:WINDIR\System32\cmd.exe",
+                      "C:\Windows\System32\cmd.exe"
+                  )
+                  foreach ($location in $cmdLocations) {
+                      if (Test-Path $location) {
+                          $cmdPath = $location
+                          break
+                      }
+                  }
+              } else {
+                  $cmdPath = $cmdPath.Source
+              }
+              
+              if (-not $cmdPath) {
+                  Write-Host "Error: cmd.exe not found"
+                  return
+              }
+              
+              Write-Host "Using cmd.exe at: $cmdPath"
+              
               # Execute and capture environment
-              $output = & cmd /c $tempBat 2>&1
+              $output = & $cmdPath /c $tempBat 2>&1
               if ($LASTEXITCODE -ne 0) {
                   Write-Host "Warning: Failed to setup MSVC environment"
                   Write-Host $output
