@@ -8,15 +8,16 @@ runs:
           if: runner.os == 'Windows'
           shell: powershell
           run: |
-              Write-Host "Installing Rust via Chocolatey..."
+              Write-Host "Installing Rust with MSVC toolchain via Chocolatey..."
               
               if (Get-Command choco -ErrorAction SilentlyContinue) {
-                  choco install rust -y
+                  # Install rust-ms which provides MSVC toolchain
+                  choco install rust-ms -y
                   
                   # Refresh PATH
                   $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
                   
-                  # Verify rustc installation
+                  # Verify installation
                   if (Get-Command rustc -ErrorAction SilentlyContinue) {
                       $version = rustc --version
                       Write-Host "Rust installed successfully: $version"
@@ -25,9 +26,9 @@ runs:
                       Write-Host "Installing rustfmt and clippy..."
                       rustup component add rustfmt clippy
                       
-                      Write-Host "Rust components installed successfully"
+                      Write-Host "Rust MSVC toolchain installed successfully"
                   } else {
-                      Write-Host "Rust installation may have failed"
+                      Write-Host "Rust installation failed"
                       exit 1
                   }
               } else {
