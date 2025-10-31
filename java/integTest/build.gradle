@@ -13,7 +13,7 @@ tasks.withType(JavaCompile) {
 }
 
 dependencies {
-    def classifier 
+    def classifier
     if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         classifier = "linux_musl-${osdetector.arch}"
     }
@@ -22,7 +22,7 @@ dependencies {
     }
     // Use published GLIDE artifact
     implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: classifier
-    
+
     // Use published jedis-compatibility artifact
     testImplementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
 
@@ -115,9 +115,10 @@ tasks.register('startCluster') {
             // Check if we should use VPC multi-engine manager
             def vpcHost = System.getenv("VALKEY_VPC_HOST")
             def engineVersion = System.getProperty("engine-version") ?: "valkey-8.0"
-            
+
             if (vpcHost != null && !vpcHost.isEmpty()) {
                 // Use VPC multi-engine manager
+                println "Using VPC multi-cluster manager for standalone with host: ${vpcHost}"
                 new ByteArrayOutputStream().withStream { os ->
                     exec {
                         workingDir "${project.rootDir}/../utils"
@@ -140,6 +141,7 @@ tasks.register('startCluster') {
                 def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
                 if (remoteHost != null && !remoteHost.isEmpty()) {
                     // Use remote cluster manager
+                    println "Using remote cluster manager for standalone with host: ${remoteHost}"
                     new ByteArrayOutputStream().withStream { os ->
                         exec {
                             workingDir "${project.rootDir}/../utils"
@@ -207,7 +209,7 @@ tasks.register('startClusterForAz') {
             // Check if we should use VPC multi-engine manager
             def vpcHost = System.getenv("VALKEY_VPC_HOST")
             def engineVersion = System.getProperty("engine-version") ?: "valkey-8.0"
-            
+
             if (vpcHost != null && !vpcHost.isEmpty()) {
                 // Use VPC multi-engine manager
                 new ByteArrayOutputStream().withStream { os ->
@@ -302,7 +304,7 @@ tasks.register('startStandalone') {
                     workingDir "${project.rootDir}/../utils"
                     // On Windows, use remote cluster manager, otherwise use local
                     if (isWindows) {
-                        def windowsRemoteHost = System.getProperty('windows-remote-host') ?: 'localhost'
+                        def windowsRemoteHost = System.getenv('VALKEY_REMOTE_HOST') ?: 'localhost'
                         println "Windows detected - using remote cluster manager for standalone with host: ${windowsRemoteHost}"
                         def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', windowsRemoteHost, 'start', '-r', '0']
                         if (System.getProperty("tls") == 'true') args.add('--tls')
@@ -383,10 +385,10 @@ tasks.withType(Test) {
 
     minHeapSize = "2048m" // Initial heap size. Needed for max size tests.
     maxHeapSize = "2048m" // Maximum heap size. Needed for max size tests.
-    
+
     // Native library path for GLIDE FFI - needed for Jedis compatibility tests
     jvmArgs "-Djava.library.path=${project.rootDir}/../target/release"
-    
+
     // Disable modularity for jedis compatibility tests
     if (name.contains('jedis') || filter.includePatterns.any { it.contains('jedis') }) {
         jvmArgs += "--add-opens=java.base/java.lang=ALL-UNNAMED"
