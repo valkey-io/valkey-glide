@@ -34,6 +34,40 @@ runs:
                       Write-Host "Installing rustfmt and clippy..."
                       rustup component add rustfmt clippy
                       
+                      # Add MSVC tools to PATH so Rust can find link.exe
+                      Write-Host "Adding VS 2022 MSVC tools to PATH..."
+                      
+                      # We installed VS 2022 Build Tools, so check the standard location
+                      $vs2022Paths = @(
+                          "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC",
+                          "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC"
+                      )
+                      
+                      $msvcFound = $false
+                      foreach ($msvcDir in $vs2022Paths) {
+                          if (Test-Path $msvcDir) {
+                              Write-Host "Found VS 2022 MSVC directory: $msvcDir"
+                              $msvcVersions = Get-ChildItem $msvcDir -Directory | Sort-Object Name -Descending
+                              if ($msvcVersions) {
+                                  $latestMsvc = $msvcVersions[0]
+                                  $msvcBin = "$($latestMsvc.FullName)\bin\Hostx64\x64"
+                                  
+                                  if (Test-Path "$msvcBin\link.exe") {
+                                      $env:PATH = "$msvcBin;$env:PATH"
+                                      echo $msvcBin >> $env:GITHUB_PATH
+                                      Write-Host "✓ Added MSVC bin to PATH: $msvcBin"
+                                      $msvcFound = $true
+                                      break
+                                  }
+                              }
+                          }
+                      }
+                      
+                      if (-not $msvcFound) {
+                          Write-Host "✗ Could not find VS 2022 MSVC tools"
+                          exit 1
+                      }
+                      
                       Write-Host "Rust MSVC toolchain installed successfully"
                   } else {
                       Write-Host "Rust installation failed"
