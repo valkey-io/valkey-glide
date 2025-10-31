@@ -185,8 +185,15 @@ jobs:
                   SSH_PRIVATE_KEY_CONTENT: ${{ secrets.VALKEY_REMOTE_SSH_KEY }}
                   VALKEY_REMOTE_HOST: ${{ vars.VALKEY_REMOTE_HOST }}
               run: |
-                  # Run the pubsub tests
-                  .\gradlew.bat --build-cache :integTest:pubsubTest -Dwindows-remote-host=${{ vars.VALKEY_REMOTE_HOST }}
+                  # Stop any existing Gradle daemons to avoid compatibility issues
+                  .\gradlew.bat --stop
+                  
+                  # Debug: Show environment variables for pubsub
+                  Write-Host "PUBSUB - VALKEY_REMOTE_HOST: $env:VALKEY_REMOTE_HOST"
+                  Write-Host "PUBSUB - PATH contains Python: $(if ($env:PATH -like '*Python*') { 'YES' } else { 'NO' })"
+                  
+                  # Run the pubsub tests with info logging
+                  .\gradlew.bat --build-cache --info :integTest:pubsubTest -Dwindows-remote-host=${{ vars.VALKEY_REMOTE_HOST }}
 
             - name: Upload test reports
               uses: actions/upload-artifact@v4
