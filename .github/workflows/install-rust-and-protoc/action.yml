@@ -1,322 +1,58 @@
-name: Install Rust tool chain and protoc
-
-inputs:
-    target:
-        description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
-        type: string
-        required: false
-        default: "x86_64-unknown-linux-gnu"
-        options:
-            - x86_64-unknown-linux-gnu
-            - aarch64-unknown-linux-gnu
-            - x86_64-apple-darwin
-            - aarch64-apple-darwin
-            - x86_64-pc-windows-msvc
-    github-token:
-        description: "GitHub token"
-        type: string
-        required: true
+name: Install Rust and protoc
+description: Install Rust toolchain and protobuf compiler
 
 runs:
     using: "composite"
     steps:
-        - name: Install Rust toolchain (Windows)
-          if: runner.os == 'Windows'
-          shell: powershell
-          env:
-              RUST_TARGET: ${{ inputs.target }}
-          run: |
-              Write-Host "Installing Rust on Windows..."
-
-              # Download and install rustup
-              Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "$env:TEMP\rustup-init.exe"
-              & "$env:TEMP\rustup-init.exe" -y --default-toolchain stable --target "$env:RUST_TARGET"
-
-              # Add to PATH for current session and persist for future steps
-              $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
-              echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
-
-              # Install components
-              rustup component add rustfmt clippy
-
-              # Verify installation
-              rustc --version
-              cargo --version
-
-        - name: Setup MSVC environment (Windows)
-          if: runner.os == 'Windows'
-          continue-on-error: true
-          shell: powershell
-          run: |
-              Write-Host "Setting up MSVC environment for Rust..."
-
-              # Check if link.exe is already available
-              if (Get-Command link.exe -ErrorAction SilentlyContinue) {
-                  Write-Host "link.exe already available"
-                  return
-              }
-
-              # Find Visual Studio installation
-              $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-              if (-not (Test-Path $vsWhere)) {
-                  Write-Host "Warning: vswhere.exe not found. Visual Studio Build Tools may not be installed yet."
-                  Write-Host "This step will be retried after dependencies are installed."
-                  return
-              }
-
-              $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-              if (-not $vsPath) {
-                  Write-Host "Warning: Visual Studio with C++ tools not found"
-                  Write-Host "This step will be retried after dependencies are installed."
-                  return
-              }
-
-              Write-Host "Found Visual Studio at: $vsPath"
-
-              # Setup MSVC environment using vcvarsall.bat
-              $vcvarsPath = "$vsPath\VC\Auxiliary\Build\vcvarsall.bat"
-              if (-not (Test-Path $vcvarsPath)) {
-                  Write-Host "Warning: vcvarsall.bat not found at $vcvarsPath"
-                  return
-              }
-
-              Write-Host "Configuring MSVC environment..."
-
-              # Create a batch file to set up environment and export variables
-              $setupScript = @"
-              @echo off
-              call "$vcvarsPath" x64
-              if errorlevel 1 (
-                  echo Failed to setup MSVC environment
-                  exit /b 1
-              )
-              echo PATH=%PATH%
-              echo LIB=%LIB%
-              echo LIBPATH=%LIBPATH%
-              echo INCLUDE=%INCLUDE%
-              echo VCINSTALLDIR=%VCINSTALLDIR%
-              echo WindowsSdkDir=%WindowsSdkDir%
-              "@
-
-              $tempBat = "$env:TEMP\setup_msvc_env.bat"
-              $setupScript | Out-File -FilePath $tempBat -Encoding ASCII
-
-              # Find cmd.exe
-              $cmdPath = Get-Command cmd.exe -ErrorAction SilentlyContinue
-              if (-not $cmdPath) {
-                  # Try common locations
-                  $cmdLocations = @(
-                      "$env:SystemRoot\System32\cmd.exe",
-                      "$env:WINDIR\System32\cmd.exe",
-                      "C:\Windows\System32\cmd.exe"
-                  )
-                  foreach ($location in $cmdLocations) {
-                      if (Test-Path $location) {
-                          $cmdPath = $location
-                          break
-                      }
-                  }
-              } else {
-                  $cmdPath = $cmdPath.Source
-              }
-
-              if (-not $cmdPath) {
-                  Write-Host "Error: cmd.exe not found"
-                  return
-              }
-
-              Write-Host "Using cmd.exe at: $cmdPath"
-
-              # Execute and capture environment
-              $output = & $cmdPath /c $tempBat 2>&1
-              if ($LASTEXITCODE -ne 0) {
-                  Write-Host "Warning: Failed to setup MSVC environment"
-                  Write-Host $output
-                  return
-              }
-
-              # Parse and set environment variables
-              foreach ($line in $output) {
-                  if ($line -match "^(\w+)=(.*)$") {
-                      $name = $matches[1]
-                      $value = $matches[2]
-                      
-                      # Set for current process
-                      [Environment]::SetEnvironmentVariable($name, $value, "Process")
-                      
-                      # Persist for GitHub Actions
-                      if ($name -eq "PATH") {
-                          # For PATH, we need to append to GITHUB_PATH
-                          $value -split ';' | Where-Object { $_ -and $_ -notmatch '^[A-Z]:[\\/]Windows[\\/]' } | ForEach-Object {
-                              echo $_ >> $env:GITHUB_PATH
-                          }
-                      } else {
-                          # For other variables, set in GITHUB_ENV
-                          echo "$name=$value" >> $env:GITHUB_ENV
-                      }
-                  }
-              }
-
-              Remove-Item $tempBat -Force
-
-              # Verify link.exe is now available
-              if (Get-Command link.exe -ErrorAction SilentlyContinue) {
-                  $linkPath = (Get-Command link.exe).Source
-                  Write-Host "Success: link.exe found at $linkPath"
-              } else {
-                  Write-Host "Warning: link.exe still not found after MSVC setup"
-                  Write-Host "Current PATH entries containing 'VC' or 'Visual Studio':"
-                  $env:PATH -split ';' | Where-Object { $_ -match 'VC|Visual Studio' } | ForEach-Object { Write-Host "  $_" }
-              }
-
-        - name: Retry MSVC environment setup (Windows)
-          if: runner.os == 'Windows'
-          shell: powershell
-          run: |
-              # Check if link.exe is available after dependencies installation
-              if (Get-Command link.exe -ErrorAction SilentlyContinue) {
-                  Write-Host "link.exe is available"
-                  exit 0
-              }
-
-              Write-Host "Retrying MSVC environment setup..."
-
-              # Find Visual Studio installation
-              $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-              if (-not (Test-Path $vsWhere)) {
-                  Write-Host "Error: vswhere.exe still not found after dependency installation"
-                  exit 1
-              }
-
-              $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-              if (-not $vsPath) {
-                  Write-Host "Error: Visual Studio with C++ tools not found after dependency installation"
-                  exit 1
-              }
-
-              Write-Host "Found Visual Studio at: $vsPath"
-
-              # Setup MSVC environment using vcvarsall.bat
-              $vcvarsPath = "$vsPath\VC\Auxiliary\Build\vcvarsall.bat"
-              if (-not (Test-Path $vcvarsPath)) {
-                  Write-Host "Error: vcvarsall.bat not found at $vcvarsPath"
-                  exit 1
-              }
-
-              Write-Host "Configuring MSVC environment..."
-
-              # Create a batch file to set up environment and export variables
-              $setupScript = @"
-              @echo off
-              call "$vcvarsPath" x64
-              if errorlevel 1 (
-                  echo Failed to setup MSVC environment
-                  exit /b 1
-              )
-              echo PATH=%PATH%
-              echo LIB=%LIB%
-              echo LIBPATH=%LIBPATH%
-              echo INCLUDE=%INCLUDE%
-              echo VCINSTALLDIR=%VCINSTALLDIR%
-              echo WindowsSdkDir=%WindowsSdkDir%
-              "@
-
-              $tempBat = "$env:TEMP\setup_msvc_env_retry.bat"
-              $setupScript | Out-File -FilePath $tempBat -Encoding ASCII
-
-              # Execute and capture environment
-              $output = & cmd /c $tempBat 2>&1
-              if ($LASTEXITCODE -ne 0) {
-                  Write-Host "Error: Failed to setup MSVC environment on retry"
-                  Write-Host $output
-                  exit 1
-              }
-
-              # Parse and set environment variables
-              foreach ($line in $output) {
-                  if ($line -match "^(\w+)=(.*)$") {
-                      $name = $matches[1]
-                      $value = $matches[2]
-                      
-                      # Set for current process
-                      [Environment]::SetEnvironmentVariable($name, $value, "Process")
-                      
-                      # Persist for GitHub Actions
-                      if ($name -eq "PATH") {
-                          # For PATH, we need to append to GITHUB_PATH
-                          $value -split ';' | Where-Object { $_ -and $_ -notmatch '^[A-Z]:[\\/]Windows[\\/]' } | ForEach-Object {
-                              echo $_ >> $env:GITHUB_PATH
-                          }
-                      } else {
-                          # For other variables, set in GITHUB_ENV
-                          echo "$name=$value" >> $env:GITHUB_ENV
-                      }
-                  }
-              }
-
-              Remove-Item $tempBat -Force
-
-              # Verify link.exe is now available
-              if (Get-Command link.exe -ErrorAction SilentlyContinue) {
-                  $linkPath = (Get-Command link.exe).Source
-                  Write-Host "Success: link.exe found at $linkPath"
-              } else {
-                  Write-Host "Error: link.exe still not found after MSVC setup retry"
-                  exit 1
-              }
-
-        - name: Install Rust toolchain (Linux/macOS)
-          if: runner.os != 'Windows'
+        - name: Install Rust toolchain
           uses: dtolnay/rust-toolchain@stable
           with:
-              targets: ${{ inputs.target }}
               components: rustfmt, clippy
 
-        - name: Install protoc (Linux/macOS)
-          if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
+        - name: Install protoc (protobuf)
+          if: runner.os != 'Windows'
           uses: arduino/setup-protoc@v3
           with:
-              repo-token: ${{ inputs.github-token }}
+              repo-token: ${{ github.token }}
 
         - name: Install protoc (Windows)
-          if: ${{ runner.os == 'Windows' }}
+          if: runner.os == 'Windows'
           shell: powershell
-          env:
-              GITHUB_TOKEN: ${{ inputs.github-token }}
           run: |
-              # Check if protoc is already available
-              if (Get-Command protoc -ErrorAction SilentlyContinue) {
-                  Write-Host "protoc already installed: $(protoc --version)"
-                  exit 0
+              Write-Host "Installing protoc via Chocolatey..."
+              
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  choco install protoc -y
+                  
+                  # Refresh PATH
+                  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                  
+                  # Verify installation
+                  if (Get-Command protoc -ErrorAction SilentlyContinue) {
+                      $version = protoc --version
+                      Write-Host "protoc installed successfully: $version"
+                  } else {
+                      Write-Host "protoc installation may have failed"
+                  }
+              } else {
+                  Write-Host "Chocolatey not available - cannot install protoc"
+                  exit 1
               }
 
-              Write-Host "Installing protoc on Windows..."
+        - name: Verify Rust installation
+          shell: bash
+          run: |
+              echo "Rust version:"
+              rustc --version
+              echo "Cargo version:"
+              cargo --version
+              echo "Rustfmt version:"
+              rustfmt --version
+              echo "Clippy version:"
+              cargo clippy --version
 
-              # Download protoc with authentication
-              $url = "https://github.com/protocolbuffers/protobuf/releases/download/v25.1/protoc-25.1-win64.zip"
-              $zipPath = "$env:TEMP\protoc.zip"
-              $extractPath = "$env:TEMP\protoc"
-
-              # Clean up extraction directory if it exists
-              if (Test-Path $extractPath) {
-                  Remove-Item -Recurse -Force $extractPath
-              }
-
-              # Add authentication header if token is available
-              $headers = @{}
-              if ($env:GITHUB_TOKEN) {
-                  $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN"
-              }
-
-              Invoke-WebRequest -Uri $url -OutFile $zipPath -Headers $headers
-
-              # Extract using .NET instead of Expand-Archive
-              Add-Type -AssemblyName System.IO.Compression.FileSystem
-              [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $extractPath)
-
-              # Add to PATH
-              $protocPath = "$extractPath\bin"
-              echo "$protocPath" >> $env:GITHUB_PATH
-
-              # Verify installation
-              & "$protocPath\protoc.exe" --version
+        - name: Verify protoc installation
+          shell: bash
+          run: |
+              echo "Protoc version:"
+              protoc --version
