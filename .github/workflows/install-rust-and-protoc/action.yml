@@ -9,7 +9,7 @@ runs:
           shell: powershell
           run: |
               Write-Host "Checking for existing Rust installation..."
-              
+
               if (Get-Command rustc -ErrorAction SilentlyContinue) {
                   Write-Host "Rust already installed - skipping installation"
                   rustc --version
@@ -151,7 +151,7 @@ runs:
           shell: powershell
           run: |
               Write-Host "Checking for existing protoc installation..."
-              
+
               if (Get-Command protoc -ErrorAction SilentlyContinue) {
                   Write-Host "protoc already installed - skipping installation"
                   protoc --version

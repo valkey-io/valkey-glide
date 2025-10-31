@@ -130,7 +130,7 @@ runs:
           shell: powershell
           run: |
               Write-Host "Checking for existing Python installation..."
-              
+
               if (Get-Command python3 -ErrorAction SilentlyContinue) {
                   Write-Host "Python already installed - skipping installation"
                   python3 --version
@@ -159,14 +159,14 @@ runs:
           shell: powershell
           run: |
               Write-Host "Checking for existing Visual Studio Build Tools..."
-              
+
               # Check if VS Build Tools are already installed
               $vsInstalled = $false
               $vsPaths = @(
                   "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools",
                   "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools"
               )
-              
+
               foreach ($vsPath in $vsPaths) {
                   if (Test-Path "$vsPath\VC\Tools\MSVC") {
                       Write-Host "Found existing VS Build Tools at: $vsPath"
@@ -174,7 +174,7 @@ runs:
                       break
                   }
               }
-              
+
               if ($vsInstalled) {
                   Write-Host "VS Build Tools already installed - skipping installation"
               } else {
