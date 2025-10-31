@@ -131,9 +131,11 @@ runs:
           run: |
               Write-Host "Checking for existing Python installation..."
 
-              if (Get-Command python3 -ErrorAction SilentlyContinue) {
+              # Check for Chocolatey Python installation specifically
+              $pythonPath = "C:\Python312\python.exe"
+              if (Test-Path $pythonPath) {
                   Write-Host "Python already installed - skipping installation"
-                  python3 --version
+                  & $pythonPath --version
               } else {
                   Write-Host "Installing Python via Chocolatey..."
 
