@@ -145,6 +145,19 @@ runs:
                       Write-Host "Python already installed - skipping installation"
                       & $pythonPath --version
                       $pythonFound = $true
+                      
+                      # Add existing Python to GITHUB_PATH
+                      $pythonDir = Split-Path $pythonPath
+                      echo $pythonDir >> $env:GITHUB_PATH
+                      $env:PATH = "$pythonDir;$env:PATH"
+                      
+                      # Create python3 alias if needed
+                      $python3Path = Join-Path $pythonDir "python3.exe"
+                      if (-not (Test-Path $python3Path)) {
+                          Copy-Item $pythonPath $python3Path
+                          Write-Host "Created python3.exe alias"
+                      }
+                      
                       break
                   }
               }
