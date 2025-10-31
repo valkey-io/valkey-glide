@@ -198,10 +198,6 @@ class RemoteClusterManager:
             cmd_parts.append("--tls")
 
         cmd_parts.extend(["-n", str(shard_count), "-r", str(replica_count)])
-        cmd_parts.extend(
-            ["--host", "0.0.0.0"]
-        )  # Bind to all interfaces for external access
-
         if load_module:
             for module in load_module:
                 cmd_parts.extend(["--load-module", module])
