@@ -5,12 +5,28 @@ Remote Cluster Manager - Executes cluster_manager.py on remote Linux instance vi
 
 import argparse
 import json
+import logging
 import os
 import subprocess
 import sys
 import tempfile
 import time
 from typing import List, Optional
+
+LOG_LEVELS = {
+    "critical": logging.CRITICAL,
+    "error": logging.ERROR,
+    "warn": logging.WARNING,
+    "warning": logging.WARNING,
+    "info": logging.INFO,
+    "debug": logging.DEBUG,
+}
+
+def init_logger(logfile: str):
+    print(f"LOG_FILE={logfile}")
+    root_logger = logging.getLogger()
+    handler = logging.FileHandler(logfile, "w", "utf-8")
+    root_logger.addHandler(handler)
 
 
 class RemoteClusterManager:
@@ -93,7 +109,7 @@ class RemoteClusterManager:
             )
             return returncode == 0 and "SSH connection test" in stdout
         except Exception as e:
-            print(f"SSH connection test failed: {e}")
+            logging.error(f"SSH connection test failed: {e}")
             return False
 
     def _execute_remote_command(
@@ -112,11 +128,11 @@ class RemoteClusterManager:
 
     def setup_remote_environment(self) -> bool:
         """Ensure remote environment is ready"""
-        print(f"Setting up remote environment on {self.host}...")
+        logging.info(f"Setting up remote environment on {self.host}...")
 
         # Test connection first
         if not self.test_connection():
-            print("[FAIL] SSH connection failed")
+            logging.error("[FAIL] SSH connection failed")
             return False
 
         # Check if repo exists, clone if not
@@ -124,24 +140,24 @@ class RemoteClusterManager:
         returncode, _, _ = self._execute_remote_command(check_repo)
 
         if returncode != 0:
-            print("Cloning valkey-glide repository...")
+            logging.info("Cloning valkey-glide repository...")
             clone_cmd = f"git clone https://github.com/valkey-io/valkey-glide.git {self.remote_repo_path}"
             returncode, stdout, stderr = self._execute_remote_command(
                 clone_cmd, timeout=120
             )
             if returncode != 0:
-                print(f"Failed to clone repository: {stderr}")
+                logging.error(f"Failed to clone repository: {stderr}")
                 return False
 
         # Update repository
-        print("Updating repository...")
+        logging.info("Updating repository...")
         update_cmd = f"cd {self.remote_repo_path} && git pull origin main"
         returncode, stdout, stderr = self._execute_remote_command(update_cmd)
         if returncode != 0:
-            print(f"Warning: Failed to update repository: {stderr}")
+            logging.warn(f"Warning: Failed to update repository: {stderr}")
 
         # Install dependencies
-        print("Installing Python dependencies...")
+        logging.info("Installing Python dependencies...")
         install_cmd = f"cd {self.remote_repo_path}/utils && pip3 install -r requirements.txt || true"
         self._execute_remote_command(install_cmd)
 
@@ -160,7 +176,7 @@ class RemoteClusterManager:
         if not self.setup_remote_environment():
             return None
 
-        print(
+        logging.info(
             f"Starting cluster on {self.host} (shards={shard_count}, replicas={replica_count})..."
         )
 
@@ -193,7 +209,7 @@ class RemoteClusterManager:
         )
 
         if returncode != 0:
-            print(f"Failed to start cluster: {stderr}")
+            logging.error(f"Failed to start cluster: {stderr}")
             return None
 
         # Parse cluster endpoints from output
@@ -222,21 +238,21 @@ class RemoteClusterManager:
                         _, port = endpoint.split(":")
                         endpoints.append(f"{self.host}:{port}")
 
-                print(f"Cluster started successfully. Endpoints: {endpoints}")
+                logging.info(f"Cluster started successfully. Endpoints: {endpoints}")
                 return endpoints
             else:
-                print("Could not parse cluster endpoints from output")
-                print(f"stdout: {stdout}")
+                logging.error("Could not parse cluster endpoints from output")
+                logging.error(f"stdout: {stdout}")
                 return None
 
         except json.JSONDecodeError as e:
-            print(f"Failed to parse cluster output: {e}")
-            print(f"stdout: {stdout}")
+            logging.error(f"Failed to parse cluster output: {e}")
+            logging.error(f"stdout: {stdout}")
             return None
 
     def stop_cluster(self) -> bool:
         """Stop cluster on remote host"""
-        print(f"Stopping cluster on {self.host}...")
+        logging.info(f"Stopping cluster on {self.host}...")
 
         stop_cmd = (
             f"cd {self.remote_repo_path}/utils && python3 cluster_manager.py stop"
@@ -244,10 +260,10 @@ class RemoteClusterManager:
         returncode, stdout, stderr = self._execute_remote_command(stop_cmd)
 
         if returncode != 0:
-            print(f"Failed to stop cluster: {stderr}")
+            logging.error(f"Failed to stop cluster: {stderr}")
             return False
 
-        print("Cluster stopped successfully")
+        logging.info("Cluster stopped successfully")
         return True
 
     def get_cluster_status(self) -> Optional[dict]:
@@ -264,6 +280,9 @@ class RemoteClusterManager:
 
 
 def main():
+    logfile = f"{cluster_folder}/cluster_manager.log" if not logfile else logfile
+    init_logger(logfile)
+
     parser = argparse.ArgumentParser(description="Remote Cluster Manager")
     parser.add_argument("--host", help="Remote Linux host IP/hostname")
     parser.add_argument("--user", default="ubuntu", help="SSH user (default: ubuntu)")
@@ -300,10 +319,13 @@ def main():
         parser.print_help()
         return 1
 
+    level = logging.INFO
+    logging.root.setLevel(level=level)
+
     # Get credentials from environment or arguments
     host = args.host or os.environ.get("VALKEY_REMOTE_HOST")
     if not host:
-        print(
+        logging.error(
             "Error: Remote host must be specified via --host or VALKEY_REMOTE_HOST environment variable"
         )
         return 1
@@ -317,10 +339,10 @@ def main():
 
         if args.command == "test":
             if manager.test_connection():
-                print("[OK] SSH connection successful")
+                logging.info("[OK] SSH connection successful")
                 return 0
             else:
-                print("[FAIL] SSH connection failed")
+                logging.error("[FAIL] SSH connection failed")
                 return 1
 
         elif args.command == "start":
@@ -333,7 +355,7 @@ def main():
             )
             if endpoints:
                 # Output endpoints in format expected by Gradle
-                print("CLUSTER_ENDPOINTS=" + ",".join(endpoints))
+                logging.info("CLUSTER_ENDPOINTS=" + ",".join(endpoints))
                 return 0
             else:
                 return 1
@@ -351,7 +373,7 @@ def main():
                 return 1
 
     except Exception as e:
-        print(f"Error: {e}")
+        logging.error(f"Error: {e}")
         return 1
 
 
