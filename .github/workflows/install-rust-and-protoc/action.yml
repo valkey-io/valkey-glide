@@ -55,43 +55,38 @@ runs:
                                       echo $msvcBin >> $env:GITHUB_PATH
                                       Write-Host "SUCCESS: Added MSVC bin to PATH: $msvcBin"
                                       
-                                      # Check if Windows SDK is available
-                                      $windowsKitsPaths = @(
-                                          "${env:ProgramFiles(x86)}\Windows Kits\10",
-                                          "${env:ProgramFiles}\Windows Kits\10"
-                                      )
-                                      
-                                      $sdkFound = $false
-                                      foreach ($windowsKitsPath in $windowsKitsPaths) {
-                                          if (Test-Path "$windowsKitsPath\Lib") {
-                                              Write-Host "Found Windows SDK at: $windowsKitsPath"
-                                              $sdkVersions = Get-ChildItem "$windowsKitsPath\Lib" -Directory | Sort-Object Name -Descending
-                                              if ($sdkVersions) {
-                                                  $latestSdk = $sdkVersions[0]
-                                                  
-                                                  # Set LIB path
-                                                  $sdkLibPath = "$($latestSdk.FullName)\um\x64;$($latestSdk.FullName)\ucrt\x64"
-                                                  $env:LIB = "$sdkLibPath;$($latestMsvc.FullName)\lib\x64"
-                                                  echo "LIB=$($env:LIB)" >> $env:GITHUB_ENV
-                                                  
-                                                  # Set INCLUDE path
-                                                  $sdkIncludePath = "$windowsKitsPath\Include\$($latestSdk.Name)\um;$windowsKitsPath\Include\$($latestSdk.Name)\ucrt;$windowsKitsPath\Include\$($latestSdk.Name)\shared"
-                                                  $env:INCLUDE = "$sdkIncludePath;$($latestMsvc.FullName)\include"
-                                                  echo "INCLUDE=$($env:INCLUDE)" >> $env:GITHUB_ENV
-                                                  
-                                                  # Set LIBPATH
-                                                  $env:LIBPATH = "$($latestMsvc.FullName)\lib\x64;$($latestSdk.FullName)\um\x64"
-                                                  echo "LIBPATH=$($env:LIBPATH)" >> $env:GITHUB_ENV
-                                                  
-                                                  Write-Host "Set MSVC environment variables for Rust compilation"
-                                                  $sdkFound = $true
-                                                  break
+                                      # Run vcvars64.bat to set up MSVC environment
+                                      $vcvarsPath = "$($latestMsvc.Parent.Parent.Parent.FullName)\Auxiliary\Build\vcvars64.bat"
+                                      if (Test-Path $vcvarsPath) {
+                                          Write-Host "Running vcvars64.bat to set up MSVC environment..."
+                                          
+                                          # Use PowerShell to call vcvars and capture environment
+                                          $psi = New-Object System.Diagnostics.ProcessStartInfo
+                                          $psi.FileName = "cmd.exe"
+                                          $psi.Arguments = "/c `"$vcvarsPath`" && set"
+                                          $psi.RedirectStandardOutput = $true
+                                          $psi.UseShellExecute = $false
+                                          $psi.CreateNoWindow = $true
+                                          
+                                          $process = [System.Diagnostics.Process]::Start($psi)
+                                          $output = $process.StandardOutput.ReadToEnd()
+                                          $process.WaitForExit()
+                                          
+                                          # Parse and set environment variables
+                                          foreach ($line in $output -split "`n") {
+                                              if ($line -match "^([^=]+)=(.*)$") {
+                                                  $name = $matches[1].Trim()
+                                                  $value = $matches[2].Trim()
+                                                  if ($name -in @("LIB", "LIBPATH", "INCLUDE", "PATH")) {
+                                                      [System.Environment]::SetEnvironmentVariable($name, $value, "Process")
+                                                      echo "$name=$value" >> $env:GITHUB_ENV
+                                                  }
                                               }
                                           }
-                                      }
-                                      
-                                      if (-not $sdkFound) {
-                                          Write-Host "WARNING: Windows SDK not found - Rust linking may fail"
+                                          
+                                          Write-Host "MSVC environment configured via vcvars64.bat"
+                                      } else {
+                                          Write-Host "WARNING: vcvars64.bat not found at $vcvarsPath"
                                       }
                                       
                                       $msvcFound = $true
