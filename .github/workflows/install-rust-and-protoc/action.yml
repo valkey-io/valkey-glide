@@ -8,7 +8,13 @@ runs:
           if: runner.os == 'Windows'
           shell: powershell
           run: |
-              Write-Host "Installing Rust with MSVC toolchain via Chocolatey..."
+              Write-Host "Checking for existing Rust installation..."
+              
+              if (Get-Command rustc -ErrorAction SilentlyContinue) {
+                  Write-Host "Rust already installed - skipping installation"
+                  rustc --version
+              } else {
+                  Write-Host "Installing Rust with MSVC toolchain via Chocolatey..."
 
               if (Get-Command choco -ErrorAction SilentlyContinue) {
                   choco install rust-ms -y
@@ -58,7 +64,7 @@ runs:
                                       # Run vcvars64.bat to set up MSVC environment
                                       $vcvarsPath = "$($latestMsvc.Parent.Parent.Parent.FullName)\Auxiliary\Build\vcvars64.bat"
                                       if (Test-Path $vcvarsPath) {
-                                          Write-Host "Running vcvars64.bat to set up MSVC environment..."
+                                          Write-Host "Running vcvars64.bat: $vcvarsPath"
                                           
                                           # Use PowerShell to call vcvars and capture environment
                                           $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -72,21 +78,36 @@ runs:
                                           $output = $process.StandardOutput.ReadToEnd()
                                           $process.WaitForExit()
                                           
+                                          Write-Host "vcvars64.bat exit code: $($process.ExitCode)"
+                                          
                                           # Parse and set environment variables
+                                          $libSet = $false
                                           foreach ($line in $output -split "`n") {
                                               if ($line -match "^([^=]+)=(.*)$") {
                                                   $name = $matches[1].Trim()
                                                   $value = $matches[2].Trim()
-                                                  if ($name -in @("LIB", "LIBPATH", "INCLUDE", "PATH")) {
+                                                  if ($name -eq "LIB") {
+                                                      Write-Host "LIB from vcvars: $value"
+                                                      [System.Environment]::SetEnvironmentVariable($name, $value, "Process")
+                                                      echo "$name=$value" >> $env:GITHUB_ENV
+                                                      $libSet = $true
+                                                  } elseif ($name -in @("LIBPATH", "INCLUDE")) {
+                                                      Write-Host "$name from vcvars: $value"
                                                       [System.Environment]::SetEnvironmentVariable($name, $value, "Process")
                                                       echo "$name=$value" >> $env:GITHUB_ENV
                                                   }
                                               }
                                           }
                                           
-                                          Write-Host "MSVC environment configured via vcvars64.bat"
+                                          if ($libSet) {
+                                              Write-Host "MSVC environment configured via vcvars64.bat"
+                                          } else {
+                                              Write-Host "ERROR: LIB variable not set by vcvars64.bat"
+                                              Write-Host "vcvars64.bat output:"
+                                              Write-Host $output
+                                          }
                                       } else {
-                                          Write-Host "WARNING: vcvars64.bat not found at $vcvarsPath"
+                                          Write-Host "ERROR: vcvars64.bat not found at $vcvarsPath"
                                       }
                                       
                                       $msvcFound = $true
@@ -110,6 +131,7 @@ runs:
                   Write-Host "Chocolatey not available - cannot install Rust"
                   exit 1
               }
+              }
 
         - name: Install Rust toolchain (Unix)
           if: runner.os != 'Windows'
@@ -128,7 +150,13 @@ runs:
           if: runner.os == 'Windows'
           shell: powershell
           run: |
-              Write-Host "Installing protoc version 29.1 via direct download..."
+              Write-Host "Checking for existing protoc installation..."
+              
+              if (Get-Command protoc -ErrorAction SilentlyContinue) {
+                  Write-Host "protoc already installed - skipping installation"
+                  protoc --version
+              } else {
+                  Write-Host "Installing protoc version 29.1 via direct download..."
 
               $protocUrl = "https://github.com/protocolbuffers/protobuf/releases/download/v29.1/protoc-29.1-win64.zip"
               $protocZip = "$env:TEMP\protoc-29.1-win64.zip"
@@ -152,6 +180,7 @@ runs:
               } else {
                   Write-Host "protoc installation may have failed"
                   exit 1
+              }
               }
 
         - name: Verify Rust installation (Windows)
