@@ -9,15 +9,14 @@ runs:
           shell: powershell
           run: |
               Write-Host "Installing Rust with MSVC toolchain via Chocolatey..."
-              
+
               if (Get-Command choco -ErrorAction SilentlyContinue) {
-                  # Install rust-ms which provides MSVC toolchain
                   choco install rust-ms -y
                   
                   # Refresh PATH
                   $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
                   
-                  # Add cargo bin directory to PATH (where rustfmt/clippy are installed)
+                  # Add cargo bin directory to PATH
                   $cargoBin = "$env:USERPROFILE\.cargo\bin"
                   if (Test-Path $cargoBin) {
                       $env:PATH = "$cargoBin;$env:PATH"
@@ -37,7 +36,6 @@ runs:
                       # Add MSVC tools to PATH so Rust can find link.exe
                       Write-Host "Adding VS 2022 MSVC tools to PATH..."
                       
-                      # We installed VS 2022 Build Tools, so check the standard location
                       $vs2022Paths = @(
                           "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC",
                           "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC"
@@ -55,7 +53,7 @@ runs:
                                   if (Test-Path "$msvcBin\link.exe") {
                                       $env:PATH = "$msvcBin;$env:PATH"
                                       echo $msvcBin >> $env:GITHUB_PATH
-                                      Write-Host "✓ Added MSVC bin to PATH: $msvcBin"
+                                      Write-Host "SUCCESS: Added MSVC bin to PATH: $msvcBin"
                                       $msvcFound = $true
                                       break
                                   }
@@ -64,7 +62,7 @@ runs:
                       }
                       
                       if (-not $msvcFound) {
-                          Write-Host "✗ Could not find VS 2022 MSVC tools"
+                          Write-Host "ERROR: Could not find VS 2022 MSVC tools"
                           exit 1
                       }
                       
@@ -96,27 +94,23 @@ runs:
           shell: powershell
           run: |
               Write-Host "Installing protoc version 29.1 via direct download..."
-              
-              # Download protoc 29.1 directly
+
               $protocUrl = "https://github.com/protocolbuffers/protobuf/releases/download/v29.1/protoc-29.1-win64.zip"
               $protocZip = "$env:TEMP\protoc-29.1-win64.zip"
               $protocDir = "C:\protoc"
-              
+
               Write-Host "Downloading protoc 29.1..."
               Invoke-WebRequest -Uri $protocUrl -OutFile $protocZip
-              
+
               Write-Host "Extracting protoc..."
               Expand-Archive -Path $protocZip -DestinationPath $protocDir -Force
-              
-              # Add to PATH
+
               $protocBin = "$protocDir\bin"
               $env:PATH = "$protocBin;$env:PATH"
               echo $protocBin >> $env:GITHUB_PATH
-              
-              # Clean up
+
               Remove-Item $protocZip -Force -ErrorAction SilentlyContinue
-              
-              # Verify installation
+
               if (Get-Command protoc -ErrorAction SilentlyContinue) {
                   $version = protoc --version
                   Write-Host "protoc installed successfully: $version"
