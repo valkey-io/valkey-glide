@@ -4,7 +4,33 @@ description: Install Rust toolchain and protobuf compiler
 runs:
     using: "composite"
     steps:
-        - name: Install Rust toolchain
+        - name: Install Rust toolchain (Windows)
+          if: runner.os == 'Windows'
+          shell: powershell
+          run: |
+              Write-Host "Installing Rust via Chocolatey..."
+              
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  choco install rust -y
+                  
+                  # Refresh PATH
+                  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                  
+                  # Verify installation
+                  if (Get-Command rustc -ErrorAction SilentlyContinue) {
+                      $version = rustc --version
+                      Write-Host "Rust installed successfully: $version"
+                  } else {
+                      Write-Host "Rust installation may have failed"
+                      exit 1
+                  }
+              } else {
+                  Write-Host "Chocolatey not available - cannot install Rust"
+                  exit 1
+              }
+
+        - name: Install Rust toolchain (Unix)
+          if: runner.os != 'Windows'
           uses: dtolnay/rust-toolchain@stable
           with:
               components: rustfmt, clippy
