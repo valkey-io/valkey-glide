@@ -129,7 +129,13 @@ runs:
           if: steps.check.outputs.python-available != 'true'
           shell: powershell
           run: |
-              Write-Host "Installing Python via Chocolatey..."
+              Write-Host "Checking for existing Python installation..."
+              
+              if (Get-Command python3 -ErrorAction SilentlyContinue) {
+                  Write-Host "Python already installed - skipping installation"
+                  python3 --version
+              } else {
+                  Write-Host "Installing Python via Chocolatey..."
 
               if (Get-Command choco -ErrorAction SilentlyContinue) {
                   choco install python3 -y
@@ -147,51 +153,57 @@ runs:
               } else {
                   Write-Host "Chocolatey not available - cannot install Python"
               }
-
-        - name: Install Windows SDK
-          shell: powershell
-          run: |
-              Write-Host "Installing Windows SDK..."
-              
-              if (Get-Command choco -ErrorAction SilentlyContinue) {
-                  choco install windows-sdk-10.0 -y
-                  
-                  if ($LASTEXITCODE -eq 0) {
-                      Write-Host "Windows SDK installed successfully"
-                  } else {
-                      Write-Host "Windows SDK installation failed"
-                  }
-              } else {
-                  Write-Host "Chocolatey not available - skipping Windows SDK"
               }
 
         - name: Install Visual Studio Build Tools
           shell: powershell
           run: |
-              Write-Host "Installing Visual Studio 2022 Build Tools..."
-
-              # Download and install VS Build Tools directly with known working parameters
-              $installerUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
-              $installerPath = "$env:TEMP\vs_buildtools.exe"
-
-              Write-Host "Downloading VS Build Tools installer..."
-              Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-
-              Write-Host "Installing VS Build Tools with C++ workload..."
-              $installArgs = @(
-                  "--quiet",
-                  "--wait",
-                  "--add", "Microsoft.VisualStudio.Workload.VCTools",
-                  "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-                  "--add", "Microsoft.VisualStudio.Component.Windows11SDK.22000",
-                  "--add", "Microsoft.VisualStudio.Component.VC.CMake.Project"
+              Write-Host "Checking for existing Visual Studio Build Tools..."
+              
+              # Check if VS Build Tools are already installed
+              $vsInstalled = $false
+              $vsPaths = @(
+                  "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools",
+                  "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools"
               )
-
-              $process = Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait -PassThru
-              Write-Host "VS Build Tools installer exit code: $($process.ExitCode)"
-
-              # Clean up
-              Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+              
+              foreach ($vsPath in $vsPaths) {
+                  if (Test-Path "$vsPath\VC\Tools\MSVC") {
+                      Write-Host "Found existing VS Build Tools at: $vsPath"
+                      $vsInstalled = $true
+                      break
+                  }
+              }
+              
+              if ($vsInstalled) {
+                  Write-Host "VS Build Tools already installed - skipping installation"
+              } else {
+                  Write-Host "Installing Visual Studio 2022 Build Tools..."
+                  
+                  # Download and install VS Build Tools directly with known working parameters
+                  $installerUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
+                  $installerPath = "$env:TEMP\vs_buildtools.exe"
+                  
+                  Write-Host "Downloading VS Build Tools installer..."
+                  Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+                  
+                  Write-Host "Installing VS Build Tools with C++ workload and Windows SDK..."
+                  $installArgs = @(
+                      "--quiet",
+                      "--wait",
+                      "--add", "Microsoft.VisualStudio.Workload.VCTools",
+                      "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                      "--add", "Microsoft.VisualStudio.Component.Windows11SDK.22000",
+                      "--add", "Microsoft.VisualStudio.Component.Windows10SDK.19041",
+                      "--add", "Microsoft.VisualStudio.Component.VC.CMake.Project"
+                  )
+                  
+                  $process = Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait -PassThru
+                  Write-Host "VS Build Tools installer exit code: $($process.ExitCode)"
+                  
+                  # Clean up
+                  Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+              }
 
               # Verify installation
               Write-Host "Verifying MSVC compiler installation..."
