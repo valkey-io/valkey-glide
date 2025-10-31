@@ -55,29 +55,43 @@ runs:
                                       echo $msvcBin >> $env:GITHUB_PATH
                                       Write-Host "SUCCESS: Added MSVC bin to PATH: $msvcBin"
                                       
-                                      # Add Windows SDK lib paths for kernel32.lib etc
-                                      $windowsKitsPath = "${env:ProgramFiles(x86)}\Windows Kits\10"
-                                      if (Test-Path $windowsKitsPath) {
-                                          $sdkVersions = Get-ChildItem "$windowsKitsPath\Lib" -Directory | Sort-Object Name -Descending
-                                          if ($sdkVersions) {
-                                              $latestSdk = $sdkVersions[0]
-                                              
-                                              # Set LIB path
-                                              $sdkLibPath = "$($latestSdk.FullName)\um\x64;$($latestSdk.FullName)\ucrt\x64"
-                                              $env:LIB = "$sdkLibPath;$($latestMsvc.FullName)\lib\x64"
-                                              echo "LIB=$($env:LIB)" >> $env:GITHUB_ENV
-                                              
-                                              # Set INCLUDE path
-                                              $sdkIncludePath = "$windowsKitsPath\Include\$($latestSdk.Name)\um;$windowsKitsPath\Include\$($latestSdk.Name)\ucrt;$windowsKitsPath\Include\$($latestSdk.Name)\shared"
-                                              $env:INCLUDE = "$sdkIncludePath;$($latestMsvc.FullName)\include"
-                                              echo "INCLUDE=$($env:INCLUDE)" >> $env:GITHUB_ENV
-                                              
-                                              # Set LIBPATH
-                                              $env:LIBPATH = "$($latestMsvc.FullName)\lib\x64;$($latestSdk.FullName)\um\x64"
-                                              echo "LIBPATH=$($env:LIBPATH)" >> $env:GITHUB_ENV
-                                              
-                                              Write-Host "Set MSVC environment variables for Rust compilation"
+                                      # Check if Windows SDK is available
+                                      $windowsKitsPaths = @(
+                                          "${env:ProgramFiles(x86)}\Windows Kits\10",
+                                          "${env:ProgramFiles}\Windows Kits\10"
+                                      )
+                                      
+                                      $sdkFound = $false
+                                      foreach ($windowsKitsPath in $windowsKitsPaths) {
+                                          if (Test-Path "$windowsKitsPath\Lib") {
+                                              Write-Host "Found Windows SDK at: $windowsKitsPath"
+                                              $sdkVersions = Get-ChildItem "$windowsKitsPath\Lib" -Directory | Sort-Object Name -Descending
+                                              if ($sdkVersions) {
+                                                  $latestSdk = $sdkVersions[0]
+                                                  
+                                                  # Set LIB path
+                                                  $sdkLibPath = "$($latestSdk.FullName)\um\x64;$($latestSdk.FullName)\ucrt\x64"
+                                                  $env:LIB = "$sdkLibPath;$($latestMsvc.FullName)\lib\x64"
+                                                  echo "LIB=$($env:LIB)" >> $env:GITHUB_ENV
+                                                  
+                                                  # Set INCLUDE path
+                                                  $sdkIncludePath = "$windowsKitsPath\Include\$($latestSdk.Name)\um;$windowsKitsPath\Include\$($latestSdk.Name)\ucrt;$windowsKitsPath\Include\$($latestSdk.Name)\shared"
+                                                  $env:INCLUDE = "$sdkIncludePath;$($latestMsvc.FullName)\include"
+                                                  echo "INCLUDE=$($env:INCLUDE)" >> $env:GITHUB_ENV
+                                                  
+                                                  # Set LIBPATH
+                                                  $env:LIBPATH = "$($latestMsvc.FullName)\lib\x64;$($latestSdk.FullName)\um\x64"
+                                                  echo "LIBPATH=$($env:LIBPATH)" >> $env:GITHUB_ENV
+                                                  
+                                                  Write-Host "Set MSVC environment variables for Rust compilation"
+                                                  $sdkFound = $true
+                                                  break
+                                              }
                                           }
+                                      }
+                                      
+                                      if (-not $sdkFound) {
+                                          Write-Host "WARNING: Windows SDK not found - Rust linking may fail"
                                       }
                                       
                                       $msvcFound = $true
