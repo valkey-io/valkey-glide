@@ -10,9 +10,11 @@ runs:
           run: |
               Write-Host "Checking for existing Rust installation..."
 
-              if (Get-Command rustc -ErrorAction SilentlyContinue) {
+              # Check for Chocolatey Rust installation specifically
+              $rustcPath = "$env:ProgramFiles\Rust stable MSVC 1.82\bin\rustc.exe"
+              if (Test-Path $rustcPath) {
                   Write-Host "Rust already installed - skipping installation"
-                  rustc --version
+                  & $rustcPath --version
               } else {
                   Write-Host "Installing Rust with MSVC toolchain via Chocolatey..."
 
@@ -152,9 +154,11 @@ runs:
           run: |
               Write-Host "Checking for existing protoc installation..."
 
-              if (Get-Command protoc -ErrorAction SilentlyContinue) {
+              # Check for protoc in the specific installation path we use
+              $protocPath = "C:\protoc\bin\protoc.exe"
+              if (Test-Path $protocPath) {
                   Write-Host "protoc already installed - skipping installation"
-                  protoc --version
+                  & $protocPath --version
               } else {
                   Write-Host "Installing protoc version 29.1 via direct download..."
 
