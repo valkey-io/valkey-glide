@@ -56,6 +56,8 @@ class RemoteClusterManager:
             self.temp_key_file = tempfile.NamedTemporaryFile(
                 mode="w", delete=False, suffix=".pem"
             )
+
+            logging.info(f"Writing Key file from content: {self.temp_key_file}")
             self.temp_key_file.write(self.key_content)
             self.temp_key_file.close()
             os.chmod(self.temp_key_file.name, 0o600)
@@ -98,6 +100,7 @@ class RemoteClusterManager:
         ]
 
         if self.key_path:
+            logging.info(f"Connecting using key: {self.key_path}")
             ssh_cmd.extend(["-i", self.key_path])
 
         ssh_cmd.extend([f"{self.user}@{self.host}", remote_command])
