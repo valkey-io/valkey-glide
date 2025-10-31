@@ -23,9 +23,17 @@ runs:
           run: |
               Write-Host "Installing Chocolatey..."
 
+              # Check if chocolatey is installed already and use it if so
+              $chocoPath = "C:\ProgramData\chocolatey\bin"
+              if (Test-Path $chocoPath) {
+                  $env:PATH = "$chocoPath;$env:PATH"
+                  Write-Host "Added Chocolatey to PATH: $chocoPath"
+              }
+          
               if (Get-Command choco -ErrorAction SilentlyContinue) {
                   Write-Host "Chocolatey already available"
                   choco --version
+                  echo $chocoPath >> $env:GITHUB_PATH
               } else {
                   # Remove any corrupted installations
                   $paths = @("C:\ProgramData\chocolatey", "$env:ALLUSERSPROFILE\chocolatey")
@@ -45,7 +53,6 @@ runs:
                   $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
                   
                   # Also add Chocolatey bin directory explicitly
-                  $chocoPath = "C:\ProgramData\chocolatey\bin"
                   if (Test-Path $chocoPath) {
                       $env:PATH = "$chocoPath;$env:PATH"
                       echo $chocoPath >> $env:GITHUB_PATH
