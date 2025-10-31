@@ -166,7 +166,8 @@ jobs:
               working-directory: java
               shell: powershell
               env:
-                  VALKEY_REMOTE_SSH_KEY: ${{ secrets.VALKEY_REMOTE_SSH_KEY }}
+                  SSH_PRIVATE_KEY_CONTENT: ${{ secrets.VALKEY_REMOTE_SSH_KEY }}
+                  VALKEY_REMOTE_HOST: ${{ vars.VALKEY_REMOTE_HOST }}
               run: |
                   # Stop any existing Gradle daemons to avoid compatibility issues
                   .\gradlew.bat --stop
@@ -182,3 +183,16 @@ jobs:
                   path: |
                       java/client/build/reports/**
                       java/integTest/build/reports/**
+
+            - name: Cleanup Gradle daemons
+              if: always()
+              working-directory: java
+              shell: powershell
+              run: |
+                  Write-Host "Cleaning up Gradle daemons..."
+                  .\gradlew.bat --stop
+                  
+                  # Force kill any remaining Gradle processes
+                  Get-Process -Name "*gradle*" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                  
+                  Write-Host "Gradle daemon cleanup complete"
