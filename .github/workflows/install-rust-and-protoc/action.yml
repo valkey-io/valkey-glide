@@ -16,10 +16,16 @@ runs:
                   # Refresh PATH
                   $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
                   
-                  # Verify installation
+                  # Verify rustc installation
                   if (Get-Command rustc -ErrorAction SilentlyContinue) {
                       $version = rustc --version
                       Write-Host "Rust installed successfully: $version"
+                      
+                      # Install rustfmt and clippy components
+                      Write-Host "Installing rustfmt and clippy..."
+                      rustup component add rustfmt clippy
+                      
+                      Write-Host "Rust components installed successfully"
                   } else {
                       Write-Host "Rust installation may have failed"
                       exit 1
@@ -39,29 +45,40 @@ runs:
           if: runner.os != 'Windows'
           uses: arduino/setup-protoc@v3
           with:
+              version: "29.1"
               repo-token: ${{ github.token }}
 
         - name: Install protoc (Windows)
           if: runner.os == 'Windows'
           shell: powershell
           run: |
-              Write-Host "Installing protoc via Chocolatey..."
+              Write-Host "Installing protoc version 29.1 via direct download..."
               
-              if (Get-Command choco -ErrorAction SilentlyContinue) {
-                  choco install protoc -y
-                  
-                  # Refresh PATH
-                  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
-                  
-                  # Verify installation
-                  if (Get-Command protoc -ErrorAction SilentlyContinue) {
-                      $version = protoc --version
-                      Write-Host "protoc installed successfully: $version"
-                  } else {
-                      Write-Host "protoc installation may have failed"
-                  }
+              # Download protoc 29.1 directly
+              $protocUrl = "https://github.com/protocolbuffers/protobuf/releases/download/v29.1/protoc-29.1-win64.zip"
+              $protocZip = "$env:TEMP\protoc-29.1-win64.zip"
+              $protocDir = "C:\protoc"
+              
+              Write-Host "Downloading protoc 29.1..."
+              Invoke-WebRequest -Uri $protocUrl -OutFile $protocZip
+              
+              Write-Host "Extracting protoc..."
+              Expand-Archive -Path $protocZip -DestinationPath $protocDir -Force
+              
+              # Add to PATH
+              $protocBin = "$protocDir\bin"
+              $env:PATH = "$protocBin;$env:PATH"
+              echo $protocBin >> $env:GITHUB_PATH
+              
+              # Clean up
+              Remove-Item $protocZip -Force -ErrorAction SilentlyContinue
+              
+              # Verify installation
+              if (Get-Command protoc -ErrorAction SilentlyContinue) {
+                  $version = protoc --version
+                  Write-Host "protoc installed successfully: $version"
               } else {
-                  Write-Host "Chocolatey not available - cannot install protoc"
+                  Write-Host "protoc installation may have failed"
                   exit 1
               }
 
