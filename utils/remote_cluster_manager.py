@@ -27,6 +27,8 @@ def init_logger(logfile: str):
     root_logger = logging.getLogger()
     handler = logging.FileHandler(logfile, "w", "utf-8")
     root_logger.addHandler(handler)
+    root_logger.addHandler(logging.StreamHandler(sys.stdout))
+    root_logger.addHandler(logging.StreamHandler(sys.stderr))
 
 
 class RemoteClusterManager:
@@ -280,7 +282,7 @@ class RemoteClusterManager:
 
 
 def main():
-    logfile = f"{cluster_folder}/cluster_manager.log"
+    logfile = f"./cluster_manager.log"
     init_logger(logfile)
 
     parser = argparse.ArgumentParser(description="Remote Cluster Manager")
