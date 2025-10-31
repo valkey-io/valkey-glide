@@ -280,7 +280,7 @@ class RemoteClusterManager:
 
 
 def main():
-    logfile = f"{cluster_folder}/cluster_manager.log" if not logfile else logfile
+    logfile = f"{cluster_folder}/cluster_manager.log"
     init_logger(logfile)
 
     parser = argparse.ArgumentParser(description="Remote Cluster Manager")
