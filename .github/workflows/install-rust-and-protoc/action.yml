@@ -39,7 +39,8 @@ runs:
                   exit 1
               }
 
-        - name: Verify Rust installation
+        - name: Verify Rust installation (Windows)
+          if: runner.os == 'Windows'
           shell: powershell
           run: |
               Write-Host "Rust version:"
@@ -51,8 +52,29 @@ runs:
               Write-Host "Clippy version:"
               cargo clippy --version
 
-        - name: Verify protoc installation
+        - name: Verify Rust installation (Unix)
+          if: runner.os != 'Windows'
+          shell: bash
+          run: |
+              echo "Rust version:"
+              rustc --version
+              echo "Cargo version:"
+              cargo --version
+              echo "Rustfmt version:"
+              rustfmt --version
+              echo "Clippy version:"
+              cargo clippy --version
+
+        - name: Verify protoc installation (Windows)
+          if: runner.os == 'Windows'
           shell: powershell
           run: |
               Write-Host "Protoc version:"
+              protoc --version
+
+        - name: Verify protoc installation (Unix)
+          if: runner.os != 'Windows'
+          shell: bash
+          run: |
+              echo "Protoc version:"
               protoc --version
