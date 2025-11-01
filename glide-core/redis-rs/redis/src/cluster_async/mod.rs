@@ -614,8 +614,6 @@ pub(crate) enum InternalSingleNodeRouting<C> {
     },
 }
 
-
-
 impl<C> From<SingleNodeRoutingInfo> for InternalSingleNodeRouting<C> {
     fn from(value: SingleNodeRoutingInfo) -> Self {
         match value {
