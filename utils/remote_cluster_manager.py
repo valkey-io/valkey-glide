@@ -47,7 +47,7 @@ class RemoteClusterManager:
         
         self.host = host
         self.user = user
-        self.key_path = key_path
+        self.key_path: Optional[str] = key_path
         self.key_content = key_content
         self.temp_key_file = None
         self.remote_repo_path = "/home/ubuntu/valkey-glide"
@@ -57,6 +57,8 @@ class RemoteClusterManager:
 
         # Handle SSH key from environment or content
         self._setup_ssh_key()
+        # After _setup_ssh_key, key_path is guaranteed to be set
+        assert self.key_path is not None
 
     def _setup_ssh_key(self):
         """Setup SSH key from various sources"""
@@ -262,14 +264,17 @@ class RemoteClusterManager:
             local_key = tls_key_file or f"{TLS_FOLDER}/server.key"
             local_ca = tls_ca_cert_file or f"{TLS_FOLDER}/ca.crt"
             
-            # Copy files to remote host
+            # Copy cert and key files (always needed for TLS)
             remote_tls_cert = f"{self.remote_repo_path}/tls_cert.pem"
             remote_tls_key = f"{self.remote_repo_path}/tls_key.pem"
-            remote_tls_ca = f"{self.remote_repo_path}/tls_ca.pem"
-            
             self._copy_file_to_remote(local_cert, remote_tls_cert)
             self._copy_file_to_remote(local_key, remote_tls_key)
-            self._copy_file_to_remote(local_ca, remote_tls_ca)
+            
+            # Copy CA file only if specified or using defaults
+            if tls_ca_cert_file or not (tls_cert_file or tls_key_file):
+                # Use CA if explicitly provided OR if using all defaults
+                remote_tls_ca = f"{self.remote_repo_path}/tls_ca.pem"
+                self._copy_file_to_remote(local_ca, remote_tls_ca)
 
         # Build cluster_manager.py command with engine-specific PATH
         cmd_parts = [
@@ -283,8 +288,19 @@ class RemoteClusterManager:
         if cluster_mode:
             cmd_parts.append("--cluster-mode")
         if tls:
-            # Use full --tls flag to avoid ambiguity with --tls-cert-file etc
-            cmd_parts.extend(["--tls", "--tls-cert-file", remote_tls_cert, "--tls-key-file", remote_tls_key, "--tls-ca-cert-file", remote_tls_ca])
+            # Pass TLS arguments based on what's available
+            assert remote_tls_cert is not None
+            assert remote_tls_key is not None  
+            cmd_parts.append("--tls")
+            cmd_parts.append("--tls-cert-file")
+            cmd_parts.append(remote_tls_cert)
+            cmd_parts.append("--tls-key-file")
+            cmd_parts.append(remote_tls_key)
+            
+            # Only add CA cert if it was copied
+            if remote_tls_ca is not None:
+                cmd_parts.append("--tls-ca-cert-file")
+                cmd_parts.append(remote_tls_ca)
 
         cmd_parts.extend(["-n", str(shard_count), "-r", str(replica_count)])
         if load_module:
@@ -368,13 +384,14 @@ class RemoteClusterManager:
         try:
             import subprocess
             
+            assert self.key_path is not None  # Guaranteed by _setup_ssh_key
             scp_cmd = [
                 "scp",
-                "-i", self.ssh_key_path,
+                "-i", self.key_path,
                 "-o", "StrictHostKeyChecking=no",
                 "-o", "UserKnownHostsFile=/dev/null",
                 local_path,
-                f"{self.username}@{self.host}:{remote_path}"
+                f"{self.user}@{self.host}:{remote_path}"
             ]
             
             result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
