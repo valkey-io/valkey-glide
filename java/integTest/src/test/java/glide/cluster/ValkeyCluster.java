@@ -61,7 +61,8 @@ public class ValkeyCluster implements AutoCloseable {
     }
 
     private enum ClusterManagerType {
-        LOCAL, REMOTE
+        LOCAL,
+        REMOTE
     }
 
     private static class ClusterManagerInfo {
