@@ -53,19 +53,23 @@ public class ValkeyCluster implements AutoCloseable {
 
         if (remoteHost != null && !remoteHost.isEmpty()) {
             // Use remote cluster manager
-            return new ClusterManagerInfo(REMOTE_MANAGER_SCRIPT, "remote", remoteHost);
+            return new ClusterManagerInfo(REMOTE_MANAGER_SCRIPT, ClusterManagerType.REMOTE, remoteHost);
         } else {
             // Use local cluster manager
-            return new ClusterManagerInfo(SCRIPT_FILE, "local", null);
+            return new ClusterManagerInfo(SCRIPT_FILE, ClusterManagerType.LOCAL, null);
         }
+    }
+
+    private enum ClusterManagerType {
+        LOCAL, REMOTE
     }
 
     private static class ClusterManagerInfo {
         final Path scriptPath;
-        final String type;
+        final ClusterManagerType type;
         final String host;
 
-        ClusterManagerInfo(Path scriptPath, String type, String host) {
+        ClusterManagerInfo(Path scriptPath, ClusterManagerType type, String host) {
             this.scriptPath = scriptPath;
             this.type = type;
             this.host = host;
@@ -107,7 +111,7 @@ public class ValkeyCluster implements AutoCloseable {
             command.add(managerInfo.scriptPath.toString());
 
             // Add manager-specific arguments
-            if ("remote".equals(managerInfo.type)) {
+            if (managerInfo.type == ClusterManagerType.REMOTE) {
                 command.add("--host");
                 command.add(managerInfo.host);
 
@@ -178,7 +182,7 @@ public class ValkeyCluster implements AutoCloseable {
                 throw new RuntimeException("Failed to create cluster: " + output);
             }
 
-            if ("remote".equals(managerInfo.type)) {
+            if (managerInfo.type == ClusterManagerType.REMOTE) {
                 parseRemoteClusterOutput(output.toString());
             } else {
                 parseClusterScriptStartOutput(output.toString());
@@ -298,7 +302,7 @@ public class ValkeyCluster implements AutoCloseable {
             command.addAll(getPythonCommand());
 
             // Use appropriate script based on manager type
-            if ("remote".equals(managerInfo.type)) {
+            if (managerInfo.type == ClusterManagerType.REMOTE) {
                 command.add(managerInfo.scriptPath.toString());
                 command.add("--host");
                 command.add(managerInfo.host);
@@ -308,7 +312,7 @@ public class ValkeyCluster implements AutoCloseable {
                 String engineVersion = System.getProperty("engine-version", "valkey-8.0");
                 command.add("--engine");
                 command.add(engineVersion);
-            } else if ("remote".equals(managerInfo.type)) {
+            } else if (managerInfo.type == ClusterManagerType.REMOTE) {
                 command.add(managerInfo.scriptPath.toString());
                 command.add("--host");
                 command.add(managerInfo.host);
@@ -349,7 +353,7 @@ public class ValkeyCluster implements AutoCloseable {
             }
 
             try {
-                int timeoutSeconds = "remote".equals(managerInfo.type) ? 30 : 20;
+                int timeoutSeconds = managerInfo.type == ClusterManagerType.REMOTE ? 30 : 20;
                 if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
                     process.destroy();
                     throw new IOException("Timeout waiting for cluster shutdown");
