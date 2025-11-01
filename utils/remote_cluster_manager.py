@@ -10,7 +10,6 @@ import os
 import subprocess
 import sys
 import tempfile
-import time
 from typing import List, Optional
 
 LOG_LEVELS = {
@@ -21,6 +20,7 @@ LOG_LEVELS = {
     "info": logging.INFO,
     "debug": logging.DEBUG,
 }
+
 
 def init_logger(logfile: str):
     print(f"LOG_FILE={logfile}")
@@ -43,8 +43,10 @@ class RemoteClusterManager:
         # Validate engine version
         supported_versions = ["7.2", "8.0", "8.1", "9.0"]
         if engine_version not in supported_versions:
-            raise ValueError(f"Unsupported engine version: {engine_version}. Supported: {supported_versions}")
-        
+            raise ValueError(
+                f"Unsupported engine version: {engine_version}. Supported: {supported_versions}"
+            )
+
         self.host = host
         self.user = user
         self.key_path: Optional[str] = key_path
@@ -195,7 +197,9 @@ class RemoteClusterManager:
         sudo apt-get install -y build-essential git pkg-config libssl-dev
         """
 
-        returncode, stdout, stderr = self._execute_remote_command(setup_cmd, timeout=300)
+        returncode, stdout, stderr = self._execute_remote_command(
+            setup_cmd, timeout=300
+        )
         if returncode != 0:
             logging.error(f"Failed to setup base environment: {stderr}")
             return False
@@ -221,7 +225,9 @@ class RemoteClusterManager:
         make BUILD_TLS=yes -j$(nproc)
         """
 
-        returncode, stdout, stderr = self._execute_remote_command(install_cmd, timeout=600)
+        returncode, stdout, stderr = self._execute_remote_command(
+            install_cmd, timeout=600
+        )
         if returncode != 0:
             logging.error(f"Failed to install Valkey {self.engine_version}: {stderr}")
             return False
@@ -249,30 +255,45 @@ class RemoteClusterManager:
             f"Starting cluster on {self.host} (shards={shard_count}, replicas={replica_count})..."
         )
 
-        # Copy TLS files to remote host if provided, or use defaults
+        # Handle TLS certificate files
         remote_tls_cert = None
         remote_tls_key = None
         remote_tls_ca = None
-        
+
         if tls:
-            # Use provided files or defaults (same as cluster_manager.py)
-            import os
-            GLIDE_HOME_DIR = os.getenv("GLIDE_HOME_DIR") or f"{__file__}/.."
-            TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/tls_crts")
-            
-            local_cert = tls_cert_file or f"{TLS_FOLDER}/server.crt"
-            local_key = tls_key_file or f"{TLS_FOLDER}/server.key"
-            local_ca = tls_ca_cert_file or f"{TLS_FOLDER}/ca.crt"
-            
-            # Copy cert and key files (always needed for TLS)
-            remote_tls_cert = f"{self.remote_repo_path}/tls_cert.pem"
-            remote_tls_key = f"{self.remote_repo_path}/tls_key.pem"
-            self._copy_file_to_remote(local_cert, remote_tls_cert)
-            self._copy_file_to_remote(local_key, remote_tls_key)
-            
-            # Copy CA file only if specified or using defaults
-            if tls_ca_cert_file or not (tls_cert_file or tls_key_file):
-                # Use CA if explicitly provided OR if using all defaults
+            # Import TLS functions from cluster_manager
+            from cluster_manager import (
+                CA_CRT,
+                SERVER_CRT,
+                SERVER_KEY,
+                generate_tls_certs,
+                should_generate_new_tls_certs,
+            )
+
+            # Generate default certs locally if needed
+            if not tls_cert_file and not tls_key_file and not tls_ca_cert_file:
+                if should_generate_new_tls_certs():
+                    logging.info("Generating TLS certificates locally...")
+                    generate_tls_certs()
+
+                # Use generated default files
+                local_cert = SERVER_CRT
+                local_key = SERVER_KEY
+                local_ca = CA_CRT
+            else:
+                # Use provided files
+                local_cert = tls_cert_file
+                local_key = tls_key_file
+                local_ca = tls_ca_cert_file
+
+            # Copy files to remote host
+            if local_cert:
+                remote_tls_cert = f"{self.remote_repo_path}/tls_cert.pem"
+                self._copy_file_to_remote(local_cert, remote_tls_cert)
+            if local_key:
+                remote_tls_key = f"{self.remote_repo_path}/tls_key.pem"
+                self._copy_file_to_remote(local_key, remote_tls_key)
+            if local_ca:
                 remote_tls_ca = f"{self.remote_repo_path}/tls_ca.pem"
                 self._copy_file_to_remote(local_ca, remote_tls_ca)
 
@@ -288,19 +309,13 @@ class RemoteClusterManager:
         if cluster_mode:
             cmd_parts.append("--cluster-mode")
         if tls:
-            # Pass TLS arguments based on what's available
-            assert remote_tls_cert is not None
-            assert remote_tls_key is not None  
-            cmd_parts.append("--tls")
+            # Always pass TLS cert files when TLS is enabled
             cmd_parts.append("--tls-cert-file")
             cmd_parts.append(remote_tls_cert)
             cmd_parts.append("--tls-key-file")
             cmd_parts.append(remote_tls_key)
-            
-            # Only add CA cert if it was copied
-            if remote_tls_ca is not None:
-                cmd_parts.append("--tls-ca-cert-file")
-                cmd_parts.append(remote_tls_ca)
+            cmd_parts.append("--tls-ca-cert-file")
+            cmd_parts.append(remote_tls_ca)
 
         cmd_parts.extend(["-n", str(shard_count), "-r", str(replica_count)])
         if load_module:
@@ -354,9 +369,7 @@ class RemoteClusterManager:
         """Stop cluster on remote host"""
         logging.info(f"Stopping cluster on {self.host}...")
 
-        stop_cmd = (
-            f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && python3 cluster_manager.py stop"
-        )
+        stop_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && python3 cluster_manager.py stop"
         returncode, stdout, stderr = self._execute_remote_command(stop_cmd)
 
         if returncode != 0:
@@ -383,39 +396,44 @@ class RemoteClusterManager:
         """Copy a local file to remote host using scp"""
         try:
             import subprocess
-            
+
             assert self.key_path is not None  # Guaranteed by _setup_ssh_key
             scp_cmd = [
                 "scp",
-                "-i", self.key_path,
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
+                "-i",
+                self.key_path,
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
                 local_path,
-                f"{self.user}@{self.host}:{remote_path}"
+                f"{self.user}@{self.host}:{remote_path}",
             ]
-            
+
             result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
             if result.returncode != 0:
                 logging.error(f"Failed to copy {local_path} to remote: {result.stderr}")
                 return False
-            
+
             logging.info(f"Copied {local_path} to {remote_path}")
             return True
-            
+
         except Exception as e:
             logging.error(f"Error copying file to remote: {e}")
             return False
 
 
 def main():
-    logfile = f"./cluster_manager.log"
+    logfile = "./cluster_manager.log"
     init_logger(logfile)
 
     parser = argparse.ArgumentParser(description="Remote Cluster Manager")
     parser.add_argument("--host", help="Remote Linux host IP/hostname")
     parser.add_argument("--user", default="ubuntu", help="SSH user (default: ubuntu)")
     parser.add_argument("--key-path", help="SSH private key path")
-    parser.add_argument("--engine-version", default="8.0", help="Valkey engine version (default: 8.0)")
+    parser.add_argument(
+        "--engine-version", default="8.0", help="Valkey engine version (default: 8.0)"
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
@@ -431,19 +449,19 @@ def main():
         "-r", "--replica-count", type=int, default=1, help="Number of replicas"
     )
     start_parser.add_argument("--tls", action="store_true", help="Enable TLS")
-    start_parser.add_argument("--tls-cert-file", type=str, help="Path to TLS certificate file")
+    start_parser.add_argument(
+        "--tls-cert-file", type=str, help="Path to TLS certificate file"
+    )
     start_parser.add_argument("--tls-key-file", type=str, help="Path to TLS key file")
-    start_parser.add_argument("--tls-ca-cert-file", type=str, help="Path to TLS CA certificate file")
+    start_parser.add_argument(
+        "--tls-ca-cert-file", type=str, help="Path to TLS CA certificate file"
+    )
     start_parser.add_argument("--load-module", action="append", help="Load module")
 
-    # Stop command
-    stop_parser = subparsers.add_parser("stop", help="Stop remote cluster")
-
-    # Status command
-    status_parser = subparsers.add_parser("status", help="Get cluster status")
-
-    # Test command
-    test_parser = subparsers.add_parser("test", help="Test SSH connection")
+    # Other subcommands (parsers created but not used yet)
+    subparsers.add_parser("stop", help="Stop remote cluster")
+    subparsers.add_parser("status", help="Get cluster status")
+    subparsers.add_parser("test", help="Test SSH connection")
 
     args = parser.parse_args()
 
@@ -467,7 +485,9 @@ def main():
     key_content = os.environ.get("SSH_PRIVATE_KEY_CONTENT")  # For GitHub secrets
 
     try:
-        manager = RemoteClusterManager(host, args.user, key_path, key_content, args.engine_version)
+        manager = RemoteClusterManager(
+            host, args.user, key_path, key_content, args.engine_version
+        )
 
         if args.command == "test":
             if manager.test_connection():
