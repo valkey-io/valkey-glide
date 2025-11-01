@@ -190,7 +190,7 @@ jobs:
               run: |
                   # Stop any existing Gradle daemons to avoid compatibility issues
                   .\gradlew.bat --stop                
-                  .\gradlew.bat --build-cache --continue build test -x javadoc -Dengine-version=${{ matrix.engine.version }}
+                  .\gradlew.bat --build-cache --continue build test -x javadoc "-Dengine-version=${{ matrix.engine.version }}"
 
             - name: Build java client (Linux/macOS)
               if: ${{ matrix.host.OS != 'windows' }}
@@ -199,7 +199,7 @@ jobs:
                   CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
               shell: bash
               run: |
-                  ./gradlew --build-cache --continue build test -x javadoc -Dengine-version=${{ matrix.engine.version }}
+                  ./gradlew --build-cache --continue build test -x javadoc "-Dengine-version=${{ matrix.engine.version }}"
 
             - name: Ensure no skipped files by linter (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
@@ -308,7 +308,7 @@ jobs:
                   .\gradlew.bat --stop
 
                   # Run the pubsub tests with info logging
-                  .\gradlew.bat --build-cache --info :integTest:pubsubTest -Dengine-version=${{ matrix.engine.version }}
+                  .\gradlew.bat --build-cache --info :integTest:pubsubTest "-Dengine-version=${{ matrix.engine.version }}"
 
             - name: Test pubsub (Linux/macOS)
               if: ${{ matrix.host.OS != 'windows' }}
@@ -317,7 +317,7 @@ jobs:
               env:
                   CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
               run: |
-                  ./gradlew --build-cache :integTest:pubsubTest -Dengine-version=${{ matrix.engine.version }}
+                  ./gradlew --build-cache :integTest:pubsubTest "-Dengine-version=${{ matrix.engine.version }}"
 
             - name: Upload test & spotbugs reports
               if: always()
@@ -453,7 +453,7 @@ jobs:
                       export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
                       export PATH=$HOME/.cargo/bin:$PATH
                   fi
-                  ./gradlew --stacktrace --build-cache --continue build -x javadoc -Dengine-version=${{ matrix.engine.version }}
+                  ./gradlew --stacktrace --build-cache --continue build -x javadoc "-Dengine-version=${{ matrix.engine.version }}"
 
             - name: Upload test & spotbugs reports
               if: always()
