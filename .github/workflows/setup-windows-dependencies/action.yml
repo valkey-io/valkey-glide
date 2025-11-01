@@ -29,7 +29,7 @@ runs:
                   $env:PATH = "$chocoPath;$env:PATH"
                   Write-Host "Added Chocolatey to PATH: $chocoPath"
               }
-          
+
               if (Get-Command choco -ErrorAction SilentlyContinue) {
                   Write-Host "Chocolatey already available"
                   choco --version
