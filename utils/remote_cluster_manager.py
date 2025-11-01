@@ -351,9 +351,9 @@ class RemoteClusterManager:
         try:
             # Look for CLUSTER_NODES= output from cluster_manager.py
             endpoints = []
-            for line in stdout.strip().split("\n"):
+            for line in stdout.strip().splitlines():
                 if line.startswith("CLUSTER_NODES="):
-                    nodes_str = line.split("=", 1)[1]
+                    nodes_str = line.split("=", 1)[1].strip()  # Strip the entire value
                     # Parse the comma-separated host:port pairs
                     for node in nodes_str.split(","):
                         node = node.strip()
