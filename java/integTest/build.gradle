@@ -129,13 +129,7 @@ tasks.register('startCluster') {
                         standardOutput = os
                     }
                     // Parse remote cluster endpoints
-                    def output = os.toString()
-                    def endpointsLine = output.lines().find { it.startsWith("CLUSTER_ENDPOINTS=") }
-                    if (endpointsLine) {
-                        clusterHosts = endpointsLine.substring("CLUSTER_ENDPOINTS=".length()).split(",").collect { it.trim() }
-                    } else {
-                        throw new GradleException("Failed to get cluster endpoints from remote host: ${output}")
-                    }
+                    clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
                 }
             } else {
                 // Use local cluster manager (original behavior for non-Windows)
@@ -176,13 +170,7 @@ tasks.register('startClusterForAz') {
                         standardOutput = os
                     }
                     // Parse remote cluster endpoints
-                    def output = os.toString()
-                    def endpointsLine = output.lines().find { it.startsWith("CLUSTER_ENDPOINTS=") }
-                    if (endpointsLine) {
-                        azClusterHosts = endpointsLine.substring("CLUSTER_ENDPOINTS=".length()).split(",").collect { it.trim() }
-                    } else {
-                        throw new GradleException("Failed to get cluster endpoints from remote host: ${output}")
-                    }
+                    azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
                 }
             } else {
                 // Use local cluster manager (original behavior for non-Windows)
@@ -280,13 +268,7 @@ tasks.register('startClusterTls') {
                         standardOutput = os
                     }
                     // Parse remote cluster endpoints
-                    def output = os.toString()
-                    def endpointsLine = output.lines().find { it.startsWith("CLUSTER_ENDPOINTS=") }
-                    if (endpointsLine) {
-                        clusterTlsHosts = endpointsLine.substring("CLUSTER_ENDPOINTS=".length()).split(",").collect { it.trim() }
-                    } else {
-                        throw new GradleException("Failed to get cluster endpoints from remote host: ${output}")
-                    }
+                    clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
                 }
             } else {
                 // Use local cluster manager
