@@ -241,10 +241,40 @@ class TlsAdvancedConfiguration:
               Enabling it without TLS will result in a `ConfigurationError`.
 
             - Default: False (verification is enforced).
+
+        root_pem_cacerts (Optional[bytes]): Custom root certificate data for TLS connections in PEM format.
+
+            - When provided, these certificates will be used instead of the system's default trust store.
+              This is useful for connecting to servers with self-signed certificates or corporate
+              certificate authorities.
+
+            - If set to an empty bytes object (non-None but length 0), a `ConfigurationError` will be raised.
+
+            - If None (default), the system's default certificate trust store will be used (platform verifier).
+
+            - The certificate data should be in PEM format as a bytes object.
+
+            - Multiple certificates can be provided by concatenating them in PEM format.
+
+            Example usage::
+
+                # Load from file
+                with open('/path/to/ca-cert.pem', 'rb') as f:
+                    cert_data = f.read()
+                tls_config = TlsAdvancedConfiguration(root_pem_cacerts=cert_data)
+
+                # Or provide directly
+                cert_data = b"-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----"
+                tls_config = TlsAdvancedConfiguration(root_pem_cacerts=cert_data)
     """
 
-    def __init__(self, use_insecure_tls: Optional[bool] = None):
+    def __init__(
+        self,
+        use_insecure_tls: Optional[bool] = None,
+        root_pem_cacerts: Optional[bytes] = None,
+    ):
         self.use_insecure_tls = use_insecure_tls
+        self.root_pem_cacerts = root_pem_cacerts
 
 
 class AdvancedBaseClientConfiguration:
@@ -275,13 +305,24 @@ class AdvancedBaseClientConfiguration:
         if self.connection_timeout:
             request.connection_timeout = self.connection_timeout
 
-        if self.tls_config and self.tls_config.use_insecure_tls:
-            if request.tls_mode == TlsMode.SecureTls:
+        if self.tls_config:
+            if self.tls_config.use_insecure_tls:
+                # Validate that TLS is enabled before allowing insecure mode
+                if request.tls_mode == TlsMode.NoTls:
+                    raise ConfigurationError(
+                        "use_insecure_tls cannot be enabled when use_tls is disabled."
+                    )
+
+                # Override the default SecureTls mode to InsecureTls when user explicitly requests it
                 request.tls_mode = TlsMode.InsecureTls
-            elif request.tls_mode == TlsMode.NoTls:
-                raise ConfigurationError(
-                    "use_insecure_tls cannot be enabled when use_tls is disabled."
-                )
+
+            # Handle root certificates
+            if self.tls_config.root_pem_cacerts is not None:
+                if len(self.tls_config.root_pem_cacerts) == 0:
+                    raise ConfigurationError(
+                        "root_pem_cacerts cannot be an empty bytes object; use None to use platform verifier"
+                    )
+                request.root_certs.append(self.tls_config.root_pem_cacerts)
 
         return request
 
@@ -891,3 +932,44 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         if self.pubsub_subscriptions:
             return self.pubsub_subscriptions.callback, self.pubsub_subscriptions.context
         return None, None
+
+
+def load_root_certificates_from_file(path: str) -> bytes:
+    """
+    Load PEM-encoded root certificates from a file.
+
+    This is a convenience function for loading custom root certificates from disk
+    to be used with TlsAdvancedConfiguration.
+
+    Args:
+        path (str): The file path to the PEM-encoded certificate file.
+
+    Returns:
+        bytes: The certificate data in PEM format.
+
+    Raises:
+        FileNotFoundError: If the certificate file does not exist.
+        ConfigurationError: If the certificate file is empty.
+
+    Example usage::
+
+        from glide_shared.config import load_root_certificates_from_file, TlsAdvancedConfiguration
+
+        # Load certificates from file
+        certs = load_root_certificates_from_file('/path/to/ca-cert.pem')
+
+        # Use in TLS configuration
+        tls_config = TlsAdvancedConfiguration(root_pem_cacerts=certs)
+    """
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Certificate file not found: {path}")
+    except Exception as e:
+        raise ConfigurationError(f"Failed to read certificate file: {e}")
+
+    if len(data) == 0:
+        raise ConfigurationError(f"Certificate file is empty: {path}")
+
+    return data

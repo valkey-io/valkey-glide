@@ -91,6 +91,7 @@ excluded_shared_symbols = [
     # python/glide-shared/glide_shared/config.py
     "BaseClientConfiguration",  # ClassDef
     "AdvancedBaseClientConfiguration",  # ClassDef
+    "load_root_certificates_from_file",  # FunctionDef
     # python/glide-shared/glide_shared/protobuf_codec.py
     "ProtobufCodec",  # ClassDef
     "PartialMessageException",  # Exception
