@@ -75,12 +75,8 @@ runs:
                   ENGINES=$(jq -c . < .github/json_matrices/engine-matrix.json)
               fi
 
-              # Exclude Redis 6.2 when Windows is included in host matrix
-              if [[ "$RUN_WITH_WINDOWS_SELF_HOSTED" == "true" ]]; then
-                  echo 'Excluding Redis 6.2 for Windows compatibility'
-                  ENGINES=$(echo "$ENGINES" | jq -c '[.[] | select(.version != "6.2")]')
-              fi
-
+              # Note: Redis 6.2 exclusion for Windows is handled in the host matrix filtering
+              # rather than globally excluding it from all platforms
               echo "engine-matrix=$ENGINES" >> $GITHUB_OUTPUT
 
         - name: Load host matrix
