@@ -1260,6 +1260,13 @@ def main():
     )
 
     parser_start.add_argument(
+        "--tls",
+        action="store_true",
+        help="Enable TLS (default: %(default)s)",
+        required=False,
+    )
+
+    parser_start.add_argument(
         "--tls-cert-file",
         type=str,
         help="Path to TLS certificate file (default: uses generated certificates)",
@@ -1330,8 +1337,10 @@ def main():
 
     args = parser.parse_args()
 
-    # Infer TLS mode from presence of TLS certificate arguments
-    args.tls = bool(
+    # TLS mode is enabled by --tls flag OR presence of TLS certificate arguments
+    if not hasattr(args, "tls"):
+        args.tls = False
+    args.tls = args.tls or bool(
         getattr(args, "tls_cert_file", None)
         or getattr(args, "tls_key_file", None)
         or getattr(args, "tls_ca_cert_file", None)
