@@ -283,11 +283,8 @@ class RemoteClusterManager:
         if cluster_mode:
             cmd_parts.append("--cluster-mode")
         if tls:
-            cmd_parts.append("--tls")
-            # Always pass TLS cert files when TLS is enabled (same as cluster_manager.py defaults)
-            cmd_parts.extend(["--tls-cert-file", remote_tls_cert])
-            cmd_parts.extend(["--tls-key-file", remote_tls_key])
-            cmd_parts.extend(["--tls-ca-cert-file", remote_tls_ca])
+            # Use full --tls flag to avoid ambiguity with --tls-cert-file etc
+            cmd_parts.extend(["--tls", "--tls-cert-file", remote_tls_cert, "--tls-key-file", remote_tls_key, "--tls-ca-cert-file", remote_tls_ca])
 
         cmd_parts.extend(["-n", str(shard_count), "-r", str(replica_count)])
         if load_module:
@@ -307,30 +304,24 @@ class RemoteClusterManager:
 
         # Parse cluster endpoints from output
         try:
-            # Look for JSON output in stdout
-            lines = stdout.strip().split("\n")
-            json_line = None
-            for line in lines:
-                if line.strip().startswith("[") and line.strip().endswith("]"):
-                    json_line = line.strip()
+            # Look for CLUSTER_NODES= output from cluster_manager.py
+            endpoints = []
+            for line in stdout.strip().split("\n"):
+                if line.startswith("CLUSTER_NODES="):
+                    nodes_str = line.split("=", 1)[1]
+                    # Parse the comma-separated host:port pairs
+                    for node in nodes_str.split(","):
+                        node = node.strip()
+                        if ":" in node:
+                            # Replace localhost/127.0.0.1 with remote host IP
+                            host, port = node.rsplit(":", 1)
+                            if host in ["127.0.0.1", "localhost"]:
+                                endpoints.append(f"{self.host}:{port}")
+                            else:
+                                endpoints.append(node)
                     break
 
-            if json_line:
-                endpoints_data = json.loads(json_line)
-                # Convert localhost to remote host IP
-                endpoints = []
-                for endpoint in endpoints_data:
-                    if (
-                        isinstance(endpoint, dict)
-                        and "host" in endpoint
-                        and "port" in endpoint
-                    ):
-                        endpoints.append(f"{self.host}:{endpoint['port']}")
-                    elif isinstance(endpoint, str):
-                        # Handle string format like "127.0.0.1:6379"
-                        _, port = endpoint.split(":")
-                        endpoints.append(f"{self.host}:{port}")
-
+            if endpoints:
                 logging.info(f"Cluster started successfully. Endpoints: {endpoints}")
                 return endpoints
             else:
@@ -379,7 +370,7 @@ class RemoteClusterManager:
             
             scp_cmd = [
                 "scp",
-                "-i", self.key_file,
+                "-i", self.ssh_key_path,
                 "-o", "StrictHostKeyChecking=no",
                 "-o", "UserKnownHostsFile=/dev/null",
                 local_path,
