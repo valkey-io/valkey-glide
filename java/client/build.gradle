@@ -127,9 +127,12 @@ tasks.register('buildRust', Exec) {
         commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
         environment RUSTFLAGS: '-C target-feature=-crt-static'
     } else if (target.contains("windows")) {
-        commandLine 'cargo', 'build', '--target', "$target", '--release'
+        commandLine 'cargo', 'build', '--target', "$target", '--release', '-j', '4'
+        environment CARGO_BUILD_JOBS: '4'
+        environment RUSTFLAGS: '-C codegen-units=16 -C link-arg=-fuse-ld=lld'
     } else {
         commandLine 'cargo', 'build', '--release'
+        environment RUSTFLAGS: '-C codegen-units=16'
     }
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always'
