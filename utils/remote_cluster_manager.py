@@ -295,10 +295,19 @@ class RemoteClusterManager:
                 if remote_tls_ca:
                     cmd_parts.extend(["--tls-ca-cert-file", remote_tls_ca])
             else:
-                # No custom files - use --tls flag (remote will generate defaults)
-                cmd_parts.append("--tls")
+                # No custom files - pass empty cert args to trigger TLS mode
+                cmd_parts.extend(
+                    [
+                        "--tls-cert-file",
+                        "",
+                        "--tls-key-file",
+                        "",
+                        "--tls-ca-cert-file",
+                        "",
+                    ]
+                )
 
-                # We'll copy the generated certs back after cluster starts
+                # Set paths for copying generated certs back after cluster starts
                 remote_tls_cert = f"{self.remote_repo_path}/utils/tls_crts/server.crt"
                 remote_tls_key = f"{self.remote_repo_path}/utils/tls_crts/server.key"
                 remote_tls_ca = f"{self.remote_repo_path}/utils/tls_crts/ca.crt"

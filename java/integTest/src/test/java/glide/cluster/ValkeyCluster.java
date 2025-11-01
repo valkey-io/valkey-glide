@@ -146,9 +146,7 @@ public class ValkeyCluster implements AutoCloseable {
             }
 
             if (tls) {
-                command.add("--tls");
-
-                // Add TLS certificate files if specified
+                // Add TLS certificate files if specified, or empty args to trigger TLS mode
                 String tlsCertFile = System.getProperty("tls-cert-file");
                 String tlsKeyFile = System.getProperty("tls-key-file");
                 String tlsCaFile = System.getProperty("tls-ca-cert-file");
@@ -156,14 +154,25 @@ public class ValkeyCluster implements AutoCloseable {
                 if (tlsCertFile != null && !tlsCertFile.isEmpty()) {
                     command.add("--tls-cert-file");
                     command.add(tlsCertFile);
+                } else {
+                    command.add("--tls-cert-file");
+                    command.add("");
                 }
+
                 if (tlsKeyFile != null && !tlsKeyFile.isEmpty()) {
                     command.add("--tls-key-file");
                     command.add(tlsKeyFile);
+                } else {
+                    command.add("--tls-key-file");
+                    command.add("");
                 }
+
                 if (tlsCaFile != null && !tlsCaFile.isEmpty()) {
                     command.add("--tls-ca-cert-file");
                     command.add(tlsCaFile);
+                } else {
+                    command.add("--tls-ca-cert-file");
+                    command.add("");
                 }
             }
 
