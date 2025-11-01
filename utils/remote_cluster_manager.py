@@ -286,6 +286,17 @@ class RemoteClusterManager:
                     self._copy_file_to_remote(tls_ca_cert_file, remote_tls_ca)
             # If no custom files, let remote cluster_manager.py generate defaults
 
+        # Get the internal IP of the remote host for binding
+        internal_ip = self._get_remote_internal_ip()
+        if not internal_ip:
+            logging.warning(
+                "Could not determine remote internal IP, using default bind"
+            )
+            bind_ip = None
+        else:
+            logging.info(f"Using internal IP for binding: {internal_ip}")
+            bind_ip = internal_ip
+
         # Build cluster_manager.py command with engine-specific PATH
         cmd_parts = [
             f"cd {self.remote_repo_path}/utils",
@@ -294,6 +305,9 @@ class RemoteClusterManager:
             "&&",
             "python3 cluster_manager_local.py start",
         ]
+
+        if bind_ip:
+            cmd_parts.extend(["--host", bind_ip])
 
         if cluster_mode:
             cmd_parts.append("--cluster-mode")
@@ -355,6 +369,24 @@ class RemoteClusterManager:
             if endpoints:
                 logging.info(f"Cluster started successfully. Endpoints: {endpoints}")
 
+                # Verify connectivity to endpoints
+                logging.info("Verifying connectivity to cluster endpoints...")
+                reachable_endpoints = []
+                for endpoint in endpoints:
+                    if self._test_endpoint_connectivity(endpoint):
+                        reachable_endpoints.append(endpoint)
+                        logging.info(f"✓ {endpoint} is reachable")
+                    else:
+                        logging.warning(f"✗ {endpoint} is not reachable")
+
+                if not reachable_endpoints:
+                    logging.error("No endpoints are reachable from local machine")
+                    return None
+                elif len(reachable_endpoints) < len(endpoints):
+                    logging.warning(
+                        f"Only {len(reachable_endpoints)}/{len(endpoints)} endpoints are reachable"
+                    )
+
                 # Copy TLS certificates back to local machine if using defaults
                 if tls and not (tls_cert_file or tls_key_file or tls_ca_cert_file):
                     logging.info("Copying generated TLS certificates from remote...")
@@ -366,15 +398,18 @@ class RemoteClusterManager:
                     os.makedirs(local_tls_dir, exist_ok=True)
 
                     # Copy certificates
-                    self._copy_file_from_remote(
-                        remote_tls_cert, os.path.join(local_tls_dir, "server.crt")
-                    )
-                    self._copy_file_from_remote(
-                        remote_tls_key, os.path.join(local_tls_dir, "server.key")
-                    )
-                    self._copy_file_from_remote(
-                        remote_tls_ca, os.path.join(local_tls_dir, "ca.crt")
-                    )
+                    if remote_tls_cert:
+                        self._copy_file_from_remote(
+                            remote_tls_cert, os.path.join(local_tls_dir, "server.crt")
+                        )
+                    if remote_tls_key:
+                        self._copy_file_from_remote(
+                            remote_tls_key, os.path.join(local_tls_dir, "server.key")
+                        )
+                    if remote_tls_ca:
+                        self._copy_file_from_remote(
+                            remote_tls_ca, os.path.join(local_tls_dir, "ca.crt")
+                        )
 
                 return endpoints
             else:
@@ -444,6 +479,47 @@ class RemoteClusterManager:
 
         except Exception as e:
             logging.error(f"Error copying file from remote: {e}")
+            return False
+
+    def _get_remote_internal_ip(self) -> Optional[str]:
+        """Get the internal IP address of the remote host"""
+        try:
+            # Try to get the IP that would be used to reach the internet (usually the VPC internal IP)
+            cmd = "ip route get 8.8.8.8 | awk '{print $7; exit}'"
+            returncode, stdout, stderr = self._execute_remote_command(cmd)
+            if returncode == 0 and stdout.strip():
+                internal_ip = stdout.strip()
+                logging.debug(f"Detected internal IP via route: {internal_ip}")
+                return internal_ip
+
+            # Fallback: get IP of the default interface
+            cmd = "hostname -I | awk '{print $1}'"
+            returncode, stdout, stderr = self._execute_remote_command(cmd)
+            if returncode == 0 and stdout.strip():
+                internal_ip = stdout.strip()
+                logging.debug(f"Detected internal IP via hostname: {internal_ip}")
+                return internal_ip
+
+        except Exception as e:
+            logging.warning(f"Failed to detect remote internal IP: {e}")
+
+        return None
+
+    def _test_endpoint_connectivity(self, endpoint: str, timeout: int = 5) -> bool:
+        """Test if an endpoint is reachable via TCP connection"""
+        try:
+            host, port = endpoint.rsplit(":", 1)
+            port = int(port)
+
+            import socket
+
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+            result = sock.connect_ex((host, port))
+            sock.close()
+            return result == 0
+        except Exception as e:
+            logging.debug(f"Connectivity test failed for {endpoint}: {e}")
             return False
 
     def _copy_file_to_remote(self, local_path: str, remote_path: str) -> bool:
