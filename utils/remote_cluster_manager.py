@@ -38,13 +38,22 @@ class RemoteClusterManager:
         user: str = "ubuntu",
         key_path: Optional[str] = None,
         key_content: Optional[str] = None,
+        engine_version: str = "8.0",
     ):
+        # Validate engine version
+        supported_versions = ["7.2", "8.0", "8.1", "9.0"]
+        if engine_version not in supported_versions:
+            raise ValueError(f"Unsupported engine version: {engine_version}. Supported: {supported_versions}")
+        
         self.host = host
         self.user = user
         self.key_path = key_path
         self.key_content = key_content
         self.temp_key_file = None
         self.remote_repo_path = "/home/ubuntu/valkey-glide"
+        self.engine_version = engine_version
+        self.engines_base_path = "/opt/engines"
+        self.engine_path = f"{self.engines_base_path}/valkey-{engine_version}"
 
         # Handle SSH key from environment or content
         self._setup_ssh_key()
@@ -140,6 +149,10 @@ class RemoteClusterManager:
             logging.error("[FAIL] SSH connection failed")
             return False
 
+        # Setup engines directory and install engine if needed
+        if not self._setup_engine():
+            return False
+
         # Check if repo exists, clone if not
         check_repo = f"test -d {self.remote_repo_path}"
         returncode, _, _ = self._execute_remote_command(check_repo)
@@ -168,6 +181,52 @@ class RemoteClusterManager:
 
         return True
 
+    def _setup_engine(self) -> bool:
+        """Setup engine directory and install Valkey if needed"""
+        logging.info(f"Setting up Valkey {self.engine_version}...")
+
+        # Create engines base directory
+        setup_cmd = f"""
+        sudo mkdir -p {self.engines_base_path}
+        sudo chown ubuntu:ubuntu {self.engines_base_path}
+        sudo apt-get update -qq
+        sudo apt-get install -y build-essential git pkg-config libssl-dev
+        """
+
+        returncode, stdout, stderr = self._execute_remote_command(setup_cmd, timeout=300)
+        if returncode != 0:
+            logging.error(f"Failed to setup base environment: {stderr}")
+            return False
+
+        # Check if engine is already installed
+        check_engine = f"test -f {self.engine_path}/src/valkey-server"
+        returncode, _, _ = self._execute_remote_command(check_engine)
+
+        if returncode == 0:
+            logging.info(f"Valkey {self.engine_version} already installed")
+            return True
+
+        # Install engine
+        logging.info(f"Installing Valkey {self.engine_version}...")
+        install_cmd = f"""
+        cd {self.engines_base_path}
+        if [ -d "valkey-{self.engine_version}" ]; then
+            rm -rf valkey-{self.engine_version}
+        fi
+        git clone https://github.com/valkey-io/valkey.git valkey-{self.engine_version}
+        cd valkey-{self.engine_version}
+        git checkout {self.engine_version}
+        make BUILD_TLS=yes -j$(nproc)
+        """
+
+        returncode, stdout, stderr = self._execute_remote_command(install_cmd, timeout=600)
+        if returncode != 0:
+            logging.error(f"Failed to install Valkey {self.engine_version}: {stderr}")
+            return False
+
+        logging.info(f"Successfully installed Valkey {self.engine_version}")
+        return True
+
     def start_cluster(
         self,
         cluster_mode: bool = True,
@@ -185,9 +244,11 @@ class RemoteClusterManager:
             f"Starting cluster on {self.host} (shards={shard_count}, replicas={replica_count})..."
         )
 
-        # Build cluster_manager.py command
+        # Build cluster_manager.py command with engine-specific PATH
         cmd_parts = [
             f"cd {self.remote_repo_path}/utils",
+            "&&",
+            f"export PATH={self.engine_path}/src:$PATH",
             "&&",
             "python3 cluster_manager.py start",
         ]
@@ -256,7 +317,7 @@ class RemoteClusterManager:
         logging.info(f"Stopping cluster on {self.host}...")
 
         stop_cmd = (
-            f"cd {self.remote_repo_path}/utils && python3 cluster_manager.py stop"
+            f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && python3 cluster_manager.py stop"
         )
         returncode, stdout, stderr = self._execute_remote_command(stop_cmd)
 
@@ -269,12 +330,13 @@ class RemoteClusterManager:
 
     def get_cluster_status(self) -> Optional[dict]:
         """Get cluster status from remote host"""
-        status_cmd = f"cd {self.remote_repo_path}/utils && python3 cluster_manager.py status || echo 'No cluster running'"
+        status_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && python3 cluster_manager.py status || echo 'No cluster running'"
         returncode, stdout, stderr = self._execute_remote_command(status_cmd)
 
         # Return basic status info
         return {
             "host": self.host,
+            "engine_version": self.engine_version,
             "status": "running" if returncode == 0 else "stopped",
             "output": stdout.strip(),
         }
@@ -288,6 +350,7 @@ def main():
     parser.add_argument("--host", help="Remote Linux host IP/hostname")
     parser.add_argument("--user", default="ubuntu", help="SSH user (default: ubuntu)")
     parser.add_argument("--key-path", help="SSH private key path")
+    parser.add_argument("--engine-version", default="8.0", help="Valkey engine version (default: 8.0)")
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
@@ -336,7 +399,7 @@ def main():
     key_content = os.environ.get("SSH_PRIVATE_KEY_CONTENT")  # For GitHub secrets
 
     try:
-        manager = RemoteClusterManager(host, args.user, key_path, key_content)
+        manager = RemoteClusterManager(host, args.user, key_path, key_content, args.engine_version)
 
         if args.command == "test":
             if manager.test_connection():

@@ -217,7 +217,7 @@ jobs:
                 Write-Host "NPM_SCOPE= $env:NPM_SCOPE"
                 Write-Host "=== DEBUG END ==="
                 
-                .\gradlew.bat --build-cache --continue build test -x javadoc
+                .\gradlew.bat --build-cache --continue build test -x javadoc -Dengine-version=${{ matrix.engine.version }}
 
             - name: Build java client (Linux/macOS)
               if: ${{ matrix.host.OS != 'windows' }}
@@ -226,7 +226,7 @@ jobs:
                   CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
               shell: bash
               run: |
-                  ./gradlew --build-cache --continue build test -x javadoc
+                  ./gradlew --build-cache --continue build test -x javadoc -Dengine-version=${{ matrix.engine.version }}
 
             - name: Ensure no skipped files by linter (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
@@ -342,7 +342,7 @@ jobs:
                 Write-Host "=== PUBSUB DEBUG END ==="
                 
                 # Run the pubsub tests with info logging
-                .\gradlew.bat --build-cache --info :integTest:pubsubTest
+                .\gradlew.bat --build-cache --info :integTest:pubsubTest -Dengine-version=${{ matrix.engine.version }}
 
             - name: Test pubsub (Linux/macOS)
               if: ${{ matrix.host.OS != 'windows' }}
@@ -351,7 +351,7 @@ jobs:
               env:
                 CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
               run: |
-                  ./gradlew --build-cache :integTest:pubsubTest
+                  ./gradlew --build-cache :integTest:pubsubTest -Dengine-version=${{ matrix.engine.version }}
 
             - name: Upload test & spotbugs reports
               if: always()
@@ -487,7 +487,7 @@ jobs:
                       export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
                       export PATH=$HOME/.cargo/bin:$PATH
                   fi
-                  ./gradlew --stacktrace --build-cache --continue build -x javadoc
+                  ./gradlew --stacktrace --build-cache --continue build -x javadoc -Dengine-version=${{ matrix.engine.version }}
 
             - name: Upload test & spotbugs reports
               if: always()
