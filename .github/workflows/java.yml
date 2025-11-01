@@ -179,24 +179,6 @@ jobs:
                       Write-Host "python command not found, skipping symlink creation"
                   }
 
-            - name: Configure VPC/Remote Valkey instance (Windows)
-              if: ${{ matrix.host.OS == 'windows' }}
-              shell: powershell
-              run: |
-                  # Check configuration priority: VPC > Remote > Local
-                  if ("${{ vars.VALKEY_VPC_HOST }}" -ne "") {
-                      Write-Host "Configuring VPC Valkey instance access..."
-                      echo "VALKEY_VPC_HOST=${{ vars.VALKEY_VPC_HOST }}" >> $env:GITHUB_ENV
-                      Write-Host "VPC Valkey configured: ${{ vars.VALKEY_VPC_HOST }}"
-                  } elseif ("${{ vars.VALKEY_REMOTE_HOST }}" -ne "") {
-                      Write-Host "Configuring remote Valkey instance access..."
-                      echo "VALKEY_REMOTE_HOST=${{ vars.VALKEY_REMOTE_HOST }}" >> $env:GITHUB_ENV
-                      Write-Host "Remote Valkey configured: ${{ vars.VALKEY_REMOTE_HOST }}"
-                  } else {
-                      Write-Host "No remote Valkey configured - will use local cluster"
-                      Write-Host "NPM_SCOPE=${{ vars.NPM_SCOPE }}"
-                  }
-
             - name: Build java client (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
               working-directory: java
@@ -207,16 +189,7 @@ jobs:
                   NPM_SCOPE: ${{ vars.NPM_SCOPE }}
               run: |
                 # Stop any existing Gradle daemons to avoid compatibility issues
-                .\gradlew.bat --stop
-
-                # Debug: Show environment variables
-                Write-Host "=== DEBUG START ==="
-                Write-Host "VALKEY_REMOTE_HOST: '$env:VALKEY_REMOTE_HOST'"
-                Write-Host "VALKEY_REMOTE_HOST length: $($env:VALKEY_REMOTE_HOST.Length)"
-                Write-Host "PATH contains Python: $(if ($env:PATH -like '*Python*') { 'YES' } else { 'NO' })"
-                Write-Host "NPM_SCOPE= $env:NPM_SCOPE"
-                Write-Host "=== DEBUG END ==="
-                
+                .\gradlew.bat --stop                
                 .\gradlew.bat --build-cache --continue build test -x javadoc -Dengine-version=${{ matrix.engine.version }}
 
             - name: Build java client (Linux/macOS)
@@ -333,13 +306,6 @@ jobs:
               run: |
                 # Stop any existing Gradle daemons to avoid compatibility issues
                 .\gradlew.bat --stop
-                
-                # Debug: Show environment variables for pubsub
-                Write-Host "=== PUBSUB DEBUG START ==="
-                Write-Host "PUBSUB - VALKEY_REMOTE_HOST: '$env:VALKEY_REMOTE_HOST'"
-                Write-Host "PUBSUB - VALKEY_REMOTE_HOST length: $($env:VALKEY_REMOTE_HOST.Length)"
-                Write-Host "PUBSUB - PATH contains Python: $(if ($env:PATH -like '*Python*') { 'YES' } else { 'NO' })"
-                Write-Host "=== PUBSUB DEBUG END ==="
                 
                 # Run the pubsub tests with info logging
                 .\gradlew.bat --build-cache --info :integTest:pubsubTest -Dengine-version=${{ matrix.engine.version }}
