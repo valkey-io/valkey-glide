@@ -564,7 +564,7 @@ def main():
             )
             if endpoints:
                 # Output endpoints in format expected by Gradle (to stdout)
-                print("CLUSTER_ENDPOINTS=" + ",".join(endpoints))
+                print("CLUSTER_NODES=" + ",".join(endpoints))
                 return 0
             else:
                 return 1
