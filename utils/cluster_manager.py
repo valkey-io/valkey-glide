@@ -443,6 +443,10 @@ def start_server(
         "--save",
         "",
     ]
+
+    # Add bind directive if host is not localhost (for remote access)
+    if host not in ["127.0.0.1", "localhost"]:
+        cmd_args.extend(["--bind", host])
     if server_version >= (7, 0, 0):
         cmd_args.extend(["--enable-debug-command", "yes"])
     # Enable multi-database support in cluster mode for Valkey 9.0+
