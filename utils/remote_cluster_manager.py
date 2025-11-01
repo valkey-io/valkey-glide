@@ -173,15 +173,27 @@ class RemoteClusterManager:
 
         # Update repository
         logging.info("Updating repository...")
-        update_cmd = f"cd {self.remote_repo_path} && git pull origin main"
+        update_cmd = f"cd {self.remote_repo_path} && git pull origin main && git log -1 --oneline"
         returncode, stdout, stderr = self._execute_remote_command(update_cmd)
         if returncode != 0:
-            logging.warn(f"Warning: Failed to update repository: {stderr}")
+            logging.warning(f"Warning: Failed to update repository: {stderr}")
+        else:
+            logging.info(f"Repository updated. Latest commit: {stdout.strip()}")
 
         # Install dependencies
         logging.info("Installing Python dependencies...")
         install_cmd = f"cd {self.remote_repo_path}/utils && pip3 install -r requirements.txt || true"
         self._execute_remote_command(install_cmd)
+
+        # Copy our local cluster_manager.py to ensure we have the latest version
+        logging.info("Copying local cluster_manager.py to remote...")
+        local_cluster_manager = os.path.join(
+            os.path.dirname(__file__), "cluster_manager.py"
+        )
+        remote_cluster_manager = (
+            f"{self.remote_repo_path}/utils/cluster_manager_local.py"
+        )
+        self._copy_file_to_remote(local_cluster_manager, remote_cluster_manager)
 
         return True
 
@@ -280,7 +292,7 @@ class RemoteClusterManager:
             "&&",
             f"export PATH={self.engine_path}/src:$PATH",
             "&&",
-            "python3 cluster_manager.py start",
+            "python3 cluster_manager_local.py start",
         ]
 
         if cluster_mode:
