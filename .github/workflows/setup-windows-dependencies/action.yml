@@ -1,0 +1,328 @@
+name: "Setup Windows Dependencies"
+description: "Install Windows dependencies including Chocolatey, Python, and Visual Studio Build Tools"
+
+inputs:
+    github-token:
+        description: "GitHub token for authentication"
+        required: false
+        default: ${{ github.token }}
+
+outputs:
+    python-available:
+        description: "Whether Python is available"
+        value: ${{ steps.check.outputs.python-available }}
+    ssh-available:
+        description: "Whether SSH is available"
+        value: ${{ steps.check.outputs.ssh-available }}
+
+runs:
+    using: "composite"
+    steps:
+        - name: Install Chocolatey
+          shell: powershell
+          run: |
+              Write-Host "Installing Chocolatey..."
+
+              # Check if chocolatey is installed already and use it if so
+              $chocoPath = "C:\ProgramData\chocolatey\bin"
+              if (Test-Path $chocoPath) {
+                  $env:PATH = "$chocoPath;$env:PATH"
+                  Write-Host "Added Chocolatey to PATH: $chocoPath"
+              }
+
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  Write-Host "Chocolatey already available"
+                  choco --version
+                  echo $chocoPath >> $env:GITHUB_PATH
+              } else {
+                  # Remove any corrupted installations
+                  $paths = @("C:\ProgramData\chocolatey", "$env:ALLUSERSPROFILE\chocolatey")
+                  foreach ($path in $paths) {
+                      if (Test-Path $path) {
+                          Write-Host "Removing existing installation: $path"
+                          Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+                      }
+                  }
+                  
+                  # Install fresh
+                  Set-ExecutionPolicy Bypass -Scope Process -Force
+                  [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+                  Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+                  
+                  # Refresh PATH properly - Chocolatey adds C:\ProgramData\chocolatey\bin
+                  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                  
+                  # Also add Chocolatey bin directory explicitly
+                  if (Test-Path $chocoPath) {
+                      $env:PATH = "$chocoPath;$env:PATH"
+                      echo $chocoPath >> $env:GITHUB_PATH
+                      Write-Host "Added Chocolatey to PATH: $chocoPath"
+                  }
+                  
+                  if (Get-Command choco -ErrorAction SilentlyContinue) {
+                      Write-Host "Chocolatey installed successfully"
+                      choco --version
+                  } else {
+                      Write-Host "Chocolatey installation failed - continuing anyway"
+                  }
+              }
+
+        - name: Check Windows dependencies
+          id: check
+          shell: powershell
+          run: |
+              Write-Host "Checking Windows dependencies..."
+
+              # Check for Python installations
+              $pythonAvailable = $false
+
+              # Method 1: Check PATH commands
+              Write-Host "Method 1: Checking PATH commands..."
+              if (Get-Command python3 -ErrorAction SilentlyContinue) {
+                  try {
+                      $version = python3 --version 2>&1
+                      Write-Host "python3 version check: $version"
+                      if ($version -match "Python 3\." -and $version -notmatch "Microsoft Store" -and $version -notmatch "not found") {
+                          $pythonAvailable = $true
+                          Write-Host "Valid Python 3.x found via python3 command: $version"
+                      } else {
+                          Write-Host "python3 command exists but not functional (likely Windows Store alias)"
+                      }
+                  } catch {
+                      Write-Host "python3 version check failed: $_"
+                  }
+              } elseif (Get-Command python -ErrorAction SilentlyContinue) {
+                  $version = python --version 2>&1
+                  Write-Host "Found python command, version: $version"
+                  if ($version -match "Python 3\.") {
+                      $pythonAvailable = $true
+                      Write-Host "Found Python 3.x via python command: $version"
+                  } else {
+                      Write-Host "Python found but not version 3.x: $version"
+                  }
+              } elseif (Get-Command py -ErrorAction SilentlyContinue) {
+                  Write-Host "Found py launcher, checking version..."
+                  try {
+                      $version = py --version 2>&1
+                      Write-Host "py launcher version: $version"
+                      if ($version -match "Python 3\.") {
+                          $pythonAvailable = $true
+                          Write-Host "Found Python 3.x via py launcher: $version"
+                      }
+                  } catch {
+                      Write-Host "py launcher version check failed: $_"
+                  }
+              } else {
+                  Write-Host "No python commands found in PATH"
+              }
+
+              # Check SSH
+              $sshAvailable = $false
+              try {
+                  ssh -V
+                  $sshAvailable = $true
+                  Write-Host "SSH client available"
+              } catch {
+                  Write-Host "SSH client not found"
+              }
+
+              # Set outputs
+              echo "python-available=$pythonAvailable" >> $env:GITHUB_OUTPUT
+              echo "ssh-available=$sshAvailable" >> $env:GITHUB_OUTPUT
+
+              Write-Host "Detection complete: Python=$pythonAvailable, SSH=$sshAvailable"
+
+        - name: Install Python if not available
+          if: steps.check.outputs.python-available != 'true'
+          shell: powershell
+          run: |
+              Write-Host "Checking for existing Python installation..."
+
+              # Check for Chocolatey Python installation - check multiple versions
+              $pythonPaths = @(
+                  "C:\Python314\python.exe",
+                  "C:\Python313\python.exe", 
+                  "C:\Python312\python.exe",
+                  "C:\Python311\python.exe"
+              )
+
+              $pythonFound = $false
+              foreach ($pythonPath in $pythonPaths) {
+                  if (Test-Path $pythonPath) {
+                      Write-Host "Python already installed - skipping installation"
+                      & $pythonPath --version
+                      $pythonFound = $true
+                      
+                      # Add existing Python to GITHUB_PATH
+                      $pythonDir = Split-Path $pythonPath
+                      echo $pythonDir >> $env:GITHUB_PATH
+                      $env:PATH = "$pythonDir;$env:PATH"
+                      
+                      # Create python3 alias if needed
+                      $python3Path = Join-Path $pythonDir "python3.exe"
+                      if (-not (Test-Path $python3Path)) {
+                          Copy-Item $pythonPath $python3Path
+                          Write-Host "Created python3.exe alias"
+                      }
+                      
+                      break
+                  }
+              }
+
+              if (-not $pythonFound) {
+                  Write-Host "Installing Python via Chocolatey..."
+
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  choco install python3 -y
+                  
+                  # Refresh PATH
+                  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                  
+                  # Create python3 alias for Gradle compatibility
+                  $pythonExe = Get-Command python -ErrorAction SilentlyContinue
+                  if ($pythonExe) {
+                      $pythonDir = Split-Path $pythonExe.Source
+                      $python3Path = Join-Path $pythonDir "python3.exe"
+                      if (-not (Test-Path $python3Path)) {
+                          Copy-Item $pythonExe.Source $python3Path
+                          Write-Host "Created python3.exe alias"
+                      }
+                      
+                      # Add Python directory to GITHUB_PATH
+                      echo $pythonDir >> $env:GITHUB_PATH
+                      $env:PATH = "$pythonDir;$env:PATH"
+                  }
+                  
+                  # Verify
+                  if (Get-Command python -ErrorAction SilentlyContinue) {
+                      $version = python --version
+                      Write-Host "Python installed successfully: $version"
+                  } else {
+                      Write-Host "Python installation may have failed"
+                  }
+              } else {
+                  Write-Host "Chocolatey not available - cannot install Python"
+              }
+              }
+
+        - name: Install build tools (NASM and CMake)
+          shell: powershell
+          run: |
+              Write-Host "Checking for existing build tools..."
+
+              # Check for NASM
+              $nasmFound = $false
+              if (Test-Path "C:\Program Files\NASM\nasm.exe") {
+                  Write-Host "NASM already installed"
+                  $nasmFound = $true
+              }
+
+              # Check for CMake
+              $cmakeFound = $false
+              if (Test-Path "C:\Program Files\CMake\bin\cmake.exe") {
+                  Write-Host "CMake already installed"
+                  $cmakeFound = $true
+              }
+
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  if (-not $nasmFound) {
+                      Write-Host "Installing NASM..."
+                      choco install nasm -y
+                  }
+                  
+                  if (-not $cmakeFound) {
+                      Write-Host "Installing CMake..."
+                      choco install cmake -y
+                  }
+                  
+                  # Refresh PATH and add to GITHUB_PATH
+                  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                  
+                  # Add NASM to PATH
+                  $nasmPath = "C:\Program Files\NASM"
+                  if (Test-Path $nasmPath) {
+                      echo $nasmPath >> $env:GITHUB_PATH
+                      $env:PATH = "$nasmPath;$env:PATH"
+                  }
+                  
+                  # Add CMake to PATH
+                  $cmakePath = "C:\Program Files\CMake\bin"
+                  if (Test-Path $cmakePath) {
+                      echo $cmakePath >> $env:GITHUB_PATH
+                      $env:PATH = "$cmakePath;$env:PATH"
+                  }
+              } else {
+                  Write-Host "Chocolatey not available - cannot install build tools"
+              }
+
+        - name: Install Visual Studio Build Tools
+          shell: powershell
+          run: |
+              Write-Host "Checking for existing Visual Studio Build Tools..."
+
+              # Check if VS Build Tools are already installed
+              $vsInstalled = $false
+              $vsPaths = @(
+                  "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools",
+                  "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools"
+              )
+
+              foreach ($vsPath in $vsPaths) {
+                  if (Test-Path "$vsPath\VC\Tools\MSVC") {
+                      Write-Host "Found existing VS Build Tools at: $vsPath"
+                      $vsInstalled = $true
+                      break
+                  }
+              }
+
+              if ($vsInstalled) {
+                  Write-Host "VS Build Tools already installed - skipping installation"
+              } else {
+                  Write-Host "Installing Visual Studio 2022 Build Tools..."
+                  
+                  # Download and install VS Build Tools directly with known working parameters
+                  $installerUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
+                  $installerPath = "$env:TEMP\vs_buildtools.exe"
+                  
+                  Write-Host "Downloading VS Build Tools installer..."
+                  Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+                  
+                  Write-Host "Installing VS Build Tools with C++ workload and Windows SDK..."
+                  $installArgs = @(
+                      "--quiet",
+                      "--wait",
+                      "--add", "Microsoft.VisualStudio.Workload.VCTools",
+                      "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                      "--add", "Microsoft.VisualStudio.Component.Windows11SDK.22000",
+                      "--add", "Microsoft.VisualStudio.Component.Windows10SDK.19041",
+                      "--add", "Microsoft.VisualStudio.Component.VC.CMake.Project"
+                  )
+                  
+                  $process = Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait -PassThru
+                  Write-Host "VS Build Tools installer exit code: $($process.ExitCode)"
+                  
+                  # Clean up
+                  Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+              }
+
+              # Verify installation
+              Write-Host "Verifying MSVC compiler installation..."
+              $msvcPaths = @(
+                  "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe",
+                  "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe"
+              )
+
+              $found = $false
+              foreach ($path in $msvcPaths) {
+                  $compiler = Get-ChildItem $path -ErrorAction SilentlyContinue | Select-Object -First 1
+                  if ($compiler) {
+                      Write-Host "MSVC compiler found: $($compiler.FullName)"
+                      $found = $true
+                      break
+                  }
+              }
+
+              if (-not $found) {
+                  Write-Host "Error: MSVC compiler not found after installation"
+                  exit 1
+              }

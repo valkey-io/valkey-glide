@@ -1,0 +1,787 @@
+name: "Setup Windows Dependencies"
+description: "Setup Python, SSH, and other Windows-specific dependencies"
+
+inputs:
+    github-token:
+        description: "GitHub token for authentication"
+        required: false
+        default: ${{ github.token }}
+
+outputs:
+    python-available:
+        description: "Whether Python is available"
+        value: ${{ steps.check.outputs.python-available }}
+    ssh-available:
+        description: "Whether SSH is available"
+        value: ${{ steps.check.outputs.ssh-available }}
+
+runs:
+    using: "composite"
+    steps:
+        - name: Install Chocolatey
+          shell: powershell
+          run: |
+              Write-Host "=== Chocolatey Installation Diagnostics ==="
+              
+              # Show current environment
+              Write-Host "Current user: $env:USERNAME"
+              Write-Host "Current PATH: $env:PATH"
+              Write-Host "PowerShell execution policy: $(Get-ExecutionPolicy)"
+              Write-Host "PowerShell version: $($PSVersionTable.PSVersion)"
+              
+              # Check if Chocolatey command exists
+              $chocoCmd = Get-Command choco -ErrorAction SilentlyContinue
+              if ($chocoCmd) {
+                  Write-Host "Chocolatey command found at: $($chocoCmd.Source)"
+                  try {
+                      $version = choco --version
+                      Write-Host "Chocolatey version: $version"
+                  } catch {
+                      Write-Host "Error running choco --version: $_"
+                  }
+              # Search filesystem for Chocolatey
+              Write-Host "Searching for Chocolatey installations..."
+              $searchPaths = @(
+                  "$env:ALLUSERSPROFILE\chocolatey",
+                  "$env:PROGRAMDATA\chocolatey", 
+                  "C:\chocolatey",
+                  "C:\ProgramData\chocolatey"
+              )
+              
+              $chocoFound = $false
+              foreach ($path in $searchPaths) {
+                  if (Test-Path $path) {
+                      Write-Host "Found Chocolatey directory: $path"
+                      $chocoExe = Join-Path $path "bin\choco.exe"
+                      if (Test-Path $chocoExe) {
+                          Write-Host "  choco.exe exists: $chocoExe"
+                          try {
+                              $version = & $chocoExe --version
+                              Write-Host "  Version: $version"
+                              
+                              # Add to PATH
+                              $binPath = Split-Path $chocoExe
+                              Write-Host "  Adding to PATH: $binPath"
+                              $env:PATH = "$binPath;$env:PATH"
+                              echo $binPath >> $env:GITHUB_PATH
+                              
+                              # Test again
+                              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                                  Write-Host "  SUCCESS: Chocolatey now available in PATH"
+                                  $chocoFound = $true
+                                  break
+                              } else {
+                                  Write-Host "  FAILED: Still not available after adding to PATH"
+                              }
+                          } catch {
+                              Write-Host "  ERROR running choco.exe: $_"
+                              Write-Host "  This installation appears corrupted"
+                          }
+                      } else {
+                          Write-Host "  choco.exe NOT found in bin directory - corrupted installation"
+                      }
+                  } else {
+                      Write-Host "Directory not found: $path"
+                  }
+              }
+              
+              if ($chocoFound) {
+                  Write-Host "Working Chocolatey installation found and configured"
+              } else {
+              
+              Write-Host "No working Chocolatey installation found - removing corrupted installation and installing fresh"
+              
+              # Remove corrupted Chocolatey installations
+              $chocolateyPaths = @(
+                  "$env:ALLUSERSPROFILE\chocolatey",
+                  "$env:PROGRAMDATA\chocolatey", 
+                  "C:\chocolatey",
+                  "C:\ProgramData\chocolatey"
+              )
+              
+              foreach ($path in $chocolateyPaths) {
+                  if (Test-Path $path) {
+                      Write-Host "Removing corrupted Chocolatey installation: $path"
+                      try {
+                          Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+                          Write-Host "  Removed: $path"
+                      } catch {
+                          Write-Host "  Failed to remove: $path - $_"
+                      }
+                  }
+              }
+              
+              # Also remove from registry if exists
+              try {
+                  Remove-Item "HKLM:\SOFTWARE\Chocolatey" -Recurse -Force -ErrorAction SilentlyContinue
+                  Write-Host "Removed Chocolatey registry entries"
+              } catch {
+                  Write-Host "No Chocolatey registry entries to remove"
+              }
+              
+              # Fresh installation with detailed error handling
+              try {
+                  Set-ExecutionPolicy Bypass -Scope Process -Force
+                  Write-Host "Execution policy set to Bypass"
+                  
+                  [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+                  Write-Host "Security protocol configured"
+                  
+                  Write-Host "Downloading Chocolatey install script..."
+                  $installScript = (New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')
+                  Write-Host "Install script downloaded ($(($installScript.Length / 1KB).ToString('F1')) KB)"
+                  
+                  Write-Host "Executing Chocolatey install script..."
+                  Invoke-Expression $installScript
+                  
+                  Write-Host "Install script completed"
+                  
+              }
+              
+              # Final verification
+              Write-Host "=== Final Chocolatey Status ==="
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  Write-Host "SUCCESS: Chocolatey is now available"
+                  choco --version
+              } else {
+                  Write-Host "FAILED: Chocolatey still not available"
+                  Write-Host "Final PATH: $env:PATH"
+                  Write-Host "This may cause issues with subsequent installations"
+              }
+
+        - name: Check Windows dependencies
+          id: check
+          shell: powershell
+          run: |
+              Write-Host "Checking Windows dependencies..."
+
+              # Debug: Show current PATH
+              Write-Host "Current PATH:"
+              $env:PATH -split ';' | ForEach-Object { Write-Host "  $_" }
+
+              # Debug: Show all executables that might be Python
+              Write-Host "All python-like executables in PATH:"
+              Get-Command python*, py -ErrorAction SilentlyContinue | ForEach-Object { 
+                  Write-Host "  $($_.Name) -> $($_.Source)"
+                  try {
+                      $version = & $_.Source --version 2>&1
+                      Write-Host "    Version: $version"
+                  } catch {
+                      Write-Host "    Version check failed: $_"
+                  }
+              }
+
+              # Check for Python installations
+              $pythonAvailable = $false
+              $pythonPath = $null
+
+              # Method 1: Check PATH commands
+              Write-Host "Method 1: Checking PATH commands..."
+              if (Get-Command python3 -ErrorAction SilentlyContinue) {
+                  $pythonPath = (Get-Command python3).Source
+                  Write-Host "Found python3 in PATH: $pythonPath"
+                  
+                  # Validate it's not a Windows Store alias
+                  try {
+                      $version = python3 --version 2>&1
+                      Write-Host "python3 version check: $version"
+                      if ($version -match "Python 3\." -and $version -notmatch "Microsoft Store" -and $version -notmatch "not found") {
+                          $pythonAvailable = $true
+                          Write-Host "Valid Python 3.x found via python3 command: $version"
+                      } else {
+                          Write-Host "python3 command exists but not functional (likely Windows Store alias)"
+                      }
+                  } catch {
+                      Write-Host "python3 version check failed: $_"
+                  }
+              } elseif (Get-Command python -ErrorAction SilentlyContinue) {
+                  $version = python --version 2>&1
+                  Write-Host "Found python command, version: $version"
+                  if ($version -match "Python 3\.") {
+                      $pythonAvailable = $true
+                      $pythonPath = (Get-Command python).Source
+                      Write-Host "Found Python 3.x via python command: $version"
+                  } else {
+                      Write-Host "Python found but not version 3.x: $version"
+                  }
+              } elseif (Get-Command py -ErrorAction SilentlyContinue) {
+                  Write-Host "Found py launcher, checking version..."
+                  try {
+                      $version = py --version 2>&1
+                      Write-Host "py launcher version: $version"
+                      if ($version -match "Python 3\.") {
+                          $pythonAvailable = $true
+                          $pythonPath = (Get-Command py).Source
+                          Write-Host "Found Python 3.x via py launcher: $version"
+                      }
+                  } catch {
+                      Write-Host "py launcher version check failed: $_"
+                  }
+              } else {
+                  Write-Host "No python commands found in PATH"
+              }
+
+              # Method 2: Check registry if not found in PATH
+              if (-not $pythonAvailable) {
+                  Write-Host "Method 2: Checking Windows registry for Python..."
+                  $regPaths = @(
+                      "HKLM:\SOFTWARE\Python\PythonCore\*\InstallPath",
+                      "HKCU:\SOFTWARE\Python\PythonCore\*\InstallPath",
+                      "HKLM:\SOFTWARE\WOW6432Node\Python\PythonCore\*\InstallPath"
+                  )
+
+                  foreach ($regPath in $regPaths) {
+                      Write-Host "Checking registry path: $regPath"
+                      try {
+                          Get-ItemProperty $regPath -ErrorAction SilentlyContinue | ForEach-Object {
+                              $installPath = $_.'(default)'
+                              Write-Host "Registry entry found: $installPath"
+                              if ($installPath -and (Test-Path $installPath)) {
+                                  $pythonExe = Join-Path $installPath "python.exe"
+                                  Write-Host "Checking: $pythonExe"
+                                  if (Test-Path $pythonExe) {
+                                      try {
+                                          $version = & $pythonExe --version 2>&1
+                                          Write-Host "Found Python at $pythonExe - Version: $version"
+                                          if ($version -match "Python 3\.") {
+                                              $pythonAvailable = $true
+                                              $pythonPath = $pythonExe
+                                              Write-Host "Using Python 3.x from registry: $pythonExe"
+                                              break
+                                          }
+                                      } catch {
+                                          Write-Host "Version check failed for $pythonExe : $_"
+                                      }
+                                  } else {
+                                      Write-Host "python.exe not found at: $pythonExe"
+                                  }
+                              } else {
+                                  Write-Host "Install path does not exist: $installPath"
+                              }
+                          }
+                      } catch {
+                          Write-Host "Registry check failed for $regPath : $_"
+                      }
+                      if ($pythonAvailable) { break }
+                  }
+              }
+
+              # Method 3: Check common paths if still not found
+              if (-not $pythonAvailable) {
+                  Write-Host "Method 3: Checking common installation paths..."
+                  $commonPaths = @(
+                      "$env:LOCALAPPDATA\Programs\Python\Python*",
+                      "$env:PROGRAMFILES\Python*",
+                      "$env:PROGRAMFILES(x86)\Python*",
+                      "C:\Python*"
+                  )
+
+                  foreach ($pathPattern in $commonPaths) {
+                      Write-Host "Checking pattern: $pathPattern"
+                      Get-ChildItem $pathPattern -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                          $pythonExe = Join-Path $_.FullName "python.exe"
+                          Write-Host "Checking: $pythonExe"
+                          if (Test-Path $pythonExe) {
+                              try {
+                                  $version = & $pythonExe --version 2>&1
+                                  Write-Host "Found Python at $pythonExe - Version: $version"
+                                  if ($version -match "Python 3\.") {
+                                      $pythonAvailable = $true
+                                      $pythonPath = $pythonExe
+                                      Write-Host "Using Python 3.x from common path: $pythonExe"
+                                      break
+                                  }
+                              } catch {
+                                  Write-Host "Version check failed for $pythonExe : $_"
+                              }
+                          } else {
+                              Write-Host "python.exe not found at: $pythonExe"
+                          }
+                      }
+                      if ($pythonAvailable) { break }
+                  }
+              }
+
+              # Check SSH
+              $sshAvailable = $false
+              if (Get-Command ssh -ErrorAction SilentlyContinue) {
+                  $sshAvailable = $true
+                  Write-Host "SSH client available"
+              } else {
+                  Write-Host "SSH client not found"
+              }
+
+              # Set outputs
+              echo "python-available=$pythonAvailable" >> $env:GITHUB_OUTPUT
+              echo "ssh-available=$sshAvailable" >> $env:GITHUB_OUTPUT
+
+              Write-Host "Detection complete: Python=$pythonAvailable, SSH=$sshAvailable"
+              
+              # Install Python via Chocolatey if not found
+              if (-not $pythonAvailable) {
+                  Write-Host "Python not found, attempting installation via Chocolatey..."
+                  
+                  # Check if Chocolatey will be available (it gets installed in the next step)
+                  Write-Host "Python installation will be handled by Chocolatey in the next step"
+              }
+              
+              Write-Host "=== End of Windows dependency check ==="
+              Write-Host "Continuing to next step..."
+
+        - name: Install Visual Studio Build Tools
+          shell: powershell
+          env:
+              GITHUB_TOKEN: ${{ inputs.github-token }}
+          run: |
+              Write-Host "=== STEP 3: Visual Studio Build Tools Installation STARTED ==="
+              Write-Host "This step should run after Windows dependency check"
+              
+              try {
+                  # Use Chocolatey to install Visual Studio Build Tools
+                  if (Get-Command choco -ErrorAction SilentlyContinue) {
+                      Write-Host "Installing Visual Studio 2022 Build Tools via Chocolatey..."
+                      choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows11SDK.22000" -y
+                      
+                      Write-Host "Chocolatey exit code: $LASTEXITCODE"
+                      
+                      if ($LASTEXITCODE -eq 0) {
+                          Write-Host "Visual Studio Build Tools installed successfully"
+                      } else {
+                          Write-Host "Visual Studio Build Tools installation failed with exit code: $LASTEXITCODE"
+                          Write-Host "Continuing anyway - this is not critical for Python installation"
+                      }
+                  } else {
+                      Write-Host "Warning: Chocolatey not available for Visual Studio installation"
+                      Write-Host "Continuing anyway - this is not critical for Python installation"
+                  }
+                  
+                  Write-Host "Visual Studio Build Tools step completed successfully"
+                  
+              } catch {
+                  Write-Host "ERROR in Visual Studio Build Tools installation: $_"
+                  Write-Host "Exception type: $($_.Exception.GetType().FullName)"
+                  Write-Host "Continuing anyway - this is not critical for Python installation"
+              }
+              
+              Write-Host "=== End of Visual Studio Build Tools Installation ==="
+              Write-Host "Installing Visual Studio Build Tools via Chocolatey..."
+              
+              # Connection pool and keep-alive diagnostics
+              Write-Host "=== Connection Pool and Keep-Alive Diagnostics ==="
+              
+              # Show current connection settings
+              Write-Host "Current DefaultConnectionLimit: $([System.Net.ServicePointManager]::DefaultConnectionLimit)"
+              Write-Host "Current MaxServicePointIdleTime: $([System.Net.ServicePointManager]::MaxServicePointIdleTime) ms"
+              Write-Host "Current UseNagleAlgorithm: $([System.Net.ServicePointManager]::UseNagleAlgorithm)"
+              Write-Host "Current Expect100Continue: $([System.Net.ServicePointManager]::Expect100Continue)"
+              Write-Host "Current DnsRefreshTimeout: $([System.Net.ServicePointManager]::DnsRefreshTimeout) ms"
+              
+              # Configure for stable long downloads
+              Write-Host "Configuring connection settings for long downloads..."
+              
+              # Increase connection limit but keep it reasonable
+              [System.Net.ServicePointManager]::DefaultConnectionLimit = 10
+              
+              # Increase idle timeout to prevent premature connection closure
+              [System.Net.ServicePointManager]::MaxServicePointIdleTime = 900000  # 15 minutes
+              
+              # Disable Nagle algorithm for better throughput
+              [System.Net.ServicePointManager]::UseNagleAlgorithm = $false
+              
+              # Disable Expect100Continue to reduce handshake overhead
+              [System.Net.ServicePointManager]::Expect100Continue = $false
+              
+              # Set DNS refresh timeout
+              [System.Net.ServicePointManager]::DnsRefreshTimeout = 120000  # 2 minutes
+              
+              # Configure TCP keep-alive at system level
+              try {
+                  # Enable TCP keep-alive with shorter intervals
+                  $tcpParams = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
+                  Write-Host "Checking TCP keep-alive settings..."
+                  
+                  $keepAliveTime = Get-ItemProperty -Path $tcpParams -Name "KeepAliveTime" -ErrorAction SilentlyContinue
+                  $keepAliveInterval = Get-ItemProperty -Path $tcpParams -Name "KeepAliveInterval" -ErrorAction SilentlyContinue
+                  
+                  Write-Host "TCP KeepAliveTime: $($keepAliveTime.KeepAliveTime) ms (default: 7200000)"
+                  Write-Host "TCP KeepAliveInterval: $($keepAliveInterval.KeepAliveInterval) ms (default: 1000)"
+              } catch {
+                  Write-Host "Could not read TCP keep-alive settings: $_"
+              }
+              
+              # Show updated settings
+              Write-Host "Updated DefaultConnectionLimit: $([System.Net.ServicePointManager]::DefaultConnectionLimit)"
+              Write-Host "Updated MaxServicePointIdleTime: $([System.Net.ServicePointManager]::MaxServicePointIdleTime) ms"
+              Write-Host "Updated UseNagleAlgorithm: $([System.Net.ServicePointManager]::UseNagleAlgorithm)"
+              Write-Host "Updated Expect100Continue: $([System.Net.ServicePointManager]::Expect100Continue)"
+              
+              Write-Host "=== End Connection Diagnostics ==="
+              
+              # Check if running as administrator with multiple methods
+              Write-Host "Checking administrative privileges..."
+              
+              # Method 1: Standard check
+              $isAdmin1 = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+              Write-Host "Method 1 (Standard): $isAdmin1"
+              
+              # Method 2: Check current user
+              $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+              Write-Host "Current user: $($currentUser.Name)"
+              Write-Host "Authentication type: $($currentUser.AuthenticationType)"
+              
+              # Method 3: Try to access admin-only location
+              $canWriteToSystem = $false
+              try {
+                  $testFile = "$env:SystemRoot\temp\admin_test.txt"
+                  "test" | Out-File -FilePath $testFile -Force
+                  Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+                  $canWriteToSystem = $true
+                  Write-Host "Method 3 (System write test): $canWriteToSystem"
+              } catch {
+                  Write-Host "Method 3 (System write test): $canWriteToSystem - $_"
+              }
+              
+              # Method 4: Check if we can run elevated commands
+              $canRunElevated = $false
+              try {
+                  $result = Start-Process -FilePath "whoami" -ArgumentList "/priv" -Wait -PassThru -WindowStyle Hidden
+                  $canRunElevated = ($result.ExitCode -eq 0)
+                  Write-Host "Method 4 (Elevated command test): $canRunElevated"
+              } catch {
+                  Write-Host "Method 4 (Elevated command test): $canRunElevated - $_"
+              }
+              
+              $hasAdminRights = $isAdmin1 -or $canWriteToSystem -or $canRunElevated
+              
+              if ($hasAdminRights) {
+                  Write-Host "Administrative privileges confirmed"
+              } else {
+                  Write-Host "Warning: Administrative privileges not detected - installations may fail"
+                  Write-Host "Continuing anyway..."
+              }
+              
+              # Check if Chocolatey is available in PATH
+              if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+                  Write-Host "Chocolatey not found in PATH, searching system..."
+                  
+                  # Systematic search for Chocolatey
+                  $chocoPath = $null
+                  
+                  # Method 1: Check environment variable
+                  if ($env:ChocolateyInstall -and (Test-Path "$env:ChocolateyInstall\bin\choco.exe")) {
+                      $chocoPath = "$env:ChocolateyInstall\bin"
+                      Write-Host "Found Chocolatey via environment variable: $chocoPath"
+                  }
+                  # Method 2: Search filesystem
+                  elseif (-not $chocoPath) {
+                      Write-Host "Searching filesystem for choco.exe..."
+                      $found = Get-ChildItem -Path "C:\" -Name "choco.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+                      if ($found) {
+                          $chocoPath = Split-Path $found.FullName
+                          Write-Host "Found Chocolatey via filesystem search: $chocoPath"
+                      }
+                  }
+                  # Method 3: Check registry
+                  elseif (-not $chocoPath) {
+                      Write-Host "Checking registry for Chocolatey..."
+                      try {
+                          $regPath = Get-ItemProperty -Path "HKLM:\SOFTWARE\Chocolatey" -Name "InstallLocation" -ErrorAction SilentlyContinue
+                          if ($regPath -and (Test-Path "$($regPath.InstallLocation)\bin\choco.exe")) {
+                              $chocoPath = "$($regPath.InstallLocation)\bin"
+                              Write-Host "Found Chocolatey via registry: $chocoPath"
+                          }
+                      } catch {
+                          Write-Host "Registry check failed: $_"
+                      }
+                  }
+                  
+                  if ($chocoPath) {
+                      # Add to PATH for current session
+                      $env:PATH = "$chocoPath;$env:PATH"
+                      # Persist for GitHub Actions
+                      echo $chocoPath >> $env:GITHUB_PATH
+                      Write-Host "Added Chocolatey to PATH"
+                  } else {
+                      Write-Host "No existing Chocolatey installation found"
+                      Write-Host "Installing prerequisites and Visual Studio Build Tools..."
+                      
+                      # Install prerequisites first to avoid exit code 5002
+                      Write-Host "Installing prerequisites..."
+                      
+                      # Install .NET Framework 4.8 (required for VS installer)
+                      try {
+                          Write-Host "Installing .NET Framework 4.8..."
+                          # Use the correct offline installer URL
+                          $netFrameworkUrl = "https://download.microsoft.com/download/9/4/1/941bcadcf2d5c19b8c5c7e6b8b5b8b8b/ndp48-x86-x64-allos-enu.exe"
+                          $netFrameworkPath = "$env:TEMP\ndp48-installer.exe"
+                          
+                          # Download with WebClient (more reliable)
+                          $webClient = New-Object System.Net.WebClient
+                          $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                          $webClient.DownloadFile($netFrameworkUrl, $netFrameworkPath)
+                          $webClient.Dispose()
+                          
+                          # Install with NETWORK SERVICE compatible flags
+                          Start-Process -FilePath $netFrameworkPath -ArgumentList "/quiet", "/norestart" -Wait
+                          Remove-Item $netFrameworkPath -Force -ErrorAction SilentlyContinue
+                          Write-Host ".NET Framework installation completed"
+                      } catch {
+                          Write-Host "Warning: .NET Framework installation failed: $_"
+                          Write-Host "Continuing without .NET Framework - VS installer may still work"
+                      }
+                      
+                      # Try winget first (more reliable on modern Windows)
+                      if (Get-Command winget -ErrorAction SilentlyContinue) {
+                          Write-Host "Using winget to install Microsoft C++ Build Tools..."
+                          winget install Microsoft.VisualStudio.2022.BuildTools.MSBuild --silent --accept-package-agreements --accept-source-agreements
+                          
+                          if ($LASTEXITCODE -eq 0) {
+                              Write-Host "winget installation successful"
+                              $skipChocolatey = $true
+                          } else {
+                              Write-Host "winget installation failed, trying full Build Tools..."
+                              winget install Microsoft.VisualStudio.2022.BuildTools --silent --accept-package-agreements --accept-source-agreements
+                              if ($LASTEXITCODE -eq 0) {
+                                  Write-Host "Full Build Tools installation successful"
+                                  $skipChocolatey = $true
+                              } else {
+                                  Write-Host "winget installation failed with exit code: $LASTEXITCODE"
+                                  Write-Host "Falling back to direct installer..."
+                              }
+                          }
+                      } else {
+                          Write-Host "winget not available, using direct installer..."
+                      }
+                      
+                      # Fallback to direct installer if winget failed or unavailable
+                      if ($LASTEXITCODE -ne 0 -or -not (Get-Command winget -ErrorAction SilentlyContinue)) {
+                          Write-Host "Creating offline VS 2022 Build Tools installer..."
+                          
+                          $installerUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
+                          $installerPath = "$env:TEMP\vs_buildtools.exe"
+                          $offlineDir = "$env:TEMP\vs_offline"
+                          
+                          # Download bootstrapper with retry
+                          $downloadSuccess = $false
+                          for ($i = 1; $i -le 3; $i++) {
+                              try {
+                                  Write-Host "Downloading VS 2022 Build Tools bootstrapper (attempt $i/3)..."
+                                  
+                                  # Configure timeout via ServicePointManager (affects all WebClient instances)
+                                  [System.Net.ServicePointManager]::DefaultConnectionLimit = 10
+                                  [System.Net.ServicePointManager]::Expect100Continue = $false
+                                  
+                                  $webClient = New-Object System.Net.WebClient
+                                  # Set headers to avoid issues
+                                  $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                                  $webClient.DownloadFile($installerUrl, $installerPath)
+                                  $webClient.Dispose()
+                                  
+                                  if (Test-Path $installerPath) {
+                                      $fileSize = (Get-Item $installerPath).Length
+                                      Write-Host "Bootstrapper download successful ($(($fileSize / 1MB).ToString('F1')) MB)"
+                                      $downloadSuccess = $true
+                                      break
+                                  }
+                              } catch {
+                                  Write-Host "Download attempt $i failed: $_"
+                                  if ($i -lt 3) { Start-Sleep -Seconds 10 }
+                              }
+                          }
+                          
+                          if ($downloadSuccess) {
+                              # NETWORK SERVICE account has limitations - try direct installation instead of layout
+                              Write-Host "NETWORK SERVICE detected - trying direct installation instead of offline layout..."
+                              
+                              $installArgs = @(
+                                  "--quiet",
+                                  "--wait",
+                                  "--norestart",
+                                  "--nocache",
+                                  "--noUpdateInstaller",
+                                  "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                                  "--add", "Microsoft.VisualStudio.Component.Windows11SDK.22000"
+                              )
+                              
+                              Write-Host "Running direct installation..."
+                              Write-Host "Command: $installerPath $($installArgs -join ' ')"
+                              $installProcess = Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait -PassThru
+                              Write-Host "Direct installation completed with exit code: $($installProcess.ExitCode)"
+                              
+                              if ($installProcess.ExitCode -eq 0 -or $installProcess.ExitCode -eq 3010) {
+                                  Write-Host "VS 2022 Build Tools direct installation successful"
+                              } else {
+                                  Write-Host "VS 2022 Build Tools installation failed with exit code: $($installProcess.ExitCode)"
+                                  
+                                  # Try minimal components as fallback
+                                  Write-Host "Trying minimal component installation..."
+                                  $minimalArgs = @(
+                                      "--quiet",
+                                      "--wait", 
+                                      "--norestart",
+                                      "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+                                  )
+                                  
+                                  $minimalProcess = Start-Process -FilePath $installerPath -ArgumentList $minimalArgs -Wait -PassThru
+                                  Write-Host "Minimal installation completed with exit code: $($minimalProcess.ExitCode)"
+                              }
+                              
+                              # Cleanup
+                              Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+                          } else {
+                              Write-Host "Failed to download VS Build Tools bootstrapper after 3 attempts"
+                          }
+                          
+                          # Skip the rest of Visual Studio logic
+                          $skipChocolatey = $true
+                      }
+                      
+                      # Skip the rest of Chocolatey logic
+                      $skipChocolatey = $true
+                  }
+              } else {
+                  Write-Host "Chocolatey already available in PATH"
+                  $skipChocolatey = $false
+              }
+              
+              # Only proceed with Chocolatey if we found it or it was already in PATH
+              if (-not $skipChocolatey) {
+                  # Verify choco is now available
+                  if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+                      Write-Host "Warning: Chocolatey still not available after setup"
+                      Write-Host "Continuing without Chocolatey..."
+                  }
+                  
+                  # Install Visual Studio Build Tools 2022 with C++ workload
+                  Write-Host "Installing Visual Studio Build Tools 2022 via Chocolatey..."
+                  choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.19041" -y
+                  
+                  if ($LASTEXITCODE -ne 0) {
+                      Write-Host "Chocolatey installation failed with exit code: $LASTEXITCODE"
+                      Write-Host "Trying alternative approach..."
+                      
+                      # Fallback: Install just the C++ compiler
+                      choco install microsoft-build-tools -y
+                      choco install visualcpp-build-tools -y
+                  }
+              }
+              
+              # Verify installation
+              $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+              if (Test-Path $vsWhere) {
+                  Write-Host "Success: vswhere.exe found at $vsWhere"
+                  
+                  $buildTools = & $vsWhere -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json
+                  if ($buildTools) {
+                      Write-Host "Success: Visual Studio Build Tools with C++ support installed"
+                      $buildTools | ForEach-Object { Write-Host "  Product: $($_.productId), Path: $($_.installationPath)" }
+                  } else {
+                      Write-Host "Warning: C++ tools verification failed, but continuing..."
+                  }
+              } else {
+                  Write-Host "Warning: vswhere.exe not found, trying manual MSVC detection..."
+                  
+                  # Check for MSVC directly
+                  $msvcPaths = @(
+                      "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\link.exe",
+                      "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\link.exe",
+                      "${env:ProgramFiles}\Microsoft Visual Studio\*\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\link.exe"
+                  )
+                  
+                  $linkFound = $false
+                  foreach ($pattern in $msvcPaths) {
+                      $found = Get-ChildItem $pattern -ErrorAction SilentlyContinue | Select-Object -First 1
+                      if ($found) {
+                          Write-Host "Found link.exe at: $($found.FullName)"
+                          $linkFound = $true
+                          break
+                      }
+                  }
+                  
+                  if (-not $linkFound) {
+                      Write-Host "Warning: No MSVC compiler found after installation"
+                      Write-Host "Continuing with other dependency installations..."
+                  }
+              }
+              
+              Write-Host "Visual Studio Build Tools installation complete"
+
+        - name: Install Python if not available
+          if: steps.check-deps.outputs.python-available != 'true'
+          shell: powershell
+          run: |
+              Write-Host "Installing Python via Chocolatey..."
+              
+              # Check if Chocolatey is available
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  Write-Host "Installing Python 3 via Chocolatey..."
+                  choco install python3 -y
+                  
+                  if ($LASTEXITCODE -eq 0) {
+                      Write-Host "Python installed successfully via Chocolatey"
+                      # Refresh PATH
+                      $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                      
+                      # Verify installation
+                      try {
+                          $version = python --version 2>&1
+                          Write-Host "Python verification successful: $version"
+                      } catch {
+                          Write-Host "Python installation verification failed"
+                      }
+                  } else {
+                      Write-Host "Chocolatey Python installation failed"
+                  }
+              } else {
+                  Write-Host "Chocolatey not available for Python installation"
+              }
+
+        - name: Setup Python3 symlink
+          if: steps.check.outputs.python-available == 'true'
+          shell: powershell
+          run: |
+              if (-not (Get-Command python3 -ErrorAction SilentlyContinue)) {
+                  if (Get-Command python -ErrorAction SilentlyContinue) {
+                      Write-Host "Creating python3 symlink..."
+                      $pythonPath = (Get-Command python).Source
+                      $python3Path = Join-Path (Split-Path $pythonPath) "python3.exe"
+                      New-Item -ItemType HardLink -Path $python3Path -Target $pythonPath -Force
+                      Write-Host "python3 symlink created"
+                  }
+              } else {
+                  Write-Host "python3 command already exists"
+              }
+
+        - name: Verify Python setup
+          shell: powershell
+          run: |
+              Write-Host "Verifying Python setup..."
+
+              $pythonWorking = $false
+
+              if (Get-Command python3 -ErrorAction SilentlyContinue) {
+                  try {
+                      $version = python3 --version 2>&1
+                      Write-Host "Python3 ready: $version"
+                      $pythonWorking = $true
+                  } catch {
+                      Write-Host "Python3 command failed: $_"
+                  }
+              } elseif (Get-Command python -ErrorAction SilentlyContinue) {
+                  try {
+                      $version = python --version 2>&1
+                      Write-Host "Python ready: $version"
+                      $pythonWorking = $true
+                  } catch {
+                      Write-Host "Python command failed: $_"
+                  }
+              } else {
+                  Write-Host "No Python commands available"
+              }
+
+              if (-not $pythonWorking) {
+                  Write-Host "Warning: Python verification failed, but continuing workflow"
+                  Write-Host "Python may still work for the actual build process"
+              } else {
+                  Write-Host "Python verification successful"
+              }

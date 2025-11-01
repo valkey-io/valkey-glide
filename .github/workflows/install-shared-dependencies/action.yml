@@ -9,6 +9,7 @@ inputs:
             - amazon-linux
             - macos
             - ubuntu
+            - windows
     target:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
         type: string
@@ -21,8 +22,13 @@ inputs:
             - aarch64-apple-darwin
             - aarch64-unknown-linux-musl
             - x86_64-unknown-linux-musl
+            - x86_64-pc-windows-msvc
     engine-version:
         description: "Engine version to install"
+        required: false
+        type: string
+    language:
+        description: "The language being built (optional, for language-specific setup)"
         required: false
         type: string
     github-token:
@@ -62,19 +68,335 @@ runs:
           run: |
               yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
+        - name: Setup Windows dependencies
+          if: "${{ runner.os == 'Windows' && runner.environment != 'github-hosted' }}"
+          uses: ./.github/workflows/setup-windows-dependencies
+          with:
+              github-token: ${{ inputs.github-token }}
+
+        - name: Check Windows build dependencies
+          if: "${{ runner.os == 'Windows' }}"
+          id: check-deps
+          shell: powershell
+          run: |
+              Write-Host "Checking Windows build dependencies..."
+
+              # Debug: Show PATH and available Python commands
+              Write-Host "PATH contains:"
+              $env:PATH -split ';' | Where-Object { $_ -like '*python*' -or $_ -like '*Python*' } | ForEach-Object { Write-Host "  $_" }
+
+              Write-Host "Available Python commands:"
+              Get-Command python* -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name) -> $($_.Source)" }
+
+              # Check Windows registry for Python installations
+              Write-Host "Checking Windows registry for Python..."
+              $regPaths = @(
+                  "HKLM:\SOFTWARE\Python\PythonCore\*\InstallPath",
+                  "HKCU:\SOFTWARE\Python\PythonCore\*\InstallPath",
+                  "HKLM:\SOFTWARE\WOW6432Node\Python\PythonCore\*\InstallPath"
+              )
+
+              foreach ($regPath in $regPaths) {
+                  try {
+                      Get-ItemProperty $regPath -ErrorAction SilentlyContinue | ForEach-Object {
+                          $installPath = $_.'(default)'
+                          if ($installPath -and (Test-Path $installPath)) {
+                              Write-Host "  Registry: $installPath"
+                              $pythonExe = Join-Path $installPath "python.exe"
+                              if (Test-Path $pythonExe) {
+                                  Write-Host "    Found: $pythonExe"
+                              }
+                          }
+                      }
+                  } catch { }
+              }
+
+              # Check common installation directories
+              Write-Host "Checking common Python installation paths..."
+              $commonPaths = @(
+                  "$env:LOCALAPPDATA\Programs\Python\Python*",
+                  "$env:PROGRAMFILES\Python*",
+                  "$env:PROGRAMFILES(x86)\Python*",
+                  "C:\Python*",
+                  "$env:APPDATA\Local\Programs\Python\Python*"
+              )
+
+              foreach ($pathPattern in $commonPaths) {
+                  Get-ChildItem $pathPattern -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                      $pythonExe = Join-Path $_.FullName "python.exe"
+                      if (Test-Path $pythonExe) {
+                          Write-Host "  Found: $pythonExe"
+                          try {
+                              $version = & $pythonExe --version 2>&1
+                              Write-Host "    Version: $version"
+                          } catch {
+                              Write-Host "    Version check failed"
+                          }
+                      }
+                  }
+              }
+
+              # Check Python3
+              $python3Available = $false
+
+              # Method 1: Check for python3 command
+              if (Get-Command python3 -ErrorAction SilentlyContinue) {
+                  try {
+                      $version = python3 --version 2>&1
+                      if ($version -match "Python 3\." -and $version -notmatch "Microsoft Store" -and $version -notmatch "not found") {
+                          $python3Available = $true
+                          Write-Host "Python3 command found: $version"
+                      } else {
+                          Write-Host "Python3 command exists but not functional: $version"
+                      }
+                  } catch {
+                      Write-Host "Python3 command exists but version check failed: $_"
+                  }
+              }
+              # Method 2: Check for python command  
+              elseif (Get-Command python -ErrorAction SilentlyContinue) {
+                  try {
+                      $version = python --version 2>&1
+                      if ($version -match "Python 3\.") {
+                          $python3Available = $true
+                          Write-Host "Python 3.x found via python command: $version"
+                      } else {
+                          Write-Host "Python found but not version 3.x: $version"
+                      }
+                  } catch {
+                      Write-Host "Python command exists but version check failed"
+                  }
+              }
+              # Method 3: Check common installation paths
+              else {
+                  $commonPaths = @(
+                      "$env:LOCALAPPDATA\Programs\Python\Python*\python.exe",
+                      "$env:PROGRAMFILES\Python*\python.exe",
+                      "$env:PROGRAMFILES(x86)\Python*\python.exe",
+                      "C:\Python*\python.exe"
+                  )
+                  
+                  foreach ($path in $commonPaths) {
+                      $found = Get-ChildItem $path -ErrorAction SilentlyContinue | Select-Object -First 1
+                      if ($found) {
+                          try {
+                              $version = & $found.FullName --version 2>&1
+                              if ($version -match "Python 3\.") {
+                                  $python3Available = $true
+                                  Write-Host "Python 3.x found at: $($found.FullName) - $version"
+                                  break
+                              }
+                          } catch {
+                              Write-Host "Found Python at $($found.FullName) but version check failed"
+                          }
+                      }
+                  }
+              }
+
+              if (-not $python3Available) {
+                  Write-Host "No Python 3.x installation detected"
+                  
+                  # Try to install Python via Chocolatey on Windows
+                  if ($IsWindows -or $env:OS -eq "Windows_NT") {
+                      Write-Host "Attempting to install Python via Chocolatey..."
+                      
+                      # Check if Chocolatey is available
+                      if (Get-Command choco -ErrorAction SilentlyContinue) {
+                          Write-Host "Installing Python 3 via Chocolatey..."
+                          choco install python3 -y
+                          
+                          if ($LASTEXITCODE -eq 0) {
+                              Write-Host "Python installed successfully via Chocolatey"
+                              # Refresh PATH
+                              $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                              
+                              # Verify installation
+                              try {
+                                  $version = python --version 2>&1
+                                  if ($version -match "Python 3\.") {
+                                      $python3Available = $true
+                                      Write-Host "Python verification successful: $version"
+                                  }
+                              } catch {
+                                  Write-Host "Python installation verification failed"
+                              }
+                          } else {
+                              Write-Host "Chocolatey Python installation failed"
+                          }
+                      } else {
+                          Write-Host "Chocolatey not available for Python installation"
+                      }
+                  }
+              }
+
+              # Check Rust (should be installed by install-rust-and-protoc action)
+              $rustAvailable = $false
+              try {
+                  rustc --version
+                  cargo --version
+                  $rustAvailable = $true
+                  Write-Host "Rust toolchain already available"
+              } catch {
+                  Write-Host "Rust toolchain will be installed by install-rust-and-protoc action"
+              }
+
+              # Check SSH client
+              $sshAvailable = $false
+              try {
+                  ssh -V 2>$null
+                  $sshAvailable = $true
+                  Write-Host "SSH client available"
+              } catch {
+                  Write-Host "SSH client not found"
+              }
+
+              # Set outputs for conditional steps
+              echo "python3-available=$python3Available" >> $env:GITHUB_OUTPUT
+              echo "rust-available=$rustAvailable" >> $env:GITHUB_OUTPUT
+              echo "ssh-available=$sshAvailable" >> $env:GITHUB_OUTPUT
+
+              Write-Host "Dependency check complete"
+              Write-Host "Results: python3-available=$python3Available, rust-available=$rustAvailable, ssh-available=$sshAvailable"
+
+        - name: Show Python detection results
+          if: "${{ runner.os == 'Windows' }}"
+          shell: powershell
+          run: |
+              Write-Host "Python detection results:"
+              Write-Host "  python3-available: ${{ steps.check-deps.outputs.python3-available }}"
+              Write-Host "  Runner type: ${{ runner.name }}"
+              Write-Host "  Runner environment: ${{ runner.environment }}"
+              Write-Host "  Is GitHub-hosted: ${{ runner.environment == 'github-hosted' }}"
+              Write-Host "  Will install Python: ${{ runner.os == 'Windows' && steps.check-deps.outputs.python3-available != 'true' }}"
+
+        - name: Install Python for Windows (self-hosted)
+          if: "${{ runner.os == 'Windows' && steps.check-deps.outputs.python3-available != 'true' }}"
+          shell: powershell
+          run: |
+              Write-Host "Installing Python via Chocolatey for self-hosted runner..."
+
+              # Refresh PATH to pick up Chocolatey from previous step
+              $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+
+              # Also add Chocolatey bin directory explicitly
+              $chocoPath = "C:\ProgramData\chocolatey\bin"
+              if (Test-Path $chocoPath) {
+                  $env:PATH = "$chocoPath;$env:PATH"
+                  Write-Host "Added Chocolatey to PATH: $chocoPath"
+              }
+
+              # Check if Chocolatey is available
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  Write-Host "Installing Python 3 via Chocolatey..."
+                  choco install python3 -y
+                  
+                  if ($LASTEXITCODE -eq 0) {
+                      Write-Host "Python installed successfully via Chocolatey"
+                      # Refresh PATH again for Python
+                      $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+                      
+                      # Verify installation
+                      try {
+                          $version = python --version 2>&1
+                          Write-Host "Python verification successful: $version"
+                      } catch {
+                          Write-Host "Python installation verification failed"
+                      }
+                  } else {
+                      Write-Host "Chocolatey Python installation failed"
+                      exit 1
+                  }
+              } else {
+                  Write-Host "Error: Chocolatey not available for Python installation"
+                  Write-Host "Current PATH: $env:PATH"
+                  exit 1
+              }
+
+        - name: Cache Valkey build
+          if: "${{ inputs.engine-version != '' }}"
+          uses: actions/cache@v4
+          id: cache-valkey
+          with:
+              path: |
+                  valkey-cache/valkey-server
+                  valkey-cache/valkey-cli
+                  valkey-cache/valkey-benchmark
+              key: valkey-${{ inputs.engine-version }}-${{ inputs.os }}-${{ inputs.target }}-${{ github.sha }}
+              restore-keys: |
+                  valkey-${{ inputs.engine-version }}-${{ inputs.os }}-${{ inputs.target }}-
+
+        - name: Install engine
+          shell: bash
+          if: "${{ inputs.engine-version != '' && steps.cache-valkey.outputs.cache-hit == 'true' && inputs.os != 'windows' }}"
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+              OS_TYPE: ${{ inputs.os }}
+          run: |
+              echo "Using cached Valkey binaries"
+              echo "OS_TYPE: '$OS_TYPE'"
+              echo "ENGINE_VERSION: '$ENGINE_VERSION'"
+              # Clone repo fresh
+              git clone https://github.com/valkey-io/valkey.git
+              cd valkey && git checkout "$ENGINE_VERSION"
+              # Move cached binaries to correct location (force overwrite)
+              mkdir -p src
+              cp -f ../valkey-cache/* src/ 2>/dev/null || true
+              # Install the cached binaries
+              sudo make install
+
+        - name: Build engine from source
+          shell: bash
+          if: "${{ inputs.engine-version != '' && steps.cache-valkey.outputs.cache-hit != 'true' && inputs.os != 'windows' }}"
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+              OS_TYPE: ${{ inputs.os }}
+          run: |
+              echo "Building Valkey from source"
+              echo "OS_TYPE: '$OS_TYPE'"
+              echo "ENGINE_VERSION: '$ENGINE_VERSION'"
+              # Install dependencies (only needed on Linux, Windows handled by Vampire)
+              if [ "$OS_TYPE" != "windows" ]; then
+                  sudo apt install -y build-essential git pkg-config libssl-dev
+              fi
+              git clone https://github.com/valkey-io/valkey.git
+              cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes
+              # Cache the built binaries - detect which naming convention is used
+              mkdir -p ../valkey-cache
+              if [ -f "src/valkey-server" ]; then
+                  echo "Found Valkey binaries"
+                  cp -f src/valkey-server src/valkey-cli src/valkey-benchmark ../valkey-cache/ 2>/dev/null || true
+              elif [ -f "src/redis-server" ]; then
+                  echo "Found Redis binaries"
+                  cp -f src/redis-server src/redis-cli src/redis-benchmark ../valkey-cache/ 2>/dev/null || true
+              else
+                  echo "Warning: No server binaries found to cache"
+              fi
+              # Install the binaries
+              sudo make install
+
+        - name: Start engine server
+          shell: bash
+          if: "${{ inputs.engine-version && inputs.os != 'windows' }}"
+          env:
+              OS_TYPE: ${{ inputs.os }}
+          run: |
+              echo "Starting Valkey server locally"
+              echo "OS_TYPE: '$OS_TYPE'"
+
+              # Start Valkey server in background
+              redis-server --daemonize yes --bind 0.0.0.0 --port 6379
+
+              # For Windows, write IP to a file that PowerShell can read
+              if [ "$OS_TYPE" = "windows" ]; then
+                  hostname -I | awk '{print $1}' > /tmp/wsl_ip.txt
+              fi
+
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
           uses: ./.github/workflows/install-rust-and-protoc
           with:
               target: ${{ inputs.target }}
               github-token: ${{ inputs.github-token }}
-
-        - name: Install engine
-          if: "${{ inputs.engine-version }}"
-          uses: ./.github/workflows/install-engine
-          with:
-              engine-version: ${{ inputs.engine-version }}
-              target: ${{ inputs.target }}
 
         - name: Install zig
           if: ${{ contains(inputs.target, 'linux-gnu') }}

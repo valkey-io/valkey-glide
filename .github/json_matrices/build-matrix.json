@@ -81,5 +81,16 @@
         "IMAGE": "amazonlinux:latest",
         "PACKAGE_MANAGERS": [],
         "languages": ["python", "node", "java", "go"]
+    },
+    {
+        "OS": "windows",
+        "NAMED_OS": "windows",
+        "RUNNER": ["self-hosted", "windows", "x64"],
+        "ARCH": "x64",
+        "TARGET": "x86_64-pc-windows-msvc",
+        "PACKAGE_MANAGERS": ["maven"],
+        "languages": ["java"],
+        "run": "always",
+        "comment": "Self-hosted Windows runner for Java tests with remote Valkey cluster"
     }
 ]

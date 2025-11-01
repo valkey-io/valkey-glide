@@ -50,6 +50,10 @@ on:
                     - use-self-hosted
                     - use-github
                 default: false
+            use-windows-self-hosted:
+                description: "Use self-hosted Windows runner"
+                type: boolean
+                default: false
             name:
                 required: false
                 type: string
@@ -90,11 +94,13 @@ jobs:
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
                   run-with-macos: ${{ (github.event.inputs.run-with-macos) }}
+                  # Use Windows self-hosted runner with VPC Linux instance by default for code changes
+                  run-with-windows-self-hosted: ${{ github.event.inputs.use-windows-self-hosted == 'true' || github.event_name == 'push' || github.event_name == 'pull_request' }}
 
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
-        timeout-minutes: 35
+        timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 35 }}
         strategy:
             fail-fast: false
             matrix:
@@ -125,9 +131,11 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.engine.version }}
+                  engine-version: ${{ matrix.host.OS == 'windows' && '' || matrix.engine.version }}
+                  language: java
 
             - name: Install protoc (protobuf)
+              if: runner.os != 'Windows'
               uses: arduino/setup-protoc@v3
               with:
                   version: "29.1"
@@ -153,13 +161,59 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
-            - name: Build java client
-              working-directory: java
-              run: ./gradlew --build-cache --continue build test -x javadoc
+            - name: Setup Python3 for Windows
+              if: ${{ matrix.host.OS == 'windows' }}
+              shell: powershell
+              run: |
+                  # Create python3 symlink for Windows if python exists
+                  if (Get-Command python -ErrorAction SilentlyContinue) {
+                      $pythonPath = (Get-Command python).Source
+                      $python3Path = Join-Path (Split-Path $pythonPath) "python3.exe"
+                      if (-not (Test-Path $python3Path)) {
+                          New-Item -ItemType HardLink -Path $python3Path -Target $pythonPath -Force
+                          Write-Host "python3 symlink created"
+                      } else {
+                          Write-Host "python3 already exists"
+                      }
+                  } else {
+                      Write-Host "python command not found, skipping symlink creation"
+                  }
 
-            - name: Ensure no skipped files by linter
+            - name: Build java client (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
               working-directory: java
-              run: ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+              env:
+                  CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
+                  SSH_PRIVATE_KEY_CONTENT: ${{ secrets.VALKEY_REMOTE_SSH_KEY }}
+                  VALKEY_REMOTE_HOST: ${{ vars.VALKEY_REMOTE_HOST }}
+                  NPM_SCOPE: ${{ vars.NPM_SCOPE }}
+              run: |
+                  # Stop any existing Gradle daemons to avoid compatibility issues
+                  .\gradlew.bat --stop                
+                  .\gradlew.bat --build-cache --continue build test -x javadoc "-Dengine-version=${{ matrix.engine.version }}"
+
+            - name: Build java client (Linux/macOS)
+              if: ${{ matrix.host.OS != 'windows' }}
+              working-directory: java
+              env:
+                  CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
+              shell: bash
+              run: |
+                  ./gradlew --build-cache --continue build test -x javadoc "-Dengine-version=${{ matrix.engine.version }}"
+
+            - name: Ensure no skipped files by linter (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              working-directory: java
+              shell: powershell
+              run: |
+                  .\gradlew.bat --build-cache spotlessDiagnose | Select-String 'All formatters are well behaved for all files'
+
+            - name: Ensure no skipped files by linter (Linux/macOS)
+              if: ${{ matrix.host.OS != 'windows' }}
+              working-directory: java
+              shell: bash
+              run: |
+                  ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
@@ -182,7 +236,7 @@ jobs:
     test-pubsub:
         name: Java PubSubTests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
-        timeout-minutes: 35
+        timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 35 }}
         strategy:
             fail-fast: false
             matrix:
@@ -211,9 +265,11 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.engine.version }}
+                  engine-version: ${{ matrix.host.OS == 'windows' && '' || matrix.engine.version }}
+                  language: java
 
             - name: Install protoc (protobuf)
+              if: runner.os != 'Windows'
               uses: arduino/setup-protoc@v3
               with:
                   version: "29.1"
@@ -239,9 +295,29 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
-            - name: Test pubsub
+            - name: Test pubsub (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
               working-directory: java
-              run: ./gradlew --build-cache :integTest:pubsubTest
+              shell: powershell
+              env:
+                  CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
+                  SSH_PRIVATE_KEY_CONTENT: ${{ secrets.VALKEY_REMOTE_SSH_KEY }}
+                  VALKEY_REMOTE_HOST: ${{ vars.VALKEY_REMOTE_HOST }}
+              run: |
+                  # Stop any existing Gradle daemons to avoid compatibility issues
+                  .\gradlew.bat --stop
+
+                  # Run the pubsub tests with info logging
+                  .\gradlew.bat --build-cache --info :integTest:pubsubTest "-Dengine-version=${{ matrix.engine.version }}"
+
+            - name: Test pubsub (Linux/macOS)
+              if: ${{ matrix.host.OS != 'windows' }}
+              working-directory: java
+              shell: bash
+              env:
+                  CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
+              run: |
+                  ./gradlew --build-cache :integTest:pubsubTest "-Dengine-version=${{ matrix.engine.version }}"
 
             - name: Upload test & spotbugs reports
               if: always()
@@ -319,9 +395,11 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.engine.version }}
+                  language: java
+                  engine-version: ${{ matrix.host.OS == 'windows' && '' || matrix.engine.version }}
 
             - name: Install protoc (protobuf)
+              if: runner.os != 'Windows'
               uses: arduino/setup-protoc@v3
               with:
                   version: "29.1"
@@ -358,9 +436,12 @@ jobs:
                       ${{ runner.os }}-gradle-
 
             - name: Build java wrapper
+              if: ${{ matrix.host.OS != 'windows' }}
               working-directory: java
+              shell: bash
               env:
                   GLIDE_CONTAINER_BUILD: true
+                  CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
               run: |
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
                       export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-amazon-corretto.x86_64
@@ -372,7 +453,7 @@ jobs:
                       export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
                       export PATH=$HOME/.cargo/bin:$PATH
                   fi
-                  ./gradlew --stacktrace --build-cache --continue build -x javadoc
+                  ./gradlew --stacktrace --build-cache --continue build -x javadoc "-Dengine-version=${{ matrix.engine.version }}"
 
             - name: Upload test & spotbugs reports
               if: always()
@@ -416,6 +497,7 @@ jobs:
                   java-version: 17
 
             - name: Install protoc (protobuf)
+              if: runner.os != 'Windows'
               uses: arduino/setup-protoc@v3
               with:
                   version: "29.1"
