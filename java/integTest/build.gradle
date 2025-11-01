@@ -143,7 +143,7 @@ tasks.register('startCluster') {
                     exec {
                         workingDir "${project.rootDir}/../utils"
                         def args = [*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'start', '--cluster-mode', '-r', '1']
-                        if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                        if (System.getProperty("tls") == 'true') args.add('--tls')
                         commandLine args
                         standardOutput = os
                     }
@@ -190,7 +190,7 @@ tasks.register('startClusterForAz') {
                     exec {
                         workingDir "${project.rootDir}/../utils"
                         def args = [*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'start', '--cluster-mode', '-r', '4']
-                        if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                        if (System.getProperty("tls") == 'true') args.add('--tls')
                         commandLine args
                         standardOutput = os
                     }
@@ -222,7 +222,7 @@ tasks.register('startStandalone') {
                         commandLine args
                     } else {
                         def args = [*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'start', '-r', '0']
-                        if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                        if (System.getProperty("tls") == 'true') args.add('--tls')
                         commandLine args
                     }
                     standardOutput = os
@@ -237,13 +237,27 @@ tasks.register('startStandalone') {
 
 tasks.register('startStandaloneTls') {
     doLast {
-        new ByteArrayOutputStream().withStream { os ->
-            exec {
-                workingDir "${project.rootDir}/../utils"
-                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '-r', '0'
-                standardOutput = os
+        if (System.getProperty("standalone-tls-endpoints") == null) {
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir "${project.rootDir}/../utils"
+                    
+                    // Check if we should use remote cluster manager
+                    def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
+                    if (remoteHost != null && !remoteHost.isEmpty()) {
+                        def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost]
+                        if (System.getProperty("engine-version")) args.addAll(['--engine-version', System.getProperty("engine-version")])
+                        args.addAll(['start', '--tls', '-r', '0'])
+                        commandLine args
+                    } else {
+                        commandLine 'python3', 'cluster_manager.py', 'start', '--tls', '-r', '0'
+                    }
+                    standardOutput = os
+                }
+                standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
             }
-            standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+        } else {
+            standaloneTlsHosts = System.getProperty("standalone-tls-endpoints")
         }
     }
 }
@@ -279,7 +293,7 @@ tasks.register('startClusterTls') {
                 new ByteArrayOutputStream().withStream { os ->
                     exec {
                         workingDir "${project.rootDir}/../utils"
-                        commandLine(*pythonCmd, 'cluster_manager.py', '--tls', 'start', '--cluster-mode')
+                        commandLine(*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '--tls')
                         standardOutput = os
                     }
                     clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
