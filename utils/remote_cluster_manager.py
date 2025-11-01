@@ -360,10 +360,13 @@ class RemoteClusterManager:
                         if ":" in node:
                             # Replace localhost/127.0.0.1 with remote host IP
                             host, port = node.rsplit(":", 1)
+                            port = port.strip()  # Remove any trailing whitespace
                             if host in ["127.0.0.1", "localhost"]:
                                 endpoints.append(f"{self.host}:{port}")
                             else:
-                                endpoints.append(node)
+                                endpoints.append(
+                                    f"{host}:{port}"
+                                )  # Ensure clean format
                     break
 
             if endpoints:
