@@ -1329,6 +1329,14 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Infer TLS mode from presence of TLS certificate arguments
+    args.tls = bool(
+        getattr(args, "tls_cert_file", None)
+        or getattr(args, "tls_key_file", None)
+        or getattr(args, "tls_ca_cert_file", None)
+    )
+
     # Check logging level
 
     level = LOG_LEVELS.get(args.log.lower())
