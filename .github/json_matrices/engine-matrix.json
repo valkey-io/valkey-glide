@@ -22,7 +22,6 @@
     },
     {
         "type": "redis",
-        "version": "6.2",
-        "run": "always"
+        "version": "6.2"
     }
 ]

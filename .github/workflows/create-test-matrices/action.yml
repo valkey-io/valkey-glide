@@ -69,11 +69,19 @@ runs:
               echo 'Select server engines to run tests against'
               if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "push" || "$RUN_FULL_MATRIX" == "false" ]]; then
                   echo 'Pick engines marked as `"run": "always"` only - on PR, push or manually triggered job which does not require full matrix'
-                  jq -c '[.[] | select(.run == "always")]' < .github/json_matrices/engine-matrix.json | awk '{ printf "engine-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
+                  ENGINES=$(jq -c '[.[] | select(.run == "always")]' < .github/json_matrices/engine-matrix.json)
               else
                   echo 'Pick all engines - on cron (schedule) or if manually triggered job requires a full matrix'
-                  jq -c . < .github/json_matrices/engine-matrix.json | awk '{ printf "engine-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
+                  ENGINES=$(jq -c . < .github/json_matrices/engine-matrix.json)
               fi
+              
+              # Exclude Redis 6.2 when Windows is included in host matrix
+              if [[ "$RUN_WITH_WINDOWS_SELF_HOSTED" == "true" ]]; then
+                  echo 'Excluding Redis 6.2 for Windows compatibility'
+                  ENGINES=$(echo "$ENGINES" | jq -c '[.[] | select(.version != "6.2")]')
+              fi
+              
+              echo "engine-matrix=$ENGINES" >> $GITHUB_OUTPUT
 
         - name: Load host matrix
           id: load-host-matrix
