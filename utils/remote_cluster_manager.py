@@ -233,6 +233,9 @@ class RemoteClusterManager:
         shard_count: int = 3,
         replica_count: int = 1,
         tls: bool = False,
+        tls_cert_file: Optional[str] = None,
+        tls_key_file: Optional[str] = None,
+        tls_ca_cert_file: Optional[str] = None,
         load_module: Optional[List[str]] = None,
     ) -> Optional[List[str]]:
         """Start cluster on remote host and return connection endpoints"""
@@ -243,6 +246,30 @@ class RemoteClusterManager:
         logging.info(
             f"Starting cluster on {self.host} (shards={shard_count}, replicas={replica_count})..."
         )
+
+        # Copy TLS files to remote host if provided, or use defaults
+        remote_tls_cert = None
+        remote_tls_key = None
+        remote_tls_ca = None
+        
+        if tls:
+            # Use provided files or defaults (same as cluster_manager.py)
+            import os
+            GLIDE_HOME_DIR = os.getenv("GLIDE_HOME_DIR") or f"{__file__}/.."
+            TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/tls_crts")
+            
+            local_cert = tls_cert_file or f"{TLS_FOLDER}/server.crt"
+            local_key = tls_key_file or f"{TLS_FOLDER}/server.key"
+            local_ca = tls_ca_cert_file or f"{TLS_FOLDER}/ca.crt"
+            
+            # Copy files to remote host
+            remote_tls_cert = f"{self.remote_repo_path}/tls_cert.pem"
+            remote_tls_key = f"{self.remote_repo_path}/tls_key.pem"
+            remote_tls_ca = f"{self.remote_repo_path}/tls_ca.pem"
+            
+            self._copy_file_to_remote(local_cert, remote_tls_cert)
+            self._copy_file_to_remote(local_key, remote_tls_key)
+            self._copy_file_to_remote(local_ca, remote_tls_ca)
 
         # Build cluster_manager.py command with engine-specific PATH
         cmd_parts = [
@@ -257,6 +284,10 @@ class RemoteClusterManager:
             cmd_parts.append("--cluster-mode")
         if tls:
             cmd_parts.append("--tls")
+            # Always pass TLS cert files when TLS is enabled (same as cluster_manager.py defaults)
+            cmd_parts.extend(["--tls-cert-file", remote_tls_cert])
+            cmd_parts.extend(["--tls-key-file", remote_tls_key])
+            cmd_parts.extend(["--tls-ca-cert-file", remote_tls_ca])
 
         cmd_parts.extend(["-n", str(shard_count), "-r", str(replica_count)])
         if load_module:
@@ -341,6 +372,32 @@ class RemoteClusterManager:
             "output": stdout.strip(),
         }
 
+    def _copy_file_to_remote(self, local_path: str, remote_path: str) -> bool:
+        """Copy a local file to remote host using scp"""
+        try:
+            import subprocess
+            
+            scp_cmd = [
+                "scp",
+                "-i", self.key_file,
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                local_path,
+                f"{self.username}@{self.host}:{remote_path}"
+            ]
+            
+            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode != 0:
+                logging.error(f"Failed to copy {local_path} to remote: {result.stderr}")
+                return False
+            
+            logging.info(f"Copied {local_path} to {remote_path}")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error copying file to remote: {e}")
+            return False
+
 
 def main():
     logfile = f"./cluster_manager.log"
@@ -366,6 +423,9 @@ def main():
         "-r", "--replica-count", type=int, default=1, help="Number of replicas"
     )
     start_parser.add_argument("--tls", action="store_true", help="Enable TLS")
+    start_parser.add_argument("--tls-cert-file", type=str, help="Path to TLS certificate file")
+    start_parser.add_argument("--tls-key-file", type=str, help="Path to TLS key file")
+    start_parser.add_argument("--tls-ca-cert-file", type=str, help="Path to TLS CA certificate file")
     start_parser.add_argument("--load-module", action="append", help="Load module")
 
     # Stop command
@@ -415,11 +475,14 @@ def main():
                 shard_count=args.shard_count,
                 replica_count=args.replica_count,
                 tls=args.tls,
+                tls_cert_file=args.tls_cert_file,
+                tls_key_file=args.tls_key_file,
+                tls_ca_cert_file=args.tls_ca_cert_file,
                 load_module=args.load_module,
             )
             if endpoints:
-                # Output endpoints in format expected by Gradle
-                logging.info("CLUSTER_ENDPOINTS=" + ",".join(endpoints))
+                # Output endpoints in format expected by Gradle (to stdout)
+                print("CLUSTER_ENDPOINTS=" + ",".join(endpoints))
                 return 0
             else:
                 return 1

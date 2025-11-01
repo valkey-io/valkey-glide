@@ -250,13 +250,43 @@ tasks.register('startStandaloneTls') {
 
 tasks.register('startClusterTls') {
     doLast {
-        new ByteArrayOutputStream().withStream { os ->
-            exec {
-                workingDir "${project.rootDir}/../utils"
-                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '--cluster-mode'
-                standardOutput = os
+        if (System.getProperty("cluster-endpoints") == null) {
+            // Check if we should use remote cluster manager
+            def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
+            if (remoteHost != null && !remoteHost.isEmpty()) {
+                // Use remote cluster manager
+                println "Using remote cluster manager for TLS cluster with host: ${remoteHost}"
+                new ByteArrayOutputStream().withStream { os ->
+                    exec {
+                        workingDir "${project.rootDir}/../utils"
+                        def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost]
+                        if (System.getProperty("engine-version")) args.addAll(['--engine-version', System.getProperty("engine-version")])
+                        args.addAll(['start', '--cluster-mode', '--tls'])
+                        commandLine args
+                        standardOutput = os
+                    }
+                    // Parse remote cluster endpoints
+                    def output = os.toString()
+                    def endpointsLine = output.lines().find { it.startsWith("CLUSTER_ENDPOINTS=") }
+                    if (endpointsLine) {
+                        clusterTlsHosts = endpointsLine.substring("CLUSTER_ENDPOINTS=".length()).split(",").collect { it.trim() }
+                    } else {
+                        throw new GradleException("Failed to get cluster endpoints from remote host: ${output}")
+                    }
+                }
+            } else {
+                // Use local cluster manager
+                new ByteArrayOutputStream().withStream { os ->
+                    exec {
+                        workingDir "${project.rootDir}/../utils"
+                        commandLine(*pythonCmd, 'cluster_manager.py', '--tls', 'start', '--cluster-mode')
+                        standardOutput = os
+                    }
+                    clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                }
             }
-            clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+        } else {
+            clusterTlsHosts = System.getProperty("cluster-endpoints")
         }
     }
 }
