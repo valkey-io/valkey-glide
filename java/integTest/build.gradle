@@ -145,7 +145,9 @@ tasks.register('startCluster') {
                     new ByteArrayOutputStream().withStream { os ->
                         exec {
                             workingDir "${project.rootDir}/../utils"
-                            def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost, 'start', '--cluster-mode', '-r', '1']
+                            def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost]
+                            if (System.getProperty("engine-version")) args.addAll(['--engine-version', System.getProperty("engine-version")])
+                            args.addAll(['start', '--cluster-mode', '-r', '1'])
                             if (System.getProperty("tls") == 'true') args.add('--tls')
                             commandLine args
                             standardOutput = os
@@ -168,7 +170,9 @@ tasks.register('startCluster') {
                         new ByteArrayOutputStream().withStream { os ->
                             exec {
                                 workingDir "${project.rootDir}/../utils"
-                                def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', windowsRemoteHost, 'start', '--cluster-mode', '-r', '1']
+                                def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', windowsRemoteHost]
+                                if (System.getProperty("engine-version")) args.addAll(['--engine-version', System.getProperty("engine-version")])
+                                args.addAll(['start', '--cluster-mode', '-r', '1'])
                                 if (System.getProperty("tls") == 'true') args.add('--tls')
                                 commandLine args
                                 standardOutput = os
@@ -237,7 +241,9 @@ tasks.register('startClusterForAz') {
                     new ByteArrayOutputStream().withStream { os ->
                         exec {
                             workingDir "${project.rootDir}/../utils"
-                            def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost, 'start', '--cluster-mode', '-r', '4']
+                            def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost]
+                            if (System.getProperty("engine-version")) args.addAll(['--engine-version', System.getProperty("engine-version")])
+                            args.addAll(['start', '--cluster-mode', '-r', '4'])
                             if (System.getProperty("tls") == 'true') args.add('--tls')
                             commandLine args
                             standardOutput = os
@@ -259,7 +265,9 @@ tasks.register('startClusterForAz') {
                         new ByteArrayOutputStream().withStream { os ->
                             exec {
                                 workingDir "${project.rootDir}/../utils"
-                                def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', windowsRemoteHost, 'start', '--cluster-mode', '-r', '4']
+                                def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', windowsRemoteHost]
+                                if (System.getProperty("engine-version")) args.addAll(['--engine-version', System.getProperty("engine-version")])
+                                args.addAll(['start', '--cluster-mode', '-r', '4'])
                                 if (System.getProperty("tls") == 'true') args.add('--tls')
                                 commandLine args
                                 standardOutput = os
@@ -306,7 +314,9 @@ tasks.register('startStandalone') {
                     if (isWindows) {
                         def windowsRemoteHost = System.getenv('VALKEY_REMOTE_HOST') ?: 'localhost'
                         println "Windows detected - using remote cluster manager for standalone with host: ${windowsRemoteHost}"
-                        def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', windowsRemoteHost, 'start', '-r', '0']
+                        def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', windowsRemoteHost]
+                        if (System.getProperty("engine-version")) args.addAll(['--engine-version', System.getProperty("engine-version")])
+                        args.addAll(['start', '-r', '0'])
                         if (System.getProperty("tls") == 'true') args.add('--tls')
                         commandLine args
                     } else {

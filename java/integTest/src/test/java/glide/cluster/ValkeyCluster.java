@@ -135,6 +135,14 @@ public class ValkeyCluster implements AutoCloseable {
             } else if ("remote".equals(managerInfo.type)) {
                 command.add("--host");
                 command.add(managerInfo.host);
+                
+                // Add engine version if specified
+                String engineVersion = System.getProperty("engine-version");
+                if (engineVersion != null && !engineVersion.isEmpty()) {
+                    command.add("--engine-version");
+                    command.add(engineVersion);
+                }
+                
                 command.add("start");
 
                 if (clusterMode) {
