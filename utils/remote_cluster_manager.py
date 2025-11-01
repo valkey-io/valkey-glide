@@ -375,9 +375,9 @@ class RemoteClusterManager:
                 for endpoint in endpoints:
                     if self._test_endpoint_connectivity(endpoint):
                         reachable_endpoints.append(endpoint)
-                        logging.info(f"✓ {endpoint} is reachable")
+                        logging.info(f"[OK] {endpoint} is reachable")
                     else:
-                        logging.warning(f"✗ {endpoint} is not reachable")
+                        logging.warning(f"[FAIL] {endpoint} is not reachable")
 
                 if not reachable_endpoints:
                     logging.error("No endpoints are reachable from local machine")
