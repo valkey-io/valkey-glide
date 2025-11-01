@@ -146,33 +146,32 @@ public class ValkeyCluster implements AutoCloseable {
             }
 
             if (tls) {
-                // Add TLS certificate files if specified, or empty args to trigger TLS mode
+                // Add TLS certificate files if specified, otherwise use --tls flag
                 String tlsCertFile = System.getProperty("tls-cert-file");
                 String tlsKeyFile = System.getProperty("tls-key-file");
                 String tlsCaFile = System.getProperty("tls-ca-cert-file");
 
-                if (tlsCertFile != null && !tlsCertFile.isEmpty()) {
-                    command.add("--tls-cert-file");
-                    command.add(tlsCertFile);
-                } else {
-                    command.add("--tls-cert-file");
-                    command.add("");
-                }
+                boolean hasCustomCerts =
+                        (tlsCertFile != null && !tlsCertFile.isEmpty())
+                                || (tlsKeyFile != null && !tlsKeyFile.isEmpty())
+                                || (tlsCaFile != null && !tlsCaFile.isEmpty());
 
-                if (tlsKeyFile != null && !tlsKeyFile.isEmpty()) {
-                    command.add("--tls-key-file");
-                    command.add(tlsKeyFile);
+                if (hasCustomCerts) {
+                    if (tlsCertFile != null && !tlsCertFile.isEmpty()) {
+                        command.add("--tls-cert-file");
+                        command.add(tlsCertFile);
+                    }
+                    if (tlsKeyFile != null && !tlsKeyFile.isEmpty()) {
+                        command.add("--tls-key-file");
+                        command.add(tlsKeyFile);
+                    }
+                    if (tlsCaFile != null && !tlsCaFile.isEmpty()) {
+                        command.add("--tls-ca-cert-file");
+                        command.add(tlsCaFile);
+                    }
                 } else {
-                    command.add("--tls-key-file");
-                    command.add("");
-                }
-
-                if (tlsCaFile != null && !tlsCaFile.isEmpty()) {
-                    command.add("--tls-ca-cert-file");
-                    command.add(tlsCaFile);
-                } else {
-                    command.add("--tls-ca-cert-file");
-                    command.add("");
+                    // No custom certificates - use --tls flag for defaults
+                    command.add("--tls");
                 }
             }
 
