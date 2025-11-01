@@ -261,41 +261,18 @@ class RemoteClusterManager:
         remote_tls_ca = None
 
         if tls:
-            # Import TLS functions from cluster_manager
-            from cluster_manager import (
-                CA_CRT,
-                SERVER_CRT,
-                SERVER_KEY,
-                generate_tls_certs,
-                should_generate_new_tls_certs,
-            )
-
-            # Generate default certs locally if needed
-            if not tls_cert_file and not tls_key_file and not tls_ca_cert_file:
-                if should_generate_new_tls_certs():
-                    logging.info("Generating TLS certificates locally...")
-                    generate_tls_certs()
-
-                # Use generated default files
-                local_cert = SERVER_CRT
-                local_key = SERVER_KEY
-                local_ca = CA_CRT
-            else:
-                # Use provided files
-                local_cert = tls_cert_file
-                local_key = tls_key_file
-                local_ca = tls_ca_cert_file
-
-            # Copy files to remote host
-            if local_cert:
-                remote_tls_cert = f"{self.remote_repo_path}/tls_cert.pem"
-                self._copy_file_to_remote(local_cert, remote_tls_cert)
-            if local_key:
-                remote_tls_key = f"{self.remote_repo_path}/tls_key.pem"
-                self._copy_file_to_remote(local_key, remote_tls_key)
-            if local_ca:
-                remote_tls_ca = f"{self.remote_repo_path}/tls_ca.pem"
-                self._copy_file_to_remote(local_ca, remote_tls_ca)
+            if tls_cert_file or tls_key_file or tls_ca_cert_file:
+                # Custom TLS files provided - copy them to remote
+                if tls_cert_file:
+                    remote_tls_cert = f"{self.remote_repo_path}/tls_cert.pem"
+                    self._copy_file_to_remote(tls_cert_file, remote_tls_cert)
+                if tls_key_file:
+                    remote_tls_key = f"{self.remote_repo_path}/tls_key.pem"
+                    self._copy_file_to_remote(tls_key_file, remote_tls_key)
+                if tls_ca_cert_file:
+                    remote_tls_ca = f"{self.remote_repo_path}/tls_ca.pem"
+                    self._copy_file_to_remote(tls_ca_cert_file, remote_tls_ca)
+            # If no custom files, let remote cluster_manager.py generate defaults
 
         # Build cluster_manager.py command with engine-specific PATH
         cmd_parts = [
@@ -309,13 +286,22 @@ class RemoteClusterManager:
         if cluster_mode:
             cmd_parts.append("--cluster-mode")
         if tls:
-            # Always pass TLS cert files when TLS is enabled
-            cmd_parts.append("--tls-cert-file")
-            cmd_parts.append(remote_tls_cert)
-            cmd_parts.append("--tls-key-file")
-            cmd_parts.append(remote_tls_key)
-            cmd_parts.append("--tls-ca-cert-file")
-            cmd_parts.append(remote_tls_ca)
+            if remote_tls_cert or remote_tls_key or remote_tls_ca:
+                # Custom TLS files provided - pass them explicitly
+                if remote_tls_cert:
+                    cmd_parts.extend(["--tls-cert-file", remote_tls_cert])
+                if remote_tls_key:
+                    cmd_parts.extend(["--tls-key-file", remote_tls_key])
+                if remote_tls_ca:
+                    cmd_parts.extend(["--tls-ca-cert-file", remote_tls_ca])
+            else:
+                # No custom files - use --tls flag (remote will generate defaults)
+                cmd_parts.append("--tls")
+
+                # We'll copy the generated certs back after cluster starts
+                remote_tls_cert = f"{self.remote_repo_path}/utils/tls_crts/server.crt"
+                remote_tls_key = f"{self.remote_repo_path}/utils/tls_crts/server.key"
+                remote_tls_ca = f"{self.remote_repo_path}/utils/tls_crts/ca.crt"
 
         cmd_parts.extend(["-n", str(shard_count), "-r", str(replica_count)])
         if load_module:
@@ -354,6 +340,28 @@ class RemoteClusterManager:
 
             if endpoints:
                 logging.info(f"Cluster started successfully. Endpoints: {endpoints}")
+
+                # Copy TLS certificates back to local machine if using defaults
+                if tls and not (tls_cert_file or tls_key_file or tls_ca_cert_file):
+                    logging.info("Copying generated TLS certificates from remote...")
+
+                    # Create local tls_crts directory
+                    import os
+
+                    local_tls_dir = os.path.join(os.path.dirname(__file__), "tls_crts")
+                    os.makedirs(local_tls_dir, exist_ok=True)
+
+                    # Copy certificates
+                    self._copy_file_from_remote(
+                        remote_tls_cert, os.path.join(local_tls_dir, "server.crt")
+                    )
+                    self._copy_file_from_remote(
+                        remote_tls_key, os.path.join(local_tls_dir, "server.key")
+                    )
+                    self._copy_file_from_remote(
+                        remote_tls_ca, os.path.join(local_tls_dir, "ca.crt")
+                    )
+
                 return endpoints
             else:
                 logging.error("Could not parse cluster endpoints from output")
@@ -391,6 +399,38 @@ class RemoteClusterManager:
             "status": "running" if returncode == 0 else "stopped",
             "output": stdout.strip(),
         }
+
+    def _copy_file_from_remote(self, remote_path: str, local_path: str) -> bool:
+        """Copy a file from remote host to local using scp"""
+        try:
+            import subprocess
+
+            assert self.key_path is not None  # Guaranteed by _setup_ssh_key
+            scp_cmd = [
+                "scp",
+                "-i",
+                self.key_path,
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                f"{self.user}@{self.host}:{remote_path}",
+                local_path,
+            ]
+
+            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode != 0:
+                logging.error(
+                    f"Failed to copy {remote_path} from remote: {result.stderr}"
+                )
+                return False
+
+            logging.info(f"Successfully copied {remote_path} to {local_path}")
+            return True
+
+        except Exception as e:
+            logging.error(f"Error copying file from remote: {e}")
+            return False
 
     def _copy_file_to_remote(self, local_path: str, remote_path: str) -> bool:
         """Copy a local file to remote host using scp"""
