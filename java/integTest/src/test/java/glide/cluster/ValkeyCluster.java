@@ -21,13 +21,6 @@ public class ValkeyCluster implements AutoCloseable {
                     .resolve("utils")
                     .resolve("cluster_manager.py");
 
-    private static final Path VPC_MANAGER_SCRIPT =
-            Paths.get(System.getProperty("user.dir"))
-                    .getParent()
-                    .getParent()
-                    .resolve("utils")
-                    .resolve("multi_engine_manager.py");
-
     private static final Path REMOTE_MANAGER_SCRIPT =
             Paths.get(System.getProperty("user.dir"))
                     .getParent()
@@ -39,12 +32,11 @@ public class ValkeyCluster implements AutoCloseable {
     private static List<String> getPythonCommand() {
         String osName = System.getProperty("os.name").toLowerCase();
         if (osName.contains("windows")) {
-            // Check if we should use VPC or remote cluster managers
-            String vpcHost = System.getenv("VALKEY_VPC_HOST");
+            // Check if we should use remote cluster manager
             String remoteHost = System.getenv("VALKEY_REMOTE_HOST");
 
-            if (vpcHost != null || remoteHost != null) {
-                // Use native Windows Python for remote/VPC managers
+            if (remoteHost != null) {
+                // Use native Windows Python for remote manager
                 return Arrays.asList("python3");
             } else {
                 // Use WSL for local cluster manager
@@ -57,13 +49,9 @@ public class ValkeyCluster implements AutoCloseable {
 
     /** Get the appropriate cluster manager script and arguments */
     private static ClusterManagerInfo getClusterManagerInfo() {
-        String vpcHost = System.getenv("VALKEY_VPC_HOST");
         String remoteHost = System.getenv("VALKEY_REMOTE_HOST");
 
-        if (vpcHost != null && !vpcHost.isEmpty()) {
-            // Use VPC multi-engine manager
-            return new ClusterManagerInfo(VPC_MANAGER_SCRIPT, "vpc", vpcHost);
-        } else if (remoteHost != null && !remoteHost.isEmpty()) {
+        if (remoteHost != null && !remoteHost.isEmpty()) {
             // Use remote cluster manager
             return new ClusterManagerInfo(REMOTE_MANAGER_SCRIPT, "remote", remoteHost);
         } else {
@@ -119,30 +107,17 @@ public class ValkeyCluster implements AutoCloseable {
             command.add(managerInfo.scriptPath.toString());
 
             // Add manager-specific arguments
-            if ("vpc".equals(managerInfo.type)) {
+            if ("remote".equals(managerInfo.type)) {
                 command.add("--host");
                 command.add(managerInfo.host);
-                command.add("start");
 
-                // Add engine version if specified
-                String engineVersion = System.getProperty("engine-version", "valkey-8.0");
-                command.add("--engine");
-                command.add(engineVersion);
-
-                if (clusterMode) {
-                    command.add("--cluster-mode");
-                }
-            } else if ("remote".equals(managerInfo.type)) {
-                command.add("--host");
-                command.add(managerInfo.host);
-                
                 // Add engine version if specified
                 String engineVersion = System.getProperty("engine-version");
                 if (engineVersion != null && !engineVersion.isEmpty()) {
                     command.add("--engine-version");
                     command.add(engineVersion);
                 }
-                
+
                 command.add("start");
 
                 if (clusterMode) {
@@ -203,7 +178,7 @@ public class ValkeyCluster implements AutoCloseable {
                 throw new RuntimeException("Failed to create cluster: " + output);
             }
 
-            if ("vpc".equals(managerInfo.type) || "remote".equals(managerInfo.type)) {
+            if ("remote".equals(managerInfo.type)) {
                 parseRemoteClusterOutput(output.toString());
             } else {
                 parseClusterScriptStartOutput(output.toString());
@@ -323,7 +298,7 @@ public class ValkeyCluster implements AutoCloseable {
             command.addAll(getPythonCommand());
 
             // Use appropriate script based on manager type
-            if ("vpc".equals(managerInfo.type)) {
+            if ("remote".equals(managerInfo.type)) {
                 command.add(managerInfo.scriptPath.toString());
                 command.add("--host");
                 command.add(managerInfo.host);
@@ -374,8 +349,7 @@ public class ValkeyCluster implements AutoCloseable {
             }
 
             try {
-                int timeoutSeconds =
-                        ("vpc".equals(managerInfo.type) || "remote".equals(managerInfo.type)) ? 30 : 20;
+                int timeoutSeconds = "remote".equals(managerInfo.type) ? 30 : 20;
                 if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
                     process.destroy();
                     throw new IOException("Timeout waiting for cluster shutdown");
