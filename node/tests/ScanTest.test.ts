@@ -2,7 +2,14 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
+import {
+    afterAll,
+    afterEach,
+    beforeAll,
+    describe,
+    expect,
+    it,
+} from "@jest/globals";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     ClusterScanCursor,
@@ -57,7 +64,7 @@ describe("Scan GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient test basic cluster scan_%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -128,7 +135,7 @@ describe("Scan GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient simple scan with encoding %p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -162,7 +169,7 @@ describe("Scan GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient scan with object type and pattern%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -210,7 +217,7 @@ describe("Scan GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient scan with count%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -246,7 +253,7 @@ describe("Scan GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient scan with match%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -294,7 +301,7 @@ describe("Scan GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient scan with different types%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -381,7 +388,7 @@ describe("Scan GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient scan with allowNonCoveredSlots %p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             const testCluster = await ValkeyCluster.createCluster(
                 true,
                 3,
@@ -573,7 +580,7 @@ describe("Scan GlideClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClient test basic scan_%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -645,7 +652,7 @@ describe("Scan GlideClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClient simple scan with encoding %p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -679,7 +686,7 @@ describe("Scan GlideClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClient scan with object type and pattern%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -727,7 +734,7 @@ describe("Scan GlideClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClient scan with count%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -763,7 +770,7 @@ describe("Scan GlideClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClient scan with match%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -811,7 +818,7 @@ describe("Scan GlideClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClient scan with different types%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
