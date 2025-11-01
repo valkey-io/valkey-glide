@@ -1006,7 +1006,7 @@ export class BaseClient {
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
     private readonly inflightRequestsLimit: number;
-    private config: BaseClientConfiguration | undefined;
+    private config: BaseClientConfiguration;
 
     protected configurePubsub(
         options: GlideClusterClientConfiguration | GlideClientConfiguration,
@@ -1236,7 +1236,7 @@ export class BaseClient {
         }
 
         const [callback, context] = this.getPubsubCallbackAndContext(
-            this.config!,
+            this.config,
         );
 
         if (callback) {
@@ -1254,7 +1254,7 @@ export class BaseClient {
 
     protected constructor(
         socket: net.Socket,
-        options?: BaseClientConfiguration,
+        options: BaseClientConfiguration = { addresses: [] },
     ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
@@ -1599,13 +1599,13 @@ export class BaseClient {
             );
         }
 
-        if (!this.isPubsubConfigured(this.config!)) {
+        if (!this.isPubsubConfigured(this.config)) {
             throw new ConfigurationError(
                 "The operation will never complete since there was no pubsbub subscriptions applied to the client.",
             );
         }
 
-        if (this.getPubsubCallbackAndContext(this.config!)[0]) {
+        if (this.getPubsubCallbackAndContext(this.config)[0]) {
             throw new ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback.",
             );
@@ -1624,13 +1624,13 @@ export class BaseClient {
             );
         }
 
-        if (!this.isPubsubConfigured(this.config!)) {
+        if (!this.isPubsubConfigured(this.config)) {
             throw new ConfigurationError(
                 "The operation will never complete since there was no pubsbub subscriptions applied to the client.",
             );
         }
 
-        if (this.getPubsubCallbackAndContext(this.config!)[0]) {
+        if (this.getPubsubCallbackAndContext(this.config)[0]) {
             throw new ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback.",
             );
@@ -7266,7 +7266,9 @@ export class BaseClient {
     ): Promise<"OK"> {
         return this.createWritePromise(
             createXGroupCreate(key, groupName, id, options),
-            { decoder: Decoder.String },
+            {
+                decoder: Decoder.String,
+            },
         );
     }
 
@@ -9290,11 +9292,11 @@ export class BaseClient {
     protected static async __createClientInternal<
         TConnection extends BaseClient,
     >(
-        options: BaseClientConfiguration,
+        options: BaseClientConfiguration = { addresses: [] },
         connectedSocket: net.Socket,
         constructor: (
             socket: net.Socket,
-            options?: BaseClientConfiguration,
+            options: BaseClientConfiguration,
         ) => TConnection,
     ): Promise<TConnection> {
         const connection = constructor(connectedSocket, options);
@@ -9320,10 +9322,10 @@ export class BaseClient {
      * @internal
      */
     protected static async createClientInternal<TConnection extends BaseClient>(
-        options: BaseClientConfiguration,
+        options: BaseClientConfiguration = { addresses: [] },
         constructor: (
             socket: net.Socket,
-            options?: BaseClientConfiguration,
+            options: BaseClientConfiguration,
         ) => TConnection,
     ): Promise<TConnection> {
         const path = await StartSocketConnection();
@@ -9388,9 +9390,9 @@ export class BaseClient {
 
         if (response === "OK" && !this.config?.credentials) {
             this.config = {
-                ...this.config!,
+                ...this.config,
                 credentials: {
-                    ...this.config!.credentials,
+                    ...this.config.credentials,
                     password: password ? password : "",
                 },
             };
