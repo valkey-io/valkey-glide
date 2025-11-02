@@ -147,7 +147,7 @@ def should_generate_new_tls_certs() -> bool:
     return True
 
 
-def generate_tls_certs():
+def generate_tls_certs(host="127.0.0.1"):
     # Based on shell script in valkey's server tests
     # https://github.com/valkey-io/valkey/blob/0d2ba9b94d28d4022ea475a2b83157830982c941/utils/gen-test-certs.sh
     logging.debug("## Generating TLS certificates")
@@ -157,8 +157,9 @@ def generate_tls_certs():
     ext_file = f"{TLS_FOLDER}/openssl.cnf"
 
     f = open(ext_file, "w")
+    # Include both localhost and the actual host IP in certificate
     f.write(
-        "keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,DNS:localhost"
+        f"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,DNS:localhost,IP:{host}"
     )
     f.close()
 
@@ -512,7 +513,7 @@ def create_servers(
 
         # Only generate default certs if using default paths and they don't exist
         if not tls_cert_file and should_generate_new_tls_certs():
-            generate_tls_certs()
+            generate_tls_certs(host)
 
         tls_args = [
             "--tls-cluster",
