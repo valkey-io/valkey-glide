@@ -61,11 +61,11 @@ def clusterHost = System.getenv('VALKEY_INTEG_TEST_IP') ?: '127.0.0.1'
 
 ext {
     extractAddressesFromClusterManagerOutput = { String output ->
-        for (def line : output.split("\n")) {
+        for (def line : output.readLines()) {  // Use readLines() for cross-platform line splitting
             if (!line.startsWith("CLUSTER_NODES="))
                 continue
 
-            return line.split("=")[1]
+            return line.split("=")[1].trim()  // Add trim() to remove trailing whitespace
         }
         return ''
     }
