@@ -317,6 +317,14 @@ tasks.withType(Test) {
         systemProperty 'test.server.cluster.tls', clusterTlsHosts
         systemProperty 'test.server.azcluster', azClusterHosts
         systemProperty 'test.server.tls', System.getProperty("tls")
+        
+        // Filter tests to focus on Connection and TLS tests only
+        if (System.getProperty("focusTests") == "true") {
+            filter {
+                includeTestsMatching "*ConnectionTests*"
+                includeTestsMatching "*TlsCertificateTest*"
+            }
+        }
     }
 
     testLogging {
@@ -371,6 +379,15 @@ test {
     filter {
         excludeTestsMatching 'glide.PubSubTests'
         excludeTestsMatching 'glide.modules.*'
+        
+        // When focusing on Connection and TLS tests, exclude others
+        if (System.getProperty("focusTests") == "true") {
+            excludeTestsMatching 'glide.*CommandTests*'
+            excludeTestsMatching 'glide.*BatchTests*'
+            excludeTestsMatching 'compatibility.jedis.*'
+            excludeTestsMatching 'glide.*AsyncTests*'
+            excludeTestsMatching 'glide.*TransactionTests*'
+        }
     }
 }
 
