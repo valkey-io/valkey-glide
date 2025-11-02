@@ -135,22 +135,30 @@ def check_if_tls_cert_is_valid(tls_file: str):
     return time_since_created.days < 3650
 
 
-def should_generate_new_tls_certs() -> bool:
-    # Returns False if we already have existing and valid TLS files, otherwise True
+def should_generate_new_tls_certs(host="127.0.0.1") -> bool:
+    # Returns False if we already have existing and valid TLS files for the correct host, otherwise True
     try:
         Path(TLS_FOLDER).mkdir(exist_ok=False)
     except FileExistsError:
         files_list = [CA_CRT, SERVER_KEY, SERVER_CRT]
         for file in files_list:
-            if check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file):
-                return False
+            if not (check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file)):
+                return True
+        
+        # Check if existing certificate is valid for the current host
+        if host != "127.0.0.1" and host != "localhost":
+            # If we're using a remote host, always regenerate to include the correct IP
+            logging.info(f"Regenerating TLS certificates for remote host: {host}")
+            return True
+        
+        return False
     return True
 
 
 def generate_tls_certs(host="127.0.0.1"):
     # Based on shell script in valkey's server tests
     # https://github.com/valkey-io/valkey/blob/0d2ba9b94d28d4022ea475a2b83157830982c941/utils/gen-test-certs.sh
-    logging.debug("## Generating TLS certificates")
+    logging.info(f"## Generating TLS certificates for host: {host}")
     tic = time.perf_counter()
     ca_key = f"{TLS_FOLDER}/ca.key"
     ca_serial = f"{TLS_FOLDER}/ca.txt"
@@ -158,8 +166,10 @@ def generate_tls_certs(host="127.0.0.1"):
 
     f = open(ext_file, "w")
     # Include both localhost and the actual host IP in certificate
+    subject_alt_name = f"IP:127.0.0.1,DNS:localhost,IP:{host}"
+    logging.info(f"Certificate subjectAltName: {subject_alt_name}")
     f.write(
-        f"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,DNS:localhost,IP:{host}"
+        f"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = {subject_alt_name}"
     )
     f.close()
 
@@ -512,7 +522,8 @@ def create_servers(
         ca_file = tls_ca_cert_file or CA_CRT
 
         # Only generate default certs if using default paths and they don't exist
-        if not tls_cert_file and should_generate_new_tls_certs():
+        if not tls_cert_file and should_generate_new_tls_certs(host):
+            logging.info(f"Generating TLS certificates for host: {host}")
             generate_tls_certs(host)
 
         tls_args = [
