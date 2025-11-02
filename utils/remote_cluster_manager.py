@@ -402,17 +402,40 @@ class RemoteClusterManager:
 
                     # Copy certificates
                     if remote_tls_cert:
-                        self._copy_file_from_remote(
-                            remote_tls_cert, os.path.join(local_tls_dir, "server.crt")
-                        )
+                        local_cert_path = os.path.join(local_tls_dir, "server.crt")
+                        self._copy_file_from_remote(remote_tls_cert, local_cert_path)
+                        if os.path.exists(local_cert_path):
+                            logging.info(f"Successfully copied {remote_tls_cert} to {local_cert_path}")
+                        else:
+                            logging.error(f"Failed to copy {remote_tls_cert} to {local_cert_path}")
+                    
                     if remote_tls_key:
-                        self._copy_file_from_remote(
-                            remote_tls_key, os.path.join(local_tls_dir, "server.key")
-                        )
+                        local_key_path = os.path.join(local_tls_dir, "server.key")
+                        self._copy_file_from_remote(remote_tls_key, local_key_path)
+                        if os.path.exists(local_key_path):
+                            logging.info(f"Successfully copied {remote_tls_key} to {local_key_path}")
+                        else:
+                            logging.error(f"Failed to copy {remote_tls_key} to {local_key_path}")
+                    
                     if remote_tls_ca:
-                        self._copy_file_from_remote(
-                            remote_tls_ca, os.path.join(local_tls_dir, "ca.crt")
-                        )
+                        local_ca_path = os.path.join(local_tls_dir, "ca.crt")
+                        self._copy_file_from_remote(remote_tls_ca, local_ca_path)
+                        if os.path.exists(local_ca_path):
+                            logging.info(f"Successfully copied {remote_tls_ca} to {local_ca_path}")
+                        else:
+                            logging.error(f"Failed to copy {remote_tls_ca} to {local_ca_path}")
+                            
+                    # Verify all required certificates exist
+                    required_certs = [
+                        os.path.join(local_tls_dir, "server.crt"),
+                        os.path.join(local_tls_dir, "server.key"), 
+                        os.path.join(local_tls_dir, "ca.crt")
+                    ]
+                    missing_certs = [cert for cert in required_certs if not os.path.exists(cert)]
+                    if missing_certs:
+                        logging.error(f"Missing TLS certificates: {missing_certs}")
+                    else:
+                        logging.info("All TLS certificates successfully copied and verified")
 
                 return endpoints
             else:
