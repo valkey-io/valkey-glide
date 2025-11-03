@@ -461,7 +461,7 @@ def start_server(
         "no",
         "--save",
         "",
-    ]
+    ])
 
     # Add bind directive if host is not localhost (for remote access)
     if host not in ["127.0.0.1", "localhost"]:
