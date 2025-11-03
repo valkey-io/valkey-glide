@@ -73,15 +73,27 @@ ext {
 
 tasks.register('stopAllAfterTests') {
     doLast {
-        exec {
-            workingDir "${project.rootDir}/../utils"
-            commandLine(*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'stop', '--prefix', 'cluster', '--keep-folder')
-            ignoreExitValue true // ignore fail if servers are stopped before
-        }
-        exec {
-            workingDir "${project.rootDir}/../utils"
-            commandLine(*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'stop', '--prefix', 'cluster', '--keep-folder')
-            ignoreExitValue true
+        // Check if we should use remote cluster manager
+        def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
+        if (remoteHost != null && !remoteHost.isEmpty()) {
+            // Stop remote clusters
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine(*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost, 'stop')
+                ignoreExitValue true // ignore fail if servers are stopped before
+            }
+        } else {
+            // Stop local clusters
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine(*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'stop', '--prefix', 'cluster', '--keep-folder')
+                ignoreExitValue true // ignore fail if servers are stopped before
+            }
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine(*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'stop', '--prefix', 'cluster', '--keep-folder')
+                ignoreExitValue true
+            }
         }
     }
 }
@@ -91,15 +103,27 @@ tasks.register('stopAllAfterTests') {
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
 tasks.register('stopAllBeforeTests') {
     doLast {
-        exec {
-            workingDir "${project.rootDir}/../utils"
-            commandLine(*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'stop', '--prefix', 'cluster', '--keep-folder')
-            ignoreExitValue true // ignore fail if servers are stopped before
-        }
-        exec {
-            workingDir "${project.rootDir}/../utils"
-            commandLine(*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'stop', '--prefix', 'cluster', '--keep-folder')
-            ignoreExitValue true
+        // Check if we should use remote cluster manager
+        def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
+        if (remoteHost != null && !remoteHost.isEmpty()) {
+            // Stop remote clusters
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine(*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost, 'stop')
+                ignoreExitValue true // ignore fail if servers are stopped before
+            }
+        } else {
+            // Stop local clusters
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine(*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'stop', '--prefix', 'cluster', '--keep-folder')
+                ignoreExitValue true // ignore fail if servers are stopped before
+            }
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine(*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'stop', '--prefix', 'cluster', '--keep-folder')
+                ignoreExitValue true
+            }
         }
     }
 }
