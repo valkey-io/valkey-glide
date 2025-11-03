@@ -437,16 +437,8 @@ def start_server(
     logfile = f"{node_folder}/server.log"
     cmd_args = [
         get_server_command(),
-    ]
-    
-    if tls:
-        # TLS mode: use tls-port for clients, disable regular port
-        cmd_args.extend(["--tls-port", str(port), "--port", "0"])
-    else:
-        # Non-TLS mode: use regular port
-        cmd_args.extend(["--port", str(port)])
-    
-    cmd_args.extend([
+        f"{'--tls-port' if tls else '--port'}",
+        str(port),
         "--cluster-enabled",
         f"{'yes' if cluster_mode else 'no'}",
         "--dir",
@@ -461,7 +453,7 @@ def start_server(
         "no",
         "--save",
         "",
-    ])
+    ]
 
     # Add bind directive if host is not localhost (for remote access)
     if host not in ["127.0.0.1", "localhost"]:
@@ -535,7 +527,8 @@ def create_servers(
             generate_tls_certs(host)
 
         tls_args = [
-            # Only encrypt client connections, not cluster bus
+            "--tls-cluster",
+            "yes",  # Required for proper port allocation in cluster mode, even if we don't want encrypted cluster bus
             "--tls-cert-file",
             cert_file,
             "--tls-key-file",
