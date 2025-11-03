@@ -376,6 +376,56 @@ class RemoteClusterManager:
             if endpoints:
                 logging.info(f"Cluster started successfully. Endpoints: {endpoints}")
                 logging.info(f"Raw cluster output: {stdout}")
+                
+                # Verify cluster nodes are actually running
+                logging.info("Verifying cluster nodes are running...")
+                for endpoint in endpoints:
+                    host, port = endpoint.split(':')
+                    # Check if process is listening on the port
+                    check_cmd = f"ss -tlnp | grep ':{port}' || netstat -tlnp | grep ':{port}' || echo 'Port {port} not found'"
+                    check_returncode, check_stdout, check_stderr = self._execute_remote_command(check_cmd, timeout=10)
+                    if check_returncode == 0 and port in check_stdout:
+                        logging.info(f"✓ Node {endpoint} is listening")
+                    else:
+                        logging.warning(f"✗ Node {endpoint} may not be running: {check_stdout}")
+                
+                # Check cluster status and topology
+                if endpoints:
+                    first_endpoint = endpoints[0]
+                    host, port = first_endpoint.split(':')
+                    
+                    # Get cluster nodes info to see topology
+                    cluster_nodes_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && echo 'CLUSTER NODES' | valkey-cli -h {host} -p {port} --tls --cert tls_crts/server.crt --key tls_crts/server.key --cacert tls_crts/ca.crt"
+                    nodes_returncode, nodes_stdout, nodes_stderr = self._execute_remote_command(cluster_nodes_cmd, timeout=15)
+                    if nodes_returncode == 0:
+                        logging.info(f"Cluster topology:")
+                        for line in nodes_stdout.strip().split('\n'):
+                            if line.strip():
+                                logging.info(f"  {line}")
+                    else:
+                        logging.warning(f"Could not get cluster nodes: {nodes_stderr}")
+                    
+                    # Get cluster info to see overall status
+                    cluster_info_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && echo 'CLUSTER INFO' | valkey-cli -h {host} -p {port} --tls --cert tls_crts/server.crt --key tls_crts/server.key --cacert tls_crts/ca.crt"
+                    info_returncode, info_stdout, info_stderr = self._execute_remote_command(cluster_info_cmd, timeout=15)
+                    if info_returncode == 0:
+                        logging.info(f"Cluster status:")
+                        for line in info_stdout.strip().split('\n'):
+                            if 'cluster_state' in line or 'cluster_slots' in line or 'cluster_known_nodes' in line:
+                                logging.info(f"  {line}")
+                    else:
+                        logging.warning(f"Could not get cluster info: {info_stderr}")
+                        
+                    # Test connectivity to each endpoint
+                    logging.info("Testing connectivity to each cluster endpoint...")
+                    for endpoint in endpoints[:3]:  # Test first 3 to avoid spam
+                        ep_host, ep_port = endpoint.split(':')
+                        ping_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && echo 'PING' | valkey-cli -h {ep_host} -p {ep_port} --tls --cert tls_crts/server.crt --key tls_crts/server.key --cacert tls_crts/ca.crt"
+                        ping_returncode, ping_stdout, ping_stderr = self._execute_remote_command(ping_cmd, timeout=10)
+                        if ping_returncode == 0 and 'PONG' in ping_stdout:
+                            logging.info(f"✓ {endpoint} responds to PING")
+                        else:
+                            logging.warning(f"✗ {endpoint} failed PING: {ping_stderr}")
 
                 # Verify connectivity to endpoints
                 logging.info("Verifying connectivity to cluster endpoints...")
