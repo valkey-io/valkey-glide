@@ -342,11 +342,12 @@ tasks.withType(Test) {
         systemProperty 'test.server.azcluster', azClusterHosts
         systemProperty 'test.server.tls', System.getProperty("tls")
         
-        // Filter tests to focus on Connection and TLS tests only
+        // Filter tests to focus on specific failing cluster TLS tests only
         if (System.getProperty("focusTests") == "true") {
             filter {
-                includeTestsMatching "*ConnectionTests*"
-                includeTestsMatching "*TlsCertificateTest*"
+                includeTestsMatching "*ClusterTlsCertificateTest.testClusterTlsWithSelfSignedCertificateSucceeds*"
+                includeTestsMatching "*ClusterTlsCertificateTest.testClusterTlsWithMultipleCertificatesSucceeds*"
+                includeTestsMatching "*ClusterTlsCertificateTest.testClusterTlsWithKeyStoreSucceeds*"
             }
         }
     }
@@ -404,13 +405,18 @@ test {
         excludeTestsMatching 'glide.PubSubTests'
         excludeTestsMatching 'glide.modules.*'
         
-        // When focusing on Connection and TLS tests, exclude others
+        // When focusing on cluster TLS tests, exclude everything else
         if (System.getProperty("focusTests") == "true") {
             excludeTestsMatching 'glide.*CommandTests*'
             excludeTestsMatching 'glide.*BatchTests*'
             excludeTestsMatching 'compatibility.jedis.*'
             excludeTestsMatching 'glide.*AsyncTests*'
             excludeTestsMatching 'glide.*TransactionTests*'
+            excludeTestsMatching 'glide.*ConnectionTests*'
+            excludeTestsMatching 'glide.standalone.*'
+            excludeTestsMatching 'glide.cluster.ClusterConnectionTests*'
+            excludeTestsMatching 'glide.cluster.ClusterCommandTests*'
+        }
         }
     }
 }
