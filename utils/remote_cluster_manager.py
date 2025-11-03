@@ -376,15 +376,6 @@ class RemoteClusterManager:
             if endpoints:
                 logging.info(f"Cluster started successfully. Endpoints: {endpoints}")
                 logging.info(f"Raw cluster output: {stdout}")
-                
-                # Verify cluster is actually running on remote host
-                if tls:
-                    verify_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && python3 cluster_manager_local.py status"
-                    verify_returncode, verify_stdout, verify_stderr = self._execute_remote_command(verify_cmd, timeout=30)
-                    if verify_returncode == 0:
-                        logging.info(f"Remote cluster status verification: {verify_stdout}")
-                    else:
-                        logging.warning(f"Could not verify remote cluster status: {verify_stderr}")
 
                 # Verify connectivity to endpoints
                 logging.info("Verifying connectivity to cluster endpoints...")
@@ -466,7 +457,7 @@ class RemoteClusterManager:
         """Stop cluster on remote host"""
         logging.info(f"Stopping cluster on {self.host}...")
 
-        stop_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && python3 cluster_manager.py stop"
+        stop_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && python3 cluster_manager.py stop --prefix cluster"
         returncode, stdout, stderr = self._execute_remote_command(stop_cmd)
 
         if returncode != 0:
