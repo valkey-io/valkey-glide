@@ -337,6 +337,7 @@ class RemoteClusterManager:
                 cmd_parts.extend(["--load-module", module])
 
         remote_command = " ".join(cmd_parts)
+        logging.info(f"Executing remote cluster command: {remote_command}")
 
         # Execute cluster start
         returncode, stdout, stderr = self._execute_remote_command(
@@ -344,7 +345,10 @@ class RemoteClusterManager:
         )
 
         if returncode != 0:
-            logging.error(f"Failed to start cluster: {stderr}")
+            logging.error(f"Remote cluster start failed with return code: {returncode}")
+            logging.error(f"Command: {remote_command}")
+            logging.error(f"stdout: {stdout}")
+            logging.error(f"stderr: {stderr}")
             return None
 
         # Parse cluster endpoints from output
@@ -371,6 +375,16 @@ class RemoteClusterManager:
 
             if endpoints:
                 logging.info(f"Cluster started successfully. Endpoints: {endpoints}")
+                logging.info(f"Raw cluster output: {stdout}")
+                
+                # Verify cluster is actually running on remote host
+                if tls:
+                    verify_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && python3 cluster_manager_local.py status"
+                    verify_returncode, verify_stdout, verify_stderr = self._execute_remote_command(verify_cmd, timeout=30)
+                    if verify_returncode == 0:
+                        logging.info(f"Remote cluster status verification: {verify_stdout}")
+                    else:
+                        logging.warning(f"Could not verify remote cluster status: {verify_stderr}")
 
                 # Verify connectivity to endpoints
                 logging.info("Verifying connectivity to cluster endpoints...")
