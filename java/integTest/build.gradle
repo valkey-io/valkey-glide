@@ -103,9 +103,11 @@ tasks.register('stopAllAfterTests') {
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
 tasks.register('stopAllBeforeTests') {
     doLast {
+        println "=== STOPPING ALL CLUSTERS BEFORE TESTS ==="
         // Check if we should use remote cluster manager
         def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
         if (remoteHost != null && !remoteHost.isEmpty()) {
+            println "Stopping remote clusters on: ${remoteHost}"
             // Stop remote clusters
             exec {
                 workingDir "${project.rootDir}/../utils"
@@ -293,6 +295,9 @@ tasks.register('startClusterTls') {
                     }
                     // Parse remote cluster endpoints
                     clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                    println "=== GRADLE CLUSTER TLS SETUP ==="
+                    println "Extracted cluster TLS hosts: ${clusterTlsHosts}"
+                    println "================================="
                 }
             } else {
                 // Use local cluster manager
@@ -303,6 +308,9 @@ tasks.register('startClusterTls') {
                         standardOutput = os
                     }
                     clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                    println "=== GRADLE LOCAL CLUSTER TLS SETUP ==="
+                    println "Extracted cluster TLS hosts: ${clusterTlsHosts}"
+                    println "======================================="
                 }
             }
         } else {

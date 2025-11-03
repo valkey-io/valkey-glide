@@ -385,9 +385,9 @@ class RemoteClusterManager:
                     check_cmd = f"ss -tlnp | grep ':{port}' || netstat -tlnp | grep ':{port}' || echo 'Port {port} not found'"
                     check_returncode, check_stdout, check_stderr = self._execute_remote_command(check_cmd, timeout=10)
                     if check_returncode == 0 and port in check_stdout:
-                        logging.info(f"✓ Node {endpoint} is listening")
+                        logging.info(f"OK - Node {endpoint} is listening")
                     else:
-                        logging.warning(f"✗ Node {endpoint} may not be running: {check_stdout}")
+                        logging.warning(f"FAIL - Node {endpoint} may not be running: {check_stdout}")
                 
                 # Check cluster status and topology
                 if endpoints:
@@ -423,9 +423,9 @@ class RemoteClusterManager:
                         ping_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && echo 'PING' | valkey-cli -h {ep_host} -p {ep_port} --tls --cert tls_crts/server.crt --key tls_crts/server.key --cacert tls_crts/ca.crt"
                         ping_returncode, ping_stdout, ping_stderr = self._execute_remote_command(ping_cmd, timeout=10)
                         if ping_returncode == 0 and 'PONG' in ping_stdout:
-                            logging.info(f"✓ {endpoint} responds to PING")
+                            logging.info(f"OK - {endpoint} responds to PING")
                         else:
-                            logging.warning(f"✗ {endpoint} failed PING: {ping_stderr}")
+                            logging.warning(f"FAIL - {endpoint} failed PING: {ping_stderr}")
 
                 # Verify connectivity to endpoints
                 logging.info("Verifying connectivity to cluster endpoints...")

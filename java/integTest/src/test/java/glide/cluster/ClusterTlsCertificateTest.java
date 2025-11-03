@@ -31,7 +31,10 @@ public class ClusterTlsCertificateTest {
     @BeforeAll
     static void setup() throws Exception {
         String clusterHosts = System.getProperty("test.server.cluster.tls", "");
+        System.out.println("=== CLUSTER TLS TEST SETUP ===");
+        System.out.println("Raw cluster hosts property: " + clusterHosts);
         String[] hosts = clusterHosts.split(",");
+        System.out.println("Split into " + hosts.length + " hosts:");
 
         clusterNodes = new ArrayList<>();
         for (String host : hosts) {
@@ -39,7 +42,10 @@ public class ClusterTlsCertificateTest {
             NodeAddress node =
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build();
             clusterNodes.add(node);
+            System.out.println("  - " + parts[0] + ":" + parts[1]);
         }
+        System.out.println("Total cluster nodes configured: " + clusterNodes.size());
+        System.out.println("===============================");
 
         caCert = getCaCertificate();
     }
