@@ -194,7 +194,7 @@ jobs:
               run: |
                   # Stop any existing Gradle daemons to avoid compatibility issues
                   .\gradlew.bat --stop                
-                  .\gradlew.bat --build-cache --continue build test -x javadoc "-Dengine-version=${{ matrix.engine.version }}" -DfocusTests=true
+                  .\gradlew.bat --no-build-cache --no-daemon --continue build test -x javadoc "-Dengine-version=${{ matrix.engine.version }}" -DfocusTests=true
 
             - name: Build java client (Linux/macOS)
               if: ${{ matrix.host.OS != 'windows' }}
