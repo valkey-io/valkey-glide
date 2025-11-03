@@ -77,15 +77,16 @@ public class ClusterTlsCertificateTest {
                 GlideClusterClientConfiguration.builder()
                         .addresses(clusterNodes)
                         .useTLS(true, TlsAdvancedConfiguration.builder().caCertificate(caCert).build())
-                        .advancedConfiguration(AdvancedGlideClusterClientConfiguration.builder()
-                                .connectionTimeout(10000) // 10 seconds instead of default
-                                .build())
+                        .advancedConfiguration(
+                                AdvancedGlideClusterClientConfiguration.builder()
+                                        .connectionTimeout(10000) // 10 seconds instead of default
+                                        .build())
                         .build();
 
         try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
             String key = "test_longer_timeout_" + UUID.randomUUID();
             String value = "test_value";
-            
+
             assertEquals("OK", client.set(key, value).get());
             assertEquals(value, client.get(key).get());
         }
