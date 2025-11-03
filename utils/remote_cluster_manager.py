@@ -418,7 +418,7 @@ class RemoteClusterManager:
                         
                     # Test connectivity to each endpoint
                     logging.info("Testing connectivity to each cluster endpoint...")
-                    for endpoint in endpoints[:3]:  # Test first 3 to avoid spam
+                    for endpoint in endpoints:  # Test ALL endpoints, not just first 3
                         ep_host, ep_port = endpoint.split(':')
                         ping_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && echo 'PING' | valkey-cli -h {ep_host} -p {ep_port} --tls --cert tls_crts/server.crt --key tls_crts/server.key --cacert tls_crts/ca.crt"
                         ping_returncode, ping_stdout, ping_stderr = self._execute_remote_command(ping_cmd, timeout=10)
