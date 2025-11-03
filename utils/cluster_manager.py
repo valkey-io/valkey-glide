@@ -527,8 +527,8 @@ def create_servers(
             generate_tls_certs(host)
 
         tls_args = [
-            "--tls-cluster",
-            "yes",
+            # Note: NOT using --tls-cluster to disable TLS between nodes
+            # Only TLS for client connections, plain TCP for cluster bus
             "--tls-cert-file",
             cert_file,
             "--tls-key-file",
