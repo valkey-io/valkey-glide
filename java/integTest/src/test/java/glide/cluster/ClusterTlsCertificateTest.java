@@ -20,6 +20,7 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -68,6 +69,23 @@ public class ClusterTlsCertificateTest {
                 TestUtilities.createClusterConfigWithRootCert(caCert, clusterNodes);
 
         TestUtilities.createAndTestClient(config);
+    }
+
+    @Test
+    void testClusterTlsWithInsecureModeSucceeds() throws Exception {
+        GlideClusterClientConfiguration config =
+                GlideClusterClientConfiguration.builder()
+                        .addresses(clusterNodes)
+                        .useTLS(true, TlsAdvancedConfiguration.builder().useInsecureTLS(true).build())
+                        .build();
+
+        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
+            String key = "test_insecure_tls_" + UUID.randomUUID();
+            String value = "test_value";
+            
+            assertEquals("OK", client.set(key, value).get());
+            assertEquals(value, client.get(key).get());
+        }
     }
 
     @Test
