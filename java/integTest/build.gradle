@@ -417,7 +417,6 @@ test {
             excludeTestsMatching 'glide.cluster.ClusterConnectionTests*'
             excludeTestsMatching 'glide.cluster.ClusterCommandTests*'
         }
-        }
     }
 }
 
