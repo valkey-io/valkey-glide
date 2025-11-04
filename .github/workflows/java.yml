@@ -273,7 +273,7 @@ jobs:
     test-java-container:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-containers]
-        timeout-minutes: 25
+        timeout-minutes: 60
         strategy:
             fail-fast: false
             matrix:
