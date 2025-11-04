@@ -1277,7 +1277,7 @@ where
                     result.map(|node| (node_address, node))
                 }
             })
-            .buffer_unordered(initial_nodes.len())
+            .buffered(1)
             .fold(
                 (
                     ConnectionsMap(DashMap::with_capacity(initial_nodes.len())),
