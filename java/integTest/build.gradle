@@ -289,7 +289,7 @@ tasks.register('startClusterTls') {
                         workingDir "${project.rootDir}/../utils"
                         def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost]
                         if (System.getProperty("engine-version")) args.addAll(['--engine-version', System.getProperty("engine-version")])
-                        args.addAll(['start', '--cluster-mode', '--tls', '-n', '3', '-r', '2'])
+                        args.addAll(['start', '--cluster-mode', '--tls', '-n', '6', '-r', '0'])
                         commandLine args
                         standardOutput = os
                     }
@@ -304,7 +304,7 @@ tasks.register('startClusterTls') {
                 new ByteArrayOutputStream().withStream { os ->
                     exec {
                         workingDir "${project.rootDir}/../utils"
-                        commandLine(*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '--tls', '-n', '3', '-r', '2')
+                        commandLine(*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '--tls', '-n', '6', '-r', '0')
                         standardOutput = os
                     }
                     clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
