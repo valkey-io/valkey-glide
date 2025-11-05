@@ -492,6 +492,11 @@ class RemoteClusterManager:
                     else:
                         logging.info("All TLS certificates successfully copied and verified")
 
+                # Run TLS diagnostics if TLS is enabled
+                if tls:
+                    self.diagnose_tls_issue(endpoints)
+                    self.test_cluster_discovery_tls(endpoints)
+                
                 return endpoints
             else:
                 logging.error("Could not parse cluster endpoints from output")
@@ -632,6 +637,120 @@ class RemoteClusterManager:
         except Exception as e:
             logging.error(f"Error copying file to remote: {e}")
             return False
+
+
+    def diagnose_tls_issue(self, endpoints: List[str]) -> None:
+        """Diagnose TLS connectivity issues for cluster endpoints"""
+        logging.info("=== TLS DIAGNOSTICS ===")
+        
+        # 1. Check cluster topology and what nodes advertise
+        if endpoints:
+            first_endpoint = endpoints[0]
+            host, port = first_endpoint.split(':')
+            
+            logging.info("1. Checking cluster topology...")
+            cluster_nodes_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && echo 'CLUSTER NODES' | valkey-cli -h {host} -p {port} --tls --cert tls_crts/server.crt --key tls_crts/server.key --cacert tls_crts/ca.crt"
+            returncode, stdout, stderr = self._execute_remote_command(cluster_nodes_cmd, timeout=15)
+            
+            if returncode == 0:
+                logging.info("Cluster nodes output:")
+                for line in stdout.strip().split('\n'):
+                    if line.strip():
+                        # Parse node info: node_id ip:port@cluster_port flags master/slave ...
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            node_addr = parts[1].split('@')[0]  # Remove cluster port
+                            logging.info(f"  Node advertises: {node_addr}")
+            else:
+                logging.error(f"Failed to get cluster nodes: {stderr}")
+        
+        # 2. Test TLS handshake to each endpoint
+        logging.info("2. Testing TLS handshake to each endpoint...")
+        for i, endpoint in enumerate(endpoints):
+            host, port = endpoint.split(':')
+            logging.info(f"Testing endpoint {i+1}/{len(endpoints)}: {endpoint}")
+            
+            # Test with openssl s_client
+            openssl_cmd = f"echo 'QUIT' | openssl s_client -connect {host}:{port} -servername {host} -verify_return_error -CAfile {self.remote_repo_path}/utils/tls_crts/ca.crt 2>&1"
+            returncode, stdout, stderr = self._execute_remote_command(openssl_cmd, timeout=10)
+            
+            if "Verify return code: 0 (ok)" in stdout:
+                logging.info(f"  ✓ TLS handshake OK for {endpoint}")
+            else:
+                logging.warning(f"  ✗ TLS handshake FAILED for {endpoint}")
+                # Extract relevant error info
+                for line in stdout.split('\n'):
+                    if 'verify error' in line.lower() or 'certificate verify failed' in line.lower():
+                        logging.warning(f"    Error: {line.strip()}")
+        
+        # 3. Check certificate details
+        logging.info("3. Checking certificate SAN entries...")
+        cert_cmd = f"cd {self.remote_repo_path}/utils && openssl x509 -in tls_crts/server.crt -text -noout | grep -A1 'Subject Alternative Name'"
+        returncode, stdout, stderr = self._execute_remote_command(cert_cmd, timeout=5)
+        
+        if returncode == 0 and stdout.strip():
+            logging.info(f"Certificate SAN: {stdout.strip()}")
+        else:
+            logging.warning("Could not extract certificate SAN entries")
+        
+        # 4. Test connection order dependency
+        logging.info("4. Testing connection order dependency...")
+        for i, endpoint in enumerate(endpoints):
+            host, port = endpoint.split(':')
+            ping_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && timeout 5 echo 'PING' | valkey-cli -h {host} -p {port} --tls --cert tls_crts/server.crt --key tls_crts/server.key --cacert tls_crts/ca.crt"
+            returncode, stdout, stderr = self._execute_remote_command(ping_cmd, timeout=10)
+            
+            if returncode == 0 and 'PONG' in stdout:
+                logging.info(f"  Connection {i+1}: {endpoint} - OK")
+            else:
+                logging.warning(f"  Connection {i+1}: {endpoint} - FAILED: {stderr}")
+        
+        logging.info("=== END TLS DIAGNOSTICS ===")
+
+    def test_cluster_discovery_tls(self, endpoints: List[str]) -> None:
+        """Test if cluster discovery reveals different IPs than initial connections"""
+        if not endpoints:
+            return
+            
+        logging.info("=== CLUSTER DISCOVERY TLS TEST ===")
+        
+        # Connect to first node and get full cluster topology
+        first_endpoint = endpoints[0]
+        host, port = first_endpoint.split(':')
+        
+        cluster_nodes_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && echo 'CLUSTER NODES' | valkey-cli -h {host} -p {port} --tls --cert tls_crts/server.crt --key tls_crts/server.key --cacert tls_crts/ca.crt"
+        returncode, stdout, stderr = self._execute_remote_command(cluster_nodes_cmd, timeout=15)
+        
+        if returncode == 0:
+            discovered_nodes = []
+            for line in stdout.strip().split('\n'):
+                if line.strip():
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        node_addr = parts[1].split('@')[0]  # Remove cluster port
+                        discovered_nodes.append(node_addr)
+            
+            logging.info(f"Initial endpoints: {endpoints}")
+            logging.info(f"Discovered nodes:  {discovered_nodes}")
+            
+            # Check if discovered nodes match initial endpoints
+            initial_set = set(endpoints)
+            discovered_set = set(discovered_nodes)
+            
+            if initial_set == discovered_set:
+                logging.info("✓ Discovered nodes match initial endpoints")
+            else:
+                logging.warning("✗ Discovered nodes differ from initial endpoints")
+                only_initial = initial_set - discovered_set
+                only_discovered = discovered_set - initial_set
+                if only_initial:
+                    logging.warning(f"  Only in initial: {only_initial}")
+                if only_discovered:
+                    logging.warning(f"  Only in discovered: {only_discovered}")
+        else:
+            logging.error(f"Failed to get cluster topology: {stderr}")
+        
+        logging.info("=== END CLUSTER DISCOVERY TLS TEST ===")
 
 
 def main():
