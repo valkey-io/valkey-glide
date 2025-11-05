@@ -1179,6 +1179,12 @@ async fn create_cluster_client(
             }
             combined_certs.extend_from_slice(cert);
         }
+        
+        // DEBUG: Print certificate content for cluster connections
+        println!("CLUSTER TLS DEBUG: Certificate stream length: {}", combined_certs.len());
+        println!("CLUSTER TLS DEBUG: First 50 bytes: {:?}", 
+            combined_certs.iter().take(50).collect::<Vec<_>>());
+        
         let tls_certs = TlsCertificates {
             client_tls: None,
             root_cert: Some(combined_certs),

@@ -448,6 +448,39 @@ class RemoteClusterManager:
                 # Copy TLS certificates back to local machine if using defaults
                 if tls and not (tls_cert_file or tls_key_file or tls_ca_cert_file):
                     logging.info("Copying generated TLS certificates from remote...")
+                    
+                    # Copy and verify certificates
+                    local_cert_files = {
+                        "ca.crt": "ca_cert_local.pem",
+                        "server.crt": "server_cert_local.pem", 
+                        "server.key": "server_key_local.pem"
+                    }
+                    
+                    for remote_name, local_name in local_cert_files.items():
+                        remote_path = f"{self.remote_repo_path}/utils/tls_crts/{remote_name}"
+                        if self._copy_file_from_remote(remote_path, local_name):
+                            logging.info(f"Copied {remote_name} to {local_name}")
+                            
+                            # Print certificate content for debugging
+                            try:
+                                with open(local_name, 'rb') as f:
+                                    cert_content = f.read()
+                                    logging.info(f"Certificate {remote_name} length: {len(cert_content)} bytes")
+                                    logging.info(f"Certificate {remote_name} first 100 bytes: {cert_content[:100]}")
+                                    
+                                    # Verify it's valid PEM
+                                    if b'-----BEGIN' in cert_content and b'-----END' in cert_content:
+                                        logging.info(f"Certificate {remote_name} appears to be valid PEM format")
+                                    else:
+                                        logging.warning(f"Certificate {remote_name} does NOT appear to be valid PEM format")
+                                        
+                            except Exception as e:
+                                logging.error(f"Failed to read copied certificate {local_name}: {e}")
+                        else:
+                            logging.error(f"Failed to copy {remote_name}")
+                            
+                    # Test certificate on Linux server side
+                    self.test_certificates_on_server(endpoints)
 
                     # Create local tls_crts directory
                     import os
@@ -899,6 +932,78 @@ tokio = { version = "1", features = ["full"] }
         except Exception as e:
             logging.error(f"Failed to copy {remote_path} from remote: {e}")
             return False
+
+
+    def test_certificates_on_server(self, endpoints: List[str]) -> None:
+        """Test certificates entirely on the Linux server side"""
+        if not endpoints:
+            return
+            
+        logging.info("=== SERVER-SIDE CERTIFICATE TEST ===")
+        
+        # Test with valkey-cli on server
+        first_endpoint = endpoints[0]
+        host, port = first_endpoint.split(':')
+        
+        # Test basic TLS connection
+        test_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && echo 'PING' | valkey-cli -h {host} -p {port} --tls --cert tls_crts/server.crt --key tls_crts/server.key --cacert tls_crts/ca.crt"
+        returncode, stdout, stderr = self._execute_remote_command(test_cmd, timeout=10)
+        
+        if returncode == 0 and 'PONG' in stdout:
+            logging.info("SUCCESS - Server-side valkey-cli TLS connection works")
+        else:
+            logging.warning(f"FAILED - Server-side valkey-cli TLS connection failed: {stderr}")
+        
+        # Print certificate details on server
+        cert_info_cmd = f"cd {self.remote_repo_path}/utils && openssl x509 -in tls_crts/ca.crt -text -noout | head -20"
+        returncode, stdout, stderr = self._execute_remote_command(cert_info_cmd, timeout=5)
+        
+        if returncode == 0:
+            logging.info("Server certificate info:")
+            for line in stdout.split('\n')[:10]:  # First 10 lines
+                if line.strip():
+                    logging.info(f"  {line}")
+        
+        # Test with a simple Rust program on server
+        rust_test_program = '''
+use std::fs;
+use std::process::Command;
+
+fn main() {
+    println!("Testing certificate files on server...");
+    
+    let cert_files = ["tls_crts/ca.crt", "tls_crts/server.crt", "tls_crts/server.key"];
+    
+    for file in &cert_files {
+        match fs::read(file) {
+            Ok(content) => {
+                println!("File {}: {} bytes", file, content.len());
+                println!("First 50 bytes: {:?}", content.iter().take(50).collect::<Vec<_>>());
+            }
+            Err(e) => println!("Failed to read {}: {}", file, e),
+        }
+    }
+}
+'''
+        
+        # Write and run the test program on server
+        write_test_cmd = f"cd {self.remote_repo_path}/utils && cat > cert_test.rs << 'EOF'\n{rust_test_program}\nEOF"
+        self._execute_remote_command(write_test_cmd, timeout=5)
+        
+        compile_cmd = f"cd {self.remote_repo_path}/utils && rustc cert_test.rs -o cert_test"
+        returncode, stdout, stderr = self._execute_remote_command(compile_cmd, timeout=10)
+        
+        if returncode == 0:
+            run_cmd = f"cd {self.remote_repo_path}/utils && ./cert_test"
+            returncode, stdout, stderr = self._execute_remote_command(run_cmd, timeout=5)
+            
+            if returncode == 0:
+                logging.info("Server-side certificate test output:")
+                for line in stdout.split('\n'):
+                    if line.strip():
+                        logging.info(f"  {line}")
+        
+        logging.info("=== END SERVER-SIDE CERTIFICATE TEST ===")
 
 
 def main():
