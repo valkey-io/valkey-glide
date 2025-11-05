@@ -496,6 +496,9 @@ class RemoteClusterManager:
                 if tls:
                     self.diagnose_tls_issue(endpoints)
                     self.test_cluster_discovery_tls(endpoints)
+                    
+                    # Test glide-core cluster TLS to isolate Java vs Rust issue
+                    self.test_glide_core_cluster_tls(endpoints)
                 
                 return endpoints
             else:
@@ -675,9 +678,9 @@ class RemoteClusterManager:
             returncode, stdout, stderr = self._execute_remote_command(openssl_cmd, timeout=10)
             
             if "Verify return code: 0 (ok)" in stdout:
-                logging.info(f"  ✓ TLS handshake OK for {endpoint}")
+                logging.info(f"  OK - TLS handshake OK for {endpoint}")
             else:
-                logging.warning(f"  ✗ TLS handshake FAILED for {endpoint}")
+                logging.warning(f"  FAIL - TLS handshake FAILED for {endpoint}")
                 # Extract relevant error info
                 for line in stdout.split('\n'):
                     if 'verify error' in line.lower() or 'certificate verify failed' in line.lower():
@@ -738,9 +741,9 @@ class RemoteClusterManager:
             discovered_set = set(discovered_nodes)
             
             if initial_set == discovered_set:
-                logging.info("✓ Discovered nodes match initial endpoints")
+                logging.info("OK - Discovered nodes match initial endpoints")
             else:
-                logging.warning("✗ Discovered nodes differ from initial endpoints")
+                logging.warning("FAIL - Discovered nodes differ from initial endpoints")
                 only_initial = initial_set - discovered_set
                 only_discovered = discovered_set - initial_set
                 if only_initial:
@@ -751,6 +754,148 @@ class RemoteClusterManager:
             logging.error(f"Failed to get cluster topology: {stderr}")
         
         logging.info("=== END CLUSTER DISCOVERY TLS TEST ===")
+
+
+    def test_glide_core_cluster_tls(self, endpoints: List[str]) -> bool:
+        """Test glide-core Rust cluster TLS against the remote cluster"""
+        if not endpoints:
+            return False
+            
+        logging.info("=== GLIDE-CORE CLUSTER TLS TEST ===")
+        
+        # Copy TLS certificates to local machine for glide-core test
+        local_tls_dir = "tls_test_certs"
+        os.makedirs(local_tls_dir, exist_ok=True)
+        
+        try:
+            # Copy certificates from remote
+            cert_files = ["ca.crt", "server.crt", "server.key"]
+            for cert_file in cert_files:
+                remote_path = f"{self.remote_repo_path}/utils/tls_crts/{cert_file}"
+                local_path = f"{local_tls_dir}/{cert_file}"
+                self._copy_file_from_remote(remote_path, local_path)
+                logging.info(f"Copied {cert_file} to {local_path}")
+            
+            # Create a simple Rust test program
+            test_program = f'''
+use redis::{{Client, cluster::{{ClusterClient, ClusterClientBuilder}}}};
+use std::fs;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {{
+    let endpoints = vec![{", ".join(f'"{ep}"' for ep in endpoints)}];
+    
+    // Read certificates
+    let ca_cert = fs::read("{local_tls_dir}/ca.crt")?;
+    
+    println!("Testing cluster connection to: {{:?}}", endpoints);
+    
+    // Create cluster client with TLS
+    let client = ClusterClientBuilder::new(endpoints)
+        .tls(redis::cluster::TlsMode::Secure)
+        .certs(redis::TlsCertificates {{
+            client_tls: None,
+            root_cert: Some(ca_cert),
+        }})
+        .build()?;
+    
+    println!("Created cluster client, attempting connection...");
+    
+    // Test connection
+    let mut conn = client.get_async_connection().await?;
+    
+    println!("Connected successfully! Testing PING...");
+    
+    // Test basic operation
+    let pong: String = redis::cmd("PING").query_async(&mut conn).await?;
+    println!("PING response: {{}}", pong);
+    
+    println!("SUCCESS: Rust glide-core cluster TLS test passed");
+    Ok(())
+}}
+'''
+            
+            # Write test program
+            test_dir = "rust_cluster_test"
+            os.makedirs(test_dir, exist_ok=True)
+            
+            with open(f"{test_dir}/main.rs", "w") as f:
+                f.write(test_program)
+            
+            # Create Cargo.toml
+            cargo_toml = '''
+[package]
+name = "cluster_tls_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+redis = { path = "../gh/jduo/valkey-glide/glide-core/redis-rs/redis", features = ["cluster-async", "tokio-comp"] }
+tokio = { version = "1", features = ["full"] }
+'''
+            
+            with open(f"{test_dir}/Cargo.toml", "w") as f:
+                f.write(cargo_toml)
+            
+            # Run the test
+            logging.info("Running Rust cluster TLS test...")
+            result = subprocess.run(
+                ["cargo", "run", "--manifest-path", f"{test_dir}/Cargo.toml"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env={**os.environ, "RUST_LOG": "debug"}
+            )
+            
+            if result.returncode == 0:
+                logging.info("SUCCESS - Rust cluster TLS test passed")
+                logging.info("This indicates the issue is Java-specific, not in Rust core")
+                if "SUCCESS: Rust glide-core cluster TLS test passed" in result.stdout:
+                    logging.info("Rust test output: Connection and PING successful")
+                return True
+            else:
+                logging.warning("FAILED - Rust cluster TLS test failed")
+                logging.warning("This indicates the issue is in the Rust core")
+                logging.warning(f"Test stdout: {result.stdout}")
+                logging.warning(f"Test stderr: {result.stderr}")
+                
+                # Check for specific BadSignature error
+                if "BadSignature" in result.stderr:
+                    logging.warning("CONFIRMED: Rust core also shows BadSignature error")
+                    logging.warning("This is a RustTLS issue in the core, not Java-specific")
+                
+                return False
+                
+        except Exception as e:
+            logging.error(f"Error running Rust cluster test: {e}")
+            return False
+        finally:
+            # Cleanup
+            import shutil
+            for cleanup_dir in [local_tls_dir, "rust_cluster_test"]:
+                if os.path.exists(cleanup_dir):
+                    shutil.rmtree(cleanup_dir)
+        
+        logging.info("=== END GLIDE-CORE CLUSTER TLS TEST ===")
+
+    def _copy_file_from_remote(self, remote_path: str, local_path: str) -> bool:
+        """Copy file from remote host to local machine"""
+        try:
+            cmd = [
+                "scp",
+                "-i", self.key_path,
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                f"{self.user}@{self.host}:{remote_path}",
+                local_path
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            return result.returncode == 0
+            
+        except Exception as e:
+            logging.error(f"Failed to copy {remote_path} from remote: {e}")
+            return False
 
 
 def main():
