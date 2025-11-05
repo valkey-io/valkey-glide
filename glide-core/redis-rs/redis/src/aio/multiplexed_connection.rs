@@ -31,6 +31,7 @@ use std::task::{self, Poll};
 use std::time::Duration;
 #[cfg(feature = "tokio-comp")]
 use tokio_util::codec::Decoder;
+use tracing::warn;
 
 // Default connection timeout in ms
 const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(2000);
@@ -67,6 +68,8 @@ impl ResponseAggregate {
 struct InFlight {
     output: PipelineOutput,
     response_aggregate: ResponseAggregate,
+    is_fenced: bool,
+    fenced_result: Option<RedisResult<Value>>,
 }
 
 // A single message sent through the pipeline
@@ -76,6 +79,7 @@ struct PipelineMessage<S> {
     // If `None`, this is a single request, not a pipeline of multiple requests.
     pipeline_response_count: Option<usize>,
     is_transaction: bool,
+    is_fenced: bool,
 }
 
 /// Wrapper around a `Stream + Sink` where each item sent through the `Sink` results in one or more
@@ -177,6 +181,12 @@ where
             return;
         }
 
+        // Handle fenced commands
+        if entry.is_fenced {
+            Self::handle_fenced_command(entry, result, self_.in_flight);
+            return;
+        }
+
         match &mut entry.response_aggregate {
             ResponseAggregate::SingleCommand => {
                 entry
@@ -230,6 +240,73 @@ where
             }
         }
     }
+    /// Handles fenced command responses.
+    ///
+    /// Fenced commands are commands followed by a PING to ensure ordering.
+    /// They receive two responses:
+    /// 1. The actual command response (or error, or nothing in case there is no returned response)
+    /// 2. PONG from the trailing PING
+    ///
+    /// This function is only called for commands where `is_fenced` is true.
+    fn handle_fenced_command(
+        mut entry: InFlight,
+        result: RedisResult<Value>,
+        in_flight: &mut VecDeque<InFlight>,
+    ) {
+        // Check if we already have a stored result (this is the second response - PONG)
+        if let Some(stored_result) = entry.fenced_result.take() {
+            Self::handle_fenced_second_response(entry, result, stored_result);
+        } else {
+            // This is the first response from the fenced command
+            Self::handle_fenced_first_response(entry, result, in_flight);
+        }
+    }
+
+    /// Handles the first response of a fenced command.
+    fn handle_fenced_first_response(
+        mut entry: InFlight,
+        result: RedisResult<Value>,
+        in_flight: &mut VecDeque<InFlight>,
+    ) {
+        match result {
+            // Case 1: First response is PONG
+            // This means the fenced command had no response
+            Ok(Value::SimpleString(ref s)) if s == "PONG" || s == "pong" => {
+                // Return Ok(Nil) to indicate success with no data
+                entry.output.send(Ok(Value::Nil)).ok();
+            }
+
+            // Case 2: First response is an error
+            // Store it and wait for PONG
+            Err(err) => {
+                entry.fenced_result = Some(Err(err));
+                in_flight.push_front(entry);
+            }
+
+            // Case 3: First response is a value (not PONG)
+            // Store it and wait for PONG
+            Ok(value) => {
+                entry.fenced_result = Some(Ok(value));
+                in_flight.push_front(entry);
+            }
+        }
+    }
+
+    /// Handles the second response of a fenced command (should be PONG).
+    fn handle_fenced_second_response(
+        entry: InFlight,
+        pong_result: RedisResult<Value>,
+        stored_result: RedisResult<Value>,
+    ) {
+        if !matches!(&pong_result, Ok(Value::SimpleString(s)) if s == "PONG") {
+            warn!(
+                "Fenced command: Expected PONG but got {:?}. Returning stored result anyway.",
+                pong_result
+            );
+        }
+
+        entry.output.send(stored_result).ok();
+    }
 }
 
 impl<SinkItem, T> Sink<PipelineMessage<SinkItem>> for PipelineSink<T>
@@ -259,6 +336,7 @@ where
             output,
             pipeline_response_count,
             is_transaction,
+            is_fenced,
         }: PipelineMessage<SinkItem>,
     ) -> Result<(), Self::Error> {
         // If there is nothing to receive our output we do not need to send the message as it is
@@ -282,6 +360,8 @@ where
                 let entry = InFlight {
                     output,
                     response_aggregate,
+                    is_fenced,
+                    fenced_result: None,
                 };
 
                 self_.in_flight.push_back(entry);
@@ -366,8 +446,13 @@ where
     }
 
     // `None` means that the stream was out of items causing that poll loop to shut down.
-    async fn send_single(&mut self, item: SinkItem, timeout: Duration) -> RedisResult<Value> {
-        self.send_recv(item, None, timeout, true).await
+    async fn send_single(
+        &mut self,
+        item: SinkItem,
+        timeout: Duration,
+        is_fenced: bool,
+    ) -> RedisResult<Value> {
+        self.send_recv(item, None, timeout, true, is_fenced).await
     }
 
     async fn send_recv(
@@ -377,6 +462,7 @@ where
         pipeline_response_count: Option<usize>,
         timeout: Duration,
         is_atomic: bool,
+        is_fenced: bool,
     ) -> Result<Value, RedisError> {
         let (sender, receiver) = oneshot::channel();
 
@@ -386,6 +472,7 @@ where
                 pipeline_response_count,
                 output: sender,
                 is_transaction: is_atomic,
+                is_fenced,
             })
             .await
             .map_err(|err| {
@@ -537,7 +624,11 @@ impl MultiplexedConnection {
     pub async fn send_packed_command(&mut self, cmd: &Cmd) -> RedisResult<Value> {
         let result = self
             .pipeline
-            .send_single(cmd.get_packed_command(), self.response_timeout)
+            .send_single(
+                cmd.get_packed_command(),
+                self.response_timeout,
+                cmd.is_fenced(),
+            )
             .await;
         if self.protocol != ProtocolVersion::RESP2 {
             if let Err(e) = &result {
@@ -569,6 +660,7 @@ impl MultiplexedConnection {
                 Some(offset + count),
                 self.response_timeout,
                 cmd.is_atomic(),
+                false,
             )
             .await;
 

@@ -437,11 +437,18 @@ pub enum PushKind {
 impl PushKind {
     #[cfg(feature = "aio")]
     pub(crate) fn has_reply(&self) -> bool {
+        // SUNSUBSCRIBE is excluded because it can be received in two ways:
+        // 1. As a response to an explicit SUNSUBSCRIBE command
+        // 2. Unprompted, when a sharded channel's slot is migrated or deleted
+        // If we treat SUNSUBSCRIBE as a command response, unprompted notifications can be
+        // incorrectly matched to unrelated in-flight commands, permanently disrupting the
+        // command-response ordering. To prevent this, SUNSUBSCRIBE notifications are never
+        // processed as command results. User-initiated SUNSUBSCRIBE commands are fenced
+        // (appended with PING) to determine success and maintain proper response ordering.
         matches!(
             self,
             &PushKind::Unsubscribe
                 | &PushKind::PUnsubscribe
-                | &PushKind::SUnsubscribe
                 | &PushKind::Subscribe
                 | &PushKind::PSubscribe
                 | &PushKind::SSubscribe
