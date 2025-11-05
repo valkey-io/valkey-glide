@@ -1251,7 +1251,15 @@ where
     ) -> RedisResult<ConnectionMap<C>> {
         let initial_nodes: Vec<(String, Option<SocketAddr>)> =
             Self::try_to_expand_initial_nodes(initial_nodes).await;
-        let connections = stream::iter(initial_nodes.iter().cloned())
+        
+        // HACK: Skip the last address to test if it's a "last node" issue
+        let nodes_to_process = if initial_nodes.len() > 1 {
+            &initial_nodes[..initial_nodes.len() - 1]
+        } else {
+            &initial_nodes[..]
+        };
+        
+        let connections = stream::iter(nodes_to_process.iter().cloned())
             .map(|(node_addr, socket_addr)| {
                 let mut params: ClusterParams = params.clone();
                 let glide_connection_options = glide_connection_options.clone();
@@ -1277,10 +1285,10 @@ where
                     result.map(|node| (node_address, node))
                 }
             })
-            .buffered(1)
+            .buffer_unordered(nodes_to_process.len())
             .fold(
                 (
-                    ConnectionsMap(DashMap::with_capacity(initial_nodes.len())),
+                    ConnectionsMap(DashMap::with_capacity(nodes_to_process.len())),
                     None,
                 ),
                 |connections: (ConnectionMap<C>, Option<String>), addr_conn_res| async move {
