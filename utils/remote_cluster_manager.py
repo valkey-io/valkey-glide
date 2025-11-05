@@ -823,11 +823,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {{
                 f.write(test_program)
             
             # Create Cargo.toml
-            cargo_toml = '''
-[package]
+            cargo_toml = '''[package]
 name = "cluster_tls_test"
 version = "0.1.0"
 edition = "2021"
+
+[[bin]]
+name = "main"
+path = "main.rs"
 
 [dependencies]
 redis = { path = "../gh/jduo/valkey-glide/glide-core/redis-rs/redis", features = ["cluster-async", "tokio-comp"] }
