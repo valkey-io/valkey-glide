@@ -42,7 +42,7 @@ bytes = { version = "1", optional = true }
 futures-util = { version = "0.3", default-features = false, optional = true }
 pin-project-lite = { version = "0.2", optional = true }
 tokio-util = { version = "0.7", optional = true }
-tokio = { version = "1", features = ["rt", "net", "time", "sync"] }
+tokio = { version = "1.48", features = ["rt", "net", "time", "sync"] }
 socket2 = { version = "0.6", features = ["all"], optional = true }
 dispose = { version = "0.5", optional = true }
 
@@ -64,10 +64,10 @@ tokio-retry2 = { version = "0.5", features = ["jitter"], optional = true }
 
 # Only needed for rustls (default TLS implementation)
 rustls = { version = "0.23.35", features = ["aws-lc-rs"] }
-rustls-platform-verifier = { version = "0.6", default-features = false }
-tokio-rustls = { version = "0.26", default-features = false }
-rustls-pemfile = { version = "2" }
-rustls-pki-types = { version = "1" }
+rustls-platform-verifier = { version = "0.6.2", default-features = false }
+tokio-rustls = { version = "0.26.4", default-features = false }
+rustls-pemfile = { version = "2.2.0" }
+rustls-pki-types = { version = "1.13.0" }
 
 # Only needed for bignum Support
 num-bigint = "0.4"
