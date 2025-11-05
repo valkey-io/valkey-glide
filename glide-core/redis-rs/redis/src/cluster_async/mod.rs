@@ -1251,15 +1251,7 @@ where
     ) -> RedisResult<ConnectionMap<C>> {
         let initial_nodes: Vec<(String, Option<SocketAddr>)> =
             Self::try_to_expand_initial_nodes(initial_nodes).await;
-        
-        // HACK: Skip the last address to test if it's a "last node" issue
-        let nodes_to_process = if initial_nodes.len() > 1 {
-            &initial_nodes[..initial_nodes.len() - 1]
-        } else {
-            &initial_nodes[..]
-        };
-        
-        let connections = stream::iter(nodes_to_process.iter().cloned())
+        let connections = stream::iter(initial_nodes.iter().cloned())
             .map(|(node_addr, socket_addr)| {
                 let mut params: ClusterParams = params.clone();
                 let glide_connection_options = glide_connection_options.clone();
@@ -1285,28 +1277,38 @@ where
                     result.map(|node| (node_address, node))
                 }
             })
-            .buffer_unordered(nodes_to_process.len())
+            .buffer_unordered(initial_nodes.len())
             .fold(
                 (
-                    ConnectionsMap(DashMap::with_capacity(nodes_to_process.len())),
-                    None,
+                    ConnectionsMap(DashMap::with_capacity(initial_nodes.len())),
+                    Vec::new(), // Collect ALL errors instead of just the last one
                 ),
-                |connections: (ConnectionMap<C>, Option<String>), addr_conn_res| async move {
+                |mut connections: (ConnectionMap<C>, Vec<String>), addr_conn_res| async move {
                     match addr_conn_res {
                         Ok((addr, node)) => {
                             connections.0 .0.insert(addr, node);
-                            (connections.0, None)
+                            connections
                         }
-                        Err(e) => (connections.0, Some(e.to_string())),
+                        Err(e) => {
+                            connections.1.push(e.to_string()); // Collect all errors
+                            connections
+                        }
                     }
                 },
             )
             .await;
         if connections.0 .0.is_empty() {
+            let error_message = if connections.1.is_empty() {
+                "No errors reported".to_string()
+            } else {
+                format!("All {} connection attempts failed: [{}]", 
+                    connections.1.len(), 
+                    connections.1.join(", "))
+            };
             return Err(RedisError::from((
                 ErrorKind::IoError,
                 "Failed to create initial connections",
-                connections.1.unwrap_or("".to_string()),
+                error_message,
             )));
         }
         info!("Connected to initial nodes:\n{}", connections.0);
