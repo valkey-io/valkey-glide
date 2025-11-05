@@ -7,7 +7,7 @@
 // Each test cases has access to a client instance and, optionally, to a cluster - object, which
 // represents a running server instance. See first 2 test cases as examples.
 
-import { expect, it } from "@jest/globals";
+import { describe, expect, it } from "@jest/globals";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     BaseClientConfiguration,
@@ -13070,9 +13070,11 @@ export function runBaseTests(config: {
                         // we expect that all commands will still await for the response even after 500 ms
                         expect(
                             await Promise.race([
-                                promise.finally(() =>
-                                    fail(`${name} didn't block infintely`),
-                                ),
+                                promise.finally(() => {
+                                    throw new Error(
+                                        `${name} didn't block infinitely`,
+                                    );
+                                }),
                                 timeoutPromise,
                             ]),
                         ).toEqual("timeOutPromiseWins");
@@ -13528,27 +13530,14 @@ export function runBaseTests(config: {
                     "no such key",
                 );
 
-                try {
-                    if (isCluster) {
-                        await (client as GlideClusterClient).exec(
-                            batch as ClusterBatch,
-                            true,
-                        );
-                    } else {
-                        await (client as GlideClient).exec(
-                            batch as Batch,
-                            true,
-                        );
-                    }
-
-                    // to make sure we are raising an error and not getting into this part
-                    fail("Expected an error to be thrown");
-                } catch (error) {
-                    expect(error).toBeInstanceOf(RequestError);
-                    expect((error as RequestError).message).toContain(
-                        "WRONGTYPE",
-                    );
-                }
+                const execPromise = isCluster
+                    ? (client as GlideClusterClient).exec(
+                          batch as ClusterBatch,
+                          true,
+                      )
+                    : (client as GlideClient).exec(batch as Batch, true);
+                await expect(execPromise).rejects.toBeInstanceOf(RequestError);
+                await expect(execPromise).rejects.toThrow(/WRONGTYPE/);
             }, protocol);
         },
         config.timeout,
