@@ -379,6 +379,13 @@ impl Client {
         cmd.command().is_some_and(|bytes| bytes == b"SELECT")
     }
 
+    /// Checks if the given command is an SUNSUBSCRIBE command.
+    /// Returns true if the command is "SUNSUBSCRIBE", false otherwise.
+    /// Note: The underlying redis-rs library normalizes commands to uppercase.
+    fn is_sunsubscribe_command(&self, cmd: &Cmd) -> bool {
+        cmd.command().is_some_and(|bytes| bytes == b"SUNSUBSCRIBE")
+    }
+
     /// Extracts the database ID from a SELECT command.
     /// Parses the first argument of the SELECT command as an i64 database ID.
     /// Returns appropriate errors for invalid formats or missing arguments.
@@ -560,6 +567,19 @@ impl Client {
             let request_timeout = match get_request_timeout(cmd, self.request_timeout) {
                 Ok(request_timeout) => request_timeout,
                 Err(err) => return Err(err),
+            };
+
+            // SUNSUBSCRIBE requires setting the fenced flag, so we must create a mutable copy
+            let cmd_ref;
+            let cmd = if self.is_sunsubscribe_command(cmd) {
+                let mut cloned = cmd.clone();
+                cloned.set_fenced(true);
+                cmd_ref = Some(cloned);
+                cmd_ref
+                    .as_ref()
+                    .expect("failed to modify fenced flag for SUNSUBSCRIBE command")
+            } else {
+                cmd
             };
 
             let result = run_with_timeout(request_timeout, async move {
