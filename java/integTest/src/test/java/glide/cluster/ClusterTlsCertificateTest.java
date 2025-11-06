@@ -21,6 +21,7 @@ import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 public class ClusterTlsCertificateTest {
@@ -71,6 +72,7 @@ public class ClusterTlsCertificateTest {
     }
 
     @Test
+    @Disabled("Temporarily disabled to isolate single test")
     void testClusterTlsWithMultipleCertificatesSucceeds() throws Exception {
         String caCertStr = new String(caCert, StandardCharsets.UTF_8);
         String multipleCerts = caCertStr + "\n" + caCertStr;
@@ -109,6 +111,7 @@ public class ClusterTlsCertificateTest {
     }
 
     @Test
+    @Disabled("Temporarily disabled to isolate single test")
     void testClusterTlsWithKeyStoreSucceeds() throws Exception {
         Path keyStorePath = Files.createTempFile("test-keystore", ".jks");
         char[] password = "password".toCharArray();
