@@ -165,36 +165,29 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
-            - name: Setup WSL and install Valkey (Windows)
+            - name: Setup WSL (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              uses: Vampire/setup-wsl@v3
+              with:
+                  distribution: Ubuntu-22.04
+                  use-cache: false
+
+            - name: Install Valkey in WSL (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
               shell: powershell
               run: |
-                  # Enable WSL feature
-                  wsl --install --no-distribution
-                  
-                  # Install Ubuntu distribution
-                  wsl --install -d Ubuntu-24.04
-                  
-                  # Wait for WSL to be ready
-                  Start-Sleep -Seconds 30
-                  
-                  # Install Valkey in WSL
-                  wsl -d Ubuntu-24.04 -- bash -c "
-                      sudo apt update && 
-                      sudo apt install -y build-essential git pkg-config libssl-dev && 
-                      git clone https://github.com/valkey-io/valkey.git && 
-                      cd valkey && 
-                      git checkout '${{ matrix.engine.version }}' && 
-                      make -j\$(nproc) BUILD_TLS=yes && 
-                      sudo make install
+                  # Install Valkey using pre-built packages (much faster than compiling)
+                  wsl -d Ubuntu-22.04 -- bash -c "
+                      export DEBIAN_FRONTEND=noninteractive &&
+                      sudo apt update -qq &&
+                      sudo apt install -y -qq wget gpg &&
+                      wget -qO- https://download.valkey.io/valkey-official.gpg | sudo gpg --dearmor -o /usr/share/keyrings/valkey-archive-keyring.gpg &&
+                      echo 'deb [signed-by /usr/share/keyrings/valkey-archive-keyring.gpg] https://download.valkey.io/deb stable main' | sudo tee /etc/apt/sources.list.d/valkey.list &&
+                      sudo apt update -qq &&
+                      sudo apt install -y -qq valkey python3
                   "
                   
-                  # Start Valkey server in WSL
-                  wsl -d Ubuntu-24.04 -- bash -c "
-                      valkey-server --daemonize yes --bind 0.0.0.0 --port 6379 --protected-mode no
-                  "
-                  
-                  Write-Host "Valkey server started in WSL"
+                  Write-Host "Valkey installed in WSL"
 
             - name: Build java client (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
@@ -313,36 +306,29 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
-            - name: Setup WSL and install Valkey (Windows)
+            - name: Setup WSL (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              uses: Vampire/setup-wsl@v3
+              with:
+                  distribution: Ubuntu-22.04
+                  use-cache: false
+
+            - name: Install Valkey in WSL (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
               shell: powershell
               run: |
-                  # Enable WSL feature
-                  wsl --install --no-distribution
-                  
-                  # Install Ubuntu distribution
-                  wsl --install -d Ubuntu-24.04
-                  
-                  # Wait for WSL to be ready
-                  Start-Sleep -Seconds 30
-                  
-                  # Install Valkey in WSL
-                  wsl -d Ubuntu-24.04 -- bash -c "
-                      sudo apt update && 
-                      sudo apt install -y build-essential git pkg-config libssl-dev && 
-                      git clone https://github.com/valkey-io/valkey.git && 
-                      cd valkey && 
-                      git checkout '${{ matrix.engine.version }}' && 
-                      make -j\$(nproc) BUILD_TLS=yes && 
-                      sudo make install
+                  # Install Valkey using pre-built packages (much faster than compiling)
+                  wsl -d Ubuntu-22.04 -- bash -c "
+                      export DEBIAN_FRONTEND=noninteractive &&
+                      sudo apt update -qq &&
+                      sudo apt install -y -qq wget gpg &&
+                      wget -qO- https://download.valkey.io/valkey-official.gpg | sudo gpg --dearmor -o /usr/share/keyrings/valkey-archive-keyring.gpg &&
+                      echo 'deb [signed-by=/usr/share/keyrings/valkey-archive-keyring.gpg] https://download.valkey.io/deb stable main' | sudo tee /etc/apt/sources.list.d/valkey.list &&
+                      sudo apt update -qq &&
+                      sudo apt install -y -qq valkey python3
                   "
                   
-                  # Start Valkey server in WSL
-                  wsl -d Ubuntu-24.04 -- bash -c "
-                      valkey-server --daemonize yes --bind 0.0.0.0 --port 6379 --protected-mode no
-                  "
-                  
-                  Write-Host "Valkey server started in WSL"
+                  Write-Host "Valkey installed in WSL"
 
             - name: Test pubsub (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
