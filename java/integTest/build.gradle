@@ -72,6 +72,10 @@ ext {
 }
 
 tasks.register('stopAllAfterTests') {
+    // Determine if we're on Windows and should use WSL
+    def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
+    def useWSL = isWindows && System.getenv("VALKEY_REMOTE_HOST") == null
+    
     doLast {
         // Check if we should use remote cluster manager
         def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
@@ -81,6 +85,13 @@ tasks.register('stopAllAfterTests') {
                 workingDir "${project.rootDir}/../utils"
                 commandLine(*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost, 'stop')
                 ignoreExitValue true // ignore fail if servers are stopped before
+            }
+        } else if (useWSL) {
+            // Stop local clusters via WSL
+            exec {
+                commandLine 'wsl', '-d', 'Ubuntu-24.04', '--', 'bash', '-c', 
+                    "cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py stop --prefix cluster --keep-folder"
+                ignoreExitValue true
             }
         } else {
             // Stop local clusters
@@ -281,6 +292,9 @@ tasks.register('startClusterTls') {
         if (System.getProperty("cluster-endpoints") == null) {
             // Check if we should use remote cluster manager
             def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
+            def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
+            def useWSL = isWindows && remoteHost == null
+            
             if (remoteHost != null && !remoteHost.isEmpty()) {
                 // Use remote cluster manager
                 println "Using remote cluster manager for TLS cluster with host: ${remoteHost}"
@@ -298,6 +312,34 @@ tasks.register('startClusterTls') {
                     println "=== GRADLE CLUSTER TLS SETUP ==="
                     println "Extracted cluster TLS hosts: ${clusterTlsHosts}"
                     println "================================="
+                }
+            } else if (useWSL) {
+                // Use WSL cluster manager
+                println "Using WSL cluster manager for TLS cluster"
+                new ByteArrayOutputStream().withStream { os ->
+                    exec {
+                        def args = ['wsl', '-d', 'Ubuntu-24.04', '--', 'bash', '-c']
+                        def wslCmd = "cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py start --cluster-mode --tls -n 6 -r 0"
+                        if (System.getProperty("engine-version")) {
+                            wslCmd += " --engine-version ${System.getProperty("engine-version")}"
+                        }
+                        args.add(wslCmd)
+                        commandLine args
+                        standardOutput = os
+                    }
+                    // Parse cluster endpoints and copy certificates
+                    clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                    
+                    // Copy certificates from WSL to Windows
+                    exec {
+                        commandLine 'wsl', '-d', 'Ubuntu-24.04', '--', 'bash', '-c',
+                            'cp /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils/tls_crts/* /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils/tls_crts/ 2>/dev/null || true'
+                        ignoreExitValue true
+                    }
+                    
+                    println "=== GRADLE WSL CLUSTER TLS SETUP ==="
+                    println "Extracted cluster TLS hosts: ${clusterTlsHosts}"
+                    println "====================================="
                 }
             } else {
                 // Use local cluster manager

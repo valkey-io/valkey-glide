@@ -40,7 +40,7 @@ public class ValkeyCluster implements AutoCloseable {
                 return Arrays.asList("python3");
             } else {
                 // Use WSL for local cluster manager
-                return Arrays.asList("wsl", "--", "python3");
+                return Arrays.asList("wsl", "-d", "Ubuntu-24.04", "--", "python3");
             }
         } else {
             return Arrays.asList("python3");
@@ -108,8 +108,78 @@ public class ValkeyCluster implements AutoCloseable {
         } else {
             this.tls = tls;
             List<String> command = new ArrayList<>();
-            command.addAll(getPythonCommand());
-            command.add(managerInfo.scriptPath.toString());
+            
+            // Handle WSL command building differently
+            String osName = System.getProperty("os.name").toLowerCase();
+            String remoteHost = System.getenv("VALKEY_REMOTE_HOST");
+            boolean useWSL = osName.contains("windows") && (remoteHost == null || remoteHost.isEmpty());
+            
+            if (useWSL) {
+                // For WSL, we need to build a single command string
+                command.addAll(Arrays.asList("wsl", "-d", "Ubuntu-24.04", "--", "bash", "-c"));
+                
+                StringBuilder wslCommand = new StringBuilder();
+                wslCommand.append("cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py");
+                
+                // Add engine version if specified
+                String engineVersion = System.getProperty("engine-version");
+                if (engineVersion != null && !engineVersion.isEmpty()) {
+                    wslCommand.append(" --engine-version ").append(engineVersion);
+                }
+                
+                wslCommand.append(" start");
+                
+                if (clusterMode) {
+                    wslCommand.append(" --cluster-mode");
+                }
+                
+                // Add host parameter - use environment variable or default to localhost
+                String host = System.getenv("VALKEY_INTEG_TEST_IP");
+                if (host == null || host.isEmpty()) {
+                    host = "127.0.0.1";
+                }
+                wslCommand.append(" --host ").append(host);
+                
+                if (tls) {
+                    wslCommand.append(" --tls");
+                    
+                    // Handle custom TLS certificates
+                    String tlsCertFile = System.getProperty("tls-cert-file");
+                    String tlsKeyFile = System.getProperty("tls-key-file");
+                    String tlsCaFile = System.getProperty("tls-ca-cert-file");
+
+                    boolean hasCustomCerts =
+                            (tlsCertFile != null && !tlsCertFile.isEmpty())
+                                    || (tlsKeyFile != null && !tlsKeyFile.isEmpty())
+                                    || (tlsCaFile != null && !tlsCaFile.isEmpty());
+
+                    if (hasCustomCerts) {
+                        if (tlsCertFile != null && !tlsCertFile.isEmpty()) {
+                            wslCommand.append(" --tls-cert-file ").append(tlsCertFile);
+                        }
+                        if (tlsKeyFile != null && !tlsKeyFile.isEmpty()) {
+                            wslCommand.append(" --tls-key-file ").append(tlsKeyFile);
+                        }
+                        if (tlsCaFile != null && !tlsCaFile.isEmpty()) {
+                            wslCommand.append(" --tls-ca-cert-file ").append(tlsCaFile);
+                        }
+                    }
+                }
+                
+                wslCommand.append(" -n ").append(shardCount);
+                wslCommand.append(" -r ").append(replicaCount);
+
+                if (loadModule != null && !loadModule.isEmpty()) {
+                    for (String module : loadModule) {
+                        wslCommand.append(" --load-module ").append(module);
+                    }
+                }
+                
+                command.add(wslCommand.toString());
+            } else {
+                // Original command building for non-WSL
+                command.addAll(getPythonCommand());
+                command.add(managerInfo.scriptPath.toString());
 
             // Add manager-specific arguments
             if (managerInfo.type == ClusterManagerType.REMOTE) {
@@ -186,6 +256,7 @@ public class ValkeyCluster implements AutoCloseable {
                     command.add(module);
                 }
             }
+            } // End of WSL else clause
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
@@ -326,7 +397,28 @@ public class ValkeyCluster implements AutoCloseable {
     public void close() throws IOException, InterruptedException {
         if (clusterFolder != null && !clusterFolder.isEmpty()) {
             List<String> command = new ArrayList<>();
-            command.addAll(getPythonCommand());
+            
+            // Handle WSL for stop command as well
+            String osName = System.getProperty("os.name").toLowerCase();
+            String remoteHost = System.getenv("VALKEY_REMOTE_HOST");
+            boolean useWSL = osName.contains("windows") && (remoteHost == null || remoteHost.isEmpty());
+            
+            if (useWSL) {
+                // For WSL stop command
+                command.addAll(Arrays.asList("wsl", "-d", "Ubuntu-24.04", "--", "bash", "-c"));
+                
+                StringBuilder wslCommand = new StringBuilder();
+                wslCommand.append("cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py");
+                
+                if (tls) {
+                    wslCommand.append(" --tls");
+                }
+                
+                wslCommand.append(" stop --cluster-folder ").append(clusterFolder);
+                
+                command.add(wslCommand.toString());
+            } else {
+                command.addAll(getPythonCommand());
 
             // Use appropriate script based on manager type
             if (managerInfo.type == ClusterManagerType.REMOTE) {
@@ -365,6 +457,7 @@ public class ValkeyCluster implements AutoCloseable {
                 command.add("--cluster-folder");
                 command.add(clusterFolder);
             }
+            } // End of WSL else clause
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
