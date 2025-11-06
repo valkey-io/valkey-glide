@@ -1209,22 +1209,38 @@ async fn create_cluster_client(
         .enumerate()
         .map(|(i, address)| {
             // DEBUG: Log certificate data for each address
-            if let Some(ref params) = tls_params {
-                println!("CLUSTER TLS DEBUG: Address {}: {}:{} - TLS params present", 
-                    i, address.host, get_port(&address));
+            println!("CLUSTER TLS DEBUG: Address {}: {}:{}", 
+                i, address.host, get_port(&address));
+            
+            // Create fresh TLS params for each connection instead of cloning
+            let fresh_tls_params = if !request.root_certs.is_empty() && tls_mode != TlsMode::NoTls {
+                let mut combined_certs = Vec::new();
+                for (j, cert) in request.root_certs.iter().enumerate() {
+                    combined_certs.extend_from_slice(cert);
+                    if j < request.root_certs.len() - 1 && !cert.ends_with(b"\n") {
+                        combined_certs.push(b'\n');
+                    }
+                }
+                
+                let tls_certs = TlsCertificates {
+                    client_tls: None,
+                    root_cert: Some(combined_certs),
+                };
+                
+                println!("CLUSTER TLS DEBUG: Creating fresh TLS params for address {}", i);
+                Some(retrieve_tls_certificates(tls_certs)?)
             } else {
-                println!("CLUSTER TLS DEBUG: Address {}: {}:{} - No TLS params", 
-                    i, address.host, get_port(&address));
-            }
+                None
+            };
             
             get_connection_info(
                 &address,
                 tls_mode,
                 valkey_connection_info.clone(),
-                tls_params.clone(),
+                fresh_tls_params,
             )
         })
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     let periodic_topology_checks = match request.periodic_checks {
         Some(PeriodicCheck::Disabled) => None,
