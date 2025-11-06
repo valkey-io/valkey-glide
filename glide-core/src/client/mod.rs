@@ -1203,50 +1203,21 @@ async fn create_cluster_client(
     } else {
         (None, None)
     };
-    let initial_nodes: Vec<_> = request
-        .addresses
-        .into_iter()
-        .enumerate()
-        .map(|(i, address)| {
-            // DEBUG: Log certificate data for each address
-            println!("CLUSTER TLS DEBUG: Address {}: {}:{}", 
-                i, address.host, get_port(&address));
-            
-            // Create fresh TLS params for each connection instead of cloning
-            let fresh_tls_params = if !request.root_certs.is_empty() && tls_mode != TlsMode::NoTls {
-                let mut combined_certs = Vec::new();
-                for (j, cert) in request.root_certs.iter().enumerate() {
-                    combined_certs.extend_from_slice(cert);
-                    if j < request.root_certs.len() - 1 && !cert.ends_with(b"\n") {
-                        combined_certs.push(b'\n');
-                    }
-                }
-                
-                let tls_certs = TlsCertificates {
-                    client_tls: None,
-                    root_cert: Some(combined_certs),
-                };
-                
-                println!("CLUSTER TLS DEBUG: Creating fresh TLS params for address {}", i);
-                match retrieve_tls_certificates(tls_certs) {
-                    Ok(params) => Some(params),
-                    Err(e) => {
-                        println!("CLUSTER TLS DEBUG: Failed to create TLS params for address {}: {}", i, e);
-                        return Err(e);
-                    }
-                }
-            } else {
-                None
-            };
-            
-            Ok(get_connection_info(
-                &address,
-                tls_mode,
-                valkey_connection_info.clone(),
-                fresh_tls_params,
-            ))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    // Create connections sequentially instead of concurrently to test if it's a concurrency issue
+    let mut connection_infos = Vec::new();
+    for (i, address) in request.addresses.into_iter().enumerate() {
+        println!("CLUSTER TLS DEBUG: Creating connection {} for {}:{}", 
+            i, address.host, get_port(&address));
+        
+        let connection_info = get_connection_info(
+            &address,
+            tls_mode,
+            valkey_connection_info.clone(),
+            tls_params.clone(),
+        );
+        connection_infos.push(connection_info);
+    }
+    let initial_nodes = connection_infos;
 
     let periodic_topology_checks = match request.periodic_checks {
         Some(PeriodicCheck::Disabled) => None,
@@ -1279,9 +1250,12 @@ async fn create_cluster_client(
         builder = builder.lib_name(lib_name);
     }
     if tls_mode != TlsMode::NoTls {
+        println!("CLUSTER TLS DEBUG: TLS mode is {:?}", tls_mode);
         let tls = if tls_mode == TlsMode::SecureTls {
+            println!("CLUSTER TLS DEBUG: Using redis::cluster::TlsMode::Secure");
             redis::cluster::TlsMode::Secure
         } else {
+            println!("CLUSTER TLS DEBUG: Using redis::cluster::TlsMode::Insecure");
             redis::cluster::TlsMode::Insecure
         };
         builder = builder.tls(tls);

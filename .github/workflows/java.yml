@@ -94,8 +94,8 @@ jobs:
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
                   run-with-macos: ${{ (github.event.inputs.run-with-macos) }}
-                  # Use Windows self-hosted runner with VPC Linux instance by default for code changes
-                  run-with-windows-self-hosted: ${{ github.event.inputs.use-windows-self-hosted == 'true' || github.event_name == 'push' || github.event_name == 'pull_request' }}
+                  # Use GitHub-hosted runners instead of Windows self-hosted for testing
+                  run-with-windows-self-hosted: false
 
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
@@ -165,32 +165,42 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
-            - name: Setup Python3 for Windows
+            - name: Setup WSL and install Valkey (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
               shell: powershell
               run: |
-                  # Create python3 symlink for Windows if python exists
-                  if (Get-Command python -ErrorAction SilentlyContinue) {
-                      $pythonPath = (Get-Command python).Source
-                      $python3Path = Join-Path (Split-Path $pythonPath) "python3.exe"
-                      if (-not (Test-Path $python3Path)) {
-                          New-Item -ItemType HardLink -Path $python3Path -Target $pythonPath -Force
-                          Write-Host "python3 symlink created"
-                      } else {
-                          Write-Host "python3 already exists"
-                      }
-                  } else {
-                      Write-Host "python command not found, skipping symlink creation"
-                  }
+                  # Enable WSL feature
+                  wsl --install --no-distribution
+                  
+                  # Install Ubuntu distribution
+                  wsl --install -d Ubuntu-24.04
+                  
+                  # Wait for WSL to be ready
+                  Start-Sleep -Seconds 30
+                  
+                  # Install Valkey in WSL
+                  wsl -d Ubuntu-24.04 -- bash -c "
+                      sudo apt update && 
+                      sudo apt install -y build-essential git pkg-config libssl-dev && 
+                      git clone https://github.com/valkey-io/valkey.git && 
+                      cd valkey && 
+                      git checkout '${{ matrix.engine.version }}' && 
+                      make -j\$(nproc) BUILD_TLS=yes && 
+                      sudo make install
+                  "
+                  
+                  # Start Valkey server in WSL
+                  wsl -d Ubuntu-24.04 -- bash -c "
+                      valkey-server --daemonize yes --bind 0.0.0.0 --port 6379 --protected-mode no
+                  "
+                  
+                  Write-Host "Valkey server started in WSL"
 
             - name: Build java client (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
               working-directory: java
               env:
                   CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
-                  SSH_PRIVATE_KEY_CONTENT: ${{ secrets.VALKEY_REMOTE_SSH_KEY }}
-                  VALKEY_REMOTE_HOST: ${{ vars.VALKEY_REMOTE_HOST }}
-                  NPM_SCOPE: ${{ vars.NPM_SCOPE }}
               run: |
                   # Stop any existing Gradle daemons to avoid compatibility issues
                   .\gradlew.bat --stop                
@@ -309,8 +319,6 @@ jobs:
               shell: powershell
               env:
                   CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
-                  SSH_PRIVATE_KEY_CONTENT: ${{ secrets.VALKEY_REMOTE_SSH_KEY }}
-                  VALKEY_REMOTE_HOST: ${{ vars.VALKEY_REMOTE_HOST }}
               run: |
                   # Stop any existing Gradle daemons to avoid compatibility issues
                   .\gradlew.bat --stop
