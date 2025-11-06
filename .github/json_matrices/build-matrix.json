@@ -92,5 +92,16 @@
         "languages": ["java"],
         "run": "always",
         "comment": "GitHub-hosted Windows runner with WSL for local Valkey testing"
+    },
+    {
+        "OS": "windows",
+        "NAMED_OS": "windows",
+        "RUNNER": "windows-latest-arm64",
+        "ARCH": "arm64",
+        "TARGET": "aarch64-pc-windows-msvc",
+        "PACKAGE_MANAGERS": ["maven"],
+        "languages": ["java"],
+        "run": "always",
+        "comment": "GitHub-hosted Windows ARM64 runner with WSL for local Valkey testing"
     }
 ]
