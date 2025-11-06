@@ -85,12 +85,12 @@
     {
         "OS": "windows",
         "NAMED_OS": "windows",
-        "RUNNER": ["self-hosted", "windows", "x64"],
+        "RUNNER": "windows-latest",
         "ARCH": "x64",
         "TARGET": "x86_64-pc-windows-msvc",
         "PACKAGE_MANAGERS": ["maven"],
         "languages": ["java"],
         "run": "always",
-        "comment": "Self-hosted Windows runner for Java tests with remote Valkey cluster"
+        "comment": "GitHub-hosted Windows runner with WSL for local Valkey testing"
     }
 ]
