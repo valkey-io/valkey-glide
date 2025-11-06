@@ -313,6 +313,37 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
+            - name: Setup WSL and install Valkey (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              shell: powershell
+              run: |
+                  # Enable WSL feature
+                  wsl --install --no-distribution
+                  
+                  # Install Ubuntu distribution
+                  wsl --install -d Ubuntu-24.04
+                  
+                  # Wait for WSL to be ready
+                  Start-Sleep -Seconds 30
+                  
+                  # Install Valkey in WSL
+                  wsl -d Ubuntu-24.04 -- bash -c "
+                      sudo apt update && 
+                      sudo apt install -y build-essential git pkg-config libssl-dev && 
+                      git clone https://github.com/valkey-io/valkey.git && 
+                      cd valkey && 
+                      git checkout '${{ matrix.engine.version }}' && 
+                      make -j\$(nproc) BUILD_TLS=yes && 
+                      sudo make install
+                  "
+                  
+                  # Start Valkey server in WSL
+                  wsl -d Ubuntu-24.04 -- bash -c "
+                      valkey-server --daemonize yes --bind 0.0.0.0 --port 6379 --protected-mode no
+                  "
+                  
+                  Write-Host "Valkey server started in WSL"
+
             - name: Test pubsub (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
               working-directory: java
