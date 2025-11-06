@@ -88,7 +88,7 @@ tasks.register('stopAllAfterTests') {
         } else if (useWSL) {
             // Stop local clusters via WSL
             exec {
-                commandLine 'wsl', '-d', 'Ubuntu-24.04', '--', 'bash', '-c', 
+                commandLine 'wsl', '-d', 'Ubuntu-22.04', '--', 'bash', '-c', 
                     "cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py stop --prefix cluster --keep-folder"
                 ignoreExitValue true
             }
@@ -172,7 +172,7 @@ tasks.register('startCluster') {
                 println "Using WSL cluster manager for standalone"
                 new ByteArrayOutputStream().withStream { os ->
                     exec {
-                        def args = ['wsl', '-d', 'Ubuntu-24.04', '--', 'bash', '-c']
+                        def args = ['wsl', '-d', 'Ubuntu-22.04', '--', 'bash', '-c']
                         def wslCmd = "cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py start --cluster-mode -r 1"
                         if (System.getProperty("engine-version")) {
                             wslCmd += " --engine-version ${System.getProperty("engine-version")}"
@@ -232,7 +232,7 @@ tasks.register('startClusterForAz') {
                 println "Using WSL cluster manager for cluster"
                 new ByteArrayOutputStream().withStream { os ->
                     exec {
-                        def args = ['wsl', '-d', 'Ubuntu-24.04', '--', 'bash', '-c']
+                        def args = ['wsl', '-d', 'Ubuntu-22.04', '--', 'bash', '-c']
                         def wslCmd = "cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py start --cluster-mode -r 4"
                         if (System.getProperty("engine-version")) {
                             wslCmd += " --engine-version ${System.getProperty("engine-version")}"
@@ -283,7 +283,7 @@ tasks.register('startStandalone') {
                         if (System.getProperty("tls") == 'true') args.add('--tls')
                         commandLine args
                     } else if (useWSL) {
-                        def args = ['wsl', '-d', 'Ubuntu-24.04', '--', 'bash', '-c']
+                        def args = ['wsl', '-d', 'Ubuntu-22.04', '--', 'bash', '-c']
                         def wslCmd = "cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py start -r 0"
                         if (System.getProperty("engine-version")) {
                             wslCmd += " --engine-version ${System.getProperty("engine-version")}"
@@ -323,7 +323,7 @@ tasks.register('startStandaloneTls') {
                         args.addAll(['start', '--tls', '-r', '0'])
                         commandLine args
                     } else if (useWSL) {
-                        def args = ['wsl', '-d', 'Ubuntu-24.04', '--', 'bash', '-c']
+                        def args = ['wsl', '-d', 'Ubuntu-22.04', '--', 'bash', '-c']
                         def wslCmd = "cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py start --tls -r 0"
                         if (System.getProperty("engine-version")) {
                             wslCmd += " --engine-version ${System.getProperty("engine-version")}"
@@ -372,7 +372,7 @@ tasks.register('startClusterTls') {
                 println "Using WSL cluster manager for TLS cluster"
                 new ByteArrayOutputStream().withStream { os ->
                     exec {
-                        def args = ['wsl', '-d', 'Ubuntu-24.04', '--', 'bash', '-c']
+                        def args = ['wsl', '-d', 'Ubuntu-22.04', '--', 'bash', '-c']
                         def wslCmd = "cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py start --cluster-mode --tls -n 6 -r 0"
                         if (System.getProperty("engine-version")) {
                             wslCmd += " --engine-version ${System.getProperty("engine-version")}"
@@ -386,7 +386,7 @@ tasks.register('startClusterTls') {
                     
                     // Copy certificates from WSL to Windows
                     exec {
-                        commandLine 'wsl', '-d', 'Ubuntu-24.04', '--', 'bash', '-c',
+                        commandLine 'wsl', '-d', 'Ubuntu-22.04', '--', 'bash', '-c',
                             'cp /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils/tls_crts/* /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils/tls_crts/ 2>/dev/null || true'
                         ignoreExitValue true
                     }
