@@ -467,6 +467,11 @@ class RemoteClusterManager:
                                     cert_content = f.read()
                                     logging.info(f"Certificate {remote_name} length: {len(cert_content)} bytes")
                                     logging.info(f"Certificate {remote_name} first 100 bytes: {cert_content[:100]}")
+                                    logging.info(f"Certificate {remote_name} last 100 bytes: {cert_content[-100:]}")
+                                    
+                                    # Print as hex for exact comparison with Rust output
+                                    hex_first = ' '.join(f'{b:02x}' for b in cert_content[:50])
+                                    logging.info(f"Certificate {remote_name} first 50 bytes hex: {hex_first}")
                                     
                                     # Verify it's valid PEM
                                     if b'-----BEGIN' in cert_content and b'-----END' in cert_content:
@@ -961,6 +966,26 @@ tokio = { version = "1", features = ["full"] }
         if returncode == 0:
             logging.info("Server certificate info:")
             for line in stdout.split('\n')[:10]:  # First 10 lines
+                if line.strip():
+                    logging.info(f"  {line}")
+        
+        # Print raw certificate content for comparison
+        cert_content_cmd = f"cd {self.remote_repo_path}/utils && wc -c tls_crts/ca.crt && head -c 100 tls_crts/ca.crt && echo && tail -c 100 tls_crts/ca.crt"
+        returncode, stdout, stderr = self._execute_remote_command(cert_content_cmd, timeout=5)
+        
+        if returncode == 0:
+            logging.info("Server certificate raw content:")
+            for line in stdout.split('\n'):
+                if line.strip():
+                    logging.info(f"  {line}")
+        
+        # Print certificate as hex for exact comparison
+        cert_hex_cmd = f"cd {self.remote_repo_path}/utils && xxd -l 100 tls_crts/ca.crt"
+        returncode, stdout, stderr = self._execute_remote_command(cert_hex_cmd, timeout=5)
+        
+        if returncode == 0:
+            logging.info("Server certificate hex (first 100 bytes):")
+            for line in stdout.split('\n'):
                 if line.strip():
                     logging.info(f"  {line}")
         
