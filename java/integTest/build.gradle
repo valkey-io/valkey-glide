@@ -3,6 +3,10 @@ plugins {
     id "com.google.osdetector" version "1.7.3"
 }
 
+// Global variables for Windows/WSL detection
+def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
+def useWSL = isWindows && System.getenv("VALKEY_REMOTE_HOST") == null
+
 repositories {
     mavenCentral()
     mavenLocal()
@@ -53,7 +57,6 @@ def clusterTlsHosts = ''
 def azClusterHosts = ''
 
 // Platform-specific Python executable
-def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
 def pythonCmd = isWindows ? ['python3'] : ['python3']
 
 // Use integration test IP from environment variable if available, otherwise default to localhost
@@ -72,10 +75,6 @@ ext {
 }
 
 tasks.register('stopAllAfterTests') {
-    // Determine if we're on Windows and should use WSL
-    def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
-    def useWSL = isWindows && System.getenv("VALKEY_REMOTE_HOST") == null
-    
     doLast {
         // Check if we should use remote cluster manager
         def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
@@ -292,8 +291,6 @@ tasks.register('startClusterTls') {
         if (System.getProperty("cluster-endpoints") == null) {
             // Check if we should use remote cluster manager
             def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
-            def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
-            def useWSL = isWindows && remoteHost == null
             
             if (remoteHost != null && !remoteHost.isEmpty()) {
                 // Use remote cluster manager
