@@ -469,13 +469,27 @@ class RemoteClusterManager:
                                     logging.info(f"Certificate {remote_name} first 100 bytes: {cert_content[:100]}")
                                     logging.info(f"Certificate {remote_name} last 100 bytes: {cert_content[-100:]}")
                                     
+                                    # Check for line ending types
+                                    lf_count = cert_content.count(b'\n')
+                                    crlf_count = cert_content.count(b'\r\n')
+                                    cr_count = cert_content.count(b'\r') - crlf_count
+                                    
+                                    logging.info(f"Certificate {remote_name} line endings: LF={lf_count}, CRLF={crlf_count}, CR={cr_count}")
+                                    
                                     # Print as hex for exact comparison with Rust output
                                     hex_first = ' '.join(f'{b:02x}' for b in cert_content[:50])
                                     logging.info(f"Certificate {remote_name} first 50 bytes hex: {hex_first}")
                                     
-                                    # Verify it's valid PEM
+                                    # Check for PEM structure
                                     if b'-----BEGIN' in cert_content and b'-----END' in cert_content:
                                         logging.info(f"Certificate {remote_name} appears to be valid PEM format")
+                                        
+                                        # Check if base64 content has proper line breaks
+                                        lines = cert_content.decode('utf-8', errors='ignore').split('\n')
+                                        base64_lines = [line for line in lines if line and not line.startswith('-----')]
+                                        if base64_lines:
+                                            avg_line_length = sum(len(line) for line in base64_lines) / len(base64_lines)
+                                            logging.info(f"Certificate {remote_name} average base64 line length: {avg_line_length:.1f}")
                                     else:
                                         logging.warning(f"Certificate {remote_name} does NOT appear to be valid PEM format")
                                         
@@ -995,11 +1009,11 @@ tokio = { version = "1", features = ["full"] }
                     logging.info(f"  {line}")
         
         # Print raw certificate content for comparison
-        cert_content_cmd = f"cd {self.remote_repo_path}/utils && wc -c tls_crts/ca.crt && head -c 100 tls_crts/ca.crt && echo && tail -c 100 tls_crts/ca.crt"
+        cert_content_cmd = f"cd {self.remote_repo_path}/utils && wc -c tls_crts/ca.crt && echo '=== FIRST 200 CHARS ===' && head -c 200 tls_crts/ca.crt && echo && echo '=== LAST 200 CHARS ===' && tail -c 200 tls_crts/ca.crt && echo && echo '=== LINE ENDINGS CHECK ===' && od -c tls_crts/ca.crt | head -5"
         returncode, stdout, stderr = self._execute_remote_command(cert_content_cmd, timeout=5)
         
         if returncode == 0:
-            logging.info("Server certificate raw content:")
+            logging.info("Server certificate raw content and line endings:")
             for line in stdout.split('\n'):
                 if line.strip():
                     logging.info(f"  {line}")
