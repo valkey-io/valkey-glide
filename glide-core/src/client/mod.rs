@@ -1170,14 +1170,21 @@ async fn create_cluster_client(
             )));
         }
         let mut combined_certs = Vec::new();
-        for cert in &request.root_certs {
+        for (i, cert) in request.root_certs.iter().enumerate() {
             if cert.is_empty() {
                 return Err(RedisError::from((
                     ErrorKind::InvalidClientConfig,
                     "Root certificate cannot be empty byte string",
                 )));
             }
+            
+            // Add the certificate
             combined_certs.extend_from_slice(cert);
+            
+            // Ensure proper PEM separation between certificates
+            if i < request.root_certs.len() - 1 && !cert.ends_with(b"\n") {
+                combined_certs.push(b'\n');
+            }
         }
         
         // DEBUG: Print certificate content for cluster connections
