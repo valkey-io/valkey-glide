@@ -3,10 +3,6 @@ plugins {
     id "com.google.osdetector" version "1.7.3"
 }
 
-// Global variables for Windows/WSL detection
-def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
-def useWSL = isWindows && System.getenv("VALKEY_REMOTE_HOST") == null
-
 repositories {
     mavenCentral()
     mavenLocal()
@@ -17,7 +13,7 @@ tasks.withType(JavaCompile) {
 }
 
 dependencies {
-    def classifier
+    def classifier 
     if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         classifier = "linux_musl-${osdetector.arch}"
     }
@@ -26,7 +22,7 @@ dependencies {
     }
     // Use published GLIDE artifact
     implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: classifier
-
+    
     // Use published jedis-compatibility artifact
     testImplementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
 
@@ -56,19 +52,20 @@ def clusterHosts = ''
 def clusterTlsHosts = ''
 def azClusterHosts = ''
 
-// Platform-specific Python executable
-def pythonCmd = isWindows ? ['python3'] : ['python3']
+// Platform-specific Python executable and WSL handling
+def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+def pythonCmd = isWindows ? ['wsl', '--', 'python3'] : ['python3']
 
 // Use integration test IP from environment variable if available, otherwise default to localhost
 def clusterHost = System.getenv('VALKEY_INTEG_TEST_IP') ?: '127.0.0.1'
 
 ext {
     extractAddressesFromClusterManagerOutput = { String output ->
-        for (def line : output.readLines()) {  // Use readLines() for cross-platform line splitting
+        for (def line : output.split("\n")) {
             if (!line.startsWith("CLUSTER_NODES="))
                 continue
 
-            return line.split("=")[1].trim()  // Add trim() to remove trailing whitespace
+            return line.split("=")[1]
         }
         return ''
     }
@@ -76,34 +73,15 @@ ext {
 
 tasks.register('stopAllAfterTests') {
     doLast {
-        // Check if we should use remote cluster manager
-        def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
-        if (remoteHost != null && !remoteHost.isEmpty()) {
-            // Stop remote clusters
-            exec {
-                workingDir "${project.rootDir}/../utils"
-                commandLine(*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost, 'stop')
-                ignoreExitValue true // ignore fail if servers are stopped before
-            }
-        } else if (useWSL) {
-            // Stop local clusters via WSL
-            exec {
-                commandLine 'wsl', '-d', 'Ubuntu-22.04', '--', 'bash', '-c', 
-                    "cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py stop --prefix cluster --keep-folder"
-                ignoreExitValue true
-            }
-        } else {
-            // Stop local clusters
-            exec {
-                workingDir "${project.rootDir}/../utils"
-                commandLine(*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'stop', '--prefix', 'cluster', '--keep-folder')
-                ignoreExitValue true // ignore fail if servers are stopped before
-            }
-            exec {
-                workingDir "${project.rootDir}/../utils"
-                commandLine(*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'stop', '--prefix', 'cluster', '--keep-folder')
-                ignoreExitValue true
-            }
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            commandLine *pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder', '--host', clusterHost
+            ignoreExitValue true // ignore fail if servers are stopped before
+        }
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            commandLine *pythonCmd, 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster', '--keep-folder', '--host', clusterHost
+            ignoreExitValue true
         }
     }
 }
@@ -113,29 +91,15 @@ tasks.register('stopAllAfterTests') {
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
 tasks.register('stopAllBeforeTests') {
     doLast {
-        println "=== STOPPING ALL CLUSTERS BEFORE TESTS ==="
-        // Check if we should use remote cluster manager
-        def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
-        if (remoteHost != null && !remoteHost.isEmpty()) {
-            println "Stopping remote clusters on: ${remoteHost}"
-            // Stop remote clusters
-            exec {
-                workingDir "${project.rootDir}/../utils"
-                commandLine(*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost, 'stop')
-                ignoreExitValue true // ignore fail if servers are stopped before
-            }
-        } else {
-            // Stop local clusters
-            exec {
-                workingDir "${project.rootDir}/../utils"
-                commandLine(*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'stop', '--prefix', 'cluster', '--keep-folder')
-                ignoreExitValue true // ignore fail if servers are stopped before
-            }
-            exec {
-                workingDir "${project.rootDir}/../utils"
-                commandLine(*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'stop', '--prefix', 'cluster', '--keep-folder')
-                ignoreExitValue true
-            }
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            commandLine *pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--host', clusterHost
+            ignoreExitValue true // ignore fail if servers are stopped before
+        }
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            commandLine *pythonCmd, 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster', '--host', clusterHost
+            ignoreExitValue true
         }
     }
 }
@@ -148,56 +112,15 @@ tasks.register('clearDirs', Delete) {
 tasks.register('startCluster') {
     doLast {
         if (System.getProperty("cluster-endpoints") == null) {
-            def engineVersion = System.getProperty("engine-version") ?: "valkey-8.0"
-            // Check if we should use remote cluster manager
-            def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
-            if (remoteHost != null && !remoteHost.isEmpty()) {
-                // Use remote cluster manager
-                println "Using remote cluster manager for standalone with host: ${remoteHost}"
-                new ByteArrayOutputStream().withStream { os ->
-                    exec {
-                        workingDir "${project.rootDir}/../utils"
-                        def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost]
-                        if (System.getProperty("engine-version")) args.addAll(['--engine-version', System.getProperty("engine-version")])
-                        args.addAll(['start', '--cluster-mode', '-r', '1'])
-                        if (System.getProperty("tls") == 'true') args.add('--tls')
-                        commandLine args
-                        standardOutput = os
-                    }
-                    // Parse remote cluster endpoints
-                    clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir "${project.rootDir}/../utils"
+                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '-r', '1', '--host', clusterHost]
+                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    commandLine args
+                    standardOutput = os
                 }
-            } else if (useWSL) {
-                // Use WSL cluster manager
-                println "Using WSL cluster manager for standalone"
-                new ByteArrayOutputStream().withStream { os ->
-                    exec {
-                        def args = ['wsl', '-d', 'Ubuntu-22.04', '--', 'bash', '-c']
-                        def wslCmd = "cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py start --cluster-mode -r 1"
-                        if (System.getProperty("engine-version")) {
-                            wslCmd += " --engine-version ${System.getProperty("engine-version")}"
-                        }
-                        if (System.getProperty("tls") == 'true') {
-                            wslCmd += " --tls"
-                        }
-                        args.add(wslCmd)
-                        commandLine args
-                        standardOutput = os
-                    }
-                    clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
-                }
-            } else {
-                // Use local cluster manager (original behavior for non-Windows)
-                new ByteArrayOutputStream().withStream { os ->
-                    exec {
-                        workingDir "${project.rootDir}/../utils"
-                        def args = [*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'start', '--cluster-mode', '-r', '1']
-                        if (System.getProperty("tls") == 'true') args.add('--tls')
-                        commandLine args
-                        standardOutput = os
-                    }
-                    clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
-                }
+                clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
             }
         } else {
             clusterHosts = System.getProperty("cluster-endpoints")
@@ -208,56 +131,15 @@ tasks.register('startCluster') {
 tasks.register('startClusterForAz') {
     doLast {
         if (System.getProperty("cluster-endpoints") == null) {
-            def engineVersion = System.getProperty("engine-version") ?: "valkey-8.0"
-
-            // Check if we should use remote cluster manager
-            def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
-            if (remoteHost != null && !remoteHost.isEmpty()) {
-                // Use remote cluster manager
-                new ByteArrayOutputStream().withStream { os ->
-                    exec {
-                        workingDir "${project.rootDir}/../utils"
-                        def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost]
-                        if (System.getProperty("engine-version")) args.addAll(['--engine-version', System.getProperty("engine-version")])
-                        args.addAll(['start', '--cluster-mode', '-r', '4'])
-                        if (System.getProperty("tls") == 'true') args.add('--tls')
-                        commandLine args
-                        standardOutput = os
-                    }
-                    // Parse remote cluster endpoints
-                    azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir "${project.rootDir}/../utils"
+                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '-r', '1', '--host', clusterHost]
+                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    commandLine args
+                    standardOutput = os
                 }
-            } else if (useWSL) {
-                // Use WSL cluster manager
-                println "Using WSL cluster manager for cluster"
-                new ByteArrayOutputStream().withStream { os ->
-                    exec {
-                        def args = ['wsl', '-d', 'Ubuntu-22.04', '--', 'bash', '-c']
-                        def wslCmd = "cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py start --cluster-mode -r 4"
-                        if (System.getProperty("engine-version")) {
-                            wslCmd += " --engine-version ${System.getProperty("engine-version")}"
-                        }
-                        if (System.getProperty("tls") == 'true') {
-                            wslCmd += " --tls"
-                        }
-                        args.add(wslCmd)
-                        commandLine args
-                        standardOutput = os
-                    }
-                    azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
-                }
-            } else {
-                // Use local cluster manager (original behavior for non-Windows)
-                new ByteArrayOutputStream().withStream { os ->
-                    exec {
-                        workingDir "${project.rootDir}/../utils"
-                        def args = [*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'start', '--cluster-mode', '-r', '4']
-                        if (System.getProperty("tls") == 'true') args.add('--tls')
-                        commandLine args
-                        standardOutput = os
-                    }
-                    azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
-                }
+                azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
             }
         } else {
             azClusterHosts = System.getProperty("cluster-endpoints")
@@ -273,31 +155,9 @@ tasks.register('startStandalone') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-
-                    // Check if we should use remote cluster manager
-                    def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
-                    if (remoteHost != null && !remoteHost.isEmpty()) {
-                        def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost]
-                        if (System.getProperty("engine-version")) args.addAll(['--engine-version', System.getProperty("engine-version")])
-                        args.addAll(['start', '-r', '0'])
-                        if (System.getProperty("tls") == 'true') args.add('--tls')
-                        commandLine args
-                    } else if (useWSL) {
-                        def args = ['wsl', '-d', 'Ubuntu-22.04', '--', 'bash', '-c']
-                        def wslCmd = "cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py start -r 0"
-                        if (System.getProperty("engine-version")) {
-                            wslCmd += " --engine-version ${System.getProperty("engine-version")}"
-                        }
-                        if (System.getProperty("tls") == 'true') {
-                            wslCmd += " --tls"
-                        }
-                        args.add(wslCmd)
-                        commandLine args
-                    } else {
-                        def args = [*pythonCmd, 'cluster_manager.py', '--host', clusterHost, 'start', '-r', '0']
-                        if (System.getProperty("tls") == 'true') args.add('--tls')
-                        commandLine args
-                    }
+                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '-r', '0', '--host', clusterHost]
+                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    commandLine args
                     standardOutput = os
                 }
                 standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
@@ -310,123 +170,37 @@ tasks.register('startStandalone') {
 
 tasks.register('startStandaloneTls') {
     doLast {
-        if (System.getProperty("standalone-tls-endpoints") == null) {
-            new ByteArrayOutputStream().withStream { os ->
-                exec {
-                    workingDir "${project.rootDir}/../utils"
-                    
-                    // Check if we should use remote cluster manager
-                    def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
-                    if (remoteHost != null && !remoteHost.isEmpty()) {
-                        def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost]
-                        if (System.getProperty("engine-version")) args.addAll(['--engine-version', System.getProperty("engine-version")])
-                        args.addAll(['start', '--tls', '-r', '0'])
-                        commandLine args
-                    } else if (useWSL) {
-                        def args = ['wsl', '-d', 'Ubuntu-22.04', '--', 'bash', '-c']
-                        def wslCmd = "cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py start --tls -r 0"
-                        if (System.getProperty("engine-version")) {
-                            wslCmd += " --engine-version ${System.getProperty("engine-version")}"
-                        }
-                        args.add(wslCmd)
-                        commandLine args
-                    } else {
-                        commandLine(*pythonCmd, 'cluster_manager.py', 'start', '--tls', '-r', '0')
-                    }
-                    standardOutput = os
-                }
-                standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '-r', '0'
+                standardOutput = os
             }
-        } else {
-            standaloneTlsHosts = System.getProperty("standalone-tls-endpoints")
+            standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
         }
     }
 }
 
 tasks.register('startClusterTls') {
     doLast {
-        if (System.getProperty("cluster-endpoints") == null) {
-            // Check if we should use remote cluster manager
-            def remoteHost = System.getenv("VALKEY_REMOTE_HOST")
-            
-            if (remoteHost != null && !remoteHost.isEmpty()) {
-                // Use remote cluster manager
-                println "Using remote cluster manager for TLS cluster with host: ${remoteHost}"
-                new ByteArrayOutputStream().withStream { os ->
-                    exec {
-                        workingDir "${project.rootDir}/../utils"
-                        def args = [*pythonCmd, 'remote_cluster_manager.py', '--host', remoteHost]
-                        if (System.getProperty("engine-version")) args.addAll(['--engine-version', System.getProperty("engine-version")])
-                        args.addAll(['start', '--cluster-mode', '--tls', '-n', '6', '-r', '0'])
-                        commandLine args
-                        standardOutput = os
-                    }
-                    // Parse remote cluster endpoints
-                    clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
-                    println "=== GRADLE CLUSTER TLS SETUP ==="
-                    println "Extracted cluster TLS hosts: ${clusterTlsHosts}"
-                    println "================================="
-                }
-            } else if (useWSL) {
-                // Use WSL cluster manager
-                println "Using WSL cluster manager for TLS cluster"
-                new ByteArrayOutputStream().withStream { os ->
-                    exec {
-                        def args = ['wsl', '-d', 'Ubuntu-22.04', '--', 'bash', '-c']
-                        def wslCmd = "cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py start --cluster-mode --tls -n 6 -r 0"
-                        if (System.getProperty("engine-version")) {
-                            wslCmd += " --engine-version ${System.getProperty("engine-version")}"
-                        }
-                        args.add(wslCmd)
-                        commandLine args
-                        standardOutput = os
-                    }
-                    // Parse cluster endpoints and copy certificates
-                    clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
-                    
-                    // Copy certificates from WSL to Windows
-                    exec {
-                        commandLine 'wsl', '-d', 'Ubuntu-22.04', '--', 'bash', '-c',
-                            'cp /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils/tls_crts/* /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils/tls_crts/ 2>/dev/null || true'
-                        ignoreExitValue true
-                    }
-                    
-                    println "=== GRADLE WSL CLUSTER TLS SETUP ==="
-                    println "Extracted cluster TLS hosts: ${clusterTlsHosts}"
-                    println "====================================="
-                }
-            } else {
-                // Use local cluster manager
-                new ByteArrayOutputStream().withStream { os ->
-                    exec {
-                        workingDir "${project.rootDir}/../utils"
-                        commandLine(*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '--tls', '-n', '6', '-r', '0')
-                        standardOutput = os
-                    }
-                    clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
-                    println "=== GRADLE LOCAL CLUSTER TLS SETUP ==="
-                    println "Extracted cluster TLS hosts: ${clusterTlsHosts}"
-                    println "======================================="
-                }
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '--cluster-mode'
+                standardOutput = os
             }
-        } else {
-            clusterTlsHosts = System.getProperty("cluster-endpoints")
+            clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
         }
     }
 }
 
 beforeTests.dependsOn 'stopAllBeforeTests'
 stopAllBeforeTests.finalizedBy 'clearDirs'
-startStandalone.dependsOn 'clearDirs'
-startStandaloneTls.dependsOn 'clearDirs'
-startCluster.dependsOn 'clearDirs'
-startClusterTls.dependsOn 'clearDirs'
-startClusterForAz.dependsOn 'clearDirs'
-beforeTests.dependsOn 'startStandalone'
-beforeTests.dependsOn 'startStandaloneTls'
-beforeTests.dependsOn 'startCluster'
-beforeTests.dependsOn 'startClusterTls'
-beforeTests.dependsOn 'startClusterForAz'
+clearDirs.finalizedBy 'startStandalone'
+clearDirs.finalizedBy 'startStandaloneTls'
+clearDirs.finalizedBy 'startCluster'
+clearDirs.finalizedBy 'startClusterTls'
+clearDirs.finalizedBy 'startClusterForAz'
 afterTests.finalizedBy 'stopAllAfterTests'
 compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
 
@@ -445,15 +219,6 @@ tasks.withType(Test) {
         systemProperty 'test.server.cluster.tls', clusterTlsHosts
         systemProperty 'test.server.azcluster', azClusterHosts
         systemProperty 'test.server.tls', System.getProperty("tls")
-        
-        // Filter tests to focus on specific failing cluster TLS tests only
-        if (System.getProperty("focusTests") == "true") {
-            filter {
-                includeTestsMatching "*ClusterTlsCertificateTest.testClusterTlsWithSelfSignedCertificateSucceeds*"
-                includeTestsMatching "*ClusterTlsCertificateTest.testClusterTlsWithMultipleCertificatesSucceeds*"
-                includeTestsMatching "*ClusterTlsCertificateTest.testClusterTlsWithKeyStoreSucceeds*"
-            }
-        }
     }
 
     testLogging {
@@ -464,10 +229,10 @@ tasks.withType(Test) {
 
     minHeapSize = "2048m" // Initial heap size. Needed for max size tests.
     maxHeapSize = "2048m" // Maximum heap size. Needed for max size tests.
-
+    
     // Native library path for GLIDE FFI - needed for Jedis compatibility tests
     jvmArgs "-Djava.library.path=${project.rootDir}/../target/release"
-
+    
     // Disable modularity for jedis compatibility tests
     if (name.contains('jedis') || filter.includePatterns.any { it.contains('jedis') }) {
         jvmArgs += "--add-opens=java.base/java.lang=ALL-UNNAMED"
@@ -508,19 +273,6 @@ test {
     filter {
         excludeTestsMatching 'glide.PubSubTests'
         excludeTestsMatching 'glide.modules.*'
-        
-        // When focusing on cluster TLS tests, exclude everything else
-        if (System.getProperty("focusTests") == "true") {
-            excludeTestsMatching 'glide.*CommandTests*'
-            excludeTestsMatching 'glide.*BatchTests*'
-            excludeTestsMatching 'compatibility.jedis.*'
-            excludeTestsMatching 'glide.*AsyncTests*'
-            excludeTestsMatching 'glide.*TransactionTests*'
-            excludeTestsMatching 'glide.*ConnectionTests*'
-            excludeTestsMatching 'glide.standalone.*'
-            excludeTestsMatching 'glide.cluster.ClusterConnectionTests*'
-            excludeTestsMatching 'glide.cluster.ClusterCommandTests*'
-        }
     }
 }
 

@@ -40,7 +40,7 @@ public class ValkeyCluster implements AutoCloseable {
                 return Arrays.asList("python3");
             } else {
                 // Use WSL for local cluster manager
-                return Arrays.asList("wsl", "-d", "Ubuntu-22.04", "--", "python3");
+                return Arrays.asList("wsl", "--", "python3");
             }
         } else {
             return Arrays.asList("python3");
@@ -116,7 +116,7 @@ public class ValkeyCluster implements AutoCloseable {
             
             if (useWSL) {
                 // For WSL, we need to build a single command string
-                command.addAll(Arrays.asList("wsl", "-d", "Ubuntu-22.04", "--", "bash", "-c"));
+                command.addAll(Arrays.asList("wsl", "--", "bash", "-c"));
                 
                 StringBuilder wslCommand = new StringBuilder();
                 wslCommand.append("cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py");
@@ -405,7 +405,7 @@ public class ValkeyCluster implements AutoCloseable {
             
             if (useWSL) {
                 // For WSL stop command
-                command.addAll(Arrays.asList("wsl", "-d", "Ubuntu-22.04", "--", "bash", "-c"));
+                command.addAll(Arrays.asList("wsl", "--", "bash", "-c"));
                 
                 StringBuilder wslCommand = new StringBuilder();
                 wslCommand.append("cd /mnt/c/actions-runner/_work/valkey-glide/valkey-glide/utils && python3 cluster_manager.py");
