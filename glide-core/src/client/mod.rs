@@ -1228,17 +1228,23 @@ async fn create_cluster_client(
                 };
                 
                 println!("CLUSTER TLS DEBUG: Creating fresh TLS params for address {}", i);
-                Some(retrieve_tls_certificates(tls_certs)?)
+                match retrieve_tls_certificates(tls_certs) {
+                    Ok(params) => Some(params),
+                    Err(e) => {
+                        println!("CLUSTER TLS DEBUG: Failed to create TLS params for address {}: {}", i, e);
+                        return Err(e);
+                    }
+                }
             } else {
                 None
             };
             
-            get_connection_info(
+            Ok(get_connection_info(
                 &address,
                 tls_mode,
                 valkey_connection_info.clone(),
                 fresh_tls_params,
-            )
+            ))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
