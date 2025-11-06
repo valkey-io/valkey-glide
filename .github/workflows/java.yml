@@ -183,6 +183,30 @@ jobs:
                       Write-Host "python command not found, skipping symlink creation"
                   }
 
+            - name: Setup WSL (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              uses: Vampire/setup-wsl@v3
+              with:
+                  distribution: Ubuntu-22.04
+                  use-cache: false
+
+            - name: Install Valkey in WSL (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              shell: powershell
+              run: |
+                  # Install Valkey by compiling from source
+                  wsl -d Ubuntu-22.04 -- bash -c "
+                      sudo apt update && 
+                      sudo apt install -y build-essential git pkg-config libssl-dev python3 && 
+                      git clone https://github.com/valkey-io/valkey.git && 
+                      cd valkey && 
+                      git checkout '${{ matrix.engine.version }}' && 
+                      make -j\$(nproc) BUILD_TLS=yes && 
+                      sudo make install
+                  "
+                  
+                  Write-Host "Valkey compiled and installed in WSL"
+
             - name: Build java client (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
               working-directory: java
