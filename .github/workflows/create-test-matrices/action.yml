@@ -113,6 +113,10 @@ runs:
                 echo "Including self-hosted Windows runners"
                 WIN_RUNNERS=$(jq --arg lang "$LANGUAGE_NAME" -c '[.[] | select(.languages? and any(.languages[] == $lang; .) and '"$CONDITION"' and .TARGET == "x86_64-pc-windows-msvc" and (.RUNNER == ["self-hosted","windows","x64"]))]' < .github/json_matrices/build-matrix.json)
                 FINAL_MATRIX=$(echo "$FINAL_MATRIX" "$WIN_RUNNERS" | jq -sc 'add')
+              else
+                echo "Including GitHub-hosted Windows runners (WSL-enabled)"
+                WIN_RUNNERS=$(jq --arg lang "$LANGUAGE_NAME" -c '[.[] | select(.languages? and any(.languages[] == $lang; .) and '"$CONDITION"' and .TARGET == "x86_64-pc-windows-msvc" and .RUNNER == "windows-latest")]' < .github/json_matrices/build-matrix.json)
+                FINAL_MATRIX=$(echo "$FINAL_MATRIX" "$WIN_RUNNERS" | jq -sc 'add')
               fi
                         
               echo "host-matrix=$(echo $FINAL_MATRIX | tr -d '\n')" >> $GITHUB_OUTPUT
