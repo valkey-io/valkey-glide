@@ -1191,6 +1191,8 @@ async fn create_cluster_client(
         println!("CLUSTER TLS DEBUG: Certificate stream length: {}", combined_certs.len());
         println!("CLUSTER TLS DEBUG: First 50 bytes: {:?}", 
             combined_certs.iter().take(50).collect::<Vec<_>>());
+        println!("CLUSTER TLS DEBUG: Last 50 bytes: {:?}", 
+            combined_certs.iter().rev().take(50).collect::<Vec<_>>());
         
         let tls_certs = TlsCertificates {
             client_tls: None,
@@ -1204,7 +1206,17 @@ async fn create_cluster_client(
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
-        .map(|address| {
+        .enumerate()
+        .map(|(i, address)| {
+            // DEBUG: Log certificate data for each address
+            if let Some(ref params) = tls_params {
+                println!("CLUSTER TLS DEBUG: Address {}: {}:{} - TLS params present", 
+                    i, address.host, get_port(&address));
+            } else {
+                println!("CLUSTER TLS DEBUG: Address {}: {}:{} - No TLS params", 
+                    i, address.host, get_port(&address));
+            }
+            
             get_connection_info(
                 &address,
                 tls_mode,
