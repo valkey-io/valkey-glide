@@ -959,6 +959,31 @@ tokio = { version = "1", features = ["full"] }
         else:
             logging.warning(f"FAILED - Server-side valkey-cli TLS connection failed: {stderr}")
         
+        # Test cluster mode connection with valkey-cli
+        cluster_test_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && echo 'CLUSTER INFO' | valkey-cli -c -h {host} -p {port} --tls --cert tls_crts/server.crt --key tls_crts/server.key --cacert tls_crts/ca.crt"
+        returncode, stdout, stderr = self._execute_remote_command(cluster_test_cmd, timeout=10)
+        
+        if returncode == 0 and 'cluster_state:ok' in stdout:
+            logging.info("SUCCESS - Server-side valkey-cli CLUSTER mode TLS connection works")
+        else:
+            logging.warning(f"FAILED - Server-side valkey-cli CLUSTER mode TLS connection failed: {stderr}")
+            
+        # Test cluster discovery with valkey-cli
+        cluster_nodes_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && echo 'CLUSTER NODES' | valkey-cli -c -h {host} -p {port} --tls --cert tls_crts/server.crt --key tls_crts/server.key --cacert tls_crts/ca.crt"
+        returncode, stdout, stderr = self._execute_remote_command(cluster_nodes_cmd, timeout=10)
+        
+        if returncode == 0:
+            logging.info("SUCCESS - Server-side valkey-cli cluster discovery works")
+            logging.info("Cluster nodes discovered:")
+            for line in stdout.split('\n')[:6]:  # First 6 nodes
+                if line.strip() and '172.31.34.123' in line:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        node_addr = parts[1].split('@')[0]
+                        logging.info(f"  Node: {node_addr}")
+        else:
+            logging.warning(f"FAILED - Server-side valkey-cli cluster discovery failed: {stderr}")
+        
         # Print certificate details on server
         cert_info_cmd = f"cd {self.remote_repo_path}/utils && openssl x509 -in tls_crts/ca.crt -text -noout | head -20"
         returncode, stdout, stderr = self._execute_remote_command(cert_info_cmd, timeout=5)
