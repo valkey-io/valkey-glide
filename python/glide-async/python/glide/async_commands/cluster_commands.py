@@ -1474,3 +1474,66 @@ class ClusterCommands(CoreCommands):
         return await self._execute_script(
             script.get_hash(), keys=None, args=args, route=route
         )
+
+    async def ssubscribe(self, channels: List[TEncodable]) -> TOK:
+        """
+        Subscribe to sharded channels (cluster mode only).
+
+        Note:
+            This command returns "OK" immediately upon updating the client's internal desired
+            subscription state. It does not wait for server confirmation that the subscription
+            was successful. To verify the actual server-side subscription state, use
+            `get_active_subscriptions()`, which returns the client's view of the current active
+            subscriptions on the server.
+
+        Args:
+            channels: A list of sharded channel names to subscribe to.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.ssubscribe(["shard_channel"])
+                "OK"
+            >>> await client.ssubscribe([b"shard1", b"shard2"])
+                "OK"
+
+        Since: Valkey 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.SSubscribe, channels),
+        )
+
+    async def sunsubscribe(self, channels: Optional[List[TEncodable]] = None) -> TOK:
+        """
+        Unsubscribe from sharded channels.
+
+        Note:
+            This command returns "OK" immediately upon updating the client's internal desired
+            subscription state. It does not wait for server confirmation that the unsubscription
+            was successful. To verify the actual server-side subscription state, use
+            `get_active_subscriptions()`, which returns the client's view of the current active
+            subscriptions on the server.
+
+        Args:
+            channels: A list of sharded channel names to unsubscribe from.
+                    If None, unsubscribes from all sharded channels.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.sunsubscribe(["shard_channel"])
+                "OK"
+            >>> await client.sunsubscribe()  # Unsubscribe from all sharded channels
+                "OK"
+
+        Since: Valkey 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.SUnsubscribe, channels if channels else []
+            ),
+        )

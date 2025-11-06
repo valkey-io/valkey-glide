@@ -7816,3 +7816,121 @@ class CoreCommands(Protocol):
         )
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)
+
+    async def subscribe(self, channels: List[TEncodable]) -> TOK:
+        """
+        Subscribe to exact channels.
+
+        Note:
+            This command returns "OK" immediately upon updating the client's internal desired
+            subscription state. It does not wait for server confirmation that the subscription
+            was successful. To verify the actual server-side subscription state, use
+            `get_active_subscriptions()`, which returns the client's view of the current active
+            subscriptions on the server.
+
+        Args:
+            channels: A list of channel names to subscribe to.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.subscribe(["channel1"])
+                "OK"
+            >>> await client.subscribe(["channel1", "channel2"])
+                "OK"
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.Subscribe, channels),
+        )
+
+    async def psubscribe(self, patterns: List[TEncodable]) -> TOK:
+        """
+        Subscribe to channel patterns.
+
+        Note:
+            This command returns "OK" immediately upon updating the client's internal desired
+            subscription state. It does not wait for server confirmation that the subscription
+            was successful. To verify the actual server-side subscription state, use
+            `get_active_subscriptions()`, which returns the client's view of the current active
+            subscriptions on the server.
+
+        Args:
+            patterns: A list of patterns to subscribe to (e.g., ["news.*"]).
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.psubscribe(["news.*"])
+                "OK"
+            >>> await client.psubscribe([b"news.*", b"updates.*"])
+                "OK"
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.PSubscribe, patterns),
+        )
+
+    async def unsubscribe(self, channels: Optional[List[TEncodable]] = None) -> TOK:
+        """
+        Unsubscribe from exact channels.
+
+        Note:
+            This command returns "OK" immediately upon updating the client's internal desired
+            subscription state. It does not wait for server confirmation that the unsubscription
+            was successful. To verify the actual server-side subscription state, use
+            `get_active_subscriptions()`, which returns the client's view of the current active
+            subscriptions on the server.
+
+        Args:
+            channels: A list of channel names to unsubscribe from.
+                    If None, unsubscribes from all exact channels.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.unsubscribe(["channel1"])
+                "OK"
+            >>> await client.unsubscribe()  # Unsubscribe from all exact channels
+                "OK"
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.Unsubscribe, channels if channels else []
+            ),
+        )
+
+    async def punsubscribe(self, patterns: Optional[List[TEncodable]] = None) -> TOK:
+        """
+        Unsubscribe from channel patterns.
+
+        Note:
+            This command returns "OK" immediately upon updating the client's internal desired
+            subscription state. It does not wait for server confirmation that the unsubscription
+            was successful. To verify the actual server-side subscription state, use
+            `get_active_subscriptions()`, which returns the client's view of the current active
+            subscriptions on the server.
+
+        Args:
+            patterns: A list of patterns to unsubscribe from.
+                    If None, unsubscribes from all patterns.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.punsubscribe([b"news.*"])
+                "OK"
+            >>> await client.punsubscribe()  # Unsubscribe from all patterns
+                "OK"
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.PUnsubscribe, patterns if patterns else []
+            ),
+        )

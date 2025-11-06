@@ -33,6 +33,14 @@ EXCLUDED_API_FUNCTIONS = {
         "is_lower",
         "py_init",
         "py_log",
+        # PubSub
+        "get_active_subscriptions",
+        "subscribe",
+        "unsubscribe",
+        "psubscribe",
+        "punsubscribe",
+        "ssubscribe",
+        "sunsubscribe",
         # others
         "init_callback",
         "create_leaked_bytes_vec",

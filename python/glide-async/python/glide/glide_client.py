@@ -576,6 +576,47 @@ class BaseClient(CoreCommands):
             self._pubsub_lock.release()
         return msg
 
+    async def get_active_subscriptions(
+        self,
+    ) -> Dict[str, Set[str]]:
+        """
+        Retrieves the current active subscriptions as tracked by the client.
+
+        This reflects the client's view of what it is currently subscribed to on the server.
+        The client continuously synchronizes its desired subscription state with the server,
+        and this method returns the current server-side state as tracked by the client.
+
+        Returns:
+            Dict[str, Set[str]]: A dictionary mapping subscription types to channel names:
+                - "channels": Set of exact channel names
+                - "patterns": Set of channel patterns
+                - "sharded_channels": Set of sharded channel names (cluster mode only)
+
+        Examples:
+            >>> # Check all active subscriptions
+            >>> active = await client.get_active_subscriptions()
+            >>> print(f"Channels: {active.get('channels', set())}")
+            >>> print(f"Patterns: {active.get('patterns', set())}")
+            >>>
+            >>> # Check if subscribed to specific channel
+            >>> if "channel1" in active.get("channels", set()):
+            >>>     print("Subscribed to channel1")
+            >>>
+            >>> # Health check: verify expected subscriptions
+            >>> expected = {"channel1", "channel2"}
+            >>> actual = active.get("channels", set())
+            >>> if not expected.issubset(actual):
+            >>>     missing = expected - actual
+            >>>     print(f"Warning: Missing subscriptions: {missing}")
+            >>>
+            >>> # Check total count
+            >>> total = sum(len(s) for s in active.values())
+            >>> print(f"Total active subscriptions: {total}")
+        """
+        raise NotImplementedError(
+            "get_active_subscriptions will be implemented in a future PR"
+        )
+
     def _cancel_pubsub_futures_with_exception_safe(self, exception: ConnectionError):
         while len(self._pubsub_futures):
             next_future = self._pubsub_futures.pop(0)
