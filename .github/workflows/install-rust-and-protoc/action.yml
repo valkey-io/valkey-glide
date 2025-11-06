@@ -8,131 +8,21 @@ runs:
           if: runner.os == 'Windows'
           shell: powershell
           run: |
-              Write-Host "Checking for existing Rust installation..."
-
-              # Check for Chocolatey Rust installation specifically
-              $rustcPath = "$env:ProgramFiles\Rust stable MSVC 1.82\bin\rustc.exe"
-              if (Test-Path $rustcPath) {
-                  Write-Host "Rust already installed - skipping installation"
-                  & $rustcPath --version
+              Write-Host "Using pre-installed Rust and MSVC on GitHub-hosted runner"
+              
+              # Verify Rust is available
+              if (Get-Command rustc -ErrorAction SilentlyContinue) {
+                  $version = rustc --version
+                  Write-Host "Rust available: $version"
+                  
+                  # Install rustfmt and clippy components
+                  Write-Host "Installing rustfmt and clippy..."
+                  rustup component add rustfmt clippy
+                  
+                  Write-Host "Rust toolchain ready"
               } else {
-                  Write-Host "Installing Rust with MSVC toolchain via Chocolatey..."
-
-              if (Get-Command choco -ErrorAction SilentlyContinue) {
-                  choco install rust-ms -y
-                  
-                  # Refresh PATH
-                  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
-                  
-                  # Add cargo bin directory to PATH
-                  $cargoBin = "$env:USERPROFILE\.cargo\bin"
-                  if (Test-Path $cargoBin) {
-                      $env:PATH = "$cargoBin;$env:PATH"
-                      echo $cargoBin >> $env:GITHUB_PATH
-                      Write-Host "Added cargo bin to PATH: $cargoBin"
-                  }
-                  
-                  # Verify installation
-                  if (Get-Command rustc -ErrorAction SilentlyContinue) {
-                      $version = rustc --version
-                      Write-Host "Rust installed successfully: $version"
-                      
-                      # Install rustfmt and clippy components
-                      Write-Host "Installing rustfmt and clippy..."
-                      rustup component add rustfmt clippy
-                      
-                      # Add MSVC tools to PATH so Rust can find link.exe
-                      Write-Host "Adding VS 2022 MSVC tools to PATH..."
-                      
-                      $vs2022Paths = @(
-                          "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC",
-                          "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC"
-                      )
-                      
-                      $msvcFound = $false
-                      foreach ($msvcDir in $vs2022Paths) {
-                          if (Test-Path $msvcDir) {
-                              Write-Host "Found VS 2022 MSVC directory: $msvcDir"
-                              $msvcVersions = Get-ChildItem $msvcDir -Directory | Sort-Object Name -Descending
-                              if ($msvcVersions) {
-                                  $latestMsvc = $msvcVersions[0]
-                                  $msvcBin = "$($latestMsvc.FullName)\bin\Hostx64\x64"
-                                  
-                                  if (Test-Path "$msvcBin\link.exe") {
-                                      $env:PATH = "$msvcBin;$env:PATH"
-                                      echo $msvcBin >> $env:GITHUB_PATH
-                                      Write-Host "SUCCESS: Added MSVC bin to PATH: $msvcBin"
-                                      
-                                      # Run vcvars64.bat to set up MSVC environment
-                                      $vcvarsPath = "$($latestMsvc.Parent.Parent.Parent.FullName)\Auxiliary\Build\vcvars64.bat"
-                                      if (Test-Path $vcvarsPath) {
-                                          Write-Host "Running vcvars64.bat: $vcvarsPath"
-                                          
-                                          # Use PowerShell to call vcvars and capture environment
-                                          $psi = New-Object System.Diagnostics.ProcessStartInfo
-                                          $psi.FileName = "cmd.exe"
-                                          $psi.Arguments = "/c `"$vcvarsPath`" && set"
-                                          $psi.RedirectStandardOutput = $true
-                                          $psi.UseShellExecute = $false
-                                          $psi.CreateNoWindow = $true
-                                          
-                                          $process = [System.Diagnostics.Process]::Start($psi)
-                                          $output = $process.StandardOutput.ReadToEnd()
-                                          $process.WaitForExit()
-                                          
-                                          Write-Host "vcvars64.bat exit code: $($process.ExitCode)"
-                                          
-                                          # Parse and set environment variables
-                                          $libSet = $false
-                                          foreach ($line in $output -split "`n") {
-                                              if ($line -match "^([^=]+)=(.*)$") {
-                                                  $name = $matches[1].Trim()
-                                                  $value = $matches[2].Trim()
-                                                  if ($name -eq "LIB") {
-                                                      Write-Host "LIB from vcvars: $value"
-                                                      [System.Environment]::SetEnvironmentVariable($name, $value, "Process")
-                                                      echo "$name=$value" >> $env:GITHUB_ENV
-                                                      $libSet = $true
-                                                  } elseif ($name -in @("LIBPATH", "INCLUDE")) {
-                                                      Write-Host "$name from vcvars: $value"
-                                                      [System.Environment]::SetEnvironmentVariable($name, $value, "Process")
-                                                      echo "$name=$value" >> $env:GITHUB_ENV
-                                                  }
-                                              }
-                                          }
-                                          
-                                          if ($libSet) {
-                                              Write-Host "MSVC environment configured via vcvars64.bat"
-                                          } else {
-                                              Write-Host "ERROR: LIB variable not set by vcvars64.bat"
-                                              Write-Host "vcvars64.bat output:"
-                                              Write-Host $output
-                                          }
-                                      } else {
-                                          Write-Host "ERROR: vcvars64.bat not found at $vcvarsPath"
-                                      }
-                                      
-                                      $msvcFound = $true
-                                      break
-                                  }
-                              }
-                          }
-                      }
-                      
-                      if (-not $msvcFound) {
-                          Write-Host "ERROR: Could not find VS 2022 MSVC tools"
-                          exit 1
-                      }
-                      
-                      Write-Host "Rust MSVC toolchain installed successfully"
-                  } else {
-                      Write-Host "Rust installation failed"
-                      exit 1
-                  }
-              } else {
-                  Write-Host "Chocolatey not available - cannot install Rust"
+                  Write-Host "ERROR: Rust not found"
                   exit 1
-              }
               }
 
         - name: Install Rust toolchain (Unix)
@@ -141,101 +31,22 @@ runs:
           with:
               components: rustfmt, clippy
 
-        - name: Install protoc (protobuf)
+        - name: Install protoc (Windows)
+          if: runner.os == 'Windows'
+          shell: powershell
+          run: |
+              Write-Host "Installing protoc via Chocolatey..."
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  choco install protoc -y
+                  Write-Host "protoc installed successfully"
+              } else {
+                  Write-Host "ERROR: Chocolatey not available"
+                  exit 1
+              }
+
+        - name: Install protoc (Unix)
           if: runner.os != 'Windows'
           uses: arduino/setup-protoc@v3
           with:
               version: "29.1"
               repo-token: ${{ github.token }}
-
-        - name: Install protoc (Windows)
-          if: runner.os == 'Windows'
-          shell: powershell
-          run: |
-              Write-Host "Checking for existing protoc installation..."
-
-              # Check for protoc in the specific installation path we use
-              $protocPath = "C:\protoc\bin\protoc.exe"
-              if (Test-Path $protocPath) {
-                  Write-Host "protoc already installed - skipping installation"
-                  & $protocPath --version
-                  
-                  # Ensure protoc is in PATH for subsequent steps
-                  $protocBin = "C:\protoc\bin"
-                  echo $protocBin >> $env:GITHUB_PATH
-                  $env:PATH = "$protocBin;$env:PATH"
-              } else {
-                  Write-Host "Installing protoc version 29.1 via direct download..."
-
-              $protocUrl = "https://github.com/protocolbuffers/protobuf/releases/download/v29.1/protoc-29.1-win64.zip"
-              $protocZip = "$env:TEMP\protoc-29.1-win64.zip"
-              $protocDir = "C:\protoc"
-
-              Write-Host "Downloading protoc 29.1..."
-              Invoke-WebRequest -Uri $protocUrl -OutFile $protocZip
-
-              Write-Host "Extracting protoc..."
-              Expand-Archive -Path $protocZip -DestinationPath $protocDir -Force
-
-              $protocBin = "$protocDir\bin"
-              $env:PATH = "$protocBin;$env:PATH"
-              echo $protocBin >> $env:GITHUB_PATH
-
-              Remove-Item $protocZip -Force -ErrorAction SilentlyContinue
-
-              if (Get-Command protoc -ErrorAction SilentlyContinue) {
-                  $version = protoc --version
-                  Write-Host "protoc installed successfully: $version"
-              } else {
-                  Write-Host "protoc installation may have failed"
-                  exit 1
-              }
-              }
-
-        - name: Verify Rust installation (Windows)
-          if: runner.os == 'Windows'
-          shell: powershell
-          run: |
-              Write-Host "Rust version:"
-              rustc --version
-              Write-Host "Cargo version:"
-              cargo --version
-              Write-Host "Rustfmt version:"
-              rustfmt --version
-              Write-Host "Clippy version:"
-              cargo clippy --version
-
-        - name: Verify Rust installation (Unix)
-          if: runner.os != 'Windows'
-          shell: bash
-          run: |
-              echo "Rust version:"
-              rustc --version
-              echo "Cargo version:"
-              cargo --version
-              echo "Rustfmt version:"
-              rustfmt --version
-              echo "Clippy version:"
-              cargo clippy --version
-
-        - name: Verify protoc installation (Windows)
-          if: runner.os == 'Windows'
-          shell: powershell
-          run: |
-              Write-Host "Protoc version:"
-
-              # Check for protoc in the specific installation path we use
-              $protocPath = "C:\protoc\bin\protoc.exe"
-              if (Test-Path $protocPath) {
-                  & $protocPath --version
-              } else {
-                  Write-Host "protoc not found at expected location: $protocPath"
-                  exit 1
-              }
-
-        - name: Verify protoc installation (Unix)
-          if: runner.os != 'Windows'
-          shell: bash
-          run: |
-              echo "Protoc version:"
-              protoc --version
