@@ -663,23 +663,18 @@ def create_standalone_replication(
 
     logging.debug("## Starting replication setup...")
     
-    # Check WSL version if running in WSL
+    # Check if running in WSL and determine version
     is_wsl = "microsoft" in platform.uname().release.lower()
     if is_wsl:
-        try:
-            result = subprocess.run(["wsl.exe", "--status"], capture_output=True, text=True, timeout=10)
-            logging.debug(f"WSL Status: {result.stdout}")
-            
-            # Check WSL version
-            version_result = subprocess.run(["wsl.exe", "--list", "--verbose"], capture_output=True, text=True, timeout=10)
-            logging.debug(f"WSL Version Info: {version_result.stdout}")
-            
-            if "Version: 2" in version_result.stdout or "2" in version_result.stdout:
-                logging.debug("✓ WSL2 detected")
-            else:
-                logging.warning("⚠ WSL1 detected - this may cause replica issues")
-        except Exception as e:
-            logging.debug(f"Could not check WSL version: {e}")
+        logging.debug("WSL environment detected")
+        # Check WSL version by looking at kernel version
+        kernel_version = platform.uname().release
+        if "WSL2" in kernel_version or "microsoft-standard" in kernel_version:
+            logging.debug("WSL2 detected (kernel: %s)", kernel_version)
+        else:
+            logging.debug("WSL1 detected (kernel: %s)", kernel_version)
+    else:
+        logging.debug("Native Linux environment detected")
 
     for i, server in enumerate(servers):
         if i == 0:
@@ -701,7 +696,6 @@ def create_standalone_replication(
         logging.debug(f"Replica {server} confirmed ready")
             
         logging.debug(f"Setting up replication: {server} -> {primary_server}")
-        logging.debug(f"REPLICAOF command: {' '.join(replica_of_command)}")
         replica_of_command = [
             get_cli_command(),
             *get_cli_option_args(cluster_folder, use_tls),
@@ -713,6 +707,7 @@ def create_standalone_replication(
             str(primary_server.host),
             str(primary_server.port),
         ]
+        logging.debug(f"REPLICAOF command: {' '.join(replica_of_command)}")
         p = subprocess.Popen(
             replica_of_command,
             stdout=subprocess.PIPE,
