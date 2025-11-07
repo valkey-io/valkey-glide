@@ -172,6 +172,17 @@ jobs:
                   # Create python3 symlink for Windows
                   ln -sf $(which python) /usr/bin/python3
 
+            - name: WSL Debug Info
+              if: ${{ matrix.host.OS == 'windows' }}
+              shell: bash
+              run: |
+                  echo "=== WSL Debug Info ==="
+                  echo "WSL Status: $(wsl -- bash -c 'echo OK')"
+                  echo "Python: $(wsl -- bash -c 'which python3')"
+                  echo "Valkey: $(wsl -- bash -c 'which valkey-server || which redis-server || echo NOT_FOUND')"
+                  echo "Kernel: $(wsl -- bash -c 'uname -r')"
+                  echo "Working Directory: $(wsl -- bash -c 'pwd')"
+
             - name: Build java client (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
               working-directory: java

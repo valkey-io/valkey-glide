@@ -163,24 +163,6 @@ tasks.register('startStandalone') {
         if (System.getProperty("standalone-endpoints") == null) {
             // Debug and setup WSL environment on Windows
             if (isWindows) {
-                println "=== WSL Debug Info ==="
-                exec {
-                    commandLine 'wsl', '--', 'bash', '-c', 'echo "WSL Status: OK" && pwd && whoami'
-                    ignoreExitValue true
-                }
-                exec {
-                    commandLine 'wsl', '--', 'bash', '-c', 'echo "Python: \\$(which python3)"'
-                    ignoreExitValue true
-                }
-                exec {
-                    commandLine 'wsl', '--', 'bash', '-c', 'echo "Valkey: \\$(which valkey-server || which redis-server || echo NOT_FOUND)"'
-                    ignoreExitValue true
-                }
-                exec {
-                    commandLine 'wsl', '--', 'bash', '-c', 'echo "Kernel: \\$(uname -r)"'
-                    ignoreExitValue true
-                }
-                
                 // Ensure cluster directory exists and has proper permissions
                 println "=== Setting up cluster directories ==="
                 exec {
