@@ -641,7 +641,8 @@ def create_cluster(
     if err or "[OK] All 16384 slots covered." not in output:
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
-    wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
+    logging.debug("Sleeping 10 seconds instead of waiting for cluster state change...")
+    time.sleep(10)
     wait_for_all_topology_views(
         servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file
     )
@@ -735,22 +736,11 @@ def create_standalone_replication(
             logging.debug(f"Could not read log for replica {server.port}: {e}")
     logging.debug("=== END REPLICA LOGS ===")
     
-    # Sleep instead of waiting for log message to avoid hanging
-    logging.debug("Sleeping 10 seconds instead of waiting for sync completion...")
-    time.sleep(10)
-    
-    # Check logs again after sleep
-    logging.debug("=== REPLICA SERVER LOGS AFTER SLEEP ===")
-    for i, server in enumerate(servers[1:], 1):  # Skip primary
-        log_file = f"{cluster_folder}/{server.port}/server.log"
-        try:
-            with open(log_file, 'r') as f:
-                log_content = f.read()
-                logging.debug(f"Replica {server.port} log (last 1000 chars):")
-                logging.debug(log_content[-1000:])
-        except Exception as e:
-            logging.debug(f"Could not read log for replica {server.port}: {e}")
-    logging.debug("=== END REPLICA LOGS AFTER SLEEP ===")
+    wait_for_a_message_in_logs(
+        cluster_folder,
+        "sync: Finished with success",
+        servers_ports[1:],
+    )
     
     logging.debug(
         f"{len(servers) - 1} nodes successfully became replicas of the primary {primary_server}!"
