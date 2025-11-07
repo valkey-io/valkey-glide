@@ -173,7 +173,7 @@ tasks.register('startStandaloneTls') {
         new ByteArrayOutputStream().withStream { os ->
             exec {
                 workingDir "${project.rootDir}/../utils"
-                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '-r', '0'
+                commandLine(*pythonCmd, 'cluster_manager.py', '--tls', 'start', '-r', '0')
                 standardOutput = os
             }
             standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
@@ -186,7 +186,7 @@ tasks.register('startClusterTls') {
         new ByteArrayOutputStream().withStream { os ->
             exec {
                 workingDir "${project.rootDir}/../utils"
-                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '--cluster-mode'
+                commandLine(*pythonCmd, 'cluster_manager.py', '--tls', 'start', '--cluster-mode')
                 standardOutput = os
             }
             clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
