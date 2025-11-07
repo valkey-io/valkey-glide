@@ -233,7 +233,7 @@ tasks.register('startClusterTls') {
         new ByteArrayOutputStream().withStream { os ->
             exec {
                 workingDir "${project.rootDir}/../utils"
-                commandLine(*pythonCmd, 'cluster_manager.py', '--tls', 'start', '--cluster-mode')
+                commandLine(*pythonCmd, 'cluster_manager.py', '--tls', 'start', '--cluster-mode', '-r', '0')
                 standardOutput = os
             }
             clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
