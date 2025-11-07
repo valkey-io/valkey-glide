@@ -606,19 +606,25 @@ impl ActualConnection {
                 ref tls_params,
             } => {
                 let host: &str = host;
-                
+
                 // DEBUG: Log TLS connection attempt
-                println!("CLUSTER TLS DEBUG: Creating TLS connection to {}:{}", host, port);
+                println!(
+                    "CLUSTER TLS DEBUG: Creating TLS connection to {}:{}",
+                    host, port
+                );
                 if let Some(ref params) = tls_params {
                     if let Some(ref store) = params.root_cert_store {
-                        println!("CLUSTER TLS DEBUG: Root cert store has {} certificates", store.len());
+                        println!(
+                            "CLUSTER TLS DEBUG: Root cert store has {} certificates",
+                            store.len()
+                        );
                     } else {
                         println!("CLUSTER TLS DEBUG: No root cert store");
                     }
                 } else {
                     println!("CLUSTER TLS DEBUG: No TLS params for {}:{}", host, port);
                 }
-                
+
                 let config = create_rustls_config(insecure, tls_params.as_ref().cloned())?;
                 let server_name = rustls_pki_types::ServerName::try_from(host)
                     .map_err(|e| {

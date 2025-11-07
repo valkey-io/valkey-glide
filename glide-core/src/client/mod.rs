@@ -1177,23 +1177,59 @@ async fn create_cluster_client(
                     "Root certificate cannot be empty byte string",
                 )));
             }
-            
+
             // Add the certificate
             combined_certs.extend_from_slice(cert);
-            
+
             // Ensure proper PEM separation between certificates
             if i < request.root_certs.len() - 1 && !cert.ends_with(b"\n") {
                 combined_certs.push(b'\n');
             }
         }
-        
-        // DEBUG: Print certificate content for cluster connections
-        println!("CLUSTER TLS DEBUG: Certificate stream length: {}", combined_certs.len());
-        println!("CLUSTER TLS DEBUG: First 50 bytes: {:?}", 
-            combined_certs.iter().take(50).collect::<Vec<_>>());
-        println!("CLUSTER TLS DEBUG: Last 50 bytes: {:?}", 
-            combined_certs.iter().rev().take(50).collect::<Vec<_>>());
-        
+
+        // DEBUG: Print comprehensive certificate content for cluster connections
+        println!("=== CLUSTER TLS DEBUG: Certificate Processing ===");
+        println!(
+            "CLUSTER TLS DEBUG: Number of certificates provided: {}",
+            request.root_certs.len()
+        );
+        println!(
+            "CLUSTER TLS DEBUG: Combined certificate stream length: {} bytes",
+            combined_certs.len()
+        );
+
+        // Log first and last bytes
+        let preview_len = std::cmp::min(100, combined_certs.len());
+        println!(
+            "CLUSTER TLS DEBUG: First {} bytes (hex): {:02x?}",
+            preview_len,
+            &combined_certs[..preview_len]
+        );
+        if combined_certs.len() > 100 {
+            println!(
+                "CLUSTER TLS DEBUG: Last {} bytes (hex): {:02x?}",
+                preview_len,
+                &combined_certs[combined_certs.len() - preview_len..]
+            );
+        }
+
+        // Check for PEM markers
+        let cert_str = String::from_utf8_lossy(&combined_certs);
+        let begin_count = cert_str.matches("-----BEGIN CERTIFICATE-----").count();
+        let end_count = cert_str.matches("-----END CERTIFICATE-----").count();
+        println!("CLUSTER TLS DEBUG: PEM BEGIN markers: {}", begin_count);
+        println!("CLUSTER TLS DEBUG: PEM END markers: {}", end_count);
+
+        // Check line endings
+        let has_crlf = combined_certs.windows(2).any(|w| w == b"\r\n");
+        let has_lf = combined_certs.contains(&b'\n');
+        let has_cr = combined_certs.contains(&b'\r');
+        println!(
+            "CLUSTER TLS DEBUG: Line endings - CRLF: {}, LF: {}, CR: {}",
+            has_crlf, has_lf, has_cr
+        );
+        println!("=================================================");
+
         let tls_certs = TlsCertificates {
             client_tls: None,
             root_cert: Some(combined_certs),
@@ -1209,36 +1245,72 @@ async fn create_cluster_client(
         .enumerate()
         .map(|(i, address)| {
             // DEBUG: Log certificate data for each address
-            println!("CLUSTER TLS DEBUG: Address {}: {}:{}", 
-                i, address.host, get_port(&address));
-            
+            println!("\n=== CLUSTER TLS DEBUG: Processing Address {} ===", i);
+            println!(
+                "CLUSTER TLS DEBUG: Address: {}:{}",
+                address.host,
+                get_port(&address)
+            );
+
             // Create fresh TLS params for each connection instead of cloning
             let fresh_tls_params = if !request.root_certs.is_empty() && tls_mode != TlsMode::NoTls {
+                println!(
+                    "CLUSTER TLS DEBUG: Creating fresh TLS params for address {}",
+                    i
+                );
+
                 let mut combined_certs = Vec::new();
                 for (j, cert) in request.root_certs.iter().enumerate() {
+                    println!(
+                        "CLUSTER TLS DEBUG: Adding certificate {} (length: {} bytes)",
+                        j,
+                        cert.len()
+                    );
                     combined_certs.extend_from_slice(cert);
                     if j < request.root_certs.len() - 1 && !cert.ends_with(b"\n") {
+                        println!(
+                            "CLUSTER TLS DEBUG: Adding newline separator after certificate {}",
+                            j
+                        );
                         combined_certs.push(b'\n');
                     }
                 }
-                
+
+                println!(
+                    "CLUSTER TLS DEBUG: Combined cert length for address {}: {} bytes",
+                    i,
+                    combined_certs.len()
+                );
+
                 let tls_certs = TlsCertificates {
                     client_tls: None,
                     root_cert: Some(combined_certs),
                 };
-                
-                println!("CLUSTER TLS DEBUG: Creating fresh TLS params for address {}", i);
+
                 match retrieve_tls_certificates(tls_certs) {
-                    Ok(params) => Some(params),
+                    Ok(params) => {
+                        println!(
+                            "CLUSTER TLS DEBUG: Successfully created TLS params for address {}",
+                            i
+                        );
+                        Some(params)
+                    }
                     Err(e) => {
-                        println!("CLUSTER TLS DEBUG: Failed to create TLS params for address {}: {}", i, e);
+                        println!(
+                            "CLUSTER TLS DEBUG: FAILED to create TLS params for address {}",
+                            i
+                        );
+                        println!("CLUSTER TLS DEBUG: Error: {}", e);
+                        println!("CLUSTER TLS DEBUG: Error kind: {:?}", e.kind());
                         return Err(e);
                     }
                 }
             } else {
+                println!("CLUSTER TLS DEBUG: No TLS params needed for address {}", i);
                 None
             };
-            
+            println!("==============================================");
+
             Ok(get_connection_info(
                 &address,
                 tls_mode,

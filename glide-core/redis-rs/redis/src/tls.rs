@@ -66,48 +66,142 @@ pub fn retrieve_tls_certificates(certificates: TlsCertificates) -> RedisResult<T
         root_cert,
     } = certificates;
 
+    // DEBUG: Log certificate processing start
+    println!("TLS DEBUG: Starting certificate processing");
+
     let client_tls_params = if let Some(ClientTlsConfig {
         client_cert,
         client_key,
     }) = client_tls
     {
+        println!("TLS DEBUG: Processing client certificate (mTLS)");
+        println!("TLS DEBUG: Client cert length: {} bytes", client_cert.len());
+        println!("TLS DEBUG: Client key length: {} bytes", client_key.len());
+
         let buf = &mut client_cert.as_slice() as &mut dyn BufRead;
         let certs = rustls_pemfile::certs(buf);
-        let client_cert_chain = certs.collect::<Result<Vec<_>, _>>()?;
+        let client_cert_chain = match certs.collect::<Result<Vec<_>, _>>() {
+            Ok(chain) => {
+                println!(
+                    "TLS DEBUG: Successfully parsed {} client certificate(s)",
+                    chain.len()
+                );
+                chain
+            }
+            Err(e) => {
+                println!("TLS DEBUG: Failed to parse client certificate: {:?}", e);
+                return Err(e.into());
+            }
+        };
 
         let client_key =
-            rustls_pemfile::private_key(&mut client_key.as_slice() as &mut dyn BufRead)?
-                .ok_or_else(|| {
-                    Error::new(
+            match rustls_pemfile::private_key(&mut client_key.as_slice() as &mut dyn BufRead)? {
+                Some(key) => {
+                    println!("TLS DEBUG: Successfully parsed client private key");
+                    key
+                }
+                None => {
+                    println!("TLS DEBUG: Failed to extract private key from PEM");
+                    return Err(Error::new(
                         IOErrorKind::Other,
                         "Unable to extract private key from PEM file",
                     )
-                })?;
+                    .into());
+                }
+            };
 
         Some(ClientTlsParams {
             client_cert_chain,
             client_key,
         })
     } else {
+        println!("TLS DEBUG: No client certificate provided (server-only TLS)");
         None
     };
 
     let root_cert_store = if let Some(root_cert) = root_cert {
-        let buf = &mut root_cert.as_slice() as &mut dyn BufRead;
-        let certs = rustls_pemfile::certs(buf);
-        let mut root_cert_store = RootCertStore::empty();
-        for result in certs {
-            if root_cert_store.add(result?.to_owned()).is_err() {
-                return Err(
-                    Error::new(IOErrorKind::Other, "Unable to parse TLS trust anchors").into(),
+        println!("TLS DEBUG: Processing root certificate");
+        println!("TLS DEBUG: Root cert length: {} bytes", root_cert.len());
+
+        // Log first and last bytes for debugging
+        if root_cert.len() > 0 {
+            let preview_len = std::cmp::min(50, root_cert.len());
+            println!(
+                "TLS DEBUG: First {} bytes: {:?}",
+                preview_len,
+                &root_cert[..preview_len]
+            );
+            if root_cert.len() > 50 {
+                println!(
+                    "TLS DEBUG: Last {} bytes: {:?}",
+                    preview_len,
+                    &root_cert[root_cert.len() - preview_len..]
                 );
             }
         }
 
+        // Check for line ending types
+        let has_crlf = root_cert.windows(2).any(|w| w == b"\r\n");
+        let has_lf = root_cert.contains(&b'\n');
+        let has_cr = root_cert.contains(&b'\r');
+        println!(
+            "TLS DEBUG: Line endings - CRLF: {}, LF: {}, CR: {}",
+            has_crlf, has_lf, has_cr
+        );
+
+        let buf = &mut root_cert.as_slice() as &mut dyn BufRead;
+        let certs = rustls_pemfile::certs(buf);
+        let mut root_cert_store = RootCertStore::empty();
+        let mut cert_count = 0;
+
+        for result in certs {
+            match result {
+                Ok(cert) => {
+                    cert_count += 1;
+                    println!("TLS DEBUG: Parsed root certificate #{}", cert_count);
+                    if root_cert_store.add(cert.to_owned()).is_err() {
+                        println!(
+                            "TLS DEBUG: Failed to add certificate #{} to trust store",
+                            cert_count
+                        );
+                        return Err(Error::new(
+                            IOErrorKind::Other,
+                            "Unable to parse TLS trust anchors",
+                        )
+                        .into());
+                    }
+                    println!(
+                        "TLS DEBUG: Successfully added certificate #{} to trust store",
+                        cert_count
+                    );
+                }
+                Err(e) => {
+                    println!(
+                        "TLS DEBUG: Failed to parse root certificate #{}: {:?}",
+                        cert_count + 1,
+                        e
+                    );
+                    return Err(e.into());
+                }
+            }
+        }
+
+        println!(
+            "TLS DEBUG: Total root certificates processed: {}",
+            cert_count
+        );
+
+        if cert_count == 0 {
+            println!("TLS DEBUG: WARNING - No certificates were parsed from root_cert data");
+        }
+
         Some(root_cert_store)
     } else {
+        println!("TLS DEBUG: No root certificate provided (using system trust store)");
         None
     };
+
+    println!("TLS DEBUG: Certificate processing completed successfully");
 
     Ok(TlsConnParams {
         client_tls_params,

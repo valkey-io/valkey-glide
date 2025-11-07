@@ -166,12 +166,17 @@ impl StandaloneClient {
             for cert in &connection_request.root_certs {
                 combined_certs.extend_from_slice(cert);
             }
-            
+
             // DEBUG: Print certificate content for standalone connections
-            println!("STANDALONE TLS DEBUG: Certificate stream length: {}", combined_certs.len());
-            println!("STANDALONE TLS DEBUG: First 50 bytes: {:?}", 
-                combined_certs.iter().take(50).collect::<Vec<_>>());
-            
+            println!(
+                "STANDALONE TLS DEBUG: Certificate stream length: {}",
+                combined_certs.len()
+            );
+            println!(
+                "STANDALONE TLS DEBUG: First 50 bytes: {:?}",
+                combined_certs.iter().take(50).collect::<Vec<_>>()
+            );
+
             let tls_certificates = redis::TlsCertificates {
                 client_tls: None,
                 root_cert: Some(combined_certs),

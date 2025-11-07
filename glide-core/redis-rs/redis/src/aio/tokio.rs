@@ -121,16 +121,73 @@ impl RedisRuntime for Tokio {
         insecure: bool,
         tls_params: &Option<TlsConnParams>,
     ) -> RedisResult<Self> {
-        let config = create_rustls_config(insecure, tls_params.clone())?;
+        println!("TLS HANDSHAKE DEBUG: Starting TLS connection");
+        println!("TLS HANDSHAKE DEBUG: Hostname: {}", hostname);
+        println!("TLS HANDSHAKE DEBUG: Socket address: {}", socket_addr);
+        println!("TLS HANDSHAKE DEBUG: Insecure mode: {}", insecure);
+        println!(
+            "TLS HANDSHAKE DEBUG: TLS params provided: {}",
+            tls_params.is_some()
+        );
+
+        let config = match create_rustls_config(insecure, tls_params.clone()) {
+            Ok(cfg) => {
+                println!("TLS HANDSHAKE DEBUG: Successfully created rustls config");
+                cfg
+            }
+            Err(e) => {
+                println!("TLS HANDSHAKE DEBUG: FAILED to create rustls config");
+                println!("TLS HANDSHAKE DEBUG: Error: {}", e);
+                return Err(e);
+            }
+        };
+
         let tls_connector = TlsConnector::from(Arc::new(config));
 
-        Ok(tls_connector
-            .connect(
-                rustls_pki_types::ServerName::try_from(hostname)?.to_owned(),
-                connect_tcp(&socket_addr).await?,
-            )
+        println!("TLS HANDSHAKE DEBUG: Connecting to TCP socket...");
+        let tcp_stream = match connect_tcp(&socket_addr).await {
+            Ok(stream) => {
+                println!("TLS HANDSHAKE DEBUG: TCP connection established");
+                stream
+            }
+            Err(e) => {
+                println!("TLS HANDSHAKE DEBUG: FAILED to establish TCP connection");
+                println!("TLS HANDSHAKE DEBUG: Error: {}", e);
+                return Err(e);
+            }
+        };
+
+        println!("TLS HANDSHAKE DEBUG: Starting TLS handshake...");
+        let server_name = match rustls_pki_types::ServerName::try_from(hostname) {
+            Ok(name) => {
+                println!("TLS HANDSHAKE DEBUG: Server name parsed successfully");
+                name
+            }
+            Err(e) => {
+                println!("TLS HANDSHAKE DEBUG: FAILED to parse server name");
+                println!("TLS HANDSHAKE DEBUG: Error: {:?}", e);
+                return Err(e.into());
+            }
+        };
+
+        match tls_connector
+            .connect(server_name.to_owned(), tcp_stream)
             .await
-            .map(|con| Tokio::TcpTls(Box::new(con)))?)
+        {
+            Ok(con) => {
+                println!("TLS HANDSHAKE DEBUG: TLS handshake completed successfully");
+                Ok(Tokio::TcpTls(Box::new(con)))
+            }
+            Err(e) => {
+                println!("TLS HANDSHAKE DEBUG: TLS handshake FAILED");
+                println!("TLS HANDSHAKE DEBUG: Error: {}", e);
+                println!(
+                    "TLS HANDSHAKE DEBUG: Error type: {:?}",
+                    std::any::type_name_of_val(&e)
+                );
+                Err(e.into())
+            }
+        }
     }
 
     #[cfg(unix)]
