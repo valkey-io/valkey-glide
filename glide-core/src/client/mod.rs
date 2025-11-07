@@ -1187,13 +1187,6 @@ async fn create_cluster_client(
             }
         }
         
-        // DEBUG: Print certificate content for cluster connections
-        println!("CLUSTER TLS DEBUG: Certificate stream length: {}", combined_certs.len());
-        println!("CLUSTER TLS DEBUG: First 50 bytes: {:?}", 
-            combined_certs.iter().take(50).collect::<Vec<_>>());
-        println!("CLUSTER TLS DEBUG: Last 50 bytes: {:?}", 
-            combined_certs.iter().rev().take(50).collect::<Vec<_>>());
-        
         let tls_certs = TlsCertificates {
             client_tls: None,
             root_cert: Some(combined_certs),
@@ -1206,9 +1199,6 @@ async fn create_cluster_client(
     // Create connections sequentially instead of concurrently to test if it's a concurrency issue
     let mut connection_infos = Vec::new();
     for (i, address) in request.addresses.into_iter().enumerate() {
-        println!("CLUSTER TLS DEBUG: Creating connection {} for {}:{}", 
-            i, address.host, get_port(&address));
-        
         let connection_info = get_connection_info(
             &address,
             tls_mode,
@@ -1250,12 +1240,9 @@ async fn create_cluster_client(
         builder = builder.lib_name(lib_name);
     }
     if tls_mode != TlsMode::NoTls {
-        println!("CLUSTER TLS DEBUG: TLS mode is {:?}", tls_mode);
         let tls = if tls_mode == TlsMode::SecureTls {
-            println!("CLUSTER TLS DEBUG: Using redis::cluster::TlsMode::Secure");
             redis::cluster::TlsMode::Secure
         } else {
-            println!("CLUSTER TLS DEBUG: Using redis::cluster::TlsMode::Insecure");
             redis::cluster::TlsMode::Insecure
         };
         builder = builder.tls(tls);
