@@ -230,8 +230,7 @@ public class CertificateDebugger {
     }
 
     /**
-     * Converts bytes to hexadecimal string representation.
-     * Compatible with Java 11+.
+     * Converts bytes to hexadecimal string representation. Compatible with Java 11+.
      *
      * @param bytes The bytes to convert
      * @return Hexadecimal string representation

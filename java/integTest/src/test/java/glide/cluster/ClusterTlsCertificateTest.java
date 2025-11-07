@@ -91,12 +91,35 @@ public class ClusterTlsCertificateTest {
         GlideClusterClientConfiguration config =
                 TestUtilities.createClusterConfigWithRootCert(caCert, clusterNodes);
 
-        System.out.println("Creating cluster client with TLS configuration...");
+        System.out.println("Step 1: Creating cluster client with TLS configuration...");
+        GlideClusterClient client = null;
         try {
-            TestUtilities.createAndTestClient(config);
-            System.out.println("Client creation and PING test: SUCCESS");
+            client = GlideClusterClient.createClient(config).get();
+            System.out.println("Step 1: Client creation: SUCCESS");
+            System.out.println("Client instance created: " + client.getClass().getName());
         } catch (Exception e) {
-            System.out.println("Client creation or PING test: FAILED");
+            System.out.println("Step 1: Client creation: FAILED");
+            System.out.println("Exception: " + e.getClass().getName());
+            System.out.println("Message: " + e.getMessage());
+            if (e.getCause() != null) {
+                System.out.println("Cause: " + e.getCause().getClass().getName());
+                System.out.println("Cause message: " + e.getCause().getMessage());
+                if (e.getCause().getCause() != null) {
+                    System.out.println("Root cause: " + e.getCause().getCause().getClass().getName());
+                    System.out.println("Root cause message: " + e.getCause().getCause().getMessage());
+                }
+            }
+            e.printStackTrace();
+            throw e;
+        }
+
+        System.out.println("Step 2: Testing PING command...");
+        try {
+            String result = client.ping().get();
+            System.out.println("Step 2: PING test: SUCCESS");
+            System.out.println("PING response: " + result);
+        } catch (Exception e) {
+            System.out.println("Step 2: PING test: FAILED");
             System.out.println("Exception: " + e.getClass().getName());
             System.out.println("Message: " + e.getMessage());
             if (e.getCause() != null) {
@@ -104,6 +127,15 @@ public class ClusterTlsCertificateTest {
                 System.out.println("Cause message: " + e.getCause().getMessage());
             }
             throw e;
+        } finally {
+            if (client != null) {
+                try {
+                    client.close();
+                    System.out.println("Client closed successfully");
+                } catch (Exception e) {
+                    System.out.println("Error closing client: " + e.getMessage());
+                }
+            }
         }
         System.out.println("=== TEST COMPLETED ===\n");
     }
