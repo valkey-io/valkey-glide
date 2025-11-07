@@ -214,13 +214,13 @@ tasks.register('startStandaloneTls') {
             if (isWindows) {
                 exec {
                     commandLine 'wsl', '--', 'bash', '-c',
-                        'cp ${workspaceRoot}/utils/tls_crts/* ${workspaceRoot}/utils/tls_crts/ 2>/dev/null || true'
+                        'echo "=== WSL tls_crts ===" && ls -la /mnt/d/a/valkey-glide/valkey-glide/utils/tls_crts/ && echo "=== Windows tls_crts ===" && ls -la /mnt/d/a/valkey-glide/valkey-glide/utils/tls_crts/'
                     ignoreExitValue true
                 }
                 // Ensure certificates have Unix line endings (remove any Windows \r)
                 exec {
                     commandLine 'wsl', '--', 'bash', '-c',
-                        'cd ${workspaceRoot}/utils/tls_crts && for f in *.crt *.key *.pem 2>/dev/null; do [ -f "$f" ] && sed -i "s/\\r//g" "$f"; done || true'
+                        'cd ${workspaceRoot}/utils/tls_crts && for f in *.crt *.key *.pem; do [ -f "$f" ] && sed -i "s/\\r//g" "$f"; done'
                     ignoreExitValue true
                 }
             }
@@ -242,13 +242,13 @@ tasks.register('startClusterTls') {
             if (isWindows) {
                 exec {
                     commandLine 'wsl', '--', 'bash', '-c',
-                        'cp ${workspaceRoot}/utils/tls_crts/* ${workspaceRoot}/utils/tls_crts/ 2>/dev/null || true'
+                        'echo "=== WSL tls_crts ===" && ls -la /mnt/d/a/valkey-glide/valkey-glide/utils/tls_crts/ && echo "=== Windows tls_crts ===" && ls -la /mnt/d/a/valkey-glide/valkey-glide/utils/tls_crts/'
                     ignoreExitValue true
                 }
                 // Ensure certificates have Unix line endings (remove any Windows \r)
                 exec {
                     commandLine 'wsl', '--', 'bash', '-c',
-                        'cd ${workspaceRoot}/utils/tls_crts && for f in *.crt *.key *.pem 2>/dev/null; do [ -f "$f" ] && sed -i "s/\\r//g" "$f"; done || true'
+                        'cd ${workspaceRoot}/utils/tls_crts && for f in *.crt *.key *.pem; do [ -f "$f" ] && sed -i "s/\\r//g" "$f"; done'
                     ignoreExitValue true
                 }
             }
