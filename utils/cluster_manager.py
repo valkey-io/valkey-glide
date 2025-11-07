@@ -722,13 +722,6 @@ def create_standalone_replication(
                 f"Failed to set up replication for server {server}: {err if err else output}"
             )
     servers_ports = [str(server.port) for server in servers]
-    logging.debug("Waiting for replica sync completion...")
-    wait_for_a_message_in_logs(
-        cluster_folder,
-        "sync: Finished with success",
-        servers_ports[1:],
-    )
-    
     # Log replica server logs for debugging
     logging.debug("=== REPLICA SERVER LOGS ===")
     for i, server in enumerate(servers[1:], 1):  # Skip primary
@@ -736,11 +729,17 @@ def create_standalone_replication(
         try:
             with open(log_file, 'r') as f:
                 log_content = f.read()
-                logging.debug(f"Replica {server.port} log (last 500 chars):")
-                logging.debug(log_content[-500:])
+                logging.debug(f"Replica {server.port} log (last 1000 chars):")
+                logging.debug(log_content[-1000:])
         except Exception as e:
             logging.debug(f"Could not read log for replica {server.port}: {e}")
     logging.debug("=== END REPLICA LOGS ===")
+    
+    wait_for_a_message_in_logs(
+        cluster_folder,
+        "sync: Finished with success",
+        servers_ports[1:],
+    )
     
     logging.debug(
         f"{len(servers) - 1} nodes successfully became replicas of the primary {primary_server}!"
