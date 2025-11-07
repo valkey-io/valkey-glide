@@ -59,6 +59,9 @@ def pythonCmd = isWindows ? ['wsl', '--', 'python3'] : ['python3']
 // Use integration test IP from environment variable if available, otherwise default to localhost
 def clusterHost = System.getenv('VALKEY_INTEG_TEST_IP') ?: '127.0.0.1'
 
+// Get workspace root - use system property or derive from project root
+def workspaceRoot = System.getProperty('workspace.root') ?: "${project.rootDir}/../.."
+
 ext {
     extractAddressesFromClusterManagerOutput = { String output ->
         for (def line : output.split("\n")) {
@@ -112,15 +115,21 @@ tasks.register('clearDirs', Delete) {
 tasks.register('startCluster') {
     doLast {
         if (System.getProperty("cluster-endpoints") == null) {
+            if (isWindows) {
+                println "=== Starting cluster setup ==="
+            }
+            
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '-r', '1', '--host', clusterHost]
+                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '-r', '1', '--host', clusterHost, '--log', 'debug']
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine args
                     standardOutput = os
+                    errorOutput = System.out
                 }
                 clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                println "=== Cluster hosts: ${clusterHosts} ==="
             }
         } else {
             clusterHosts = System.getProperty("cluster-endpoints")
@@ -152,15 +161,38 @@ tasks.register('afterTests') {}
 tasks.register('startStandalone') {
     doLast {
         if (System.getProperty("standalone-endpoints") == null) {
+            // Debug and setup WSL environment on Windows
+            if (isWindows) {
+                println "=== WSL Debug Info ==="
+                exec {
+                    commandLine 'wsl', '--', 'bash', '-c', 'echo "WSL Status: OK" && pwd && whoami'
+                    ignoreExitValue true
+                }
+                exec {
+                    commandLine 'wsl', '--', 'bash', '-c', 'echo "Python: $(which python3)" && echo "Valkey: $(which valkey-server || which redis-server || echo "NOT FOUND")"'
+                    ignoreExitValue true
+                }
+                
+                // Ensure cluster directory exists and has proper permissions
+                println "=== Setting up cluster directories ==="
+                exec {
+                    commandLine 'wsl', '--', 'bash', '-c', "cd \"\${workspaceRoot}/utils\" && mkdir -p clusters && chmod 755 clusters && ls -la clusters"
+                    ignoreExitValue true
+                }
+                println "=== Starting cluster manager ==="
+            }
+            
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '-r', '0', '--host', clusterHost]
+                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '-r', '0', '--host', clusterHost, '--log', 'debug']
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine args
                     standardOutput = os
+                    errorOutput = System.out // Show errors immediately
                 }
                 standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                println "=== Standalone hosts: ${standaloneHosts} ==="
             }
         } else {
             standaloneHosts = System.getProperty("standalone-endpoints")
@@ -177,6 +209,21 @@ tasks.register('startStandaloneTls') {
                 standardOutput = os
             }
             standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            
+            // Copy certificates from WSL to Windows if needed
+            if (isWindows) {
+                exec {
+                    commandLine 'wsl', '--', 'bash', '-c',
+                        'cp ${workspaceRoot}/utils/tls_crts/* ${workspaceRoot}/utils/tls_crts/ 2>/dev/null || true'
+                    ignoreExitValue true
+                }
+                // Ensure certificates have Unix line endings (remove any Windows \r)
+                exec {
+                    commandLine 'wsl', '--', 'bash', '-c',
+                        'cd ${workspaceRoot}/utils/tls_crts && for f in *.crt *.key *.pem 2>/dev/null; do [ -f "$f" ] && sed -i "s/\\r//g" "$f"; done || true'
+                    ignoreExitValue true
+                }
+            }
         }
     }
 }
@@ -190,6 +237,21 @@ tasks.register('startClusterTls') {
                 standardOutput = os
             }
             clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            
+            // Copy certificates from WSL to Windows if needed
+            if (isWindows) {
+                exec {
+                    commandLine 'wsl', '--', 'bash', '-c',
+                        'cp ${workspaceRoot}/utils/tls_crts/* ${workspaceRoot}/utils/tls_crts/ 2>/dev/null || true'
+                    ignoreExitValue true
+                }
+                // Ensure certificates have Unix line endings (remove any Windows \r)
+                exec {
+                    commandLine 'wsl', '--', 'bash', '-c',
+                        'cd ${workspaceRoot}/utils/tls_crts && for f in *.crt *.key *.pem 2>/dev/null; do [ -f "$f" ] && sed -i "s/\\r//g" "$f"; done || true'
+                    ignoreExitValue true
+                }
+            }
         }
     }
 }
