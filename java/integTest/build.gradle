@@ -169,7 +169,15 @@ tasks.register('startStandalone') {
                     ignoreExitValue true
                 }
                 exec {
-                    commandLine 'wsl', '--', 'bash', '-c', 'echo "Python: $(which python3)" && echo "Valkey: $(which valkey-server || which redis-server || echo "NOT FOUND")"'
+                    commandLine 'wsl', '--', 'bash', '-c', 'echo "Python: \\$(which python3)"'
+                    ignoreExitValue true
+                }
+                exec {
+                    commandLine 'wsl', '--', 'bash', '-c', 'echo "Valkey: \\$(which valkey-server || which redis-server || echo NOT_FOUND)"'
+                    ignoreExitValue true
+                }
+                exec {
+                    commandLine 'wsl', '--', 'bash', '-c', 'echo "Kernel: \\$(uname -r)"'
                     ignoreExitValue true
                 }
                 
@@ -220,7 +228,7 @@ tasks.register('startStandaloneTls') {
                 // Ensure certificates have Unix line endings (remove any Windows \r)
                 exec {
                     commandLine 'wsl', '--', 'bash', '-c',
-                        'cd ${workspaceRoot}/utils/tls_crts && for f in *.crt *.key *.pem; do [ -f "$f" ] && sed -i "s/\\r//g" "$f"; done'
+                        'if [ -d "${workspaceRoot}/utils/tls_crts" ]; then cd ${workspaceRoot}/utils/tls_crts && for f in *.crt *.key *.pem; do [ -f "$f" ] && sed -i "s/\\r//g" "$f"; done; fi'
                     ignoreExitValue true
                 }
             }
@@ -248,7 +256,7 @@ tasks.register('startClusterTls') {
                 // Ensure certificates have Unix line endings (remove any Windows \r)
                 exec {
                     commandLine 'wsl', '--', 'bash', '-c',
-                        'cd ${workspaceRoot}/utils/tls_crts && for f in *.crt *.key *.pem; do [ -f "$f" ] && sed -i "s/\\r//g" "$f"; done'
+                        'if [ -d "${workspaceRoot}/utils/tls_crts" ]; then cd ${workspaceRoot}/utils/tls_crts && for f in *.crt *.key *.pem; do [ -f "$f" ] && sed -i "s/\\r//g" "$f"; done; fi'
                     ignoreExitValue true
                 }
             }
