@@ -3878,10 +3878,11 @@ describe("PubSub", () => {
             let client: TGlideClient | null = null;
 
             try {
-                const channel1 = "test_shardchannel1";
-                const channel2 = "test_shardchannel2";
-                const channel3 = "test_shardchannel3";
-                const channel4 = "test_shardchannel4";
+                const runId = String(getRandomKey());
+                const channel1 = `test_shardchannel1:${runId}`;
+                const channel2 = `test_shardchannel2:${runId}`;
+                const channel3 = `test_shardchannel3:${runId}`;
+                const channel4 = `test_shardchannel4:${runId}`;
 
                 // Set up subscriptions
                 pubSub1 = createPubSubSubscription(
@@ -3914,14 +3915,39 @@ describe("PubSub", () => {
                     getOptions(clusterMode),
                 );
 
-                let subscribers = await (
-                    client as GlideClusterClient
-                ).pubsubShardNumSub([channel1, channel2, channel3]);
-                expect(convertGlideRecordToRecord(subscribers)).toEqual({
-                    [channel1]: 0,
-                    [channel2]: 0,
-                    [channel3]: 0,
-                });
+                // wait until zeros to avoid leftovers
+                {
+                    let ok = false;
+
+                    for (let i = 0; i < 60; i++) {
+                        const subs = await (
+                            client as GlideClusterClient
+                        ).pubsubShardNumSub([channel1, channel2, channel3]);
+                        const m = convertGlideRecordToRecord(subs);
+
+                        if (
+                            m[channel1] === 0 &&
+                            m[channel2] === 0 &&
+                            m[channel3] === 0
+                        ) {
+                            ok = true;
+                            break;
+                        }
+
+                        await new Promise((r) => setTimeout(r, 50));
+                    }
+
+                    if (!ok) {
+                        const subs = await (
+                            client as GlideClusterClient
+                        ).pubsubShardNumSub([channel1, channel2, channel3]);
+                        expect(convertGlideRecordToRecord(subs)).toEqual({
+                            [channel1]: 0,
+                            [channel2]: 0,
+                            [channel3]: 0,
+                        });
+                    }
+                }
 
                 [client1, client2] = await createClients(
                     clusterMode,
@@ -3938,15 +3964,52 @@ describe("PubSub", () => {
                 );
 
                 // Test pubsubShardnumsub
-                subscribers = await (
-                    client4 as GlideClusterClient
-                ).pubsubShardNumSub([channel1, channel2, channel3, channel4]);
-                expect(convertGlideRecordToRecord(subscribers)).toEqual({
-                    [channel1]: 1,
-                    [channel2]: 2,
-                    [channel3]: 3,
-                    [channel4]: 0,
-                });
+                {
+                    let ok = false;
+
+                    for (let i = 0; i < 60; i++) {
+                        const subs = await (
+                            client4 as GlideClusterClient
+                        ).pubsubShardNumSub([
+                            channel1,
+                            channel2,
+                            channel3,
+                            channel4,
+                        ]);
+                        const m = convertGlideRecordToRecord(subs);
+
+                        if (
+                            m[channel1] === 1 &&
+                            m[channel2] === 2 &&
+                            m[channel3] === 3 &&
+                            m[channel4] === 0
+                        ) {
+                            ok = true;
+                            break;
+                        }
+
+                        await new Promise((r) => setTimeout(r, 50));
+                    }
+
+                    if (!ok) {
+                        const subscribers = await (
+                            client4 as GlideClusterClient
+                        ).pubsubShardNumSub([
+                            channel1,
+                            channel2,
+                            channel3,
+                            channel4,
+                        ]);
+                        expect(convertGlideRecordToRecord(subscribers)).toEqual(
+                            {
+                                [channel1]: 1,
+                                [channel2]: 2,
+                                [channel3]: 3,
+                                [channel4]: 0,
+                            },
+                        );
+                    }
+                }
 
                 // Test pubsubShardnumsub with no channels
                 const emptySubscribers = await (
