@@ -353,9 +353,7 @@ tasks.withType(Test) {
         // Filter tests to focus on specific failing cluster TLS tests only
         if (System.getProperty("focusTests") == "true") {
             filter {
-                includeTestsMatching "*ClusterTlsCertificateTest.testClusterTlsWithSelfSignedCertificateSucceeds*"
-                includeTestsMatching "*ClusterTlsCertificateTest.testClusterTlsWithMultipleCertificatesSucceeds*"
-                includeTestsMatching "*ClusterTlsCertificateTest.testClusterTlsWithKeyStoreSucceeds*"
+                includeTestsMatching "*ClusterTlsCertificateTest*"
             }
         }
     }
@@ -424,6 +422,10 @@ test {
             excludeTestsMatching 'glide.standalone.*'
             excludeTestsMatching 'glide.cluster.ClusterConnectionTests*'
             excludeTestsMatching 'glide.cluster.ClusterCommandTests*'
+            excludeTestsMatching 'glide.cluster.ClusterScanTests*'
+            excludeTestsMatching 'glide.cluster.ClusterTransactionTests*'
+            // Only include ClusterTlsCertificateTest when focusing
+            includeTestsMatching 'glide.cluster.ClusterTlsCertificateTest*'
         }
     }
 }
