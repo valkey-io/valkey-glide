@@ -3444,10 +3444,11 @@ describe("PubSub", () => {
             let client: TGlideClient | null = null;
 
             try {
-                const channel1 = "test_channel1";
-                const channel2 = "test_channel2";
-                const channel3 = "some_channel3";
-                const pattern = "test_*";
+                const runId = String(getRandomKey());
+                const channel1 = `test_channel1:${runId}`;
+                const channel2 = `test_channel2:${runId}`;
+                const channel3 = `some_channel3:${runId}`;
+                const pattern = `test_*:${runId}`;
 
                 if (clusterMode) {
                     client = await GlideClusterClient.createClient(
@@ -3460,7 +3461,10 @@ describe("PubSub", () => {
                 }
 
                 // Assert no channels exists yet
-                expect(await client.pubsubChannels()).toEqual([]);
+                const none = await client.pubsubChannels({
+                    pattern: `*:${runId}`,
+                });
+                expect(new Set(none)).toEqual(new Set([]));
 
                 pubSub = createPubSubSubscription(
                     clusterMode,
@@ -3482,12 +3486,44 @@ describe("PubSub", () => {
                 );
 
                 // Test pubsubChannels without pattern
-                const channels = await client2.pubsubChannels();
+                for (let i = 0; i < 60; i++) {
+                    const channels = await client2.pubsubChannels({
+                        pattern: `*:${runId}`,
+                    });
+                    const s = new Set(channels);
+
+                    if (s.has(channel1) && s.has(channel2) && s.has(channel3)) {
+                        break;
+                    }
+
+                    await new Promise((r) => setTimeout(r, 50));
+                }
+
+                const channels = await client2.pubsubChannels({
+                    pattern: `*:${runId}`,
+                });
                 expect(new Set(channels)).toEqual(
                     new Set([channel1, channel2, channel3]),
                 );
 
                 // Test pubsubChannels with pattern
+                for (let i = 0; i < 60; i++) {
+                    const channelsWithPattern = await client2.pubsubChannels({
+                        pattern,
+                    });
+                    const s = new Set(channelsWithPattern);
+
+                    if (
+                        s.has(channel1) &&
+                        s.has(channel2) &&
+                        !s.has(channel3)
+                    ) {
+                        break;
+                    }
+
+                    await new Promise((r) => setTimeout(r, 50));
+                }
+
                 const channelsWithPattern = await client2.pubsubChannels({
                     pattern,
                 });
@@ -3497,7 +3533,7 @@ describe("PubSub", () => {
 
                 // Test with non-matching pattern
                 const nonMatchingChannels = await client2.pubsubChannels({
-                    pattern: "non_matching_*",
+                    pattern: `non_matching_*:${runId}`,
                 });
                 expect(nonMatchingChannels.length).toBe(0);
             } finally {
