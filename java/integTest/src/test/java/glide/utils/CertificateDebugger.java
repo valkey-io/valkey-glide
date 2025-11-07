@@ -3,7 +3,6 @@ package glide.utils;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.HexFormat;
 
 /**
  * Utility class for debugging TLS certificates in tests. Provides comprehensive logging of
@@ -232,12 +231,17 @@ public class CertificateDebugger {
 
     /**
      * Converts bytes to hexadecimal string representation.
+     * Compatible with Java 11+.
      *
      * @param bytes The bytes to convert
      * @return Hexadecimal string representation
      */
     private static String bytesToHex(byte[] bytes) {
-        return HexFormat.of().formatHex(bytes);
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 
     /**
