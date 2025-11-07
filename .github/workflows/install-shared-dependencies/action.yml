@@ -163,7 +163,7 @@ runs:
                   sudo apt install -y build-essential git pkg-config libssl-dev
               fi
               git clone https://github.com/valkey-io/valkey.git
-              cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes
+              cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes all
               # Cache the built binaries - detect which naming convention is used
               mkdir -p ../valkey-cache
               if [ -f "src/valkey-server" ]; then
