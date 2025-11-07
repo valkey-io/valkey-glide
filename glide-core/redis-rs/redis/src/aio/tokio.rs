@@ -153,7 +153,7 @@ impl RedisRuntime for Tokio {
             Err(e) => {
                 println!("TLS HANDSHAKE DEBUG: FAILED to establish TCP connection");
                 println!("TLS HANDSHAKE DEBUG: Error: {}", e);
-                return Err(e);
+                return Err(e.into());
             }
         };
 

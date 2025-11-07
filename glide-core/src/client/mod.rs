@@ -1162,7 +1162,7 @@ async fn create_cluster_client(
     let tls_mode = request.tls_mode.unwrap_or_default();
 
     let valkey_connection_info = get_valkey_connection_info(&request, iam_token_manager).await;
-    let (tls_params, tls_certificates) = if !request.root_certs.is_empty() {
+    let (_tls_params, tls_certificates) = if !request.root_certs.is_empty() {
         if tls_mode == TlsMode::NoTls {
             return Err(RedisError::from((
                 ErrorKind::InvalidClientConfig,
