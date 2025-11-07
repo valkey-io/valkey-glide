@@ -35,10 +35,10 @@ runs:
           if: runner.os == 'Windows'
           shell: powershell
           run: |
-              Write-Host "Installing protoc via Chocolatey..."
+              Write-Host "Installing protoc version 29.1..."
               if (Get-Command choco -ErrorAction SilentlyContinue) {
-                  choco install protoc -y
-                  Write-Host "protoc installed successfully"
+                  choco install protoc --version=29.1 -y
+                  Write-Host "protoc 29.1 installed successfully"
               } else {
                   Write-Host "ERROR: Chocolatey not available"
                   exit 1
