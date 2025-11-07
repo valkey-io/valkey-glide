@@ -6,6 +6,7 @@ import argparse
 import json
 import logging
 import os
+import platform
 import random
 import re
 import signal
@@ -661,10 +662,46 @@ def create_standalone_replication(
     primary_server = servers[0]
 
     logging.debug("## Starting replication setup...")
+    
+    # Check WSL version if running in WSL
+    is_wsl = "microsoft" in platform.uname().release.lower()
+    if is_wsl:
+        try:
+            result = subprocess.run(["wsl.exe", "--status"], capture_output=True, text=True, timeout=10)
+            logging.debug(f"WSL Status: {result.stdout}")
+            
+            # Check WSL version
+            version_result = subprocess.run(["wsl.exe", "--list", "--verbose"], capture_output=True, text=True, timeout=10)
+            logging.debug(f"WSL Version Info: {version_result.stdout}")
+            
+            if "Version: 2" in version_result.stdout or "2" in version_result.stdout:
+                logging.debug("✓ WSL2 detected")
+            else:
+                logging.warning("⚠ WSL1 detected - this may cause replica issues")
+        except Exception as e:
+            logging.debug(f"Could not check WSL version: {e}")
 
     for i, server in enumerate(servers):
         if i == 0:
             continue  # Skip the primary server
+            
+        # Ensure replica server is fully ready for replication
+        logging.debug(f"Verifying replica {server} is ready for replication...")
+        ping_cmd = [
+            get_cli_command(),
+            *get_cli_option_args(cluster_folder, use_tls),
+            "-h", str(server.host),
+            "-p", str(server.port),
+            "PING"
+        ]
+        ping_result = subprocess.run(ping_cmd, capture_output=True, text=True, timeout=5)
+        if ping_result.returncode != 0 or "PONG" not in ping_result.stdout:
+            logging.error(f"Replica {server} not responding to PING: {ping_result.stderr}")
+            raise Exception(f"Replica {server} not ready for replication")
+        logging.debug(f"Replica {server} confirmed ready")
+            
+        logging.debug(f"Setting up replication: {server} -> {primary_server}")
+        logging.debug(f"REPLICAOF command: {' '.join(replica_of_command)}")
         replica_of_command = [
             get_cli_command(),
             *get_cli_option_args(cluster_folder, use_tls),
@@ -683,16 +720,33 @@ def create_standalone_replication(
             text=True,
         )
         output, err = p.communicate(timeout=20)
+        logging.debug(f"REPLICAOF output for {server}: stdout='{output}', stderr='{err}'")
         if err or "OK" not in output:
+            logging.error(f"REPLICAOF failed for {server}: {err if err else output}")
             raise Exception(
                 f"Failed to set up replication for server {server}: {err if err else output}"
             )
     servers_ports = [str(server.port) for server in servers]
+    logging.debug("Waiting for replica sync completion...")
     wait_for_a_message_in_logs(
         cluster_folder,
         "sync: Finished with success",
         servers_ports[1:],
     )
+    
+    # Log replica server logs for debugging
+    logging.debug("=== REPLICA SERVER LOGS ===")
+    for i, server in enumerate(servers[1:], 1):  # Skip primary
+        log_file = f"{cluster_folder}/{server.port}/server.log"
+        try:
+            with open(log_file, 'r') as f:
+                log_content = f.read()
+                logging.debug(f"Replica {server.port} log (last 500 chars):")
+                logging.debug(log_content[-500:])
+        except Exception as e:
+            logging.debug(f"Could not read log for replica {server.port}: {e}")
+    logging.debug("=== END REPLICA LOGS ===")
+    
     logging.debug(
         f"{len(servers) - 1} nodes successfully became replicas of the primary {primary_server}!"
     )
