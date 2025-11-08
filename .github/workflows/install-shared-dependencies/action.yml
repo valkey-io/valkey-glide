@@ -82,15 +82,15 @@ runs:
           with:
               python-version: "3.x"
 
+        - name: Set up Docker Buildx
+          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
+          uses: docker/setup-buildx-action@v3
+
         - name: Setup Docker Container (Windows only)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
           shell: bash
           run: |
               echo "=== Setting up Docker container for Redis/Valkey ==="
-              
-              # Setup buildx for multi-platform support
-              docker buildx create --use --name multiarch --driver docker-container || true
-              docker buildx inspect --bootstrap
               
               # Build the Docker image with buildx
               docker buildx build --platform linux/amd64 \
