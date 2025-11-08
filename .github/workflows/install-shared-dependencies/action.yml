@@ -157,6 +157,68 @@ runs:
               
               echo "WSL Docker setup completed"
 
+        - name: Cache Valkey build (Non-Windows)
+          if: "${{ inputs.engine-version && inputs.os != 'windows' }}"
+          uses: actions/cache@v4
+          id: cache-valkey
+          with:
+              path: |
+                  valkey-cache/valkey-server
+                  valkey-cache/valkey-cli
+                  valkey-cache/valkey-benchmark
+              key: valkey-${{ inputs.engine-version }}-${{ inputs.os }}-${{ inputs.target }}-${{ github.sha }}
+              restore-keys: |
+                  valkey-${{ inputs.engine-version }}-${{ inputs.os }}-${{ inputs.target }}-
+
+        - name: Install engine (Non-Windows, Cached)
+          shell: bash
+          if: "${{ inputs.engine-version && inputs.os != 'windows' && steps.cache-valkey.outputs.cache-hit == 'true' }}"
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+              OS_TYPE: ${{ inputs.os }}
+          run: |
+              echo "Using cached Valkey binaries"
+              echo "OS_TYPE: '$OS_TYPE'"
+              echo "ENGINE_VERSION: '$ENGINE_VERSION'"
+              # Clone repo fresh
+              git clone https://github.com/valkey-io/valkey.git
+              cd valkey && git checkout "$ENGINE_VERSION"
+              # Move cached binaries to correct location (force overwrite)
+              mkdir -p src
+              cp -f ../valkey-cache/* src/ 2>/dev/null || true
+              # Install the cached binaries
+              sudo make install
+
+        - name: Build engine from source (Non-Windows)
+          shell: bash
+          if: "${{ inputs.engine-version && inputs.os != 'windows' && steps.cache-valkey.outputs.cache-hit != 'true' }}"
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+              OS_TYPE: ${{ inputs.os }}
+          run: |
+              echo "Building Valkey from source"
+              echo "OS_TYPE: '$OS_TYPE'"
+              echo "ENGINE_VERSION: '$ENGINE_VERSION'"
+              # Install dependencies (only needed on Linux, macOS uses brew)
+              if [ "$OS_TYPE" = "ubuntu" ]; then
+                  sudo apt install -y build-essential git pkg-config libssl-dev
+              fi
+              git clone https://github.com/valkey-io/valkey.git
+              cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes all
+              # Cache the built binaries - detect which naming convention is used
+              mkdir -p ../valkey-cache
+              if [ -f "src/valkey-server" ]; then
+                  echo "Found Valkey binaries"
+                  cp -f src/valkey-server src/valkey-cli src/valkey-benchmark ../valkey-cache/ 2>/dev/null || true
+              elif [ -f "src/redis-server" ]; then
+                  echo "Found Redis binaries"
+                  cp -f src/redis-server src/redis-cli src/redis-benchmark ../valkey-cache/ 2>/dev/null || true
+              else
+                  echo "Warning: No server binaries found to cache"
+              fi
+              # Install the binaries
+              sudo make install
+
 
 
         - name: Start engine server
