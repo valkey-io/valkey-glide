@@ -130,26 +130,20 @@ runs:
                 sudo docker run -d --name valkey-test-container \
                   --network host \
                   -v /mnt/d/a/valkey-glide/valkey-glide:/workspace \
-                  ubuntu:22.04 bash -c "
-                    apt-get update && 
-                    apt-get install -y python3 python3-pip build-essential git pkg-config libssl-dev &&
-                    echo 'Starting Valkey build process' &&
-                    git clone https://github.com/valkey-io/valkey.git &&
-                    echo 'Git clone completed' &&
-                    cd valkey &&
-                    echo 'Checking out version ${{ inputs.engine-version }}' &&
-                    git checkout ${{ inputs.engine-version }} &&
-                    echo 'Starting make build' &&
-                    make -j4 &&
-                    echo 'Make completed, starting install' &&
-                    make install &&
-                    echo 'Install completed' &&
-                    ls -la /usr/local/bin/ &&
-                    cd / &&
-                    rm -rf valkey &&
-                    echo 'Valkey build process completed' &&
-                    tail -f /dev/null
-                  "
+                  ubuntu:22.04 tail -f /dev/null
+                
+                # Install dependencies
+                sudo docker exec valkey-test-container apt-get update
+                sudo docker exec valkey-test-container apt-get install -y python3 python3-pip build-essential git pkg-config libssl-dev
+                
+                # Clone and build Valkey
+                sudo docker exec valkey-test-container git clone https://github.com/valkey-io/valkey.git
+                sudo docker exec valkey-test-container bash -c 'cd valkey && git checkout ${{ inputs.engine-version }}'
+                sudo docker exec valkey-test-container bash -c 'cd valkey && make -j4'
+                sudo docker exec valkey-test-container bash -c 'cd valkey && make install'
+                
+                # Verify installation
+                sudo docker exec valkey-test-container ls -la /usr/local/bin/
                 
                 # Wait for installation to complete
                 sleep 60
@@ -172,6 +166,7 @@ runs:
                 sudo docker exec valkey-test-container valkey-server --version
                 
                 echo 'Docker setup complete in WSL'
+              "
               "
               
 
