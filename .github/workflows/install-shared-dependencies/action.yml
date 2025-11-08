@@ -93,15 +93,15 @@ runs:
 
         - name: Setup Docker in WSL (Windows)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
-          shell: pwsh
+          shell: bash
           run: |
-              Write-Host "=== Setting up Docker inside WSL ==="
+              echo "=== Setting up Docker inside WSL ==="
               
               # Stop Windows Docker daemon if running to avoid conflicts (ignore errors)
               net stop docker || echo "Windows Docker not running or already stopped"
               
               # Test WSL is working
-              Write-Host "Testing WSL..."
+              echo "Testing WSL..."
               wsl -- echo "WSL is working"
               
               # Start Docker daemon in WSL with proper setup
@@ -111,7 +111,7 @@ runs:
               wsl -- echo "WSL is working"
               
               # Step 2: Start Docker daemon in WSL
-              Write-Host "Starting Docker daemon in WSL..."
+              echo "Starting Docker daemon in WSL..."
               wsl -- bash -c "
                 echo 'Killing any existing Docker processes...'
                 pkill -f dockerd || true
@@ -136,13 +136,13 @@ runs:
                 echo 'Final Docker status check:'
                 docker info || echo 'Docker daemon failed to start'
               "
-              Start-Sleep 5
+              sleep 5
               
               # Step 3: Test Docker in WSL
               wsl -- docker info
               
               # Step 4: Pull Ubuntu image and create container
-              Write-Host "Creating Valkey container..."
+              echo "Creating Valkey container..."
               wsl -- docker pull ubuntu:22.04
               
               # Step 5: Start container and install Valkey
@@ -163,12 +163,12 @@ runs:
               "
               
               # Step 6: Wait and verify installation
-              Write-Host "Waiting for Valkey installation..."
-              Start-Sleep 60
+              echo "Waiting for Valkey installation..."
+              sleep 60
               
-              Write-Host "Verifying container and Valkey installation..."
+              echo "Verifying container and Valkey installation..."
               if (!(wsl -- docker ps | Select-String "valkey-test-container")) {
-                  Write-Host "ERROR: Container is not running"
+                  echo "ERROR: Container is not running"
                   wsl -- docker logs valkey-test-container
                   exit 1
               }
@@ -176,7 +176,7 @@ runs:
               wsl -- docker exec valkey-test-container python3 --version
               wsl -- docker exec valkey-test-container /usr/local/bin/valkey-server --version
               
-              Write-Host "WSL Docker setup completed"
+              echo "WSL Docker setup completed"
 
         - name: Cache Valkey build (Non-Windows)
           if: "${{ inputs.engine-version && inputs.os != 'windows' }}"
