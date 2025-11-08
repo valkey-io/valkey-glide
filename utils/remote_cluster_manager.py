@@ -297,6 +297,12 @@ class RemoteClusterManager:
             logging.info(f"Using internal IP for binding: {internal_ip}")
             bind_ip = internal_ip
 
+        # Clean up old TLS certificates to force regeneration
+        if tls and not (tls_cert_file or tls_key_file or tls_ca_cert_file):
+            logging.info("Cleaning up old TLS certificates to force fresh generation...")
+            cleanup_cmd = f"rm -rf {self.remote_repo_path}/utils/tls_crts"
+            self._execute_remote_command(cleanup_cmd, timeout=10)
+
         # Build cluster_manager.py command with engine-specific PATH
         cmd_parts = [
             f"cd {self.remote_repo_path}/utils",
