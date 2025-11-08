@@ -137,21 +137,14 @@ def check_if_tls_cert_is_valid(tls_file: str):
 
 def should_generate_new_tls_certs(host="127.0.0.1") -> bool:
     # Returns False if we already have existing and valid TLS files for the correct host, otherwise True
+    # ALWAYS regenerate certificates to ensure CA and server certs are in sync
+    # This prevents "BadSignature" errors from certificate mismatches
     try:
         Path(TLS_FOLDER).mkdir(exist_ok=False)
     except FileExistsError:
-        files_list = [CA_CRT, SERVER_KEY, SERVER_CRT]
-        for file in files_list:
-            if not (check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file)):
-                return True
-        
-        # Check if existing certificate is valid for the current host
-        if host != "127.0.0.1" and host != "localhost":
-            # If we're using a remote host, always regenerate to include the correct IP
-            logging.info(f"Regenerating TLS certificates for remote host: {host}")
-            return True
-        
-        return False
+        # Folder exists - always regenerate to ensure fresh, matching certificates
+        logging.info(f"TLS folder exists, regenerating certificates for host: {host}")
+        return True
     return True
 
 
