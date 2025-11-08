@@ -161,23 +161,27 @@ tasks.register('afterTests') {}
 tasks.register('startStandalone') {
     doLast {
         if (System.getProperty("standalone-endpoints") == null) {
-            // Debug and setup WSL environment on Windows
-            if (isWindows) {
-                // Ensure cluster directory exists and has proper permissions
-                println "=== Setting up cluster directories ==="
-                exec {
-                    commandLine 'wsl', '--', 'bash', '-c', "cd \"\${workspaceRoot}/utils\" && mkdir -p clusters && chmod 755 clusters && ls -la clusters"
-                    ignoreExitValue true
-                }
-                println "=== Starting cluster manager ==="
-            }
-            
             new ByteArrayOutputStream().withStream { os ->
-                exec {
-                    workingDir "${project.rootDir}/../utils"
-                    def args = [*pythonCmd, 'cluster_manager.py', 'start', '-r', '0', '--host', clusterHost]
-                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
-                    commandLine args
+                if (isWindows) {
+                    // Use Docker container on Windows
+                    exec {
+                        def args = ['docker', 'exec', 'valkey-test-container', 'python3', '/workspace/utils/cluster_manager.py', 'start', '-r', '0', '--host', clusterHost]
+                        if (System.getProperty("tls") == 'true') args.add(6, '--tls')
+                        commandLine args
+                        standardOutput = os
+                        errorOutput = System.out
+                    }
+                } else {
+                    // Use native execution on Linux/macOS
+                    exec {
+                        workingDir "${project.rootDir}/../utils"
+                        def args = [*pythonCmd, 'cluster_manager.py', 'start', '-r', '0', '--host', clusterHost]
+                        if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                        commandLine args
+                        standardOutput = os
+                        errorOutput = System.out
+                    }
+                }
                     standardOutput = os
                     errorOutput = System.out // Show errors immediately
                 }
