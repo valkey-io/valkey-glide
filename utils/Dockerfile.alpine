@@ -1,0 +1,30 @@
+FROM alpine:3.22
+ARG ENGINE_VERSION=8.0.1
+
+# Install dependencies (including musl-dev for Alpine compatibility)
+RUN apk add --no-cache \
+    python3 \
+    py3-pip \
+    build-base \
+    linux-headers \
+    openssl-dev \
+    wget \
+    git \
+    bash \
+    musl-dev \
+    gcc \
+    g++ \
+    make \
+    pkgconfig
+
+# Install Valkey with Alpine-specific build flags
+RUN wget -O valkey.tar.gz https://github.com/valkey-io/valkey/archive/refs/tags/${ENGINE_VERSION}.tar.gz \
+    && tar -xzf valkey.tar.gz \
+    && cd valkey-${ENGINE_VERSION} \
+    && make -j"$(nproc)" MALLOC=libc \
+    && make install \
+    && cd .. \
+    && rm -rf valkey-${ENGINE_VERSION} valkey.tar.gz
+
+WORKDIR /workspace
+CMD ["/bin/bash"]
