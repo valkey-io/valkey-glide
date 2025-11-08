@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM --platform=linux/amd64 ubuntu:22.04
 
 # Build argument for engine version
 ARG ENGINE_VERSION=8.0.1
