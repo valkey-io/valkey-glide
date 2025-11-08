@@ -20,9 +20,12 @@ RUN wget -O valkey.tar.gz https://github.com/valkey-io/valkey/archive/refs/tags/
     && tar -xzf valkey.tar.gz \
     && cd valkey-${ENGINE_VERSION} \
     && make -j"$(nproc)" \
-    && make install \
+    && make install PREFIX=/usr/local \
     && cd .. \
     && rm -rf valkey-${ENGINE_VERSION} valkey.tar.gz
+
+# Ensure /usr/local/bin is in PATH
+ENV PATH="/usr/local/bin:${PATH}"
 
 WORKDIR /workspace
 CMD ["/bin/bash"]

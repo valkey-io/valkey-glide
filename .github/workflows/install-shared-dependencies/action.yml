@@ -111,8 +111,32 @@ runs:
               wsl -- echo "WSL is working"
               
               # Step 2: Start Docker daemon in WSL
-              wsl -- bash -c "dockerd --host=unix:///var/run/docker.sock > /tmp/docker.log 2>&1 &"
-              Start-Sleep 10
+              Write-Host "Starting Docker daemon in WSL..."
+              wsl -- bash -c "
+                echo 'Killing any existing Docker processes...'
+                pkill -f dockerd || true
+                sleep 2
+                
+                echo 'Creating Docker directories...'
+                mkdir -p /var/run /var/lib/docker
+                
+                echo 'Starting Docker daemon...'
+                dockerd --host=unix:///var/run/docker.sock --dns=8.8.8.8 --dns=1.1.1.1 --data-root=/var/lib/docker &
+                
+                echo 'Waiting for Docker daemon to start...'
+                for i in {1..30}; do
+                  echo \"Attempt \$i: Testing Docker connection...\"
+                  if docker info; then
+                    echo 'Docker daemon is running!'
+                    break
+                  fi
+                  sleep 2
+                done
+                
+                echo 'Final Docker status check:'
+                docker info || echo 'Docker daemon failed to start'
+              "
+              Start-Sleep 5
               
               # Step 3: Test Docker in WSL
               wsl -- docker info
