@@ -87,13 +87,26 @@ runs:
           shell: bash
           run: |
               echo "=== Setting up Docker container for Redis/Valkey ==="
-              # Build the Docker image with engine version
-              docker build -f utils/Dockerfile.valkey-test \
+              
+              # Ensure Docker is in Linux container mode
+              echo "Switching Docker to Linux container mode..."
+              powershell -Command "& 'C:\Program Files\Docker\Docker\DockerCli.exe' -SwitchLinuxEngine" || true
+              
+              # Wait a moment for Docker to switch
+              sleep 5
+              
+              # Verify Docker can pull Linux images
+              docker version
+              
+              # Build the Docker image with engine version and explicit platform
+              docker build --platform linux/amd64 \
+                -f utils/Dockerfile.valkey-test \
                 --build-arg ENGINE_VERSION=${{ inputs.engine-version }} \
                 -t valkey-test-env utils/
               
               # Start a long-running container with full port range and volume mount
               docker run -d --name valkey-test-container \
+                --platform linux/amd64 \
                 -v "${{ github.workspace }}:/workspace" \
                 -p 6379-55535:6379-55535 \
                 valkey-test-env tail -f /dev/null
