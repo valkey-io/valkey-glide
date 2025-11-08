@@ -182,9 +182,6 @@ tasks.register('startStandalone') {
                         errorOutput = System.out
                     }
                 }
-                    standardOutput = os
-                    errorOutput = System.out // Show errors immediately
-                }
                 standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
                 println "=== Standalone hosts: ${standaloneHosts} ==="
             }
