@@ -129,6 +129,7 @@ runs:
                 # Start container and install Valkey inside it
                 sudo docker run -d --name valkey-test-container \
                   --network host \
+                  --privileged \
                   -v /mnt/d/a/valkey-glide/valkey-glide:/workspace \
                   ubuntu:22.04 tail -f /dev/null
                 
@@ -144,6 +145,17 @@ runs:
                 
                 # Verify installation
                 sudo docker exec valkey-test-container ls -la /usr/local/bin/
+                
+                # Test Valkey server can start and bind to ports
+                echo 'Testing Valkey server startup...'
+                sudo docker exec valkey-test-container bash -c 'valkey-server --port 6379 --daemonize yes'
+                sleep 2
+                sudo docker exec valkey-test-container bash -c 'valkey-cli ping || echo "Valkey server not responding"'
+                sudo docker exec valkey-test-container bash -c 'pkill valkey-server || true'
+                
+                # Test network connectivity
+                echo 'Testing network connectivity...'
+                sudo docker exec valkey-test-container bash -c 'ss -tlnp | grep :6379 || echo "No processes listening on 6379"'
                 
                 # Wait for installation to complete
                 sleep 60
