@@ -123,9 +123,9 @@ runs:
                 sudo docker --version
                 sudo docker info
                 
-                # Build Valkey container
+                # Build Valkey container using Ubuntu
                 cd /mnt/d/a/valkey-glide/valkey-glide
-                sudo docker build -f utils/Dockerfile.alpine --build-arg ENGINE_VERSION=${{ inputs.engine-version }} -t valkey-test-env utils/
+                sudo docker build -f utils/Dockerfile.valkey-test --build-arg ENGINE_VERSION=${{ inputs.engine-version }} -t valkey-test-env utils/
                 
                 # Start long-running container
                 sudo docker run -d --name valkey-test-container \
@@ -144,36 +144,6 @@ runs:
               echo "WSL Docker setup completed"
 
 
-        - name: Build engine from source
-          shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
-          if: "${{ inputs.engine-version && steps.cache-valkey.outputs.cache-hit != 'true' }}"
-          env:
-              ENGINE_VERSION: ${{ inputs.engine-version }}
-              OS_TYPE: ${{ inputs.os }}
-              WSLENV: ENGINE_VERSION:OS_TYPE
-          run: |
-              echo "Building Valkey from source"
-              echo "OS_TYPE: '$OS_TYPE'"
-              echo "ENGINE_VERSION: '$ENGINE_VERSION'"
-              # Install dependencies (only needed on Linux, Windows handled by Vampire)
-              if [ "$OS_TYPE" != "windows" ]; then
-                  sudo apt install -y build-essential git pkg-config libssl-dev
-              fi
-              git clone https://github.com/valkey-io/valkey.git
-              cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes all
-              # Cache the built binaries - detect which naming convention is used
-              mkdir -p ../valkey-cache
-              if [ -f "src/valkey-server" ]; then
-                  echo "Found Valkey binaries"
-                  cp -f src/valkey-server src/valkey-cli src/valkey-benchmark ../valkey-cache/ 2>/dev/null || true
-              elif [ -f "src/redis-server" ]; then
-                  echo "Found Redis binaries"
-                  cp -f src/redis-server src/redis-cli src/redis-benchmark ../valkey-cache/ 2>/dev/null || true
-              else
-                  echo "Warning: No server binaries found to cache"
-              fi
-              # Install the binaries
-              sudo make install
 
         - name: Start engine server
           shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}

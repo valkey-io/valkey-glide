@@ -1,7 +1,8 @@
-FROM --platform=linux/amd64 ubuntu:22.04
-
-# Build argument for engine version
+FROM ubuntu:22.04
 ARG ENGINE_VERSION=8.0.1
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
@@ -14,7 +15,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Valkey with dynamic version and parallel build
+# Install Valkey with parallel build
 RUN wget -O valkey.tar.gz https://github.com/valkey-io/valkey/archive/refs/tags/${ENGINE_VERSION}.tar.gz \
     && tar -xzf valkey.tar.gz \
     && cd valkey-${ENGINE_VERSION} \
@@ -23,8 +24,5 @@ RUN wget -O valkey.tar.gz https://github.com/valkey-io/valkey/archive/refs/tags/
     && cd .. \
     && rm -rf valkey-${ENGINE_VERSION} valkey.tar.gz
 
-# Set working directory to match mounted volume
 WORKDIR /workspace
-
-# Default command
 CMD ["/bin/bash"]
