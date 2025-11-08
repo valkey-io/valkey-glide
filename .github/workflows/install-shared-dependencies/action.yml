@@ -82,22 +82,27 @@ runs:
           with:
               python-version: "3.x"
 
-        - name: Set up Docker Buildx
-          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
-          uses: docker/setup-buildx-action@v3
-
         - name: Setup Docker Container (Windows only)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
           shell: bash
+          env:
+            DOCKER_DEFAULT_PLATFORM: linux/amd64
+            DOCKER_CLI_EXPERIMENTAL: enabled
           run: |
               echo "=== Setting up Docker container for Redis/Valkey ==="
               
-              # Build the Docker image with buildx
-              docker buildx build --platform linux/amd64 \
+              # Set Docker to use Linux platform and enable experimental features
+              export DOCKER_DEFAULT_PLATFORM=linux/amd64
+              export DOCKER_CLI_EXPERIMENTAL=enabled
+              
+              # Enable experimental features in Docker daemon config
+              echo '{"experimental": true}' | sudo tee /etc/docker/daemon.json || true
+              
+              # Build the Docker image with our custom Valkey configuration
+              docker build \
                 -f utils/Dockerfile.valkey-test \
                 --build-arg ENGINE_VERSION=${{ inputs.engine-version }} \
                 -t valkey-test-env \
-                --load \
                 utils/
               
               # Start a long-running container
