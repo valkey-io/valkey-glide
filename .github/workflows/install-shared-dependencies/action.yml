@@ -157,6 +157,36 @@ runs:
                 echo 'Testing network connectivity...'
                 sudo docker exec valkey-test-container ss -tlnp | grep :6379 || echo "No processes listening on 6379"
                 
+                # Fix system configuration issues that prevent server startup
+                echo 'Fixing system configuration...'
+                sudo docker exec valkey-test-container sysctl vm.overcommit_memory=1 || echo "Cannot set overcommit"
+                sudo docker exec valkey-test-container bash -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' || echo "Cannot disable hugepage"
+                
+                # Check system limits
+                echo 'Checking system limits...'
+                sudo docker exec valkey-test-container ulimit -n
+                sudo docker exec valkey-test-container bash -c 'ulimit -n 65536; echo "File descriptor limit set to 65536"'
+                
+                # Test if we can bind to random high ports
+                echo 'Testing random port binding...'
+                sudo docker exec valkey-test-container valkey-server --port 0 --daemonize yes --logfile /tmp/random-port.log
+                sleep 2
+                sudo docker exec valkey-test-container cat /tmp/random-port.log
+                sudo docker exec valkey-test-container pkill valkey-server || true
+                
+                # Test cluster creation
+                echo 'Testing cluster creation...'
+                sudo docker exec valkey-test-container python3 /workspace/utils/cluster_manager.py start --cluster-mode --shard-count 3 --replica-count 1 --folder-path /tmp/test-cluster --prefix test
+                sleep 5
+                
+                # Check if cluster nodes are running
+                echo 'Checking cluster status...'
+                sudo docker exec valkey-test-container ps aux | grep valkey-server || echo 'No valkey-server processes found'
+                sudo docker exec valkey-test-container ss -tlnp | grep valkey-server || echo 'No valkey ports listening'
+                
+                # Clean up test cluster
+                sudo docker exec valkey-test-container python3 /workspace/utils/cluster_manager.py stop --folder-path /tmp/test-cluster --prefix test || echo 'Cleanup failed'
+                
                 # Wait for installation to complete
                 sleep 60
                 
