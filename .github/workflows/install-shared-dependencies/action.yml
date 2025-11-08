@@ -50,8 +50,8 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'ubuntu' && !contains(inputs.target, 'musl')}}"
           run: |
-              apt update -y
-              apt install -y git gcc pkg-config openssl libssl-dev
+              sudo apt update -y
+              sudo apt install -y git gcc pkg-config openssl libssl-dev
 
         - name: Install software dependencies for MUSL
           shell: bash
@@ -66,7 +66,7 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'amazon-linux' }}"
           run: |
-              yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
+              sudo yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
         - name: Install software dependencies for Windows
           shell: pwsh
@@ -93,103 +93,66 @@ runs:
 
         - name: Setup Docker in WSL (Windows)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
-          shell: bash
+          shell: pwsh
           run: |
-              echo "=== Setting up Docker inside WSL ==="
+              Write-Host "=== Setting up Docker inside WSL ==="
               
-              # Stop Windows Docker daemon if running to avoid conflicts
-              net stop docker || true
+              # Stop Windows Docker daemon if running to avoid conflicts (ignore errors)
+              net stop docker || echo "Windows Docker not running or already stopped"
+              
+              # Test WSL is working
+              Write-Host "Testing WSL..."
+              wsl -- echo "WSL is working"
               
               # Start Docker daemon in WSL with proper setup
-              wsl -- bash -c '
-                # Kill any existing Docker processes in WSL
-                pkill -f dockerd || true
-                sleep 2
-                
-                # Add user to docker group and apply immediately
-                usermod -aG docker \$USER
-                
-                # Create docker directory if it doesn't exist
-                mkdir -p /var/run
-                
-                # Start Docker daemon with better networking
-                dockerd --host=unix:///var/run/docker.sock --dns=8.8.8.8 --dns=1.1.1.1 > /tmp/docker.log 2>&1 &
-                
-                # Wait for Docker daemon to start
-                echo 'Waiting for Docker daemon to start...'
-                for i in {1..30}; do
-                  if docker info >/dev/null 2>&1; then
-                    echo 'Docker daemon is running'
-                    break
-                  fi
-                  echo \"Attempt \$i: Docker not ready yet, waiting...\"
-                  sleep 2
-                done
-                
-                # Test Docker with first
-                docker --version
-                
-                # Verify we are using Linux Docker (not Windows)
-                if ! docker info | grep -q "OSType: linux"; then
-                    echo "ERROR: Not using Linux Docker in WSL"
-                    docker info
-                    exit 1
-                fi
-                docker info
-                
-                # Use a pre-built Ubuntu image and install Valkey at runtime
-                docker pull ubuntu:22.04
-                
-                # Start container and install Valkey inside it
-                docker run -d --name valkey-test-container \
-                  --network host \
-                  -v /mnt/d/a/valkey-glide/valkey-glide:/workspace \
-                  ubuntu:22.04 bash -c '
-                    set -e
-                    apt-get update && 
-                    apt-get install -y python3 python3-pip build-essential git pkg-config libssl-dev wget &&
-                    cd /tmp &&
-                    wget -O valkey.tar.gz https://github.com/valkey-io/valkey/archive/refs/tags/${{ inputs.engine-version }}.tar.gz &&
-                    tar -xzf valkey.tar.gz &&
-                    cd valkey-${{ inputs.engine-version }} &&
-                    make -j$(nproc) &&
-                    make install PREFIX=/usr/local &&
-                    echo "Checking /usr/local/bin for valkey binaries:" &&
-                    ls -la /usr/local/bin/valkey* &&
-                    /usr/local/bin/valkey-server --version &&
-                    export PATH="/usr/local/bin:$PATH" &&
-                    cd / &&
-                    rm -rf /tmp/valkey* &&
-                    tail -f /dev/null
-                  '
-                
-                # Wait for installation to complete
-                sleep 60
-                
-                # Verify container is running and Valkey is properly installed
-                if ! docker ps | grep -q valkey-test-container; then
-                    echo 'ERROR: Container is not running'
-                    docker logs valkey-test-container
-                    exit 1
-                fi
-                
-                echo 'Testing Python installation...'
-                if ! docker exec valkey-test-container python3 --version; then
-                    echo 'ERROR: Python not available in container'
-                    exit 1
-                fi
-                
-                echo 'Testing Valkey installation...'
-                if ! docker exec valkey-test-container /usr/local/bin/valkey-server --version; then
-                    echo 'ERROR: Valkey not properly installed in container'
-                    docker logs valkey-test-container
-                    exit 1
-                fi
-                
-                echo 'Docker setup complete in WSL'
+              echo "Starting WSL Docker setup..."
+              
+              # Step 1: Test WSL
+              wsl -- echo "WSL is working"
+              
+              # Step 2: Start Docker daemon in WSL
+              wsl -- bash -c "dockerd --host=unix:///var/run/docker.sock > /tmp/docker.log 2>&1 &"
+              Start-Sleep 10
+              
+              # Step 3: Test Docker in WSL
+              wsl -- docker info
+              
+              # Step 4: Pull Ubuntu image and create container
+              Write-Host "Creating Valkey container..."
+              wsl -- docker pull ubuntu:22.04
+              
+              # Step 5: Start container and install Valkey
+              wsl -- docker run -d --name valkey-test-container --network host -v /mnt/d/a/valkey-glide/valkey-glide:/workspace ubuntu:22.04 bash -c "
+                set -e
+                apt-get update && 
+                apt-get install -y python3 python3-pip build-essential git pkg-config libssl-dev wget &&
+                cd /tmp &&
+                wget -O valkey.tar.gz https://github.com/valkey-io/valkey/archive/refs/tags/${{ inputs.engine-version }}.tar.gz &&
+                tar -xzf valkey.tar.gz &&
+                cd valkey-${{ inputs.engine-version }} &&
+                make -j`$(nproc) &&
+                make install PREFIX=/usr/local &&
+                /usr/local/bin/valkey-server --version &&
+                cd / &&
+                rm -rf /tmp/valkey* &&
+                tail -f /dev/null
               "
               
-              echo "WSL Docker setup completed"
+              # Step 6: Wait and verify installation
+              Write-Host "Waiting for Valkey installation..."
+              Start-Sleep 60
+              
+              Write-Host "Verifying container and Valkey installation..."
+              if (!(wsl -- docker ps | Select-String "valkey-test-container")) {
+                  Write-Host "ERROR: Container is not running"
+                  wsl -- docker logs valkey-test-container
+                  exit 1
+              }
+              
+              wsl -- docker exec valkey-test-container python3 --version
+              wsl -- docker exec valkey-test-container /usr/local/bin/valkey-server --version
+              
+              Write-Host "WSL Docker setup completed"
 
         - name: Cache Valkey build (Non-Windows)
           if: "${{ inputs.engine-version && inputs.os != 'windows' }}"
