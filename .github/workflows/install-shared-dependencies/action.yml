@@ -50,8 +50,8 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'ubuntu' && !contains(inputs.target, 'musl')}}"
           run: |
-              sudo apt update -y
-              sudo apt install -y git gcc pkg-config openssl libssl-dev
+              apt update -y
+              apt install -y git gcc pkg-config openssl libssl-dev
 
         - name: Install software dependencies for MUSL
           shell: bash
@@ -100,18 +100,18 @@ runs:
               # Start Docker daemon in WSL with proper setup
               wsl -- bash -c '
                 # Add user to docker group and apply immediately
-                sudo usermod -aG docker \$USER
+                usermod -aG docker \$USER
                 
                 # Create docker directory if it doesn't exist
-                sudo mkdir -p /var/run
+                mkdir -p /var/run
                 
                 # Start Docker daemon with better networking
-                sudo dockerd --host=unix:///var/run/docker.sock --dns=8.8.8.8 --dns=1.1.1.1 > /tmp/docker.log 2>&1 &
+                dockerd --host=unix:///var/run/docker.sock --dns=8.8.8.8 --dns=1.1.1.1 > /tmp/docker.log 2>&1 &
                 
                 # Wait for Docker daemon to start
                 echo 'Waiting for Docker daemon to start...'
                 for i in {1..30}; do
-                  if sudo docker info >/dev/null 2>&1; then
+                  if docker info >/dev/null 2>&1; then
                     echo 'Docker daemon is running'
                     break
                   fi
@@ -119,21 +119,21 @@ runs:
                   sleep 2
                 done
                 
-                # Test Docker with sudo first
-                sudo docker --version
-                sudo docker info
+                # Test Docker with first
+                docker --version
+                docker info
                 
                 # Use a pre-built Ubuntu image and install Valkey at runtime
-                sudo docker pull ubuntu:22.04
+                docker pull ubuntu:22.04
                 
                 # Start container and install Valkey inside it
-                sudo docker run -d --name valkey-test-container \
+                docker run -d --name valkey-test-container \
                   --network host \
                   -v /mnt/d/a/valkey-glide/valkey-glide:/workspace \
                   ubuntu:22.04 bash -c '
                     set -e
                     apt-get update && 
-                    apt-get install -y python3 python3-pip build-essential git pkg-config libssl-dev wget sudo &&
+                    apt-get install -y python3 python3-pip build-essential git pkg-config libssl-dev wget &&
                     cd /tmp &&
                     wget -O valkey.tar.gz https://github.com/valkey-io/valkey/archive/refs/tags/${{ inputs.engine-version }}.tar.gz &&
                     tar -xzf valkey.tar.gz &&
@@ -153,22 +153,22 @@ runs:
                 sleep 60
                 
                 # Verify container is running and Valkey is properly installed
-                if ! sudo docker ps | grep -q valkey-test-container; then
+                if ! docker ps | grep -q valkey-test-container; then
                     echo 'ERROR: Container is not running'
-                    sudo docker logs valkey-test-container
+                    docker logs valkey-test-container
                     exit 1
                 fi
                 
                 echo 'Testing Python installation...'
-                if ! sudo docker exec valkey-test-container python3 --version; then
+                if ! docker exec valkey-test-container python3 --version; then
                     echo 'ERROR: Python not available in container'
                     exit 1
                 fi
                 
                 echo 'Testing Valkey installation...'
-                if ! sudo docker exec valkey-test-container /usr/local/bin/valkey-server --version; then
+                if ! docker exec valkey-test-container /usr/local/bin/valkey-server --version; then
                     echo 'ERROR: Valkey not properly installed in container'
-                    sudo docker logs valkey-test-container
+                    docker logs valkey-test-container
                     exit 1
                 fi
                 
@@ -207,7 +207,7 @@ runs:
               mkdir -p src
               cp -f ../valkey-cache/* src/ 2>/dev/null || true
               # Install the cached binaries
-              sudo make install
+              make install
 
         - name: Build engine from source (Non-Windows)
           shell: bash
@@ -221,7 +221,7 @@ runs:
               echo "ENGINE_VERSION: '$ENGINE_VERSION'"
               # Install dependencies (only needed on Linux, macOS uses brew)
               if [ "$OS_TYPE" = "ubuntu" ]; then
-                  sudo apt install -y build-essential git pkg-config libssl-dev
+                  apt install -y build-essential git pkg-config libssl-dev
               fi
               git clone https://github.com/valkey-io/valkey.git
               cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes all
@@ -237,7 +237,7 @@ runs:
                   echo "Warning: No server binaries found to cache"
               fi
               # Install the binaries
-              sudo make install
+              make install
 
 
 
