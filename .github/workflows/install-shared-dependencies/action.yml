@@ -148,9 +148,21 @@ runs:
                 # Wait for installation to complete
                 sleep 60
                 
+                # Check container logs to see what happened during build
+                echo 'Container logs:'
+                sudo docker logs valkey-test-container
+                
                 # Verify container is running
                 sudo docker ps
                 sudo docker exec valkey-test-container python3 --version
+                
+                # Check if Valkey was actually built
+                echo 'Checking for Valkey binaries:'
+                sudo docker exec valkey-test-container find /usr -name '*valkey*' 2>/dev/null || true
+                sudo docker exec valkey-test-container find /usr/local -name '*valkey*' 2>/dev/null || true
+                sudo docker exec valkey-test-container ls -la /usr/local/bin/ || true
+                
+                # Try to run valkey-server
                 sudo docker exec valkey-test-container valkey-server --version
                 
                 echo 'Docker setup complete in WSL'
