@@ -119,22 +119,53 @@ runs:
                 
                 echo 'Creating Docker directories...'
                 mkdir -p /var/run /var/lib/docker
+                ls -la /var/run/ /var/lib/docker/
                 
-                echo 'Starting Docker daemon...'
-                dockerd --host=unix:///var/run/docker.sock --dns=8.8.8.8 --dns=1.1.1.1 --data-root=/var/lib/docker &
+                echo 'Starting Docker daemon with full logging...'
+                dockerd --host=unix:///var/run/docker.sock --dns=8.8.8.8 --dns=1.1.1.1 --data-root=/var/lib/docker --debug &
+                DOCKER_PID=\$!
+                echo \"Docker daemon started with PID: \$DOCKER_PID\"
                 
                 echo 'Waiting for Docker daemon to start...'
                 for i in {1..30}; do
                   echo \"Attempt \$i: Testing Docker connection...\"
-                  if docker info; then
+                  if docker info 2>&1; then
                     echo 'Docker daemon is running!'
                     break
+                  else
+                    echo 'Docker not ready, checking if daemon is still running...'
+                    if ! kill -0 \$DOCKER_PID 2>/dev/null; then
+                      echo 'ERROR: Docker daemon process died!'
+                      echo 'Checking system logs...'
+                      dmesg | tail -20
+                      exit 1
+                    fi
                   fi
                   sleep 2
                 done
                 
                 echo 'Final Docker status check:'
-                docker info || echo 'Docker daemon failed to start'
+                docker info 2>&1 || echo 'Docker daemon failed to start'
+                
+                # Build Valkey container using Ubuntu Dockerfile
+                echo 'Building Valkey container...'
+                cd /mnt/d/a/valkey-glide/valkey-glide
+                docker build -f utils/Dockerfile.valkey-test --build-arg ENGINE_VERSION=${{ inputs.engine-version }} -t valkey-test-env utils/
+                
+                # Start long-running container
+                echo 'Starting Valkey container...'
+                docker run -d --name valkey-test-container \
+                  --network host \
+                  -v /mnt/d/a/valkey-glide/valkey-glide:/workspace \
+                  valkey-test-env tail -f /dev/null
+                
+                # Verify container is running and Valkey is installed
+                echo 'Verifying container and Valkey installation...'
+                docker ps
+                docker exec valkey-test-container python3 --version
+                docker exec valkey-test-container valkey-server --version
+                
+                echo 'Docker and Valkey setup complete in WSL'
               "
               sleep 5
               
@@ -206,7 +237,7 @@ runs:
               cd valkey && git checkout "$ENGINE_VERSION"
               # Move cached binaries to correct location (force overwrite)
               mkdir -p src
-              cp -f ../valkey-cache/* src/ 2>/dev/null || true
+              cp -f ../valkey-cache/* src/  || true
               # Install the cached binaries
               sudo make install
 
@@ -230,10 +261,10 @@ runs:
               mkdir -p ../valkey-cache
               if [ -f "src/valkey-server" ]; then
                   echo "Found Valkey binaries"
-                  cp -f src/valkey-server src/valkey-cli src/valkey-benchmark ../valkey-cache/ 2>/dev/null || true
+                  cp -f src/valkey-server src/valkey-cli src/valkey-benchmark ../valkey-cache/  || true
               elif [ -f "src/redis-server" ]; then
                   echo "Found Redis binaries"
-                  cp -f src/redis-server src/redis-cli src/redis-benchmark ../valkey-cache/ 2>/dev/null || true
+                  cp -f src/redis-server src/redis-cli src/redis-benchmark ../valkey-cache/  || true
               else
                   echo "Warning: No server binaries found to cache"
               fi
