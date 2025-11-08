@@ -112,11 +112,18 @@ public class ValkeyCluster implements AutoCloseable {
             // Handle Docker command building differently
             String osName = System.getProperty("os.name").toLowerCase();
             String remoteHost = System.getenv("VALKEY_REMOTE_HOST");
-            boolean useDocker = osName.contains("windows") && (remoteHost == null || remoteHost.isEmpty());
+            boolean useDocker =
+                    osName.contains("windows") && (remoteHost == null || remoteHost.isEmpty());
 
             if (useDocker) {
                 // For Docker, build command as separate arguments
-                command.addAll(Arrays.asList("docker", "exec", "valkey-test-container", "python3", "/workspace/utils/cluster_manager.py"));
+                command.addAll(
+                        Arrays.asList(
+                                "docker",
+                                "exec",
+                                "valkey-test-container",
+                                "python3",
+                                "/workspace/utils/cluster_manager.py"));
 
                 // Add engine version if specified
                 String engineVersion = System.getProperty("engine-version");
@@ -404,11 +411,18 @@ public class ValkeyCluster implements AutoCloseable {
             // Handle Docker for stop command as well
             String osName = System.getProperty("os.name").toLowerCase();
             String remoteHost = System.getenv("VALKEY_REMOTE_HOST");
-            boolean useDocker = osName.contains("windows") && (remoteHost == null || remoteHost.isEmpty());
+            boolean useDocker =
+                    osName.contains("windows") && (remoteHost == null || remoteHost.isEmpty());
 
             if (useDocker) {
                 // For Docker stop command
-                command.addAll(Arrays.asList("docker", "exec", "valkey-test-container", "python3", "/workspace/utils/cluster_manager.py"));
+                command.addAll(
+                        Arrays.asList(
+                                "docker",
+                                "exec",
+                                "valkey-test-container",
+                                "python3",
+                                "/workspace/utils/cluster_manager.py"));
 
                 if (tls) {
                     command.add("--tls");
