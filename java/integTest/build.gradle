@@ -123,7 +123,7 @@ tasks.register('startCluster') {
                 if (isWindows) {
                     // Use Docker inside WSL for cluster
                     exec {
-                        def args = ['wsl', '--', 'docker', 'exec', 'valkey-test-container', 'python3', '/workspace/utils/cluster_manager.py', 'start', '--cluster-mode', '--host', clusterHost]
+                        def args = ['wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container', 'python3', '/workspace/utils/cluster_manager.py', 'start', '--cluster-mode', '--host', clusterHost]
                         if (System.getProperty("tls") == 'true') args.add(8, '--tls')
                         commandLine args
                         standardOutput = os
@@ -155,7 +155,7 @@ tasks.register('startClusterForAz') {
                 if (isWindows) {
                     // Use Docker inside WSL for cluster
                     exec {
-                        def args = ['wsl', '--', 'docker', 'exec', 'valkey-test-container', 'python3', '/workspace/utils/cluster_manager.py', 'start', '--cluster-mode', '--host', clusterHost]
+                        def args = ['wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container', 'python3', '/workspace/utils/cluster_manager.py', 'start', '--cluster-mode', '--host', clusterHost]
                         if (System.getProperty("tls") == 'true') args.add(8, '--tls')
                         commandLine args
                         standardOutput = os
@@ -184,10 +184,10 @@ tasks.register('startStandalone') {
         if (System.getProperty("standalone-endpoints") == null) {
             new ByteArrayOutputStream().withStream { os ->
                 if (isWindows) {
-                    // Use Docker inside WSL container
+                    // Use Docker inside WSL for standalone
                     exec {
-                        def args = ['wsl', '--', 'docker', 'exec', 'valkey-test-container', 'python3', '/workspace/utils/cluster_manager.py', 'start', '-r', '0', '--host', clusterHost]
-                        if (System.getProperty("tls") == 'true') args.add(7, '--tls')
+                        def args = ['wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container', 'python3', '/workspace/utils/cluster_manager.py', 'start', '-r', '0', '--host', clusterHost]
+                        if (System.getProperty("tls") == 'true') args.add(8, '--tls')
                         commandLine args
                         standardOutput = os
                         errorOutput = System.out
@@ -246,7 +246,7 @@ tasks.register('startClusterTls') {
             if (isWindows) {
                 // Use Docker inside WSL for TLS cluster
                 exec {
-                    commandLine 'wsl', '--', 'docker', 'exec', 'valkey-test-container', 'python3', '/workspace/utils/cluster_manager.py', 'start', '--tls', '--cluster-mode'
+                    commandLine 'wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container', 'python3', '/workspace/utils/cluster_manager.py', 'start', '--tls', '--cluster-mode'
                     standardOutput = os
                 }
             } else {

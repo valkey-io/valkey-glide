@@ -97,68 +97,52 @@ runs:
           run: |
               echo "=== Setting up Docker inside WSL ==="
               
-              # Start Docker daemon in WSL
+              # Start Docker daemon in WSL with proper setup
               wsl -- bash -c "
-                # Add user to docker group
+                # Add user to docker group and apply immediately
                 sudo usermod -aG docker \$USER
                 
-                # Start Docker daemon in background
-                sudo dockerd --host=unix:///var/run/docker.sock --host=tcp://0.0.0.0:2375 > /tmp/docker.log 2>&1 &
+                # Create docker directory if it doesn't exist
+                sudo mkdir -p /var/run
                 
-                # Wait for Docker to start
-                sleep 10
+                # Start Docker daemon with proper permissions
+                sudo dockerd --host=unix:///var/run/docker.sock --host=tcp://0.0.0.0:2375 --iptables=false > /tmp/docker.log 2>&1 &
                 
-                # Test Docker
-                docker --version
-                docker info
+                # Wait for Docker daemon to start
+                echo 'Waiting for Docker daemon to start...'
+                for i in {1..30}; do
+                  if sudo docker info >/dev/null 2>&1; then
+                    echo 'Docker daemon is running'
+                    break
+                  fi
+                  echo \"Attempt \$i: Docker not ready yet, waiting...\"
+                  sleep 2
+                done
+                
+                # Test Docker with sudo first
+                sudo docker --version
+                sudo docker info
                 
                 # Build Valkey container
                 cd /mnt/d/a/valkey-glide/valkey-glide
-                docker build -f utils/Dockerfile.alpine --build-arg ENGINE_VERSION=${{ inputs.engine-version }} -t valkey-test-env utils/
+                sudo docker build -f utils/Dockerfile.alpine --build-arg ENGINE_VERSION=${{ inputs.engine-version }} -t valkey-test-env utils/
                 
                 # Start long-running container
-                docker run -d --name valkey-test-container \
+                sudo docker run -d --name valkey-test-container \
                   -v /mnt/d/a/valkey-glide/valkey-glide:/workspace \
                   -p 6379-55535:6379-55535 \
                   valkey-test-env tail -f /dev/null
+                
+                # Verify container is running
+                sudo docker ps
+                sudo docker exec valkey-test-container python3 --version
+                sudo docker exec valkey-test-container valkey-server --version
                 
                 echo 'Docker setup complete in WSL'
               "
               
               echo "WSL Docker setup completed"
 
-        - name: Cache Valkey build
-          if: "${{ inputs.engine-version }}"
-          uses: actions/cache@v4
-          id: cache-valkey
-          with:
-              path: |
-                  valkey-cache/valkey-server
-                  valkey-cache/valkey-cli
-                  valkey-cache/valkey-benchmark
-              key: valkey-${{ inputs.engine-version }}-${{ inputs.os }}-${{ inputs.target }}-${{ github.sha }}
-              restore-keys: |
-                  valkey-${{ inputs.engine-version }}-${{ inputs.os }}-${{ inputs.target }}-
-
-        - name: Install engine
-          shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
-          if: "${{ inputs.engine-version && steps.cache-valkey.outputs.cache-hit == 'true' }}"
-          env:
-              ENGINE_VERSION: ${{ inputs.engine-version }}
-              OS_TYPE: ${{ inputs.os }}
-              WSLENV: ENGINE_VERSION:OS_TYPE
-          run: |
-              echo "Using cached Valkey binaries"
-              echo "OS_TYPE: '$OS_TYPE'"
-              echo "ENGINE_VERSION: '$ENGINE_VERSION'"
-              # Clone repo fresh
-              git clone https://github.com/valkey-io/valkey.git
-              cd valkey && git checkout "$ENGINE_VERSION"
-              # Move cached binaries to correct location (force overwrite)
-              mkdir -p src
-              cp -f ../valkey-cache/* src/ 2>/dev/null || true
-              # Install the cached binaries
-              sudo make install
 
         - name: Build engine from source
           shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
