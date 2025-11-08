@@ -82,37 +82,27 @@ runs:
           with:
               python-version: "3.x"
 
-        - name: Setup WSL (Windows only)
+        - name: Setup Docker Container (Windows only)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
-          uses: Vampire/setup-wsl@v6
-          with:
-              distribution: Ubuntu-22.04
-              use-cache: true
-              update: true
-              additional-packages: build-essential git pkg-config libssl-dev python3 python3-pip
-
-        - name: Optimize WSL for better performance (Windows)
-          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
-          shell: pwsh
+          shell: bash
           run: |
-              # Optimize WSL for better performance before engine installation
-              Write-Host "Optimizing WSL configuration for engine build..."
-
-              # Create WSL config for better performance
-              $wslConfig = @"
-              [wsl2]
-              memory=6GB
-              processors=4
-              swap=2GB
-              localhostForwarding=true
-              "@
-              $wslConfig | Out-File -FilePath "$env:USERPROFILE\.wslconfig" -Encoding utf8
-
-              # Restart WSL to apply config
-              wsl --shutdown
-              Start-Sleep -Seconds 3
-
-              Write-Host "WSL optimization complete - ready for engine build"
+              echo "=== Setting up Docker container for Redis/Valkey ==="
+              # Build the Docker image with engine version
+              docker build -f utils/Dockerfile.valkey-test \
+                --build-arg ENGINE_VERSION=${{ inputs.engine-version }} \
+                -t valkey-test-env utils/
+              
+              # Start a long-running container with full port range and volume mount
+              docker run -d --name valkey-test-container \
+                -v "${{ github.workspace }}:/workspace" \
+                -p 6379-55535:6379-55535 \
+                valkey-test-env tail -f /dev/null
+              
+              echo "Docker container started with Valkey ${{ inputs.engine-version }}"
+              
+              # Verify container is running and tools are available
+              docker exec valkey-test-container python3 --version
+              docker exec valkey-test-container valkey-server --version
 
         - name: Cache Valkey build
           if: "${{ inputs.engine-version }}"
