@@ -167,7 +167,6 @@ runs:
                 
                 echo 'Docker setup complete in WSL'
               "
-              "
               
 
         - name: Cache Valkey build (Non-Windows)
