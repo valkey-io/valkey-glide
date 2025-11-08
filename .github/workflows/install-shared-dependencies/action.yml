@@ -148,14 +148,14 @@ runs:
                 
                 # Test Valkey server can start and bind to ports
                 echo 'Testing Valkey server startup...'
-                sudo docker exec valkey-test-container bash -c 'valkey-server --port 6379 --daemonize yes'
+                sudo docker exec valkey-test-container valkey-server --port 6379 --daemonize yes
                 sleep 2
-                sudo docker exec valkey-test-container bash -c 'valkey-cli ping || echo "Valkey server not responding"'
-                sudo docker exec valkey-test-container bash -c 'pkill valkey-server || true'
+                sudo docker exec valkey-test-container valkey-cli ping || echo "Valkey server not responding"
+                sudo docker exec valkey-test-container pkill valkey-server || true
                 
                 # Test network connectivity
                 echo 'Testing network connectivity...'
-                sudo docker exec valkey-test-container bash -c 'ss -tlnp | grep :6379 || echo "No processes listening on 6379"'
+                sudo docker exec valkey-test-container ss -tlnp | grep :6379 || echo "No processes listening on 6379"
                 
                 # Wait for installation to complete
                 sleep 60
