@@ -82,30 +82,50 @@ runs:
           with:
               python-version: "3.x"
 
-        - name: Setup Docker Container (Windows only)
+        - name: Setup WSL with Docker (Windows only)
+          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
+          uses: Vampire/setup-wsl@v6
+          with:
+              distribution: Ubuntu-22.04
+              use-cache: true
+              update: true
+              additional-packages: build-essential git pkg-config libssl-dev python3 python3-pip docker.io
+
+        - name: Setup Docker in WSL (Windows)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
           shell: bash
           run: |
-              echo "=== Setting up Alpine-based Valkey container ==="
+              echo "=== Setting up Docker inside WSL ==="
               
-              # Build Alpine-based container using permanent Dockerfile
-              docker build \
-                -f utils/Dockerfile.alpine \
-                --build-arg ENGINE_VERSION=${{ inputs.engine-version }} \
-                -t valkey-test-env \
-                utils/
+              # Start Docker daemon in WSL
+              wsl -- bash -c "
+                # Add user to docker group
+                sudo usermod -aG docker \$USER
+                
+                # Start Docker daemon in background
+                sudo dockerd --host=unix:///var/run/docker.sock --host=tcp://0.0.0.0:2375 > /tmp/docker.log 2>&1 &
+                
+                # Wait for Docker to start
+                sleep 10
+                
+                # Test Docker
+                docker --version
+                docker info
+                
+                # Build Valkey container
+                cd /mnt/d/a/valkey-glide/valkey-glide
+                docker build -f utils/Dockerfile.alpine --build-arg ENGINE_VERSION=${{ inputs.engine-version }} -t valkey-test-env utils/
+                
+                # Start long-running container
+                docker run -d --name valkey-test-container \
+                  -v /mnt/d/a/valkey-glide/valkey-glide:/workspace \
+                  -p 6379-55535:6379-55535 \
+                  valkey-test-env tail -f /dev/null
+                
+                echo 'Docker setup complete in WSL'
+              "
               
-              # Start container
-              docker run -d --name valkey-test-container \
-                -v "${{ github.workspace }}:/workspace" \
-                -p 6379-55535:6379-55535 \
-                valkey-test-env tail -f /dev/null
-              
-              echo "Alpine-based Valkey container started with version ${{ inputs.engine-version }}"
-              
-              # Verify installation
-              docker exec valkey-test-container python3 --version
-              docker exec valkey-test-container valkey-server --version
+              echo "WSL Docker setup completed"
 
         - name: Cache Valkey build
           if: "${{ inputs.engine-version }}"

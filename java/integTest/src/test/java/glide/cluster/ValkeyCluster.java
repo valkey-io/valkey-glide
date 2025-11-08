@@ -28,7 +28,7 @@ public class ValkeyCluster implements AutoCloseable {
                     .resolve("utils")
                     .resolve("remote_cluster_manager.py");
 
-    /** Get platform-specific Python command with Docker support */
+    /** Get platform-specific Python command with Docker in WSL support */
     private static List<String> getPythonCommand() {
         String osName = System.getProperty("os.name").toLowerCase();
         if (osName.contains("windows")) {
@@ -39,8 +39,8 @@ public class ValkeyCluster implements AutoCloseable {
                 // Use native Windows Python for remote manager
                 return Arrays.asList("python3");
             } else {
-                // Use Docker container for local cluster manager
-                return Arrays.asList("docker", "exec", "valkey-test-container", "python3");
+                // Use Docker inside WSL for local cluster manager
+                return Arrays.asList("wsl", "--", "docker", "exec", "valkey-test-container", "python3");
             }
         } else {
             return Arrays.asList("python3");
@@ -109,16 +109,18 @@ public class ValkeyCluster implements AutoCloseable {
             this.tls = tls;
             List<String> command = new ArrayList<>();
 
-            // Handle Docker command building differently
+            // Handle Docker in WSL command building differently
             String osName = System.getProperty("os.name").toLowerCase();
             String remoteHost = System.getenv("VALKEY_REMOTE_HOST");
-            boolean useDocker =
+            boolean useDockerInWSL =
                     osName.contains("windows") && (remoteHost == null || remoteHost.isEmpty());
 
-            if (useDocker) {
-                // For Docker, build command as separate arguments
+            if (useDockerInWSL) {
+                // For Docker in WSL, build command as separate arguments
                 command.addAll(
                         Arrays.asList(
+                                "wsl",
+                                "--",
                                 "docker",
                                 "exec",
                                 "valkey-test-container",
@@ -408,16 +410,18 @@ public class ValkeyCluster implements AutoCloseable {
         if (clusterFolder != null && !clusterFolder.isEmpty()) {
             List<String> command = new ArrayList<>();
 
-            // Handle Docker for stop command as well
+            // Handle Docker in WSL for stop command as well
             String osName = System.getProperty("os.name").toLowerCase();
             String remoteHost = System.getenv("VALKEY_REMOTE_HOST");
-            boolean useDocker =
+            boolean useDockerInWSL =
                     osName.contains("windows") && (remoteHost == null || remoteHost.isEmpty());
 
-            if (useDocker) {
-                // For Docker stop command
+            if (useDockerInWSL) {
+                // For Docker in WSL stop command
                 command.addAll(
                         Arrays.asList(
+                                "wsl",
+                                "--",
                                 "docker",
                                 "exec",
                                 "valkey-test-container",
