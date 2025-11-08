@@ -85,35 +85,25 @@ runs:
         - name: Setup Docker Container (Windows only)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
           shell: bash
-          env:
-            DOCKER_DEFAULT_PLATFORM: linux/amd64
-            DOCKER_CLI_EXPERIMENTAL: enabled
           run: |
-              echo "=== Setting up Docker container for Redis/Valkey ==="
+              echo "=== Setting up Alpine-based Valkey container ==="
               
-              # Set Docker to use Linux platform and enable experimental features
-              export DOCKER_DEFAULT_PLATFORM=linux/amd64
-              export DOCKER_CLI_EXPERIMENTAL=enabled
-              
-              # Enable experimental features in Docker daemon config
-              echo '{"experimental": true}' | sudo tee /etc/docker/daemon.json || true
-              
-              # Build the Docker image with our custom Valkey configuration
+              # Build Alpine-based container using permanent Dockerfile
               docker build \
-                -f utils/Dockerfile.valkey-test \
+                -f utils/Dockerfile.alpine \
                 --build-arg ENGINE_VERSION=${{ inputs.engine-version }} \
                 -t valkey-test-env \
                 utils/
               
-              # Start a long-running container
+              # Start container
               docker run -d --name valkey-test-container \
                 -v "${{ github.workspace }}:/workspace" \
                 -p 6379-55535:6379-55535 \
                 valkey-test-env tail -f /dev/null
               
-              echo "Docker container started with Valkey ${{ inputs.engine-version }}"
+              echo "Alpine-based Valkey container started with version ${{ inputs.engine-version }}"
               
-              # Verify container is running and tools are available
+              # Verify installation
               docker exec valkey-test-container python3 --version
               docker exec valkey-test-container valkey-server --version
 
