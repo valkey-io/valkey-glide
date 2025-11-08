@@ -98,7 +98,7 @@ runs:
               echo "=== Setting up Docker inside WSL ==="
               
               # Start Docker daemon in WSL with proper setup
-              wsl -- bash -c "
+              wsl -- bash -c '
                 # Add user to docker group and apply immediately
                 sudo usermod -aG docker \$USER
                 
@@ -245,14 +245,25 @@ runs:
           shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
           if: "${{ inputs.engine-version && inputs.os != 'windows' }}"
           env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
               OS_TYPE: ${{ inputs.os }}
-              WSLENV: OS_TYPE
+              WSLENV: ENGINE_VERSION:OS_TYPE
           run: |
-              echo "Starting Valkey server"
+              echo "Starting server for engine version $ENGINE_VERSION"
               echo "OS_TYPE: '$OS_TYPE'"
 
-              # Start Valkey server in background
-              valkey-server --daemonize yes --bind 0.0.0.0 --port 6379
+              # Determine which server binary to use based on version
+              MAJOR_VERSION=$(echo "$ENGINE_VERSION" | cut -d. -f1)
+              if [ "$MAJOR_VERSION" -lt 7 ]; then
+                  SERVER_BINARY="redis-server"
+                  echo "Using redis-server for version $ENGINE_VERSION"
+              else
+                  SERVER_BINARY="valkey-server"
+                  echo "Using valkey-server for version $ENGINE_VERSION"
+              fi
+
+              # Start server in background
+              $SERVER_BINARY --daemonize yes --bind 0.0.0.0 --port 6379
 
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
