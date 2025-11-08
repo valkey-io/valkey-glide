@@ -97,8 +97,15 @@ runs:
           run: |
               echo "=== Setting up Docker inside WSL ==="
               
+              # Stop Windows Docker daemon if running to avoid conflicts
+              net stop docker || true
+              
               # Start Docker daemon in WSL with proper setup
               wsl -- bash -c '
+                # Kill any existing Docker processes in WSL
+                pkill -f dockerd || true
+                sleep 2
+                
                 # Add user to docker group and apply immediately
                 usermod -aG docker \$USER
                 
@@ -121,6 +128,13 @@ runs:
                 
                 # Test Docker with first
                 docker --version
+                
+                # Verify we are using Linux Docker (not Windows)
+                if ! docker info | grep -q "OSType: linux"; then
+                    echo "ERROR: Not using Linux Docker in WSL"
+                    docker info
+                    exit 1
+                fi
                 docker info
                 
                 # Use a pre-built Ubuntu image and install Valkey at runtime
@@ -207,7 +221,7 @@ runs:
               mkdir -p src
               cp -f ../valkey-cache/* src/ 2>/dev/null || true
               # Install the cached binaries
-              make install
+              sudo make install
 
         - name: Build engine from source (Non-Windows)
           shell: bash
@@ -221,7 +235,7 @@ runs:
               echo "ENGINE_VERSION: '$ENGINE_VERSION'"
               # Install dependencies (only needed on Linux, macOS uses brew)
               if [ "$OS_TYPE" = "ubuntu" ]; then
-                  apt install -y build-essential git pkg-config libssl-dev
+                  sudo apt install -y build-essential git pkg-config libssl-dev
               fi
               git clone https://github.com/valkey-io/valkey.git
               cd valkey && git checkout "$ENGINE_VERSION" && make -j$(nproc) BUILD_TLS=yes all
@@ -237,7 +251,7 @@ runs:
                   echo "Warning: No server binaries found to cache"
               fi
               # Install the binaries
-              make install
+              sudo make install
 
 
 
