@@ -39,8 +39,8 @@ public class ValkeyCluster implements AutoCloseable {
                 // Use native Windows Python for remote manager
                 return Arrays.asList("python3");
             } else {
-                // Use Docker inside WSL for local cluster manager
-                return Arrays.asList("wsl", "--", "docker", "exec", "valkey-test-container", "python3");
+                // Use Docker inside WSL for local cluster manager (with sudo)
+                return Arrays.asList("wsl", "--", "sudo", "sudo", "docker", "exec", "valkey-test-container", "python3");
             }
         } else {
             return Arrays.asList("python3");
@@ -121,7 +121,7 @@ public class ValkeyCluster implements AutoCloseable {
                         Arrays.asList(
                                 "wsl",
                                 "--",
-                                "docker",
+                                "sudo", "docker",
                                 "exec",
                                 "valkey-test-container",
                                 "python3",
@@ -422,7 +422,7 @@ public class ValkeyCluster implements AutoCloseable {
                         Arrays.asList(
                                 "wsl",
                                 "--",
-                                "docker",
+                                "sudo", "docker",
                                 "exec",
                                 "valkey-test-container",
                                 "python3",
