@@ -641,8 +641,7 @@ def create_cluster(
     if err or "[OK] All 16384 slots covered." not in output:
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
-    logging.debug("Sleeping 10 seconds instead of waiting for cluster state change...")
-    time.sleep(10)
+    wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
     wait_for_all_topology_views(
         servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file
     )
