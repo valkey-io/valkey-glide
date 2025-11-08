@@ -133,21 +133,21 @@ runs:
                   ubuntu:22.04 bash -c "
                     apt-get update && 
                     apt-get install -y python3 python3-pip build-essential git pkg-config libssl-dev &&
-                    echo '=== Starting Valkey build process ===' &&
+                    echo 'Starting Valkey build process' &&
                     git clone https://github.com/valkey-io/valkey.git &&
-                    echo '=== Git clone completed ===' &&
+                    echo 'Git clone completed' &&
                     cd valkey &&
-                    echo '=== Checking out version ${{ inputs.engine-version }} ===' &&
+                    echo 'Checking out version ${{ inputs.engine-version }}' &&
                     git checkout ${{ inputs.engine-version }} &&
-                    echo '=== Starting make build ===' &&
-                    make -j\$(nproc) &&
-                    echo '=== Make completed, starting install ===' &&
+                    echo 'Starting make build' &&
+                    make -j4 &&
+                    echo 'Make completed, starting install' &&
                     make install &&
-                    echo '=== Install completed ===' &&
-                    ls -la /usr/local/bin/valkey* &&
+                    echo 'Install completed' &&
+                    ls -la /usr/local/bin/ &&
                     cd / &&
                     rm -rf valkey &&
-                    echo '=== Valkey build process completed ===' &&
+                    echo 'Valkey build process completed' &&
                     tail -f /dev/null
                   "
                 
