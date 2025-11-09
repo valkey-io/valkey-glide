@@ -60,6 +60,7 @@ EXCLUDED_API_FUNCTIONS = {
 EXCLUDED_API_FILENAMES = {
     "async_only": [
         "opentelemetry.py",
+        "mock_pubsub.py",
     ],
     "sync_only": ["_glide_ffi.py"],
 }
@@ -69,6 +70,28 @@ EXCLUDED_TESTS = {
         "test_inflight_request_limit",
         "test_statistics",
         "test_UDS_socket_connection_failure",
+        # Dynamic PubSub tests (no sync equivalent yet)
+        "test_subscribe_basic",
+        "test_unsubscribe_basic",
+        "test_psubscribe_basic",
+        "test_punsubscribe_basic",
+        "test_ssubscribe_basic",
+        "test_sunsubscribe_basic",
+        "test_subscribe_coexistence_async_sync",
+        "test_subscribe_multiple_channels",
+        "test_unsubscribe_all_channels",
+        "test_mixed_lazy_and_blocking",
+        "test_get_subscriptions_empty",
+        # Dynamic PubSub helper functions
+        "subscribe_by_method",
+        "unsubscribe_by_method",
+        "psubscribe_by_method",
+        "punsubscribe_by_method",
+        "ssubscribe_by_method",
+        "sunsubscribe_by_method",
+        "wait_for_subscription_if_needed",
+        "reset_broker",
+        "get_pubsub_channel_modes_from_client",
     ],
     "sync_only": ["test_sync_fork"],
 }

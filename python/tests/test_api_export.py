@@ -56,7 +56,10 @@ excluded_async_symbols = [
     # python/glide-async/python/glide/async_commands/core.py
     "CoreCommands",  # ClassDef
     # python/glide-async/python/glide/opentelemetry.py
-    "OpenTelemetry",  # ClassDef
+    "OpenTelemetry",  # ClassDef,
+    # python/glide-async/python/glide/async_commands/mock_pubsub.py
+    "MockPubSubBroker",
+    "normalize_args",
 ]
 
 excluded_sync_symbols = [
@@ -111,10 +114,19 @@ excluded_shared_symbols = [
 
 allowed_missing_re_exports_in_async = [
     # python/glide-shared/glide_shared/exceptions.py
-    "LoggerError"
+    "LoggerError",
+    # python/glide-shared/glide_shared/commands/core_options.py
+    "PubSubOperation",
+    "PubSubMode",
+    "PubSubChannelType",
 ]
 
-allowed_missing_re_exports_in_sync: list[str] = []
+allowed_missing_re_exports_in_sync: list[str] = [
+    # python/glide-shared/glide_shared/commands/core_options.py
+    "PubSubOperation",
+    "PubSubMode",
+    "PubSubChannelType",
+]
 
 
 class AnomalousSymbolVisitor(ast.NodeVisitor):

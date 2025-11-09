@@ -19,7 +19,10 @@ from glide_shared.commands.core_options import (
     HashFieldConditionalChange,
     InsertPosition,
     OnlyIfEqual,
+    PubSubChannelType,
+    PubSubMode,
     PubSubMsg,
+    PubSubOperation,
     UpdateOptions,
     _build_sort_args,
 )
@@ -99,6 +102,15 @@ class CoreCommands(Protocol):
         type: Optional[ObjectType] = ...,
         allow_non_covered_slots: bool = ...,
     ) -> TResult: ...
+
+    async def _pubsub_operation(
+        self,
+        operation: PubSubOperation,
+        channel_type: PubSubChannelType,
+        mode: PubSubMode,
+        channels: Optional[Set[str]] = None,
+        timeout_ms: int = 0,
+    ) -> None: ...
 
     async def _update_connection_password(
         self, password: Optional[str], immediate_auth: bool
@@ -7840,7 +7852,15 @@ class CoreCommands(Protocol):
             >>> # Multiple channels
             >>> await client.subscribe_lazy({"channel1", "channel2"})
         """
-        await self._execute_command(RequestType.Subscribe, list(channels))
+        if not channels:
+            raise RequestError("channels must not be empty")
+
+        await self._pubsub_operation(
+            operation=PubSubOperation.Subscribe,
+            channel_type=PubSubChannelType.Exact,
+            mode=PubSubMode.Lazy,
+            channels=channels,
+        )
 
     async def subscribe(self, channels: Set[str], timeout_ms: int = 0) -> None:
         """
@@ -7867,8 +7887,16 @@ class CoreCommands(Protocol):
             >>> await client.subscribe({"channel1", "channel2"}, timeout=5.0)
             >>> print("Subscribed successfully within 5 seconds")
         """
-        args = list(channels) + [str(timeout_ms)]
-        await self._execute_command(RequestType.Subscribe, list(args))
+        if not channels:
+            raise RequestError("channels must not be empty")
+
+        await self._pubsub_operation(
+            operation=PubSubOperation.Subscribe,
+            channel_type=PubSubChannelType.Exact,
+            mode=PubSubMode.Blocking,
+            channels=channels,
+            timeout_ms=timeout_ms,
+        )
 
     async def psubscribe_lazy(self, patterns: Set[str]) -> None:
         """
@@ -7893,7 +7921,15 @@ class CoreCommands(Protocol):
             >>> # Multiple patterns
             >>> await client.psubscribe_lazy({"news.*", "updates.*"})
         """
-        await self._execute_command(RequestType.PSubscribe, list(patterns))
+        if not patterns:
+            raise RequestError("patterns must not be empty")
+
+        await self._pubsub_operation(
+            operation=PubSubOperation.Subscribe,
+            channel_type=PubSubChannelType.Pattern,
+            mode=PubSubMode.Lazy,
+            channels=patterns,
+        )
 
     async def psubscribe(self, patterns: Set[str], timeout_ms: int = 0) -> None:
         """
@@ -7920,8 +7956,16 @@ class CoreCommands(Protocol):
             >>> await client.psubscribe({"news.*", "updates.*"}, timeout=10.0)
             >>> print("Subscribed to patterns successfully within 10 seconds")
         """
-        args = list(patterns) + [str(timeout_ms)]
-        await self._execute_command(RequestType.PSubscribe, list(args))
+        if not patterns:
+            raise RequestError("patterns must not be empty")
+
+        await self._pubsub_operation(
+            operation=PubSubOperation.Subscribe,
+            channel_type=PubSubChannelType.Pattern,
+            mode=PubSubMode.Blocking,
+            channels=patterns,
+            timeout_ms=timeout_ms,
+        )
 
     async def unsubscribe_lazy(self, channels: Optional[Set[str]] = None) -> None:
         """
@@ -7947,8 +7991,11 @@ class CoreCommands(Protocol):
             >>> # Unsubscribe from all exact channels
             >>> await client.unsubscribe_lazy()
         """
-        await self._execute_command(
-            RequestType.Unsubscribe, list(channels) if channels else []
+        await self._pubsub_operation(
+            operation=PubSubOperation.Unsubscribe,
+            channel_type=PubSubChannelType.Exact,
+            mode=PubSubMode.Lazy,
+            channels=channels,
         )
 
     async def unsubscribe(
@@ -7982,8 +8029,13 @@ class CoreCommands(Protocol):
             >>> # Unsubscribe from all exact channels with timeout
             >>> await client.unsubscribe(timeout=10.0)
         """
-        args = (list(channels) if channels else []) + [str(timeout_ms)]
-        await self._execute_command(RequestType.Unsubscribe, list(args))
+        await self._pubsub_operation(
+            operation=PubSubOperation.Unsubscribe,
+            channel_type=PubSubChannelType.Exact,
+            mode=PubSubMode.Blocking,
+            channels=channels,
+            timeout_ms=timeout_ms,
+        )
 
     async def punsubscribe_lazy(self, patterns: Optional[Set[str]] = None) -> None:
         """
@@ -8008,8 +8060,11 @@ class CoreCommands(Protocol):
             >>> # Unsubscribe from all patterns
             >>> await client.punsubscribe_lazy()
         """
-        await self._execute_command(
-            RequestType.PUnsubscribe, list(patterns) if patterns else []
+        await self._pubsub_operation(
+            operation=PubSubOperation.Unsubscribe,
+            channel_type=PubSubChannelType.Pattern,
+            mode=PubSubMode.Lazy,
+            channels=patterns,
         )
 
     async def punsubscribe(
@@ -8043,5 +8098,10 @@ class CoreCommands(Protocol):
             >>> # Unsubscribe from all patterns with timeout
             >>> await client.punsubscribe(timeout=10.0)
         """
-        args = (list(patterns) if patterns else []) + [str(timeout_ms)]
-        await self._execute_command(RequestType.PUnsubscribe, list(args))
+        await self._pubsub_operation(
+            operation=PubSubOperation.Unsubscribe,
+            channel_type=PubSubChannelType.Pattern,
+            mode=PubSubMode.Blocking,
+            channels=patterns,
+            timeout_ms=timeout_ms,
+        )
