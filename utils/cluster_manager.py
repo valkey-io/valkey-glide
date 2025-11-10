@@ -157,6 +157,19 @@ def generate_tls_certs(host="127.0.0.1"):
     ca_serial = f"{TLS_FOLDER}/ca.txt"
     ext_file = f"{TLS_FOLDER}/openssl.cnf"
 
+    # Create CA config file with required extensions
+    ca_ext_file = f"{TLS_FOLDER}/ca_openssl.cnf"
+    with open(ca_ext_file, "w") as f:
+        f.write("[req]\n")
+        f.write("distinguished_name = req_distinguished_name\n")
+        f.write("x509_extensions = v3_ca\n")
+        f.write("[req_distinguished_name]\n")
+        f.write("[v3_ca]\n")
+        f.write("basicConstraints = critical,CA:TRUE\n")
+        f.write("keyUsage = critical,keyCertSign,cRLSign\n")
+        f.write("subjectKeyIdentifier = hash\n")
+    
+    # Create server cert config file
     f = open(ext_file, "w")
     # Include both localhost and the actual host IP in certificate
     subject_alt_name = f"IP:127.0.0.1,DNS:localhost,IP:{host}"
@@ -192,7 +205,7 @@ def generate_tls_certs(host="127.0.0.1"):
     # Build server key
     make_key(SERVER_KEY, 2048)
 
-    # Build CA Cert
+    # Build CA Cert with proper extensions
     p = subprocess.Popen(
         [
             "openssl",
@@ -207,6 +220,8 @@ def generate_tls_certs(host="127.0.0.1"):
             "3650",
             "-subj",
             "/O=Valkey GLIDE Test/CN=Certificate Authority",
+            "-config",
+            ca_ext_file,
             "-out",
             CA_CRT,
         ],
