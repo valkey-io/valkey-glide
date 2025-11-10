@@ -28,7 +28,6 @@ EXCLUDED_API_FUNCTIONS = {
         "get_traces",
         "init_opentelemetry",
         "set_traces",
-        "get_statistics",
         # Logger
         "is_lower",
         "py_init",
