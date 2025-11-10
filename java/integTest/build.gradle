@@ -353,7 +353,8 @@ tasks.withType(Test) {
         // Filter tests to focus on specific failing cluster TLS tests only
         if (System.getProperty("focusTests") == "true") {
             filter {
-                includeTestsMatching "*ClusterTlsCertificateTest*"
+                // Run ONLY the self-signed certificate test for clearer logs
+                includeTestsMatching "*ClusterTlsCertificateTest.testClusterTlsWithSelfSignedCertificateSucceeds"
             }
         }
     }
