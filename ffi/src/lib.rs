@@ -18,10 +18,11 @@ use protobuf::Message;
 use redis::ErrorKind;
 use redis::ObjectType;
 use redis::ScanStateRC;
+use redis::cluster_routing::ResponsePolicy;
+use redis::cluster_routing::Routable;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
-use redis::cluster_routing::{ResponsePolicy, Routable};
 use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, Pipeline, PipelineRetryStrategy, RedisResult, Value};
 use std::ffi::CStr;
