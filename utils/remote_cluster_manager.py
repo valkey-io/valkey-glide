@@ -297,14 +297,11 @@ class RemoteClusterManager:
             logging.info(f"Using internal IP for binding: {internal_ip}")
             bind_ip = internal_ip
 
-        # Stop any existing cluster and clean up old TLS certificates
+        # Clean up old TLS certificates to force fresh generation
+        # Note: Cluster stopping is handled by stopAllBeforeTests Gradle task
         if tls and not (tls_cert_file or tls_key_file or tls_ca_cert_file):
-            logging.info("Stopping any existing cluster...")
-            stop_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && python3 cluster_manager_local.py stop --prefix cluster || true"
-            self._execute_remote_command(stop_cmd, timeout=30)
-            
             logging.info("Cleaning up old TLS certificates to force fresh generation...")
-            cleanup_cmd = f"rm -rf {self.remote_repo_path}/utils/tls_crts && rm -rf {self.remote_repo_path}/utils/clusters"
+            cleanup_cmd = f"rm -rf {self.remote_repo_path}/utils/tls_crts"
             self._execute_remote_command(cleanup_cmd, timeout=10)
 
         # Build cluster_manager.py command with engine-specific PATH
@@ -577,7 +574,8 @@ class RemoteClusterManager:
         """Stop cluster on remote host"""
         logging.info(f"Stopping cluster on {self.host}...")
 
-        stop_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && python3 cluster_manager.py stop --prefix cluster"
+        # Use cluster_manager_local.py if it exists (our updated version), otherwise fall back to cluster_manager.py
+        stop_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && python3 cluster_manager_local.py stop --prefix cluster || python3 cluster_manager.py stop --prefix cluster"
         returncode, stdout, stderr = self._execute_remote_command(stop_cmd)
 
         if returncode != 0:
