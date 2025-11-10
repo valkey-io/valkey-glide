@@ -82,6 +82,26 @@ public class ClusterTlsCertificateTest {
         System.out.println("\n=== TEST: testClusterTlsWithSelfSignedCertificateSucceeds ===");
 
         // Log certificate before creating client
+        // Test TCP connectivity to cluster endpoints BEFORE attempting TLS
+        System.out.println("=== PRE-TEST TCP CONNECTIVITY CHECK ===");
+        for (NodeAddress node : clusterNodes) {
+            try {
+                java.net.Socket socket = new java.net.Socket();
+                socket.connect(new java.net.InetSocketAddress(node.getHost(), node.getPort()), 5000);
+                socket.close();
+                System.out.println("✓ TCP connect OK: " + node.getHost() + ":" + node.getPort());
+            } catch (Exception e) {
+                System.out.println(
+                        "✗ TCP connect FAILED: "
+                                + node.getHost()
+                                + ":"
+                                + node.getPort()
+                                + " - "
+                                + e.getMessage());
+            }
+        }
+        System.out.println("========================================");
+
         CertificateDebugger.logCertificateInfo(
                 caCert, "Before Client Creation - Self-Signed Certificate");
 
