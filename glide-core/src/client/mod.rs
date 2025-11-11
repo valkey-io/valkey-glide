@@ -574,10 +574,6 @@ impl Client {
                 Err(err) => return Err(err),
             };
 
-            // Capture flags before moving cmd
-            let is_select = self.is_select_command(cmd);
-            let is_client_setname = self.is_client_set_name_command(cmd);
-
             let result = run_with_timeout(request_timeout, async move {
                 let expected_type = expected_type_for_cmd(cmd);
                 let value  = match client {
@@ -617,12 +613,12 @@ impl Client {
 
                 // Intercept CLIENT SETNAME commands after regular processing
                 // Only handle CLIENT SETNAME commands if they executed successfully (no error)
-                if is_client_setname {
+                if self.is_client_set_name_command(cmd) {
                     self.handle_client_set_name_command(cmd).await?;
                 }
                 // Intercept SELECT commands after regular processing
                 // Only handle SELECT commands if they executed successfully (no error)
-                if is_select {
+                if self.is_select_command(cmd) {
                     self.handle_select_command(cmd).await?;
                 }
             Ok(value)

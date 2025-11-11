@@ -20,6 +20,7 @@ use futures_util::{
     sink::Sink,
     stream::{self, Stream, StreamExt, TryStreamExt as _},
 };
+use logger_core::log_error;
 use pin_project_lite::pin_project;
 use std::collections::VecDeque;
 use std::fmt;
@@ -31,7 +32,6 @@ use std::task::{self, Poll};
 use std::time::Duration;
 #[cfg(feature = "tokio-comp")]
 use tokio_util::codec::Decoder;
-use tracing::error;
 
 // Default connection timeout in ms
 const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(2000);
@@ -308,7 +308,6 @@ where
         stored_result: RedisResult<Value>,
         response_sync_lost: &mut bool,
     ) {
-        println!("in second");
         // Verify we got PONG
         let is_pong = matches!(
             &pong_result,
@@ -316,14 +315,13 @@ where
         );
 
         if !is_pong {
-            println!("in not pong");
             // Set the flag - all future commands will fail
             *response_sync_lost = true;
 
-            error!(
-                response = ?pong_result,
-                "CRITICAL: Expected PONG for fenced command but got unexpected response. \
-                Response synchronization lost. All commands will fail until reconnection."
+            log_error(
+                "Fenced command",
+                "CRITICAL: Expected PONG for fenced command but got unexpected response.
+                Response synchronization lost. All commands will fail until reconnection.",
             );
 
             // Fail the current command
@@ -382,6 +380,15 @@ where
         let self_ = self.as_mut().project();
 
         if let Some(err) = self_.error.take() {
+            let _ = output.send(Err(err));
+            return Err(());
+        }
+
+        if *self_.response_sync_lost {
+            let err = RedisError::from((
+                crate::ErrorKind::ProtocolDesync,
+                "Response synchronization lost - connection must be reestablished",
+            ));
             let _ = output.send(Err(err));
             return Err(());
         }
