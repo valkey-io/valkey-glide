@@ -31,7 +31,7 @@ use std::task::{self, Poll};
 use std::time::Duration;
 #[cfg(feature = "tokio-comp")]
 use tokio_util::codec::Decoder;
-use tracing::warn;
+use tracing::error;
 
 // Default connection timeout in ms
 const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(2000);
@@ -111,6 +111,7 @@ pin_project! {
         push_manager: Arc<ArcSwap<PushManager>>,
         disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
         is_stream_closed: Arc<AtomicBool>,
+        response_sync_lost: bool,
     }
 }
 
@@ -134,6 +135,7 @@ where
             push_manager,
             disconnect_notifier,
             is_stream_closed,
+            response_sync_lost: false,
         }
     }
 
@@ -160,13 +162,24 @@ where
 
     fn send_result(self: Pin<&mut Self>, result: RedisResult<Value>) {
         let self_ = self.project();
-        let mut skip_value = false;
+
+        // If response synchronization is lost, fail all requests
+        if *self_.response_sync_lost {
+            if let Some(entry) = self_.in_flight.pop_front() {
+                let err = RedisError::from((
+                    crate::ErrorKind::ProtocolDesync,
+                    "Response synchronization lost - connection must be reestablished",
+                ));
+                entry.output.send(Err(err)).ok();
+            }
+            return;
+        }
+
         if let Ok(res) = &result {
             if let Value::Push { kind, data: _data } = res {
                 self_.push_manager.load().try_send_raw(res);
                 if !kind.has_reply() {
-                    // If it's not true then push kind is converted to reply of a command
-                    skip_value = true;
+                    return;
                 }
             }
         }
@@ -176,14 +189,9 @@ where
             None => return,
         };
 
-        if skip_value {
-            self_.in_flight.push_front(entry);
-            return;
-        }
-
         // Handle fenced commands
         if entry.is_fenced {
-            Self::handle_fenced_command(entry, result, self_.in_flight);
+            Self::handle_fenced_command(entry, result, self_.in_flight, self_.response_sync_lost);
             return;
         }
 
@@ -252,10 +260,11 @@ where
         mut entry: InFlight,
         result: RedisResult<Value>,
         in_flight: &mut VecDeque<InFlight>,
+        response_sync_lost: &mut bool,
     ) {
         // Check if we already have a stored result (this is the second response - PONG)
         if let Some(stored_result) = entry.fenced_result.take() {
-            Self::handle_fenced_second_response(entry, result, stored_result);
+            Self::handle_fenced_second_response(entry, result, stored_result, response_sync_lost);
         } else {
             // This is the first response from the fenced command
             Self::handle_fenced_first_response(entry, result, in_flight);
@@ -297,15 +306,39 @@ where
         entry: InFlight,
         pong_result: RedisResult<Value>,
         stored_result: RedisResult<Value>,
+        response_sync_lost: &mut bool,
     ) {
-        if !matches!(&pong_result, Ok(Value::SimpleString(s)) if s == "PONG") {
-            warn!(
-                "Fenced command: Expected PONG but got {:?}. Returning stored result anyway.",
-                pong_result
+        println!("in second");
+        // Verify we got PONG
+        let is_pong = matches!(
+            &pong_result,
+            Ok(Value::SimpleString(s)) if s == "PONG"
+        );
+
+        if !is_pong {
+            println!("in not pong");
+            // Set the flag - all future commands will fail
+            *response_sync_lost = true;
+
+            error!(
+                response = ?pong_result,
+                "CRITICAL: Expected PONG for fenced command but got unexpected response. \
+                Response synchronization lost. All commands will fail until reconnection."
             );
+
+            // Fail the current command
+            let err = RedisError::from((
+                crate::ErrorKind::ProtocolDesync,
+                "Expected PONG for fenced command but received different response",
+                format!("Response synchronization lost. Got: {:?}", pong_result),
+            ));
+            entry.output.send(Err(err)).ok();
+            return;
         }
 
-        entry.output.send(stored_result).ok();
+        // ✅ Got PONG as expected, return the stored result
+        let final_result = stored_result.and_then(|v| v.extract_error());
+        entry.output.send(final_result).ok();
     }
 }
 

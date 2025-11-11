@@ -322,13 +322,13 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClientUsageError> {
 }
 
 async fn send_command(
-    cmd: Cmd,
+    mut cmd: Cmd,
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
     let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let res = client
-        .send_command(&cmd, routing)
+        .send_command(&mut cmd, routing)
         .await
         .map_err(|err| err.into());
 

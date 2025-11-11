@@ -156,6 +156,10 @@ pub enum ErrorKind {
     /// Used when an error occurs on when user perform wrong usage of management operation.
     /// E.g. not allowed configuration change.
     UserOperationError,
+
+    /// Response synchronization lost between commands and responses.
+    /// The connection protocol is broken and must be reestablished.
+    ProtocolDesync,
 }
 
 #[derive(PartialEq, Debug, Clone, Display, Copy)]
@@ -954,6 +958,7 @@ impl RedisError {
             ErrorKind::ParseError => "parse error",
             ErrorKind::NotAllSlotsCovered => "not all slots are covered",
             ErrorKind::UserOperationError => "Wrong usage of management operation",
+            ErrorKind::ProtocolDesync => "Response processing has goten out of sync",
         }
     }
 
@@ -1158,6 +1163,7 @@ impl RedisError {
             ErrorKind::FatalReceiveError => RetryMethod::Reconnect,
             ErrorKind::FatalSendError => RetryMethod::ReconnectAndRetry,
             ErrorKind::UserOperationError => RetryMethod::NoRetry,
+            ErrorKind::ProtocolDesync => RetryMethod::NoRetry,
         }
     }
 }

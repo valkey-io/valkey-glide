@@ -802,11 +802,18 @@ impl TestClusterContext {
     pub async fn delete_specific_slot(
         &self,
         slot_to_delete: u16,
-        slot_distribution: Vec<(String, String, String, Vec<Vec<u16>>)>,
+        slot_distribution: Option<Vec<(String, String, String, Vec<Vec<u16>>)>>,
     ) -> RoutingInfo {
         let mut cluster_conn = self.async_connection(None).await;
-        // Use a reference to the slot distribution so we don't have to clone it.
-        let distribution = &slot_distribution;
+
+        // Get or discover slot distribution
+        let distribution = match slot_distribution {
+            Some(dist) => dist,
+            None => {
+                let cluster_nodes = self.get_cluster_nodes().await;
+                self.get_slots_ranges_distribution(&cluster_nodes)
+            }
+        };
 
         // Find the node currently responsible for the slot.
         let current_node = distribution

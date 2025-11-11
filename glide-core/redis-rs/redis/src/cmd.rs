@@ -681,6 +681,18 @@ pub fn cmd(name: &str) -> Cmd {
     rv
 }
 
+/// Shortcut function to creating a fenced command with a single argument.
+///
+/// /// ```rust
+/// redis::fenced_cmd("PING");
+/// ```
+pub fn fenced_cmd(name: &str) -> Cmd {
+    let mut rv = Cmd::new();
+    rv.arg(name);
+    rv.is_fenced = true;
+    rv
+}
+
 /// Packs a bunch of commands into a request.  This is generally a quite
 /// useless function as this functionality is nicely wrapped through the
 /// `Cmd` object, but in some cases it can be useful.  The return value
