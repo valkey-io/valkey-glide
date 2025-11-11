@@ -1475,7 +1475,7 @@ class ClusterCommands(CoreCommands):
             script.get_hash(), keys=None, args=args, route=route
         )
 
-    async def ssubscribe(self, channels: List[TEncodable]) -> TOK:
+    async def ssubscribe(self, channels: set[str]) -> TOK:
         """
         Subscribe to sharded channels (cluster mode only).
 
@@ -1487,15 +1487,15 @@ class ClusterCommands(CoreCommands):
             subscriptions on the server.
 
         Args:
-            channels: A list of sharded channel names to subscribe to.
+            channels: A set of sharded channel names to subscribe to.
 
         Returns:
             TOK: A simple "OK" response.
 
         Examples:
-            >>> await client.ssubscribe(["shard_channel"])
+            >>> await client.ssubscribe({"shard_channel"})
                 "OK"
-            >>> await client.ssubscribe([b"shard1", b"shard2"])
+            >>> await client.ssubscribe({b"shard1", b"shard2"})
                 "OK"
 
         Since: Valkey 7.0.0.
@@ -1505,7 +1505,7 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.SSubscribe, channels),
         )
 
-    async def sunsubscribe(self, channels: Optional[List[TEncodable]] = None) -> TOK:
+    async def sunsubscribe(self, channels: Optional[set[str]] = None) -> TOK:
         """
         Unsubscribe from sharded channels.
 
@@ -1517,14 +1517,14 @@ class ClusterCommands(CoreCommands):
             subscriptions on the server.
 
         Args:
-            channels: A list of sharded channel names to unsubscribe from.
+            channels: A set of sharded channel names to unsubscribe from.
                     If None, unsubscribes from all sharded channels.
 
         Returns:
             TOK: A simple "OK" response.
 
         Examples:
-            >>> await client.sunsubscribe(["shard_channel"])
+            >>> await client.sunsubscribe({"shard_channel"})
                 "OK"
             >>> await client.sunsubscribe()  # Unsubscribe from all sharded channels
                 "OK"

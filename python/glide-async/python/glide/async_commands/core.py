@@ -7817,7 +7817,7 @@ class CoreCommands(Protocol):
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)
 
-    async def subscribe(self, channels: List[TEncodable]) -> TOK:
+    async def subscribe(self, channels: set[str]) -> TOK:
         """
         Subscribe to exact channels.
 
@@ -7829,15 +7829,15 @@ class CoreCommands(Protocol):
             subscriptions on the server.
 
         Args:
-            channels: A list of channel names to subscribe to.
+            channels: A set of channel names to subscribe to.
 
         Returns:
             TOK: A simple "OK" response.
 
         Examples:
-            >>> await client.subscribe(["channel1"])
+            >>> await client.subscribe({"channel1"})
                 "OK"
-            >>> await client.subscribe(["channel1", "channel2"])
+            >>> await client.subscribe({"channel1", "channel2"})
                 "OK"
         """
         return cast(
@@ -7845,7 +7845,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.Subscribe, channels),
         )
 
-    async def psubscribe(self, patterns: List[TEncodable]) -> TOK:
+    async def psubscribe(self, patterns: set[str]) -> TOK:
         """
         Subscribe to channel patterns.
 
@@ -7857,15 +7857,15 @@ class CoreCommands(Protocol):
             subscriptions on the server.
 
         Args:
-            patterns: A list of patterns to subscribe to (e.g., ["news.*"]).
+            patterns: A set of patterns to subscribe to (e.g., {"news.*"}).
 
         Returns:
             TOK: A simple "OK" response.
 
         Examples:
-            >>> await client.psubscribe(["news.*"])
+            >>> await client.psubscribe({"news.*"})
                 "OK"
-            >>> await client.psubscribe([b"news.*", b"updates.*"])
+            >>> await client.psubscribe({"news.*", "updates.*"})
                 "OK"
         """
         return cast(
@@ -7873,7 +7873,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.PSubscribe, patterns),
         )
 
-    async def unsubscribe(self, channels: Optional[List[TEncodable]] = None) -> TOK:
+    async def unsubscribe(self, channels: Optional[set[str]] = None) -> TOK:
         """
         Unsubscribe from exact channels.
 
@@ -7885,14 +7885,14 @@ class CoreCommands(Protocol):
             subscriptions on the server.
 
         Args:
-            channels: A list of channel names to unsubscribe from.
+            channels: A set of channel names to unsubscribe from.
                     If None, unsubscribes from all exact channels.
 
         Returns:
             TOK: A simple "OK" response.
 
         Examples:
-            >>> await client.unsubscribe(["channel1"])
+            >>> await client.unsubscribe({"channel1"})
                 "OK"
             >>> await client.unsubscribe()  # Unsubscribe from all exact channels
                 "OK"
@@ -7904,7 +7904,7 @@ class CoreCommands(Protocol):
             ),
         )
 
-    async def punsubscribe(self, patterns: Optional[List[TEncodable]] = None) -> TOK:
+    async def punsubscribe(self, patterns: Optional[set[str]] = None) -> TOK:
         """
         Unsubscribe from channel patterns.
 
@@ -7916,14 +7916,14 @@ class CoreCommands(Protocol):
             subscriptions on the server.
 
         Args:
-            patterns: A list of patterns to unsubscribe from.
+            patterns: A set of patterns to unsubscribe from.
                     If None, unsubscribes from all patterns.
 
         Returns:
             TOK: A simple "OK" response.
 
         Examples:
-            >>> await client.punsubscribe([b"news.*"])
+            >>> await client.punsubscribe({"news.*"})
                 "OK"
             >>> await client.punsubscribe()  # Unsubscribe from all patterns
                 "OK"

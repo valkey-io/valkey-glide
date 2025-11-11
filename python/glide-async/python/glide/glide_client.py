@@ -31,7 +31,12 @@ from glide.glide import (
 )
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import PubSubMsg
-from glide_shared.config import BaseClientConfiguration, ServerCredentials
+from glide_shared.config import (
+    BaseClientConfiguration,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+    ServerCredentials,
+)
 from glide_shared.constants import (
     DEFAULT_READ_BYTES_SIZE,
     OK,
@@ -576,47 +581,6 @@ class BaseClient(CoreCommands):
             self._pubsub_lock.release()
         return msg
 
-    async def get_active_subscriptions(
-        self,
-    ) -> Dict[str, Set[str]]:
-        """
-        Retrieves the current active subscriptions as tracked by the client.
-
-        This reflects the client's view of what it is currently subscribed to on the server.
-        The client continuously synchronizes its desired subscription state with the server,
-        and this method returns the current server-side state as tracked by the client.
-
-        Returns:
-            Dict[str, Set[str]]: A dictionary mapping subscription types to channel names:
-                - "channels": Set of exact channel names
-                - "patterns": Set of channel patterns
-                - "sharded_channels": Set of sharded channel names (cluster mode only)
-
-        Examples:
-            >>> # Check all active subscriptions
-            >>> active = await client.get_active_subscriptions()
-            >>> print(f"Channels: {active.get('channels', set())}")
-            >>> print(f"Patterns: {active.get('patterns', set())}")
-            >>>
-            >>> # Check if subscribed to specific channel
-            >>> if "channel1" in active.get("channels", set()):
-            >>>     print("Subscribed to channel1")
-            >>>
-            >>> # Health check: verify expected subscriptions
-            >>> expected = {"channel1", "channel2"}
-            >>> actual = active.get("channels", set())
-            >>> if not expected.issubset(actual):
-            >>>     missing = expected - actual
-            >>>     print(f"Warning: Missing subscriptions: {missing}")
-            >>>
-            >>> # Check total count
-            >>> total = sum(len(s) for s in active.values())
-            >>> print(f"Total active subscriptions: {total}")
-        """
-        raise NotImplementedError(
-            "get_active_subscriptions will be implemented in a future PR"
-        )
-
     def _cancel_pubsub_futures_with_exception_safe(self, exception: ConnectionError):
         while len(self._pubsub_futures):
             next_future = self._pubsub_futures.pop(0)
@@ -850,6 +814,50 @@ class GlideClusterClient(BaseClient, ClusterCommands):
         return self.config._create_a_protobuf_conn_request(cluster_mode=True)
 
 
+    async def get_active_subscriptions(
+        self,
+    ) -> Tuple[
+        Dict[GlideClusterClientConfiguration.PubSubChannelModes, Set[str]],
+        Dict[GlideClusterClientConfiguration.PubSubChannelModes, Set[str]],
+    ]:
+        """
+        Retrieves both the desired and current subscription states as tracked by the client.
+
+        This allows verification of synchronization between what the client intends to be
+        subscribed to (desired) and what it is actually subscribed to (current).
+
+        Returns:
+            Two dictionaries with the same structure as PubSubSubscriptions.channels_and_patterns:
+                - desired_subscriptions: Dict[PubSubChannelModes, Set[str]]
+                - current_subscriptions: Dict[PubSubChannelModes, Set[str]]
+
+        Examples:
+            >>> from glide import GlideClusterClientConfiguration
+            >>> PubSubChannelModes = GlideClusterClientConfiguration.PubSubChannelModes
+            >>>
+            >>> # Get both subscription states
+            >>> desired, current = await client.get_active_subscriptions()
+            >>>
+            >>> # Check if subscribed to specific channel
+            >>> if "channel1" in current.get(PubSubChannelModes.Exact, set()):
+            >>>     print("Subscribed to channel1")
+            >>>
+            >>> # Direct comparison with config
+            >>> if client.config.pubsub_subscriptions.channels_and_patterns == desired:
+            >>>     print("Config matches desired state")
+            >>>
+            >>> # Check if synchronized
+            >>> if desired == current:
+            >>>     print("Subscriptions are synchronized")
+            >>>
+            >>> # Find missing subscriptions
+            >>> missing = desired.get(PubSubChannelModes.Exact, set()) - current.get(PubSubChannelModes.Exact, set())
+            >>> if missing:
+            >>>     print(f"Not yet subscribed to: {missing}")
+        """
+        pass
+
+
 class GlideClient(BaseClient, StandaloneCommands):
     """
     Client used for connection to standalone servers.
@@ -857,6 +865,49 @@ class GlideClient(BaseClient, StandaloneCommands):
     For full documentation, see
     [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#standalone)
     """
+
+    async def get_active_subscriptions(
+        self,
+    ) -> Tuple[
+        Dict[GlideClientConfiguration.PubSubChannelModes, Set[str]],
+        Dict[GlideClientConfiguration.PubSubChannelModes, Set[str]],
+    ]:
+        """
+        Retrieves both the desired and current subscription states as tracked by the client.
+
+        This allows verification of synchronization between what the client intends to be
+        subscribed to (desired) and what it is actually subscribed to (current).
+
+        Returns:
+            Two dictionaries with the same structure as PubSubSubscriptions.channels_and_patterns:
+                - desired_subscriptions: Dict[PubSubChannelModes, Set[str]]
+                - current_subscriptions: Dict[PubSubChannelModes, Set[str]]
+
+        Examples:
+            >>> from glide import GlideClientConfiguration
+            >>> PubSubChannelModes = GlideClientConfiguration.PubSubChannelModes
+            >>>
+            >>> # Get both subscription states
+            >>> desired, current = await client.get_active_subscriptions()
+            >>>
+            >>> # Check if subscribed to specific channel
+            >>> if "channel1" in current.get(PubSubChannelModes.Exact, set()):
+            >>>     print("Subscribed to channel1")
+            >>>
+            >>> # Direct comparison with config
+            >>> if client.config.pubsub_subscriptions.channels_and_patterns == desired:
+            >>>     print("Config matches desired state")
+            >>>
+            >>> # Check if synchronized
+            >>> if desired == current:
+            >>>     print("Subscriptions are synchronized")
+            >>>
+            >>> # Find missing subscriptions
+            >>> missing = desired.get(PubSubChannelModes.Exact, set()) - current.get(PubSubChannelModes.Exact, set())
+            >>> if missing:
+            >>>     print(f"Not yet subscribed to: {missing}")
+        """
+        pass
 
 
 TGlideClient = Union[GlideClient, GlideClusterClient]
