@@ -24,6 +24,21 @@ class PubSubMsg:
     pattern: Optional[TEncodable]
 
 
+class SubscriptionStatus(Enum):
+    """
+    Represents the status of a subscription operation.
+    """
+
+    OK = "OK"
+    """The subscription was successfully updated in desired state and applied on the server."""
+
+    PENDING = "PENDING"
+    """The subscription was updated in desired state but not yet applied on the server."""
+
+    FAILED = "FAILED"
+    """Failed to update the desired state."""
+
+
 class ConditionalChange(Enum):
     """
     A condition to the `SET`, `ZADD` and `GEOADD` commands.

@@ -34,7 +34,7 @@ EXCLUDED_API_FUNCTIONS = {
         "py_init",
         "py_log",
         # PubSub
-        "get_active_subscriptions",
+        "get_subscriptions",
         "subscribe",
         "unsubscribe",
         "psubscribe",

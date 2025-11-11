@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Union, cast
+from typing import Dict, List, Mapping, Optional, Set, Union, cast
 
 from glide.glide import ClusterScanCursor, Script
 from glide_shared.commands.batch import ClusterBatch
@@ -12,6 +12,7 @@ from glide_shared.commands.core_options import (
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
+    SubscriptionStatus,
 )
 from glide_shared.constants import (
     TOK,
@@ -1475,65 +1476,75 @@ class ClusterCommands(CoreCommands):
             script.get_hash(), keys=None, args=args, route=route
         )
 
-    async def ssubscribe(self, channels: set[str]) -> TOK:
+    async def ssubscribe(self, channels: Set[str]) -> SubscriptionStatus:
         """
         Subscribe to sharded channels (cluster mode only).
 
         Note:
-            This command returns "OK" immediately upon updating the client's internal desired
-            subscription state. It does not wait for server confirmation that the subscription
-            was successful. To verify the actual server-side subscription state, use
-            `get_active_subscriptions()`, which returns the client's view of the current active
-            subscriptions on the server.
+            This command updates the client's internal desired subscription state and returns
+            a status indicating whether the change has been applied on the server:
+            - SubscriptionStatus.OK: Successfully applied on the server
+            - SubscriptionStatus.PENDING: Updated the desired state locally but not yet applied on the server
+            - SubscriptionStatus.FAILED: Failed to update the desired state
+
+            Use `get_subscriptions()` to verify the actual server-side subscription state as well as the internal desired state.
 
         Args:
             channels: A set of sharded channel names to subscribe to.
 
         Returns:
-            TOK: A simple "OK" response.
+            SubscriptionStatus: The status of the subscription operation.
 
         Examples:
-            >>> await client.ssubscribe({"shard_channel"})
-                "OK"
-            >>> await client.ssubscribe({b"shard1", b"shard2"})
-                "OK"
+            >>> status = await client.ssubscribe({"shard_channel"})
+            >>> if status == SubscriptionStatus.OK:
+            >>>     print("Subscribed to sharded channel successfully")
+            >>>
+            >>> # Multiple sharded channels
+            >>> await client.ssubscribe({"shard1", "shard2"})
 
         Since: Valkey 7.0.0.
         """
         return cast(
-            TOK,
-            await self._execute_command(RequestType.SSubscribe, channels),
+            SubscriptionStatus,
+            await self._execute_command(RequestType.SSubscribe, list(channels)),
         )
 
-    async def sunsubscribe(self, channels: Optional[set[str]] = None) -> TOK:
+    async def sunsubscribe(
+        self, channels: Optional[Set[str]] = None
+    ) -> SubscriptionStatus:
         """
         Unsubscribe from sharded channels.
 
         Note:
-            This command returns "OK" immediately upon updating the client's internal desired
-            subscription state. It does not wait for server confirmation that the unsubscription
-            was successful. To verify the actual server-side subscription state, use
-            `get_active_subscriptions()`, which returns the client's view of the current active
-            subscriptions on the server.
+            This command updates the client's internal desired subscription state and returns
+            a status indicating whether the change has been applied on the server:
+            - SubscriptionStatus.OK: Successfully applied on the server
+            - SubscriptionStatus.PENDING: Updated the desired state locally but not yet applied on the server
+            - SubscriptionStatus.FAILED: Failed to update the desired state
+
+            Use `get_subscriptions()` to verify the actual server-side subscription state as well as the internal desired state.
 
         Args:
             channels: A set of sharded channel names to unsubscribe from.
                     If None, unsubscribes from all sharded channels.
 
         Returns:
-            TOK: A simple "OK" response.
+            SubscriptionStatus: The status of the subscription operation.
 
         Examples:
-            >>> await client.sunsubscribe({"shard_channel"})
-                "OK"
-            >>> await client.sunsubscribe()  # Unsubscribe from all sharded channels
-                "OK"
+            >>> status = await client.sunsubscribe({"shard_channel"})
+            >>> if status == SubscriptionStatus.PENDING:
+            >>>     print("Unsubscription pending")
+            >>>
+            >>> # Unsubscribe from all sharded channels
+            >>> await client.sunsubscribe()
 
         Since: Valkey 7.0.0.
         """
         return cast(
-            TOK,
+            SubscriptionStatus,
             await self._execute_command(
-                RequestType.SUnsubscribe, channels if channels else []
+                RequestType.SUnsubscribe, list(channels) if channels else []
             ),
         )

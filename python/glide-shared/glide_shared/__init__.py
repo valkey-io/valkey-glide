@@ -38,6 +38,7 @@ from .commands.core_options import (
     InsertPosition,
     OnlyIfEqual,
     PubSubMsg,
+    SubscriptionStatus,
     UpdateOptions,
 )
 from .commands.server_modules import json_batch
@@ -274,6 +275,7 @@ __all__ = [
     "UpdateOptions",
     # PubSub
     "PubSubMsg",
+    "SubscriptionStatus",
     # Json
     "json_batch",
     "JsonGetOptions",

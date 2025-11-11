@@ -20,6 +20,7 @@ from glide_shared.commands.core_options import (
     InsertPosition,
     OnlyIfEqual,
     PubSubMsg,
+    SubscriptionStatus,
     UpdateOptions,
     _build_sort_args,
 )
@@ -7817,120 +7818,142 @@ class CoreCommands(Protocol):
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)
 
-    async def subscribe(self, channels: set[str]) -> TOK:
+    async def subscribe(self, channels: Set[str]) -> SubscriptionStatus:
         """
         Subscribe to exact channels.
 
         Note:
-            This command returns "OK" immediately upon updating the client's internal desired
-            subscription state. It does not wait for server confirmation that the subscription
-            was successful. To verify the actual server-side subscription state, use
-            `get_active_subscriptions()`, which returns the client's view of the current active
-            subscriptions on the server.
+            This command updates the client's internal desired subscription state and returns
+            a status indicating whether the change has been applied on the server:
+            - SubscriptionStatus.OK: Successfully applied on the server
+            - SubscriptionStatus.PENDING: Updated the desired state locally but not yet applied on the server
+            - SubscriptionStatus.FAILED: Failed to update the desired state
+
+            Use `get_subscriptions()` to verify the actual server-side subscription state as well as the internal desired state.
 
         Args:
             channels: A set of channel names to subscribe to.
 
         Returns:
-            TOK: A simple "OK" response.
+            SubscriptionStatus: The status of the subscription operation.
 
         Examples:
-            >>> await client.subscribe({"channel1"})
-                "OK"
-            >>> await client.subscribe({"channel1", "channel2"})
-                "OK"
+            >>> status = await client.subscribe({"channel1"})
+            >>> if status == SubscriptionStatus.OK:
+            >>>     print("Subscribed successfully")
+            >>> elif status == SubscriptionStatus.PENDING:
+            >>>     print("Subscription pending, waiting for server confirmation")
+            >>>
+            >>> # Multiple channels
+            >>> status = await client.subscribe({"channel1", "channel2"})
         """
         return cast(
-            TOK,
-            await self._execute_command(RequestType.Subscribe, channels),
+            SubscriptionStatus,
+            await self._execute_command(RequestType.Subscribe, list(channels)),
         )
 
-    async def psubscribe(self, patterns: set[str]) -> TOK:
+    async def psubscribe(self, patterns: Set[str]) -> SubscriptionStatus:
         """
         Subscribe to channel patterns.
 
         Note:
-            This command returns "OK" immediately upon updating the client's internal desired
-            subscription state. It does not wait for server confirmation that the subscription
-            was successful. To verify the actual server-side subscription state, use
-            `get_active_subscriptions()`, which returns the client's view of the current active
-            subscriptions on the server.
+            This command updates the client's internal desired subscription state and returns
+            a status indicating whether the change has been applied on the server:
+            - SubscriptionStatus.OK: Successfully applied on the server
+            - SubscriptionStatus.PENDING: Updated the desired state locally but not yet applied on the server
+            - SubscriptionStatus.FAILED: Failed to update the desired state
+
+            Use `get_subscriptions()` to verify the actual server-side subscription state as well as the internal desired state.
 
         Args:
             patterns: A set of patterns to subscribe to (e.g., {"news.*"}).
 
         Returns:
-            TOK: A simple "OK" response.
+            SubscriptionStatus: The status of the subscription operation.
 
         Examples:
-            >>> await client.psubscribe({"news.*"})
-                "OK"
+            >>> status = await client.psubscribe({"news.*"})
+            >>> if status == SubscriptionStatus.OK:
+            >>>     print("Subscribed to pattern successfully")
+            >>>
+            >>> # Multiple patterns
             >>> await client.psubscribe({"news.*", "updates.*"})
-                "OK"
         """
         return cast(
-            TOK,
-            await self._execute_command(RequestType.PSubscribe, patterns),
+            SubscriptionStatus,
+            await self._execute_command(RequestType.PSubscribe, list(patterns)),
         )
 
-    async def unsubscribe(self, channels: Optional[set[str]] = None) -> TOK:
+    async def unsubscribe(
+        self, channels: Optional[Set[str]] = None
+    ) -> SubscriptionStatus:
         """
         Unsubscribe from exact channels.
 
         Note:
-            This command returns "OK" immediately upon updating the client's internal desired
-            subscription state. It does not wait for server confirmation that the unsubscription
-            was successful. To verify the actual server-side subscription state, use
-            `get_active_subscriptions()`, which returns the client's view of the current active
-            subscriptions on the server.
+            This command updates the client's internal desired subscription state and returns
+            a status indicating whether the change has been applied on the server:
+            - SubscriptionStatus.OK: Successfully applied on the server
+            - SubscriptionStatus.PENDING: Updated the desired state locally but not yet applied on the server
+            - SubscriptionStatus.FAILED: Failed to update the desired state
+
+            Use `get_subscriptions()` to verify the actual server-side subscription state as well as the internal desired state.
 
         Args:
             channels: A set of channel names to unsubscribe from.
                     If None, unsubscribes from all exact channels.
 
         Returns:
-            TOK: A simple "OK" response.
+            SubscriptionStatus: The status of the subscription operation.
 
         Examples:
-            >>> await client.unsubscribe({"channel1"})
-                "OK"
-            >>> await client.unsubscribe()  # Unsubscribe from all exact channels
-                "OK"
+            >>> status = await client.unsubscribe({"channel1"})
+            >>> if status == SubscriptionStatus.PENDING:
+            >>>     print("Unsubscription pending")
+            >>>
+            >>> # Unsubscribe from all exact channels
+            >>> await client.unsubscribe()
         """
         return cast(
-            TOK,
+            SubscriptionStatus,
             await self._execute_command(
-                RequestType.Unsubscribe, channels if channels else []
+                RequestType.Unsubscribe, list(channels) if channels else []
             ),
         )
 
-    async def punsubscribe(self, patterns: Optional[set[str]] = None) -> TOK:
+    async def punsubscribe(
+        self, patterns: Optional[Set[str]] = None
+    ) -> SubscriptionStatus:
         """
         Unsubscribe from channel patterns.
 
         Note:
-            This command returns "OK" immediately upon updating the client's internal desired
-            subscription state. It does not wait for server confirmation that the unsubscription
-            was successful. To verify the actual server-side subscription state, use
-            `get_active_subscriptions()`, which returns the client's view of the current active
-            subscriptions on the server.
+            This command updates the client's internal desired subscription state and returns
+            a status indicating whether the change has been applied on the server:
+            - SubscriptionStatus.OK: Successfully applied on the server
+            - SubscriptionStatus.PENDING: Updated the desired state locally but not yet applied on the server
+            - SubscriptionStatus.FAILED: Failed to update the desired state
+
+            Use `get_subscriptions()` to verify the actual server-side subscription state as well as the internal desired state.
 
         Args:
             patterns: A set of patterns to unsubscribe from.
                     If None, unsubscribes from all patterns.
 
         Returns:
-            TOK: A simple "OK" response.
+            SubscriptionStatus: The status of the subscription operation.
 
         Examples:
-            >>> await client.punsubscribe({"news.*"})
-                "OK"
-            >>> await client.punsubscribe()  # Unsubscribe from all patterns
-                "OK"
+            >>> status = await client.punsubscribe({"news.*"})
+            >>> if status != SubscriptionStatus.FAILED:
+            >>>     print("Unsubscribe request accepted")
+            >>>
+            >>> # Unsubscribe from all patterns
+            >>> await client.punsubscribe()
         """
         return cast(
-            TOK,
+            SubscriptionStatus,
             await self._execute_command(
-                RequestType.PUnsubscribe, patterns if patterns else []
+                RequestType.PUnsubscribe, list(patterns) if patterns else []
             ),
         )

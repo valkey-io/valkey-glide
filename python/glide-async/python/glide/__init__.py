@@ -130,6 +130,7 @@ from glide_shared import (
     StreamReadGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
+    SubscriptionStatus,
     TagField,
     TBatch,
     TClusterResponse,
@@ -328,6 +329,7 @@ __all__ = [
     "ClusterScanCursor",
     # PubSub
     "PubSubMsg",
+    "SubscriptionStatus",
     # Json
     "glide_json",
     "json_batch",
