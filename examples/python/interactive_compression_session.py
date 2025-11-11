@@ -10,7 +10,7 @@ synchronously in an interactive session.
 """
 
 import asyncio
-import valkey
+import valkey  # type: ignore[import-not-found]
 from glide import (
     GlideClient,
     GlideClientConfiguration,
