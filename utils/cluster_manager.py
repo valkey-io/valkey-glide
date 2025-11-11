@@ -157,6 +157,13 @@ def generate_tls_certs(host="127.0.0.1"):
     ca_serial = f"{TLS_FOLDER}/ca.txt"
     ext_file = f"{TLS_FOLDER}/openssl.cnf"
 
+    # Create extensions file for both CA and server certs
+    ca_ext_file = f"{TLS_FOLDER}/ca_ext.cnf"
+    with open(ca_ext_file, "w") as f:
+        f.write("[v3_ca]\n")
+        f.write("basicConstraints = critical,CA:TRUE\n")
+        f.write("keyUsage = critical,keyCertSign,cRLSign\n")
+    
     # Create server cert config file with SAN
     f = open(ext_file, "w")
     # Include both localhost and the actual host IP in certificate
@@ -193,7 +200,7 @@ def generate_tls_certs(host="127.0.0.1"):
     # Build server key
     make_key(SERVER_KEY, 2048)
 
-    # Build CA Cert with proper extensions using -addext
+    # Build CA Cert with proper extensions using -extfile (compatible with older OpenSSL)
     p = subprocess.Popen(
         [
             "openssl",
@@ -208,10 +215,10 @@ def generate_tls_certs(host="127.0.0.1"):
             "3650",
             "-subj",
             "/O=Valkey GLIDE Test/CN=Certificate Authority",
-            "-addext",
-            "basicConstraints=critical,CA:TRUE",
-            "-addext",
-            "keyUsage=critical,keyCertSign,cRLSign",
+            "-extensions",
+            "v3_ca",
+            "-extfile",
+            ca_ext_file,
             "-out",
             CA_CRT,
         ],
