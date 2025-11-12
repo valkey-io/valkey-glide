@@ -9298,8 +9298,10 @@ export class BaseClient {
         ) => TConnection,
     ): Promise<TConnection> {
         const connection = constructor(connectedSocket, options);
+        const connectStart = Date.now();
         await connection.connectToServer(options);
-        Logger.log("info", "Client lifetime", "connected to server");
+        const connectTime = Date.now() - connectStart;
+        Logger.log("info", "Client lifetime", `connected to server in ${connectTime}ms`);
         return connection;
     }
 
@@ -9326,15 +9328,22 @@ export class BaseClient {
             options?: BaseClientConfiguration,
         ) => TConnection,
     ): Promise<TConnection> {
+        const overallStart = Date.now();
         const path = await StartSocketConnection();
+        const socketStart = Date.now();
         const socket = await this.GetSocket(path);
+        const socketTime = Date.now() - socketStart;
+        Logger.log("info", "Client lifetime", `socket connection established in ${socketTime}ms`);
 
         try {
-            return await this.__createClientInternal<TConnection>(
+            const client = await this.__createClientInternal<TConnection>(
                 options,
                 socket,
                 constructor,
             );
+            const totalTime = Date.now() - overallStart;
+            Logger.log("info", "Client lifetime", `total client creation time: ${totalTime}ms`);
+            return client;
         } catch (err) {
             // Ensure socket is closed
             socket.end();
