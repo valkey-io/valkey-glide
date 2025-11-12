@@ -692,7 +692,7 @@ pub fn get_statistics(env: Env) -> Result<JsObject> {
     let total_bytes_compressed = Telemetry::total_bytes_compressed().to_string();
     let total_bytes_decompressed = Telemetry::total_bytes_decompressed().to_string();
     let compression_skipped_count = Telemetry::compression_skipped_count().to_string();
-    
+
     let mut stats: JsObject = env.create_object()?;
     stats.set_named_property("total_connections", total_connections)?;
     stats.set_named_property("total_clients", total_clients)?;
