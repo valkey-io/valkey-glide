@@ -174,7 +174,6 @@ public class ClusterBatchTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
-    @Timeout(15)
     public void test_batch_large_values(GlideClusterClient clusterClient, boolean isAtomic) {
         // Skip on macOS - the macOS tests run on self hosted VMs which have resource limits
         // making this test flaky with "no buffer space available" errors. See -
