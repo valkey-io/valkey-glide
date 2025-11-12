@@ -1382,11 +1382,15 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     };
     let request_timeout = format!(
         "\nRequest timeout: {}",
-        request.request_timeout.unwrap_or(DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32)
+        request
+            .request_timeout
+            .unwrap_or(DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32)
     );
     let connection_timeout = format!(
         "\nConnection timeout: {}",
-        request.connection_timeout.unwrap_or(DEFAULT_CONNECTION_TIMEOUT.as_millis() as u32)
+        request
+            .connection_timeout
+            .unwrap_or(DEFAULT_CONNECTION_TIMEOUT.as_millis() as u32)
     );
     let database_id = format!("\ndatabase ID: {}", request.database_id);
     let rfr_strategy = request

@@ -9301,7 +9301,11 @@ export class BaseClient {
         const connectStart = Date.now();
         await connection.connectToServer(options);
         const connectTime = Date.now() - connectStart;
-        Logger.log("info", "Client lifetime", `connected to server in ${connectTime}ms`);
+        Logger.log(
+            "info",
+            "Client lifetime",
+            `connected to server in ${connectTime}ms`,
+        );
         return connection;
     }
 
@@ -9333,7 +9337,11 @@ export class BaseClient {
         const socketStart = Date.now();
         const socket = await this.GetSocket(path);
         const socketTime = Date.now() - socketStart;
-        Logger.log("info", "Client lifetime", `socket connection established in ${socketTime}ms`);
+        Logger.log(
+            "info",
+            "Client lifetime",
+            `socket connection established in ${socketTime}ms`,
+        );
 
         try {
             const client = await this.__createClientInternal<TConnection>(
@@ -9342,7 +9350,11 @@ export class BaseClient {
                 constructor,
             );
             const totalTime = Date.now() - overallStart;
-            Logger.log("info", "Client lifetime", `total client creation time: ${totalTime}ms`);
+            Logger.log(
+                "info",
+                "Client lifetime",
+                `total client creation time: ${totalTime}ms`,
+            );
             return client;
         } catch (err) {
             // Ensure socket is closed
