@@ -297,6 +297,13 @@ class RemoteClusterManager:
             logging.info(f"Using internal IP for binding: {internal_ip}")
             bind_ip = internal_ip
 
+        # Clean up old TLS certificates to force fresh generation
+        # Note: Cluster stopping is handled by stopAllBeforeTests Gradle task
+        if tls and not (tls_cert_file or tls_key_file or tls_ca_cert_file):
+            logging.info("Cleaning up old TLS certificates to force fresh generation...")
+            cleanup_cmd = f"rm -rf {self.remote_repo_path}/utils/tls_crts"
+            self._execute_remote_command(cleanup_cmd, timeout=10)
+
         # Build cluster_manager.py command with engine-specific PATH
         cmd_parts = [
             f"cd {self.remote_repo_path}/utils",
@@ -549,6 +556,9 @@ class RemoteClusterManager:
                     self.diagnose_tls_issue(endpoints)
                     self.test_cluster_discovery_tls(endpoints)
                     
+                    # Test TLS connection from Windows machine (where this script runs)
+                    self.test_tls_from_windows(endpoints, local_tls_dir)
+                    
                     # Test glide-core cluster TLS to isolate Java vs Rust issue
                     self.test_glide_core_cluster_tls(endpoints)
                 
@@ -567,7 +577,8 @@ class RemoteClusterManager:
         """Stop cluster on remote host"""
         logging.info(f"Stopping cluster on {self.host}...")
 
-        stop_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && python3 cluster_manager.py stop --prefix cluster"
+        # Use cluster_manager_local.py if it exists (our updated version), otherwise fall back to cluster_manager.py
+        stop_cmd = f"cd {self.remote_repo_path}/utils && export PATH={self.engine_path}/src:$PATH && python3 cluster_manager_local.py stop --prefix cluster || python3 cluster_manager.py stop --prefix cluster"
         returncode, stdout, stderr = self._execute_remote_command(stop_cmd)
 
         if returncode != 0:
@@ -807,6 +818,65 @@ class RemoteClusterManager:
         
         logging.info("=== END CLUSTER DISCOVERY TLS TEST ===")
 
+
+    def test_tls_from_windows(self, endpoints: List[str], local_tls_dir: str) -> None:
+        """Test TLS connection from Windows machine (where this script runs)"""
+        if not endpoints:
+            return
+            
+        logging.info("=== WINDOWS-SIDE TLS CONNECTION TEST ===")
+        logging.info("Testing TLS connectivity from Windows machine to cluster...")
+        
+        import ssl
+        import socket
+        
+        ca_cert_path = os.path.join(local_tls_dir, "ca.crt")
+        
+        if not os.path.exists(ca_cert_path):
+            logging.error(f"CA certificate not found at {ca_cert_path}")
+            return
+        
+        # Test first endpoint
+        first_endpoint = endpoints[0]
+        host, port = first_endpoint.split(':')
+        port = int(port)
+        
+        try:
+            # Create SSL context with CA certificate
+            context = ssl.create_default_context(cafile=ca_cert_path)
+            
+            logging.info(f"Attempting TLS connection to {host}:{port} from Windows...")
+            
+            # Create socket and wrap with TLS
+            with socket.create_connection((host, port), timeout=10) as sock:
+                with context.wrap_socket(sock, server_hostname=host) as ssock:
+                    logging.info(f"✓ TLS handshake successful from Windows!")
+                    logging.info(f"  Protocol: {ssock.version()}")
+                    logging.info(f"  Cipher: {ssock.cipher()}")
+                    
+                    # Try to send a PING command
+                    ssock.sendall(b"*1\r\n$4\r\nPING\r\n")
+                    response = ssock.recv(1024)
+                    logging.info(f"  PING response: {response[:50]}")
+                    
+                    if b"PONG" in response or b"+PONG" in response:
+                        logging.info("✓ Successfully sent PING and received PONG from Windows!")
+                    else:
+                        logging.warning(f"Unexpected response: {response}")
+                        
+        except ssl.SSLError as e:
+            logging.error(f"✗ TLS handshake FAILED from Windows: {e}")
+            logging.error(f"  This indicates a certificate mismatch issue")
+        except socket.timeout:
+            logging.error(f"✗ Connection timeout from Windows")
+            logging.error(f"  This indicates a network connectivity issue")
+        except ConnectionRefusedError:
+            logging.error(f"✗ Connection refused from Windows")
+            logging.error(f"  This indicates the cluster is not listening or stopped")
+        except Exception as e:
+            logging.error(f"✗ Connection failed from Windows: {type(e).__name__}: {e}")
+        
+        logging.info("=== END WINDOWS-SIDE TLS CONNECTION TEST ===")
 
     def test_glide_core_cluster_tls(self, endpoints: List[str]) -> bool:
         """Test glide-core Rust cluster TLS against the remote cluster"""

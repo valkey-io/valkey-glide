@@ -1301,9 +1301,11 @@ where
             let error_message = if connections.1.is_empty() {
                 "No errors reported".to_string()
             } else {
-                format!("All {} connection attempts failed: [{}]", 
-                    connections.1.len(), 
-                    connections.1.join(", "))
+                format!(
+                    "All {} connection attempts failed: [{}]",
+                    connections.1.len(),
+                    connections.1.join(", ")
+                )
             };
             return Err(RedisError::from((
                 ErrorKind::IoError,
