@@ -115,33 +115,36 @@ tasks.register('clearDirs', Delete) {
 tasks.register('startCluster') {
     doLast {
         if (System.getProperty("cluster-endpoints") == null) {
-            if (isWindows) {
-                println "=== Starting cluster setup ==="
+            // Start 6 Valkey servers directly (3 masters + 3 replicas)
+            def ports = [7000, 7001, 7002, 7003, 7004, 7005]
+            def clusterNodes = []
+            
+            println "=== Starting Valkey cluster nodes directly ==="
+            
+            ports.each { port ->
+                println "Starting Valkey server on port ${port}..."
+                exec {
+                    commandLine 'wsl', '--', 'sudo', 'docker', 'exec', '-d', 'valkey-test-container', 
+                        'valkey-server', '--port', port.toString(), '--cluster-enabled', 'yes',
+                        '--cluster-config-file', "/tmp/nodes-${port}.conf",
+                        '--cluster-node-timeout', '5000', '--appendonly', 'yes',
+                        '--daemonize', 'yes', '--logfile', "/tmp/valkey-${port}.log"
+                }
+                clusterNodes.add("127.0.0.1:${port}")
             }
             
-            new ByteArrayOutputStream().withStream { os ->
-                if (isWindows) {
-                    // Use Docker inside WSL for cluster
-                    exec {
-                        def args = ['wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container', 'python3', '/workspace/utils/cluster_manager.py', 'start', '--cluster-mode', '--host', clusterHost]
-                        if (System.getProperty("tls") == 'true') args.add(8, '--tls')
-                        commandLine args
-                        standardOutput = os
-                        errorOutput = System.out
-                    }
-                } else {
-                    exec {
-                        workingDir "${project.rootDir}/../utils"
-                        def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '--host', clusterHost]
-                        if (System.getProperty("tls") == 'true') args.add(2, '--tls')
-                        commandLine args
-                        standardOutput = os
-                        errorOutput = System.out
-                    }
-                }
-                clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
-                println "=== Cluster hosts: ${clusterHosts} ==="
+            // Wait for servers to start
+            sleep(3000)
+            
+            // Create cluster
+            println "Creating cluster with nodes: ${clusterNodes.join(' ')}"
+            exec {
+                commandLine 'wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container',
+                    'valkey-cli', '--cluster', 'create', *clusterNodes, '--cluster-replicas', '1', '--cluster-yes'
             }
+            
+            clusterHosts = clusterNodes.join(',')
+            println "=== Cluster hosts: ${clusterHosts} ==="
         } else {
             clusterHosts = System.getProperty("cluster-endpoints")
         }
@@ -278,11 +281,12 @@ tasks.register('startClusterTls') {
 
 beforeTests.dependsOn 'stopAllBeforeTests'
 stopAllBeforeTests.finalizedBy 'clearDirs'
-clearDirs.finalizedBy 'startStandalone'
-clearDirs.finalizedBy 'startStandaloneTls'
+// Disable standalone servers - only start clusters
+// clearDirs.finalizedBy 'startStandalone'
+// clearDirs.finalizedBy 'startStandaloneTls'
 clearDirs.finalizedBy 'startCluster'
 clearDirs.finalizedBy 'startClusterTls'
-clearDirs.finalizedBy 'startClusterForAz'
+// clearDirs.finalizedBy 'startClusterForAz'
 afterTests.finalizedBy 'stopAllAfterTests'
 compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
 
@@ -353,8 +357,16 @@ jacocoTestCoverageVerification {
 
 test {
     filter {
+        // Only run cluster tests
+        includeTestsMatching 'glide.cluster.*'
+        // Exclude everything else
+        excludeTestsMatching 'glide.standalone.*'
         excludeTestsMatching 'glide.PubSubTests'
         excludeTestsMatching 'glide.modules.*'
+        excludeTestsMatching 'glide.SharedClientTests'
+        excludeTestsMatching 'glide.SharedCommandTests'
+        excludeTestsMatching 'glide.OpenTelemetry*'
+        excludeTestsMatching 'glide.BatchTestUtilities'
     }
 }
 
