@@ -5,14 +5,26 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.OpenTelemetry;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 @Timeout(30) // seconds
 public class OpenTelemetryConfigTests {
-    private static final String VALID_ENDPOINT_TRACES = "/tmp/spans.json";
-    private static final String VALID_FILE_ENDPOINT_TRACES = "file://" + VALID_ENDPOINT_TRACES;
+    private static String VALID_ENDPOINT_TRACES;
+    private static String VALID_FILE_ENDPOINT_TRACES;
+
+    @BeforeAll
+    @SneakyThrows
+    static void setup() {
+        // Use Java's system temporary directory API (cross-platform)
+        Path tempDir = Files.createTempDirectory("otel-test");
+        VALID_ENDPOINT_TRACES = tempDir.resolve("spans.json").toString();
+        VALID_FILE_ENDPOINT_TRACES = "file://" + VALID_ENDPOINT_TRACES;
+    }
 
     // Test wrong open telemetry configs
     @Test

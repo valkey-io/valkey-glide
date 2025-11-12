@@ -18,6 +18,8 @@
 #### Fixes
 
 * Node: Resolved circular import dependency between `BaseClient.ts`, `GlideClient.ts`, and `GlideClusterClient.ts.` ([#4607](https://github.com/valkey-io/valkey-glide/issues/4607))
+* JAVA: Add Windows support and prevent double-loading in NativeUtils library loader
+* JAVA: Add cross-platform compatibility fixes for builds and tests - UTF-8 encoding, platform-native line endings, and system temp directory usage
 * Java: Make shutdown hook optional ([#4935](https://github.com/valkey-io/valkey-glide/pull/4935))
 
 #### Operational Enhancements
