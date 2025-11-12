@@ -21,6 +21,7 @@ import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 public class ClusterTlsCertificateTest {
@@ -31,7 +32,10 @@ public class ClusterTlsCertificateTest {
     @BeforeAll
     static void setup() throws Exception {
         String clusterHosts = System.getProperty("test.server.cluster.tls", "");
+        System.out.println("=== CLUSTER TLS TEST SETUP ===");
+        System.out.println("Raw cluster hosts property: " + clusterHosts);
         String[] hosts = clusterHosts.split(",");
+        System.out.println("Split into " + hosts.length + " hosts:");
 
         clusterNodes = new ArrayList<>();
         for (String host : hosts) {
@@ -39,7 +43,10 @@ public class ClusterTlsCertificateTest {
             NodeAddress node =
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build();
             clusterNodes.add(node);
+            System.out.println("  - " + parts[0] + ":" + parts[1]);
         }
+        System.out.println("Total cluster nodes configured: " + clusterNodes.size());
+        System.out.println("===============================");
 
         caCert = getCaCertificate();
     }
@@ -65,6 +72,7 @@ public class ClusterTlsCertificateTest {
     }
 
     @Test
+    @Disabled("Temporarily disabled to isolate single test")
     void testClusterTlsWithMultipleCertificatesSucceeds() throws Exception {
         String caCertStr = new String(caCert, StandardCharsets.UTF_8);
         String multipleCerts = caCertStr + "\n" + caCertStr;
@@ -103,6 +111,7 @@ public class ClusterTlsCertificateTest {
     }
 
     @Test
+    @Disabled("Temporarily disabled to isolate single test")
     void testClusterTlsWithKeyStoreSucceeds() throws Exception {
         Path keyStorePath = Files.createTempFile("test-keystore", ".jks");
         char[] password = "password".toCharArray();

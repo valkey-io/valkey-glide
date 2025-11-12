@@ -35,7 +35,7 @@ class Logger:
     If none of these functions are called, the first log attempt will initialize a new logger with default configuration.
     """
 
-    _instance: Logger | None = None
+    _instance: Optional[Logger] = None
     _glide_ffi = _GlideFFI()
     _ffi = _glide_ffi.ffi
     _lib = _glide_ffi.lib

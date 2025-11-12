@@ -1170,15 +1170,30 @@ async fn create_cluster_client(
             )));
         }
         let mut combined_certs = Vec::new();
-        for cert in &request.root_certs {
+        for (i, cert) in request.root_certs.iter().enumerate() {
             if cert.is_empty() {
                 return Err(RedisError::from((
                     ErrorKind::InvalidClientConfig,
                     "Root certificate cannot be empty byte string",
                 )));
             }
+            
+            // Add the certificate
             combined_certs.extend_from_slice(cert);
+            
+            // Ensure proper PEM separation between certificates
+            if i < request.root_certs.len() - 1 && !cert.ends_with(b"\n") {
+                combined_certs.push(b'\n');
+            }
         }
+        
+        // DEBUG: Print certificate content for cluster connections
+        println!("CLUSTER TLS DEBUG: Certificate stream length: {}", combined_certs.len());
+        println!("CLUSTER TLS DEBUG: First 50 bytes: {:?}", 
+            combined_certs.iter().take(50).collect::<Vec<_>>());
+        println!("CLUSTER TLS DEBUG: Last 50 bytes: {:?}", 
+            combined_certs.iter().rev().take(50).collect::<Vec<_>>());
+        
         let tls_certs = TlsCertificates {
             client_tls: None,
             root_cert: Some(combined_certs),
@@ -1191,15 +1206,47 @@ async fn create_cluster_client(
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
-        .map(|address| {
-            get_connection_info(
+        .enumerate()
+        .map(|(i, address)| {
+            // DEBUG: Log certificate data for each address
+            println!("CLUSTER TLS DEBUG: Address {}: {}:{}", 
+                i, address.host, get_port(&address));
+            
+            // Create fresh TLS params for each connection instead of cloning
+            let fresh_tls_params = if !request.root_certs.is_empty() && tls_mode != TlsMode::NoTls {
+                let mut combined_certs = Vec::new();
+                for (j, cert) in request.root_certs.iter().enumerate() {
+                    combined_certs.extend_from_slice(cert);
+                    if j < request.root_certs.len() - 1 && !cert.ends_with(b"\n") {
+                        combined_certs.push(b'\n');
+                    }
+                }
+                
+                let tls_certs = TlsCertificates {
+                    client_tls: None,
+                    root_cert: Some(combined_certs),
+                };
+                
+                println!("CLUSTER TLS DEBUG: Creating fresh TLS params for address {}", i);
+                match retrieve_tls_certificates(tls_certs) {
+                    Ok(params) => Some(params),
+                    Err(e) => {
+                        println!("CLUSTER TLS DEBUG: Failed to create TLS params for address {}: {}", i, e);
+                        return Err(e);
+                    }
+                }
+            } else {
+                None
+            };
+            
+            Ok(get_connection_info(
                 &address,
                 tls_mode,
                 valkey_connection_info.clone(),
-                tls_params.clone(),
-            )
+                fresh_tls_params,
+            ))
         })
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     let periodic_topology_checks = match request.periodic_checks {
         Some(PeriodicCheck::Disabled) => None,
