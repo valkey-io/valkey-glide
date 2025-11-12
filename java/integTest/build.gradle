@@ -329,7 +329,10 @@ startClusterForAz.dependsOn 'clearDirs'
 beforeTests.dependsOn 'startStandalone'
 beforeTests.dependsOn 'startStandaloneTls'
 beforeTests.dependsOn 'startCluster'
-beforeTests.dependsOn 'startClusterTls'
+// Skip cluster TLS tests on Windows due to Docker-in-WSL networking issues
+if (!System.getProperty('os.name').toLowerCase().contains('windows')) {
+    beforeTests.dependsOn 'startClusterTls'
+}
 beforeTests.dependsOn 'startClusterForAz'
 afterTests.finalizedBy 'stopAllAfterTests'
 compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
