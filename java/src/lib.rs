@@ -1446,7 +1446,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_getGlideCoreDefault
     _class: JClass,
 ) -> jlong {
     // Return glide-core's default connection timeout in milliseconds
-    glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as jlong
+    glide_core::client::DEFAULT_CONNECTION_TIMEOUT.as_millis() as jlong
 }
 
 /// Get glide-core default request timeout in milliseconds
