@@ -109,7 +109,7 @@ spotless {
         removeUnusedImports()
         trimTrailingWhitespace()
         endWithNewline()
-        lineEndings 'UNIX'
+        lineEndings 'PLATFORM_NATIVE'
         googleJavaFormat('1.22.0').reflowLongStrings().groupArtifact('com.google.googlejavaformat:google-java-format')
         leadingSpacesToTabs(2)
         leadingTabsToSpaces(4)
