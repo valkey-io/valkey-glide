@@ -382,13 +382,13 @@ func (suite *GlideTestSuite) getSpecificClients(clientFlag ClientTypeFlag) []int
 
 func (suite *GlideTestSuite) getTimeoutClients() []interfaces.BaseClientCommands {
 	clients := []interfaces.BaseClientCommands{}
-	clusterTimeoutClient, err := suite.createConnectionTimeoutClient(2000, 20*time.Second, nil)
+	clusterTimeoutClient, err := suite.createConnectionTimeoutClient(250, 20*time.Second, nil)
 	if err != nil {
 		suite.T().Fatalf("Failed to create cluster timeout client: %s", err.Error())
 	}
 	clients = append(clients, clusterTimeoutClient)
 
-	standaloneTimeoutClient, err := suite.createConnectionTimeoutClusterClient(2000, 20*time.Second)
+	standaloneTimeoutClient, err := suite.createConnectionTimeoutClusterClient(250, 20*time.Second)
 	if err != nil {
 		suite.T().Fatalf("Failed to create standalone timeout client: %s", err.Error())
 	}
