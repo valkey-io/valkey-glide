@@ -18,7 +18,10 @@
 #### Fixes
 
 * Node: Resolved circular import dependency between `BaseClient.ts`, `GlideClient.ts`, and `GlideClusterClient.ts.` ([#4607](https://github.com/valkey-io/valkey-glide/issues/4607))
+* JAVA: Add Windows support and prevent double-loading in NativeUtils library loader
+* JAVA: Add cross-platform compatibility fixes for builds and tests - UTF-8 encoding, platform-native line endings, and system temp directory usage
 * Java: Make shutdown hook optional ([#4935](https://github.com/valkey-io/valkey-glide/pull/4935))
+* Core/Java/Node: Fix default connection timeout value for clients ([#4966](https://github.com/valkey-io/valkey-glide/pull/4966))
 
 #### Operational Enhancements
 
@@ -42,7 +45,7 @@
 
 #### Fixes 
 
-* CORE: Fix SELECT Command Database Persistence Across Reconnections ([#4764](https://github.com/valkey-io/valkey-glide/issues/#4764))
+* CORE: Fix SELECT Command Database Persistence Across Reconnections ([#4764](https://github.com/valkey-io/valkey-glide/issues/4764))
 * Rust: Updates the `install-rust-and-protoc` action to explicitly include the `rustfmt` and `clippy` components. ([#4816](https://github.com/valkey-io/valkey-glide/issues/4816))
 * CORE: Persist Client Name Across Reconnections for CLIENT SETNAME Command. ([#4841](https://github.com/valkey-io/valkey-glide/pull/4841))
 
