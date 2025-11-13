@@ -70,7 +70,7 @@ public class ConnectionManager {
                         this.requestTimeoutMs =
                                 configuration.getRequestTimeout() != null
                                         ? configuration.getRequestTimeout()
-                                        : (int) GlideNativeBridge.getGlideCoreDefaultTimeoutMs();
+                                        : (int) GlideNativeBridge.getGlideCoreDefaultRequestTimeoutMs();
 
                         boolean insecureTls = resolveInsecureTls(configuration);
                         int connectionTimeoutMs = resolveConnectionTimeout(configuration);
@@ -471,7 +471,7 @@ public class ConnectionManager {
         if (advanced != null && advanced.getConnectionTimeout() != null) {
             return advanced.getConnectionTimeout();
         }
-        return (int) GlideNativeBridge.getGlideCoreDefaultTimeoutMs();
+        return (int) GlideNativeBridge.getGlideCoreDefaultConnectionTimeoutMs();
     }
 
     private static boolean resolveInsecureTls(BaseClientConfiguration configuration) {

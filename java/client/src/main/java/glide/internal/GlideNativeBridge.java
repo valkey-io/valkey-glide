@@ -66,8 +66,11 @@ public class GlideNativeBridge {
             String routeParam,
             boolean expectUtf8Response);
 
-    /** Get glide-core default timeout in milliseconds */
-    public static native long getGlideCoreDefaultTimeoutMs();
+    /** Get glide-core default connection timeout in milliseconds */
+    public static native long getGlideCoreDefaultConnectionTimeoutMs();
+
+    /** Get glide-core default request timeout in milliseconds */
+    public static native long getGlideCoreDefaultRequestTimeoutMs();
 
     /** Get glide-core default maximum inflight requests limit */
     public static native int getGlideCoreDefaultMaxInflightRequests();

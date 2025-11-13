@@ -222,9 +222,9 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 			time.Sleep(1 * time.Second) // Wait to ensure the debug sleep command is running
 			var err error
 			if clusterMode {
-				_, err = suite.createConnectionTimeoutClusterClient(100, 250)
+				_, err = suite.createConnectionTimeoutClusterClient(10*time.Millisecond, 250*time.Millisecond)
 			} else {
-				_, err = suite.createConnectionTimeoutClient(100, 250, backoffStrategy)
+				_, err = suite.createConnectionTimeoutClient(10*time.Millisecond, 250*time.Millisecond, backoffStrategy)
 			}
 			assert.Error(suite.T(), err)
 			assert.True(suite.T(), strings.Contains(err.Error(), "timed out"))
