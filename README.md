@@ -27,10 +27,10 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE) is an offi
 
 Valkey GLIDE is API-compatible with the following engine versions:
 
-| Engine Type           |  6.2  |  7.0  |   7.1  |  7.2  |  8.0  |  8.1  |
-|-----------------------|-------|-------|--------|-------|-------|-------|
-| Valkey                |   -   |   -   |   -    |   V   |   V   |   V   |
-| Redis                 |   V   |   V   |   V    |   V   |   -   |   -   |
+| Engine Type | 6.2 | 7.0 | 7.1 | 7.2 | 8.0 | 8.1 | 9.0 |
+|-------------|-----|-----|-----|-----|-----|-----|-----|
+| Valkey      | -   | -   | -   | V   | V   | V   | V   |
+| Redis       | V   | V   | V   | V   | -   | -   | -   |
 
 ## Current Status and Upcoming Releases
 
