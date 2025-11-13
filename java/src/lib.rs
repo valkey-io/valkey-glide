@@ -86,7 +86,7 @@ async fn execute_command_request_and_complete(
         let root_span_ptr_opt = command_request.root_span_ptr;
         match &command_request.command {
             Some(protobuf_bridge::command_request::Command::SingleCommand(command)) => {
-                let cmd = protobuf_bridge::create_valkey_command(command).map_err(|e| {
+                let mut cmd = protobuf_bridge::create_valkey_command(command).map_err(|e| {
                     redis::RedisError::from((
                         redis::ErrorKind::ClientError,
                         "Failed to create command",
@@ -108,7 +108,7 @@ async fn execute_command_request_and_complete(
                     None
                 };
 
-                let exec = client.send_command(&cmd, routing).await;
+                let exec = client.send_command(&mut cmd, routing).await;
 
                 if let Some(root_span_ptr) = root_span_ptr_opt
                     && root_span_ptr != 0

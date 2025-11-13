@@ -33,7 +33,12 @@ pub struct Cmd {
     no_response: bool,
     /// The span associated with this command
     span: Option<GlideSpan>,
+    //  A flag indicating whether this is a fenced command  (will have PING appended to ensure ordering)
+    is_fenced: bool,
 }
+
+/// The PING command used to fence other commands for ordering guarantees
+const FENCE_COMMAND: &[u8] = b"*1\r\n$4\r\nPING\r\n";
 
 /// Represents a redis iterator.
 pub struct Iter<'a, T: FromRedisValue> {
@@ -227,22 +232,28 @@ where
     I: IntoIterator<Item = Arg<&'a [u8]>> + Clone + ExactSizeIterator,
 {
     let mut cmd = Vec::new();
-    write_command_to_vec(&mut cmd, args, cursor);
+    write_command_to_vec(&mut cmd, args, cursor, false);
     cmd
 }
 
-fn write_command_to_vec<'a, I>(cmd: &mut Vec<u8>, args: I, cursor: u64)
+fn write_command_to_vec<'a, I>(cmd: &mut Vec<u8>, args: I, cursor: u64, is_fenced: bool)
 where
     I: IntoIterator<Item = Arg<&'a [u8]>> + Clone + ExactSizeIterator,
 {
-    let total_len = args_len(args.clone(), cursor);
+    let total_len =
+        args_len(args.clone(), cursor) + if is_fenced { FENCE_COMMAND.len() } else { 0 };
 
     cmd.reserve(total_len);
 
-    write_command(cmd, args, cursor).unwrap()
+    write_command(cmd, args, cursor, is_fenced).unwrap()
 }
 
-fn write_command<'a, I>(cmd: &mut (impl ?Sized + io::Write), args: I, cursor: u64) -> io::Result<()>
+fn write_command<'a, I>(
+    cmd: &mut (impl ?Sized + io::Write),
+    args: I,
+    cursor: u64,
+    is_fenced: bool,
+) -> io::Result<()>
 where
     I: IntoIterator<Item = Arg<&'a [u8]>> + Clone + ExactSizeIterator,
 {
@@ -268,6 +279,12 @@ where
         cmd.write_all(bytes)?;
         cmd.write_all(b"\r\n")?;
     }
+
+    // If this is a fenced command, append a PING command
+    if is_fenced {
+        cmd.write_all(FENCE_COMMAND)?;
+    }
+
     Ok(())
 }
 
@@ -326,6 +343,7 @@ impl Cmd {
             cursor: None,
             no_response: false,
             span: None,
+            is_fenced: false,
         }
     }
 
@@ -337,6 +355,7 @@ impl Cmd {
             cursor: None,
             no_response: false,
             span: None,
+            is_fenced: false,
         }
     }
 
@@ -408,11 +427,22 @@ impl Cmd {
     }
 
     pub(crate) fn write_packed_command(&self, cmd: &mut Vec<u8>) {
-        write_command_to_vec(cmd, self.args_iter(), self.cursor.unwrap_or(0))
+        write_command_to_vec(
+            cmd,
+            self.args_iter(),
+            self.cursor.unwrap_or(0),
+            self.is_fenced,
+        )
     }
 
     pub(crate) fn write_packed_command_preallocated(&self, cmd: &mut Vec<u8>) {
-        write_command(cmd, self.args_iter(), self.cursor.unwrap_or(0)).unwrap()
+        write_command(
+            cmd,
+            self.args_iter(),
+            self.cursor.unwrap_or(0),
+            self.is_fenced,
+        )
+        .unwrap()
     }
 
     /// Like `get_packed_command` but replaces the cursor with the
@@ -604,6 +634,20 @@ impl Cmd {
     pub fn span(&self) -> Option<GlideSpan> {
         self.span.clone()
     }
+
+    /// Mark this command as fenced. A PING command will be appended after it
+    /// to ensure proper ordering of response processing.
+    #[inline]
+    pub fn set_fenced(&mut self, fenced: bool) -> &mut Cmd {
+        self.is_fenced = fenced;
+        self
+    }
+
+    /// Check whether this command is fenced.
+    #[inline]
+    pub fn is_fenced(&self) -> bool {
+        self.is_fenced
+    }
 }
 
 impl fmt::Debug for Cmd {
@@ -634,6 +678,18 @@ impl fmt::Debug for Cmd {
 pub fn cmd(name: &str) -> Cmd {
     let mut rv = Cmd::new();
     rv.arg(name);
+    rv
+}
+
+/// Shortcut function to creating a fenced command with a single argument.
+///
+/// /// ```rust
+/// redis::fenced_cmd("PING");
+/// ```
+pub fn fenced_cmd(name: &str) -> Cmd {
+    let mut rv = Cmd::new();
+    rv.arg(name);
+    rv.is_fenced = true;
     rv
 }
 

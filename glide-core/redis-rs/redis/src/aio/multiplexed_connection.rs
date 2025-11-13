@@ -20,6 +20,7 @@ use futures_util::{
     sink::Sink,
     stream::{self, Stream, StreamExt, TryStreamExt as _},
 };
+use logger_core::log_error;
 use pin_project_lite::pin_project;
 use std::collections::VecDeque;
 use std::fmt;
@@ -67,6 +68,8 @@ impl ResponseAggregate {
 struct InFlight {
     output: PipelineOutput,
     response_aggregate: ResponseAggregate,
+    is_fenced: bool,
+    fenced_result: Option<RedisResult<Value>>,
 }
 
 // A single message sent through the pipeline
@@ -76,6 +79,7 @@ struct PipelineMessage<S> {
     // If `None`, this is a single request, not a pipeline of multiple requests.
     pipeline_response_count: Option<usize>,
     is_transaction: bool,
+    is_fenced: bool,
 }
 
 /// Wrapper around a `Stream + Sink` where each item sent through the `Sink` results in one or more
@@ -107,6 +111,7 @@ pin_project! {
         push_manager: Arc<ArcSwap<PushManager>>,
         disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
         is_stream_closed: Arc<AtomicBool>,
+        response_sync_lost: bool,
     }
 }
 
@@ -130,6 +135,7 @@ where
             push_manager,
             disconnect_notifier,
             is_stream_closed,
+            response_sync_lost: false,
         }
     }
 
@@ -156,13 +162,24 @@ where
 
     fn send_result(self: Pin<&mut Self>, result: RedisResult<Value>) {
         let self_ = self.project();
-        let mut skip_value = false;
+
+        // If response synchronization is lost, fail all requests
+        if *self_.response_sync_lost {
+            if let Some(entry) = self_.in_flight.pop_front() {
+                let err = RedisError::from((
+                    crate::ErrorKind::ProtocolDesync,
+                    "Response synchronization lost - connection must be reestablished",
+                ));
+                entry.output.send(Err(err)).ok();
+            }
+            return;
+        }
+
         if let Ok(res) = &result {
             if let Value::Push { kind, data: _data } = res {
                 self_.push_manager.load().try_send_raw(res);
                 if !kind.has_reply() {
-                    // If it's not true then push kind is converted to reply of a command
-                    skip_value = true;
+                    return;
                 }
             }
         }
@@ -172,8 +189,9 @@ where
             None => return,
         };
 
-        if skip_value {
-            self_.in_flight.push_front(entry);
+        // Handle fenced commands
+        if entry.is_fenced {
+            Self::handle_fenced_command(entry, result, self_.in_flight, self_.response_sync_lost);
             return;
         }
 
@@ -230,6 +248,96 @@ where
             }
         }
     }
+    /// Handles fenced command responses.
+    ///
+    /// Fenced commands are commands followed by a PING to ensure ordering.
+    /// They receive two responses:
+    /// 1. The actual command response (or error, or nothing in case there is no returned response)
+    /// 2. PONG from the trailing PING
+    ///
+    /// This function is only called for commands where `is_fenced` is true.
+    fn handle_fenced_command(
+        mut entry: InFlight,
+        result: RedisResult<Value>,
+        in_flight: &mut VecDeque<InFlight>,
+        response_sync_lost: &mut bool,
+    ) {
+        // Check if we already have a stored result (this is the second response - PONG)
+        if let Some(stored_result) = entry.fenced_result.take() {
+            Self::handle_fenced_second_response(entry, result, stored_result, response_sync_lost);
+        } else {
+            // This is the first response from the fenced command
+            Self::handle_fenced_first_response(entry, result, in_flight);
+        }
+    }
+
+    /// Handles the first response of a fenced command.
+    fn handle_fenced_first_response(
+        mut entry: InFlight,
+        result: RedisResult<Value>,
+        in_flight: &mut VecDeque<InFlight>,
+    ) {
+        match result {
+            // Case 1: First response is PONG
+            // This means the fenced command had no response
+            Ok(Value::SimpleString(ref s)) if s == "PONG" || s == "pong" => {
+                // Return Ok(Nil) to indicate success with no data
+                entry.output.send(Ok(Value::Nil)).ok();
+            }
+
+            // Case 2: First response is an error
+            // Store it and wait for PONG
+            Err(err) => {
+                entry.fenced_result = Some(Err(err));
+                in_flight.push_front(entry);
+            }
+
+            // Case 3: First response is a value (not PONG)
+            // Store it and wait for PONG
+            Ok(value) => {
+                entry.fenced_result = Some(Ok(value));
+                in_flight.push_front(entry);
+            }
+        }
+    }
+
+    /// Handles the second response of a fenced command (should be PONG).
+    fn handle_fenced_second_response(
+        entry: InFlight,
+        pong_result: RedisResult<Value>,
+        stored_result: RedisResult<Value>,
+        response_sync_lost: &mut bool,
+    ) {
+        // Verify we got PONG
+        let is_pong = matches!(
+            &pong_result,
+            Ok(Value::SimpleString(s)) if s == "PONG"
+        );
+
+        if !is_pong {
+            // Set the flag - all future commands will fail
+            *response_sync_lost = true;
+
+            log_error(
+                "Fenced command",
+                "CRITICAL: Expected PONG for fenced command but got unexpected response.
+                Response synchronization lost. All commands will fail until reconnection.",
+            );
+
+            // Fail the current command
+            let err = RedisError::from((
+                crate::ErrorKind::ProtocolDesync,
+                "Expected PONG for fenced command but received different response",
+                format!("Response synchronization lost. Got: {:?}", pong_result),
+            ));
+            entry.output.send(Err(err)).ok();
+            return;
+        }
+
+        // ✅ Got PONG as expected, return the stored result
+        let final_result = stored_result.and_then(|v| v.extract_error());
+        entry.output.send(final_result).ok();
+    }
 }
 
 impl<SinkItem, T> Sink<PipelineMessage<SinkItem>> for PipelineSink<T>
@@ -259,6 +367,7 @@ where
             output,
             pipeline_response_count,
             is_transaction,
+            is_fenced,
         }: PipelineMessage<SinkItem>,
     ) -> Result<(), Self::Error> {
         // If there is nothing to receive our output we do not need to send the message as it is
@@ -275,6 +384,15 @@ where
             return Err(());
         }
 
+        if *self_.response_sync_lost {
+            let err = RedisError::from((
+                crate::ErrorKind::ProtocolDesync,
+                "Response synchronization lost - connection must be reestablished",
+            ));
+            let _ = output.send(Err(err));
+            return Err(());
+        }
+
         match self_.sink_stream.start_send(input) {
             Ok(()) => {
                 let response_aggregate =
@@ -282,6 +400,8 @@ where
                 let entry = InFlight {
                     output,
                     response_aggregate,
+                    is_fenced,
+                    fenced_result: None,
                 };
 
                 self_.in_flight.push_back(entry);
@@ -366,8 +486,13 @@ where
     }
 
     // `None` means that the stream was out of items causing that poll loop to shut down.
-    async fn send_single(&mut self, item: SinkItem, timeout: Duration) -> RedisResult<Value> {
-        self.send_recv(item, None, timeout, true).await
+    async fn send_single(
+        &mut self,
+        item: SinkItem,
+        timeout: Duration,
+        is_fenced: bool,
+    ) -> RedisResult<Value> {
+        self.send_recv(item, None, timeout, true, is_fenced).await
     }
 
     async fn send_recv(
@@ -377,6 +502,7 @@ where
         pipeline_response_count: Option<usize>,
         timeout: Duration,
         is_atomic: bool,
+        is_fenced: bool,
     ) -> Result<Value, RedisError> {
         let (sender, receiver) = oneshot::channel();
 
@@ -386,6 +512,7 @@ where
                 pipeline_response_count,
                 output: sender,
                 is_transaction: is_atomic,
+                is_fenced,
             })
             .await
             .map_err(|err| {
@@ -537,7 +664,11 @@ impl MultiplexedConnection {
     pub async fn send_packed_command(&mut self, cmd: &Cmd) -> RedisResult<Value> {
         let result = self
             .pipeline
-            .send_single(cmd.get_packed_command(), self.response_timeout)
+            .send_single(
+                cmd.get_packed_command(),
+                self.response_timeout,
+                cmd.is_fenced(),
+            )
             .await;
         if self.protocol != ProtocolVersion::RESP2 {
             if let Err(e) = &result {
@@ -569,6 +700,7 @@ impl MultiplexedConnection {
                 Some(offset + count),
                 self.response_timeout,
                 cmd.is_atomic(),
+                false,
             )
             .await;
 
