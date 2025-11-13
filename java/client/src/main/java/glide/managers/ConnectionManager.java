@@ -70,7 +70,7 @@ public class ConnectionManager {
                         this.requestTimeoutMs =
                                 configuration.getRequestTimeout() != null
                                         ? configuration.getRequestTimeout()
-                                        : (int) GlideNativeBridge.getGlideCoreDefaultTimeoutMs();
+                                        : (int) GlideNativeBridge.getGlideCoreDefaultRequestTimeoutMs();
 
                         boolean insecureTls = resolveInsecureTls(configuration);
                         int connectionTimeoutMs = resolveConnectionTimeout(configuration);
@@ -201,6 +201,29 @@ public class ConnectionManager {
                             if (credentials.getPassword() != null) {
                                 authBuilder.setPassword(credentials.getPassword());
                             }
+                            // Set IAM credentials if present
+                            if (credentials.getIamConfig() != null) {
+                                var iamConfig = credentials.getIamConfig();
+                                IamCredentials.Builder iamBuilder = IamCredentials.newBuilder();
+                                iamBuilder.setClusterName(iamConfig.getClusterName());
+                                iamBuilder.setRegion(iamConfig.getRegion());
+
+                                // Map ServiceType enum to protobuf ServiceType
+                                if (iamConfig.getService()
+                                        == glide.api.models.configuration.ServiceType.ELASTICACHE) {
+                                    iamBuilder.setServiceType(ServiceType.ELASTICACHE);
+                                } else if (iamConfig.getService()
+                                        == glide.api.models.configuration.ServiceType.MEMORYDB) {
+                                    iamBuilder.setServiceType(ServiceType.MEMORYDB);
+                                }
+
+                                // Set optional refresh interval
+                                if (iamConfig.getRefreshIntervalSeconds() != null) {
+                                    iamBuilder.setRefreshIntervalSeconds(iamConfig.getRefreshIntervalSeconds());
+                                }
+
+                                authBuilder.setIamCredentials(iamBuilder.build());
+                            }
                             requestBuilder.setAuthenticationInfo(authBuilder.build());
                         }
 
@@ -272,6 +295,12 @@ public class ConnectionManager {
                                 retryBuilder.setJitterPercent(reconnectJitterPercent);
                             }
                             requestBuilder.setConnectionRetryStrategy(retryBuilder.build());
+                        }
+
+                        // Set root certificates if provided from user configuration
+                        byte[] rootCerts = extractRootCertificates(configuration);
+                        if (rootCerts != null) {
+                            requestBuilder.addRootCerts(com.google.protobuf.ByteString.copyFrom(rootCerts));
                         }
 
                         // Set pubsub subscriptions
@@ -442,7 +471,7 @@ public class ConnectionManager {
         if (advanced != null && advanced.getConnectionTimeout() != null) {
             return advanced.getConnectionTimeout();
         }
-        return (int) GlideNativeBridge.getGlideCoreDefaultTimeoutMs();
+        return (int) GlideNativeBridge.getGlideCoreDefaultConnectionTimeoutMs();
     }
 
     private static boolean resolveInsecureTls(BaseClientConfiguration configuration) {
@@ -459,6 +488,18 @@ public class ConnectionManager {
             return true;
         }
         return false;
+    }
+
+    private static byte[] extractRootCertificates(BaseClientConfiguration configuration) {
+        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+        if (advanced == null) {
+            return null;
+        }
+        TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
+        if (tlsConfig == null) {
+            return null;
+        }
+        return tlsConfig.getRootCertificates();
     }
 
     private static AdvancedBaseClientConfiguration extractAdvancedConfiguration(

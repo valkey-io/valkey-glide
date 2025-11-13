@@ -155,7 +155,7 @@ jobs:
 
             - name: Build java client
               working-directory: java
-              run: ./gradlew --build-cache --continue build -x javadoc
+              run: ./gradlew --build-cache --continue build test -x javadoc
 
             - name: Ensure no skipped files by linter
               working-directory: java
@@ -273,7 +273,7 @@ jobs:
     test-java-container:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-containers]
-        timeout-minutes: 25
+        timeout-minutes: 60
         strategy:
             fail-fast: false
             matrix:

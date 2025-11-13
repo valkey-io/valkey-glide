@@ -152,6 +152,33 @@ impl StandaloneClient {
             DEFAULT_CONNECTION_TIMEOUT,
         );
 
+        let tls_params = if !connection_request.root_certs.is_empty() {
+            if tls_mode.unwrap_or(TlsMode::NoTls) == TlsMode::NoTls {
+                return Err(StandaloneClientConnectionError::FailedConnection(vec![(
+                    None,
+                    RedisError::from((
+                        redis::ErrorKind::InvalidClientConfig,
+                        "Custom root certificates provided but TLS is disabled",
+                    )),
+                )]));
+            }
+            let mut combined_certs = Vec::new();
+            for cert in &connection_request.root_certs {
+                combined_certs.extend_from_slice(cert);
+            }
+            let tls_certificates = redis::TlsCertificates {
+                client_tls: None,
+                root_cert: Some(combined_certs),
+            };
+            Some(
+                redis::retrieve_tls_certificates(tls_certificates).map_err(|err| {
+                    StandaloneClientConnectionError::FailedConnection(vec![(None, err)])
+                })?,
+            )
+        } else {
+            None
+        };
+
         let mut stream = stream::iter(connection_request.addresses.into_iter())
             .map(move |address| {
                 let info = if address.host != pubsub_addr.host || address.port != pubsub_addr.port {
@@ -164,9 +191,10 @@ impl StandaloneClient {
                 let tls = tls_mode.unwrap_or(TlsMode::NoTls);
                 let discover = discover_az;
                 let timeout = connection_timeout;
+                let params = tls_params.clone();
                 async move {
                     get_connection_and_replication_info(
-                        &address, &retry, &info, tls, &sender, discover, timeout,
+                        &address, &retry, &info, tls, &sender, discover, timeout, params,
                     )
                     .await
                     .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -626,6 +654,27 @@ impl StandaloneClient {
         Ok(Value::Okay)
     }
 
+    /// Update the database id used to establish connection with the servers.
+    pub async fn update_connection_database(&self, database_id: i64) -> RedisResult<Value> {
+        for node in self.inner.nodes.iter() {
+            node.update_connection_database(database_id);
+        }
+
+        Ok(Value::Okay)
+    }
+
+    /// Update the client_name used to create the connection.
+    pub async fn update_connection_client_name(
+        &self,
+        new_client_name: Option<String>,
+    ) -> RedisResult<Value> {
+        for node in self.inner.nodes.iter() {
+            node.update_connection_client_name(new_client_name.clone());
+        }
+
+        Ok(Value::Okay)
+    }
+
     /// Retrieve the username used to authenticate with the server.
     pub fn get_username(&self) -> Option<String> {
         // All nodes in the client should have the same username configured, thus any connection would work here.
@@ -633,6 +682,7 @@ impl StandaloneClient {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn get_connection_and_replication_info(
     address: &NodeAddress,
     retry_strategy: &RetryStrategy,
@@ -641,8 +691,9 @@ async fn get_connection_and_replication_info(
     push_sender: &Option<mpsc::UnboundedSender<PushInfo>>,
     discover_az: bool,
     connection_timeout: Duration,
+    tls_params: Option<redis::TlsConnParams>,
 ) -> Result<(ReconnectingConnection, Value), (ReconnectingConnection, RedisError)> {
-    let result = ReconnectingConnection::new(
+    let reconnecting_connection = ReconnectingConnection::new(
         address,
         *retry_strategy,
         connection_info.clone(),
@@ -650,17 +701,13 @@ async fn get_connection_and_replication_info(
         push_sender.clone(),
         discover_az,
         connection_timeout,
+        tls_params,
     )
-    .await;
-    let reconnecting_connection = match result {
-        Ok(reconnecting_connection) => reconnecting_connection,
-        Err(tuple) => return Err(tuple),
-    };
+    .await?;
 
     let mut multiplexed_connection = match reconnecting_connection.get_connection().await {
         Ok(multiplexed_connection) => multiplexed_connection,
         Err(err) => {
-            // NOTE: this block is never reached
             reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
             return Err((reconnecting_connection, err));
         }
@@ -670,10 +717,7 @@ async fn get_connection_and_replication_info(
         .send_packed_command(redis::cmd("INFO").arg("REPLICATION"))
         .await
     {
-        Ok(replication_status) => {
-            // Connection established + we got the INFO output
-            Ok((reconnecting_connection, replication_status))
-        }
+        Ok(replication_status) => Ok((reconnecting_connection, replication_status)),
         Err(err) => Err((reconnecting_connection, err)),
     }
 }

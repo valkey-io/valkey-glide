@@ -100,6 +100,7 @@ import {
     createBitField,
     createBitOp,
     createBitPos,
+    createCopy,
     createDecr,
     createDecrBy,
     createDel,
@@ -168,6 +169,7 @@ import {
     createMGet,
     createMSet,
     createMSetNX,
+    createMove,
     createObjectEncoding,
     createObjectFreq,
     createObjectIdletime,
@@ -207,6 +209,7 @@ import {
     createSUnion,
     createSUnionStore,
     createScriptShow,
+    createSelect,
     createSet,
     createSetBit,
     createSetRange,
@@ -907,6 +910,18 @@ export interface AdvancedBaseClientConfiguration {
          * - Default: false (verification is enforced).
          */
         insecure?: boolean;
+
+        /**
+         * Custom root certificate data for TLS connections.
+         *
+         * - When provided, these certificates will be used instead of the system's default trust store.
+         *   If not provided, the system's default certificate trust store will be used.
+         *
+         * - The certificate data should be in PEM format as a string or Buffer.
+         *
+         * - This is useful when connecting to servers with self-signed certificates or custom certificate authorities.
+         */
+        rootCertificates?: string | Buffer;
     };
 }
 
@@ -2127,6 +2142,28 @@ export class BaseClient {
         );
     }
 
+    /**
+     * Move `key` from the currently selected database to the database specified by `dbIndex`.
+     *
+     * @remarks Move is available for cluster mode since Valkey 9.0.0 and above.
+     *
+     * @see {@link https://valkey.io/commands/move/|valkey.io} for more details.
+     *
+     * @param key - The key to move.
+     * @param dbIndex - The index of the database to move `key` to.
+     * @returns `true` if `key` was moved, or `false` if the `key` already exists in the destination
+     *     database or does not exist in the source database.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.move("key", 1);
+     * console.log(result); // Output: true
+     * ```
+     */
+    public async move(key: GlideString, dbIndex: number): Promise<boolean> {
+        return this.createWritePromise(createMove(key, dbIndex));
+    }
+
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
      *
      * @see {@link https://valkey.io/commands/incr/|valkey.io} for details.
@@ -2189,6 +2226,48 @@ export class BaseClient {
         amount: number,
     ): Promise<number> {
         return this.createWritePromise(createIncrByFloat(key, amount));
+    }
+
+    /**
+     * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
+     * the value will be copied to the database specified, otherwise the current database will be used.
+     * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
+     * no action.
+     *
+     * @see {@link https://valkey.io/commands/copy/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0. destinationDB parameter for cluster mode is supported since Valkey 9.0.0 and above
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `destinationDB`: the alternative logical database index for the destination key.
+     *     If not provided, the current database will be used.
+     * - (Optional) `replace`: if `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     * @returns `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.copy("set1", "set2");
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     * ```typescript
+     * const result = await client.copy("set1", "set2", { replace: true });
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     * ```typescript
+     * const result = await client.copy("set1", "set2", { destinationDB: 1, replace: false });
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     */
+    public async copy(
+        source: GlideString,
+        destination: GlideString,
+        options?: { destinationDB?: number; replace?: boolean },
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createCopy(source, destination, options),
+        );
     }
 
     /** Decrements the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -4055,6 +4134,28 @@ export class BaseClient {
         members: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(createSAdd(key, members));
+    }
+
+    /**
+     * Changes the currently selected database.
+     *
+     * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
+     *
+     * @param index - The index of the database to select.
+     * @returns A simple `"OK"` response.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of select method (NOT RECOMMENDED)
+     * const result = await client.select(2);
+     * console.log(result); // Output: 'OK'
+     * // Note: Database selection will be lost on reconnection!
+     * ```
+     */
+    public async select(index: number): Promise<"OK"> {
+        return this.createWritePromise(createSelect(index), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Removes the specified members from the set stored at `key`. Specified members that are not a member of this set are ignored.
@@ -9107,13 +9208,29 @@ export class BaseClient {
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
 
         // Apply TLS configuration if present
-        if (options.tlsAdvancedConfiguration?.insecure) {
-            if (request.tlsMode === connection_request.TlsMode.SecureTls) {
-                request.tlsMode = connection_request.TlsMode.InsecureTls;
-            } else if (request.tlsMode === connection_request.TlsMode.NoTls) {
+        if (options.tlsAdvancedConfiguration) {
+            // request.tlsMode is either SecureTls or InsecureTls here
+            if (request.tlsMode === connection_request.TlsMode.NoTls) {
                 throw new ConfigurationError(
-                    "InsecureTls cannot be enabled when useTLS is disabled.",
+                    "TLS advanced configuration cannot be set when useTLS is disabled.",
                 );
+            }
+
+            // If options.tlsAdvancedConfiguration.insecure is true then use InsecureTls mode
+            if (options.tlsAdvancedConfiguration.insecure) {
+                request.tlsMode = connection_request.TlsMode.InsecureTls;
+            }
+
+            if (options.tlsAdvancedConfiguration.rootCertificates) {
+                const certData =
+                    typeof options.tlsAdvancedConfiguration.rootCertificates ===
+                    "string"
+                        ? Buffer.from(
+                              options.tlsAdvancedConfiguration.rootCertificates,
+                              "utf-8",
+                          )
+                        : options.tlsAdvancedConfiguration.rootCertificates;
+                request.rootCerts = [new Uint8Array(certData)];
             }
         }
     }
@@ -9181,8 +9298,14 @@ export class BaseClient {
         ) => TConnection,
     ): Promise<TConnection> {
         const connection = constructor(connectedSocket, options);
+        const connectStart = Date.now();
         await connection.connectToServer(options);
-        Logger.log("info", "Client lifetime", "connected to server");
+        const connectTime = Date.now() - connectStart;
+        Logger.log(
+            "info",
+            "Client lifetime",
+            `connected to server in ${connectTime}ms`,
+        );
         return connection;
     }
 
@@ -9209,15 +9332,30 @@ export class BaseClient {
             options?: BaseClientConfiguration,
         ) => TConnection,
     ): Promise<TConnection> {
+        const overallStart = Date.now();
         const path = await StartSocketConnection();
+        const socketStart = Date.now();
         const socket = await this.GetSocket(path);
+        const socketTime = Date.now() - socketStart;
+        Logger.log(
+            "info",
+            "Client lifetime",
+            `socket connection established in ${socketTime}ms`,
+        );
 
         try {
-            return await this.__createClientInternal<TConnection>(
+            const client = await this.__createClientInternal<TConnection>(
                 options,
                 socket,
                 constructor,
             );
+            const totalTime = Date.now() - overallStart;
+            Logger.log(
+                "info",
+                "Client lifetime",
+                `total client creation time: ${totalTime}ms`,
+            );
+            return client;
         } catch (err) {
             // Ensure socket is closed
             socket.end();

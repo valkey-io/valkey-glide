@@ -29,6 +29,7 @@ pub struct ConnectionRequest {
     pub inflight_requests_limit: Option<u32>,
     pub lazy_connect: bool,
     pub refresh_topology_from_initial_nodes: bool,
+    pub root_certs: Vec<Vec<u8>>,
 }
 
 /// Authentication information for connecting to Redis/Valkey servers
@@ -276,6 +277,11 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         let inflight_requests_limit = none_if_zero(value.inflight_requests_limit);
         let lazy_connect = value.lazy_connect;
         let refresh_topology_from_initial_nodes = value.refresh_topology_from_initial_nodes;
+        let root_certs = value
+            .root_certs
+            .into_iter()
+            .map(|cert| cert.to_vec())
+            .collect();
 
         ConnectionRequest {
             read_from,
@@ -295,6 +301,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             inflight_requests_limit,
             lazy_connect,
             refresh_topology_from_initial_nodes,
+            root_certs,
         }
     }
 }

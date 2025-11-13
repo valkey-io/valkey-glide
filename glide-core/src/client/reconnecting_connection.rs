@@ -193,17 +193,17 @@ async fn create_connection(
     }
 }
 
+// tls_params should be only set if tls_mode is SecureTls
+// this should be validated before calling this function
 fn get_client(
     address: &NodeAddress,
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
+    tls_params: Option<redis::TlsConnParams>,
 ) -> redis::Client {
-    redis::Client::open(super::get_connection_info(
-        address,
-        tls_mode,
-        redis_connection_info,
-    ))
-    .unwrap() // can unwrap, because [open] fails only on trying to convert input to ConnectionInfo, and we pass ConnectionInfo.
+    let connection_info =
+        super::get_connection_info(address, tls_mode, redis_connection_info, tls_params);
+    redis::Client::open(connection_info).unwrap() // can unwrap, because [open] fails only on trying to convert input to ConnectionInfo, and we pass ConnectionInfo.
 }
 
 impl ConnectionBackend {
@@ -214,6 +214,7 @@ impl ConnectionBackend {
 }
 
 impl ReconnectingConnection {
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn new(
         address: &NodeAddress,
         connection_retry_strategy: RetryStrategy,
@@ -222,13 +223,14 @@ impl ReconnectingConnection {
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         discover_az: bool,
         connection_timeout: Duration,
+        tls_params: Option<redis::TlsConnParams>,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
             format!("Attempting connection to {address}"),
         );
 
-        let connection_info = get_client(address, tls_mode, redis_connection_info);
+        let connection_info = get_client(address, tls_mode, redis_connection_info, tls_params);
         let backend = ConnectionBackend {
             connection_info: RwLock::new(connection_info),
             connection_available_signal: ManualResetEvent::new(true),
@@ -315,6 +317,9 @@ impl ReconnectingConnection {
         // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
         // background, regardless of whether the calling task is dropped or not.
         task::spawn(async move {
+            // Get a clone of the client with the current connection info
+            // updates made via update_connection_database(). This ensures reconnection uses the
+            // correct database as selected by previous SELECT commands.
             let client = {
                 let guard = connection_clone.inner.backend.get_backend_client();
                 guard.clone()
@@ -392,6 +397,36 @@ impl ReconnectingConnection {
             .write()
             .expect(WRITE_LOCK_ERR);
         client.update_password(new_password);
+    }
+
+    /// Updates the database ID that's saved inside connection_info, that will be used in case of disconnection from the server.
+    ///
+    /// This method is called when a SELECT command is successfully executed to track the current database.
+    /// During reconnection, the stored database ID will be automatically used to re-select the correct
+    /// database via a SELECT command during connection establishment.
+    ///
+    /// # Arguments
+    /// * `new_database_id` - The database ID to store for future reconnections
+    ///
+    pub(crate) fn update_connection_database(&self, new_database_id: i64) {
+        let mut client = self
+            .inner
+            .backend
+            .connection_info
+            .write()
+            .expect(WRITE_LOCK_ERR);
+        client.update_database(new_database_id);
+    }
+
+    /// Updates the client name that's saved inside connection_info, that will be used in case of disconnection from the server.
+    pub(crate) fn update_connection_client_name(&self, new_client_name: Option<String>) {
+        let mut client = self
+            .inner
+            .backend
+            .connection_info
+            .write()
+            .expect(WRITE_LOCK_ERR);
+        client.update_client_name(new_client_name);
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.

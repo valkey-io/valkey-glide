@@ -4,10 +4,6 @@
 
 import { execFile } from "child_process";
 import { lt } from "semver";
-import {
-    GlideClientConfiguration,
-    GlideClusterClientConfiguration,
-} from "../node/build-ts";
 
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
 
@@ -42,6 +38,7 @@ function parseOutput(input: string): {
 export type TestTLSConfig = {useTLS: boolean; advancedConfiguration?: {
                     tlsAdvancedConfiguration?: {
                         insecure?: boolean,
+                        rootCertificates?: Buffer<ArrayBufferLike>,
                     },
                 },};
 

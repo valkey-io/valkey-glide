@@ -5,6 +5,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
@@ -34,18 +35,84 @@ func (addr *NodeAddress) toProtobuf() *protobuf.NodeAddress {
 	return &protobuf.NodeAddress{Host: addr.Host, Port: uint32(addr.Port)}
 }
 
+// ServiceType represents the types of AWS services that can be used for IAM authentication.
+type ServiceType int
+
+const (
+	// Amazon ElastiCache service.
+	ElastiCache ServiceType = iota
+	// Amazon MemoryDB service.
+	MemoryDB
+)
+
+// IamAuthConfig represents configuration settings for IAM authentication.
+type IamAuthConfig struct {
+	// The name of the ElastiCache/MemoryDB cluster.
+	clusterName string
+	// The type of service being used (ElastiCache or MemoryDB).
+	service ServiceType
+	// The AWS region where the ElastiCache/MemoryDB cluster is located.
+	region string
+	// Optional refresh interval in seconds for renewing IAM authentication tokens.
+	// If not provided, the core will use its default value.
+	refreshIntervalSeconds *uint32
+}
+
+// NewIamAuthConfig returns an [IamAuthConfig] struct with the given configuration.
+func NewIamAuthConfig(clusterName string, service ServiceType, region string) *IamAuthConfig {
+	return &IamAuthConfig{
+		clusterName: clusterName,
+		service:     service,
+		region:      region,
+	}
+}
+
+// WithRefreshIntervalSeconds sets the refresh interval in seconds for IAM token renewal.
+func (config *IamAuthConfig) WithRefreshIntervalSeconds(seconds uint32) *IamAuthConfig {
+	config.refreshIntervalSeconds = &seconds
+	return config
+}
+
+func (config *IamAuthConfig) toProtobuf() *protobuf.IamCredentials {
+	iamCreds := &protobuf.IamCredentials{
+		ClusterName: config.clusterName,
+		Region:      config.region,
+	}
+
+	if config.service == ElastiCache {
+		iamCreds.ServiceType = protobuf.ServiceType_ELASTICACHE
+	} else {
+		iamCreds.ServiceType = protobuf.ServiceType_MEMORYDB
+	}
+
+	if config.refreshIntervalSeconds != nil {
+		iamCreds.RefreshIntervalSeconds = config.refreshIntervalSeconds
+	}
+
+	return iamCreds
+}
+
 // ServerCredentials represents the credentials for connecting to servers.
+// Supports two authentication modes:
+//   - Password-based authentication: Use username and password
+//   - IAM authentication: Use username (required) and iamConfig
+//
+// These modes are mutually exclusive.
 type ServerCredentials struct {
 	// The username that will be used for authenticating connections to the servers. If not supplied, "default"
-	// will be used.
+	// will be used for password-based authentication. Required for IAM authentication.
 	username string
 	// The password that will be used for authenticating connections to the servers.
+	// Mutually exclusive with iamConfig.
 	password string
+	// IAM authentication configuration. Mutually exclusive with password.
+	// The client will automatically generate and refresh the authentication token based on the provided configuration.
+	iamConfig *IamAuthConfig
 }
 
 // NewServerCredentials returns a [ServerCredentials] struct with the given username and password.
 func NewServerCredentials(username string, password string) *ServerCredentials {
-	return &ServerCredentials{username, password}
+	return &ServerCredentials{username: username, password: password}
 }
 
 // NewServerCredentialsWithDefaultUsername returns a [ServerCredentials] struct with a default username of "default" and the
@@ -54,8 +121,34 @@ func NewServerCredentialsWithDefaultUsername(password string) *ServerCredentials
 	return &ServerCredentials{password: password}
 }
 
+// NewServerCredentialsWithIam returns a [ServerCredentials] struct configured for IAM authentication.
+// The username is required for IAM authentication.
+func NewServerCredentialsWithIam(username string, iamConfig *IamAuthConfig) (*ServerCredentials, error) {
+	if username == "" {
+		return nil, errors.New("username is required for IAM authentication")
+	}
+	if iamConfig == nil {
+		return nil, errors.New("iamConfig cannot be nil")
+	}
+	return &ServerCredentials{username: username, iamConfig: iamConfig}, nil
+}
+
 func (creds *ServerCredentials) toProtobuf() *protobuf.AuthenticationInfo {
-	return &protobuf.AuthenticationInfo{Username: creds.username, Password: creds.password}
+	authInfo := &protobuf.AuthenticationInfo{
+		Username: creds.username,
+		Password: creds.password,
+	}
+
+	if creds.iamConfig != nil {
+		authInfo.IamCredentials = creds.iamConfig.toProtobuf()
+	}
+
+	return authInfo
+}
+
+// IsIamAuth returns true if this credential is configured for IAM authentication.
+func (creds *ServerCredentials) IsIamAuth() bool {
+	return creds.iamConfig != nil
 }
 
 // ReadFrom represents the client's read from strategy.
@@ -248,6 +341,28 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 		request.ConnectionTimeout = connectionTimeout
 	}
 
+	// Handle TLS configuration
+	if config.AdvancedClientConfiguration.tlsConfig != nil {
+		tlsConfig := config.AdvancedClientConfiguration.tlsConfig
+
+		// Handle insecure TLS mode
+		if tlsConfig.UseInsecureTLS {
+			if request.TlsMode == protobuf.TlsMode_NoTls {
+				return nil, errors.New("UseInsecureTLS cannot be enabled when UseTLS is disabled")
+			}
+			// Override SecureTls mode to InsecureTls when user explicitly requests it
+			request.TlsMode = protobuf.TlsMode_InsecureTls
+		}
+
+		// Handle root certificates
+		if tlsConfig.RootCertificates != nil {
+			if len(tlsConfig.RootCertificates) == 0 {
+				return nil, errors.New("root certificates cannot be an empty byte array; use nil to use platform verifier")
+			}
+			request.RootCerts = [][]byte{tlsConfig.RootCertificates}
+		}
+	}
+
 	return request, nil
 }
 
@@ -398,6 +513,29 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
 	}
 	request.RefreshTopologyFromInitialNodes = config.AdvancedClusterClientConfiguration.refreshTopologyFromInitialNodes
+
+	// Handle TLS configuration
+	if config.AdvancedClusterClientConfiguration.tlsConfig != nil {
+		tlsConfig := config.AdvancedClusterClientConfiguration.tlsConfig
+
+		// Handle insecure TLS mode
+		if tlsConfig.UseInsecureTLS {
+			if request.TlsMode == protobuf.TlsMode_NoTls {
+				return nil, errors.New("UseInsecureTLS cannot be enabled when UseTLS is disabled")
+			}
+			// Override SecureTls mode to InsecureTls when user explicitly requests it
+			request.TlsMode = protobuf.TlsMode_InsecureTls
+		}
+
+		// Handle root certificates
+		if tlsConfig.RootCertificates != nil {
+			if len(tlsConfig.RootCertificates) == 0 {
+				return nil, errors.New("root certificates cannot be an empty byte array; use nil to use platform verifier")
+			}
+			request.RootCerts = [][]byte{tlsConfig.RootCertificates}
+		}
+	}
+
 	return request, nil
 }
 
@@ -516,9 +654,96 @@ func (config *ClusterClientConfiguration) GetSubscription() *ClusterSubscription
 	return nil
 }
 
+// TlsConfiguration represents TLS-specific configuration settings.
+type TlsConfiguration struct {
+	// RootCertificates contains custom root certificate data for TLS connections in PEM format.
+	//
+	// When provided, these certificates will be used instead of the system's default trust store.
+	// If set to an empty byte array (non-nil but length 0), an error will be returned.
+	// If nil, the system's default certificate trust store will be used (platform verifier).
+	//
+	// The certificate data should be in PEM format as a byte array.
+	RootCertificates []byte
+
+	// UseInsecureTLS bypasses TLS certificate verification when set to true.
+	//
+	// When enabled, the client skips certificate validation. This is useful when connecting
+	// to servers or clusters using self-signed certificates, or when DNS entries (e.g., CNAMEs)
+	// don't match certificate hostnames.
+	//
+	// This setting is typically used in development or testing environments. It is strongly
+	// discouraged in production, as it introduces security risks such as man-in-the-middle attacks.
+	//
+	// Only valid if TLS is already enabled in the base client configuration.
+	// Enabling it without TLS will result in an error.
+	//
+	// Default: false (verification is enforced).
+	UseInsecureTLS bool
+}
+
+// NewTlsConfiguration returns a new [TlsConfiguration] with default settings (uses platform verifier).
+func NewTlsConfiguration() *TlsConfiguration {
+	return &TlsConfiguration{}
+}
+
+// WithRootCertificates sets custom root certificates for TLS connections.
+// The certificates should be in PEM format.
+// Pass nil to use the system's default trust store (default behavior).
+// Passing an empty byte array will result in an error during connection.
+func (config *TlsConfiguration) WithRootCertificates(rootCerts []byte) *TlsConfiguration {
+	config.RootCertificates = rootCerts
+	return config
+}
+
+// WithInsecureTLS enables or disables insecure TLS mode.
+//
+// When enabled (true), TLS certificate verification is bypassed. This is useful for development
+// and testing with self-signed certificates, but should never be used in production.
+//
+// Only valid if TLS is already enabled in the base client configuration.
+// Attempting to enable insecure TLS without TLS enabled will result in an error during connection.
+//
+// Default: false (verification is enforced).
+func (config *TlsConfiguration) WithInsecureTLS(insecure bool) *TlsConfiguration {
+	config.UseInsecureTLS = insecure
+	return config
+}
+
+// LoadRootCertificatesFromFile reads a PEM-encoded certificate file and returns its contents as a byte array.
+// This is a convenience function for loading custom root certificates from disk.
+//
+// Parameters:
+//   - path: The file path to the PEM-encoded certificate file
+//
+// Returns:
+//   - []byte: The certificate data in PEM format
+//   - error: An error if the file cannot be read
+//
+// Example usage:
+//
+//	certs, err := config.LoadRootCertificatesFromFile("/path/to/ca-cert.pem")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certs)
+//	advancedConfig := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+func LoadRootCertificatesFromFile(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read certificate file: %w", err)
+	}
+
+	if len(data) == 0 {
+		return nil, fmt.Errorf("certificate file is empty: %s", path)
+	}
+
+	return data, nil
+}
+
 // Represents advanced configuration settings for a Standalone client used in [ClientConfiguration].
 type AdvancedClientConfiguration struct {
 	connectionTimeout time.Duration
+	tlsConfig         *TlsConfiguration
 }
 
 // NewAdvancedClientConfiguration returns a new [AdvancedClientConfiguration] with default settings.
@@ -541,11 +766,21 @@ func (config *AdvancedClientConfiguration) WithConnectionTimeout(
 	return config
 }
 
+// WithTlsConfiguration sets the TLS configuration for the client.
+// This allows customization of TLS behavior, such as providing custom root certificates.
+func (config *AdvancedClientConfiguration) WithTlsConfiguration(
+	tlsConfig *TlsConfiguration,
+) *AdvancedClientConfiguration {
+	config.tlsConfig = tlsConfig
+	return config
+}
+
 // Represents advanced configuration settings for a Cluster client used in
 // [ClusterClientConfiguration].
 type AdvancedClusterClientConfiguration struct {
 	connectionTimeout               time.Duration
 	refreshTopologyFromInitialNodes bool
+	tlsConfig                       *TlsConfiguration
 }
 
 // NewAdvancedClusterClientConfiguration returns a new [AdvancedClusterClientConfiguration] with default settings.
@@ -575,5 +810,14 @@ func (config *AdvancedClusterClientConfiguration) WithRefreshTopologyFromInitial
 	refreshTopologyFromInitialNodes bool,
 ) *AdvancedClusterClientConfiguration {
 	config.refreshTopologyFromInitialNodes = refreshTopologyFromInitialNodes
+	return config
+}
+
+// WithTlsConfiguration sets the TLS configuration for the cluster client.
+// This allows customization of TLS behavior, such as providing custom root certificates.
+func (config *AdvancedClusterClientConfiguration) WithTlsConfiguration(
+	tlsConfig *TlsConfiguration,
+) *AdvancedClusterClientConfiguration {
+	config.tlsConfig = tlsConfig
 	return config
 }

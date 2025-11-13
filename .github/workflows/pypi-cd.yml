@@ -141,31 +141,30 @@ jobs:
                   # List of packages to update
                   for package in glide-async glide-sync glide-shared; do
                     echo "Patching version in $package/pyproject.toml"
-                    # Remove "version" from dynamic array (handles all positions and comma combinations)
-                    sed -i $SED_FOR_MACOS '/^dynamic = /s/"version",\s*//g' "./$package/pyproject.toml"  # Remove "version", 
-                    sed -i $SED_FOR_MACOS '/^dynamic = /s/,\s*"version"//g' "./$package/pyproject.toml"  # Remove ,"version"
-                    sed -i $SED_FOR_MACOS '/^dynamic = /s/"version"//g' "./$package/pyproject.toml"      # Remove "version"
-                    
-                    # Add version field after [project] line (handle macOS vs Linux differently)
-                    if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then
-                      # macOS requires backslash and newline
-                      sed -i '' '/^\[project\]/a\
-                  version = "${{ env.RELEASE_VERSION }}"
-                  ' "./$package/pyproject.toml"
-                    else
-                      # Linux syntax
-                      sed -i '/^\[project\]/a version = "${{ env.RELEASE_VERSION }}"' "./$package/pyproject.toml"
-                    fi
+                    sed -i $SED_FOR_MACOS "s/^dynamic = \[\s*\"version\"\s*\]/version = \"${{ env.RELEASE_VERSION }}\"/" "./$package/pyproject.toml"
 
                     # Log the updated file
                     cat "./$package/pyproject.toml"
                   done
 
+            - name: Install Python 3.14 on persistent self-hosted runner
+              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && contains(matrix.build.RUNNER, 'persistent') }}
+              run: |
+                  # Note: We currently only have Linux persistent self-hosted runner. If persistent self-hosted macOS runners
+                  # are added to the matrix for CD pipelines, update this step to conditionally use:
+                  #     brew install python@3.14 && brew link python@3.14
+                  if ! command -v python3.14 &> /dev/null; then
+                      sudo apt update
+                      sudo apt install -y python3.14 python3.14-dev
+                      python3.14 -m ensurepip --upgrade
+                      python3.14 -m pip install --upgrade pip
+                  fi
+
             - name: Set up Python
               if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
               uses: actions/setup-python@v5
               with:
-                  python-version: "3.13"
+                  python-version: "3.14"
 
             - name: Update package version in config.toml for the async client
               uses: ./.github/workflows/update-glide-version
@@ -277,16 +276,17 @@ jobs:
               with:
                   working-directory: ./python/glide-async
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 pypy3.9 pypy3.10 pypy3.11' || 'python3.13' }}
+                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.9 pypy3.10 pypy3.11' || 'python3.14' }}
                   manylinux: auto
                   container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
+                  docker-options: --pull always --rm
                   before-script-linux: |
                       # Install protobuf compiler
                       if [[ $(`which apt`) != '' ]]
                       then
                         echo "installing unzip and curl"
                         apt-get update
-                        apt install unzip curl python3.13 pypy3 -y
+                        apt install unzip curl python3.14 pypy3 -y
                       fi
                       PB_REL="https://github.com/protocolbuffers/protobuf/releases"
                       ARCH=`uname -p`
@@ -354,19 +354,28 @@ jobs:
                   maturin-version: 0.14.17
                   working-directory: ./python/glide-async
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 pypy3.9 pypy3.10 pypy3.11' || 'python3.13' }}
+                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.9 pypy3.10 pypy3.11' || 'python3.14' }}
 
             ### SYNC CLIENT ###
 
+            - name: Determine Python command
+              id: python_cmd
+              run: |
+                  if command -v python3.14 &> /dev/null; then
+                      echo "cmd=python3.14" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "cmd=python3" >> "$GITHUB_OUTPUT"
+                  fi
+
             - name: Install cibuildwheel
-              run: python3 -m pip install cibuildwheel
+              run: ${{ steps.python_cmd.outputs.cmd }} -m pip install cibuildwheel
 
             - name: Determine cibuildwheel version and set enable flags
               id: cibw_config
               run: |
-                  python3 -m pip install setuptools
+                  ${{ steps.python_cmd.outputs.cmd }} -m pip install setuptools
                   # PyPy builds are disabled by default from version 3
-                  CIBW_VERSION=$(python3 -c "import pkg_resources; print(pkg_resources.get_distribution('cibuildwheel').version)")
+                  CIBW_VERSION=$(python3.14 -c "from importlib.metadata import version; print(version('cibuildwheel'))")
                   echo "Detected cibuildwheel version: $CIBW_VERSION"
 
                   ENABLE_FLAGS=""
@@ -379,10 +388,12 @@ jobs:
             - name: Build Python Sync client wheels
               run: |
                   # we call cibuildwheel from the root folder in order to copy the whole folder tree to the docker
-                  cibuildwheel python/glide-sync --output-dir python/glide-sync/wheels
+                  ${{ steps.python_cmd.outputs.cmd }} -m cibuildwheel python/glide-sync --output-dir python/glide-sync/wheels
               env:
-                  CIBW_BUILD: ${{ github.event_name != 'pull_request' && 'cp39-* cp310-* cp311-* cp312-* cp313-* pp39-* pp310-* pp311-*' || 'cp313-*' }}
+                  CIBW_BUILD: ${{ github.event_name != 'pull_request' && 'cp39-* cp310-* cp311-* cp312-* cp313-* cp314-* pp39-* pp310-* pp311-*' || 'cp314-*' }}
                   CIBW_SKIP: "*-musl* *i686* *i386*"
+                  CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+                  CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
                   CIBW_ARCHS_LINUX: auto
                   CIBW_ARCHS_MACOS: auto
                   CIBW_ENABLE: ${{ steps.cibw_config.outputs.enable_flags }}
@@ -427,21 +438,7 @@ jobs:
                   # List of packages to update
                   for package in glide-async glide-sync glide-shared; do
                     echo "Patching version in $package/pyproject.toml"
-                    # Remove "version" from dynamic array (handles all positions and comma combinations)
-                    sed -i $SED_FOR_MACOS '/^dynamic = /s/"version",\s*//g' "./$package/pyproject.toml"  # Remove "version", 
-                    sed -i $SED_FOR_MACOS '/^dynamic = /s/,\s*"version"//g' "./$package/pyproject.toml"  # Remove ,"version"
-                    sed -i $SED_FOR_MACOS '/^dynamic = /s/"version"//g' "./$package/pyproject.toml"      # Remove "version"
-                    
-                    # Add version field after [project] line (handle macOS vs Linux differently)
-                    if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then
-                      # macOS requires backslash and newline
-                      sed -i '' '/^\[project\]/a\
-                  version = "${{ env.RELEASE_VERSION }}"
-                  ' "./$package/pyproject.toml"
-                    else
-                      # Linux syntax
-                      sed -i '/^\[project\]/a version = "${{ env.RELEASE_VERSION }}"' "./$package/pyproject.toml"
-                    fi
+                    sed -i $SED_FOR_MACOS "s/^dynamic = \[\s*\"version\"\s*\]/version = \"${{ env.RELEASE_VERSION }}\"/" "./$package/pyproject.toml"
 
                     # Log the updated file
                     cat "./$package/pyproject.toml"

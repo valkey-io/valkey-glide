@@ -10,6 +10,16 @@ repositories {
     mavenCentral()
 }
 
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Javadoc) {
+    options.encoding = 'UTF-8'
+    options.charSet = 'UTF-8'
+    options.docEncoding = 'UTF-8'
+}
+
 ext {
     // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
     arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
@@ -19,7 +29,7 @@ dependencies {
     implementation project(':client')
 
     // Transitive dependencies needed by GLIDE client
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.18.0'
 
     implementation('com.google.protobuf:protobuf-java') {
         version {

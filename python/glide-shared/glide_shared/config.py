@@ -107,23 +107,92 @@ class BackoffStrategy:
         self.jitter_percent = jitter_percent
 
 
-class ServerCredentials:
+class ServiceType(Enum):
     """
-    Represents the credentials for connecting to a server.
+    Represents the types of AWS services that can be used for IAM authentication.
+    """
+
+    ELASTICACHE = 0
+    """Amazon ElastiCache service."""
+    MEMORYDB = 1
+    """Amazon MemoryDB service."""
+
+
+class IamAuthConfig:
+    """
+    Configuration settings for IAM authentication.
 
     Attributes:
-        password (str): The password that will be used for authenticating connections to the servers.
-        username (Optional[str]): The username that will be used for authenticating connections to the servers.
-            If not supplied, "default" will be used.
+        cluster_name (str): The name of the ElastiCache/MemoryDB cluster.
+        service (ServiceType): The type of service being used (ElastiCache or MemoryDB).
+        region (str): The AWS region where the ElastiCache/MemoryDB cluster is located.
+        refresh_interval_seconds (Optional[int]): Optional refresh interval in seconds for renewing IAM authentication tokens.
+            If not provided, the core will use a default value of 300 seconds (5 min).
     """
 
     def __init__(
         self,
-        password: str,
-        username: Optional[str] = None,
+        cluster_name: str,
+        service: ServiceType,
+        region: str,
+        refresh_interval_seconds: Optional[int] = None,
     ):
+        self.cluster_name = cluster_name
+        self.service = service
+        self.region = region
+        self.refresh_interval_seconds = refresh_interval_seconds
+
+
+class ServerCredentials:
+    """
+    Represents the credentials for connecting to a server.
+
+    Exactly one of the following authentication modes must be provided:
+        - Password-based authentication: Use password (and optionally username)
+        - IAM authentication: Use username (required) and iam_config
+
+    These modes are mutually exclusive - you cannot use both simultaneously.
+
+    Attributes:
+        password (Optional[str]): The password that will be used for authenticating connections to the servers.
+            Mutually exclusive with iam_config. Either password or iam_config must be provided.
+        username (Optional[str]): The username that will be used for authenticating connections to the servers.
+            If not supplied for password-based authentication, "default" will be used.
+            Required for IAM authentication.
+        iam_config (Optional[IamAuthConfig]): IAM authentication configuration. Mutually exclusive with password.
+            Either password or iam_config must be provided.
+            The client will automatically generate and refresh the authentication token based on the provided configuration.
+    """
+
+    def __init__(
+        self,
+        password: Optional[str] = None,
+        username: Optional[str] = None,
+        iam_config: Optional[IamAuthConfig] = None,
+    ):
+        # Validate mutual exclusivity
+        if password is not None and iam_config is not None:
+            raise ConfigurationError(
+                "password and iam_config are mutually exclusive. Use either password-based or IAM authentication, not both."
+            )
+
+        # Validate IAM requires username
+        if iam_config is not None and not username:
+            raise ConfigurationError("username is required for IAM authentication.")
+
+        # At least one authentication method must be provided
+        if password is None and iam_config is None:
+            raise ConfigurationError(
+                "Either password or iam_config must be provided for authentication."
+            )
+
         self.password = password
         self.username = username
+        self.iam_config = iam_config
+
+    def is_iam_auth(self) -> bool:
+        """Returns True if this credential is configured for IAM authentication."""
+        return self.iam_config is not None
 
 
 class PeriodicChecksManualInterval:
@@ -172,10 +241,40 @@ class TlsAdvancedConfiguration:
               Enabling it without TLS will result in a `ConfigurationError`.
 
             - Default: False (verification is enforced).
+
+        root_pem_cacerts (Optional[bytes]): Custom root certificate data for TLS connections in PEM format.
+
+            - When provided, these certificates will be used instead of the system's default trust store.
+              This is useful for connecting to servers with self-signed certificates or corporate
+              certificate authorities.
+
+            - If set to an empty bytes object (non-None but length 0), a `ConfigurationError` will be raised.
+
+            - If None (default), the system's default certificate trust store will be used (platform verifier).
+
+            - The certificate data should be in PEM format as a bytes object.
+
+            - Multiple certificates can be provided by concatenating them in PEM format.
+
+            Example usage::
+
+                # Load from file
+                with open('/path/to/ca-cert.pem', 'rb') as f:
+                    cert_data = f.read()
+                tls_config = TlsAdvancedConfiguration(root_pem_cacerts=cert_data)
+
+                # Or provide directly
+                cert_data = b"-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----"
+                tls_config = TlsAdvancedConfiguration(root_pem_cacerts=cert_data)
     """
 
-    def __init__(self, use_insecure_tls: Optional[bool] = None):
+    def __init__(
+        self,
+        use_insecure_tls: Optional[bool] = None,
+        root_pem_cacerts: Optional[bytes] = None,
+    ):
         self.use_insecure_tls = use_insecure_tls
+        self.root_pem_cacerts = root_pem_cacerts
 
 
 class AdvancedBaseClientConfiguration:
@@ -206,13 +305,24 @@ class AdvancedBaseClientConfiguration:
         if self.connection_timeout:
             request.connection_timeout = self.connection_timeout
 
-        if self.tls_config and self.tls_config.use_insecure_tls:
-            if request.tls_mode == TlsMode.SecureTls:
+        if self.tls_config:
+            if self.tls_config.use_insecure_tls:
+                # Validate that TLS is enabled before allowing insecure mode
+                if request.tls_mode == TlsMode.NoTls:
+                    raise ConfigurationError(
+                        "use_insecure_tls cannot be enabled when use_tls is disabled."
+                    )
+
+                # Override the default SecureTls mode to InsecureTls when user explicitly requests it
                 request.tls_mode = TlsMode.InsecureTls
-            elif request.tls_mode == TlsMode.NoTls:
-                raise ConfigurationError(
-                    "use_insecure_tls cannot be enabled when use_tls is disabled."
-                )
+
+            # Handle root certificates
+            if self.tls_config.root_pem_cacerts is not None:
+                if len(self.tls_config.root_pem_cacerts) == 0:
+                    raise ConfigurationError(
+                        "root_pem_cacerts cannot be an empty bytes object; use None to use platform verifier"
+                    )
+                request.root_certs.append(self.tls_config.root_pem_cacerts)
 
         return request
 
@@ -357,7 +467,41 @@ class BaseClientConfiguration:
 
         if self.credentials.username:
             request.authentication_info.username = self.credentials.username
-        request.authentication_info.password = self.credentials.password
+
+        if self.credentials.password:
+            request.authentication_info.password = self.credentials.password
+
+        # Set IAM credentials if present
+        if self.credentials.iam_config:
+            iam_config = self.credentials.iam_config
+            request.authentication_info.iam_credentials.cluster_name = (
+                iam_config.cluster_name
+            )
+            request.authentication_info.iam_credentials.region = iam_config.region
+
+            # Map ServiceType enum to protobuf ServiceType
+            if iam_config.service == ServiceType.ELASTICACHE:
+                from glide_shared.protobuf.connection_request_pb2 import (
+                    ServiceType as ProtobufServiceType,
+                )
+
+                request.authentication_info.iam_credentials.service_type = (
+                    ProtobufServiceType.ELASTICACHE
+                )
+            elif iam_config.service == ServiceType.MEMORYDB:
+                from glide_shared.protobuf.connection_request_pb2 import (
+                    ServiceType as ProtobufServiceType,
+                )
+
+                request.authentication_info.iam_credentials.service_type = (
+                    ProtobufServiceType.MEMORYDB
+                )
+
+            # Set optional refresh interval
+            if iam_config.refresh_interval_seconds is not None:
+                request.authentication_info.iam_credentials.refresh_interval_seconds = (
+                    iam_config.refresh_interval_seconds
+                )
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -592,7 +736,7 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
             that bypasses certificate validation.
         refresh_topology_from_initial_nodes (bool): Enables refreshing the cluster topology using only the initial nodes.
             When this option is enabled, all topology updates (both the periodic checks and on-demand refreshes
-            triggered by topology changes) will query only the initial nodes provided when creating the client, rather than using internal cluster view.
+            triggered by topology changes) will query only the initial nodes provided when creating the client, rather than using the internal cluster view.
     """
 
     def __init__(
@@ -788,3 +932,44 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         if self.pubsub_subscriptions:
             return self.pubsub_subscriptions.callback, self.pubsub_subscriptions.context
         return None, None
+
+
+def load_root_certificates_from_file(path: str) -> bytes:
+    """
+    Load PEM-encoded root certificates from a file.
+
+    This is a convenience function for loading custom root certificates from disk
+    to be used with TlsAdvancedConfiguration.
+
+    Args:
+        path (str): The file path to the PEM-encoded certificate file.
+
+    Returns:
+        bytes: The certificate data in PEM format.
+
+    Raises:
+        FileNotFoundError: If the certificate file does not exist.
+        ConfigurationError: If the certificate file is empty.
+
+    Example usage::
+
+        from glide_shared.config import load_root_certificates_from_file, TlsAdvancedConfiguration
+
+        # Load certificates from file
+        certs = load_root_certificates_from_file('/path/to/ca-cert.pem')
+
+        # Use in TLS configuration
+        tls_config = TlsAdvancedConfiguration(root_pem_cacerts=certs)
+    """
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Certificate file not found: {path}")
+    except Exception as e:
+        raise ConfigurationError(f"Failed to read certificate file: {e}")
+
+    if len(data) == 0:
+        raise ConfigurationError(f"Certificate file is empty: {path}")
+
+    return data

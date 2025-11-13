@@ -42,6 +42,9 @@ public class GlideNativeBridge {
     public static native void updateConnectionPassword(
             long clientPtr, String password, boolean immediateAuth, long callbackId);
 
+    /** Refresh the IAM authentication token. */
+    public static native void refreshIamToken(long clientPtr, long callbackId);
+
     /** Check if the native client is connected */
     public static native boolean isConnected(long clientPtr);
 
@@ -63,8 +66,11 @@ public class GlideNativeBridge {
             String routeParam,
             boolean expectUtf8Response);
 
-    /** Get glide-core default timeout in milliseconds */
-    public static native long getGlideCoreDefaultTimeoutMs();
+    /** Get glide-core default connection timeout in milliseconds */
+    public static native long getGlideCoreDefaultConnectionTimeoutMs();
+
+    /** Get glide-core default request timeout in milliseconds */
+    public static native long getGlideCoreDefaultRequestTimeoutMs();
 
     /** Get glide-core default maximum inflight requests limit */
     public static native int getGlideCoreDefaultMaxInflightRequests();

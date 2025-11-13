@@ -24,8 +24,8 @@ use versions::Versioning;
 pub mod cluster;
 pub mod mocks;
 
-pub(crate) const SHORT_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(10_000);
-pub(crate) const LONG_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(20_000);
+pub(crate) const SHORT_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(20_000);
+pub(crate) const LONG_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(40_000);
 
 // Code copied from redis-rs
 
@@ -395,8 +395,8 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
         .wait()
         .expect("failed to create CA cert");
 
-    // Build x509v3 extensions file
-    fs::write(&ext_file, b"keyUsage = digitalSignature, keyEncipherment")
+    // Build x509v3 extensions file with SAN for 127.0.0.1
+    fs::write(&ext_file, b"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,DNS:localhost")
         .expect("failed to create x509v3 extensions file");
 
     // Read redis key
@@ -445,6 +445,12 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
         redis_crt,
         redis_key,
         ca_crt,
+    }
+}
+
+impl TlsFilePaths {
+    pub fn read_ca_cert_as_bytes(&self) -> Vec<u8> {
+        fs::read(&self.ca_crt).expect("Failed to read CA certificate file")
     }
 }
 

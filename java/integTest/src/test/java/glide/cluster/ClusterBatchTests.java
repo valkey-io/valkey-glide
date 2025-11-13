@@ -175,6 +175,13 @@ public class ClusterBatchTests {
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
     public void test_batch_large_values(GlideClusterClient clusterClient, boolean isAtomic) {
+        // Skip on macOS - the macOS tests run on self hosted VMs which have resource limits
+        // making this test flaky with "no buffer space available" errors. See -
+        // https://github.com/valkey-io/valkey-glide/issues/4902
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("mac")) {
+            return;
+        }
         int length = 1 << 25; // 33mb
         String key = "0".repeat(length);
         String value = "0".repeat(length);
