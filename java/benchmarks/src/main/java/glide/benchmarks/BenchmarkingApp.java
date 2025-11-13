@@ -60,6 +60,7 @@ public class BenchmarkingApp {
                     break;
             }
         }
+        System.exit(0);
     }
 
     private static Options getOptions() {
