@@ -338,7 +338,7 @@ assert_eq!(result, Ok(("foo".to_string(), b"bar".to_vec())));
 // public api
 pub use crate::client::Client;
 pub use crate::client::GlideConnectionOptions;
-pub use crate::cmd::{cmd, pack_command, pipe, Arg, Cmd, Iter};
+pub use crate::cmd::{cmd, fenced_cmd, pack_command, pipe, Arg, Cmd, Iter};
 pub use crate::commands::{
     Commands, ControlFlow, Direction, LposOptions, PubSubCommands, SetOptions,
 };

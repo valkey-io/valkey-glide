@@ -32,10 +32,11 @@ mod cluster_async {
             MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
         },
         cluster_topology::{get_slot, DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES},
-        cmd, from_owned_redis_value, parse_redis_value, AsyncCommands, Cmd, ConnectionAddr,
-        ErrorKind, FromRedisValue, GlideConnectionOptions, InfoDict, IntoConnectionInfo,
-        PipelineRetryStrategy, ProtocolVersion, PubSubChannelOrPattern, PubSubSubscriptionInfo,
-        PubSubSubscriptionKind, PushInfo, PushKind, RedisError, RedisFuture, RedisResult, Value,
+        cmd, fenced_cmd, from_owned_redis_value, parse_redis_value, AsyncCommands, Cmd,
+        ConnectionAddr, ErrorKind, FromRedisValue, GlideConnectionOptions, InfoDict,
+        IntoConnectionInfo, PipelineRetryStrategy, ProtocolVersion, PubSubChannelOrPattern,
+        PubSubSubscriptionInfo, PubSubSubscriptionKind, PushInfo, PushKind, RedisError,
+        RedisFuture, RedisResult, Value,
     };
 
     use crate::support::*;
@@ -6379,6 +6380,499 @@ mod cluster_async {
         });
 
         assert_eq!(request_counter.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_fenced_command_with_successful_response() {
+        // Test fenced command returns correct value (command result, then PONG).
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0).use_protocol(ProtocolVersion::RESP3),
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            let _: () = connection.set("test_key", "test_value").await.unwrap();
+
+            let mut fenced_cmd = fenced_cmd("GET");
+            fenced_cmd.arg("test_key");
+
+            let result: String = fenced_cmd.query_async(&mut connection).await.unwrap();
+            assert_eq!(result, "test_value");
+
+            // Verify ordering is correct after fenced command
+            let result: String = cmd("GET")
+                .arg("test_key")
+                .query_async(&mut connection)
+                .await
+                .unwrap();
+            assert_eq!(result, "test_value");
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_fenced_command_with_server_error() {
+        // Test fenced command correctly returns server error (error, then PONG).
+
+        let key = "type_error_test_key";
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0).use_protocol(ProtocolVersion::RESP3),
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            // Set key to string value
+            let _: () = connection.set(key, "hello").await.unwrap();
+
+            // Try LPUSH to string key (will fail with WRONGTYPE)
+            let mut lpush_cmd = fenced_cmd("LPUSH");
+            lpush_cmd.arg(key).arg("1");
+
+            let result = lpush_cmd.query_async::<_, Value>(&mut connection).await;
+
+            match result {
+                Err(e) if e.kind() == ErrorKind::ExtensionError => {
+                    assert_eq!(e.code(), Some("WRONGTYPE"));
+                }
+                Err(e) => panic!("Expected WRONGTYPE error but got {:?}: {}", e.kind(), e),
+                Ok(val) => panic!("Expected Err(WRONGTYPE) but got Ok: {:?}", val),
+            }
+
+            // Verify connection still works
+            let ping_result: String = cmd("PING").query_async(&mut connection).await.unwrap();
+            assert_eq!(ping_result, "PONG");
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_fenced_command_with_connection_error() {
+        // Test fenced command correctly handles connection errors.
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0).use_protocol(ProtocolVersion::RESP3),
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            let mut fenced_cmd = fenced_cmd("GET");
+            fenced_cmd.arg("some_key");
+
+            // Drop cluster to kill all connections
+            drop(cluster);
+
+            let result = connection.req_packed_command(&fenced_cmd).await;
+
+            assert!(
+                result
+                    .as_ref()
+                    .is_err_and(|e| e.kind() == ErrorKind::FatalSendError
+                        || e.kind() == ErrorKind::FatalReceiveError),
+                "Expected connection error, but got: {:?}",
+                result
+            );
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_fenced_sunsubscribe_with_moved_error() {
+        // Test fenced SUNSUBSCRIBE receives MOVED error after slot migration,
+        // verifying the fenced command logic handles it correctly.
+        // This scenario is similar to the one described in - https://github.com/valkey-io/valkey/issues/1066
+
+        let channel = "fenced_sunsubscribe_test_channel";
+        let channel_slot = get_slot(channel.as_bytes());
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0).use_protocol(ProtocolVersion::RESP3),
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            let _: () = cmd("SSUBSCRIBE")
+                .arg(channel)
+                .query_async(&mut connection)
+                .await
+                .unwrap();
+
+            let old_node_route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                Route::new(channel_slot, SlotAddr::Master),
+            ));
+
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+            cluster
+                .move_specific_slot(channel_slot, slot_distribution)
+                .await;
+
+            let mut unsubscribe_cmd = fenced_cmd("SUNSUBSCRIBE");
+            unsubscribe_cmd.arg(channel);
+
+            let result = connection
+                .route_command(&unsubscribe_cmd, old_node_route)
+                .await;
+
+            match result {
+                Err(e) if e.kind() == ErrorKind::Moved => {}
+                Err(e) => panic!(
+                    "Expected Err(MOVED) but got different error: kind={:?}, detail={:?}",
+                    e.kind(),
+                    e.detail()
+                ),
+                Ok(val) => panic!("Expected Err(MOVED) but got Ok: {:?}", val),
+            }
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_fenced_sunsubscribe_with_slot_deletion_error() {
+        // Test fenced SUNSUBSCRIBE receives error after slot deletion,
+        // verifying the fenced command logic handles it correctly.
+        // This scenario is similar to the one described in - https://github.com/valkey-io/valkey/issues/1066
+
+        let channel = "fenced_sunsubscribe_deletion_test_channel";
+        let channel_slot = get_slot(channel.as_bytes());
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0).use_protocol(ProtocolVersion::RESP3),
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            let _: () = cmd("SSUBSCRIBE")
+                .arg(channel)
+                .query_async(&mut connection)
+                .await
+                .unwrap();
+
+            let old_node_route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                Route::new(channel_slot, SlotAddr::Master),
+            ));
+
+            cluster.delete_specific_slot(channel_slot, None).await;
+
+            let mut unsubscribe_cmd = fenced_cmd("SUNSUBSCRIBE");
+            unsubscribe_cmd.arg(channel);
+
+            let result = connection
+                .route_command(&unsubscribe_cmd, old_node_route)
+                .await;
+
+            // Verify we got a server error (slot no longer owned by this node)
+            match result {
+                Err(e) if e.kind() == ErrorKind::ClusterDown => {}
+                Err(e) => panic!("Expected CLUSTERDOWN error but got {:?}: {}", e.kind(), e),
+                Ok(val) => panic!("Expected Err(CLUSTERDOWN) but got Ok: {:?}", val),
+            }
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_fenced_sunsubscribe_successful() {
+        // Test fenced SUNSUBSCRIBE correctly handles PONG as the response of the command,
+        // indicating the fenced command completed successfully.
+
+        let channel = "successful_sunsubscribe_test_channel";
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0).use_protocol(ProtocolVersion::RESP3),
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            let _: () = cmd("SSUBSCRIBE")
+                .arg(channel)
+                .query_async(&mut connection)
+                .await
+                .unwrap();
+
+            let mut unsubscribe_cmd = fenced_cmd("SUNSUBSCRIBE");
+            unsubscribe_cmd.arg(channel);
+
+            let result = unsubscribe_cmd
+                .query_async::<_, Value>(&mut connection)
+                .await;
+
+            assert!(
+                matches!(result, Ok(Value::Nil)),
+                "Expected Nil but got: {:?}",
+                result
+            );
+
+            // Verify ordering is still correct
+            let ping_result: String = cmd("PING").query_async(&mut connection).await.unwrap();
+            assert_eq!(ping_result, "PONG");
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_multiple_fenced_commands_sequential() {
+        // Test multiple fenced commands sent sequentially each receive correct responses.
+
+        let channels = vec![
+            "fenced_seq_channel_1",
+            "fenced_seq_channel_2",
+            "fenced_seq_channel_3",
+            "fenced_seq_channel_4",
+        ];
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0).use_protocol(ProtocolVersion::RESP3),
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            // Subscribe to all channels
+            for channel in &channels {
+                let _: () = cmd("SSUBSCRIBE")
+                    .arg(channel)
+                    .query_async(&mut connection)
+                    .await
+                    .unwrap();
+            }
+
+            // Send fenced SUNSUBSCRIBE for each channel
+            for channel in &channels {
+                let mut unsubscribe_cmd = fenced_cmd("SUNSUBSCRIBE");
+                unsubscribe_cmd.arg(channel);
+
+                let result = unsubscribe_cmd
+                    .query_async::<_, Value>(&mut connection)
+                    .await;
+
+                assert!(
+                    matches!(result, Ok(Value::Nil)),
+                    "Expected Nil for channel '{}' but got: {:?}",
+                    channel,
+                    result
+                );
+            }
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_response_ordering_during_slot_migration() {
+        // Verifies that if there's an unrelated InFlight request while receiving an unprompted
+        // SUNSUBSCRIBE push notification, it does not interfere with response ordering
+
+        let channel = "migration_test_channel";
+        let mut pubsub_subs = PubSubSubscriptionInfo::new();
+        pubsub_subs.insert(
+            PubSubSubscriptionKind::Sharded,
+            HashSet::from([PubSubChannelOrPattern::from(channel.as_bytes())]),
+        );
+        let pubsub_subs_clone = pubsub_subs.clone();
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| {
+                builder
+                    .retries(3)
+                    .use_protocol(ProtocolVersion::RESP3)
+                    .pubsub_subscriptions(pubsub_subs_clone)
+                    .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            },
+            false,
+        );
+
+        block_on_all(async move {
+            let connection = cluster.async_connection(None).await;
+            let mut push_connection = cluster.async_connection(None).await;
+
+            let channel_slot = get_slot(channel.as_bytes());
+
+            // Start blocking BLPOP
+            let blpop_key = "blocking_list_key";
+            let expected_value = "test_value";
+            let mut connection_clone = connection.clone();
+            let blpop_handle = tokio::spawn(async move {
+                connection_clone
+                    .blpop::<_, Option<(String, String)>>(blpop_key, 10.0)
+                    .await
+            });
+
+            // Move slot to trigger unprompted SUNSUBSCRIBE
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+            cluster
+                .move_specific_slot(channel_slot, slot_distribution)
+                .await;
+
+            // Push value to unblock BLPOP
+            let _: () = push_connection
+                .rpush(blpop_key, expected_value)
+                .await
+                .unwrap();
+
+            // Verify BLPOP received correct value
+            let blpop_result = blpop_handle.await.unwrap();
+            match blpop_result {
+                Ok(Some((key, value))) => {
+                    assert_eq!(key, blpop_key);
+                    assert_eq!(value, expected_value);
+                }
+                Ok(None) => panic!("BLPOP timed out"),
+                Err(e) => panic!("BLPOP failed: {:?}", e),
+            }
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_protocol_desync_when_fenced_command_fails() {
+        let test_user = "test_desync_user";
+        let test_password = "test_password";
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| {
+                builder
+                    .retries(0)
+                    .use_protocol(ProtocolVersion::RESP3)
+                    .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            },
+            false,
+        );
+
+        block_on_all(async {
+            // Use admin connection for ACL commands (default user)
+            let mut admin_connection = cluster.async_connection(None).await;
+
+            // Set up test user with PING initially to allow connection setup
+            let _: () = redis::cmd("ACL")
+                .arg("SETUSER")
+                .arg(test_user)
+                .arg("on")
+                .arg(&format!(">{}", test_password))
+                .arg("+subscribe")
+                .arg("+ssubscribe")
+                .arg("+sunsubscribe")
+                .arg("+unsubscribe")
+                .arg("+ping")      // Allow PING initially
+                .arg("+cluster")   // Allow CLUSTER commands for topology discovery
+                .arg("allkeys")
+                .query_async(&mut admin_connection)
+                .await
+                .unwrap();
+
+            // Create a separate client for test user
+            let test_user_client = ClusterClient::builder(cluster.nodes.clone())
+                .use_protocol(ProtocolVersion::RESP3)
+                .username(test_user.to_string())
+                .password(test_password.to_string())
+                .build()
+                .unwrap();
+
+            let mut connection = test_user_client.get_async_connection(None).await.unwrap();
+
+            // Now revoke PING permission
+            let _: () = redis::cmd("ACL")
+                .arg("SETUSER")
+                .arg(test_user)
+                .arg("-ping")  // Revoke PING
+                .query_async(&mut admin_connection)
+                .await
+                .unwrap();
+
+            // Try fenced command (will fail because PING is denied)
+            let mut cmd = fenced_cmd("SET");
+            cmd.arg("test_key");
+            cmd.arg("test_value");
+
+            let result = cmd.query_async::<_, Value>(&mut connection).await;
+
+            // Verify - should fail with ProtocolDesync
+            match result {
+                Err(e) if e.kind() == ErrorKind::ProtocolDesync => {}
+                Err(e) => panic!(
+                    "Expected ProtocolDesync error but got {:?}: {}",
+                    e.kind(),
+                    e
+                ),
+                Ok(val) => panic!("Expected Err(ProtocolDesync) but got Ok: {:?}", val),
+            }
+
+            // Verify: Subsequent command also fails with ProtocolDesync
+            let subsequent_result = cmd.query_async::<_, String>(&mut connection).await;
+            assert!(subsequent_result.is_err(), "Subsequent PING should fail");
+            assert_eq!(
+                subsequent_result.unwrap_err().kind(),
+                ErrorKind::ProtocolDesync
+            );
+
+            // Cleanup: Delete test user
+            let _: () = redis::cmd("ACL")
+                .arg("DELUSER")
+                .arg(test_user)
+                .query_async(&mut admin_connection)
+                .await
+                .unwrap();
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
     }
 
     mod mtls_test {
