@@ -400,6 +400,13 @@ impl Client {
         cmd.command().is_some_and(|bytes| bytes == b"SELECT")
     }
 
+    /// Checks if the given command is an SUNSUBSCRIBE command.
+    /// Returns true if the command is "SUNSUBSCRIBE", false otherwise.
+    /// Note: The underlying redis-rs library normalizes commands to uppercase.
+    fn is_sunsubscribe_command(&self, cmd: &Cmd) -> bool {
+        cmd.command().is_some_and(|bytes| bytes == b"SUNSUBSCRIBE")
+    }
+
     /// Extracts the database ID from a SELECT command.
     /// Parses the first argument of the SELECT command as an i64 database ID.
     /// Returns appropriate errors for invalid formats or missing arguments.
@@ -571,13 +578,18 @@ impl Client {
     /// This function will route the command to the correct node, and retry if needed.
     pub fn send_command<'a>(
         &'a mut self,
-        cmd: &'a Cmd,
+        cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             let client = self.get_or_initialize_client().await?;
 
-            let expected_type = expected_type_for_cmd(cmd);
+            // SUNSUBSCRIBE requires setting the fenced flag, so we must create a mutable copy
+            if self.is_sunsubscribe_command(cmd) {
+                cmd.set_fenced(true);
+            }
+
+            // let expected_type = expected_type_for_cmd(cmd);
             let request_timeout = match get_request_timeout(cmd, self.request_timeout) {
                 Ok(request_timeout) => request_timeout,
                 Err(err) => return Err(err),
@@ -586,12 +598,9 @@ impl Client {
             // Clone compression_manager reference before moving into async block
             let compression_manager = self.compression_manager.clone();
 
-            // Check if we need to intercept commands before sending
-            let is_client_setname = self.is_client_set_name_command(cmd);
-            let is_select = self.is_select_command(cmd);
-
             let result = run_with_timeout(request_timeout, async move {
-                match client {
+                let expected_type = expected_type_for_cmd(cmd);
+                let value  = match client {
                     ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
                     ClientWrapper::Cluster {mut client } => {
                         let final_routing =
@@ -649,21 +658,21 @@ impl Client {
                         value // No compression manager, return original value
                     };
                     convert_to_expected_type(processed_value, expected_type)
-                })
+                })?;
+
+                // Intercept CLIENT SETNAME commands after regular processing
+                // Only handle CLIENT SETNAME commands if they executed successfully (no error)
+                if self.is_client_set_name_command(cmd) {
+                    self.handle_client_set_name_command(cmd).await?;
+                }
+                // Intercept SELECT commands after regular processing
+                // Only handle SELECT commands if they executed successfully (no error)
+                if self.is_select_command(cmd) {
+                    self.handle_select_command(cmd).await?;
+                }
+                Ok(value)
             })
             .await?;
-
-            // Intercept CLIENT SETNAME commands after regular processing
-            // Only handle CLIENT SETNAME commands if they executed successfully (no error)
-            if is_client_setname {
-                self.handle_client_set_name_command(cmd).await?;
-            }
-
-            // Intercept SELECT commands after regular processing
-            // Only handle SELECT commands if they executed successfully (no error)
-            if is_select {
-                self.handle_select_command(cmd).await?;
-            }
 
             Ok(result)
         })
@@ -942,8 +951,8 @@ impl Client {
     ) -> redis::RedisResult<Value> {
         let _ = self.get_or_initialize_client().await?;
 
-        let eval = eval_cmd(hash, keys, args);
-        let result = self.send_command(&eval, routing.clone()).await;
+        let mut eval = eval_cmd(hash, keys, args);
+        let result = self.send_command(&mut eval, routing.clone()).await;
         let Err(err) = result else {
             return result;
         };
@@ -951,9 +960,9 @@ impl Client {
             let Some(code) = get_script(hash) else {
                 return Err(err);
             };
-            let load = load_cmd(&code);
-            self.send_command(&load, None).await?;
-            self.send_command(&eval, routing).await
+            let mut load = load_cmd(&code);
+            self.send_command(&mut load, None).await?;
+            self.send_command(&mut eval, routing).await
         } else {
             Err(err)
         }
@@ -1065,7 +1074,7 @@ impl Client {
             cmd.arg(&username);
         }
         cmd.arg(pass);
-        self.send_command(&cmd, Some(routing)).await
+        self.send_command(&mut cmd, Some(routing)).await
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
@@ -1656,7 +1665,7 @@ impl Client {
 pub trait GlideClientForTests {
     fn send_command<'a>(
         &'a mut self,
-        cmd: &'a Cmd,
+        cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value>;
 }
@@ -1664,7 +1673,7 @@ pub trait GlideClientForTests {
 impl GlideClientForTests for Client {
     fn send_command<'a>(
         &'a mut self,
-        cmd: &'a Cmd,
+        cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value> {
         self.send_command(cmd, routing)
@@ -1674,7 +1683,7 @@ impl GlideClientForTests for Client {
 impl GlideClientForTests for StandaloneClient {
     fn send_command<'a>(
         &'a mut self,
-        cmd: &'a Cmd,
+        cmd: &'a mut Cmd,
         _routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value> {
         self.send_command(cmd).boxed()

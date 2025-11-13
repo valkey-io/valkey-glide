@@ -613,7 +613,7 @@ mod standalone_client_tests {
                 ),
             );
             let ping_response = lazy_glide_client_enum
-                .send_command(&redis::cmd("PING"), None)
+                .send_command(&mut redis::cmd("PING"), None)
                 .await;
             assert!(
                 ping_response.is_ok(),
