@@ -114,10 +114,7 @@ allowed_missing_re_exports_in_async = [
     "LoggerError"
 ]
 
-allowed_missing_re_exports_in_sync: list[str] = [
-    # python/glide-shared/glide_shared/commands/core_options.py
-    "SubscriptionStatus"
-]
+allowed_missing_re_exports_in_sync: list[str] = []
 
 
 class AnomalousSymbolVisitor(ast.NodeVisitor):

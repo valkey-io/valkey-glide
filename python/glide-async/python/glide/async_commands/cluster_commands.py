@@ -12,7 +12,6 @@ from glide_shared.commands.core_options import (
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
-    SubscriptionStatus,
 )
 from glide_shared.constants import (
     TOK,
@@ -1476,75 +1475,129 @@ class ClusterCommands(CoreCommands):
             script.get_hash(), keys=None, args=args, route=route
         )
 
-    async def ssubscribe(self, channels: Set[str]) -> SubscriptionStatus:
+    async def ssubscribe_lazy(self, channels: Set[str]) -> None:
         """
-        Subscribe to sharded channels (cluster mode only).
+        Subscribe to sharded channels (cluster mode only, non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+        The client will attempt to subscribe asynchronously in the background.
 
         Note:
-            This command updates the client's internal desired subscription state and returns
-            a status indicating whether the change has been applied on the server:
-            - SubscriptionStatus.OK: Successfully applied on the server
-            - SubscriptionStatus.PENDING: Updated the desired state locally but not yet applied on the server
-            - SubscriptionStatus.FAILED: Failed to update the desired state
-
-            Use `get_subscriptions()` to verify the actual server-side subscription state as well as the internal desired state.
+            Use `get_subscriptions()` to verify the actual server-side subscription state.
 
         Args:
             channels: A set of sharded channel names to subscribe to.
 
         Returns:
-            SubscriptionStatus: The status of the subscription operation.
+            TResult: The result of the subscription command.
 
         Examples:
-            >>> status = await client.ssubscribe({"shard_channel"})
-            >>> if status == SubscriptionStatus.OK:
-            >>>     print("Subscribed to sharded channel successfully")
+            >>> await client.ssubscribe_lazy({"shard_channel"})
+            >>> # Subscription request sent, not waiting for confirmation
             >>>
             >>> # Multiple sharded channels
-            >>> await client.ssubscribe({"shard1", "shard2"})
+            >>> await client.ssubscribe_lazy({"shard1", "shard2"})
 
         Since: Valkey 7.0.0.
         """
-        return cast(
-            SubscriptionStatus,
-            await self._execute_command(RequestType.SSubscribe, list(channels)),
-        )
+        await self._execute_command(RequestType.SSubscribe, list(channels))
 
-    async def sunsubscribe(
-        self, channels: Optional[Set[str]] = None
-    ) -> SubscriptionStatus:
+    async def ssubscribe(self, channels: Set[str], timeout: float = 0) -> None:
         """
-        Unsubscribe from sharded channels.
+        Subscribe to sharded channels (cluster mode only, blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
+
+        Args:
+            channels: A set of sharded channel names to subscribe to.
+            timeout: Maximum time in seconds to wait for server confirmation.
+                    A value of 0 (default) blocks indefinitely until confirmation.
+
+        Returns:
+            TResult: The result of the subscription command.
+
+        Raises:
+            TimeoutError: If timeout > 0 and server confirmation not received within timeout.
+
+        Examples:
+            >>> await client.ssubscribe({"shard_channel"})
+            >>> print("Subscribed to sharded channel successfully (waited indefinitely)")
+            >>>
+            >>> # With timeout
+            >>> await client.ssubscribe({"shard1", "shard2"}, timeout=5.0)
+            >>> print("Subscribed to sharded channels successfully within 5 seconds")
+
+        Since: Valkey 7.0.0.
+        """
+        args = list(channels) + [str(timeout)]
+        await self._execute_command(RequestType.SSubscribe, list(args))
+
+    async def sunsubscribe_lazy(self, channels: Optional[Set[str]] = None) -> None:
+        """
+        Unsubscribe from sharded channels (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+        The client will attempt to unsubscribe asynchronously in the background.
 
         Note:
-            This command updates the client's internal desired subscription state and returns
-            a status indicating whether the change has been applied on the server:
-            - SubscriptionStatus.OK: Successfully applied on the server
-            - SubscriptionStatus.PENDING: Updated the desired state locally but not yet applied on the server
-            - SubscriptionStatus.FAILED: Failed to update the desired state
-
-            Use `get_subscriptions()` to verify the actual server-side subscription state as well as the internal desired state.
+            Use `get_subscriptions()` to verify the actual server-side subscription state.
 
         Args:
             channels: A set of sharded channel names to unsubscribe from.
                     If None, unsubscribes from all sharded channels.
 
         Returns:
-            SubscriptionStatus: The status of the subscription operation.
+            TResult: The result of the unsubscription command.
 
         Examples:
-            >>> status = await client.sunsubscribe({"shard_channel"})
-            >>> if status == SubscriptionStatus.PENDING:
-            >>>     print("Unsubscription pending")
+            >>> await client.sunsubscribe_lazy({"shard_channel"})
+            >>> # Unsubscription request sent, not waiting for confirmation
             >>>
             >>> # Unsubscribe from all sharded channels
-            >>> await client.sunsubscribe()
+            >>> await client.sunsubscribe_lazy()
 
         Since: Valkey 7.0.0.
         """
-        return cast(
-            SubscriptionStatus,
-            await self._execute_command(
-                RequestType.SUnsubscribe, list(channels) if channels else []
-            ),
+        await self._execute_command(
+            RequestType.SUnsubscribe, list(channels) if channels else []
         )
+
+    async def sunsubscribe(
+        self, channels: Optional[Set[str]] = None, timeout: float = 0
+    ) -> None:
+        """
+        Unsubscribe from sharded channels (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
+
+        Args:
+            channels: A set of sharded channel names to unsubscribe from.
+                    If None, unsubscribes from all sharded channels.
+            timeout: Maximum time in seconds to wait for server confirmation.
+                    A value of 0 (default) blocks indefinitely until confirmation.
+
+        Returns:
+            TResult: The result of the unsubscription command.
+
+        Raises:
+            TimeoutError: If timeout > 0 and server confirmation not received within timeout.
+
+        Examples:
+            >>> await client.sunsubscribe({"shard_channel"})
+            >>> print("Unsubscribed from sharded channel successfully (waited indefinitely)")
+            >>>
+            >>> # With timeout
+            >>> await client.sunsubscribe({"shard_channel"}, timeout=5.0)
+            >>> print("Unsubscribed from sharded channel successfully within 5 seconds")
+            >>>
+            >>> # Unsubscribe from all sharded channels with timeout
+            >>> await client.sunsubscribe(timeout=10.0)
+
+        Since: Valkey 7.0.0.
+        """
+        args = (list(channels) if channels else []) + [str(timeout)]
+        await self._execute_command(RequestType.SUnsubscribe, list(args))

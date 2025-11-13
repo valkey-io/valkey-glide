@@ -20,7 +20,6 @@ from glide_shared.commands.core_options import (
     InsertPosition,
     OnlyIfEqual,
     PubSubMsg,
-    SubscriptionStatus,
     UpdateOptions,
     _build_sort_args,
 )
@@ -7818,142 +7817,239 @@ class CoreCommands(Protocol):
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)
 
-    async def subscribe(self, channels: Set[str]) -> SubscriptionStatus:
+    async def subscribe_lazy(self, channels: Set[str]) -> None:
         """
-        Subscribe to exact channels.
+        Subscribe to exact channels (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+        The client will attempt to subscribe asynchronously in the background.
 
         Note:
-            This command updates the client's internal desired subscription state and returns
-            a status indicating whether the change has been applied on the server:
-            - SubscriptionStatus.OK: Successfully applied on the server
-            - SubscriptionStatus.PENDING: Updated the desired state locally but not yet applied on the server
-            - SubscriptionStatus.FAILED: Failed to update the desired state
-
-            Use `get_subscriptions()` to verify the actual server-side subscription state as well as the internal desired state.
+            Use `get_subscriptions()` to verify the actual server-side subscription state.
 
         Args:
             channels: A set of channel names to subscribe to.
 
         Returns:
-            SubscriptionStatus: The status of the subscription operation.
+            TResult: The result of the subscription command.
 
         Examples:
-            >>> status = await client.subscribe({"channel1"})
-            >>> if status == SubscriptionStatus.OK:
-            >>>     print("Subscribed successfully")
-            >>> elif status == SubscriptionStatus.PENDING:
-            >>>     print("Subscription pending, waiting for server confirmation")
+            >>> await client.subscribe_lazy({"channel1"})
+            >>> # Subscription request sent, not waiting for confirmation
             >>>
             >>> # Multiple channels
-            >>> status = await client.subscribe({"channel1", "channel2"})
+            >>> await client.subscribe_lazy({"channel1", "channel2"})
         """
-        return cast(
-            SubscriptionStatus,
-            await self._execute_command(RequestType.Subscribe, list(channels)),
-        )
+        await self._execute_command(RequestType.Subscribe, list(channels))
 
-    async def psubscribe(self, patterns: Set[str]) -> SubscriptionStatus:
+    async def subscribe(self, channels: Set[str], timeout: float) -> None:
         """
-        Subscribe to channel patterns.
+        Subscribe to exact channels (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
+
+        Args:
+            channels: A set of channel names to subscribe to.
+            timeout: Maximum time in seconds to wait for server confirmation.
+                    A value of 0 blocks indefinitely until confirmation.
+
+        Returns:
+            TResult: The result of the subscription command.
+
+        Raises:
+            TimeoutError: If timeout > 0 and server confirmation not received within timeout.
+
+        Examples:
+            >>> await client.subscribe({"channel1"})
+            >>> print("Subscribed successfully (waited indefinitely)")
+            >>>
+            >>> # With timeout
+            >>> await client.subscribe({"channel1", "channel2"}, timeout=5.0)
+            >>> print("Subscribed successfully within 5 seconds")
+        """
+        args = list(channels) + [str(timeout)]
+        await self._execute_command(RequestType.Subscribe, list(args))
+
+    async def psubscribe_lazy(self, patterns: Set[str]) -> None:
+        """
+        Subscribe to channel patterns (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+        The client will attempt to subscribe asynchronously in the background.
 
         Note:
-            This command updates the client's internal desired subscription state and returns
-            a status indicating whether the change has been applied on the server:
-            - SubscriptionStatus.OK: Successfully applied on the server
-            - SubscriptionStatus.PENDING: Updated the desired state locally but not yet applied on the server
-            - SubscriptionStatus.FAILED: Failed to update the desired state
-
-            Use `get_subscriptions()` to verify the actual server-side subscription state as well as the internal desired state.
+            Use `get_subscriptions()` to verify the actual server-side subscription state.
 
         Args:
             patterns: A set of patterns to subscribe to (e.g., {"news.*"}).
 
         Returns:
-            SubscriptionStatus: The status of the subscription operation.
+            TResult: The result of the subscription command.
 
         Examples:
-            >>> status = await client.psubscribe({"news.*"})
-            >>> if status == SubscriptionStatus.OK:
-            >>>     print("Subscribed to pattern successfully")
+            >>> await client.psubscribe_lazy({"news.*"})
+            >>> # Pattern subscription request sent, not waiting for confirmation
             >>>
             >>> # Multiple patterns
-            >>> await client.psubscribe({"news.*", "updates.*"})
+            >>> await client.psubscribe_lazy({"news.*", "updates.*"})
         """
-        return cast(
-            SubscriptionStatus,
-            await self._execute_command(RequestType.PSubscribe, list(patterns)),
-        )
+        await self._execute_command(RequestType.PSubscribe, list(patterns))
 
-    async def unsubscribe(
-        self, channels: Optional[Set[str]] = None
-    ) -> SubscriptionStatus:
+    async def psubscribe(self, patterns: Set[str], timeout: float = 0) -> None:
         """
-        Unsubscribe from exact channels.
+        Subscribe to channel patterns (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
+
+        Args:
+            patterns: A set of patterns to subscribe to (e.g., {"news.*"}).
+            timeout: Maximum time in seconds to wait for server confirmation.
+                    A value of 0 blocks indefinitely until confirmation.
+
+        Returns:
+            TResult: The result of the subscription command.
+
+        Raises:
+            TimeoutError: If timeout > 0 and server confirmation not received within timeout.
+
+        Examples:
+            >>> await client.psubscribe({"news.*"})
+            >>> print("Subscribed to pattern successfully (waited indefinitely)")
+            >>>
+            >>> # With timeout
+            >>> await client.psubscribe({"news.*", "updates.*"}, timeout=10.0)
+            >>> print("Subscribed to patterns successfully within 10 seconds")
+        """
+        args = list(patterns) + [str(timeout)]
+        await self._execute_command(RequestType.PSubscribe, list(args))
+
+    async def unsubscribe_lazy(self, channels: Optional[Set[str]] = None) -> None:
+        """
+        Unsubscribe from exact channels (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+        The client will attempt to subscribe asynchronously in the background.
 
         Note:
-            This command updates the client's internal desired subscription state and returns
-            a status indicating whether the change has been applied on the server:
-            - SubscriptionStatus.OK: Successfully applied on the server
-            - SubscriptionStatus.PENDING: Updated the desired state locally but not yet applied on the server
-            - SubscriptionStatus.FAILED: Failed to update the desired state
-
-            Use `get_subscriptions()` to verify the actual server-side subscription state as well as the internal desired state.
+            Use `get_subscriptions()` to verify the actual server-side subscription state.
 
         Args:
             channels: A set of channel names to unsubscribe from.
                     If None, unsubscribes from all exact channels.
 
         Returns:
-            SubscriptionStatus: The status of the subscription operation.
+            TResult: The result of the unsubscription command.
 
         Examples:
-            >>> status = await client.unsubscribe({"channel1"})
-            >>> if status == SubscriptionStatus.PENDING:
-            >>>     print("Unsubscription pending")
+            >>> await client.unsubscribe_lazy({"channel1"})
+            >>> # Unsubscription request sent, not waiting for confirmation
             >>>
             >>> # Unsubscribe from all exact channels
-            >>> await client.unsubscribe()
+            >>> await client.unsubscribe_lazy()
         """
-        return cast(
-            SubscriptionStatus,
-            await self._execute_command(
-                RequestType.Unsubscribe, list(channels) if channels else []
-            ),
+        await self._execute_command(
+            RequestType.Unsubscribe, list(channels) if channels else []
         )
 
-    async def punsubscribe(
-        self, patterns: Optional[Set[str]] = None
-    ) -> SubscriptionStatus:
+    async def unsubscribe(
+        self, channels: Optional[Set[str]] = None, timeout: float = 0
+    ) -> None:
         """
-        Unsubscribe from channel patterns.
+        Unsubscribe from exact channels (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
+
+        Args:
+            channels: A set of channel names to unsubscribe from.
+                    If None, unsubscribes from all exact channels.
+            timeout: Maximum time in seconds to wait for server confirmation.
+                    A value of 0 blocks indefinitely until confirmation.
+
+        Returns:
+            TResult: The result of the unsubscription command.
+
+        Raises:
+            TimeoutError: If timeout > 0 and server confirmation not received within timeout.
+
+        Examples:
+            >>> await client.unsubscribe({"channel1"})
+            >>> print("Unsubscribed successfully (waited indefinitely)")
+            >>>
+            >>> # With timeout
+            >>> await client.unsubscribe({"channel1"}, timeout=5.0)
+            >>> print("Unsubscribed successfully within 5 seconds")
+            >>>
+            >>> # Unsubscribe from all exact channels with timeout
+            >>> await client.unsubscribe(timeout=10.0)
+        """
+        args = (list(channels) if channels else []) + [str(timeout)]
+        await self._execute_command(RequestType.Unsubscribe, list(args))
+
+    async def punsubscribe_lazy(self, patterns: Optional[Set[str]] = None) -> None:
+        """
+        Unsubscribe from channel patterns (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
 
         Note:
-            This command updates the client's internal desired subscription state and returns
-            a status indicating whether the change has been applied on the server:
-            - SubscriptionStatus.OK: Successfully applied on the server
-            - SubscriptionStatus.PENDING: Updated the desired state locally but not yet applied on the server
-            - SubscriptionStatus.FAILED: Failed to update the desired state
-
-            Use `get_subscriptions()` to verify the actual server-side subscription state as well as the internal desired state.
+            Use `get_subscriptions()` to verify the actual server-side subscription state.
 
         Args:
             patterns: A set of patterns to unsubscribe from.
                     If None, unsubscribes from all patterns.
 
         Returns:
-            SubscriptionStatus: The status of the subscription operation.
+            TResult: The result of the unsubscription command.
 
         Examples:
-            >>> status = await client.punsubscribe({"news.*"})
-            >>> if status != SubscriptionStatus.FAILED:
-            >>>     print("Unsubscribe request accepted")
+            >>> await client.punsubscribe_lazy({"news.*"})
+            >>> # Pattern unsubscription request sent, not waiting for confirmation
             >>>
             >>> # Unsubscribe from all patterns
-            >>> await client.punsubscribe()
+            >>> await client.punsubscribe_lazy()
         """
-        return cast(
-            SubscriptionStatus,
-            await self._execute_command(
-                RequestType.PUnsubscribe, list(patterns) if patterns else []
-            ),
+        await self._execute_command(
+            RequestType.PUnsubscribe, list(patterns) if patterns else []
         )
+
+    async def punsubscribe(
+        self, patterns: Optional[Set[str]] = None, timeout: float = 0
+    ) -> None:
+        """
+        Unsubscribe from channel patterns (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
+
+        Args:
+            patterns: A set of patterns to unsubscribe from.
+                    If None, unsubscribes from all patterns.
+            timeout: Maximum time in seconds to wait for server confirmation.
+                    A value of 0 blocks indefinitely until confirmation.
+
+        Returns:
+            TResult: The result of the unsubscription command.
+
+        Raises:
+            TimeoutError: If timeout > 0 and server confirmation not received within timeout.
+
+        Examples:
+            >>> await client.punsubscribe({"news.*"})
+            >>> print("Unsubscribed from pattern successfully (waited indefinitely)")
+            >>>
+            >>> # With timeout
+            >>> await client.punsubscribe({"news.*"}, timeout=5.0)
+            >>> print("Unsubscribed from pattern successfully within 5 seconds")
+            >>>
+            >>> # Unsubscribe from all patterns with timeout
+            >>> await client.punsubscribe(timeout=10.0)
+        """
+        args = (list(patterns) if patterns else []) + [str(timeout)]
+        await self._execute_command(RequestType.PUnsubscribe, list(args))

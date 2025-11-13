@@ -41,6 +41,12 @@ EXCLUDED_API_FUNCTIONS = {
         "punsubscribe",
         "ssubscribe",
         "sunsubscribe",
+        "psubscribe_lazy",
+        "punsubscribe_lazy",
+        "ssubscribe_lazy",
+        "subscribe_lazy",
+        "sunsubscribe_lazy",
+        "unsubscribe_lazy",
         # others
         "init_callback",
         "create_leaked_bytes_vec",
