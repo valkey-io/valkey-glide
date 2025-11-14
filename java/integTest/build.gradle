@@ -218,62 +218,17 @@ tasks.register('beforeTests') {}
 tasks.register('afterTests') {}
 tasks.register('startStandalone') {
     doLast {
-        if (System.getProperty("standalone-endpoints") == null) {
-            new ByteArrayOutputStream().withStream { os ->
-                if (isWindows) {
-                    // Use Docker inside WSL for standalone
-                    exec {
-                        def args = ['wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container', 'python3', '/workspace/utils/cluster_manager.py', 'start', '-r', '0', '--host', clusterHost]
-                        if (System.getProperty("tls") == 'true') args.add(8, '--tls')
-                        commandLine args
-                        standardOutput = os
-                        errorOutput = System.out
-                    }
-                } else {
-                    // Use native execution on Linux/macOS
-                    exec {
-                        workingDir "${project.rootDir}/../utils"
-                        def args = [*pythonCmd, 'cluster_manager.py', 'start', '-r', '0', '--host', clusterHost]
-                        if (System.getProperty("tls") == 'true') args.add(2, '--tls')
-                        commandLine args
-                        standardOutput = os
-                        errorOutput = System.out
-                    }
-                }
-                standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
-                println "=== Standalone hosts: ${standaloneHosts} ==="
-            }
-        } else {
-            standaloneHosts = System.getProperty("standalone-endpoints")
-        }
+        // Disabled for WSL testing - only use clusters
+        println "=== Standalone server disabled - using clusters only ==="
+        standaloneHosts = "127.0.0.1:6379" // Dummy value to prevent errors
     }
 }
 
 tasks.register('startStandaloneTls') {
     doLast {
-        new ByteArrayOutputStream().withStream { os ->
-            exec {
-                workingDir "${project.rootDir}/../utils"
-                commandLine(*pythonCmd, 'cluster_manager.py', 'start', '--tls', '-r', '0')
-                standardOutput = os
-            }
-            standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
-            
-            // Copy certificates from WSL to Windows if needed
-            if (isWindows) {
-                exec {
-                    commandLine 'wsl', '--', 'bash', '-c',
-                        'echo "=== WSL tls_crts ===" && ls -la /mnt/d/a/valkey-glide/valkey-glide/utils/tls_crts/ && echo "=== Windows tls_crts ===" && ls -la /mnt/d/a/valkey-glide/valkey-glide/utils/tls_crts/'
-                    ignoreExitValue true
-                }
-                // Ensure certificates have Unix line endings (remove any Windows \r)
-                exec {
-                    commandLine 'wsl', '--', 'bash', '-c',
-                        'if [ -d "${workspaceRoot}/utils/tls_crts" ]; then cd ${workspaceRoot}/utils/tls_crts && for f in *.crt *.key *.pem; do [ -f "$f" ] && sed -i "s/\\r//g" "$f"; done; fi'
-                    ignoreExitValue true
-                }
-            }
-        }
+        // Disabled for WSL testing - only use clusters
+        println "=== Standalone TLS server disabled - using clusters only ==="
+        standaloneTlsHosts = "127.0.0.1:6380" // Dummy value to prevent errors
     }
 }
 
@@ -315,11 +270,12 @@ tasks.register('startClusterTls') {
 
 beforeTests.dependsOn 'stopAllBeforeTests'
 stopAllBeforeTests.finalizedBy 'clearDirs'
-clearDirs.finalizedBy 'startStandalone'
-clearDirs.finalizedBy 'startStandaloneTls'
+// Disable standalone servers - only start clusters
+// clearDirs.finalizedBy 'startStandalone'
+// clearDirs.finalizedBy 'startStandaloneTls'
 clearDirs.finalizedBy 'startCluster'
-clearDirs.finalizedBy 'startClusterTls'
-clearDirs.finalizedBy 'startClusterForAz'
+// clearDirs.finalizedBy 'startClusterTls'
+// clearDirs.finalizedBy 'startClusterForAz'
 afterTests.finalizedBy 'stopAllAfterTests'
 compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
 
