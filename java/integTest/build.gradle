@@ -116,15 +116,15 @@ tasks.register('startCluster') {
     doLast {
         if (System.getProperty("cluster-endpoints") == null) {
             if (isWindows) {
-                println "=== Starting cluster setup ==="
+                println "=== Starting cluster setup directly in WSL ==="
             }
             
             new ByteArrayOutputStream().withStream { os ->
                 if (isWindows) {
-                    // Use Docker inside WSL for cluster
+                    // Use WSL directly without Docker
                     exec {
-                        def args = ['wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container', 'python3', '/workspace/utils/cluster_manager.py', 'start', '--cluster-mode', '--host', clusterHost]
-                        if (System.getProperty("tls") == 'true') args.add(8, '--tls')
+                        def args = ['wsl', '--', 'python3', '/mnt/c/workspace/utils/cluster_manager.py', 'start', '--cluster-mode', '--host', '127.0.0.1']
+                        if (System.getProperty("tls") == 'true') args.add(6, '--tls')
                         commandLine args
                         standardOutput = os
                         errorOutput = System.out
@@ -145,41 +145,37 @@ tasks.register('startCluster') {
             
             // Check for replica log files after cluster creation
             if (isWindows) {
-                println "=== Checking WSL/Docker memory usage ==="
+                println "=== Checking WSL memory usage ==="
                 exec {
                     commandLine 'wsl', '--', 'free', '-h'
-                    ignoreExitValue true
-                }
-                exec {
-                    commandLine 'wsl', '--', 'sudo', 'docker', 'stats', '--no-stream', '--format', 'table {{.Container}}\\t{{.CPUPerc}}\\t{{.MemUsage}}\\t{{.MemPerc}}'
                     ignoreExitValue true
                 }
                 
                 println "=== Checking for replica log files ==="
                 exec {
-                    commandLine 'wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container',
-                        'find', '/workspace/utils/clusters', '-name', 'server.log', '-exec', 'ls', '-la', '{}', ';'
+                    commandLine 'wsl', '--', 'find', '/mnt/c/workspace/utils/clusters', '-name', 'server.log', '-exec', 'ls', '-la', '{}', ';'
                     ignoreExitValue true
                 }
                 
                 println "=== Printing contents of all server log files ==="
                 exec {
-                    commandLine 'wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container',
-                        'find', '/workspace/utils/clusters', '-name', 'server.log', '-exec', 'sh', '-c', 'echo "=== LOG FILE: {} ==="; cat "{}"', ';'
+                    commandLine 'wsl', '--', 'find', '/mnt/c/workspace/utils/clusters', '-name', 'server.log', '-exec', 'sh', '-c', 'echo "=== LOG FILE: {} ==="; cat "{}"', ';'
                     ignoreExitValue true
                 }
                 
                 println "=== Checking cluster directory structure ==="
                 exec {
-                    commandLine 'wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container',
-                        'find', '/workspace/utils/clusters', '-type', 'd', '-exec', 'ls', '-la', '{}', ';'
+                    commandLine 'wsl', '--', 'find', '/mnt/c/workspace/utils/clusters', '-type', 'd', '-exec', 'ls', '-la', '{}', ';'
                     ignoreExitValue true
                 }
                 
                 println "=== Checking running Valkey processes ==="
                 exec {
-                    commandLine 'wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container',
-                        'ps', 'aux', '|', 'grep', 'valkey'
+                    commandLine 'wsl', '--', 'ps', 'aux'
+                    ignoreExitValue true
+                }
+                exec {
+                    commandLine 'wsl', '--', 'pgrep', '-f', 'valkey'
                     ignoreExitValue true
                 }
             }
