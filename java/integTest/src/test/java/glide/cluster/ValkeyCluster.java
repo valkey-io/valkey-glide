@@ -28,7 +28,7 @@ public class ValkeyCluster implements AutoCloseable {
                     .resolve("utils")
                     .resolve("remote_cluster_manager.py");
 
-    /** Get platform-specific Python command with Docker in WSL support */
+    /** Get platform-specific Python command with WSL support */
     private static List<String> getPythonCommand() {
         String osName = System.getProperty("os.name").toLowerCase();
         if (osName.contains("windows")) {
@@ -39,8 +39,8 @@ public class ValkeyCluster implements AutoCloseable {
                 // Use native Windows Python for remote manager
                 return Arrays.asList("python3");
             } else {
-                // Use Docker inside WSL for local cluster manager (with sudo)
-                return Arrays.asList("wsl", "--", "sudo", "sudo", "docker", "exec", "valkey-test-container", "python3");
+                // Use WSL directly
+                return Arrays.asList("wsl", "--", "python3");
             }
         } else {
             return Arrays.asList("python3");
@@ -109,23 +109,20 @@ public class ValkeyCluster implements AutoCloseable {
             this.tls = tls;
             List<String> command = new ArrayList<>();
 
-            // Handle Docker in WSL command building differently
+            // Handle WSL command building differently
             String osName = System.getProperty("os.name").toLowerCase();
             String remoteHost = System.getenv("VALKEY_REMOTE_HOST");
-            boolean useDockerInWSL =
+            boolean useWSL =
                     osName.contains("windows") && (remoteHost == null || remoteHost.isEmpty());
 
-            if (useDockerInWSL) {
-                // For Docker in WSL, build command as separate arguments
+            if (useWSL) {
+                // For WSL, build command as separate arguments
                 command.addAll(
                         Arrays.asList(
                                 "wsl",
                                 "--",
-                                "sudo", "docker",
-                                "exec",
-                                "valkey-test-container",
                                 "python3",
-                                "/workspace/utils/cluster_manager.py"));
+                                "/mnt/c/workspace/utils/cluster_manager.py"));
 
                 // Add engine version if specified
                 String engineVersion = System.getProperty("engine-version");
@@ -268,7 +265,7 @@ public class ValkeyCluster implements AutoCloseable {
                         command.add(module);
                     }
                 }
-            } // End of Docker else clause
+            } // End of WSL else clause
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
@@ -410,23 +407,20 @@ public class ValkeyCluster implements AutoCloseable {
         if (clusterFolder != null && !clusterFolder.isEmpty()) {
             List<String> command = new ArrayList<>();
 
-            // Handle Docker in WSL for stop command as well
+            // Handle WSL for stop command as well
             String osName = System.getProperty("os.name").toLowerCase();
             String remoteHost = System.getenv("VALKEY_REMOTE_HOST");
-            boolean useDockerInWSL =
+            boolean useWSL =
                     osName.contains("windows") && (remoteHost == null || remoteHost.isEmpty());
 
-            if (useDockerInWSL) {
-                // For Docker in WSL stop command
+            if (useWSL) {
+                // For WSL stop command
                 command.addAll(
                         Arrays.asList(
                                 "wsl",
                                 "--",
-                                "sudo", "docker",
-                                "exec",
-                                "valkey-test-container",
                                 "python3",
-                                "/workspace/utils/cluster_manager.py"));
+                                "/mnt/c/workspace/utils/cluster_manager.py"));
 
                 if (tls) {
                     command.add("--tls");
@@ -475,7 +469,7 @@ public class ValkeyCluster implements AutoCloseable {
                     command.add("--cluster-folder");
                     command.add(clusterFolder);
                 }
-            } // End of Docker else clause
+            } // End of WSL else clause
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
