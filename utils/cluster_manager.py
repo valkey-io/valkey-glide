@@ -735,6 +735,24 @@ def create_standalone_replication(
             logging.debug(f"Could not read log for replica {server.port}: {e}")
     logging.debug("=== END REPLICA LOGS ===")
     
+    # Debug: Check replica log files before waiting
+    print("=== DEBUG: Checking replica log files ===", flush=True)
+    for port in servers_ports[1:]:  # Skip first port (primary)
+        log_file = f"{cluster_folder}/server_{port}/server.log"
+        print(f"Checking replica log: {log_file}", flush=True)
+        if os.path.exists(log_file):
+            print(f"✓ Log file exists: {log_file}", flush=True)
+            try:
+                with open(log_file, 'r') as f:
+                    content = f.read()
+                    print(f"=== REPLICA {port} LOG CONTENT ===", flush=True)
+                    print(content[-1000:] if len(content) > 1000 else content, flush=True)  # Last 1000 chars
+                    print(f"=== END REPLICA {port} LOG ===", flush=True)
+            except Exception as e:
+                print(f"✗ Error reading {log_file}: {e}", flush=True)
+        else:
+            print(f"✗ Log file missing: {log_file}", flush=True)
+    
     wait_for_a_message_in_logs(
         cluster_folder,
         "sync: Finished with success",
@@ -951,11 +969,39 @@ def wait_for_server(
 def wait_for_message(
     log_file: str,
     message: str,
-    timeout: int = 5,
+    timeout: int = 30,  # Increased timeout for WSL/cluster sync
 ):
     logging.debug(f"checking state changed in {log_file}")
     print(f"=== TAILING LOG FILE: {log_file} ===", flush=True)
     print(f"Waiting for message: '{message}'", flush=True)
+    
+    # Debug: Check if Valkey processes are running and ports are open
+    print("=== DEBUG: Checking running processes and ports ===", flush=True)
+    try:
+        # Check for valkey-server processes
+        result = subprocess.run(['ps', 'aux'], capture_output=True, text=True, timeout=5)
+        valkey_processes = [line for line in result.stdout.split('\n') if 'valkey-server' in line]
+        if valkey_processes:
+            print("✓ Valkey processes found:", flush=True)
+            for proc in valkey_processes:
+                print(f"  {proc}", flush=True)
+        else:
+            print("✗ No valkey-server processes found", flush=True)
+        
+        # Check for listening ports
+        result = subprocess.run(['ss', '-tlnp'], capture_output=True, text=True, timeout=5)
+        listening_ports = [line for line in result.stdout.split('\n') if 'valkey' in line or ':637' in line or ':638' in line]
+        if listening_ports:
+            print("✓ Valkey ports listening:", flush=True)
+            for port in listening_ports:
+                print(f"  {port}", flush=True)
+        else:
+            print("✗ No Valkey ports found listening", flush=True)
+            
+    except Exception as e:
+        print(f"✗ Error checking processes/ports: {e}", flush=True)
+    
+    print("=== END PROCESS/PORT CHECK ===", flush=True)
     
     timeout_start = time.time()
     last_position = 0
@@ -963,6 +1009,13 @@ def wait_for_message(
     
     while time.time() < timeout_start + timeout:
         try:
+            # Add a small delay to prevent tight loop and allow file system operations
+            time.sleep(0.1)
+            
+            # Check if we've exceeded timeout (safety check)
+            if time.time() >= timeout_start + timeout:
+                break
+            
             # Check file size first to see if it's growing
             current_size = os.path.getsize(log_file) if os.path.exists(log_file) else 0
             if current_size != last_size:
@@ -993,8 +1046,6 @@ def wait_for_message(
             print(f"Log file {log_file} not found yet, waiting...", flush=True)
         except Exception as e:
             print(f"Error reading {log_file}: {e}", flush=True)
-            
-        time.sleep(0.1)  # Back to faster polling in Linux
         
     print(f"=== TIMEOUT waiting for '{message}' in {log_file} ===", flush=True)
     # Print final log content for debugging
