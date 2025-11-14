@@ -4,7 +4,7 @@
 
 import {
     SIZE_SET_KEYSPACE,
-    createRedisClient,
+    createGlideClient,
     generateValue,
     receivedOptions,
 } from "./utils";
@@ -16,9 +16,8 @@ async function fill_database(
     tls: boolean,
     port: number,
 ) {
-    const client = await createRedisClient(host, isCluster, tls, port);
+    const client = await createGlideClient(host, isCluster, tls, port);
     const data = generateValue(data_size);
-    await client.connect();
 
     const CONCURRENT_SETS = 1000;
     const sets = Array.from(Array(CONCURRENT_SETS).keys()).map(
@@ -31,7 +30,7 @@ async function fill_database(
     );
 
     await Promise.all(sets);
-    await client.quit();
+    client.close();
 }
 
 Promise.resolve()
