@@ -172,6 +172,28 @@ jobs:
                   # Create python3 symlink for Windows
                   ln -sf $(which python) /usr/bin/python3
 
+            - name: Configure WSL memory for Windows
+              if: ${{ matrix.host.OS == 'windows' }}
+              shell: powershell
+              run: |
+                  # Create .wslconfig to increase WSL memory limit
+                  $wslConfig = @"
+                  [wsl2]
+                  memory=8GB
+                  swap=4GB
+                  processors=4
+                  vmIdleTimeout=-1
+                  "@
+                  $wslConfig | Out-File -FilePath "$env:USERPROFILE\.wslconfig" -Encoding utf8
+                  
+                  # Restart WSL to apply new memory settings
+                  wsl --shutdown
+                  Start-Sleep -Seconds 5
+                  wsl echo "WSL restarted with new memory configuration"
+                  
+                  # Verify memory settings
+                  wsl free -h
+
             - name: Build java client (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
               working-directory: java
