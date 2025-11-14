@@ -122,7 +122,7 @@ public class ValkeyCluster implements AutoCloseable {
                                 "wsl",
                                 "--",
                                 "python3",
-                                "/mnt/c/workspace/utils/cluster_manager.py"));
+                                "cluster_manager.py"));
 
                 // Add engine version if specified
                 String engineVersion = System.getProperty("engine-version");
@@ -268,6 +268,13 @@ public class ValkeyCluster implements AutoCloseable {
             } // End of WSL else clause
 
             ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+            
+            // Set working directory to utils folder for relative path
+            if (useWSL) {
+                pb.directory(Paths.get("").toAbsolutePath().getParent().resolve("utils").toFile());
+            }
+
             pb.redirectErrorStream(true);
             Process process = pb.start();
 
@@ -420,7 +427,7 @@ public class ValkeyCluster implements AutoCloseable {
                                 "wsl",
                                 "--",
                                 "python3",
-                                "/mnt/c/workspace/utils/cluster_manager.py"));
+                                "cluster_manager.py"));
 
                 if (tls) {
                     command.add("--tls");
@@ -472,6 +479,13 @@ public class ValkeyCluster implements AutoCloseable {
             } // End of WSL else clause
 
             ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+            
+            // Set working directory to utils folder for relative path
+            if (useWSL) {
+                pb.directory(Paths.get("").toAbsolutePath().getParent().resolve("utils").toFile());
+            }
+
             pb.redirectErrorStream(true);
             Process process = pb.start();
 

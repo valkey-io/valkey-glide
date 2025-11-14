@@ -123,8 +123,9 @@ tasks.register('startCluster') {
                 if (isWindows) {
                     // Use WSL directly without Docker
                     exec {
-                        def args = ['wsl', '--', 'python3', '/mnt/c/workspace/utils/cluster_manager.py', 'start', '--cluster-mode', '--host', '127.0.0.1']
-                        if (System.getProperty("tls") == 'true') args.add(6, '--tls')
+                        workingDir "${project.rootDir}/../utils"
+                        def args = ['wsl', '--', 'python3', 'cluster_manager.py', 'start', '--cluster-mode', '--host', '127.0.0.1']
+                        if (System.getProperty("tls") == 'true') args.add(4, '--tls')
                         commandLine args
                         standardOutput = os
                         errorOutput = System.out
