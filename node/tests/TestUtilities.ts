@@ -567,7 +567,9 @@ export async function flushAndCloseClient(
 
         // Add a small delay to allow sockets to be properly released
         // This prevents socket exhaustion when running many tests sequentially
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        // Use longer delay for TLS connections as they need more cleanup time
+        const delay = tlsConfig?.useTLS ? 50 : 10;
+        await new Promise((resolve) => setTimeout(resolve, delay));
     }
 }
 
