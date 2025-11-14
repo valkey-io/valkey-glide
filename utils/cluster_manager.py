@@ -476,17 +476,17 @@ def start_server(
             cmd_args.extend(["--loadmodule", module_path])
     cmd_args += tls_args
     
-    print(f"=== DEBUG: Starting server with command: {' '.join(cmd_args)} ===", flush=True)
+    logging.info(f"Starting server with command: {' '.join(cmd_args)}")
     p = subprocess.Popen(
         cmd_args,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
-    print(f"=== DEBUG: Server process started, waiting for output ===", flush=True)
+    logging.info("Server process started, waiting for output")
     output, err = p.communicate(timeout=2)
-    print(f"=== DEBUG: Server output: {output} ===", flush=True)
-    print(f"=== DEBUG: Server error: {err} ===", flush=True)
+    logging.info(f"Server output: {output}")
+    logging.info(f"Server error: {err}")
     if p.returncode != 0:
         raise Exception(
             f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
@@ -520,7 +520,7 @@ def create_servers(
     tls_ca_cert_file: Optional[str] = None,
 ) -> List[Server]:
     tic = time.perf_counter()
-    logging.debug("## Creating servers")
+    logging.info("## Creating servers - DEBUG CHECKPOINT")
     ready_servers: List[Server] = []
     nodes_count = shard_count * (1 + replica_count)
     tls_args = []
@@ -741,22 +741,22 @@ def create_standalone_replication(
     logging.debug("=== END REPLICA LOGS ===")
     
     # Debug: Check replica log files before waiting
-    print("=== DEBUG: Checking replica log files ===", flush=True)
+    logging.info("=== DEBUG: Checking replica log files ===")
     for port in servers_ports[1:]:  # Skip first port (primary)
         log_file = f"{cluster_folder}/server_{port}/server.log"
-        print(f"Checking replica log: {log_file}", flush=True)
+        logging.info(f"Checking replica log: {log_file}")
         if os.path.exists(log_file):
-            print(f"✓ Log file exists: {log_file}", flush=True)
+            logging.info(f"[OK] Log file exists: {log_file}")
             try:
                 with open(log_file, 'r') as f:
                     content = f.read()
-                    print(f"=== REPLICA {port} LOG CONTENT ===", flush=True)
-                    print(content[-1000:] if len(content) > 1000 else content, flush=True)  # Last 1000 chars
-                    print(f"=== END REPLICA {port} LOG ===", flush=True)
+                    logging.info(f"=== REPLICA {port} LOG CONTENT ===")
+                    logging.info(content[-1000:] if len(content) > 1000 else content)  # Last 1000 chars
+                    logging.info(f"=== END REPLICA {port} LOG ===")
             except Exception as e:
-                print(f"✗ Error reading {log_file}: {e}", flush=True)
+                logging.info(f"[ERROR] Error reading {log_file}: {e}")
         else:
-            print(f"✗ Log file missing: {log_file}", flush=True)
+            logging.info(f"[ERROR] Log file missing: {log_file}")
     
     wait_for_a_message_in_logs(
         cluster_folder,
@@ -977,36 +977,36 @@ def wait_for_message(
     timeout: int = 30,  # Increased timeout for WSL/cluster sync
 ):
     logging.debug(f"checking state changed in {log_file}")
-    print(f"=== TAILING LOG FILE: {log_file} ===", flush=True)
-    print(f"Waiting for message: '{message}'", flush=True)
+    logging.info(f"=== TAILING LOG FILE: {log_file} ===")
+    logging.info(f"Waiting for message: '{message}'")
     
     # Debug: Check if Valkey processes are running and ports are open
-    print("=== DEBUG: Checking running processes and ports ===", flush=True)
+    logging.info("=== DEBUG: Checking running processes and ports ===")
     try:
         # Check for valkey-server processes
         result = subprocess.run(['ps', 'aux'], capture_output=True, text=True, timeout=5)
         valkey_processes = [line for line in result.stdout.split('\n') if 'valkey-server' in line]
         if valkey_processes:
-            print("✓ Valkey processes found:", flush=True)
+            logging.info("[OK] Valkey processes found:")
             for proc in valkey_processes:
-                print(f"  {proc}", flush=True)
+                logging.info(f"  {proc}")
         else:
-            print("✗ No valkey-server processes found", flush=True)
+            logging.info("[ERROR] No valkey-server processes found")
         
         # Check for listening ports
         result = subprocess.run(['ss', '-tlnp'], capture_output=True, text=True, timeout=5)
         listening_ports = [line for line in result.stdout.split('\n') if 'valkey' in line or ':637' in line or ':638' in line]
         if listening_ports:
-            print("✓ Valkey ports listening:", flush=True)
+            logging.info("[OK] Valkey ports listening:")
             for port in listening_ports:
-                print(f"  {port}", flush=True)
+                logging.info(f"  {port}")
         else:
-            print("✗ No Valkey ports found listening", flush=True)
+            logging.info("[ERROR] No Valkey ports found listening")
             
     except Exception as e:
-        print(f"✗ Error checking processes/ports: {e}", flush=True)
+        logging.info(f"[ERROR] Error checking processes/ports: {e}")
     
-    print("=== END PROCESS/PORT CHECK ===", flush=True)
+    logging.info("=== END PROCESS/PORT CHECK ===")
     
     timeout_start = time.time()
     last_position = 0
@@ -1024,7 +1024,7 @@ def wait_for_message(
             # Check file size first to see if it's growing
             current_size = os.path.getsize(log_file) if os.path.exists(log_file) else 0
             if current_size != last_size:
-                print(f"[{os.path.basename(log_file)}] File size changed: {last_size} -> {current_size}", flush=True)
+                logging.info(f"[{os.path.basename(log_file)}] File size changed: {last_size} -> {current_size}")
                 last_size = current_size
             
             with open(log_file, "r") as f:
@@ -1037,34 +1037,34 @@ def wait_for_message(
                     lines = new_content.split('\n')
                     for line in lines:
                         if line.strip():  # Only print non-empty lines
-                            print(f"[{os.path.basename(log_file)}] {line}", flush=True)
+                            logging.info(f"[{os.path.basename(log_file)}] {line}")
                     last_position = f.tell()
                 
                 # Check if we found the message in the full content
                 f.seek(0)
                 full_content = f.read()
                 if message in full_content:
-                    print(f"=== FOUND MESSAGE '{message}' in {log_file} ===", flush=True)
+                    logging.info(f"=== FOUND MESSAGE '{message}' in {log_file} ===")
                     return True
                     
         except FileNotFoundError:
-            print(f"Log file {log_file} not found yet, waiting...", flush=True)
+            logging.info(f"Log file {log_file} not found yet, waiting...")
         except Exception as e:
-            print(f"Error reading {log_file}: {e}", flush=True)
+            logging.info(f"Error reading {log_file}: {e}")
         
-    print(f"=== TIMEOUT waiting for '{message}' in {log_file} ===", flush=True)
+    logging.info(f"=== TIMEOUT waiting for '{message}' in {log_file} ===")
     # Print final log content for debugging
     try:
         with open(log_file, "r") as f:
             final_content = f.read()
-            print(f"Final log content ({len(final_content)} chars):", flush=True)
+            logging.info(f"Final log content ({len(final_content)} chars):")
             # Split into lines for better readability
             lines = final_content.split('\n')
             for line in lines[-20:]:  # Last 20 lines
                 if line.strip():
-                    print(f"  {line}", flush=True)
+                    logging.info(f"  {line}")
     except Exception as e:
-        print(f"Could not read final log content: {e}", flush=True)
+        logging.info(f"Could not read final log content: {e}")
         
     logging.warning(
         f"Timeout exceeded trying to check if {log_file} contains {message}"
