@@ -954,15 +954,62 @@ def wait_for_message(
     timeout: int = 5,
 ):
     logging.debug(f"checking state changed in {log_file}")
+    print(f"=== TAILING LOG FILE: {log_file} ===", flush=True)
+    print(f"Waiting for message: '{message}'", flush=True)
+    
     timeout_start = time.time()
+    last_position = 0
+    last_size = 0
+    
     while time.time() < timeout_start + timeout:
+        try:
+            # Check file size first to see if it's growing
+            current_size = os.path.getsize(log_file) if os.path.exists(log_file) else 0
+            if current_size != last_size:
+                print(f"[{os.path.basename(log_file)}] File size changed: {last_size} -> {current_size}", flush=True)
+                last_size = current_size
+            
+            with open(log_file, "r") as f:
+                # Read from last position to get new content
+                f.seek(last_position)
+                new_content = f.read()
+                
+                if new_content:
+                    # Split into lines (Unix line endings)
+                    lines = new_content.split('\n')
+                    for line in lines:
+                        if line.strip():  # Only print non-empty lines
+                            print(f"[{os.path.basename(log_file)}] {line}", flush=True)
+                    last_position = f.tell()
+                
+                # Check if we found the message in the full content
+                f.seek(0)
+                full_content = f.read()
+                if message in full_content:
+                    print(f"=== FOUND MESSAGE '{message}' in {log_file} ===", flush=True)
+                    return True
+                    
+        except FileNotFoundError:
+            print(f"Log file {log_file} not found yet, waiting...", flush=True)
+        except Exception as e:
+            print(f"Error reading {log_file}: {e}", flush=True)
+            
+        time.sleep(0.1)  # Back to faster polling in Linux
+        
+    print(f"=== TIMEOUT waiting for '{message}' in {log_file} ===", flush=True)
+    # Print final log content for debugging
+    try:
         with open(log_file, "r") as f:
-            server_log = f.read()
-            if message in server_log:
-                return True
-            else:
-                time.sleep(0.1)
-                continue
+            final_content = f.read()
+            print(f"Final log content ({len(final_content)} chars):", flush=True)
+            # Split into lines for better readability
+            lines = final_content.split('\n')
+            for line in lines[-20:]:  # Last 20 lines
+                if line.strip():
+                    print(f"  {line}", flush=True)
+    except Exception as e:
+        print(f"Could not read final log content: {e}", flush=True)
+        
     logging.warning(
         f"Timeout exceeded trying to check if {log_file} contains {message}"
     )
