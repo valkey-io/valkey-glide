@@ -475,13 +475,18 @@ def start_server(
         for module_path in load_module:
             cmd_args.extend(["--loadmodule", module_path])
     cmd_args += tls_args
+    
+    print(f"=== DEBUG: Starting server with command: {' '.join(cmd_args)} ===", flush=True)
     p = subprocess.Popen(
         cmd_args,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
+    print(f"=== DEBUG: Server process started, waiting for output ===", flush=True)
     output, err = p.communicate(timeout=2)
+    print(f"=== DEBUG: Server output: {output} ===", flush=True)
+    print(f"=== DEBUG: Server error: {err} ===", flush=True)
     if p.returncode != 0:
         raise Exception(
             f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
