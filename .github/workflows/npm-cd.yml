@@ -44,7 +44,7 @@ jobs:
             should_publish: ${{ steps.get-params.outputs.should_publish }}
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   fetch-depth: 0
 
@@ -182,7 +182,7 @@ jobs:
         name: Build for ${{ matrix.TARGET }} (${{ matrix.build_type }})
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   fetch-depth: 0
 
@@ -297,7 +297,7 @@ jobs:
             release_package_artifact_name: "release-packages-${{ github.run_id }}"
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   fetch-depth: 0
             - name: Create Build Directory
@@ -474,7 +474,7 @@ jobs:
 
             - name: Checkout (via action)
               if: ${{ !(matrix.TARGET == 'aarch64-unknown-linux-musl') }}
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   fetch-depth: 0
 
