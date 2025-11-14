@@ -142,6 +142,47 @@ tasks.register('startCluster') {
                 clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
                 println "=== Cluster hosts: ${clusterHosts} ==="
             }
+            
+            // Check for replica log files after cluster creation
+            if (isWindows) {
+                println "=== Checking WSL/Docker memory usage ==="
+                exec {
+                    commandLine 'wsl', '--', 'free', '-h'
+                    ignoreExitValue true
+                }
+                exec {
+                    commandLine 'wsl', '--', 'sudo', 'docker', 'stats', '--no-stream', '--format', 'table {{.Container}}\\t{{.CPUPerc}}\\t{{.MemUsage}}\\t{{.MemPerc}}'
+                    ignoreExitValue true
+                }
+                
+                println "=== Checking for replica log files ==="
+                exec {
+                    commandLine 'wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container',
+                        'find', '/workspace/utils/clusters', '-name', 'server.log', '-exec', 'ls', '-la', '{}', ';'
+                    ignoreExitValue true
+                }
+                
+                println "=== Printing contents of all server log files ==="
+                exec {
+                    commandLine 'wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container',
+                        'find', '/workspace/utils/clusters', '-name', 'server.log', '-exec', 'sh', '-c', 'echo "=== LOG FILE: {} ==="; cat "{}"', ';'
+                    ignoreExitValue true
+                }
+                
+                println "=== Checking cluster directory structure ==="
+                exec {
+                    commandLine 'wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container',
+                        'find', '/workspace/utils/clusters', '-type', 'd', '-exec', 'ls', '-la', '{}', ';'
+                    ignoreExitValue true
+                }
+                
+                println "=== Checking running Valkey processes ==="
+                exec {
+                    commandLine 'wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container',
+                        'ps', 'aux', '|', 'grep', 'valkey'
+                    ignoreExitValue true
+                }
+            }
         } else {
             clusterHosts = System.getProperty("cluster-endpoints")
         }
