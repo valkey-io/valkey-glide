@@ -220,6 +220,7 @@ tasks.register('beforeTests') {}
 tasks.register('afterTests') {}
 tasks.register('startStandalone') {
     doLast {
+        println "=== DEBUG: startStandalone task starting ==="
         if (project.hasProperty('host') && project.property('host') == 'localhost') {
             println "=== Starting standalone setup directly in WSL ==="
             new ByteArrayOutputStream().withStream { os ->
@@ -227,24 +228,34 @@ tasks.register('startStandalone') {
                     workingDir '../utils'
                     commandLine 'wsl', '--', 'python3', 'cluster_manager.py', 'start', '--host', '127.0.0.1'
                     standardOutput = os
+                    errorOutput = System.err  // Show errors for debugging
                 }
-                standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                def output = os.toString()
+                println "=== Standalone command output: ${output.take(200)}... ==="
+                standaloneHosts = extractAddressesFromClusterManagerOutput(output)
+                println "=== Standalone hosts: ${standaloneHosts} ==="
             }
         } else {
+            println "=== Starting standalone setup with python3 ==="
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir '../utils'
                     commandLine 'python3', 'cluster_manager.py', 'start', '--host', project.findProperty('host') ?: '127.0.0.1'
                     standardOutput = os
                 }
-                standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                def output = os.toString()
+                println "=== Standalone command output: ${output.take(200)}... ==="
+                standaloneHosts = extractAddressesFromClusterManagerOutput(output)
+                println "=== Standalone hosts: ${standaloneHosts} ==="
             }
         }
+        println "=== DEBUG: startStandalone task completed ==="
     }
 }
 
 tasks.register('startStandaloneTls') {
     doLast {
+        println "=== DEBUG: startStandaloneTls task starting ==="
         if (project.hasProperty('host') && project.property('host') == 'localhost') {
             println "=== Starting standalone TLS setup directly in WSL ==="
             new ByteArrayOutputStream().withStream { os ->
@@ -252,19 +263,28 @@ tasks.register('startStandaloneTls') {
                     workingDir '../utils'
                     commandLine 'wsl', '--', 'python3', 'cluster_manager.py', 'start', '--tls', '--host', '127.0.0.1'
                     standardOutput = os
+                    errorOutput = System.err  // Show errors for debugging
                 }
-                standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                def output = os.toString()
+                println "=== Standalone TLS command output: ${output.take(200)}... ==="
+                standaloneTlsHosts = extractAddressesFromClusterManagerOutput(output)
+                println "=== Standalone TLS hosts: ${standaloneTlsHosts} ==="
             }
         } else {
+            println "=== Starting standalone TLS setup with python3 ==="
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir '../utils'
                     commandLine 'python3', 'cluster_manager.py', 'start', '--tls', '--host', project.findProperty('host') ?: '127.0.0.1'
                     standardOutput = os
                 }
-                standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                def output = os.toString()
+                println "=== Standalone TLS command output: ${output.take(200)}... ==="
+                standaloneTlsHosts = extractAddressesFromClusterManagerOutput(output)
+                println "=== Standalone TLS hosts: ${standaloneTlsHosts} ==="
             }
         }
+        println "=== DEBUG: startStandaloneTls task completed ==="
     }
 }
 
