@@ -1,32 +1,52 @@
-name: Install Rust tool chain and protoc
-
-inputs:
-    target:
-        description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
-        type: string
-        required: false
-        default: "x86_64-unknown-linux-gnu"
-        options:
-            - x86_64-unknown-linux-gnu
-            - aarch64-unknown-linux-gnu
-            - x86_64-apple-darwin
-            - aarch64-apple-darwin
-    github-token:
-        description: "GitHub token"
-        type: string
-        required: true
+name: Install Rust and protoc
+description: Install Rust toolchain and protobuf compiler
 
 runs:
     using: "composite"
     steps:
-        - name: Install Rust toolchain
+        - name: Install Rust toolchain (Windows)
+          if: runner.os == 'Windows'
+          shell: powershell
+          run: |
+              Write-Host "Using pre-installed Rust and MSVC on GitHub-hosted runner"
+
+              # Verify Rust is available
+              if (Get-Command rustc -ErrorAction SilentlyContinue) {
+                  $version = rustc --version
+                  Write-Host "Rust available: $version"
+                  
+                  # Install rustfmt and clippy components
+                  Write-Host "Installing rustfmt and clippy..."
+                  rustup component add rustfmt clippy
+                  
+                  Write-Host "Rust toolchain ready"
+              } else {
+                  Write-Host "ERROR: Rust not found"
+                  exit 1
+              }
+
+        - name: Install Rust toolchain (Unix)
+          if: runner.os != 'Windows'
           uses: dtolnay/rust-toolchain@stable
           with:
-              targets: ${{ inputs.target }}
               components: rustfmt, clippy
 
-        - name: Install protoc (protobuf)
+        - name: Install protoc (Windows)
+          if: runner.os == 'Windows'
+          shell: powershell
+          run: |
+              Write-Host "Installing protoc version 29.1..."
+              if (Get-Command choco -ErrorAction SilentlyContinue) {
+                  choco install protoc --version=29.1 -y
+                  Write-Host "protoc 29.1 installed successfully"
+              } else {
+                  Write-Host "ERROR: Chocolatey not available"
+                  exit 1
+              }
+
+        - name: Install protoc (Unix)
+          if: runner.os != 'Windows'
           uses: arduino/setup-protoc@v3
           with:
-              version: "25.1"
-              repo-token: ${{ inputs.github-token }}
+              version: "29.1"
+              repo-token: ${{ github.token }}

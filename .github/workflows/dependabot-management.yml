@@ -250,7 +250,7 @@ jobs:
                       }
 
                       // Add basic changelog information
-                      const changelog = `## Changelog\n\nUpdated ${depName} from ${fromVersion} to ${toVersion}\n\n📋 To view detailed changes, visit the package repository or release notes.`;
+                      const changelog = `## Changelog\n\nUpdated ${depName} from ${fromVersion} to ${toVersion}\n\n[INFO] To view detailed changes, visit the package repository or release notes.`;
                       
                       const newBody = `${body}\n\n${changelog}`;
                       

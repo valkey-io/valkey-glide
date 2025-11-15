@@ -691,6 +691,44 @@ def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
         return None
 
 
+def refresh_cluster_topology_wsl(
+    servers: List[Server],
+    cluster_folder: str,
+    use_tls: bool,
+    tls_cert_file: Optional[str] = None,
+    tls_key_file: Optional[str] = None,
+    tls_ca_cert_file: Optional[str] = None,
+):
+    """
+    WSL-specific: Force all nodes to meet each other explicitly
+    """
+    logging.debug("WSL: Refreshing cluster topology with explicit CLUSTER MEET commands")
+    
+    # Make sure every node knows about every other node
+    for server in servers:
+        for other_server in servers:
+            if server != other_server:
+                meet_cmd = [
+                    get_cli_command(),
+                    "-h",
+                    server.host,
+                    "-p",
+                    str(server.port),
+                    *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                    "cluster",
+                    "meet",
+                    other_server.host,
+                    str(other_server.port),
+                ]
+                logging.debug(f"Executing: {meet_cmd}")
+                try:
+                    result = subprocess.run(meet_cmd, capture_output=True, text=True, timeout=5)
+                    if result.returncode != 0:
+                        logging.warning(f"CLUSTER MEET failed: {result.stderr}")
+                except subprocess.TimeoutExpired:
+                    logging.warning(f"CLUSTER MEET timeout for {server} -> {other_server}")
+
+
 def wait_for_all_topology_views(
     servers: List[Server],
     cluster_folder: str,
@@ -703,6 +741,14 @@ def wait_for_all_topology_views(
     Wait for each of the nodes to have a topology view that contains all nodes.
     Only when a replica finished syncing and loading, it will be included in the CLUSTER SLOTS output.
     """
+    # Check if we're running in WSL environment
+    is_wsl = os.path.exists('/proc/version') and 'microsoft' in open('/proc/version').read().lower()
+    
+    if is_wsl:
+        # WSL: Force topology refresh first
+        refresh_cluster_topology_wsl(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
+        time.sleep(2)  # Give time for MEET commands to propagate
+    
     for server in servers:
         cmd_args = [
             get_cli_command(),
