@@ -325,18 +325,18 @@ tasks.register('startClusterTls') {
     }
 }
 
-beforeTests.dependsOn 'stopAllBeforeTests'
-stopAllBeforeTests.finalizedBy 'clearDirs'
-clearDirs.finalizedBy 'startStandalone'
-clearDirs.finalizedBy 'startStandaloneTls'
-clearDirs.finalizedBy 'startCluster'
-clearDirs.finalizedBy 'startClusterTls'
-clearDirs.finalizedBy 'startClusterForAz'
-afterTests.finalizedBy 'stopAllAfterTests'
-compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
+beforeTests.dependsOn stopAllBeforeTests
+stopAllBeforeTests.finalizedBy clearDirs
+clearDirs.finalizedBy startStandalone
+clearDirs.finalizedBy startStandaloneTls
+clearDirs.finalizedBy startCluster
+clearDirs.finalizedBy startClusterTls
+clearDirs.finalizedBy startClusterForAz
+afterTests.finalizedBy stopAllAfterTests
+compileTestJava.dependsOn(':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal')
 
 tasks.withType(Test) {
-    dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
+    dependsOn(':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal')
     useJUnitPlatform()
     if (!project.gradle.startParameter.taskNames.contains(':integTest:modulesTest')) {
         dependsOn 'beforeTests'
