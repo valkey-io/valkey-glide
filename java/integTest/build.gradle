@@ -242,6 +242,7 @@ tasks.register('startStandalone') {
                     workingDir '../utils'
                     commandLine 'python3', 'cluster_manager.py', 'start', '--host', project.findProperty('host') ?: '127.0.0.1'
                     standardOutput = os
+                    errorOutput = System.err  // Show Python logging
                 }
                 def output = os.toString()
                 println "=== Standalone command output: ${output.take(200)}... ==="
@@ -277,6 +278,7 @@ tasks.register('startStandaloneTls') {
                     workingDir '../utils'
                     commandLine 'python3', 'cluster_manager.py', 'start', '--tls', '--host', project.findProperty('host') ?: '127.0.0.1'
                     standardOutput = os
+                    errorOutput = System.err  // Show Python logging
                 }
                 def output = os.toString()
                 println "=== Standalone TLS command output: ${output.take(200)}... ==="
@@ -327,11 +329,11 @@ tasks.register('startClusterTls') {
 
 beforeTests.dependsOn stopAllBeforeTests
 stopAllBeforeTests.finalizedBy clearDirs
-clearDirs.finalizedBy startStandalone
-clearDirs.finalizedBy startStandaloneTls
-clearDirs.finalizedBy startCluster
-clearDirs.finalizedBy startClusterTls
-clearDirs.finalizedBy startClusterForAz
+startStandalone.dependsOn clearDirs
+startStandaloneTls.dependsOn startStandalone  
+startCluster.dependsOn startStandaloneTls
+startClusterTls.dependsOn startCluster
+startClusterForAz.dependsOn startClusterTls
 afterTests.finalizedBy stopAllAfterTests
 compileTestJava.dependsOn(':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal')
 
