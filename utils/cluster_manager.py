@@ -862,10 +862,7 @@ def wait_for_all_topology_views(
     Wait for each of the nodes to have a topology view that contains all nodes.
     Only when a replica finished syncing and loading, it will be included in the CLUSTER SLOTS output.
     """
-    logging.info(f"Starting topology view synchronization for {len(servers)} servers")
-    
     for i, server in enumerate(servers):
-        logging.info(f"Checking topology view for server {i+1}/{len(servers)}: {server.host}:{server.port}")
         
         cmd_args = [
             get_cli_command(),
@@ -884,25 +881,29 @@ def wait_for_all_topology_views(
             "cluster",
             "slots",
         ]
-        logging.info(f"Executing CLUSTER SLOTS command: {' '.join(cmd_args)}")
-        retries = 300  # 5 minutes (300 seconds) for WSL topology sync
+        retries = 80
         while retries >= 0:
-            logging.info(f"Topology check attempt {300-retries+1}/301 for {server.host}:{server.port}")
-            logging.info(f"About to execute redis_cli_run_command with timeout=5s")
-            
-            start_time = time.time()
             output = redis_cli_run_command(cmd_args)
-            end_time = time.time()
-            
-            logging.info(f"redis_cli_run_command completed in {end_time-start_time:.2f}s, output={'None' if output is None else f'{len(output)} chars'}")
             
             if output is not None:
-                host_count = output.count(f"{server.host}")
-                logging.info(f"Found {host_count} occurrences of '{server.host}' in output, need {len(servers)}")
-                logging.info(f"CLUSTER SLOTS output: {output[:500]}...")  # First 500 chars
+                # Check if all hash slots (0-16383) are covered, which means cluster is functional
+                lines = output.strip().split('\n')
+                slot_ranges = []
                 
-                if host_count == len(servers):
-                    logging.info(f"Server {server.host}:{server.port} has complete topology view")
+                for i in range(0, len(lines), 3):  # CLUSTER SLOTS output comes in groups of 3 lines
+                    if i + 2 < len(lines):
+                        try:
+                            start_slot = int(lines[i])
+                            end_slot = int(lines[i + 1])
+                            slot_ranges.append((start_slot, end_slot))
+                        except (ValueError, IndexError):
+                            continue
+                
+                # Check if we have complete slot coverage (0-16383)
+                slot_ranges.sort()
+                total_slots_covered = sum(end - start + 1 for start, end in slot_ranges)
+                
+                if total_slots_covered == 16384:  # All slots covered
                     # Server is ready, get the node's role
                     cmd_args = [
                         get_cli_command(),
@@ -925,19 +926,15 @@ def wait_for_all_topology_views(
                     node_info = parse_cluster_nodes(cluster_slots_output)
                     if node_info:
                         server.set_primary(node_info["is_primary"])
-                    logging.info(f"Server {server} is ready!")
                     break
                 else:
-                    logging.info(f"Incomplete topology view, continuing to retry... ({retries} retries left)")
+                    retries -= 1
             else:
-                logging.info(f"CLUSTER SLOTS command returned None, retrying... ({retries} retries left)")
+                retries -= 1
             
-            retries -= 1
             time.sleep(1)
-            continue
 
         if retries < 0:
-            logging.error(f"Timeout exceeded waiting for server {server} topology view")
             raise Exception(
                 f"Timeout exceeded trying to wait for server {server} to know all hosts.\n"
                 f"Current CLUSTER SLOTS output:\n{output}"
