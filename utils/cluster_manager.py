@@ -784,7 +784,7 @@ def wait_for_a_message_in_logs(
 
         if server_ports and os.path.basename(os.path.normpath(dir)) not in server_ports:
             continue
-        if not wait_for_message(log_file, message, 10):
+        if not wait_for_message(log_file, message, 300):  # 5 minutes for WSL
             raise Exception(
                 f"During the timeout duration, the server logs associated with port {dir} did not contain the message:{message}."
                 f"See {dir}/server.log for more information"
@@ -974,7 +974,7 @@ def wait_for_server(
 def wait_for_message(
     log_file: str,
     message: str,
-    timeout: int = 30,  # Increased timeout for WSL/cluster sync
+    timeout: int = 300,  # 5 minutes for WSL sync completion
 ):
     logging.debug(f"checking state changed in {log_file}")
     logging.info(f"=== TAILING LOG FILE: {log_file} ===")
@@ -1011,18 +1011,37 @@ def wait_for_message(
     timeout_start = time.time()
     last_position = 0
     last_size = 0
+    loop_count = 0
+    
+    logging.info(f"Starting wait loop for '{message}' in {log_file}")
     
     while time.time() < timeout_start + timeout:
+        loop_count += 1
+        logging.info(f"Loop iteration {loop_count} - checking for message")
+        
         try:
             # Add a small delay to prevent tight loop and allow file system operations
             time.sleep(0.1)
             
             # Check if we've exceeded timeout (safety check)
-            if time.time() >= timeout_start + timeout:
+            current_time = time.time()
+            if current_time >= timeout_start + timeout:
+                logging.info(f"Timeout check: {current_time} >= {timeout_start + timeout}, breaking")
                 break
             
             # Check file size first to see if it's growing
-            current_size = os.path.getsize(log_file) if os.path.exists(log_file) else 0
+            logging.info(f"About to call os.path.exists({log_file})")
+            file_exists = os.path.exists(log_file)
+            logging.info(f"os.path.exists returned: {file_exists}")
+            
+            if file_exists:
+                logging.info(f"About to call os.path.getsize({log_file})")
+                current_size = os.path.getsize(log_file)
+                logging.info(f"os.path.getsize returned: {current_size}")
+            else:
+                current_size = 0
+                logging.info(f"File doesn't exist, setting size to 0")
+            
             if current_size != last_size:
                 logging.info(f"[{os.path.basename(log_file)}] File size changed: {last_size} -> {current_size}")
                 last_size = current_size
@@ -1035,10 +1054,17 @@ def wait_for_message(
                 if new_content:
                     # Split into lines (Unix line endings)
                     lines = new_content.split('\n')
+                    logging.info(f"Processing {len(lines)} lines")
                     for line in lines:
                         if line.strip():  # Only print non-empty lines
                             logging.info(f"[{os.path.basename(log_file)}] {line}")
-                    last_position = f.tell()
+                            
+                        if message in line:
+                            logging.info(f"=== FOUND MESSAGE '{message}' in {log_file} ===")
+                            return True
+                            
+                last_position = f.tell()
+                logging.info(f"Updated last_position to {last_position}")
                 
                 # Check if we found the message in the full content
                 f.seek(0)
@@ -1052,6 +1078,9 @@ def wait_for_message(
         except Exception as e:
             logging.info(f"Error reading {log_file}: {e}")
         
+        logging.info(f"End of loop iteration {loop_count}")
+        
+    logging.info(f"Exited wait loop after {loop_count} iterations")
     logging.info(f"=== TIMEOUT waiting for '{message}' in {log_file} ===")
     # Print final log content for debugging
     try:
