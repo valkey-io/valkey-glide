@@ -20,7 +20,8 @@ public class ValkeyCluster implements AutoCloseable {
                     .resolve("utils")
                     .resolve("cluster_manager.py");
 
-    private static final boolean isWindows = System.getProperty("os.name").toLowerCase().contains("windows");
+    private static final boolean isWindows =
+            System.getProperty("os.name").toLowerCase().contains("windows");
 
     private boolean tls = false;
     private String clusterFolder;
