@@ -205,7 +205,7 @@ tasks.register('startClusterForAz') {
                     // Use direct WSL for cluster
                     exec {
                         workingDir "${project.rootDir}/../utils"
-                        def args = ['wsl', '--', 'python3', 'cluster_manager.py', 'start', '--cluster-mode', '--host', clusterHost]
+                        def args = ['wsl', '--', 'python3', 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4', '--host', clusterHost]
                         if (System.getProperty("tls") == 'true') args.add(5, '--tls')
                         commandLine args
                         standardOutput = os
@@ -213,7 +213,7 @@ tasks.register('startClusterForAz') {
                 } else {
                     exec {
                         workingDir "${project.rootDir}/../utils"
-                        def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '--host', clusterHost]
+                        def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4', '--host', clusterHost]
                         if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                         commandLine args
                         standardOutput = os
