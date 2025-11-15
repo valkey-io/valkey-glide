@@ -166,7 +166,6 @@ impl StandaloneClient {
             for cert in &connection_request.root_certs {
                 combined_certs.extend_from_slice(cert);
             }
-            
             let tls_certificates = redis::TlsCertificates {
                 client_tls: None,
                 root_cert: Some(combined_certs),

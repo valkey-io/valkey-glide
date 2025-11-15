@@ -71,7 +71,7 @@ public class ConnectionTests {
 
     @SneakyThrows
     private ValkeyCluster createDedicatedCluster(boolean clusterMode) {
-        return new ValkeyCluster(false, clusterMode, clusterMode ? 3 : 1, 1, null, null);
+        return new ValkeyCluster(false, clusterMode, clusterMode ? 3 : 1, 0, null, null);
     }
 
     @SneakyThrows

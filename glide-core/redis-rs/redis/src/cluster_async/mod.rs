@@ -598,9 +598,8 @@ impl<C> From<InternalSingleNodeRouting<C>> for InternalRoutingInfo<C> {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(crate) enum InternalSingleNodeRouting<C> {
-    #[default]
     Random,
     SpecificNode(Route),
     ByAddress(String),
@@ -612,6 +611,12 @@ pub(crate) enum InternalSingleNodeRouting<C> {
         redirect: Redirect,
         previous_routing: Box<InternalSingleNodeRouting<C>>,
     },
+}
+
+impl<C> Default for InternalSingleNodeRouting<C> {
+    fn default() -> Self {
+        Self::Random
+    }
 }
 
 impl<C> From<SingleNodeRoutingInfo> for InternalSingleNodeRouting<C> {
@@ -1281,34 +1286,24 @@ where
             .fold(
                 (
                     ConnectionsMap(DashMap::with_capacity(initial_nodes.len())),
-                    Vec::new(), // Collect ALL errors instead of just the last one
+                    None,
                 ),
-                |mut connections: (ConnectionMap<C>, Vec<String>), addr_conn_res| async move {
+                |connections: (ConnectionMap<C>, Option<String>), addr_conn_res| async move {
                     match addr_conn_res {
                         Ok((addr, node)) => {
                             connections.0 .0.insert(addr, node);
-                            connections
+                            (connections.0, None)
                         }
-                        Err(e) => {
-                            connections.1.push(e.to_string()); // Collect all errors
-                            connections
-                        }
+                        Err(e) => (connections.0, Some(e.to_string())),
                     }
                 },
             )
             .await;
         if connections.0 .0.is_empty() {
-            let error_message = if connections.1.is_empty() {
-                "No errors reported".to_string()
-            } else {
-                format!("All {} connection attempts failed: [{}]", 
-                    connections.1.len(), 
-                    connections.1.join(", "))
-            };
             return Err(RedisError::from((
                 ErrorKind::IoError,
                 "Failed to create initial connections",
-                error_message,
+                connections.1.unwrap_or("".to_string()),
             )));
         }
         info!("Connected to initial nodes:\n{}", connections.0);
