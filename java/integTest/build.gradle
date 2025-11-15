@@ -204,7 +204,7 @@ tasks.register('startClusterForAz') {
                 if (isWindows) {
                     // Use direct WSL for cluster
                     exec {
-                        workingDir '../utils'
+                        workingDir "${project.rootDir}/../utils"
                         def args = ['wsl', '--', 'python3', 'cluster_manager.py', 'start', '--cluster-mode', '--host', clusterHost]
                         if (System.getProperty("tls") == 'true') args.add(5, '--tls')
                         commandLine args
@@ -240,27 +240,20 @@ tasks.register('afterTests') {
 tasks.register('startStandalone') {
     doLast {
         println "=== DEBUG: startStandalone task starting ==="
-        try {
-            if (isWindows) {
-                println "=== Starting standalone setup directly in WSL ==="
+        if (System.getProperty("standalone-endpoints") == null) {
+            try {
                 new ByteArrayOutputStream().withStream { os ->
                     exec {
-                        workingDir '../utils'
-                        commandLine 'wsl', '--', 'python3', 'cluster_manager.py', 'start', '--host', '127.0.0.1'
-                        standardOutput = os
-                        errorOutput = System.err  // Show errors for debugging
-                    }
-                    def output = os.toString()
-                    println "=== Standalone command output: ${output.take(200)}... ==="
-                    standaloneHosts = extractAddressesFromClusterManagerOutput(output)
-                    println "=== Standalone hosts: ${standaloneHosts} ==="
-                }
-            } else {
-                println "=== Starting standalone setup with python3 ==="
-                new ByteArrayOutputStream().withStream { os ->
-                    exec {
-                        workingDir '../utils'
-                        commandLine 'python3', 'cluster_manager.py', 'start', '--host', project.findProperty('host') ?: '127.0.0.1'
+                        workingDir "${project.rootDir}/../utils"
+                        if (isWindows) {
+                            def args = ['wsl', '--', 'python3', 'cluster_manager.py', 'start', '-r', '0']
+                            if (System.getProperty("tls") == 'true') args.add(5, '--tls')
+                            commandLine args
+                        } else {
+                            def args = ['python3', 'cluster_manager.py', 'start', '-r', '0']
+                            if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                            commandLine args
+                        }
                         standardOutput = os
                         errorOutput = System.err  // Show Python logging
                     }
@@ -269,10 +262,12 @@ tasks.register('startStandalone') {
                     standaloneHosts = extractAddressesFromClusterManagerOutput(output)
                     println "=== Standalone hosts: ${standaloneHosts} ==="
                 }
+            } catch (Exception e) {
+                println "=== ERROR: startStandalone failed: ${e.message} ==="
+                standaloneHosts = "127.0.0.1:6379"  // Fallback value
             }
-        } catch (Exception e) {
-            println "=== ERROR: startStandalone failed: ${e.message} ==="
-            standaloneHosts = "127.0.0.1:6379"  // Fallback value
+        } else {
+            standaloneHosts = System.getProperty("standalone-endpoints")
         }
         println "=== DEBUG: startStandalone task completed ==="
     }
@@ -281,34 +276,21 @@ tasks.register('startStandalone') {
 tasks.register('startStandaloneTls') {
     doLast {
         println "=== DEBUG: startStandaloneTls task starting ==="
-        if (isWindows) {
-            println "=== Starting standalone TLS setup directly in WSL ==="
-            new ByteArrayOutputStream().withStream { os ->
-                exec {
-                    workingDir '../utils'
-                    commandLine 'wsl', '--', 'python3', 'cluster_manager.py', 'start', '--tls', '--host', '127.0.0.1'
-                    standardOutput = os
-                    errorOutput = System.err  // Show errors for debugging
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                if (isWindows) {
+                    commandLine 'wsl', '--', 'python3', 'cluster_manager.py', '--tls', 'start', '-r', '0'
+                } else {
+                    commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '-r', '0'
                 }
-                def output = os.toString()
-                println "=== Standalone TLS command output: ${output.take(200)}... ==="
-                standaloneTlsHosts = extractAddressesFromClusterManagerOutput(output)
-                println "=== Standalone TLS hosts: ${standaloneTlsHosts} ==="
+                standardOutput = os
+                errorOutput = System.err  // Show Python logging
             }
-        } else {
-            println "=== Starting standalone TLS setup with python3 ==="
-            new ByteArrayOutputStream().withStream { os ->
-                exec {
-                    workingDir '../utils'
-                    commandLine 'python3', 'cluster_manager.py', 'start', '--tls', '--host', project.findProperty('host') ?: '127.0.0.1'
-                    standardOutput = os
-                    errorOutput = System.err  // Show Python logging
-                }
-                def output = os.toString()
-                println "=== Standalone TLS command output: ${output.take(200)}... ==="
-                standaloneTlsHosts = extractAddressesFromClusterManagerOutput(output)
-                println "=== Standalone TLS hosts: ${standaloneTlsHosts} ==="
-            }
+            def output = os.toString()
+            println "=== Standalone TLS command output: ${output.take(200)}... ==="
+            standaloneTlsHosts = extractAddressesFromClusterManagerOutput(output)
+            println "=== Standalone TLS hosts: ${standaloneTlsHosts} ==="
         }
         println "=== DEBUG: startStandaloneTls task completed ==="
     }
@@ -320,7 +302,7 @@ tasks.register('startClusterTls') {
             if (isWindows) {
                 // Use direct WSL for TLS cluster
                 exec {
-                    workingDir '../utils'
+                    workingDir "${project.rootDir}/../utils"
                     commandLine 'wsl', '--', 'python3', 'cluster_manager.py', 'start', '--tls', '--cluster-mode', '--host', '127.0.0.1'
                     standardOutput = os
                 }
@@ -353,12 +335,11 @@ tasks.register('startClusterTls') {
 
 beforeTests.dependsOn stopAllBeforeTests
 stopAllBeforeTests.finalizedBy clearDirs
-// Make start tasks independent of cleanup success
-startStandalone.mustRunAfter clearDirs
-startStandaloneTls.dependsOn startStandalone  
-startCluster.dependsOn startStandaloneTls
-startClusterTls.dependsOn startCluster
-startClusterForAz.dependsOn startClusterTls
+clearDirs.finalizedBy startStandalone
+clearDirs.finalizedBy startStandaloneTls
+clearDirs.finalizedBy startCluster
+clearDirs.finalizedBy startClusterTls
+clearDirs.finalizedBy startClusterForAz
 afterTests.finalizedBy stopAllAfterTests
 compileTestJava.dependsOn(':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal')
 
@@ -367,30 +348,16 @@ tasks.withType(Test) {
     useJUnitPlatform()
     if (!project.gradle.startParameter.taskNames.contains(':integTest:modulesTest')) {
         dependsOn 'beforeTests'
-        dependsOn 'startStandalone'  // Explicit dependency on start tasks
-        dependsOn 'startStandaloneTls'
-        dependsOn 'startCluster' 
-        dependsOn 'startClusterTls'
-        dependsOn 'startClusterForAz'
         finalizedBy 'afterTests'
     }
 
     doFirst {
-        println "=== SETTING TEST SYSTEM PROPERTIES ==="
-        println "standaloneHosts: '${standaloneHosts}'"
-        println "standaloneTlsHosts: '${standaloneTlsHosts}'"
-        println "clusterHosts: '${clusterHosts}'"
-        println "clusterTlsHosts: '${clusterTlsHosts}'"
-        println "azClusterHosts: '${azClusterHosts}'"
-        
         systemProperty 'test.server.standalone', standaloneHosts
         systemProperty 'test.server.standalone.tls', standaloneTlsHosts
         systemProperty 'test.server.cluster', clusterHosts
         systemProperty 'test.server.cluster.tls', clusterTlsHosts
         systemProperty 'test.server.azcluster', azClusterHosts
         systemProperty 'test.server.tls', System.getProperty("tls")
-        
-        println "=== END SYSTEM PROPERTIES ==="
     }
 
     testLogging {
