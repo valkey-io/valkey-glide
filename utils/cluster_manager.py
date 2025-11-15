@@ -1002,19 +1002,19 @@ def wait_for_message(
     # Debug: Check if Valkey processes are running and ports are open
     logging.info("=== DEBUG: Checking running processes and ports ===")
     try:
-        # Check for valkey-server processes
+        # Check for valkey-server or redis-server processes
         result = subprocess.run(['ps', 'aux'], capture_output=True, text=True, timeout=5)
-        valkey_processes = [line for line in result.stdout.split('\n') if 'valkey-server' in line]
+        valkey_processes = [line for line in result.stdout.split('\n') if 'valkey-server' in line or 'redis-server' in line]
         if valkey_processes:
-            logging.info("[OK] Valkey processes found:")
+            logging.info("[OK] Valkey/Redis processes found:")
             for proc in valkey_processes:
                 logging.info(f"  {proc}")
         else:
-            logging.info("[ERROR] No valkey-server processes found")
+            logging.info("[ERROR] No valkey-server or redis-server processes found")
         
         # Check for listening ports
         result = subprocess.run(['ss', '-tlnp'], capture_output=True, text=True, timeout=5)
-        listening_ports = [line for line in result.stdout.split('\n') if 'valkey' in line or ':637' in line or ':638' in line]
+        listening_ports = [line for line in result.stdout.split('\n') if 'valkey' in line or 'redis' in line or ':637' in line or ':638' in line]
         if listening_ports:
             logging.info("[OK] Valkey ports listening:")
             for port in listening_ports:
