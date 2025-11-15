@@ -191,10 +191,11 @@ tasks.register('startClusterForAz') {
         if (System.getProperty("cluster-endpoints") == null) {
             new ByteArrayOutputStream().withStream { os ->
                 if (isWindows) {
-                    // Use Docker inside WSL for cluster
+                    // Use direct WSL for cluster
                     exec {
-                        def args = ['wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container', 'python3', '/workspace/utils/cluster_manager.py', 'start', '--cluster-mode', '--host', clusterHost]
-                        if (System.getProperty("tls") == 'true') args.add(8, '--tls')
+                        workingDir '../utils'
+                        def args = ['wsl', '--', 'python3', 'cluster_manager.py', 'start', '--cluster-mode', '--host', clusterHost]
+                        if (System.getProperty("tls") == 'true') args.add(5, '--tls')
                         commandLine args
                         standardOutput = os
                     }
@@ -219,17 +220,51 @@ tasks.register('beforeTests') {}
 tasks.register('afterTests') {}
 tasks.register('startStandalone') {
     doLast {
-        // Disabled for WSL testing - only use clusters
-        println "=== Standalone server disabled - using clusters only ==="
-        standaloneHosts = "127.0.0.1:6379" // Dummy value to prevent errors
+        if (project.hasProperty('host') && project.property('host') == 'localhost') {
+            println "=== Starting standalone setup directly in WSL ==="
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir '../utils'
+                    commandLine 'wsl', '--', 'python3', 'cluster_manager.py', 'start', '--host', '127.0.0.1'
+                    standardOutput = os
+                }
+                standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            }
+        } else {
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir '../utils'
+                    commandLine 'python3', 'cluster_manager.py', 'start', '--host', project.findProperty('host') ?: '127.0.0.1'
+                    standardOutput = os
+                }
+                standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            }
+        }
     }
 }
 
 tasks.register('startStandaloneTls') {
     doLast {
-        // Disabled for WSL testing - only use clusters
-        println "=== Standalone TLS server disabled - using clusters only ==="
-        standaloneTlsHosts = "127.0.0.1:6380" // Dummy value to prevent errors
+        if (project.hasProperty('host') && project.property('host') == 'localhost') {
+            println "=== Starting standalone TLS setup directly in WSL ==="
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir '../utils'
+                    commandLine 'wsl', '--', 'python3', 'cluster_manager.py', 'start', '--tls', '--host', '127.0.0.1'
+                    standardOutput = os
+                }
+                standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            }
+        } else {
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir '../utils'
+                    commandLine 'python3', 'cluster_manager.py', 'start', '--tls', '--host', project.findProperty('host') ?: '127.0.0.1'
+                    standardOutput = os
+                }
+                standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            }
+        }
     }
 }
 
@@ -237,9 +272,10 @@ tasks.register('startClusterTls') {
     doLast {
         new ByteArrayOutputStream().withStream { os ->
             if (isWindows) {
-                // Use Docker inside WSL for TLS cluster
+                // Use direct WSL for TLS cluster
                 exec {
-                    commandLine 'wsl', '--', 'sudo', 'docker', 'exec', 'valkey-test-container', 'python3', '/workspace/utils/cluster_manager.py', 'start', '--tls', '--cluster-mode'
+                    workingDir '../utils'
+                    commandLine 'wsl', '--', 'python3', 'cluster_manager.py', 'start', '--tls', '--cluster-mode', '--host', '127.0.0.1'
                     standardOutput = os
                 }
             } else {
@@ -271,12 +307,11 @@ tasks.register('startClusterTls') {
 
 beforeTests.dependsOn 'stopAllBeforeTests'
 stopAllBeforeTests.finalizedBy 'clearDirs'
-// Disable standalone servers - only start clusters
-// clearDirs.finalizedBy 'startStandalone'
-// clearDirs.finalizedBy 'startStandaloneTls'
+clearDirs.finalizedBy 'startStandalone'
+clearDirs.finalizedBy 'startStandaloneTls'
 clearDirs.finalizedBy 'startCluster'
-// clearDirs.finalizedBy 'startClusterTls'
-// clearDirs.finalizedBy 'startClusterForAz'
+clearDirs.finalizedBy 'startClusterTls'
+clearDirs.finalizedBy 'startClusterForAz'
 afterTests.finalizedBy 'stopAllAfterTests'
 compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
 
