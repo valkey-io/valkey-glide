@@ -112,17 +112,11 @@ public class ValkeyCluster implements AutoCloseable {
             // Handle WSL command building differently
             String osName = System.getProperty("os.name").toLowerCase();
             String remoteHost = System.getenv("VALKEY_REMOTE_HOST");
-            boolean useWSL =
-                    osName.contains("windows") && (remoteHost == null || remoteHost.isEmpty());
+            boolean useWSL = osName.contains("windows") && (remoteHost == null || remoteHost.isEmpty());
 
             if (useWSL) {
                 // For WSL, build command as separate arguments
-                command.addAll(
-                        Arrays.asList(
-                                "wsl",
-                                "--",
-                                "python3",
-                                "cluster_manager.py"));
+                command.addAll(Arrays.asList("wsl", "--", "python3", "cluster_manager.py"));
 
                 // Add engine version if specified
                 String engineVersion = System.getProperty("engine-version");
@@ -269,7 +263,7 @@ public class ValkeyCluster implements AutoCloseable {
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
-            
+
             // Set working directory to utils folder for relative path
             if (useWSL) {
                 pb.directory(Paths.get("").toAbsolutePath().getParent().resolve("utils").toFile());
@@ -417,17 +411,11 @@ public class ValkeyCluster implements AutoCloseable {
             // Handle WSL for stop command as well
             String osName = System.getProperty("os.name").toLowerCase();
             String remoteHost = System.getenv("VALKEY_REMOTE_HOST");
-            boolean useWSL =
-                    osName.contains("windows") && (remoteHost == null || remoteHost.isEmpty());
+            boolean useWSL = osName.contains("windows") && (remoteHost == null || remoteHost.isEmpty());
 
             if (useWSL) {
                 // For WSL stop command
-                command.addAll(
-                        Arrays.asList(
-                                "wsl",
-                                "--",
-                                "python3",
-                                "cluster_manager.py"));
+                command.addAll(Arrays.asList("wsl", "--", "python3", "cluster_manager.py"));
 
                 if (tls) {
                     command.add("--tls");
@@ -480,7 +468,7 @@ public class ValkeyCluster implements AutoCloseable {
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
-            
+
             // Set working directory to utils folder for relative path
             if (useWSL) {
                 pb.directory(Paths.get("").toAbsolutePath().getParent().resolve("utils").toFile());
