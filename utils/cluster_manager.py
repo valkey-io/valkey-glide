@@ -777,18 +777,25 @@ def wait_for_a_message_in_logs(
     message: str,
     server_ports: Optional[List[str]] = None,
 ):
+    logging.info(f"Waiting for message '{message}' in all server logs")
     for dir in Path(cluster_folder).rglob("*"):
         if not dir.is_dir():
             continue
         log_file = f"{dir}/server.log"
 
         if server_ports and os.path.basename(os.path.normpath(dir)) not in server_ports:
+            logging.info(f"Skipping {dir} - not in server_ports list")
             continue
+            
+        logging.info(f"Checking for message '{message}' in {log_file}")
         if not wait_for_message(log_file, message, 300):  # 5 minutes for WSL
             raise Exception(
                 f"During the timeout duration, the server logs associated with port {dir} did not contain the message:{message}."
                 f"See {dir}/server.log for more information"
             )
+        logging.info(f"Successfully found message '{message}' in {log_file}")
+    
+    logging.info(f"All servers have message '{message}' - continuing")
 
 
 def parse_cluster_nodes(command_output: Optional[str]) -> Optional[dict]:
@@ -1008,12 +1015,33 @@ def wait_for_message(
     
     logging.info("=== END PROCESS/PORT CHECK ===")
     
+    logging.info(f"Starting wait loop for '{message}' in {log_file}")
+    
+    # First, let's see what messages are already in the log
+    if os.path.exists(log_file):
+        try:
+            with open(log_file, "r") as f:
+                content = f.read()
+                logging.info(f"=== INITIAL LOG CONTENT FOR {os.path.basename(log_file)} ===")
+                lines = content.split('\n')[-20:]  # Last 20 lines
+                for line in lines:
+                    if line.strip():
+                        logging.info(f"[INITIAL] {line}")
+                logging.info(f"=== END INITIAL LOG CONTENT ===")
+                
+                # Check if message is already there
+                if message in content:
+                    logging.info(f"Message '{message}' already found in {log_file}")
+                    return True
+        except Exception as e:
+            logging.info(f"Error reading initial log content: {e}")
+    else:
+        logging.info(f"Log file {log_file} does not exist yet")
+    
     timeout_start = time.time()
     last_position = 0
     last_size = 0
     loop_count = 0
-    
-    logging.info(f"Starting wait loop for '{message}' in {log_file}")
     
     while time.time() < timeout_start + timeout:
         loop_count += 1
@@ -1058,6 +1086,10 @@ def wait_for_message(
                     for line in lines:
                         if line.strip():  # Only print non-empty lines
                             logging.info(f"[{os.path.basename(log_file)}] {line}")
+                            
+                            # Log any sync-related messages we see
+                            if "sync" in line.lower() or "replica" in line.lower() or "primary" in line.lower():
+                                logging.info(f"*** SYNC-RELATED: {line} ***")
                             
                         if message in line:
                             logging.info(f"=== FOUND MESSAGE '{message}' in {log_file} ===")
