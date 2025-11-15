@@ -154,19 +154,19 @@ tasks.register('startCluster') {
                 
                 println "=== Checking for replica log files ==="
                 exec {
-                    commandLine 'wsl', '--', 'find', '/mnt/c/workspace/utils/clusters', '-name', 'server.log', '-exec', 'ls', '-la', '{}', ';'
+                    commandLine 'wsl', '--', 'find', '/mnt/c/workspace/utils/clusters', '-name', 'server.log', '-exec', 'ls', '-la', '{}', '\\;'
                     ignoreExitValue true
                 }
                 
                 println "=== Printing contents of all server log files ==="
                 exec {
-                    commandLine 'wsl', '--', 'find', '/mnt/c/workspace/utils/clusters', '-name', 'server.log', '-exec', 'sh', '-c', 'echo "=== LOG FILE: {} ==="; cat "{}"', ';'
+                    commandLine 'wsl', '--', 'find', '/mnt/c/workspace/utils/clusters', '-name', 'server.log', '-exec', 'sh', '-c', 'echo "=== LOG FILE: {} ==="; cat "{}"', '\\;'
                     ignoreExitValue true
                 }
                 
                 println "=== Checking cluster directory structure ==="
                 exec {
-                    commandLine 'wsl', '--', 'find', '/mnt/c/workspace/utils/clusters', '-type', 'd', '-exec', 'ls', '-la', '{}', ';'
+                    commandLine 'wsl', '--', 'find', '/mnt/c/workspace/utils/clusters', '-type', 'd', '-exec', 'ls', '-la', '{}', '\\;'
                     ignoreExitValue true
                 }
                 
@@ -221,7 +221,7 @@ tasks.register('afterTests') {}
 tasks.register('startStandalone') {
     doLast {
         println "=== DEBUG: startStandalone task starting ==="
-        if (project.hasProperty('host') && project.property('host') == 'localhost') {
+        if (isWindows) {
             println "=== Starting standalone setup directly in WSL ==="
             new ByteArrayOutputStream().withStream { os ->
                 exec {
@@ -256,7 +256,7 @@ tasks.register('startStandalone') {
 tasks.register('startStandaloneTls') {
     doLast {
         println "=== DEBUG: startStandaloneTls task starting ==="
-        if (project.hasProperty('host') && project.property('host') == 'localhost') {
+        if (isWindows) {
             println "=== Starting standalone TLS setup directly in WSL ==="
             new ByteArrayOutputStream().withStream { os ->
                 exec {
