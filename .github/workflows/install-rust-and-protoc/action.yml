@@ -9,7 +9,7 @@ runs:
           shell: powershell
           run: |
               Write-Host "Using pre-installed Rust and MSVC on GitHub-hosted runner"
-              
+
               # Verify Rust is available
               if (Get-Command rustc -ErrorAction SilentlyContinue) {
                   $version = rustc --version
