@@ -6,7 +6,6 @@ import argparse
 import json
 import logging
 import os
-import platform
 import random
 import re
 import signal
@@ -62,24 +61,7 @@ def get_server_command() -> str:
     """Get server command, checking valkey-server first, then redis-server"""
     global _SERVER_COMMAND
     if _SERVER_COMMAND is None:
-        # Check if ENGINE_PATH is set (for multi-engine setup)
-        engine_path = os.environ.get("ENGINE_PATH")
-        if engine_path:
-            # Try engine-specific binaries first
-            engine_valkey = f"{engine_path}/src/valkey-server"
-            engine_redis = f"{engine_path}/src/redis-server"
-
-            if os.path.exists(engine_valkey) and os.access(engine_valkey, os.X_OK):
-                _SERVER_COMMAND = engine_valkey
-            elif os.path.exists(engine_redis) and os.access(engine_redis, os.X_OK):
-                _SERVER_COMMAND = engine_redis
-            else:
-                raise Exception(
-                    f"No executable server binary found in {engine_path}/src/"
-                )
-        else:
-            # Fall back to PATH-based lookup
-            _SERVER_COMMAND = get_command(["valkey-server", "redis-server"])
+        _SERVER_COMMAND = get_command(["valkey-server", "redis-server"])
     return _SERVER_COMMAND
 
 
@@ -87,26 +69,7 @@ def get_cli_command() -> str:
     """Get CLI command, checking valkey-cli first, then redis-cli"""
     global _CLI_COMMAND
     if _CLI_COMMAND is None:
-        # Check if ENGINE_PATH is set (for multi-engine setup)
-        engine_path = os.environ.get("ENGINE_PATH")
-        if engine_path:
-            # Try engine-specific binaries first
-            engine_valkey_cli = f"{engine_path}/src/valkey-cli"
-            engine_redis_cli = f"{engine_path}/src/redis-cli"
-
-            if os.path.exists(engine_valkey_cli) and os.access(
-                engine_valkey_cli, os.X_OK
-            ):
-                _CLI_COMMAND = engine_valkey_cli
-            elif os.path.exists(engine_redis_cli) and os.access(
-                engine_redis_cli, os.X_OK
-            ):
-                _CLI_COMMAND = engine_redis_cli
-            else:
-                raise Exception(f"No executable CLI binary found in {engine_path}/src/")
-        else:
-            # Fall back to PATH-based lookup
-            _CLI_COMMAND = get_command(["valkey-cli", "redis-cli"])
+        _CLI_COMMAND = get_command(["valkey-cli", "redis-cli"])
     return _CLI_COMMAND
 
 
@@ -124,7 +87,7 @@ def check_if_tls_cert_exist(tls_file: str, timeout: int = 15):
             return True
         else:
             time.sleep(0.005)
-    logging.warning(f"Timed out waiting for certificate file {tls_file}")
+    logging.warn(f"Timed out waiting for certificate file {tls_file}")
     return False
 
 
@@ -136,42 +99,29 @@ def check_if_tls_cert_is_valid(tls_file: str):
     return time_since_created.days < 3650
 
 
-def should_generate_new_tls_certs(host="127.0.0.1") -> bool:
-    # Returns False if we already have existing and valid TLS files for the correct host, otherwise True
+def should_generate_new_tls_certs() -> bool:
+    # Returns False if we already have existing and valid TLS files, otherwise True
     try:
         Path(TLS_FOLDER).mkdir(exist_ok=False)
     except FileExistsError:
         files_list = [CA_CRT, SERVER_KEY, SERVER_CRT]
         for file in files_list:
-            if not (check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file)):
-                return True
-        
-        # Check if existing certificate is valid for the current host
-        if host != "127.0.0.1" and host != "localhost":
-            # If we're using a remote host, always regenerate to include the correct IP
-            logging.info(f"Regenerating TLS certificates for remote host: {host}")
-            return True
-        
-        return False
+            if check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file):
+                return False
     return True
 
 
-def generate_tls_certs(host="127.0.0.1"):
+def generate_tls_certs():
     # Based on shell script in valkey's server tests
     # https://github.com/valkey-io/valkey/blob/0d2ba9b94d28d4022ea475a2b83157830982c941/utils/gen-test-certs.sh
-    logging.info(f"## Generating TLS certificates for host: {host}")
+    logging.debug("## Generating TLS certificates")
     tic = time.perf_counter()
     ca_key = f"{TLS_FOLDER}/ca.key"
     ca_serial = f"{TLS_FOLDER}/ca.txt"
     ext_file = f"{TLS_FOLDER}/openssl.cnf"
 
     f = open(ext_file, "w")
-    # Include both localhost and the actual host IP in certificate
-    subject_alt_name = f"IP:127.0.0.1,DNS:localhost,IP:{host}"
-    logging.info(f"Certificate subjectAltName: {subject_alt_name}")
-    f.write(
-        f"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = {subject_alt_name}"
-    )
+    f.write("keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,DNS:localhost")
     f.close()
 
     def make_key(name: str, size: int):
@@ -285,9 +235,7 @@ def generate_tls_certs(host="127.0.0.1"):
 
 
 def get_cli_option_args(
-    cluster_folder: str,
-    use_tls: bool,
-    auth: Optional[str] = None,
+    cluster_folder: str, use_tls: bool, auth: Optional[str] = None,
     tls_cert_file: Optional[str] = None,
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
@@ -356,13 +304,8 @@ def print_servers_json(servers: List[Server]):
 
 
 def next_free_port(
-    min_port: Optional[int] = None, max_port: int = 55535, timeout: int = 60
+    min_port: int = 6379, max_port: int = 55535, timeout: int = 60
 ) -> int:
-    # Use BASE_PORT from environment if set (for multi-engine setup)
-    if min_port is None:
-        base_port = os.environ.get("BASE_PORT")
-        min_port = int(base_port) if base_port else 6379
-
     tic = time.perf_counter()
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     timeout_start = time.time()
@@ -440,9 +383,6 @@ def start_server(
         get_server_command(),
         f"{'--tls-port' if tls else '--port'}",
         str(port),
-    ]
-    
-    cmd_args.extend([
         "--cluster-enabled",
         f"{'yes' if cluster_mode else 'no'}",
         "--dir",
@@ -457,11 +397,7 @@ def start_server(
         "no",
         "--save",
         "",
-    ])
-
-    # Add bind directive if host is not localhost (for remote access)
-    if host not in ["127.0.0.1", "localhost"]:
-        cmd_args.extend(["--bind", host])
+    ]
     if server_version >= (7, 0, 0):
         cmd_args.extend(["--enable-debug-command", "yes"])
     # Enable multi-database support in cluster mode for Valkey 9.0+
@@ -475,18 +411,13 @@ def start_server(
         for module_path in load_module:
             cmd_args.extend(["--loadmodule", module_path])
     cmd_args += tls_args
-    
-    logging.info(f"Starting server with command: {' '.join(cmd_args)}")
     p = subprocess.Popen(
         cmd_args,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
-    logging.info("Server process started, waiting for output")
     output, err = p.communicate(timeout=2)
-    logging.info(f"Server output: {output}")
-    logging.info(f"Server error: {err}")
     if p.returncode != 0:
         raise Exception(
             f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
@@ -520,7 +451,7 @@ def create_servers(
     tls_ca_cert_file: Optional[str] = None,
 ) -> List[Server]:
     tic = time.perf_counter()
-    logging.info("## Creating servers - DEBUG CHECKPOINT")
+    logging.debug("## Creating servers")
     ready_servers: List[Server] = []
     nodes_count = shard_count * (1 + replica_count)
     tls_args = []
@@ -529,22 +460,21 @@ def create_servers(
         cert_file = tls_cert_file or SERVER_CRT
         key_file = tls_key_file or SERVER_KEY
         ca_file = tls_ca_cert_file or CA_CRT
-
+        
         # Only generate default certs if using default paths and they don't exist
-        if not tls_cert_file and should_generate_new_tls_certs(host):
-            logging.info(f"Generating TLS certificates for host: {host}")
-            generate_tls_certs(host)
-
+        if not tls_cert_file and should_generate_new_tls_certs():
+            generate_tls_certs()
+            
         tls_args = [
             "--tls-cluster",
-            "yes",  # Required for proper port allocation
+            "yes",
             "--tls-cert-file",
             cert_file,
             "--tls-key-file",
             key_file,
             "--tls-ca-cert-file",
             ca_file,
-            "--tls-auth-clients",
+            "--tls-auth-clients",  # Make it so client doesn't have to send cert
             "no",
             "--bind",
             host,
@@ -587,15 +517,7 @@ def create_servers(
                 )
             )
             continue
-        if not wait_for_server(
-            server,
-            cluster_folder,
-            tls,
-            10,
-            tls_cert_file,
-            tls_key_file,
-            tls_ca_cert_file,
-        ):
+        if not wait_for_server(server, cluster_folder, tls, 10, tls_cert_file, tls_key_file, tls_ca_cert_file):
             raise Exception(
                 f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
                 f"See {node_folder}/server.log for more information"
@@ -623,14 +545,7 @@ def create_cluster(
     p = subprocess.Popen(
         [
             get_cli_command(),
-            *get_cli_option_args(
-                cluster_folder,
-                use_tls,
-                None,
-                tls_cert_file,
-                tls_key_file,
-                tls_ca_cert_file,
-            ),
+            *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
             "--cluster",
             "create",
             *servers_tuple,
@@ -647,9 +562,7 @@ def create_cluster(
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
     wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
-    wait_for_all_topology_views(
-        servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file
-    )
+    wait_for_all_topology_views(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
     print_servers_json(servers)
 
     logging.debug("The cluster was successfully created!")
@@ -667,40 +580,10 @@ def create_standalone_replication(
     primary_server = servers[0]
 
     logging.debug("## Starting replication setup...")
-    
-    # Check if running in WSL and determine version
-    is_wsl = "microsoft" in platform.uname().release.lower()
-    if is_wsl:
-        logging.debug("WSL environment detected")
-        # Check WSL version by looking at kernel version
-        kernel_version = platform.uname().release
-        if "WSL2" in kernel_version or "microsoft-standard" in kernel_version:
-            logging.debug("WSL2 detected (kernel: %s)", kernel_version)
-        else:
-            logging.debug("WSL1 detected (kernel: %s)", kernel_version)
-    else:
-        logging.debug("Native Linux environment detected")
 
     for i, server in enumerate(servers):
         if i == 0:
             continue  # Skip the primary server
-            
-        # Ensure replica server is fully ready for replication
-        logging.debug(f"Verifying replica {server} is ready for replication...")
-        ping_cmd = [
-            get_cli_command(),
-            *get_cli_option_args(cluster_folder, use_tls),
-            "-h", str(server.host),
-            "-p", str(server.port),
-            "PING"
-        ]
-        ping_result = subprocess.run(ping_cmd, capture_output=True, text=True, timeout=5)
-        if ping_result.returncode != 0 or "PONG" not in ping_result.stdout:
-            logging.error(f"Replica {server} not responding to PING: {ping_result.stderr}")
-            raise Exception(f"Replica {server} not ready for replication")
-        logging.debug(f"Replica {server} confirmed ready")
-            
-        logging.debug(f"Setting up replication: {server} -> {primary_server}")
         replica_of_command = [
             get_cli_command(),
             *get_cli_option_args(cluster_folder, use_tls),
@@ -712,7 +595,6 @@ def create_standalone_replication(
             str(primary_server.host),
             str(primary_server.port),
         ]
-        logging.debug(f"REPLICAOF command: {' '.join(replica_of_command)}")
         p = subprocess.Popen(
             replica_of_command,
             stdout=subprocess.PIPE,
@@ -720,50 +602,16 @@ def create_standalone_replication(
             text=True,
         )
         output, err = p.communicate(timeout=20)
-        logging.debug(f"REPLICAOF output for {server}: stdout='{output}', stderr='{err}'")
         if err or "OK" not in output:
-            logging.error(f"REPLICAOF failed for {server}: {err if err else output}")
             raise Exception(
                 f"Failed to set up replication for server {server}: {err if err else output}"
             )
     servers_ports = [str(server.port) for server in servers]
-    # Log replica server logs for debugging
-    logging.debug("=== REPLICA SERVER LOGS ===")
-    for i, server in enumerate(servers[1:], 1):  # Skip primary
-        log_file = f"{cluster_folder}/{server.port}/server.log"
-        try:
-            with open(log_file, 'r') as f:
-                log_content = f.read()
-                logging.debug(f"Replica {server.port} log (last 1000 chars):")
-                logging.debug(log_content[-1000:])
-        except Exception as e:
-            logging.debug(f"Could not read log for replica {server.port}: {e}")
-    logging.debug("=== END REPLICA LOGS ===")
-    
-    # Debug: Check replica log files before waiting
-    logging.info("=== DEBUG: Checking replica log files ===")
-    for port in servers_ports[1:]:  # Skip first port (primary)
-        log_file = f"{cluster_folder}/server_{port}/server.log"
-        logging.info(f"Checking replica log: {log_file}")
-        if os.path.exists(log_file):
-            logging.info(f"[OK] Log file exists: {log_file}")
-            try:
-                with open(log_file, 'r') as f:
-                    content = f.read()
-                    logging.info(f"=== REPLICA {port} LOG CONTENT ===")
-                    logging.info(content[-1000:] if len(content) > 1000 else content)  # Last 1000 chars
-                    logging.info(f"=== END REPLICA {port} LOG ===")
-            except Exception as e:
-                logging.info(f"[ERROR] Error reading {log_file}: {e}")
-        else:
-            logging.info(f"[ERROR] Log file missing: {log_file}")
-    
     wait_for_a_message_in_logs(
         cluster_folder,
         "sync: Finished with success",
         servers_ports[1:],
     )
-    
     logging.debug(
         f"{len(servers) - 1} nodes successfully became replicas of the primary {primary_server}!"
     )
@@ -777,25 +625,18 @@ def wait_for_a_message_in_logs(
     message: str,
     server_ports: Optional[List[str]] = None,
 ):
-    logging.info(f"Waiting for message '{message}' in all server logs")
     for dir in Path(cluster_folder).rglob("*"):
         if not dir.is_dir():
             continue
         log_file = f"{dir}/server.log"
 
         if server_ports and os.path.basename(os.path.normpath(dir)) not in server_ports:
-            logging.info(f"Skipping {dir} - not in server_ports list")
             continue
-            
-        logging.info(f"Checking for message '{message}' in {log_file}")
-        if not wait_for_message(log_file, message, 300):  # 5 minutes for WSL
+        if not wait_for_message(log_file, message, 10):
             raise Exception(
                 f"During the timeout duration, the server logs associated with port {dir} did not contain the message:{message}."
                 f"See {dir}/server.log for more information"
             )
-        logging.info(f"Successfully found message '{message}' in {log_file}")
-    
-    logging.info(f"All servers have message '{message}' - continuing")
 
 
 def parse_cluster_nodes(command_output: Optional[str]) -> Optional[dict]:
@@ -850,6 +691,44 @@ def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
         return None
 
 
+def refresh_cluster_topology_wsl(
+    servers: List[Server],
+    cluster_folder: str,
+    use_tls: bool,
+    tls_cert_file: Optional[str] = None,
+    tls_key_file: Optional[str] = None,
+    tls_ca_cert_file: Optional[str] = None,
+):
+    """
+    WSL-specific: Force all nodes to meet each other explicitly
+    """
+    logging.debug("WSL: Refreshing cluster topology with explicit CLUSTER MEET commands")
+    
+    # Make sure every node knows about every other node
+    for server in servers:
+        for other_server in servers:
+            if server != other_server:
+                meet_cmd = [
+                    get_cli_command(),
+                    "-h",
+                    server.host,
+                    "-p",
+                    str(server.port),
+                    *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                    "cluster",
+                    "meet",
+                    other_server.host,
+                    str(other_server.port),
+                ]
+                logging.debug(f"Executing: {meet_cmd}")
+                try:
+                    result = subprocess.run(meet_cmd, capture_output=True, text=True, timeout=5)
+                    if result.returncode != 0:
+                        logging.warning(f"CLUSTER MEET failed: {result.stderr}")
+                except subprocess.TimeoutExpired:
+                    logging.warning(f"CLUSTER MEET timeout for {server} -> {other_server}")
+
+
 def wait_for_all_topology_views(
     servers: List[Server],
     cluster_folder: str,
@@ -862,77 +741,51 @@ def wait_for_all_topology_views(
     Wait for each of the nodes to have a topology view that contains all nodes.
     Only when a replica finished syncing and loading, it will be included in the CLUSTER SLOTS output.
     """
-    for i, server in enumerate(servers):
-        
+    # Check if we're running in WSL environment
+    is_wsl = os.path.exists('/proc/version') and 'microsoft' in open('/proc/version').read().lower()
+    
+    if is_wsl:
+        # WSL: Force topology refresh first
+        refresh_cluster_topology_wsl(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
+        time.sleep(2)  # Give time for MEET commands to propagate
+    
+    for server in servers:
         cmd_args = [
             get_cli_command(),
             "-h",
             server.host,
             "-p",
             str(server.port),
-            *get_cli_option_args(
-                cluster_folder,
-                use_tls,
-                None,
-                tls_cert_file,
-                tls_key_file,
-                tls_ca_cert_file,
-            ),
+            *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
             "cluster",
             "slots",
         ]
+        logging.debug(f"Executing: {cmd_args}")
         retries = 80
         while retries >= 0:
             output = redis_cli_run_command(cmd_args)
-            
-            if output is not None:
-                # Check if all hash slots (0-16383) are covered, which means cluster is functional
-                lines = output.strip().split('\n')
-                slot_ranges = []
-                
-                for i in range(0, len(lines), 3):  # CLUSTER SLOTS output comes in groups of 3 lines
-                    if i + 2 < len(lines):
-                        try:
-                            start_slot = int(lines[i])
-                            end_slot = int(lines[i + 1])
-                            slot_ranges.append((start_slot, end_slot))
-                        except (ValueError, IndexError):
-                            continue
-                
-                # Check if we have complete slot coverage (0-16383)
-                slot_ranges.sort()
-                total_slots_covered = sum(end - start + 1 for start, end in slot_ranges)
-                
-                if total_slots_covered == 16384:  # All slots covered
-                    # Server is ready, get the node's role
-                    cmd_args = [
-                        get_cli_command(),
-                        "-h",
-                        server.host,
-                        "-p",
-                        str(server.port),
-                        *get_cli_option_args(
-                            cluster_folder,
-                            use_tls,
-                            None,
-                            tls_cert_file,
-                            tls_key_file,
-                            tls_ca_cert_file,
-                        ),
-                        "cluster",
-                        "nodes",
-                    ]
-                    cluster_slots_output = redis_cli_run_command(cmd_args)
-                    node_info = parse_cluster_nodes(cluster_slots_output)
-                    if node_info:
-                        server.set_primary(node_info["is_primary"])
-                    break
-                else:
-                    retries -= 1
+            if output is not None and output.count(f"{server.host}") == len(servers):
+                # Server is ready, get the node's role
+                cmd_args = [
+                    get_cli_command(),
+                    "-h",
+                    server.host,
+                    "-p",
+                    str(server.port),
+                    *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                    "cluster",
+                    "nodes",
+                ]
+                cluster_slots_output = redis_cli_run_command(cmd_args)
+                node_info = parse_cluster_nodes(cluster_slots_output)
+                if node_info:
+                    server.set_primary(node_info["is_primary"])
+                logging.debug(f"Server {server} is ready!")
+                break
             else:
                 retries -= 1
-            
-            time.sleep(1)
+                time.sleep(1)
+                continue
 
         if retries < 0:
             raise Exception(
@@ -960,14 +813,7 @@ def wait_for_server(
                 server.host,
                 "-p",
                 str(server.port),
-                *get_cli_option_args(
-                    cluster_folder,
-                    use_tls,
-                    None,
-                    tls_cert_file,
-                    tls_key_file,
-                    tls_ca_cert_file,
-                ),
+                *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
                 "PING",
             ],
             stdout=subprocess.PIPE,
@@ -993,155 +839,19 @@ def wait_for_server(
 def wait_for_message(
     log_file: str,
     message: str,
-    timeout: int = 300,  # 5 minutes for WSL sync completion
+    timeout: int = 5,
 ):
     logging.debug(f"checking state changed in {log_file}")
-    logging.info(f"=== TAILING LOG FILE: {log_file} ===")
-    logging.info(f"Waiting for message: '{message}'")
-    
-    # Debug: Check if Valkey processes are running and ports are open
-    logging.info("=== DEBUG: Checking running processes and ports ===")
-    try:
-        # Check for valkey-server or redis-server processes
-        result = subprocess.run(['ps', 'aux'], capture_output=True, text=True, timeout=5)
-        valkey_processes = [line for line in result.stdout.split('\n') if 'valkey-server' in line or 'redis-server' in line]
-        if valkey_processes:
-            logging.info("[OK] Valkey/Redis processes found:")
-            for proc in valkey_processes:
-                logging.info(f"  {proc}")
-        else:
-            logging.info("[ERROR] No valkey-server or redis-server processes found")
-        
-        # Check for listening ports
-        result = subprocess.run(['ss', '-tlnp'], capture_output=True, text=True, timeout=5)
-        listening_ports = [line for line in result.stdout.split('\n') if 'valkey' in line or 'redis' in line or ':637' in line or ':638' in line]
-        if listening_ports:
-            logging.info("[OK] Valkey ports listening:")
-            for port in listening_ports:
-                logging.info(f"  {port}")
-        else:
-            logging.info("[ERROR] No Valkey ports found listening")
-            
-    except Exception as e:
-        logging.info(f"[ERROR] Error checking processes/ports: {e}")
-    
-    logging.info("=== END PROCESS/PORT CHECK ===")
-    
-    logging.info(f"Starting wait loop for '{message}' in {log_file}")
-    
-    # First, let's see what messages are already in the log
-    if os.path.exists(log_file):
-        try:
-            with open(log_file, "r") as f:
-                content = f.read()
-                logging.info(f"=== INITIAL LOG CONTENT FOR {os.path.basename(log_file)} ===")
-                lines = content.split('\n')[-20:]  # Last 20 lines
-                for line in lines:
-                    if line.strip():
-                        logging.info(f"[INITIAL] {line}")
-                logging.info(f"=== END INITIAL LOG CONTENT ===")
-                
-                # Check if message is already there
-                if message in content:
-                    logging.info(f"Message '{message}' already found in {log_file}")
-                    return True
-        except Exception as e:
-            logging.info(f"Error reading initial log content: {e}")
-    else:
-        logging.info(f"Log file {log_file} does not exist yet")
-    
     timeout_start = time.time()
-    last_position = 0
-    last_size = 0
-    loop_count = 0
-    
     while time.time() < timeout_start + timeout:
-        loop_count += 1
-        logging.info(f"Loop iteration {loop_count} - checking for message")
-        
-        try:
-            # Add a small delay to prevent tight loop and allow file system operations
-            time.sleep(0.1)
-            
-            # Check if we've exceeded timeout (safety check)
-            current_time = time.time()
-            if current_time >= timeout_start + timeout:
-                logging.info(f"Timeout check: {current_time} >= {timeout_start + timeout}, breaking")
-                break
-            
-            # Check file size first to see if it's growing
-            logging.info(f"About to call os.path.exists({log_file})")
-            file_exists = os.path.exists(log_file)
-            logging.info(f"os.path.exists returned: {file_exists}")
-            
-            if file_exists:
-                logging.info(f"About to call os.path.getsize({log_file})")
-                current_size = os.path.getsize(log_file)
-                logging.info(f"os.path.getsize returned: {current_size}")
-            else:
-                current_size = 0
-                logging.info(f"File doesn't exist, setting size to 0")
-            
-            if current_size != last_size:
-                logging.info(f"[{os.path.basename(log_file)}] File size changed: {last_size} -> {current_size}")
-                last_size = current_size
-            
-            with open(log_file, "r") as f:
-                # Read from last position to get new content
-                f.seek(last_position)
-                new_content = f.read()
-                
-                if new_content:
-                    # Split into lines (Unix line endings)
-                    lines = new_content.split('\n')
-                    logging.info(f"Processing {len(lines)} lines")
-                    for line in lines:
-                        if line.strip():  # Only print non-empty lines
-                            logging.info(f"[{os.path.basename(log_file)}] {line}")
-                            
-                            # Log any sync-related messages we see
-                            if "sync" in line.lower() or "replica" in line.lower() or "primary" in line.lower():
-                                logging.info(f"*** SYNC-RELATED: {line} ***")
-                            
-                        if message in line:
-                            logging.info(f"=== FOUND MESSAGE '{message}' in {log_file} ===")
-                            return True
-                            
-                last_position = f.tell()
-                logging.info(f"Updated last_position to {last_position}")
-                
-                # Check if we found the message in the full content
-                f.seek(0)
-                full_content = f.read()
-                if message in full_content:
-                    logging.info(f"=== FOUND MESSAGE '{message}' in {log_file} ===")
-                    return True
-                    
-        except FileNotFoundError:
-            logging.info(f"Log file {log_file} not found yet, waiting...")
-        except Exception as e:
-            logging.info(f"Error reading {log_file}: {e}")
-        
-        logging.info(f"End of loop iteration {loop_count}")
-        
-    logging.info(f"Exited wait loop after {loop_count} iterations")
-    logging.info(f"=== TIMEOUT waiting for '{message}' in {log_file} ===")
-    # Print final log content for debugging
-    try:
         with open(log_file, "r") as f:
-            final_content = f.read()
-            logging.info(f"Final log content ({len(final_content)} chars):")
-            # Split into lines for better readability
-            lines = final_content.split('\n')
-            for line in lines[-20:]:  # Last 20 lines
-                if line.strip():
-                    logging.info(f"  {line}")
-    except Exception as e:
-        logging.info(f"Could not read final log content: {e}")
-        
-    logging.warning(
-        f"Timeout exceeded trying to check if {log_file} contains {message}"
-    )
+            server_log = f.read()
+            if message in server_log:
+                return True
+            else:
+                time.sleep(0.1)
+                continue
+    logging.warn(f"Timeout exceeded trying to check if {log_file} contains {message}")
     return False
 
 
@@ -1188,7 +898,7 @@ def is_address_already_in_use(
         if not os.path.exists(log_file):
             time.sleep(0.1)
             continue
-
+        
         with open(log_file, "r") as f:
             server_log = f.read()
             # Check for known error message variants because different C libraries
@@ -1201,7 +911,7 @@ def is_address_already_in_use(
             else:
                 time.sleep(0.1)
                 continue
-    logging.warning(
+    logging.warn(
         f"Timeout exceeded trying to check if address already in use for server {server}!"
     )
     return False
@@ -1434,15 +1144,6 @@ def main():
     # Start parser
     parser_start = subparsers.add_parser("start", help="Start a new cluster")
     parser_start.add_argument(
-        "-H",
-        "--host",
-        type=str,
-        help="Host address (default: %(default)s)",
-        required=False,
-        default="127.0.0.1",
-    )
-
-    parser_start.add_argument(
         "--cluster-mode",
         action="store_true",
         help="Create a Redis Cluster with cluster mode enabled. If not specified, a Standalone Redis cluster will be created.",
@@ -1501,28 +1202,21 @@ def main():
         help="The paths of the server modules to load.",
         required=False,
     )
-
-    parser_start.add_argument(
-        "--tls",
-        action="store_true",
-        help="Enable TLS (default: %(default)s)",
-        required=False,
-    )
-
+    
     parser_start.add_argument(
         "--tls-cert-file",
         type=str,
         help="Path to TLS certificate file (default: uses generated certificates)",
         required=False,
     )
-
+    
     parser_start.add_argument(
         "--tls-key-file",
         type=str,
         help="Path to TLS key file (default: uses generated certificates)",
         required=False,
     )
-
+    
     parser_start.add_argument(
         "--tls-ca-cert-file",
         type=str,
@@ -1532,15 +1226,6 @@ def main():
 
     # Stop parser
     parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
-    parser_stop.add_argument(
-        "-H",
-        "--host",
-        type=str,
-        help="Host address (default: %(default)s)",
-        required=False,
-        default="127.0.0.1",
-    )
-
     parser_stop.add_argument(
         "--folder-path",
         type=dir_path,
@@ -1579,16 +1264,6 @@ def main():
     )
 
     args = parser.parse_args()
-
-    # TLS mode is enabled by --tls flag OR presence of TLS certificate arguments
-    if not hasattr(args, "tls"):
-        args.tls = False
-    args.tls = args.tls or bool(
-        getattr(args, "tls_cert_file", None)
-        or getattr(args, "tls_key_file", None)
-        or getattr(args, "tls_ca_cert_file", None)
-    )
-
     # Check logging level
 
     level = LOG_LEVELS.get(args.log.lower())
@@ -1633,9 +1308,9 @@ def main():
             args.cluster_mode,
             args.load_module,
             False,
-            getattr(args, "tls_cert_file", None),
-            getattr(args, "tls_key_file", None),
-            getattr(args, "tls_ca_cert_file", None),
+            getattr(args, 'tls_cert_file', None),
+            getattr(args, 'tls_key_file', None),
+            getattr(args, 'tls_ca_cert_file', None),
         )
         if args.cluster_mode:
             # Create a cluster
@@ -1645,9 +1320,9 @@ def main():
                 args.replica_count,
                 cluster_folder,
                 args.tls,
-                getattr(args, "tls_cert_file", None),
-                getattr(args, "tls_key_file", None),
-                getattr(args, "tls_ca_cert_file", None),
+                getattr(args, 'tls_cert_file', None),
+                getattr(args, 'tls_key_file', None),
+                getattr(args, 'tls_ca_cert_file', None),
             )
         elif args.replica_count > 0:
             # Create a standalone replication group
