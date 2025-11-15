@@ -1170,23 +1170,15 @@ async fn create_cluster_client(
             )));
         }
         let mut combined_certs = Vec::new();
-        for (i, cert) in request.root_certs.iter().enumerate() {
+        for cert in &request.root_certs {
             if cert.is_empty() {
                 return Err(RedisError::from((
                     ErrorKind::InvalidClientConfig,
                     "Root certificate cannot be empty byte string",
                 )));
             }
-            
-            // Add the certificate
             combined_certs.extend_from_slice(cert);
-            
-            // Ensure proper PEM separation between certificates
-            if i < request.root_certs.len() - 1 && !cert.ends_with(b"\n") {
-                combined_certs.push(b'\n');
-            }
         }
-        
         let tls_certs = TlsCertificates {
             client_tls: None,
             root_cert: Some(combined_certs),
@@ -1196,18 +1188,18 @@ async fn create_cluster_client(
     } else {
         (None, None)
     };
-    // Create connections sequentially instead of concurrently to test if it's a concurrency issue
-    let mut connection_infos = Vec::new();
-    for (i, address) in request.addresses.into_iter().enumerate() {
-        let connection_info = get_connection_info(
-            &address,
-            tls_mode,
-            valkey_connection_info.clone(),
-            tls_params.clone(),
-        );
-        connection_infos.push(connection_info);
-    }
-    let initial_nodes = connection_infos;
+    let initial_nodes: Vec<_> = request
+        .addresses
+        .into_iter()
+        .map(|address| {
+            get_connection_info(
+                &address,
+                tls_mode,
+                valkey_connection_info.clone(),
+                tls_params.clone(),
+            )
+        })
+        .collect();
 
     let periodic_topology_checks = match request.periodic_checks {
         Some(PeriodicCheck::Disabled) => None,
