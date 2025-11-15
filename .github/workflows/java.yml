@@ -185,12 +185,12 @@ jobs:
                   vmIdleTimeout=-1
                   "@
                   $wslConfig | Out-File -FilePath "$env:USERPROFILE\.wslconfig" -Encoding utf8
-                  
+
                   # Restart WSL to apply new memory settings
                   wsl --shutdown
                   Start-Sleep -Seconds 5
                   wsl echo "WSL restarted with new memory configuration"
-                  
+
                   # Verify memory settings
                   wsl free -h
 

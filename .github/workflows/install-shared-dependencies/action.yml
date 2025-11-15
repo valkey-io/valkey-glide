@@ -94,16 +94,18 @@ runs:
         - name: Install Valkey directly in WSL (Windows)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
           shell: bash
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
           run: |
               echo "=== Installing Valkey directly in WSL ==="
-              
+
               # Install Valkey directly in WSL
               wsl -- bash -c "
                 # Clone and build Valkey
                 cd /tmp
                 git clone https://github.com/valkey-io/valkey.git
                 cd valkey
-                git checkout ${{ inputs.engine-version }}
+                git checkout \"$ENGINE_VERSION\"
                 make -j4
                 sudo make install
                 
@@ -190,8 +192,6 @@ runs:
               fi
               # Install the binaries
               sudo make install
-
-
 
         - name: Start engine server (Non-Windows)
           shell: ${{ inputs.os == 'windows' && 'wsl-bash {0}' || 'bash' }}
