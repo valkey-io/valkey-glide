@@ -137,7 +137,7 @@ tasks.register('startCluster') {
                         workingDir "${project.rootDir}/../utils"
                         commandLine 'wsl', '--', 'bash', './start-cluster.sh'
                         standardOutput = os
-                        errorOutput = System.out
+                        errorOutput = System.err  // Show debug output from script
                     }
                     def output = os.toString()
                     def matcher = output =~ /CLUSTER_HOSTS=([^\n\r]+)/
@@ -175,6 +175,7 @@ tasks.register('startClusterForAz') {
                         workingDir "${project.rootDir}/../utils"
                         commandLine 'wsl', '--', 'bash', './start-cluster-az.sh'
                         standardOutput = os
+                        errorOutput = System.err  // Show debug output from script
                     }
                     def output = os.toString()
                     def matcher = output =~ /AZ_CLUSTER_HOSTS=([^\n\r]+)/
@@ -278,6 +279,7 @@ tasks.register('startClusterTls') {
                     workingDir "${project.rootDir}/../utils"
                     commandLine 'wsl', '--', 'bash', './start-cluster-tls.sh'
                     standardOutput = os
+                    errorOutput = System.err  // Show debug output from script
                 }
                 def output = os.toString()
                 def matcher = output =~ /CLUSTER_TLS_HOSTS=([^\n\r]+)/

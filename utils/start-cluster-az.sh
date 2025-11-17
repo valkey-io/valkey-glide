@@ -7,19 +7,59 @@ set -e
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 
-echo "Current directory: $(pwd)"
+# Send debug output to stderr so Gradle shows it
+exec 2> >(tee -a /tmp/cluster-debug.log >&2)
+
+echo "=== START CLUSTER AZ SCRIPT DEBUG ===" >&2
+echo "Current directory: $(pwd)" >&2
+echo "User: $(whoami)" >&2
+echo "Date: $(date)" >&2
+
+# Check if we can write to current directory
+touch test-write.tmp && rm test-write.tmp && echo "Can write to current directory" >&2 || echo "Cannot write to current directory" >&2
 
 # Ensure clusters directory exists with proper permissions
+echo "Checking if clusters directory exists..." >&2
 if [ ! -d "clusters" ]; then
+    echo "clusters directory does not exist, creating..." >&2
     mkdir -p clusters || {
-        echo "Failed to create clusters directory, trying alternative approach"
-        mkdir clusters 2>/dev/null || true
+        echo "mkdir -p clusters failed, trying alternatives" >&2
+        mkdir clusters 2>/dev/null || echo "mkdir clusters also failed" >&2
     }
+else
+    echo "clusters directory already exists" >&2
 fi
-chmod 755 clusters 2>/dev/null || true
+
+echo "Setting permissions on clusters directory..." >&2
+chmod 755 clusters 2>/dev/null || echo "chmod failed" >&2
+
+# Verify clusters directory exists and is accessible
+echo "Verifying clusters directory..." >&2
+if [ ! -d "clusters" ]; then
+    echo "ERROR: clusters directory does not exist after creation attempts" >&2
+    exit 1
+else
+    echo "clusters directory verified to exist" >&2
+fi
 
 CLUSTER_DIR="clusters/cluster-az-$(date +%Y-%m-%dT%H-%M-%SZ)-$(openssl rand -hex 3)"
-mkdir -p "$CLUSTER_DIR"
+echo "Creating cluster directory: $CLUSTER_DIR" >&2
+
+# Try to create the cluster directory
+mkdir -p "$CLUSTER_DIR" || {
+    echo "mkdir -p failed for $CLUSTER_DIR" >&2
+    exit 1
+}
+
+# Verify the cluster directory was created
+if [ ! -d "$CLUSTER_DIR" ]; then
+    echo "ERROR: Cluster directory $CLUSTER_DIR was not created successfully" >&2
+    exit 1
+else
+    echo "Successfully created cluster directory: $CLUSTER_DIR" >&2
+fi
+
+echo "=== END CLUSTER AZ SCRIPT DEBUG ===" >&2
 
 echo "Creating AZ cluster in $CLUSTER_DIR"
 

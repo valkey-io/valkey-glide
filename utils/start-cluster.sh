@@ -7,46 +7,68 @@ set -e
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 
-# Debug: Show current directory without any potential formatting issues
-printf "Current directory: %s\n" "$(pwd)"
+# Send debug output to stderr so Gradle shows it
+exec 2> >(tee -a /tmp/cluster-debug.log >&2)
+
+echo "=== START CLUSTER SCRIPT DEBUG ===" >&2
+echo "Current directory: $(pwd)" >&2
+echo "User: $(whoami)" >&2
+echo "Date: $(date)" >&2
+echo "PWD: $PWD" >&2
+
+# Check if we can write to current directory
+touch test-write.tmp && rm test-write.tmp && echo "Can write to current directory" >&2 || echo "Cannot write to current directory" >&2
+
+# List current directory contents
+echo "Current directory contents:" >&2
+ls -la . >&2 || echo "Cannot list current directory" >&2
 
 # Ensure clusters directory exists with proper permissions
+echo "Checking if clusters directory exists..." >&2
 if [ ! -d "clusters" ]; then
+    echo "clusters directory does not exist, creating..." >&2
     mkdir -p clusters || {
-        printf "Failed to create clusters directory, trying alternative approach\n"
-        mkdir clusters 2>/dev/null || true
+        echo "mkdir -p clusters failed, trying alternatives" >&2
+        mkdir clusters 2>/dev/null || echo "mkdir clusters also failed" >&2
     }
+else
+    echo "clusters directory already exists" >&2
 fi
-chmod 755 clusters 2>/dev/null || true
+
+echo "Setting permissions on clusters directory..." >&2
+chmod 755 clusters 2>/dev/null || echo "chmod failed" >&2
 
 # Verify clusters directory exists and is accessible
+echo "Verifying clusters directory..." >&2
 if [ ! -d "clusters" ]; then
-    printf "ERROR: clusters directory does not exist after creation attempts\n"
+    echo "ERROR: clusters directory does not exist after creation attempts" >&2
     exit 1
+else
+    echo "clusters directory verified to exist" >&2
 fi
 
-CLUSTER_DIR="clusters/cluster-$(date +%Y-%m-%dT%H-%M-%SZ)-$(openssl rand -hex 3)"
-printf "Creating cluster directory: %s\n" "$CLUSTER_DIR"
+# List clusters directory
+echo "clusters directory contents:" >&2
+ls -la clusters/ >&2 || echo "Cannot list clusters directory" >&2
 
-# Try multiple approaches to create the cluster directory
+CLUSTER_DIR="clusters/cluster-$(date +%Y-%m-%dT%H-%M-%SZ)-$(openssl rand -hex 3)"
+echo "Creating cluster directory: $CLUSTER_DIR" >&2
+
+# Try to create the cluster directory
 mkdir -p "$CLUSTER_DIR" || {
-    printf "mkdir -p failed, trying alternatives\n"
-    mkdir "$CLUSTER_DIR" 2>/dev/null || {
-        printf "Regular mkdir failed, trying with sudo\n"
-        sudo mkdir -p "$CLUSTER_DIR" 2>/dev/null || {
-            printf "All directory creation methods failed\n"
-            exit 1
-        }
-    }
+    echo "mkdir -p failed for $CLUSTER_DIR" >&2
+    exit 1
 }
 
 # Verify the cluster directory was created
 if [ ! -d "$CLUSTER_DIR" ]; then
-    printf "ERROR: Cluster directory %s was not created successfully\n" "$CLUSTER_DIR"
+    echo "ERROR: Cluster directory $CLUSTER_DIR was not created successfully" >&2
     exit 1
+else
+    echo "Successfully created cluster directory: $CLUSTER_DIR" >&2
 fi
 
-printf "Successfully created cluster directory: %s\n" "$CLUSTER_DIR"
+echo "=== END CLUSTER SCRIPT DEBUG ===" >&2
 
 echo "Creating cluster in $CLUSTER_DIR"
 
