@@ -51,37 +51,57 @@ public class ValkeyCluster implements AutoCloseable {
         } else {
             this.tls = tls;
             List<String> command = new ArrayList<>();
+            
             if (isWindows) {
+                // Use bash scripts for Windows + WSL
                 command.add("wsl");
                 command.add("--");
-            }
-            command.add("python3");
-            command.add(SCRIPT_FILE.toString());
-
-            if (tls) {
-                command.add("--tls");
-            }
-
-            command.add("start");
-
-            if (clusterMode) {
-                command.add("--cluster-mode");
-            }
-
-            if (loadModule != null && !loadModule.isEmpty()) {
-                for (String module : loadModule) {
-                    command.add("--load-module");
-                    command.add(module);
+                
+                if (tls) {
+                    command.add("./start-cluster-tls.sh");
+                } else if (replicaCount == 4) {
+                    command.add("./start-cluster-az.sh");
+                } else {
+                    command.add("./start-cluster.sh");
                 }
-            }
+            } else {
+                // Use Python cluster_manager.py for Linux/macOS
+                command.add("python3");
+                command.add(SCRIPT_FILE.toString());
 
-            command.add("-n");
-            command.add(String.valueOf(shardCount));
-            command.add("-r");
-            command.add(String.valueOf(replicaCount));
+                if (tls) {
+                    command.add("--tls");
+                }
+
+                command.add("start");
+
+                if (clusterMode) {
+                    command.add("--cluster-mode");
+                }
+
+                if (loadModule != null && !loadModule.isEmpty()) {
+                    for (String module : loadModule) {
+                        command.add("--load-module");
+                        command.add(module);
+                    }
+                }
+
+                command.add("-n");
+                command.add(String.valueOf(shardCount));
+                command.add("-r");
+                command.add(String.valueOf(replicaCount));
+            }
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
+            
+            // Set working directory to utils folder
+            Path utilsDir = Paths.get(System.getProperty("user.dir"))
+                    .getParent()
+                    .getParent()
+                    .resolve("utils");
+            pb.directory(utilsDir.toFile());
+            
             Process process = pb.start();
 
             StringBuilder output = new StringBuilder();
@@ -102,13 +122,59 @@ public class ValkeyCluster implements AutoCloseable {
                 throw new RuntimeException("Failed to create cluster: " + output);
             }
 
-            parseClusterScriptStartOutput(output.toString());
+            if (isWindows) {
+                parseClusterScriptBashOutput(output.toString(), tls, replicaCount);
+            } else {
+                parseClusterScriptStartOutput(output.toString());
+            }
         }
     }
 
     /** Constructor with default values */
     public ValkeyCluster(boolean tls) throws IOException, InterruptedException {
         this(tls, false, 3, 1, null, null);
+    }
+
+    private void parseClusterScriptBashOutput(String output, boolean tls, int replicaCount) {
+        String hostPattern;
+        if (tls) {
+            hostPattern = "CLUSTER_TLS_HOSTS=";
+        } else if (replicaCount == 4) {
+            hostPattern = "AZ_CLUSTER_HOSTS=";
+        } else {
+            hostPattern = "CLUSTER_HOSTS=";
+        }
+        
+        this.nodesAddr = new ArrayList<>();
+        this.clusterFolder = ""; // Bash scripts manage their own directories
+        
+        for (String line : output.split("\n")) {
+            if (line.contains(hostPattern)) {
+                String[] parts = line.split(hostPattern);
+                if (parts.length != 2) {
+                    throw new IllegalArgumentException("Invalid cluster hosts format");
+                }
+
+                String[] addresses = parts[1].split(",");
+                if (addresses.length == 0) {
+                    throw new IllegalArgumentException("No cluster nodes found");
+                }
+
+                for (String addr : addresses) {
+                    String[] hostPort = addr.split(":");
+                    if (hostPort.length != 2) {
+                        throw new IllegalArgumentException("Invalid node address format: " + addr);
+                    }
+                    this.nodesAddr.add(
+                            NodeAddress.builder().host(hostPort[0]).port(Integer.parseInt(hostPort[1])).build());
+                }
+                break;
+            }
+        }
+        
+        if (this.nodesAddr.isEmpty()) {
+            throw new IllegalArgumentException("No cluster nodes found in bash script output");
+        }
     }
 
     private void parseClusterScriptStartOutput(String output) {
@@ -178,12 +244,50 @@ public class ValkeyCluster implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        if (clusterFolder != null && !clusterFolder.isEmpty()) {
+        if (isWindows) {
+            // Use stop script for Windows + WSL
             List<String> command = new ArrayList<>();
-            if (isWindows) {
-                command.add("wsl");
-                command.add("--");
+            command.add("wsl");
+            command.add("--");
+            command.add("./stop-clusters.sh");
+
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+            
+            // Set working directory to utils folder
+            Path utilsDir = Paths.get(System.getProperty("user.dir"))
+                    .getParent()
+                    .getParent()
+                    .resolve("utils");
+            pb.directory(utilsDir.toFile());
+            
+            Process process = pb.start();
+
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader =
+                    new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                }
             }
+
+            try {
+                if (!process.waitFor(20, TimeUnit.SECONDS)) {
+                    process.destroy();
+                    throw new IOException("Timeout waiting for cluster shutdown");
+                }
+
+                if (process.exitValue() != 0) {
+                    throw new IOException("Failed to stop cluster: " + output);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted while stopping cluster", e);
+            }
+        } else if (clusterFolder != null && !clusterFolder.isEmpty()) {
+            // Use Python cluster_manager.py for Linux/macOS
+            List<String> command = new ArrayList<>();
             command.add("python3");
             command.add(SCRIPT_FILE.toString());
 
@@ -218,6 +322,11 @@ public class ValkeyCluster implements AutoCloseable {
                     throw new IOException("Failed to stop cluster: " + output);
                 }
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted while stopping cluster", e);
+            }
+        }
+    }
                 Thread.currentThread().interrupt();
                 throw new IOException("Interrupted while waiting for cluster shutdown", e);
             }

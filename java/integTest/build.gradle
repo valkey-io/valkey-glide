@@ -127,19 +127,24 @@ tasks.register('startCluster') {
     doLast {
         if (System.getProperty("cluster-endpoints") == null) {
             if (isWindows) {
-                println "=== Starting cluster setup directly in WSL ==="
+                println "=== Starting cluster setup via WSL bash script ==="
             }
             
             new ByteArrayOutputStream().withStream { os ->
                 if (isWindows) {
-                    // Use WSL directly without Docker
+                    // Use WSL to run bash script
                     exec {
                         workingDir "${project.rootDir}/../utils"
-                        def args = ['wsl', '--', 'python3', 'cluster_manager.py', 'start', '--cluster-mode']
-                        if (System.getProperty("tls") == 'true') args.add(2, '--tls')
-                        commandLine args
+                        commandLine 'wsl', '--', './start-cluster.sh'
                         standardOutput = os
                         errorOutput = System.out
+                    }
+                    def output = os.toString()
+                    def matcher = output =~ /CLUSTER_HOSTS=([^\n\r]+)/
+                    if (matcher.find()) {
+                        clusterHosts = matcher.group(1)
+                    } else {
+                        throw new Exception("Could not extract cluster hosts from script output")
                     }
                 } else {
                     exec {
@@ -150,46 +155,9 @@ tasks.register('startCluster') {
                         standardOutput = os
                         errorOutput = System.out
                     }
+                    clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
                 }
-                clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
                 println "=== Cluster hosts: ${clusterHosts} ==="
-            }
-            
-            // Check for replica log files after cluster creation
-            if (isWindows) {
-                println "=== Checking WSL memory usage ==="
-                exec {
-                    commandLine 'wsl', '--', 'free', '-h'
-                    ignoreExitValue true
-                }
-                
-                println "=== Checking for replica log files ==="
-                exec {
-                    commandLine 'wsl', '--', 'find', '/mnt/c/workspace/utils/clusters', '-name', 'server.log', '-exec', 'ls', '-la', '{}', '\\;'
-                    ignoreExitValue true
-                }
-                
-                println "=== Printing contents of all server log files ==="
-                exec {
-                    commandLine 'wsl', '--', 'find', '/mnt/c/workspace/utils/clusters', '-name', 'server.log', '-exec', 'sh', '-c', 'echo "=== LOG FILE: {} ==="; cat "{}"', '\\;'
-                    ignoreExitValue true
-                }
-                
-                println "=== Checking cluster directory structure ==="
-                exec {
-                    commandLine 'wsl', '--', 'find', '/mnt/c/workspace/utils/clusters', '-type', 'd', '-exec', 'ls', '-la', '{}', '\\;'
-                    ignoreExitValue true
-                }
-                
-                println "=== Checking running Valkey processes ==="
-                exec {
-                    commandLine 'wsl', '--', 'ps', 'aux'
-                    ignoreExitValue true
-                }
-                exec {
-                    commandLine 'wsl', '--', 'pgrep', '-f', 'valkey'
-                    ignoreExitValue true
-                }
             }
         } else {
             clusterHosts = System.getProperty("cluster-endpoints")
@@ -202,13 +170,18 @@ tasks.register('startClusterForAz') {
         if (System.getProperty("cluster-endpoints") == null) {
             new ByteArrayOutputStream().withStream { os ->
                 if (isWindows) {
-                    // Use direct WSL for cluster
+                    // Use WSL to run AZ bash script
                     exec {
                         workingDir "${project.rootDir}/../utils"
-                        def args = ['wsl', '--', 'python3', 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4']
-                        if (System.getProperty("tls") == 'true') args.add(2, '--tls')
-                        commandLine args
+                        commandLine 'wsl', '--', './start-cluster-az.sh'
                         standardOutput = os
+                    }
+                    def output = os.toString()
+                    def matcher = output =~ /AZ_CLUSTER_HOSTS=([^\n\r]+)/
+                    if (matcher.find()) {
+                        azClusterHosts = matcher.group(1)
+                    } else {
+                        throw new Exception("Could not extract AZ cluster hosts from script output")
                     }
                 } else {
                     exec {
@@ -218,8 +191,8 @@ tasks.register('startClusterForAz') {
                         commandLine args
                         standardOutput = os
                     }
+                    azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
                 }
-                azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
             }
         } else {
             azClusterHosts = System.getProperty("cluster-endpoints")
@@ -300,11 +273,25 @@ tasks.register('startClusterTls') {
     doLast {
         new ByteArrayOutputStream().withStream { os ->
             if (isWindows) {
-                // Use direct WSL for TLS cluster
+                // Use WSL to run TLS bash script
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    commandLine 'wsl', '--', 'python3', 'cluster_manager.py', 'start', '--tls', '--cluster-mode'
+                    commandLine 'wsl', '--', './start-cluster-tls.sh'
                     standardOutput = os
+                }
+                def output = os.toString()
+                def matcher = output =~ /CLUSTER_TLS_HOSTS=([^\n\r]+)/
+                if (matcher.find()) {
+                    clusterTlsHosts = matcher.group(1)
+                } else {
+                    throw new Exception("Could not extract TLS cluster hosts from script output")
+                }
+                
+                // Copy certificates from script output location if needed
+                exec {
+                    commandLine 'wsl', '--', 'bash', '-c',
+                        'find ${workspaceRoot}/utils/clusters -name "tls" -type d -exec cp -r {} ${workspaceRoot}/utils/tls_crts \\; 2>/dev/null || true'
+                    ignoreExitValue true
                 }
             } else {
                 exec {
@@ -312,22 +299,7 @@ tasks.register('startClusterTls') {
                     commandLine(*pythonCmd, 'cluster_manager.py', 'start', '--tls', '--cluster-mode')
                     standardOutput = os
                 }
-            }
-            clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
-            
-            // Copy certificates from WSL to Windows if needed
-            if (isWindows) {
-                exec {
-                    commandLine 'wsl', '--', 'bash', '-c',
-                        'echo "=== WSL tls_crts ===" && ls -la /mnt/d/a/valkey-glide/valkey-glide/utils/tls_crts/ && echo "=== Windows tls_crts ===" && ls -la /mnt/d/a/valkey-glide/valkey-glide/utils/tls_crts/'
-                    ignoreExitValue true
-                }
-                // Ensure certificates have Unix line endings (remove any Windows \r)
-                exec {
-                    commandLine 'wsl', '--', 'bash', '-c',
-                        'if [ -d "${workspaceRoot}/utils/tls_crts" ]; then cd ${workspaceRoot}/utils/tls_crts && for f in *.crt *.key *.pem; do [ -f "$f" ] && sed -i "s/\\r//g" "$f"; done; fi'
-                    ignoreExitValue true
-                }
+                clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
             }
         }
     }
