@@ -1502,7 +1502,7 @@ class ClusterCommands(CoreCommands):
         """
         await self._execute_command(RequestType.SSubscribe, list(channels))
 
-    async def ssubscribe(self, channels: Set[str], timeout: int = 0) -> None:
+    async def ssubscribe(self, channels: Set[str], timeout_ms: int = 0) -> None:
         """
         Subscribe to sharded channels (cluster mode only, blocking).
 
@@ -1511,7 +1511,7 @@ class ClusterCommands(CoreCommands):
 
         Args:
             channels: A set of sharded channel names to subscribe to.
-            timeout: Maximum time in milliseconds to wait for server confirmation.
+            timeout_ms: Maximum time in milliseconds to wait for server confirmation.
                     A value of 0 (default) blocks indefinitely until confirmation.
 
         Returns: None
@@ -1529,7 +1529,7 @@ class ClusterCommands(CoreCommands):
 
         Since: Valkey 7.0.0.
         """
-        args = list(channels) + [str(timeout)]
+        args = list(channels) + [str(timeout_ms)]
         await self._execute_command(RequestType.SSubscribe, list(args))
 
     async def sunsubscribe_lazy(self, channels: Optional[Set[str]] = None) -> None:
@@ -1563,7 +1563,7 @@ class ClusterCommands(CoreCommands):
         )
 
     async def sunsubscribe(
-        self, channels: Optional[Set[str]] = None, timeout: int = 0
+        self, channels: Optional[Set[str]] = None, timeout_ms: int = 0
     ) -> None:
         """
         Unsubscribe from sharded channels (blocking).
@@ -1574,7 +1574,7 @@ class ClusterCommands(CoreCommands):
         Args:
             channels: A set of sharded channel names to unsubscribe from.
                     If None, unsubscribes from all sharded channels.
-            timeout: Maximum time in milliseconds to wait for server confirmation.
+            timeout_ms: Maximum time in milliseconds to wait for server confirmation.
                     A value of 0 (default) blocks indefinitely until confirmation.
 
         Returns: None
@@ -1595,5 +1595,5 @@ class ClusterCommands(CoreCommands):
 
         Since: Valkey 7.0.0.
         """
-        args = (list(channels) if channels else []) + [str(timeout)]
+        args = (list(channels) if channels else []) + [str(timeout_ms)]
         await self._execute_command(RequestType.SUnsubscribe, list(args))

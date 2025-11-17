@@ -7842,7 +7842,7 @@ class CoreCommands(Protocol):
         """
         await self._execute_command(RequestType.Subscribe, list(channels))
 
-    async def subscribe(self, channels: Set[str], timeout: int = 0) -> None:
+    async def subscribe(self, channels: Set[str], timeout_ms: int = 0) -> None:
         """
         Subscribe to exact channels (blocking).
 
@@ -7851,7 +7851,7 @@ class CoreCommands(Protocol):
 
         Args:
             channels: A set of channel names to subscribe to.
-            timeout: Maximum time in milliseconds to wait for server confirmation.
+            timeout_ms: Maximum time in milliseconds to wait for server confirmation.
                     A value of 0 blocks indefinitely until confirmation.
 
         Return: None
@@ -7867,7 +7867,7 @@ class CoreCommands(Protocol):
             >>> await client.subscribe({"channel1", "channel2"}, timeout=5.0)
             >>> print("Subscribed successfully within 5 seconds")
         """
-        args = list(channels) + [str(timeout)]
+        args = list(channels) + [str(timeout_ms)]
         await self._execute_command(RequestType.Subscribe, list(args))
 
     async def psubscribe_lazy(self, patterns: Set[str]) -> None:
@@ -7895,7 +7895,7 @@ class CoreCommands(Protocol):
         """
         await self._execute_command(RequestType.PSubscribe, list(patterns))
 
-    async def psubscribe(self, patterns: Set[str], timeout: int = 0) -> None:
+    async def psubscribe(self, patterns: Set[str], timeout_ms: int = 0) -> None:
         """
         Subscribe to channel patterns (blocking).
 
@@ -7904,7 +7904,7 @@ class CoreCommands(Protocol):
 
         Args:
             patterns: A set of patterns to subscribe to (e.g., {"news.*"}).
-            timeout: Maximum time in milliseconds to wait for server confirmation.
+            timeout_ms: Maximum time in milliseconds to wait for server confirmation.
                     A value of 0 blocks indefinitely until confirmation.
 
         Return: None
@@ -7920,7 +7920,7 @@ class CoreCommands(Protocol):
             >>> await client.psubscribe({"news.*", "updates.*"}, timeout=10.0)
             >>> print("Subscribed to patterns successfully within 10 seconds")
         """
-        args = list(patterns) + [str(timeout)]
+        args = list(patterns) + [str(timeout_ms)]
         await self._execute_command(RequestType.PSubscribe, list(args))
 
     async def unsubscribe_lazy(self, channels: Optional[Set[str]] = None) -> None:
@@ -7952,7 +7952,7 @@ class CoreCommands(Protocol):
         )
 
     async def unsubscribe(
-        self, channels: Optional[Set[str]] = None, timeout: int = 0
+        self, channels: Optional[Set[str]] = None, timeout_ms: int = 0
     ) -> None:
         """
         Unsubscribe from exact channels (blocking).
@@ -7963,7 +7963,7 @@ class CoreCommands(Protocol):
         Args:
             channels: A set of channel names to unsubscribe from.
                     If None, unsubscribes from all exact channels.
-            timeout: Maximum time in milliseconds to wait for server confirmation.
+            timeout_ms: Maximum time in milliseconds to wait for server confirmation.
                     A value of 0 blocks indefinitely until confirmation.
 
         Return: None
@@ -7982,7 +7982,7 @@ class CoreCommands(Protocol):
             >>> # Unsubscribe from all exact channels with timeout
             >>> await client.unsubscribe(timeout=10.0)
         """
-        args = (list(channels) if channels else []) + [str(timeout)]
+        args = (list(channels) if channels else []) + [str(timeout_ms)]
         await self._execute_command(RequestType.Unsubscribe, list(args))
 
     async def punsubscribe_lazy(self, patterns: Optional[Set[str]] = None) -> None:
@@ -8013,7 +8013,7 @@ class CoreCommands(Protocol):
         )
 
     async def punsubscribe(
-        self, patterns: Optional[Set[str]] = None, timeout: int = 0
+        self, patterns: Optional[Set[str]] = None, timeout_ms: int = 0
     ) -> None:
         """
         Unsubscribe from channel patterns (blocking).
@@ -8024,7 +8024,7 @@ class CoreCommands(Protocol):
         Args:
             patterns: A set of patterns to unsubscribe from.
                     If None, unsubscribes from all patterns.
-            timeout: Maximum time in milliseconds to wait for server confirmation.
+            timeout_ms: Maximum time in milliseconds to wait for server confirmation.
                     A value of 0 blocks indefinitely until confirmation.
 
         Return: None
@@ -8043,5 +8043,5 @@ class CoreCommands(Protocol):
             >>> # Unsubscribe from all patterns with timeout
             >>> await client.punsubscribe(timeout=10.0)
         """
-        args = (list(patterns) if patterns else []) + [str(timeout)]
+        args = (list(patterns) if patterns else []) + [str(timeout_ms)]
         await self._execute_command(RequestType.PUnsubscribe, list(args))
