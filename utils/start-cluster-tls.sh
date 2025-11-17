@@ -3,8 +3,15 @@
 
 set -e
 
+echo "Current directory: $(pwd)"
+
 # Ensure clusters directory exists with proper permissions
-mkdir -p clusters 2>/dev/null || true
+if [ ! -d "clusters" ]; then
+    mkdir -p clusters || {
+        echo "Failed to create clusters directory, trying alternative approach"
+        mkdir clusters 2>/dev/null || true
+    }
+fi
 chmod 755 clusters 2>/dev/null || true
 
 CLUSTER_DIR="clusters/cluster-tls-$(date +%Y-%m-%dT%H-%M-%SZ)-$(openssl rand -hex 3)"

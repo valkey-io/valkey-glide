@@ -1041,9 +1041,20 @@ def is_address_already_in_use(
 def dir_path(path: str):
     try:
         # Try to create the path folder if it isn't exist
-        Path(path).mkdir(exist_ok=True)
-    except Exception:
-        pass
+        Path(path).mkdir(exist_ok=True, parents=True)
+    except Exception as e:
+        # If Path.mkdir fails, try os.makedirs as fallback
+        try:
+            os.makedirs(path, exist_ok=True)
+        except Exception:
+            # If both fail, try basic mkdir
+            try:
+                os.mkdir(path)
+            except FileExistsError:
+                pass  # Directory already exists, that's fine
+            except Exception:
+                pass  # Give up on creation, just check if it exists
+    
     if os.path.isdir(path):
         return path
     else:
