@@ -1489,8 +1489,7 @@ class ClusterCommands(CoreCommands):
         Args:
             channels: A set of sharded channel names to subscribe to.
 
-        Returns:
-            TResult: The result of the subscription command.
+        Returns: None
 
         Examples:
             >>> await client.ssubscribe_lazy({"shard_channel"})
@@ -1503,7 +1502,7 @@ class ClusterCommands(CoreCommands):
         """
         await self._execute_command(RequestType.SSubscribe, list(channels))
 
-    async def ssubscribe(self, channels: Set[str], timeout: float = 0) -> None:
+    async def ssubscribe(self, channels: Set[str], timeout: int = 0) -> None:
         """
         Subscribe to sharded channels (cluster mode only, blocking).
 
@@ -1512,11 +1511,10 @@ class ClusterCommands(CoreCommands):
 
         Args:
             channels: A set of sharded channel names to subscribe to.
-            timeout: Maximum time in seconds to wait for server confirmation.
+            timeout: Maximum time in milliseconds to wait for server confirmation.
                     A value of 0 (default) blocks indefinitely until confirmation.
 
-        Returns:
-            TResult: The result of the subscription command.
+        Returns: None
 
         Raises:
             TimeoutError: If timeout > 0 and server confirmation not received within timeout.
@@ -1549,8 +1547,7 @@ class ClusterCommands(CoreCommands):
             channels: A set of sharded channel names to unsubscribe from.
                     If None, unsubscribes from all sharded channels.
 
-        Returns:
-            TResult: The result of the unsubscription command.
+        Returns: None
 
         Examples:
             >>> await client.sunsubscribe_lazy({"shard_channel"})
@@ -1566,7 +1563,7 @@ class ClusterCommands(CoreCommands):
         )
 
     async def sunsubscribe(
-        self, channels: Optional[Set[str]] = None, timeout: float = 0
+        self, channels: Optional[Set[str]] = None, timeout: int = 0
     ) -> None:
         """
         Unsubscribe from sharded channels (blocking).
@@ -1577,11 +1574,10 @@ class ClusterCommands(CoreCommands):
         Args:
             channels: A set of sharded channel names to unsubscribe from.
                     If None, unsubscribes from all sharded channels.
-            timeout: Maximum time in seconds to wait for server confirmation.
+            timeout: Maximum time in milliseconds to wait for server confirmation.
                     A value of 0 (default) blocks indefinitely until confirmation.
 
-        Returns:
-            TResult: The result of the unsubscription command.
+        Returns: None
 
         Raises:
             TimeoutError: If timeout > 0 and server confirmation not received within timeout.

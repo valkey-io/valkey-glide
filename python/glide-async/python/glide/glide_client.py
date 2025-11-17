@@ -815,18 +815,15 @@ class GlideClusterClient(BaseClient, ClusterCommands):
 
     async def get_subscriptions(
         self,
-    ) -> Tuple[
-        Dict[GlideClusterClientConfiguration.PubSubChannelModes, Set[str]],
-        Dict[GlideClusterClientConfiguration.PubSubChannelModes, Set[str]],
-    ]:
+    ) -> GlideClusterClientConfiguration.PubSubState:
         """
-        Retrieves both the desired and actual subscription states as tracked by the client.
+        Retrieves both the desired and current subscription states as tracked by the client.
 
         This allows verification of synchronization between what the client intends to be
-        subscribed to (desired) and what it is actually subscribed to (actual).
+        subscribed to (desired) and what it is actually subscribed to on the server (actual).
 
         Returns:
-            Two dictionaries with the same structure as PubSubSubscriptions.channels_and_patterns:
+            GlideClusterClientConfiguration.PubSubState: An object containing two attributes:
                 - desired_subscriptions: Dict[PubSubChannelModes, Set[str]]
                 - actual_subscriptions: Dict[PubSubChannelModes, Set[str]]
 
@@ -835,7 +832,9 @@ class GlideClusterClient(BaseClient, ClusterCommands):
             >>> PubSubChannelModes = GlideClusterClientConfiguration.PubSubChannelModes
             >>>
             >>> # Get both subscription states
-            >>> desired, actual = await client.get_subscriptions()
+            >>> state = await client.get_subscriptions()
+            >>> desired = state.desired_subscriptions
+            >>> actual = state.actual_subscriptions
             >>>
             >>> # Check if subscribed to specific channel
             >>> if "channel1" in actual.get(PubSubChannelModes.Exact, set()):
@@ -869,18 +868,15 @@ class GlideClient(BaseClient, StandaloneCommands):
 
     async def get_subscriptions(
         self,
-    ) -> Tuple[
-        Dict[GlideClientConfiguration.PubSubChannelModes, Set[str]],
-        Dict[GlideClientConfiguration.PubSubChannelModes, Set[str]],
-    ]:
+    ) -> GlideClientConfiguration.PubSubState:
         """
         Retrieves both the desired and current subscription states as tracked by the client.
 
         This allows verification of synchronization between what the client intends to be
-        subscribed to (desired) and what it is actually subscribed to (actual).
+        subscribed to (desired) and what it is actually subscribed to on the server (actual).
 
         Returns:
-            Two dictionaries with the same structure as PubSubSubscriptions.channels_and_patterns:
+            GlideClientConfiguration.PubSubState: An object containing two attributes:
                 - desired_subscriptions: Dict[PubSubChannelModes, Set[str]]
                 - actual_subscriptions: Dict[PubSubChannelModes, Set[str]]
 
@@ -889,7 +885,9 @@ class GlideClient(BaseClient, StandaloneCommands):
             >>> PubSubChannelModes = GlideClientConfiguration.PubSubChannelModes
             >>>
             >>> # Get both subscription states
-            >>> desired, actual = await client.get_subscriptions()
+            >>> state = await client.get_subscriptions()
+            >>> desired = state.desired_subscriptions
+            >>> actual = state.actual_subscriptions
             >>>
             >>> # Check if subscribed to specific channel
             >>> if "channel1" in actual.get(PubSubChannelModes.Exact, set()):
