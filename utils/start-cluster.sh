@@ -3,6 +3,19 @@
 
 set -e
 
+# Debug: Show current directory and permissions
+echo "Current directory: $(pwd)"
+echo "Directory contents:"
+ls -la . || echo "Cannot list current directory"
+
+# Ensure clusters directory exists with proper permissions
+mkdir -p clusters
+chmod 755 clusters
+
+# Verify clusters directory
+echo "Clusters directory:"
+ls -la clusters/ || echo "Cannot access clusters directory"
+
 CLUSTER_DIR="clusters/cluster-$(date +%Y-%m-%dT%H-%M-%SZ)-$(openssl rand -hex 3)"
 mkdir -p "$CLUSTER_DIR"
 

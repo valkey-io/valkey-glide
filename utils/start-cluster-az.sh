@@ -3,6 +3,10 @@
 
 set -e
 
+# Ensure clusters directory exists with proper permissions
+mkdir -p clusters
+chmod 755 clusters
+
 CLUSTER_DIR="clusters/cluster-az-$(date +%Y-%m-%dT%H-%M-%SZ)-$(openssl rand -hex 3)"
 mkdir -p "$CLUSTER_DIR"
 

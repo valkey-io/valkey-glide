@@ -132,10 +132,15 @@ tasks.register('startCluster') {
             
             new ByteArrayOutputStream().withStream { os ->
                 if (isWindows) {
-                    // Use WSL to run bash script
+                    // Use WSL to run bash script (fix line endings first)
                     exec {
                         workingDir "${project.rootDir}/../utils"
-                        commandLine 'wsl', '--', './start-cluster.sh'
+                        commandLine 'wsl', '--', 'dos2unix', 'start-cluster.sh'
+                        ignoreExitValue true
+                    }
+                    exec {
+                        workingDir "${project.rootDir}/../utils"
+                        commandLine 'wsl', '--', 'bash', './start-cluster.sh'
                         standardOutput = os
                         errorOutput = System.out
                     }
@@ -170,10 +175,15 @@ tasks.register('startClusterForAz') {
         if (System.getProperty("cluster-endpoints") == null) {
             new ByteArrayOutputStream().withStream { os ->
                 if (isWindows) {
-                    // Use WSL to run AZ bash script
+                    // Use WSL to run AZ bash script (fix line endings first)
                     exec {
                         workingDir "${project.rootDir}/../utils"
-                        commandLine 'wsl', '--', './start-cluster-az.sh'
+                        commandLine 'wsl', '--', 'dos2unix', 'start-cluster-az.sh'
+                        ignoreExitValue true
+                    }
+                    exec {
+                        workingDir "${project.rootDir}/../utils"
+                        commandLine 'wsl', '--', 'bash', './start-cluster-az.sh'
                         standardOutput = os
                     }
                     def output = os.toString()
@@ -273,10 +283,15 @@ tasks.register('startClusterTls') {
     doLast {
         new ByteArrayOutputStream().withStream { os ->
             if (isWindows) {
-                // Use WSL to run TLS bash script
+                // Use WSL to run TLS bash script (fix line endings first)
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    commandLine 'wsl', '--', './start-cluster-tls.sh'
+                    commandLine 'wsl', '--', 'dos2unix', 'start-cluster-tls.sh'
+                    ignoreExitValue true
+                }
+                exec {
+                    workingDir "${project.rootDir}/../utils"
+                    commandLine 'wsl', '--', 'bash', './start-cluster-tls.sh'
                     standardOutput = os
                 }
                 def output = os.toString()

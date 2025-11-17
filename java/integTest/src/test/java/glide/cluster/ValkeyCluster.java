@@ -56,13 +56,30 @@ public class ValkeyCluster implements AutoCloseable {
                 // Use bash scripts for Windows + WSL
                 command.add("wsl");
                 command.add("--");
+                command.add("bash");
                 
+                String scriptName;
                 if (tls) {
-                    command.add("./start-cluster-tls.sh");
+                    scriptName = "./start-cluster-tls.sh";
                 } else if (replicaCount == 4) {
-                    command.add("./start-cluster-az.sh");
+                    scriptName = "./start-cluster-az.sh";
                 } else {
-                    command.add("./start-cluster.sh");
+                    scriptName = "./start-cluster.sh";
+                }
+                command.add(scriptName);
+                
+                // Fix line endings first
+                Path utilsDir = Paths.get(System.getProperty("user.dir"))
+                        .getParent()
+                        .getParent()
+                        .resolve("utils");
+                
+                try {
+                    ProcessBuilder dos2unix = new ProcessBuilder("wsl", "--", "dos2unix", scriptName.substring(2));
+                    dos2unix.directory(utilsDir.toFile());
+                    dos2unix.start().waitFor(5, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    // Ignore dos2unix errors - script might already have correct line endings
                 }
             } else {
                 // Use Python cluster_manager.py for Linux/macOS
@@ -245,10 +262,24 @@ public class ValkeyCluster implements AutoCloseable {
     @Override
     public void close() throws IOException {
         if (isWindows) {
-            // Use stop script for Windows + WSL
+            // Use stop script for Windows + WSL (fix line endings first)
+            Path utilsDir = Paths.get(System.getProperty("user.dir"))
+                    .getParent()
+                    .getParent()
+                    .resolve("utils");
+            
+            try {
+                ProcessBuilder dos2unix = new ProcessBuilder("wsl", "--", "dos2unix", "stop-clusters.sh");
+                dos2unix.directory(utilsDir.toFile());
+                dos2unix.start().waitFor(5, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                // Ignore dos2unix errors
+            }
+            
             List<String> command = new ArrayList<>();
             command.add("wsl");
             command.add("--");
+            command.add("bash");
             command.add("./stop-clusters.sh");
 
             ProcessBuilder pb = new ProcessBuilder(command);

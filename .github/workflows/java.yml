@@ -171,6 +171,9 @@ jobs:
               run: |
                   # Create python3 symlink for Windows
                   ln -sf $(which python) /usr/bin/python3
+                  
+                  # Install dos2unix for line ending conversion
+                  sudo apt-get update && sudo apt-get install -y dos2unix
 
             - name: Configure WSL memory for Windows
               if: ${{ matrix.host.OS == 'windows' }}
