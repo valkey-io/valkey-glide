@@ -375,6 +375,21 @@ public abstract class BaseClient
         } catch (Exception e) {
             throw new RuntimeException("Failed to load native library", e);
         }
+
+        // Configure auto-exit behavior
+        boolean autoExit = !Boolean.getBoolean("glide.client.disableAutoExit");
+        glide.ffi.resolvers.RuntimeResolver.setAutoExit(autoExit);
+
+        // Configure auto-exit delay (default 2 seconds)
+        String delayStr = System.getProperty("glide.client.autoExitDelay", "2");
+        try {
+            long delaySecs = Long.parseLong(delayStr);
+            if (delaySecs > 0) {
+                glide.ffi.resolvers.RuntimeResolver.setAutoExitDelay(delaySecs);
+            }
+        } catch (NumberFormatException e) {
+            // Use default delay of 2 seconds
+        }
     }
 
     /** Helper which extracts data from received {@link Response}s from GLIDE. */
