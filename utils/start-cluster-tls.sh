@@ -3,6 +3,10 @@
 
 set -e
 
+# Force UTF-8 encoding for output
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+
 echo "Current directory: $(pwd)"
 
 # Ensure clusters directory exists with proper permissions

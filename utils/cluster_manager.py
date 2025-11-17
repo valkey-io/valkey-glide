@@ -1039,6 +1039,10 @@ def is_address_already_in_use(
 
 
 def dir_path(path: str):
+    import subprocess
+    import sys
+    
+    # First try standard Python methods
     try:
         # Try to create the path folder if it isn't exist
         Path(path).mkdir(exist_ok=True, parents=True)
@@ -1053,12 +1057,23 @@ def dir_path(path: str):
             except FileExistsError:
                 pass  # Directory already exists, that's fine
             except Exception:
-                pass  # Give up on creation, just check if it exists
+                # Last resort: try system mkdir if we're in WSL
+                try:
+                    if sys.platform.startswith('linux'):
+                        subprocess.run(['mkdir', '-p', path], check=True, capture_output=True)
+                except Exception:
+                    pass  # Give up on creation, just check if it exists
     
+    # Final verification
     if os.path.isdir(path):
         return path
     else:
-        raise NotADirectoryError(path)
+        # Try one more time with absolute path
+        abs_path = os.path.abspath(path)
+        if os.path.isdir(abs_path):
+            return abs_path
+        else:
+            raise NotADirectoryError(f"Cannot create or access directory: {path} (absolute: {abs_path})")
 
 
 def stop_server(server: Server, cluster_folder: str, use_tls: bool, auth: str):

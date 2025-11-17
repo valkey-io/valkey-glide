@@ -3,6 +3,10 @@
 
 set -e
 
+# Force UTF-8 encoding for output
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+
 # Debug: Show current directory without any potential formatting issues
 printf "Current directory: %s\n" "$(pwd)"
 
@@ -15,8 +19,34 @@ if [ ! -d "clusters" ]; then
 fi
 chmod 755 clusters 2>/dev/null || true
 
+# Verify clusters directory exists and is accessible
+if [ ! -d "clusters" ]; then
+    printf "ERROR: clusters directory does not exist after creation attempts\n"
+    exit 1
+fi
+
 CLUSTER_DIR="clusters/cluster-$(date +%Y-%m-%dT%H-%M-%SZ)-$(openssl rand -hex 3)"
-mkdir -p "$CLUSTER_DIR"
+printf "Creating cluster directory: %s\n" "$CLUSTER_DIR"
+
+# Try multiple approaches to create the cluster directory
+mkdir -p "$CLUSTER_DIR" || {
+    printf "mkdir -p failed, trying alternatives\n"
+    mkdir "$CLUSTER_DIR" 2>/dev/null || {
+        printf "Regular mkdir failed, trying with sudo\n"
+        sudo mkdir -p "$CLUSTER_DIR" 2>/dev/null || {
+            printf "All directory creation methods failed\n"
+            exit 1
+        }
+    }
+}
+
+# Verify the cluster directory was created
+if [ ! -d "$CLUSTER_DIR" ]; then
+    printf "ERROR: Cluster directory %s was not created successfully\n" "$CLUSTER_DIR"
+    exit 1
+fi
+
+printf "Successfully created cluster directory: %s\n" "$CLUSTER_DIR"
 
 echo "Creating cluster in $CLUSTER_DIR"
 
