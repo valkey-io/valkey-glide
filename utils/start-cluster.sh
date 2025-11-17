@@ -9,8 +9,8 @@ echo "Directory contents:"
 ls -la . || echo "Cannot list current directory"
 
 # Ensure clusters directory exists with proper permissions
-mkdir -p clusters
-chmod 755 clusters
+mkdir -p clusters 2>/dev/null || true
+chmod 755 clusters 2>/dev/null || true
 
 # Verify clusters directory
 echo "Clusters directory:"

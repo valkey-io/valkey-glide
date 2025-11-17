@@ -58,28 +58,12 @@ public class ValkeyCluster implements AutoCloseable {
                 command.add("--");
                 command.add("bash");
                 
-                String scriptName;
                 if (tls) {
-                    scriptName = "./start-cluster-tls.sh";
+                    command.add("./start-cluster-tls.sh");
                 } else if (replicaCount == 4) {
-                    scriptName = "./start-cluster-az.sh";
+                    command.add("./start-cluster-az.sh");
                 } else {
-                    scriptName = "./start-cluster.sh";
-                }
-                command.add(scriptName);
-                
-                // Fix line endings first
-                Path utilsDir = Paths.get(System.getProperty("user.dir"))
-                        .getParent()
-                        .getParent()
-                        .resolve("utils");
-                
-                try {
-                    ProcessBuilder dos2unix = new ProcessBuilder("wsl", "--", "dos2unix", scriptName.substring(2));
-                    dos2unix.directory(utilsDir.toFile());
-                    dos2unix.start().waitFor(5, TimeUnit.SECONDS);
-                } catch (Exception e) {
-                    // Ignore dos2unix errors - script might already have correct line endings
+                    command.add("./start-cluster.sh");
                 }
             } else {
                 // Use Python cluster_manager.py for Linux/macOS
@@ -262,20 +246,7 @@ public class ValkeyCluster implements AutoCloseable {
     @Override
     public void close() throws IOException {
         if (isWindows) {
-            // Use stop script for Windows + WSL (fix line endings first)
-            Path utilsDir = Paths.get(System.getProperty("user.dir"))
-                    .getParent()
-                    .getParent()
-                    .resolve("utils");
-            
-            try {
-                ProcessBuilder dos2unix = new ProcessBuilder("wsl", "--", "dos2unix", "stop-clusters.sh");
-                dos2unix.directory(utilsDir.toFile());
-                dos2unix.start().waitFor(5, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                // Ignore dos2unix errors
-            }
-            
+            // Use stop script for Windows + WSL
             List<String> command = new ArrayList<>();
             command.add("wsl");
             command.add("--");

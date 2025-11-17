@@ -4,8 +4,8 @@
 set -e
 
 # Ensure clusters directory exists with proper permissions
-mkdir -p clusters
-chmod 755 clusters
+mkdir -p clusters 2>/dev/null || true
+chmod 755 clusters 2>/dev/null || true
 
 CLUSTER_DIR="clusters/cluster-tls-$(date +%Y-%m-%dT%H-%M-%SZ)-$(openssl rand -hex 3)"
 mkdir -p "$CLUSTER_DIR"

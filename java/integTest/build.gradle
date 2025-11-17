@@ -132,12 +132,7 @@ tasks.register('startCluster') {
             
             new ByteArrayOutputStream().withStream { os ->
                 if (isWindows) {
-                    // Use WSL to run bash script (fix line endings first)
-                    exec {
-                        workingDir "${project.rootDir}/../utils"
-                        commandLine 'wsl', '--', 'dos2unix', 'start-cluster.sh'
-                        ignoreExitValue true
-                    }
+                    // Use WSL to run bash script
                     exec {
                         workingDir "${project.rootDir}/../utils"
                         commandLine 'wsl', '--', 'bash', './start-cluster.sh'
@@ -175,12 +170,7 @@ tasks.register('startClusterForAz') {
         if (System.getProperty("cluster-endpoints") == null) {
             new ByteArrayOutputStream().withStream { os ->
                 if (isWindows) {
-                    // Use WSL to run AZ bash script (fix line endings first)
-                    exec {
-                        workingDir "${project.rootDir}/../utils"
-                        commandLine 'wsl', '--', 'dos2unix', 'start-cluster-az.sh'
-                        ignoreExitValue true
-                    }
+                    // Use WSL to run AZ bash script
                     exec {
                         workingDir "${project.rootDir}/../utils"
                         commandLine 'wsl', '--', 'bash', './start-cluster-az.sh'
@@ -283,12 +273,7 @@ tasks.register('startClusterTls') {
     doLast {
         new ByteArrayOutputStream().withStream { os ->
             if (isWindows) {
-                // Use WSL to run TLS bash script (fix line endings first)
-                exec {
-                    workingDir "${project.rootDir}/../utils"
-                    commandLine 'wsl', '--', 'dos2unix', 'start-cluster-tls.sh'
-                    ignoreExitValue true
-                }
+                // Use WSL to run TLS bash script
                 exec {
                     workingDir "${project.rootDir}/../utils"
                     commandLine 'wsl', '--', 'bash', './start-cluster-tls.sh'
