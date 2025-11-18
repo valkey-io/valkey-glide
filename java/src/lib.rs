@@ -1267,9 +1267,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                     // Store in handle table
                     handle_table.insert(safe_handle, client);
 
-                    // Track client count
-                    jni_client::increment_client_count();
-
                     // If we created a push channel, spawn a forwarder to deliver pushes to Java
                     if let Some(mut rx) = rx_opt {
                         let jvm_arc = jni_client::JVM.get().cloned();
@@ -1277,7 +1274,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                         get_runtime().spawn(async move {
                             while let Some(push) = rx.recv().await {
                                 if let Some(jvm) = jvm_arc.as_ref()
-                                    && let Ok(mut env) = jvm.attach_current_thread_permanently()
+                                    && let Ok(mut env) = jvm.attach_current_thread_as_daemon()
                                 {
                                     handle_push_notification(&mut env, handle_for_java, push);
                                 }
@@ -1378,9 +1375,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_closeClient(
                 runtime.spawn(async move {
                     // Drop the client; core will close connections via Drop implementations
                     drop(client);
-
-                    // Track client count after cleanup completes
-                    jni_client::decrement_client_count();
                 });
             }
             Some(())
@@ -2424,26 +2418,4 @@ fn get_ok_jstring<'a>(env: &mut JNIEnv<'a>) -> Result<JString<'a>, FFIError> {
         .expect("OK_STRING_GLOBAL should be initialized");
     let local = env.new_local_ref(global.as_obj())?;
     Ok(JString::from(local))
-}
-
-/// Enable or disable auto-exit when all clients are closed
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_ffi_resolvers_RuntimeResolver_setAutoExit(
-    _env: JNIEnv,
-    _class: JClass,
-    enabled: jni::sys::jboolean,
-) {
-    jni_client::set_auto_exit(enabled != 0);
-}
-
-/// Set the delay in seconds before auto-exit after last client closes
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_ffi_resolvers_RuntimeResolver_setAutoExitDelay(
-    _env: JNIEnv,
-    _class: JClass,
-    delay_secs: jni::sys::jlong,
-) {
-    if delay_secs > 0 {
-        jni_client::set_auto_exit_delay(delay_secs as u64);
-    }
 }

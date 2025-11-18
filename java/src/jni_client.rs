@@ -15,7 +15,6 @@ use redis::{RedisError, Value as ServerValue};
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, channel};
 use std::thread;
-use std::thread::sleep;
 use tokio::runtime::Runtime;
 
 // Type aliases for complex types
@@ -24,12 +23,7 @@ type CallbackResult = Result<ServerValue, RedisError>;
 
 // Runtime and JVM statics
 pub static JVM: std::sync::OnceLock<Arc<JavaVM>> = std::sync::OnceLock::new();
-static RUNTIME: std::sync::OnceLock<std::sync::Mutex<Option<Runtime>>> = std::sync::OnceLock::new();
-
-// Client count tracking for auto-exit
-static CLIENT_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-static AUTO_EXIT_ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-static AUTO_EXIT_DELAY_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(2);
+static RUNTIME: std::sync::OnceLock<Runtime> = std::sync::OnceLock::new();
 
 // Defaults for runtime and callback workers
 const DEFAULT_RUNTIME_WORKER_THREADS: usize = 1;
@@ -62,9 +56,9 @@ pub fn free_native_buffer(id: u64) -> bool {
     registry.remove(&id).is_some()
 }
 
-/// Get or initialize the runtime
+/// Initialize or return the shared Tokio runtime.
 pub(crate) fn get_runtime() -> &'static Runtime {
-    let mutex = RUNTIME.get_or_init(|| {
+    RUNTIME.get_or_init(|| {
         let worker_threads = if let Ok(threads_str) = std::env::var("GLIDE_TOKIO_WORKER_THREADS") {
             threads_str
                 .parse::<usize>()
@@ -73,7 +67,7 @@ pub(crate) fn get_runtime() -> &'static Runtime {
             DEFAULT_RUNTIME_WORKER_THREADS
         };
 
-        let runtime = tokio::runtime::Builder::new_multi_thread()
+        tokio::runtime::Builder::new_multi_thread()
             .worker_threads(worker_threads)
             .max_blocking_threads(worker_threads * 2)
             .enable_all()
@@ -81,24 +75,8 @@ pub(crate) fn get_runtime() -> &'static Runtime {
             .thread_stack_size(2 * 1024 * 1024)
             .thread_keep_alive(std::time::Duration::from_secs(60))
             .build()
-            .expect("Failed to create Tokio runtime");
-
-        std::sync::Mutex::new(Some(runtime))
-    });
-
-    let guard = mutex.lock().unwrap();
-    let runtime_ref = guard.as_ref().expect("Runtime has been shut down");
-    // SAFETY: Extend lifetime - runtime lives in static Mutex
-    unsafe { &*(runtime_ref as *const Runtime) }
-}
-
-/// Shutdown the Tokio runtime
-pub(crate) fn shutdown_runtime() {
-    if let Some(mutex) = RUNTIME.get() {
-        if let Some(runtime) = mutex.lock().unwrap().take() {
-            runtime.shutdown_timeout(std::time::Duration::from_secs(5));
-        }
-    }
+            .expect("Failed to create Tokio runtime")
+    })
 }
 
 /// Handle table for native clients.
@@ -121,39 +99,6 @@ static NEXT_HANDLE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU
 
 pub fn generate_safe_handle() -> u64 {
     NEXT_HANDLE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-}
-
-/// Increment client count when a client is created
-pub(crate) fn increment_client_count() {
-    CLIENT_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-}
-
-/// Decrement client count and invoke callback if count reaches zero
-pub(crate) fn decrement_client_count() {
-    let count = CLIENT_COUNT.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-    if count == 1 && AUTO_EXIT_ENABLED.load(std::sync::atomic::Ordering::SeqCst) {
-        // Last client closed - wait to see if another is created
-        let delay_secs = AUTO_EXIT_DELAY_SECS.load(std::sync::atomic::Ordering::SeqCst);
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(delay_secs));
-
-            // If still zero clients, shutdown and exit
-            if CLIENT_COUNT.load(std::sync::atomic::Ordering::SeqCst) == 0 {
-                shutdown_runtime();
-                std::process::exit(0);
-            }
-        });
-    }
-}
-
-/// Enable or disable auto-exit when all clients are closed
-pub(crate) fn set_auto_exit(enabled: bool) {
-    AUTO_EXIT_ENABLED.store(enabled, std::sync::atomic::Ordering::SeqCst);
-}
-
-/// Set the delay in seconds before auto-exit after last client closes
-pub(crate) fn set_auto_exit_delay(delay_secs: u64) {
-    AUTO_EXIT_DELAY_SECS.store(delay_secs, std::sync::atomic::Ordering::SeqCst);
 }
 
 /// Create actual glide-core Valkey client with specified configuration
@@ -209,7 +154,7 @@ pub async fn ensure_client_for_handle(handle_id: u64) -> Result<GlideClient> {
             get_runtime().spawn(async move {
                 while let Some(push) = rx.recv().await {
                     if let Some(jvm) = jvm_arc.as_ref()
-                        && let Ok(mut env) = jvm.attach_current_thread_permanently()
+                        && let Ok(mut env) = jvm.attach_current_thread_as_daemon()
                     {
                         // Handle push notification callback to Java
                         handle_push_notification(&mut env, handle_for_java, push);
@@ -401,7 +346,7 @@ fn process_callback_job(
     result: CallbackResult,
     binary_mode: bool,
 ) {
-    match jvm.attach_current_thread_permanently() {
+    match jvm.attach_current_thread_as_daemon() {
         Ok(mut env) => match result {
             Ok(server_value) => {
                 let _ = env.push_local_frame(16);
