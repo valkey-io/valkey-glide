@@ -789,6 +789,15 @@ class GlideClientConfiguration(BaseClientConfiguration):
         callback: Optional[Callable[[PubSubMsg, Any], None]]
         context: Any
 
+    @dataclass
+    class PubSubState:
+        desired_subscriptions: Dict[
+            GlideClientConfiguration.PubSubChannelModes, Set[str]
+        ]
+        actual_subscriptions: Dict[
+            GlideClientConfiguration.PubSubChannelModes, Set[str]
+        ]
+
     def __init__(
         self,
         addresses: List[NodeAddress],
@@ -994,6 +1003,15 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         ]
         callback: Optional[Callable[[PubSubMsg, Any], None]]
         context: Any
+
+    @dataclass
+    class PubSubState:
+        desired_subscriptions: Dict[
+            GlideClusterClientConfiguration.PubSubChannelModes, Set[str]
+        ]
+        actual_subscriptions: Dict[
+            GlideClusterClientConfiguration.PubSubChannelModes, Set[str]
+        ]
 
     def __init__(
         self,
