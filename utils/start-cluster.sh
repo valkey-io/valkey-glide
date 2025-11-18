@@ -34,6 +34,39 @@ mkdir -p "$CLUSTER_DIR" || {
 echo "Successfully created cluster directory: $CLUSTER_DIR" >&2
 echo "=== END CLUSTER SCRIPT DEBUG ===" >&2
 
+# Check which server is available
+if command -v valkey-server >/dev/null 2>&1; then
+    SERVER_CMD="valkey-server"
+    CLI_CMD="valkey-cli"
+    echo "Using Valkey server" >&2
+elif command -v redis-server >/dev/null 2>&1; then
+    SERVER_CMD="redis-server"
+    CLI_CMD="redis-cli"
+    echo "Using Redis server" >&2
+else
+    echo "ERROR: Neither valkey-server nor redis-server found" >&2
+    exit 1
+fi
+
+# Test if we can bind to ports in WSL
+echo "Testing port binding in WSL..." >&2
+if nc -l 7999 </dev/null >/dev/null 2>&1 & 
+then
+    TEST_PID=$!
+    sleep 1
+    kill $TEST_PID 2>/dev/null
+    echo "Port binding test successful" >&2
+else
+    echo "WARNING: Port binding test failed, but continuing..." >&2
+fi
+
+# Test valkey-server directly
+echo "Testing $SERVER_CMD directly..." >&2
+$SERVER_CMD --version >&2 || {
+    echo "ERROR: $SERVER_CMD --version failed" >&2
+    exit 1
+}
+
 echo "Creating cluster in $CLUSTER_DIR"
 
 # Start 6 nodes (3 primaries + 3 replicas)
@@ -53,7 +86,8 @@ for port in "${PORTS[@]}"; do
     
     echo "Starting Valkey server on port $port in directory $node_dir" >&2
     
-    valkey-server \
+    # Start valkey-server and capture output
+    $SERVER_CMD \
         --port $port \
         --cluster-enabled yes \
         --cluster-config-file "$node_dir/nodes.conf" \
@@ -65,10 +99,22 @@ for port in "${PORTS[@]}"; do
         --daemonize yes \
         --dir "$node_dir" \
         --protected-mode no \
-        --bind 127.0.0.1 || {
+        --bind 127.0.0.1 2>&1 || {
         echo "Failed to start Valkey server on port $port" >&2
+        echo "Checking if valkey-server is available..." >&2
+        which $SERVER_CMD >&2 || echo "$SERVER_CMD not found in PATH" >&2
+        echo "Attempting to read server log..." >&2
+        cat "$node_dir/server.log" 2>/dev/null || echo "No log file created" >&2
         exit 1
     }
+    
+    # Wait a moment and check if the server actually started
+    sleep 1
+    if ! netstat -ln 2>/dev/null | grep ":$port " >/dev/null; then
+        echo "WARNING: Port $port does not appear to be listening" >&2
+        echo "Server log contents:" >&2
+        cat "$node_dir/server.log" 2>/dev/null || echo "No log file found" >&2
+    fi
     
     echo "Started node on port $port"
 done

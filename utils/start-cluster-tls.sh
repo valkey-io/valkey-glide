@@ -34,6 +34,27 @@ mkdir -p "$CLUSTER_DIR" || {
 echo "Successfully created cluster directory: $CLUSTER_DIR" >&2
 echo "=== END CLUSTER TLS SCRIPT DEBUG ===" >&2
 
+# Check which server is available
+if command -v valkey-server >/dev/null 2>&1; then
+    SERVER_CMD="valkey-server"
+    CLI_CMD="valkey-cli"
+    echo "Using Valkey server" >&2
+elif command -v redis-server >/dev/null 2>&1; then
+    SERVER_CMD="redis-server"
+    CLI_CMD="redis-cli"
+    echo "Using Redis server" >&2
+else
+    echo "ERROR: Neither valkey-server nor redis-server found" >&2
+    exit 1
+fi
+
+# Test valkey-server directly
+echo "Testing $SERVER_CMD directly..." >&2
+$SERVER_CMD --version >&2 || {
+    echo "ERROR: $SERVER_CMD --version failed" >&2
+    exit 1
+}
+
 echo "Creating TLS cluster in $CLUSTER_DIR"
 
 # Start 6 nodes (3 primaries + 3 replicas) with TLS
@@ -53,7 +74,8 @@ for port in "${PORTS[@]}"; do
     
     echo "Starting TLS Valkey server on port $port in directory $node_dir" >&2
     
-    valkey-server \
+    # Start valkey-server with TLS configuration
+    $SERVER_CMD \
         --port $port \
         --cluster-enabled yes \
         --cluster-config-file "$node_dir/nodes.conf" \
@@ -70,10 +92,22 @@ for port in "${PORTS[@]}"; do
         --tls-cert-file ../tls_crts/server.crt \
         --tls-key-file ../tls_crts/server.key \
         --tls-ca-cert-file ../tls_crts/ca.crt \
-        --tls-cluster yes || {
+        --tls-cluster yes 2>&1 || {
         echo "Failed to start TLS Valkey server on port $port" >&2
+        echo "Checking if $SERVER_CMD is available..." >&2
+        which $SERVER_CMD >&2 || echo "$SERVER_CMD not found in PATH" >&2
+        echo "Attempting to read server log..." >&2
+        cat "$node_dir/server.log" 2>/dev/null || echo "No log file created" >&2
         exit 1
     }
+    
+    # Wait a moment and check if the server actually started
+    sleep 1
+    if ! netstat -ln 2>/dev/null | grep ":$port " >/dev/null; then
+        echo "WARNING: Port $port does not appear to be listening" >&2
+        echo "Server log contents:" >&2
+        cat "$node_dir/server.log" 2>/dev/null || echo "No log file found" >&2
+    fi
     
     echo "Started TLS node on port $port (TLS port $((port + 1000)))"
 done
@@ -81,23 +115,19 @@ done
 # Wait for servers to start
 sleep 2
 
-# Create cluster using TLS ports
+# Create cluster using regular ports (not TLS ports for cluster creation)
 echo "Creating TLS cluster..."
-valkey-cli --cluster create \
-    127.0.0.1:8000 127.0.0.1:8001 127.0.0.1:8002 \
-    127.0.0.1:8003 127.0.0.1:8004 127.0.0.1:8005 \
+$CLI_CMD --cluster create \
+    127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 \
+    127.0.0.1:7003 127.0.0.1:7004 127.0.0.1:7005 \
     --cluster-replicas 1 \
-    --cluster-yes \
-    --tls \
-    --cert ../tls_crts/client.crt \
-    --key ../tls_crts/client.key \
-    --cacert ../tls_crts/ca.crt
+    --cluster-yes
 
 # Wait for cluster to stabilize
 sleep 3
 
-# Output cluster endpoints (TLS ports)
-echo "CLUSTER_TLS_HOSTS=127.0.0.1:8000,127.0.0.1:8001,127.0.0.1:8002,127.0.0.1:8003,127.0.0.1:8004,127.0.0.1:8005"
+# Output cluster endpoints (regular ports, TLS is handled by server config)
+echo "CLUSTER_TLS_HOSTS=127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005"
 echo "TLS Cluster created successfully in $CLUSTER_DIR"
 
 echo "Creating TLS cluster in $CLUSTER_DIR"
