@@ -78,12 +78,12 @@ tasks.register('stopAllAfterTests') {
     doLast {
         exec {
             workingDir "${project.rootDir}/../utils"
-            commandLine *pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder', '--host', clusterHost
+            commandLine *pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
             ignoreExitValue true // ignore fail if servers are stopped before
         }
         exec {
             workingDir "${project.rootDir}/../utils"
-            commandLine *pythonCmd, 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster', '--keep-folder', '--host', clusterHost
+            commandLine *pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'tls-cluster', '--keep-folder'
             ignoreExitValue true
         }
     }
@@ -98,7 +98,7 @@ tasks.register('stopAllBeforeTests') {
         try {
             exec {
                 workingDir "${project.rootDir}/../utils"
-                commandLine *pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--host', clusterHost
+                commandLine *pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'cluster'
                 ignoreExitValue true // ignore fail if servers are stopped before
             }
         } catch (Exception e) {
@@ -108,7 +108,7 @@ tasks.register('stopAllBeforeTests') {
         try {
             exec {
                 workingDir "${project.rootDir}/../utils"
-                commandLine *pythonCmd, 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster', '--host', clusterHost
+                commandLine *pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'tls-cluster'
                 ignoreExitValue true
             }
         } catch (Exception e) {

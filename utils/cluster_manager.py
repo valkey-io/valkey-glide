@@ -27,9 +27,32 @@ LOG_LEVELS = {
 }
 
 GLIDE_HOME_DIR = os.getenv("GLIDE_HOME_DIR") or f"{__file__}/.."
-CLUSTERS_FOLDER = os.getenv("CLUSTERS_FOLDER") or os.path.abspath(
-    f"{GLIDE_HOME_DIR}/clusters"
-)
+
+# Use WSL-accessible directory on Windows/WSL, regular clusters folder otherwise
+try:
+    if os.path.exists('/proc/version'):
+        with open('/proc/version', 'r') as f:
+            version_info = f.read().lower()
+            if 'microsoft' in version_info or 'wsl' in version_info:
+                # We're in WSL - use WSL filesystem
+                CLUSTERS_FOLDER = os.getenv("CLUSTERS_FOLDER") or "/tmp/valkey-clusters"
+                print(f"WSL detected, using clusters folder: {CLUSTERS_FOLDER}")
+            else:
+                # Regular Linux - use relative path
+                CLUSTERS_FOLDER = os.getenv("CLUSTERS_FOLDER") or os.path.abspath(
+                    f"{GLIDE_HOME_DIR}/clusters"
+                )
+    else:
+        # macOS or other - use relative path
+        CLUSTERS_FOLDER = os.getenv("CLUSTERS_FOLDER") or os.path.abspath(
+            f"{GLIDE_HOME_DIR}/clusters"
+        )
+except Exception as e:
+    print(f"Error detecting WSL, using default clusters folder: {e}")
+    # Fallback to regular path
+    CLUSTERS_FOLDER = os.getenv("CLUSTERS_FOLDER") or os.path.abspath(
+        f"{GLIDE_HOME_DIR}/clusters"
+    )
 TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/tls_crts")
 CA_CRT = f"{TLS_FOLDER}/ca.crt"
 SERVER_CRT = f"{TLS_FOLDER}/server.crt"
@@ -1042,37 +1065,52 @@ def dir_path(path: str):
     import subprocess
     import sys
     
+    print(f"dir_path called with: {path}")
+    
     # First try standard Python methods
     try:
         # Try to create the path folder if it isn't exist
         Path(path).mkdir(exist_ok=True, parents=True)
+        print(f"Path.mkdir succeeded for: {path}")
     except Exception as e:
+        print(f"Path.mkdir failed for {path}: {e}")
         # If Path.mkdir fails, try os.makedirs as fallback
         try:
             os.makedirs(path, exist_ok=True)
-        except Exception:
+            print(f"os.makedirs succeeded for: {path}")
+        except Exception as e2:
+            print(f"os.makedirs failed for {path}: {e2}")
             # If both fail, try basic mkdir
             try:
                 os.mkdir(path)
+                print(f"os.mkdir succeeded for: {path}")
             except FileExistsError:
+                print(f"Directory {path} already exists")
                 pass  # Directory already exists, that's fine
-            except Exception:
+            except Exception as e3:
+                print(f"os.mkdir failed for {path}: {e3}")
                 # Last resort: try system mkdir if we're in WSL
                 try:
                     if sys.platform.startswith('linux'):
-                        subprocess.run(['mkdir', '-p', path], check=True, capture_output=True)
-                except Exception:
+                        result = subprocess.run(['mkdir', '-p', path], check=True, capture_output=True, text=True)
+                        print(f"system mkdir succeeded for: {path}")
+                except Exception as e4:
+                    print(f"system mkdir failed for {path}: {e4}")
                     pass  # Give up on creation, just check if it exists
     
     # Final verification
     if os.path.isdir(path):
+        print(f"Directory verified to exist: {path}")
         return path
     else:
         # Try one more time with absolute path
         abs_path = os.path.abspath(path)
+        print(f"Trying absolute path: {abs_path}")
         if os.path.isdir(abs_path):
+            print(f"Absolute path exists: {abs_path}")
             return abs_path
         else:
+            print(f"FINAL FAILURE: Cannot create or access directory: {path} (absolute: {abs_path})")
             raise NotADirectoryError(f"Cannot create or access directory: {path} (absolute: {abs_path})")
 
 
