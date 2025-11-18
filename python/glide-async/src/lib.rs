@@ -273,6 +273,30 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
             "total_clients".to_string(),
             Telemetry::total_clients().to_string(),
         );
+        stats_map.insert(
+            "total_values_compressed".to_string(),
+            Telemetry::total_values_compressed().to_string(),
+        );
+        stats_map.insert(
+            "total_values_decompressed".to_string(),
+            Telemetry::total_values_decompressed().to_string(),
+        );
+        stats_map.insert(
+            "total_original_bytes".to_string(),
+            Telemetry::total_original_bytes().to_string(),
+        );
+        stats_map.insert(
+            "total_bytes_compressed".to_string(),
+            Telemetry::total_bytes_compressed().to_string(),
+        );
+        stats_map.insert(
+            "total_bytes_decompressed".to_string(),
+            Telemetry::total_bytes_decompressed().to_string(),
+        );
+        stats_map.insert(
+            "compression_skipped_count".to_string(),
+            Telemetry::compression_skipped_count().to_string(),
+        );
 
         Python::with_gil(|py| {
             let py_dict = PyDict::new(py);

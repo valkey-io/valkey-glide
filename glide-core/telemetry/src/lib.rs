@@ -16,6 +16,18 @@ pub struct Telemetry {
     total_connections: usize,
     /// Total number of GLIDE clients
     total_clients: usize,
+    /// Total number of values compressed
+    total_values_compressed: usize,
+    /// Total number of values decompressed
+    total_values_decompressed: usize,
+    /// Total original bytes before compression
+    total_original_bytes: usize,
+    /// Total bytes after compression
+    total_bytes_compressed: usize,
+    /// Total bytes after decompression
+    total_bytes_decompressed: usize,
+    /// Number of times compression was skipped
+    compression_skipped_count: usize,
 }
 
 lazy_static! {
@@ -66,6 +78,93 @@ impl Telemetry {
     /// Return the number of active clients
     pub fn total_clients() -> usize {
         TELEMETRY.read().expect(MUTEX_READ_ERR).total_clients
+    }
+
+    /// Increment the total number of values compressed
+    pub fn incr_total_values_compressed(incr_by: usize) -> usize {
+        let mut t = TELEMETRY.write().expect(MUTEX_WRITE_ERR);
+        t.total_values_compressed = t.total_values_compressed.saturating_add(incr_by);
+        t.total_values_compressed
+    }
+
+    /// Return the total number of values compressed
+    pub fn total_values_compressed() -> usize {
+        TELEMETRY
+            .read()
+            .expect(MUTEX_READ_ERR)
+            .total_values_compressed
+    }
+
+    /// Increment the total number of values decompressed
+    pub fn incr_total_values_decompressed(incr_by: usize) -> usize {
+        let mut t = TELEMETRY.write().expect(MUTEX_WRITE_ERR);
+        t.total_values_decompressed = t.total_values_decompressed.saturating_add(incr_by);
+        t.total_values_decompressed
+    }
+
+    /// Return the total number of values decompressed
+    pub fn total_values_decompressed() -> usize {
+        TELEMETRY
+            .read()
+            .expect(MUTEX_READ_ERR)
+            .total_values_decompressed
+    }
+
+    /// Increment the total original bytes before compression
+    pub fn incr_total_original_bytes(incr_by: usize) -> usize {
+        let mut t = TELEMETRY.write().expect(MUTEX_WRITE_ERR);
+        t.total_original_bytes = t.total_original_bytes.saturating_add(incr_by);
+        t.total_original_bytes
+    }
+
+    /// Return the total original bytes before compression
+    pub fn total_original_bytes() -> usize {
+        TELEMETRY.read().expect(MUTEX_READ_ERR).total_original_bytes
+    }
+
+    /// Increment the total bytes after compression
+    pub fn incr_total_bytes_compressed(incr_by: usize) -> usize {
+        let mut t = TELEMETRY.write().expect(MUTEX_WRITE_ERR);
+        t.total_bytes_compressed = t.total_bytes_compressed.saturating_add(incr_by);
+        t.total_bytes_compressed
+    }
+
+    /// Return the total bytes after compression
+    pub fn total_bytes_compressed() -> usize {
+        TELEMETRY
+            .read()
+            .expect(MUTEX_READ_ERR)
+            .total_bytes_compressed
+    }
+
+    /// Increment the total bytes after decompression
+    pub fn incr_total_bytes_decompressed(incr_by: usize) -> usize {
+        let mut t = TELEMETRY.write().expect(MUTEX_WRITE_ERR);
+        t.total_bytes_decompressed = t.total_bytes_decompressed.saturating_add(incr_by);
+        t.total_bytes_decompressed
+    }
+
+    /// Return the total bytes after decompression
+    pub fn total_bytes_decompressed() -> usize {
+        TELEMETRY
+            .read()
+            .expect(MUTEX_READ_ERR)
+            .total_bytes_decompressed
+    }
+
+    /// Increment the compression skipped count
+    pub fn incr_compression_skipped_count(incr_by: usize) -> usize {
+        let mut t = TELEMETRY.write().expect(MUTEX_WRITE_ERR);
+        t.compression_skipped_count = t.compression_skipped_count.saturating_add(incr_by);
+        t.compression_skipped_count
+    }
+
+    /// Return the compression skipped count
+    pub fn compression_skipped_count() -> usize {
+        TELEMETRY
+            .read()
+            .expect(MUTEX_READ_ERR)
+            .compression_skipped_count
     }
 
     /// Reset the telemetry collected thus far
