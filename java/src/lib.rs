@@ -1274,7 +1274,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                         get_runtime().spawn(async move {
                             while let Some(push) = rx.recv().await {
                                 if let Some(jvm) = jvm_arc.as_ref()
-                                    && let Ok(mut env) = jvm.attach_current_thread_permanently()
+                                    && let Ok(mut env) = jvm.attach_current_thread_as_daemon()
                                 {
                                     handle_push_notification(&mut env, handle_for_java, push);
                                 }
