@@ -154,7 +154,7 @@ pub async fn ensure_client_for_handle(handle_id: u64) -> Result<GlideClient> {
             get_runtime().spawn(async move {
                 while let Some(push) = rx.recv().await {
                     if let Some(jvm) = jvm_arc.as_ref()
-                        && let Ok(mut env) = jvm.attach_current_thread_permanently()
+                        && let Ok(mut env) = jvm.attach_current_thread_as_daemon()
                     {
                         // Handle push notification callback to Java
                         handle_push_notification(&mut env, handle_for_java, push);
@@ -346,7 +346,7 @@ fn process_callback_job(
     result: CallbackResult,
     binary_mode: bool,
 ) {
-    match jvm.attach_current_thread_permanently() {
+    match jvm.attach_current_thread_as_daemon() {
         Ok(mut env) => match result {
             Ok(server_value) => {
                 let _ = env.push_local_frame(16);
