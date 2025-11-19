@@ -122,8 +122,8 @@ valkey-cli --cluster create \
 sleep 3
 
 # Output cluster endpoints
-echo "AZ_CLUSTER_HOSTS=127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005,127.0.0.1:7006,127.0.0.1:7007"
-echo "AZ Cluster created successfully in $CLUSTER_DIR"
+printf "AZ_CLUSTER_HOSTS=127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005,127.0.0.1:7006,127.0.0.1:7007\r\n"
+printf "AZ Cluster created successfully in $CLUSTER_DIR\r\n"
 
 echo "Creating AZ cluster in $CLUSTER_DIR"
 

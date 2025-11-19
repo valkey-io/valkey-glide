@@ -74,6 +74,10 @@ for port in "${PORTS[@]}"; do
     
     echo "Starting TLS Valkey server on port $port in directory $node_dir" >&2
     
+    # Get absolute path to TLS certificates
+    TLS_DIR="$(cd "$(dirname "$0")" && pwd)/tls_crts"
+    echo "Using TLS certificates from: $TLS_DIR" >&2
+    
     # Start valkey-server with TLS configuration and disable PID file
     $SERVER_CMD \
         --port $port \
@@ -90,9 +94,9 @@ for port in "${PORTS[@]}"; do
         --bind 127.0.0.1 \
         --pidfile "" \
         --tls-port $((port + 1000)) \
-        --tls-cert-file ../tls_crts/server.crt \
-        --tls-key-file ../tls_crts/server.key \
-        --tls-ca-cert-file ../tls_crts/ca.crt \
+        --tls-cert-file "$TLS_DIR/server.crt" \
+        --tls-key-file "$TLS_DIR/server.key" \
+        --tls-ca-cert-file "$TLS_DIR/ca.crt" \
         --tls-cluster yes 2>&1 || {
         echo "Failed to start TLS Valkey server on port $port" >&2
         echo "Server log:" >&2
@@ -132,8 +136,8 @@ $CLI_CMD --cluster create \
 sleep 3
 
 # Output cluster endpoints (regular ports, TLS is handled by server config)
-echo "CLUSTER_TLS_HOSTS=127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005"
-echo "TLS Cluster created successfully in $CLUSTER_DIR"
+printf "CLUSTER_TLS_HOSTS=127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005\r\n"
+printf "TLS Cluster created successfully in $CLUSTER_DIR\r\n"
 
 echo "Creating TLS cluster in $CLUSTER_DIR"
 
