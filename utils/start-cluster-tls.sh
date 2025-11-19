@@ -84,6 +84,7 @@ for port in "${PORTS[@]}"; do
         --cluster-enabled yes \
         --cluster-config-file "$node_dir/nodes.conf" \
         --cluster-node-timeout 5000 \
+        --cluster-databases 16 \
         --appendonly yes \
         --appendfilename "appendonly-$port.aof" \
         --dbfilename "dump-$port.rdb" \
@@ -126,7 +127,7 @@ sleep 2
 
 # Create cluster using regular ports (not TLS ports for cluster creation)
 echo "Creating TLS cluster..." >&2
-echo "Running: $CLI_CMD --cluster create 127.0.0.1:7010 127.0.0.1:7011 127.0.0.1:7012 127.0.0.1:7013 127.0.0.1:7014 127.0.0.1:7015 --cluster-replicas 1 --cluster-databases 16 --cluster-yes" >&2
+echo "Running: $CLI_CMD --cluster create 127.0.0.1:7010 127.0.0.1:7011 127.0.0.1:7012 127.0.0.1:7013 127.0.0.1:7014 127.0.0.1:7015 --cluster-replicas 1 --cluster-yes" >&2
 timeout 30 $CLI_CMD --cluster create \
     127.0.0.1:7010 127.0.0.1:7011 127.0.0.1:7012 \
     127.0.0.1:7013 127.0.0.1:7014 127.0.0.1:7015 \

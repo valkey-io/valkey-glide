@@ -79,6 +79,7 @@ for port in "${PORTS[@]}"; do
         --cluster-enabled yes \
         --cluster-config-file "$node_dir/nodes.conf" \
         --cluster-node-timeout 5000 \
+        --cluster-databases 16 \
         --appendonly yes \
         --appendfilename "appendonly-$port.aof" \
         --dbfilename "dump-$port.rdb" \
@@ -112,7 +113,7 @@ sleep 2
 
 # Create cluster with 4 replicas
 echo "Creating AZ cluster..." >&2
-echo "Running: $CLI_CMD --cluster create 127.0.0.1:7020 127.0.0.1:7021 127.0.0.1:7022 127.0.0.1:7023 127.0.0.1:7024 127.0.0.1:7025 127.0.0.1:7026 127.0.0.1:7027 --cluster-replicas 1 --cluster-databases 16 --cluster-yes" >&2
+echo "Running: $CLI_CMD --cluster create 127.0.0.1:7020 127.0.0.1:7021 127.0.0.1:7022 127.0.0.1:7023 127.0.0.1:7024 127.0.0.1:7025 127.0.0.1:7026 127.0.0.1:7027 --cluster-replicas 1 --cluster-yes" >&2
 timeout 30 $CLI_CMD --cluster create \
     127.0.0.1:7020 127.0.0.1:7021 127.0.0.1:7022 127.0.0.1:7023 \
     127.0.0.1:7024 127.0.0.1:7025 127.0.0.1:7026 127.0.0.1:7027 \
