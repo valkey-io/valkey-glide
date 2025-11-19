@@ -79,7 +79,6 @@ for port in "${PORTS[@]}"; do
         --cluster-enabled yes \
         --cluster-config-file "$node_dir/nodes.conf" \
         --cluster-node-timeout 5000 \
-        --cluster-databases 16 \
         --appendonly yes \
         --appendfilename "appendonly-$port.aof" \
         --dbfilename "dump-$port.rdb" \
