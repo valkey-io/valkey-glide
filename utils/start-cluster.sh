@@ -149,3 +149,7 @@ sleep 3
 # Output cluster endpoints
 printf "CLUSTER_HOSTS=127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005\r\n"
 printf "Cluster created successfully in $CLUSTER_DIR\r\n"
+
+# Ensure output is flushed and exit immediately
+sync
+exit 0
