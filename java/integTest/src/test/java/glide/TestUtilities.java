@@ -91,7 +91,11 @@ public class TestUtilities {
             return GlideClusterClient.createClient(
                             GlideClusterClientConfiguration.builder()
                                     .addresses(seedNodes)
-                                    .requestTimeout(2000)
+                                    .requestTimeout(20000) // 10x timeout for WSL compatibility
+                                    .advancedConfiguration(
+                                            AdvancedGlideClusterClientConfiguration.builder()
+                                                    .connectionTimeout(50000) // 10x default connection timeout for WSL
+                                                    .build())
                                     .lazyConnect(lazyConnect)
                                     // Explicitly set no credentials for dedicated clusters to avoid
                                     // authentication issues from environment or global state
@@ -105,7 +109,11 @@ public class TestUtilities {
             return GlideClient.createClient(
                             GlideClientConfiguration.builder()
                                     .addresses(nodeAddresses)
-                                    .requestTimeout(2000)
+                                    .requestTimeout(20000) // 10x timeout for WSL compatibility
+                                    .advancedConfiguration(
+                                            AdvancedGlideClientConfiguration.builder()
+                                                    .connectionTimeout(50000) // 10x default connection timeout for WSL
+                                                    .build())
                                     .lazyConnect(lazyConnect)
                                     // Explicitly set no credentials for dedicated clusters to avoid
                                     // authentication issues from environment or global state
