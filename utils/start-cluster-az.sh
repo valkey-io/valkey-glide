@@ -86,7 +86,8 @@ for port in "${PORTS[@]}"; do
         --daemonize yes \
         --dir "$node_dir" \
         --protected-mode no \
-        --bind 127.0.0.1 || {
+        --bind 127.0.0.1 \
+        --pidfile "" || {
         echo "Failed to start Valkey server on port $port" >&2
         exit 1
     }

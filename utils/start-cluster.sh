@@ -99,7 +99,8 @@ for port in "${PORTS[@]}"; do
         --daemonize yes \
         --dir "$node_dir" \
         --protected-mode no \
-        --bind 127.0.0.1 2>&1 || {
+        --bind 127.0.0.1 \
+        --pidfile "" 2>&1 || {
         echo "Failed to start Valkey server on port $port" >&2
         echo "Checking if valkey-server is available..." >&2
         which $SERVER_CMD >&2 || echo "$SERVER_CMD not found in PATH" >&2

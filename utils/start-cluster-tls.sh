@@ -74,7 +74,7 @@ for port in "${PORTS[@]}"; do
     
     echo "Starting TLS Valkey server on port $port in directory $node_dir" >&2
     
-    # Start valkey-server with TLS configuration
+    # Start valkey-server with TLS configuration and disable PID file
     $SERVER_CMD \
         --port $port \
         --cluster-enabled yes \
@@ -88,16 +88,15 @@ for port in "${PORTS[@]}"; do
         --dir "$node_dir" \
         --protected-mode no \
         --bind 127.0.0.1 \
+        --pidfile "" \
         --tls-port $((port + 1000)) \
         --tls-cert-file ../tls_crts/server.crt \
         --tls-key-file ../tls_crts/server.key \
         --tls-ca-cert-file ../tls_crts/ca.crt \
         --tls-cluster yes 2>&1 || {
         echo "Failed to start TLS Valkey server on port $port" >&2
-        echo "Checking if $SERVER_CMD is available..." >&2
-        which $SERVER_CMD >&2 || echo "$SERVER_CMD not found in PATH" >&2
-        echo "Attempting to read server log..." >&2
-        cat "$node_dir/server.log" 2>/dev/null || echo "No log file created" >&2
+        echo "Server log:" >&2
+        cat "$node_dir/server.log" 2>/dev/null | tail -10 >&2 || echo "No log file" >&2
         exit 1
     }
     
