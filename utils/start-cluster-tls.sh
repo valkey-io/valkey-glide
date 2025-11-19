@@ -102,12 +102,18 @@ for port in "${PORTS[@]}"; do
     }
     
     # Wait a moment and check if the server actually started
-    sleep 1
-    if ! netstat -ln 2>/dev/null | grep ":$port " >/dev/null; then
-        echo "WARNING: Port $port does not appear to be listening" >&2
-        echo "Server log contents:" >&2
-        cat "$node_dir/server.log" 2>/dev/null || echo "No log file found" >&2
+    sleep 2
+    
+    # Check for the actual process format: valkey-server 127.0.0.1:7005
+    if pgrep -f "127.0.0.1:$port" >/dev/null 2>&1; then
+        echo "SUCCESS: Server process found for port $port" >&2
+    else
+        echo "ERROR: No server process found for port $port" >&2
+        echo "Server log:" >&2
+        cat "$node_dir/server.log" 2>/dev/null | tail -5 >&2 || echo "No log file" >&2
     fi
+    
+    echo "Started TLS node on port $port (TLS port $((port + 1000)))"
     
     echo "Started TLS node on port $port (TLS port $((port + 1000)))"
 done

@@ -111,22 +111,13 @@ for port in "${PORTS[@]}"; do
     # Wait a moment and check if the server actually started
     sleep 2
     
-    # WSL-specific debugging
-    echo "=== WSL DEBUG INFO FOR PORT $port ===" >&2
-    echo "Process check:" >&2
-    ps aux | grep valkey | grep -v grep >&2 || echo "No valkey processes found" >&2
-    echo "Port check with ss:" >&2
-    ss -tlnp | grep ":$port " >&2 || echo "Port $port not found with ss" >&2
-    echo "Port check with netstat:" >&2
-    netstat -tlnp 2>/dev/null | grep ":$port " >&2 || echo "Port $port not found with netstat" >&2
-    echo "Server log (last 10 lines):" >&2
-    tail -10 "$node_dir/server.log" 2>/dev/null || echo "No log file found" >&2
-    echo "=== END WSL DEBUG INFO ===" >&2
-    
-    if ps aux | grep "$SERVER_CMD" | grep ":$port" | grep -v grep >/dev/null; then
-        echo "SUCCESS: Valkey server process found for port $port" >&2
+    # Check for the actual process format: valkey-server 127.0.0.1:7005
+    if pgrep -f "127.0.0.1:$port" >/dev/null 2>&1; then
+        echo "SUCCESS: Server process found for port $port" >&2
     else
-        echo "ERROR: No Valkey server process found for port $port" >&2
+        echo "ERROR: No server process found for port $port" >&2
+        echo "Server log:" >&2
+        cat "$node_dir/server.log" 2>/dev/null | tail -5 >&2 || echo "No log file" >&2
     fi
     
     echo "Started node on port $port"

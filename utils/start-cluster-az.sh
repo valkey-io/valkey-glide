@@ -34,6 +34,27 @@ mkdir -p "$CLUSTER_DIR" || {
 echo "Successfully created cluster directory: $CLUSTER_DIR" >&2
 echo "=== END CLUSTER AZ SCRIPT DEBUG ===" >&2
 
+# Check which server is available
+if command -v valkey-server >/dev/null 2>&1; then
+    SERVER_CMD="valkey-server"
+    CLI_CMD="valkey-cli"
+    echo "Using Valkey server" >&2
+elif command -v redis-server >/dev/null 2>&1; then
+    SERVER_CMD="redis-server"
+    CLI_CMD="redis-cli"
+    echo "Using Redis server" >&2
+else
+    echo "ERROR: Neither valkey-server nor redis-server found" >&2
+    exit 1
+fi
+
+# Test valkey-server directly
+echo "Testing $SERVER_CMD directly..." >&2
+$SERVER_CMD --version >&2 || {
+    echo "ERROR: $SERVER_CMD --version failed" >&2
+    exit 1
+}
+
 echo "Creating AZ cluster in $CLUSTER_DIR"
 
 # Start 8 nodes (4 primaries + 4 replicas) for AZ testing
@@ -69,6 +90,18 @@ for port in "${PORTS[@]}"; do
         echo "Failed to start Valkey server on port $port" >&2
         exit 1
     }
+    
+    # Wait a moment and check if the server actually started
+    sleep 2
+    
+    # Check for the actual process format: valkey-server 127.0.0.1:7005
+    if pgrep -f "127.0.0.1:$port" >/dev/null 2>&1; then
+        echo "SUCCESS: Server process found for port $port" >&2
+    else
+        echo "ERROR: No server process found for port $port" >&2
+        echo "Server log:" >&2
+        cat "$node_dir/server.log" 2>/dev/null | tail -5 >&2 || echo "No log file" >&2
+    fi
     
     echo "Started node on port $port"
 done
