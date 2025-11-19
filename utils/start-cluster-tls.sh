@@ -125,12 +125,19 @@ done
 sleep 2
 
 # Create cluster using regular ports (not TLS ports for cluster creation)
-echo "Creating TLS cluster..."
-$CLI_CMD --cluster create \
+echo "Creating TLS cluster..." >&2
+timeout 30 $CLI_CMD --cluster create \
     127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 \
     127.0.0.1:7003 127.0.0.1:7004 127.0.0.1:7005 \
     --cluster-replicas 1 \
-    --cluster-yes
+    --cluster-yes || {
+    echo "ERROR: TLS Cluster creation failed or timed out" >&2
+    echo "Checking server processes:" >&2
+    ps aux | grep valkey | grep -v grep >&2 || echo "No valkey processes" >&2
+    exit 1
+}
+
+echo "TLS Cluster creation completed" >&2
 
 # Wait for cluster to stabilize
 sleep 3

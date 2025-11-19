@@ -129,12 +129,14 @@ sleep 2
 
 # Create cluster
 echo "Creating cluster..." >&2
-$CLI_CMD --cluster create \
+timeout 30 $CLI_CMD --cluster create \
     127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 \
     127.0.0.1:7003 127.0.0.1:7004 127.0.0.1:7005 \
     --cluster-replicas 1 \
     --cluster-yes || {
-    echo "ERROR: Cluster creation failed" >&2
+    echo "ERROR: Cluster creation failed or timed out" >&2
+    echo "Checking server processes:" >&2
+    ps aux | grep valkey | grep -v grep >&2 || echo "No valkey processes" >&2
     exit 1
 }
 
