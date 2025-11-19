@@ -51,13 +51,13 @@ public class ValkeyCluster implements AutoCloseable {
         } else {
             this.tls = tls;
             List<String> command = new ArrayList<>();
-            
+
             if (isWindows) {
                 // Use bash scripts for Windows + WSL
                 command.add("wsl");
                 command.add("--");
                 command.add("bash");
-                
+
                 if (tls) {
                     command.add("./start-cluster-tls.sh");
                 } else if (replicaCount == 4) {
@@ -95,14 +95,14 @@ public class ValkeyCluster implements AutoCloseable {
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
-            
+
             // Set working directory to utils folder
             Path utilsDir = Paths.get(System.getProperty("user.dir"))
                     .getParent()
                     .getParent()
                     .resolve("utils");
             pb.directory(utilsDir.toFile());
-            
+
             Process process = pb.start();
 
             StringBuilder output = new StringBuilder();
@@ -145,10 +145,10 @@ public class ValkeyCluster implements AutoCloseable {
         } else {
             hostPattern = "CLUSTER_HOSTS=";
         }
-        
+
         this.nodesAddr = new ArrayList<>();
         this.clusterFolder = ""; // Bash scripts manage their own directories
-        
+
         for (String line : output.split("\n")) {
             if (line.contains(hostPattern)) {
                 String[] parts = line.split(hostPattern);
@@ -172,7 +172,7 @@ public class ValkeyCluster implements AutoCloseable {
                 break;
             }
         }
-        
+
         if (this.nodesAddr.isEmpty()) {
             throw new IllegalArgumentException("No cluster nodes found in bash script output");
         }
@@ -255,14 +255,14 @@ public class ValkeyCluster implements AutoCloseable {
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
-            
+
             // Set working directory to utils folder
             Path utilsDir = Paths.get(System.getProperty("user.dir"))
                     .getParent()
                     .getParent()
                     .resolve("utils");
             pb.directory(utilsDir.toFile());
-            
+
             Process process = pb.start();
 
             StringBuilder output = new StringBuilder();
@@ -326,11 +326,6 @@ public class ValkeyCluster implements AutoCloseable {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IOException("Interrupted while stopping cluster", e);
-            }
-        }
-    }
-                Thread.currentThread().interrupt();
-                throw new IOException("Interrupted while waiting for cluster shutdown", e);
             }
         }
     }
