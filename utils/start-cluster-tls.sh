@@ -129,7 +129,7 @@ echo "Creating TLS cluster..." >&2
 timeout 30 $CLI_CMD --cluster create \
     127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 \
     127.0.0.1:7003 127.0.0.1:7004 127.0.0.1:7005 \
-    --cluster-replicas 1 \
+    --cluster-replicas 0 \
     --cluster-yes || {
     echo "ERROR: TLS Cluster creation failed or timed out" >&2
     echo "Checking server processes:" >&2
