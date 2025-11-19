@@ -132,7 +132,6 @@ timeout 30 $CLI_CMD --cluster create \
     127.0.0.1:7010 127.0.0.1:7011 127.0.0.1:7012 \
     127.0.0.1:7013 127.0.0.1:7014 127.0.0.1:7015 \
     --cluster-replicas 1 \
-    --cluster-databases 16 \
     --cluster-yes 2>&1 | tee /dev/stderr || {
     echo "ERROR: TLS Cluster creation failed or timed out" >&2
     echo "Checking server processes:" >&2
