@@ -58,7 +58,7 @@ $SERVER_CMD --version >&2 || {
 echo "Creating AZ cluster in $CLUSTER_DIR"
 
 # Start 8 nodes (4 primaries + 4 replicas) for AZ testing
-PORTS=(7000 7001 7002 7003 7004 7005 7006 7007)
+PORTS=(7020 7021 7022 7023 7024 7025 7026 7027)
 PIDS=()
 
 for port in "${PORTS[@]}"; do
@@ -112,10 +112,10 @@ sleep 2
 
 # Create cluster with 4 replicas
 echo "Creating AZ cluster..." >&2
-echo "Running: $CLI_CMD --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 127.0.0.1:7003 127.0.0.1:7004 127.0.0.1:7005 127.0.0.1:7006 127.0.0.1:7007 --cluster-replicas 1 --cluster-yes" >&2
+echo "Running: $CLI_CMD --cluster create 127.0.0.1:7020 127.0.0.1:7021 127.0.0.1:7022 127.0.0.1:7023 127.0.0.1:7024 127.0.0.1:7025 127.0.0.1:7026 127.0.0.1:7027 --cluster-replicas 1 --cluster-yes" >&2
 timeout 30 $CLI_CMD --cluster create \
-    127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 127.0.0.1:7003 \
-    127.0.0.1:7004 127.0.0.1:7005 127.0.0.1:7006 127.0.0.1:7007 \
+    127.0.0.1:7020 127.0.0.1:7021 127.0.0.1:7022 127.0.0.1:7023 \
+    127.0.0.1:7024 127.0.0.1:7025 127.0.0.1:7026 127.0.0.1:7027 \
     --cluster-replicas 1 \
     --cluster-yes 2>&1 | tee /dev/stderr || {
     echo "ERROR: AZ Cluster creation failed or timed out" >&2
@@ -130,7 +130,7 @@ echo "AZ Cluster creation completed" >&2
 sleep 3
 
 # Output cluster endpoints
-printf "AZ_CLUSTER_HOSTS=127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005,127.0.0.1:7006,127.0.0.1:7007\r\n"
+printf "AZ_CLUSTER_HOSTS=127.0.0.1:7020,127.0.0.1:7021,127.0.0.1:7022,127.0.0.1:7023,127.0.0.1:7024,127.0.0.1:7025,127.0.0.1:7026,127.0.0.1:7027\r\n"
 printf "AZ Cluster created successfully in $CLUSTER_DIR\r\n"
 
 # Ensure output is flushed and exit immediately

@@ -58,7 +58,7 @@ $SERVER_CMD --version >&2 || {
 echo "Creating TLS cluster in $CLUSTER_DIR"
 
 # Start 6 nodes (3 primaries + 3 replicas) with TLS
-PORTS=(7000 7001 7002 7003 7004 7005)
+PORTS=(7010 7011 7012 7013 7014 7015)
 PIDS=()
 
 for port in "${PORTS[@]}"; do
@@ -126,10 +126,10 @@ sleep 2
 
 # Create cluster using regular ports (not TLS ports for cluster creation)
 echo "Creating TLS cluster..." >&2
-echo "Running: $CLI_CMD --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 127.0.0.1:7003 127.0.0.1:7004 127.0.0.1:7005 --cluster-replicas 1 --cluster-yes" >&2
+echo "Running: $CLI_CMD --cluster create 127.0.0.1:7010 127.0.0.1:7011 127.0.0.1:7012 127.0.0.1:7013 127.0.0.1:7014 127.0.0.1:7015 --cluster-replicas 1 --cluster-yes" >&2
 timeout 30 $CLI_CMD --cluster create \
-    127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 \
-    127.0.0.1:7003 127.0.0.1:7004 127.0.0.1:7005 \
+    127.0.0.1:7010 127.0.0.1:7011 127.0.0.1:7012 \
+    127.0.0.1:7013 127.0.0.1:7014 127.0.0.1:7015 \
     --cluster-replicas 1 \
     --cluster-yes 2>&1 | tee /dev/stderr || {
     echo "ERROR: TLS Cluster creation failed or timed out" >&2
@@ -144,7 +144,7 @@ echo "TLS Cluster creation completed" >&2
 sleep 3
 
 # Output cluster endpoints (regular ports, TLS is handled by server config)
-printf "CLUSTER_TLS_HOSTS=127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005\r\n"
+printf "CLUSTER_TLS_HOSTS=127.0.0.1:7010,127.0.0.1:7011,127.0.0.1:7012,127.0.0.1:7013,127.0.0.1:7014,127.0.0.1:7015\r\n"
 printf "TLS Cluster created successfully in $CLUSTER_DIR\r\n"
 
 # Ensure output is flushed and exit immediately
