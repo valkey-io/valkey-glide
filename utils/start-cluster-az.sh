@@ -112,11 +112,12 @@ sleep 2
 
 # Create cluster with 4 replicas
 echo "Creating AZ cluster..." >&2
-echo "Running: $CLI_CMD --cluster create 127.0.0.1:7020 127.0.0.1:7021 127.0.0.1:7022 127.0.0.1:7023 127.0.0.1:7024 127.0.0.1:7025 127.0.0.1:7026 127.0.0.1:7027 --cluster-replicas 1 --cluster-yes" >&2
+echo "Running: $CLI_CMD --cluster create 127.0.0.1:7020 127.0.0.1:7021 127.0.0.1:7022 127.0.0.1:7023 127.0.0.1:7024 127.0.0.1:7025 127.0.0.1:7026 127.0.0.1:7027 --cluster-replicas 1 --cluster-databases 16 --cluster-yes" >&2
 timeout 30 $CLI_CMD --cluster create \
     127.0.0.1:7020 127.0.0.1:7021 127.0.0.1:7022 127.0.0.1:7023 \
     127.0.0.1:7024 127.0.0.1:7025 127.0.0.1:7026 127.0.0.1:7027 \
     --cluster-replicas 1 \
+    --cluster-databases 16 \
     --cluster-yes 2>&1 | tee /dev/stderr || {
     echo "ERROR: AZ Cluster creation failed or timed out" >&2
     echo "Checking server processes:" >&2
