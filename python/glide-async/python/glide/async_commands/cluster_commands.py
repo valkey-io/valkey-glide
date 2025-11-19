@@ -12,6 +12,9 @@ from glide_shared.commands.core_options import (
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
+    PubSubChannelType,
+    PubSubMode,
+    PubSubOperation,
 )
 from glide_shared.constants import (
     TOK,
@@ -1500,7 +1503,15 @@ class ClusterCommands(CoreCommands):
 
         Since: Valkey 7.0.0.
         """
-        await self._execute_command(RequestType.SSubscribe, list(channels))
+        if not channels:
+            raise RequestError("channels must not be empty")
+
+        await self._pubsub_operation(
+            operation=PubSubOperation.Subscribe,
+            channel_type=PubSubChannelType.Sharded,
+            mode=PubSubMode.Lazy,
+            channels=channels,
+        )
 
     async def ssubscribe(self, channels: Set[str], timeout_ms: int = 0) -> None:
         """
@@ -1529,8 +1540,15 @@ class ClusterCommands(CoreCommands):
 
         Since: Valkey 7.0.0.
         """
-        args = list(channels) + [str(timeout_ms)]
-        await self._execute_command(RequestType.SSubscribe, list(args))
+        if not channels:
+            raise RequestError("channels must not be empty")
+
+        await self._pubsub_operation(
+            operation=PubSubOperation.Subscribe,
+            channel_type=PubSubChannelType.Sharded,
+            mode=PubSubMode.Blocking,
+            channels=channels,
+        )
 
     async def sunsubscribe_lazy(self, channels: Optional[Set[str]] = None) -> None:
         """
@@ -1558,8 +1576,11 @@ class ClusterCommands(CoreCommands):
 
         Since: Valkey 7.0.0.
         """
-        await self._execute_command(
-            RequestType.SUnsubscribe, list(channels) if channels else []
+        await self._pubsub_operation(
+            operation=PubSubOperation.Unsubscribe,
+            channel_type=PubSubChannelType.Sharded,
+            mode=PubSubMode.Lazy,
+            channels=channels,
         )
 
     async def sunsubscribe(
@@ -1595,5 +1616,9 @@ class ClusterCommands(CoreCommands):
 
         Since: Valkey 7.0.0.
         """
-        args = (list(channels) if channels else []) + [str(timeout_ms)]
-        await self._execute_command(RequestType.SUnsubscribe, list(args))
+        await self._pubsub_operation(
+            operation=PubSubOperation.Unsubscribe,
+            channel_type=PubSubChannelType.Sharded,
+            mode=PubSubMode.Blocking,
+            channels=channels,
+        )

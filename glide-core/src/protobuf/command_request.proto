@@ -533,6 +533,33 @@ message UpdateConnectionPassword {
 message RefreshIamToken {
 }
 
+message PubSubCommand {
+    enum Operation {
+        Subscribe = 0;
+        Unsubscribe = 1;
+    }
+    
+    enum ChannelType {
+        Exact = 0;
+        Pattern = 1;
+        Sharded = 2;
+    }
+    
+    enum Mode {
+        Lazy = 0;
+        Blocking = 1;
+    }
+    
+    Operation operation = 1;
+    ChannelType channel_type = 2;
+    Mode mode = 3;
+    repeated bytes channels = 4;
+    optional uint32 timeout_ms = 5;
+}
+
+message GetSubscriptions {
+}
+
 message CommandRequest {
     uint32 callback_idx = 1;
 
@@ -544,7 +571,9 @@ message CommandRequest {
         ClusterScan cluster_scan = 6;
         UpdateConnectionPassword update_connection_password = 7;
         RefreshIamToken refresh_iam_token = 8;
+        PubSubCommand pubsub_command = 9;
+        GetSubscriptions get_subscriptions = 10;  
     }
-    Routes route = 9;
-    optional uint64 root_span_ptr = 10;
+    Routes route = 11;
+    optional uint64 root_span_ptr = 12;
 }

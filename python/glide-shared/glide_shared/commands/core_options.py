@@ -1,7 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import List, Optional, Type, Union, get_args
 
 from glide_shared.commands.command_args import Limit, OrderBy
@@ -22,6 +22,35 @@ class PubSubMsg:
     message: TEncodable
     channel: TEncodable
     pattern: Optional[TEncodable]
+
+
+class PubSubOperation(IntEnum):
+    """PubSub operation type."""
+
+    Subscribe = 0
+    """ Subscribe to channels/patterns """
+    Unsubscribe = 1
+    """ Unsubscribe from channels/patterns """
+
+
+class PubSubChannelType(IntEnum):
+    """PubSub channel type."""
+
+    Exact = 0
+    """ Use exact channel names """
+    Pattern = 1
+    """ Use channel name patterns """
+    Sharded = 2
+    """ Use sharded channels (cluster mode only, requires Valkey 7.0+) """
+
+
+class PubSubMode(IntEnum):
+    """PubSub subscription mode."""
+
+    Lazy = 0
+    """ Non-blocking - updates desired state, returns immediately """
+    Blocking = 1
+    """ Blocking - waits for actual subscription confirmation """
 
 
 class ConditionalChange(Enum):

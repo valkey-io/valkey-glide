@@ -617,6 +617,16 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                         .await
                         .map(|_| Value::SimpleString("OK".into()))
                         .map_err(|err| err.into()),
+                    command_request::Command::PubsubCommand(_pubsub_command) => {
+                        Err(ClientUsageError::Internal(
+                            "Dynamic PubSub not yet implemented".to_string(),
+                        ))
+                    }
+                    command_request::Command::GetSubscriptions(_get_subscriptions) => {
+                        Err(ClientUsageError::Internal(
+                            "Get subscriptions not yet implemented".to_string(),
+                        ))
+                    }
                 },
                 None => {
                     log_debug(
