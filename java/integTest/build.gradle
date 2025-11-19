@@ -121,6 +121,19 @@ tasks.register('stopAllBeforeTests') {
 // delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
 tasks.register('clearDirs', Delete) {
     delete "${project.rootDir}/../utils/clusters"
+    
+    // Also clean up bash script cluster directories in WSL/Linux temp
+    if (isWindows) {
+        exec {
+            commandLine 'wsl', '--', 'bash', '-c', 'rm -rf /tmp/clusters /tmp/cluster-* || true'
+            ignoreExitValue true
+        }
+    } else {
+        exec {
+            commandLine 'bash', '-c', 'rm -rf /tmp/clusters /tmp/cluster-* || true'
+            ignoreExitValue true
+        }
+    }
 }
 
 tasks.register('startCluster') {
