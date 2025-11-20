@@ -78,30 +78,6 @@ for port in "${PORTS[@]}"; do
     TLS_DIR="$(cd "$(dirname "$0")" && pwd)/tls_crts"
     echo "Using TLS certificates from: $TLS_DIR" >&2
     
-    # Generate TLS certificates if they don't exist (matching cluster_manager.py behavior)
-    if [ ! -f "$TLS_DIR/server.crt" ] || [ ! -f "$TLS_DIR/server.key" ] || [ ! -f "$TLS_DIR/ca.crt" ]; then
-        echo "Generating TLS certificates..." >&2
-        mkdir -p "$TLS_DIR"
-        
-        # Generate CA key and certificate (matching cluster_manager.py)
-        openssl genrsa -out "$TLS_DIR/ca.key" 4096 2>/dev/null
-        openssl req -x509 -new -nodes -sha256 -key "$TLS_DIR/ca.key" -days 3650 \
-            -subj "/O=Valkey GLIDE Test/CN=Certificate Authority" \
-            -out "$TLS_DIR/ca.crt" 2>/dev/null
-        
-        # Generate server key and certificate (matching cluster_manager.py)
-        openssl genrsa -out "$TLS_DIR/server.key" 2048 2>/dev/null
-        openssl req -new -sha256 -subj "/O=Valkey GLIDE Test/CN=Generic-cert" \
-            -key "$TLS_DIR/server.key" | \
-        openssl x509 -req -sha256 -CA "$TLS_DIR/ca.crt" -CAkey "$TLS_DIR/ca.key" \
-            -CAcreateserial -days 3650 \
-            -extensions v3_req -extfile <(echo "keyUsage = digitalSignature, keyEncipherment
-subjectAltName = IP:127.0.0.1,DNS:localhost") \
-            -out "$TLS_DIR/server.crt" 2>/dev/null
-        
-        echo "TLS certificates generated successfully" >&2
-    fi
-    
     # Start valkey-server with TLS configuration and disable PID file
     $SERVER_CMD \
         --port $port \
