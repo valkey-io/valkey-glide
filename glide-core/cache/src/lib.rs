@@ -1,15 +1,19 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 use dashmap::DashMap;
-use logger_core::log_info;
+use logger_core::{log_debug, log_info};
 use moka::policy::EvictionPolicy as MokaEvictionPolicy;
 use moka::sync::Cache;
 use once_cell::sync::Lazy;
 use redis::Value;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
+use tokio::task::JoinHandle;
 
 static CACHE_REGISTRY: Lazy<DashMap<String, Weak<Cache<Vec<u8>, Value>>>> =
     Lazy::new(|| DashMap::new());
+
+static HOUSEKEEPING_HANDLE: Lazy<parking_lot::Mutex<Option<JoinHandle<()>>>> =
+    Lazy::new(|| parking_lot::Mutex::new(None));
 
 /// Cache eviction policy
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,6 +100,9 @@ pub fn get_or_create_cache(
     // Store weak reference in registry
     CACHE_REGISTRY.insert(cache_id.to_string(), Arc::downgrade(&cache));
 
+    // Start housekeeping task if this is the first cache
+    start_cache_housekeeping();
+
     cache
 }
 
@@ -174,12 +181,80 @@ fn calculate_value_additional_data(value: &Value) -> usize {
 /// Returns the total size of the cache entry (key + value) in bytes
 fn cache_entry_weigher(key: &Vec<u8>, value: &Value) -> u32 {
     let total_size = key.len() + calculate_value_size(value);
-    println!(
-        "Cache entry weigher: key_len = {}, value_size = {}",
-        key.len(),
-        calculate_value_size(value)
-    );
     total_size.try_into().unwrap_or(u32::MAX)
+}
+
+/// Periodically runs pending tasks for all live caches
+async fn periodic_cache_housekeeping(interval_duration: Duration) {
+    log_info(
+        "cache_housekeeping",
+        format!(
+            "Started cache housekeeping task (interval: {:?})",
+            interval_duration
+        ),
+    );
+
+    loop {
+        tokio::time::sleep(interval_duration).await;
+
+        let mut live_count = 0;
+        let mut dead_keys = Vec::new();
+
+        // Process all caches
+        for entry in CACHE_REGISTRY.iter() {
+            match entry.value().upgrade() {
+                Some(cache) => {
+                    cache.run_pending_tasks();
+                    live_count += 1;
+                }
+                None => {
+                    // Cache is dead, mark for removal
+                    dead_keys.push(entry.key().clone());
+                }
+            }
+        }
+
+        // Clean up dead cache entries
+        for key in dead_keys {
+            CACHE_REGISTRY.remove(&key);
+            log_debug(
+                "cache_housekeeping",
+                format!("Removed dead cache entry: {}", key),
+            );
+        }
+
+        // If no live caches remain, stop the housekeeping task
+        if live_count == 0 && CACHE_REGISTRY.is_empty() {
+            log_info(
+                "cache_housekeeping",
+                "No live caches remaining, stopping housekeeping task",
+            );
+            break;
+        }
+
+        log_debug(
+            "cache_housekeeping",
+            format!("Processed {} live caches", live_count),
+        );
+    }
+
+    log_info("cache_housekeeping", "Cache housekeeping task stopped");
+}
+
+/// Start the cache housekeeping background task
+pub fn start_cache_housekeeping() {
+    let mut handle_guard = HOUSEKEEPING_HANDLE.lock();
+
+    // Don't start if already running
+    if handle_guard.is_some() {
+        log_debug("cache_housekeeping", "Housekeeping task already running");
+        return;
+    }
+
+    let task = tokio::spawn(periodic_cache_housekeeping(Duration::from_millis(500)));
+    *handle_guard = Some(task);
+
+    log_info("cache_housekeeping", "Started cache housekeeping task");
 }
 
 #[cfg(test)]

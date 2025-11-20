@@ -78,6 +78,13 @@ class ClientSideCache:
         currently supported. This means cached values may become stale if updated on
         the server before the TTL expires.
 
+        **Note**: In order for 2 clients to share the same cache, they must be
+        created with the same `ClientSideCache` instance.
+        * Client's with different `ClientSideCache` instances will have separate caches,
+        even if the configurations are identical.
+        * Client's using different db's cannot share the same cache.
+        * Client's using different ACL users cannot share the same cache.
+
         Args:
             max_cache_kb (int): Maximum size of the cache in kilobytes (KB). This limits
                 the total memory used by cached keys and values. When this limit is reached,
