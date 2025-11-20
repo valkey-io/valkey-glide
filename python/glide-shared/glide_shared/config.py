@@ -396,6 +396,12 @@ class BaseClientConfiguration:
             If not set, connections are established immediately during client creation (equivalent to `False`).
         client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
             See `ClientSideCache` for more information.
+            **Note**: In order for 2 clients to share the same cache, they must be
+                created with the same `ClientSideCache` instance.
+                * Client's with different `ClientSideCache` instances will have separate caches,
+                even if the configurations are identical.
+                * Client's using different db's cannot share the same cache.
+                * Client's using different ACL users cannot share the same cache.
     """
 
     def __init__(
@@ -641,6 +647,12 @@ class GlideClientConfiguration(BaseClientConfiguration):
             see `AdvancedGlideClientConfiguration`.
         client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
             See `ClientSideCache` for more information.
+            **Note**: In order for 2 clients to share the same cache, they must be
+                created with the same `ClientSideCache` instance.
+                * Client's with different `ClientSideCache` instances will have separate caches,
+                even if the configurations are identical.
+                * Client's using different db's cannot share the same cache.
+                * Client's using different ACL users cannot share the same cache.
     """
 
     class PubSubChannelModes(IntEnum):
@@ -838,6 +850,12 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             see `AdvancedGlideClusterClientConfiguration`.
         client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
             See `ClientSideCache` for more information.
+            **Note**: In order for 2 clients to share the same cache, they must be
+                created with the same `ClientSideCache` instance.
+                * Client's with different `ClientSideCache` instances will have separate caches,
+                even if the configurations are identical.
+                * Client's using different db's cannot share the same cache.
+                * Client's using different ACL users cannot share the same cache.
 
     Note:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff

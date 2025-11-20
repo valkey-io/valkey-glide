@@ -158,6 +158,8 @@ from glide_shared import (
     VectorFieldAttributesHnsw,
     VectorType,
     json_batch,
+    ClientSideCache,
+    EvictionPolicy,
 )
 
 from .async_commands import ft, glide_json
@@ -385,4 +387,7 @@ __all__ = [
     "FtAggregateSortProperty",
     "FtProfileOptions",
     "QueryType",
+    # Cache
+    "ClientSideCache",
+    "EvictionPolicy",
 ]
