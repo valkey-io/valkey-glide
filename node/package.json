@@ -92,7 +92,7 @@
         "@types/uuid": "11",
         "find-free-port": "2",
         "lint-staged": "16",
-        "jest": "29",
+        "jest": "30",
         "jest-html-reporter": "4",
         "protobufjs-cli": "1",
         "replace": "1",
