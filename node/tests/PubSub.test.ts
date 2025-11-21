@@ -30,7 +30,6 @@ import {
     getServerVersion,
     parseEndpoints,
 } from "./TestUtilities";
-
 type TGlideClient = GlideClient | GlideClusterClient;
 
 function convertGlideRecordToRecord(
@@ -3636,7 +3635,6 @@ describe("PubSub", () => {
                 const channel3 = "test_channel3";
                 const channel4 = "test_channel4";
 
-                // Set up subscriptions
                 pubSub1 = createPubSubSubscription(
                     clusterMode,
                     {
@@ -3707,19 +3705,47 @@ describe("PubSub", () => {
                     pubSub3,
                 );
 
-                // Test pubsubNumsub
-                subscribers = await client2.pubsubNumSub([
-                    channel1,
-                    channel2,
-                    channel3,
-                    channel4,
-                ]);
-                expect(convertGlideRecordToRecord(subscribers)).toEqual({
-                    [channel1]: 1,
-                    [channel2]: 2,
-                    [channel3]: 3,
-                    [channel4]: 0,
-                });
+                // === [FIX START] Polling for eventual consistency ===
+                // Issue #4924: Metadata propagation takes time in cluster mode.
+                // We poll until the counts match expectations or timeout.
+                {
+                    // Wait up to 3 seconds (60 * 50ms)
+                    for (let i = 0; i < 60; i++) {
+                        const res = await client2.pubsubNumSub([
+                            channel1,
+                            channel2,
+                            channel3,
+                            channel4,
+                        ]);
+                        const rec = convertGlideRecordToRecord(res);
+
+                        if (
+                            rec[channel1] === 1 &&
+                            rec[channel2] === 2 &&
+                            rec[channel3] === 3 &&
+                            rec[channel4] === 0
+                        ) {
+                            break;
+                        }
+
+                        await new Promise((r) => setTimeout(r, 50));
+                    }
+
+                    // Final assertion
+                    subscribers = await client2.pubsubNumSub([
+                        channel1,
+                        channel2,
+                        channel3,
+                        channel4,
+                    ]);
+                    expect(convertGlideRecordToRecord(subscribers)).toEqual({
+                        [channel1]: 1,
+                        [channel2]: 2,
+                        [channel3]: 3,
+                        [channel4]: 0,
+                    });
+                }
+                // === [FIX END] ===
 
                 // Test pubsubNumsub with no channels
                 const emptySubscribers = await client2.pubsubNumSub([]);
