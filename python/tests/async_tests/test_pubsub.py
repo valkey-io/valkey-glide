@@ -311,8 +311,8 @@ class TestPubSub:
 
             # Create a map of channels to random messages with shard prefix
             channels_and_messages = {
-                f"{shard_prefix}{get_random_string(10)}": get_random_string(5)
-                for _ in range(NUM_CHANNELS)
+                f"{shard_prefix}{get_random_string(10)}:{i}": get_random_string(5)
+                for i in range(NUM_CHANNELS)
             }
 
             callback, context = None, None
@@ -602,8 +602,8 @@ class TestPubSub:
 
             # Create a map of channels to random messages with shard prefix
             channels_and_messages = {
-                f"{shard_prefix}{get_random_string(10)}": get_random_string(5)
-                for _ in range(NUM_CHANNELS)
+                f"{shard_prefix}{get_random_string(10)}:{i}": get_random_string(5)
+                for i in range(NUM_CHANNELS)
             }
 
             callback, context = None, None
@@ -683,10 +683,10 @@ class TestPubSub:
         try:
             PATTERN = "{{{}}}:{}".format("channel", "*")
             channels = {
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
+                "{{{}}}:{}:0".format("channel", get_random_string(5)): get_random_string(
                     5
                 ),
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
+                "{{{}}}:{}:1".format("channel", get_random_string(5)): get_random_string(
                     5
                 ),
             }
@@ -817,10 +817,10 @@ class TestPubSub:
             NUM_CHANNELS = 256
             PATTERN = "{{{}}}:{}".format("channel", "*")
             channels = {
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
+                "{{{}}}:{}:{}".format("channel", get_random_string(5), i): get_random_string(
                     5
                 )
-                for _ in range(NUM_CHANNELS)
+                for i in range(NUM_CHANNELS)
             }
 
             callback, context = None, None
