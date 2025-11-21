@@ -4024,11 +4024,23 @@ describe("PubSub", () => {
                     pubSub,
                 );
 
-                // Test pubsubChannels
-                const regularChannels = await client2.pubsubChannels();
-                expect(regularChannels).toEqual([regularChannel]);
+                {
+                    // Wait up to 3 seconds (60 * 50ms)
+                    for (let i = 0; i < 60; i++) {
+                        const channels = await client2.pubsubChannels();
 
-                // Test pubsubShardchannels
+                        if (channels.includes(regularChannel)) {
+                            break;
+                        }
+
+                        await new Promise((r) => setTimeout(r, 50));
+                    }
+
+                    // Final assertion
+                    const regularChannels = await client2.pubsubChannels();
+                    expect(regularChannels).toEqual([regularChannel]);
+                }
+
                 const shardChannels = await (
                     client2 as GlideClusterClient
                 ).pubsubShardChannels();
