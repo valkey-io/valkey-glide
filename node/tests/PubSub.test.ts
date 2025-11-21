@@ -3707,19 +3707,42 @@ describe("PubSub", () => {
                     pubSub3,
                 );
 
-                // Test pubsubNumsub
-                subscribers = await client2.pubsubNumSub([
-                    channel1,
-                    channel2,
-                    channel3,
-                    channel4,
-                ]);
-                expect(convertGlideRecordToRecord(subscribers)).toEqual({
-                    [channel1]: 1,
-                    [channel2]: 2,
-                    [channel3]: 3,
-                    [channel4]: 0,
-                });
+                {
+                    for (let i = 0; i < 60; i++) {
+                        const res = await client2.pubsubNumSub([
+                            channel1,
+                            channel2,
+                            channel3,
+                            channel4,
+                        ]);
+                        const rec = convertGlideRecordToRecord(res);
+
+                        if (
+                            rec[channel1] === 1 &&
+                            rec[channel2] === 2 &&
+                            rec[channel3] === 3 &&
+                            rec[channel4] === 0
+                        ) {
+                            break;
+                        }
+
+                        await new Promise((r) => setTimeout(r, 50));
+                    }
+
+                    // Final assertion
+                    subscribers = await client2.pubsubNumSub([
+                        channel1,
+                        channel2,
+                        channel3,
+                        channel4,
+                    ]);
+                    expect(convertGlideRecordToRecord(subscribers)).toEqual({
+                        [channel1]: 1,
+                        [channel2]: 2,
+                        [channel3]: 3,
+                        [channel4]: 0,
+                    });
+                }
 
                 // Test pubsubNumsub with no channels
                 const emptySubscribers = await client2.pubsubNumSub([]);
