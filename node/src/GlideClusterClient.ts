@@ -629,7 +629,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<GlideClusterClient> {
         return await super.createClientInternal(
             options,
-            (socket: net.Socket, options?: GlideClusterClientConfiguration) =>
+            (socket: net.Socket, options: GlideClusterClientConfiguration) =>
                 new GlideClusterClient(socket, options),
         );
     }
