@@ -75,7 +75,13 @@ run-name:
     ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
 
 jobs:
+    git-secrets-scan:
+        name: Git Secrets Scan
+        runs-on: ubuntu-latest
+        uses: ./.github/workflows/git-secrets-scan
+
     get-matrices:
+        needs: git-secrets-scan
         runs-on: ubuntu-latest
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}

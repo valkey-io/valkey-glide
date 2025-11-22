@@ -82,7 +82,13 @@ env:
     BASE_GO_VERSION: "1.22"
 
 jobs:
+    git-secrets-scan:
+        name: Git Secrets Scan
+        runs-on: ubuntu-latest
+        uses: ./.github/workflows/git-secrets-scan
+
     get-matrices:
+        needs: git-secrets-scan
         runs-on: ubuntu-latest
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}

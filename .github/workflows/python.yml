@@ -98,7 +98,13 @@ env:
     RUN_ASYNC_ONLY: ${{ (github.event.inputs.run_async_tests == 'true' && github.event.inputs.run_sync_tests == 'false') }}
 
 jobs:
+    git-secrets-scan:
+        name: Git Secrets Scan
+        runs-on: ubuntu-latest
+        uses: ./.github/workflows/git-secrets-scan
+
     get-matrices:
+        needs: git-secrets-scan
         runs-on: ubuntu-latest
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
