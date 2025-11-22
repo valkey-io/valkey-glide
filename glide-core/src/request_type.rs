@@ -710,6 +710,10 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::FtInfo => RequestType::FtInfo,
             ProtobufRequestType::FtProfile => RequestType::FtProfile,
             ProtobufRequestType::FtSearch => RequestType::FtSearch,
+            ProtobufRequestType::ModuleList => RequestType::ModuleList,
+            ProtobufRequestType::ModuleLoad => RequestType::ModuleLoad,
+            ProtobufRequestType::ModuleLoadEx => RequestType::ModuleLoadEx,
+            ProtobufRequestType::ModuleUnload => RequestType::ModuleUnload,
             _ => todo!(),
         }
     }
@@ -987,6 +991,10 @@ impl RequestType {
             RequestType::FtInfo => Some(cmd("FT.INFO")),
             RequestType::FtProfile => Some(cmd("FT.PROFILE")),
             RequestType::FtSearch => Some(cmd("FT.SEARCH")),
+            RequestType::ModuleList => Some(get_two_word_command("MODULE", "LIST")),
+            RequestType::ModuleLoad => Some(get_two_word_command("MODULE", "LOAD")),
+            RequestType::ModuleLoadEx => Some(get_two_word_command("MODULE", "LOADEX")),
+            RequestType::ModuleUnload => Some(get_two_word_command("MODULE", "UNLOAD")),
             _ => todo!(),
         }
     }
