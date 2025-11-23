@@ -19,6 +19,7 @@ from typing import (
 import pytest
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
+from glide_shared.cache import ClientSideCache
 from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.commands.bitmap import (
     BitFieldGet,
@@ -544,6 +545,7 @@ def create_client_config(
     use_tls: Optional[bool] = None,
     tls_insecure: Optional[bool] = None,
     lazy_connect: Optional[bool] = False,
+    cache: Optional[ClientSideCache] = None,
 ) -> Union[GlideClusterClientConfiguration, GlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
@@ -571,6 +573,7 @@ def create_client_config(
                 connection_timeout, tls_config=tls_adv_conf
             ),
             lazy_connect=lazy_connect,
+            client_side_cache=cache,
         )
     else:
         valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
@@ -592,6 +595,7 @@ def create_client_config(
             ),
             reconnect_strategy=reconnect_strategy,
             lazy_connect=lazy_connect,
+            client_side_cache=cache,
         )
 
 

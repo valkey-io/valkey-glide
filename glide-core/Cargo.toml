@@ -24,6 +24,7 @@ rustls = { version = "0.23", features = ["aws-lc-rs"] }
 rustls-pemfile = "2"
 rustls-pki-types = "1"
 telemetrylib = { path = "./telemetry" }
+glidecachelib = { path = "./cache" }
 tokio = { version = "1", features = ["macros", "time"] }
 logger_core = { path = "../logger_core" }
 tokio-util = { version = "^0.7", features = ["rt"], optional = true }
@@ -51,8 +52,9 @@ async-trait = { version = "0.1" }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 versions = "7"
-strum = "0.26"       
+strum = "0.26"
 strum_macros = "0.26"
+moka = { version = "0.12", features = ["sync"] }
 
 [features]
 proto = ["protobuf"]
@@ -76,7 +78,7 @@ criterion = { version = "^0.6", features = ["html_reports", "async_tokio"] }
 which = "8"
 ctor = "0.5"
 redis = { path = "./redis-rs/redis", features = ["tls-rustls-insecure"] }
-rustls = { version = "0.23", features = ["aws-lc-rs"]}
+rustls = { version = "0.23", features = ["aws-lc-rs"] }
 iai-callgrind = "0.15"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 glide-core = { path = ".", features = [
@@ -84,7 +86,10 @@ glide-core = { path = ".", features = [
 ] } # always enable this feature in tests.
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(standalone_heartbeat)', 'cfg(feature, values("iam_tests"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(standalone_heartbeat)',
+    'cfg(feature, values("iam_tests"))',
+] }
 
 [build-dependencies]
 protobuf-codegen = "3"
