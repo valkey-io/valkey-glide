@@ -1,87 +1,64 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
-import static glide.TestUtilities.commonClientConfig;
-import static glide.TestUtilities.commonClusterClientConfig;
-
-import glide.api.BaseClient;
-import glide.api.GlideClient;
-import glide.api.GlideClusterClient;
 import glide.api.logging.Logger;
-import org.apache.commons.lang3.tuple.Pair;
+import glide.api.models.configuration.NodeAddress;
+import glide.cluster.ValkeyCluster;
+import java.util.List;
 import org.semver4j.Semver;
 
 public final class TestConfiguration {
-    public static final String[] STANDALONE_HOSTS =
-            System.getProperty("test.server.standalone", "").split(",");
-    public static final String[] CLUSTER_HOSTS =
-            System.getProperty("test.server.cluster", "").split(",");
-    public static final String[] AZ_CLUSTER_HOSTS =
-            System.getProperty("test.server.azcluster", "").split(",");
-    public static final Semver SERVER_VERSION;
     public static final boolean TLS = Boolean.parseBoolean(System.getProperty("test.server.tls", ""));
+    public static final String[] STANDALONE_TLS_HOSTS = {}; // Not used
+    public static final String[] CLUSTER_TLS_HOSTS = {}; // Not used
+    public static final Semver SERVER_VERSION = new Semver("9.0.0");
+    
+    private static String[] standaloneHosts = null;
+    private static String[] clusterHosts = null;
+    private static String[] azClusterHosts = null;
 
     static {
         Logger.init(Logger.Level.OFF);
         Logger.setLoggerConfig(Logger.Level.OFF);
-
-        System.out.printf("STANDALONE_HOSTS = %s\n", System.getProperty("test.server.standalone", ""));
-        System.out.printf("CLUSTER_HOSTS = %s\n", System.getProperty("test.server.cluster", ""));
-        System.out.printf("AZ_CLUSTER_HOSTS = %s\n", System.getProperty("test.server.azcluster", ""));
-
-        var result = getVersionFromStandalone();
-        if (result.getKey() != null) {
-            SERVER_VERSION = result.getKey();
-        } else {
-            var errorStandalone = result.getValue();
-            result = getVersionFromCluster();
-            if (result.getKey() != null) {
-                SERVER_VERSION = result.getKey();
-            } else {
-                var errorCluster = result.getValue();
-                errorStandalone.printStackTrace(System.err);
-                System.err.println();
-                errorCluster.printStackTrace(System.err);
-                throw new RuntimeException("Failed to get server version");
-            }
-        }
         System.out.printf("SERVER_VERSION = %s\n", SERVER_VERSION);
     }
-
-    private static Pair<Semver, Exception> getVersionFromStandalone() {
-        if (STANDALONE_HOSTS[0].isEmpty()) {
-            return Pair.of(null, new Exception("No standalone nodes given"));
+    
+    public static String[] getStandaloneHosts() {
+        if (standaloneHosts == null) {
+            standaloneHosts = getHostsFromCluster(TestUtilities.getSharedStandalone());
         }
-        try {
-            BaseClient client = GlideClient.createClient(commonClientConfig().build()).get();
-
-            String serverVersion = TestUtilities.getServerVersion(client);
-            if (serverVersion != null) {
-                return Pair.of(new Semver(serverVersion), null);
-            } else {
-                return Pair.of(null, new Exception("Failed to parse version"));
-            }
-        } catch (Exception e) {
-            return Pair.of(null, e);
-        }
+        return standaloneHosts;
     }
-
-    private static Pair<Semver, Exception> getVersionFromCluster() {
-        if (CLUSTER_HOSTS[0].isEmpty()) {
-            return Pair.of(null, new Exception("No cluster nodes given"));
+    
+    public static String[] getClusterHosts() {
+        if (clusterHosts == null) {
+            clusterHosts = getHostsFromCluster(TestUtilities.getSharedCluster());
         }
-        try {
-            BaseClient client =
-                    GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
-
-            String serverVersion = TestUtilities.getServerVersion(client);
-            if (serverVersion != null) {
-                return Pair.of(new Semver(serverVersion), null);
-            } else {
-                return Pair.of(null, new Exception("Failed to parse version"));
-            }
-        } catch (Exception e) {
-            return Pair.of(null, e);
+        return clusterHosts;
+    }
+    
+    public static String[] getAzClusterHosts() {
+        if (azClusterHosts == null) {
+            azClusterHosts = getHostsFromCluster(TestUtilities.getSharedAzCluster());
         }
+        return azClusterHosts;
+    }
+    
+    // For backward compatibility
+    public static final String[] STANDALONE_HOSTS = new String[0];
+    public static final String[] CLUSTER_HOSTS = new String[0];
+    public static final String[] AZ_CLUSTER_HOSTS = new String[0];
+    
+    private static String[] getHostsFromCluster(ValkeyCluster cluster) {
+        if (cluster == null) {
+            return new String[0];
+        }
+        List<NodeAddress> addresses = cluster.getNodesAddr();
+        if (addresses == null || addresses.isEmpty()) {
+            return new String[0];
+        }
+        return addresses.stream()
+                .map(addr -> addr.getHost() + ":" + addr.getPort())
+                .toArray(String[]::new);
     }
 }

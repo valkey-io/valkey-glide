@@ -58,7 +58,7 @@ ext {
             if (!line.startsWith("CLUSTER_NODES="))
                 continue
 
-            return line.split("=")[1]
+            return line.split("=")[1].trim()
         }
         return ''
     }
@@ -66,15 +66,24 @@ ext {
 
 tasks.register('stopAllAfterTests') {
     doLast {
-        exec {
-            workingDir "${project.rootDir}/../utils"
-            commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
-            ignoreExitValue true // ignore fail if servers are stopped before
-        }
-        exec {
-            workingDir "${project.rootDir}/../utils"
-            commandLine 'python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster', '--keep-folder'
-            ignoreExitValue true
+        def remoteHost = System.getenv('VALKEY_REMOTE_HOST')
+        if (remoteHost) {
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'remote_cluster_manager.py', '--host', remoteHost, 'stop'
+                ignoreExitValue true
+            }
+        } else {
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
+                ignoreExitValue true // ignore fail if servers are stopped before
+            }
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster', '--keep-folder'
+                ignoreExitValue true
+            }
         }
     }
 }
@@ -84,15 +93,24 @@ tasks.register('stopAllAfterTests') {
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
 tasks.register('stopAllBeforeTests') {
     doLast {
-        exec {
-            workingDir "${project.rootDir}/../utils"
-            commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'
-            ignoreExitValue true // ignore fail if servers are stopped before
-        }
-        exec {
-            workingDir "${project.rootDir}/../utils"
-            commandLine 'python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster'
-            ignoreExitValue true
+        def remoteHost = System.getenv('VALKEY_REMOTE_HOST')
+        if (remoteHost) {
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'remote_cluster_manager.py', '--host', remoteHost, 'stop'
+                ignoreExitValue true
+            }
+        } else {
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'
+                ignoreExitValue true // ignore fail if servers are stopped before
+            }
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster'
+                ignoreExitValue true
+            }
         }
     }
 }
@@ -108,12 +126,20 @@ tasks.register('startCluster') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode']
-                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    def remoteHost = System.getenv('VALKEY_REMOTE_HOST')
+                    def args
+                    if (remoteHost) {
+                        args = ['python3', 'remote_cluster_manager.py', '--host', remoteHost, 'start', '--cluster-mode']
+                        if (System.getProperty("tls") == 'true') args.add('--tls')
+                    } else {
+                        args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode']
+                        if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    }
                     commandLine args
                     standardOutput = os
                 }
                 clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                println "CLUSTER_HOSTS = ${clusterHosts}"
             }
         } else {
             clusterHosts = System.getProperty("cluster-endpoints")
@@ -127,12 +153,20 @@ tasks.register('startClusterForAz') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4']
-                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    def remoteHost = System.getenv('VALKEY_REMOTE_HOST')
+                    def args
+                    if (remoteHost) {
+                        args = ['python3', 'remote_cluster_manager.py', '--host', remoteHost, 'start', '--cluster-mode', '-r', '4']
+                        if (System.getProperty("tls") == 'true') args.add('--tls')
+                    } else {
+                        args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4']
+                        if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    }
                     commandLine args
                     standardOutput = os
                 }
                 azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                println "AZ_CLUSTER_HOSTS = ${azClusterHosts}"
             }
         } else {
             azClusterHosts = System.getProperty("cluster-endpoints")
@@ -148,12 +182,20 @@ tasks.register('startStandalone') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = ['python3', 'cluster_manager.py', 'start', '-r', '0']
-                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    def remoteHost = System.getenv('VALKEY_REMOTE_HOST')
+                    def args
+                    if (remoteHost) {
+                        args = ['python3', 'remote_cluster_manager.py', '--host', remoteHost, 'start', '-n', '1', '-r', '0']
+                        if (System.getProperty("tls") == 'true') args.add('--tls')
+                    } else {
+                        args = ['python3', 'cluster_manager.py', 'start', '-r', '0']
+                        if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    }
                     commandLine args
                     standardOutput = os
                 }
                 standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                println "STANDALONE_HOSTS = ${standaloneHosts}"
             }
         } else {
             standaloneHosts = System.getProperty("standalone-endpoints")
@@ -166,10 +208,18 @@ tasks.register('startStandaloneTls') {
         new ByteArrayOutputStream().withStream { os ->
             exec {
                 workingDir "${project.rootDir}/../utils"
-                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '-r', '0'
+                def remoteHost = System.getenv('VALKEY_REMOTE_HOST')
+                def args
+                if (remoteHost) {
+                    args = ['python3', 'remote_cluster_manager.py', '--host', remoteHost, 'start', '--tls', '-n', '1', '-r', '0']
+                } else {
+                    args = ['python3', 'cluster_manager.py', '--tls', 'start', '-r', '0']
+                }
+                commandLine args
                 standardOutput = os
             }
             standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            println "STANDALONE_TLS_HOSTS = ${standaloneTlsHosts}"
         }
     }
 }
@@ -179,31 +229,39 @@ tasks.register('startClusterTls') {
         new ByteArrayOutputStream().withStream { os ->
             exec {
                 workingDir "${project.rootDir}/../utils"
-                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '--cluster-mode'
+                def remoteHost = System.getenv('VALKEY_REMOTE_HOST')
+                def args
+                if (remoteHost) {
+                    args = ['python3', 'remote_cluster_manager.py', '--host', remoteHost, 'start', '--tls', '--cluster-mode']
+                } else {
+                    args = ['python3', 'cluster_manager.py', '--tls', 'start', '--cluster-mode']
+                }
+                commandLine args
                 standardOutput = os
             }
             clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            println "CLUSTER_TLS_HOSTS = ${clusterTlsHosts}"
         }
     }
 }
 
-beforeTests.dependsOn 'stopAllBeforeTests'
-stopAllBeforeTests.finalizedBy 'clearDirs'
-clearDirs.finalizedBy 'startStandalone'
-clearDirs.finalizedBy 'startStandaloneTls'
-clearDirs.finalizedBy 'startCluster'
-clearDirs.finalizedBy 'startClusterTls'
-clearDirs.finalizedBy 'startClusterForAz'
-afterTests.finalizedBy 'stopAllAfterTests'
+// beforeTests.dependsOn 'stopAllBeforeTests'
+// stopAllBeforeTests.finalizedBy 'clearDirs'
+// clearDirs.finalizedBy 'startStandalone'
+// clearDirs.finalizedBy 'startStandaloneTls'
+// clearDirs.finalizedBy 'startCluster'
+// clearDirs.finalizedBy 'startClusterTls'
+// clearDirs.finalizedBy 'startClusterForAz'
+// afterTests.finalizedBy 'stopAllAfterTests'
 compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
 
 tasks.withType(Test) {
     dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
     useJUnitPlatform()
-    if (!project.gradle.startParameter.taskNames.contains(':integTest:modulesTest')) {
-        dependsOn 'beforeTests'
-        finalizedBy 'afterTests'
-    }
+    // if (!project.gradle.startParameter.taskNames.contains(':integTest:modulesTest')) {
+    //     dependsOn 'beforeTests'
+    //     finalizedBy 'afterTests'
+    // }
 
     doFirst {
         systemProperty 'test.server.standalone', standaloneHosts

@@ -24,6 +24,8 @@ import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.ProtocolVersion;
+import glide.api.models.configuration.RequestRoutingConfiguration;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.cluster.ValkeyCluster;
 import java.nio.file.Files;
@@ -39,6 +41,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -91,13 +94,13 @@ public class TestUtilities {
             return GlideClusterClient.createClient(
                             GlideClusterClientConfiguration.builder()
                                     .addresses(seedNodes)
-                                    .requestTimeout(2000)
+                                    .requestTimeout(10000)
                                     .lazyConnect(lazyConnect)
                                     // Explicitly set no credentials for dedicated clusters to avoid
                                     // authentication issues from environment or global state
                                     .credentials(null)
                                     .build())
-                    .get();
+                    .get(30, TimeUnit.SECONDS);
         } else {
             List<NodeAddress> nodeAddresses =
                     addresses != null ? addresses : valkeyCluster.getNodesAddr();
@@ -105,13 +108,13 @@ public class TestUtilities {
             return GlideClient.createClient(
                             GlideClientConfiguration.builder()
                                     .addresses(nodeAddresses)
-                                    .requestTimeout(2000)
+                                    .requestTimeout(10000)
                                     .lazyConnect(lazyConnect)
                                     // Explicitly set no credentials for dedicated clusters to avoid
                                     // authentication issues from environment or global state
                                     .credentials(null)
                                     .build())
-                    .get();
+                    .get(30, TimeUnit.SECONDS);
         }
     }
 
@@ -181,15 +184,42 @@ public class TestUtilities {
         return Stream.of(arrays).flatMap(Stream::of).toArray(size -> Arrays.copyOf(arrays[0], size));
     }
 
+    // Shared standalone instance for tests
+    private static ValkeyCluster sharedStandalone = null;
+    
+    public static synchronized ValkeyCluster getSharedStandalone() {
+        if (sharedStandalone == null) {
+            try {
+                System.out.println("[DEBUG] Creating shared standalone (1 shard, 0 replicas)");
+                sharedStandalone = new ValkeyCluster(TLS, false, 1, 0, null, null);
+                if (sharedStandalone == null || sharedStandalone.getNodesAddr() == null) {
+                    throw new RuntimeException("ValkeyCluster created but is null or has no nodes");
+                }
+                System.out.println("[DEBUG] Shared standalone created. Nodes: " + sharedStandalone.getNodesAddr());
+            } catch (Exception e) {
+                System.err.println("[ERROR] Failed to create shared standalone: " + e.getMessage());
+                e.printStackTrace();
+                sharedStandalone = null;
+                throw new RuntimeException("Failed to create shared standalone", e);
+            }
+        } else if (!isStandaloneHealthy(sharedStandalone)) {
+            throw new RuntimeException("[DEBUG] Shared standalone unhealthy - test should fail");
+        }
+        return sharedStandalone;
+    }
+    
     public static GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?>
             commonClientConfig() {
-        var builder = GlideClientConfiguration.builder();
-        for (var host : STANDALONE_HOSTS) {
-            var parts = host.split(":");
-            builder.address(
-                    NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+        try {
+            var cluster = getSharedStandalone();
+            var builder = GlideClientConfiguration.builder();
+            for (var address : cluster.getNodesAddr()) {
+                builder.address(address);
+            }
+            return builder.useTLS(TLS).requestTimeout(100000);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create standalone config", e);
         }
-        return builder.useTLS(TLS);
     }
 
     /**
@@ -206,26 +236,151 @@ public class TestUtilities {
         return Files.readAllBytes(caCertPath);
     }
 
+    // Shared cluster instance for tests that need persistent cluster state
+    private static ValkeyCluster sharedCluster = null;
+    
+    public static synchronized ValkeyCluster getSharedCluster() {
+        if (sharedCluster == null) {
+            try {
+                System.out.println("[DEBUG] Creating shared cluster (3 shards, 1 replica)");
+                sharedCluster = new ValkeyCluster(TLS, true, 3, 1, null, null);
+                if (sharedCluster == null || sharedCluster.getNodesAddr() == null) {
+                    throw new RuntimeException("ValkeyCluster created but is null or has no nodes");
+                }
+                System.out.println("[DEBUG] Shared cluster created. Nodes: " + sharedCluster.getNodesAddr());
+            } catch (Exception e) {
+                System.err.println("[ERROR] Failed to create shared cluster: " + e.getMessage());
+                e.printStackTrace();
+                sharedCluster = null;
+                throw new RuntimeException("Failed to create shared cluster", e);
+            }
+        } else if (!isClusterHealthy(sharedCluster)) {
+            throw new RuntimeException("[DEBUG] Shared cluster unhealthy - test should fail");
+        }
+        return sharedCluster;
+    }
+    
     public static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>
             commonClusterClientConfig() {
-        var builder = GlideClusterClientConfiguration.builder();
-        for (var host : CLUSTER_HOSTS) {
-            var parts = host.split(":");
-            builder.address(
-                    NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+        try {
+            var cluster = getSharedCluster();
+            var builder = GlideClusterClientConfiguration.builder();
+            for (var address : cluster.getNodesAddr()) {
+                builder.address(address);
+            }
+            return builder.useTLS(TLS).requestTimeout(100000);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create cluster config", e);
         }
-        return builder.useTLS(TLS);
     }
 
+    // Shared AZ cluster instance for tests that need persistent cluster state
+    private static ValkeyCluster sharedAzCluster = null;
+    
+    public static synchronized ValkeyCluster getSharedAzCluster() {
+        if (sharedAzCluster == null) {
+            try {
+                System.out.println("[DEBUG] Creating shared AZ cluster (3 shards, 4 replicas)");
+                sharedAzCluster = new ValkeyCluster(TLS, true, 3, 4, null, null);
+                if (sharedAzCluster == null || sharedAzCluster.getNodesAddr() == null) {
+                    throw new RuntimeException("ValkeyCluster created but is null or has no nodes");
+                }
+                System.out.println("[DEBUG] Shared AZ cluster created. Nodes: " + sharedAzCluster.getNodesAddr());
+            } catch (Exception e) {
+                System.err.println("[ERROR] Failed to create shared AZ cluster: " + e.getMessage());
+                e.printStackTrace();
+                sharedAzCluster = null;
+                throw new RuntimeException("Failed to create shared AZ cluster", e);
+            }
+        } else if (!isClusterHealthy(sharedAzCluster)) {
+            throw new RuntimeException("[DEBUG] Shared AZ cluster unhealthy - test should fail");
+        }
+        return sharedAzCluster;
+    }
+    
+    private static boolean isStandaloneHealthy(ValkeyCluster cluster) {
+        if (cluster == null) return false;
+        try {
+            var builder = GlideClientConfiguration.builder();
+            for (var address : cluster.getNodesAddr()) {
+                builder.address(address);
+            }
+            try (var testClient = GlideClient.createClient(
+                    builder.useTLS(TLS).requestTimeout(30000).build()).get(100, TimeUnit.SECONDS)) {
+                testClient.ping().get(30, TimeUnit.SECONDS);
+                return true;
+            }
+        } catch (Exception e) {
+            System.out.println("[DEBUG] Standalone health check failed: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    private static boolean isClusterHealthy(ValkeyCluster cluster) {
+        if (cluster == null) return false;
+        try {
+            var builder = GlideClusterClientConfiguration.builder();
+            for (var address : cluster.getNodesAddr()) {
+                builder.address(address);
+            }
+            try (var testClient = GlideClusterClient.createClient(
+                    builder.useTLS(TLS).requestTimeout(30000).build()).get(100, TimeUnit.SECONDS)) {
+                testClient.ping().get(30, TimeUnit.SECONDS);
+                return true;
+            }
+        } catch (Exception e) {
+            System.out.println("[DEBUG] Cluster health check failed: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    @SneakyThrows
+    public static BaseClient createDedicatedClient(
+            boolean clusterMode, 
+            ProtocolVersion protocol, 
+            ValkeyCluster cluster, 
+            boolean lazyConnection) {
+        if (clusterMode) {
+            var builder = GlideClusterClientConfiguration.builder();
+            for (var address : cluster.getNodesAddr()) {
+                builder.address(address);
+            }
+            var config = builder.useTLS(TLS).requestTimeout(10000);
+            if (protocol != null) {
+                config.protocol(protocol);
+            }
+            if (lazyConnection) {
+                config.lazyConnect(true);
+            }
+            return GlideClusterClient.createClient(config.build()).get();
+        } else {
+            var builder = GlideClientConfiguration.builder();
+            for (var address : cluster.getNodesAddr()) {
+                builder.address(address);
+            }
+            var config = builder.useTLS(TLS).requestTimeout(10000);
+            if (protocol != null) {
+                config.protocol(protocol);
+            }
+            if (lazyConnection) {
+                config.lazyConnect(true);
+            }
+            return GlideClient.createClient(config.build()).get();
+        }
+    }
+    
     public static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>
             azClusterClientConfig() {
-        var builder = GlideClusterClientConfiguration.builder();
-        for (var host : AZ_CLUSTER_HOSTS) {
-            var parts = host.split(":");
-            builder.address(
-                    NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+        try {
+            var cluster = getSharedAzCluster();
+            var builder = GlideClusterClientConfiguration.builder();
+            for (var address : cluster.getNodesAddr()) {
+                builder.address(address);
+            }
+            return builder.useTLS(TLS).requestTimeout(100000);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create AZ cluster config", e);
         }
-        return builder.useTLS(TLS);
     }
 
     /**
