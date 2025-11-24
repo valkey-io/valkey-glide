@@ -1,5 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import os
 from typing import AsyncGenerator, List, Optional, Union
 
 import anyio
@@ -282,3 +283,23 @@ async def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersi
             raise TimeoutError(f"Connection timeout during teardown: {e}")
         else:
             raise e
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "use_mock_pubsub: mark test class to use mock pubsub"
+    )
+
+
+@pytest.fixture(autouse=True)
+def setup_mock_pubsub(request):
+    """Auto-fixture that sets mock pubsub env var based on marker"""
+    if request.node.get_closest_marker("use_mock_pubsub"):
+        os.environ["GLIDE_USE_MOCK_PUBSUB"] = "1"
+        yield
+        # Clean up after test
+        os.environ.pop("GLIDE_USE_MOCK_PUBSUB", None)
+    else:
+        # Make sure it's disabled
+        os.environ.pop("GLIDE_USE_MOCK_PUBSUB", None)
+        yield

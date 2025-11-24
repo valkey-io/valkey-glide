@@ -35,6 +35,7 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
+use crate::mock_pubsub;
 use crate::request_type::RequestType;
 use redis::InfoDict;
 use telemetrylib::GlideOpenTelemetry;
@@ -407,6 +408,35 @@ impl Client {
         cmd.command().is_some_and(|bytes| bytes == b"SUNSUBSCRIBE")
     }
 
+    /// Register config-based pubsub subscriptions with the mock broker
+    async fn register_config_subscriptions_with_mock(
+        broker: &Arc<mock_pubsub::MockPubSubBroker>,
+        client_id: &str,
+        pubsub_subscriptions: std::collections::HashMap<
+            redis::PubSubSubscriptionKind,
+            std::collections::HashSet<Vec<u8>>,
+        >,
+    ) {
+        for (kind, channels) in pubsub_subscriptions {
+            let channels: Vec<String> = channels
+                .into_iter()
+                .filter_map(|bytes| String::from_utf8(bytes).ok())
+                .collect();
+
+            if channels.is_empty() {
+                continue;
+            }
+
+            let sub_type = match kind {
+                redis::PubSubSubscriptionKind::Exact => mock_pubsub::SubscriptionType::Exact,
+                redis::PubSubSubscriptionKind::Pattern => mock_pubsub::SubscriptionType::Pattern,
+                redis::PubSubSubscriptionKind::Sharded => mock_pubsub::SubscriptionType::Sharded,
+            };
+
+            broker.subscribe_lazy(client_id, channels, sub_type).await;
+        }
+    }
+
     /// Extracts the database ID from a SELECT command.
     /// Parses the first argument of the SELECT command as an i64 database ID.
     /// Returns appropriate errors for invalid formats or missing arguments.
@@ -587,6 +617,14 @@ impl Client {
             // SUNSUBSCRIBE requires setting the fenced flag, so we must create a mutable copy
             if self.is_sunsubscribe_command(cmd) {
                 cmd.set_fenced(true);
+            }
+
+            if mock_pubsub::is_mock_enabled()
+                && mock_pubsub::MockPubSubBroker::is_pubsub_command(cmd)
+            {
+                let broker = mock_pubsub::get_mock_broker();
+                let client_id = self.get_client_id();
+                return broker.handle_pubsub_command(&client_id, cmd).await;
             }
 
             // let expected_type = expected_type_for_cmd(cmd);
@@ -1191,6 +1229,11 @@ impl Client {
         iam_manager.refresh_token().await;
         Ok(())
     }
+
+    /// Get unique client ID for mock broker
+    fn get_client_id(&self) -> String {
+        format!("{:p}", &*self.internal_client)
+    }
 }
 
 fn load_cmd(code: &[u8]) -> Cmd {
@@ -1567,6 +1610,13 @@ impl Client {
         let compression_manager = create_compression_manager(request.compression_config.clone())?;
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
+            let is_cluster = request.cluster_mode_enabled;
+            let lazy_connect = request.lazy_connect;
+
+            // Clone push_sender before it's moved
+            let push_sender_for_mock = push_sender.clone();
+            let pubsub_subscriptions_for_mock = request.pubsub_subscriptions.clone();
+
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
             let internal_client_arc =
@@ -1599,12 +1649,12 @@ impl Client {
                 client_guard.iam_token_manager = iam_token_manager.clone();
             }
 
-            let internal_client = if request.lazy_connect {
+            let internal_client = if lazy_connect {
                 ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request,
                     push_sender,
                 }))
-            } else if request.cluster_mode_enabled {
+            } else if is_cluster {
                 let client =
                     create_cluster_client(request, push_sender, iam_token_manager.as_ref())
                         .await
@@ -1626,6 +1676,25 @@ impl Client {
             {
                 let mut guard = internal_client_arc.write().await;
                 *guard = internal_client;
+            }
+
+            // Compute client ID for mock registration
+            let client_id = format!("{:p}", &*internal_client_arc);
+
+            // Register with mock broker immediately if enabled
+            if mock_pubsub::is_mock_enabled()
+                && let Some(sender) = push_sender_for_mock
+            {
+                let broker = mock_pubsub::get_mock_broker();
+                broker
+                    .register_client(client_id.clone(), sender, is_cluster)
+                    .await;
+
+                // Register config-based subscriptions with mock broker
+                if let Some(pubsub_subs) = pubsub_subscriptions_for_mock {
+                    Self::register_config_subscriptions_with_mock(&broker, &client_id, pubsub_subs)
+                        .await;
+                }
             }
 
             // Return the client from the Arc
