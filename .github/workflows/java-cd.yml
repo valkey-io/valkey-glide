@@ -29,7 +29,7 @@ jobs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
 
             - name: load-platform-matrix
               id: load-platform-matrix
@@ -93,7 +93,7 @@ jobs:
                   else
                     echo "No cleaning needed"
                   fi
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
             - name: Set up JDK
               uses: actions/setup-java@v4
               with:
@@ -306,7 +306,7 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/action-runner-ilia/_work/valkey-glide
 
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
 
             - name: Set up JDK
               uses: actions/setup-java@v4
