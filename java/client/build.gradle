@@ -30,9 +30,9 @@ dependencies {
             prefer '4.29.1'
         }
     }
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
 
-    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.6'
+    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.9.8'
 
     // junit
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '5.2.0'
