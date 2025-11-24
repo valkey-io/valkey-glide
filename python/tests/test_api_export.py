@@ -56,7 +56,7 @@ excluded_async_symbols = [
     # python/glide-async/python/glide/async_commands/core.py
     "CoreCommands",  # ClassDef
     # python/glide-async/python/glide/opentelemetry.py
-    "OpenTelemetry",  # ClassDef
+    "OpenTelemetry",  # ClassDef,
 ]
 
 excluded_sync_symbols = [
