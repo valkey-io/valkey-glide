@@ -35,15 +35,6 @@ public class GlideValueResolver {
     public static native Object valueFromPointerBinary(long pointer);
 
     /**
-     * Copy the given array of byte arrays to a native series of byte arrays and return a C-style
-     * pointer.
-     *
-     * @param args The arguments to copy.
-     * @return A C-style pointer to a native representation of the arguments.
-     */
-    public static native long createLeakedBytesVec(byte[][] args);
-
-    /**
      * Get the maximum length in bytes of all request arguments.
      *
      * @return The maximum length in bytes of all request arguments.

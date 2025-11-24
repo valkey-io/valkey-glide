@@ -28,6 +28,7 @@ import {
     GlideClusterClient,
     GlideReturnType,
     GlideString,
+    HashFieldConditionalChange,
     InfBoundary,
     InfoOptions,
     InsertPosition,
@@ -482,13 +483,32 @@ export function createLongRunningLuaScript(
 export async function testTeardown(
     cluster_mode: boolean,
     option: BaseClientConfiguration,
+    existingClient?: BaseClient,
 ) {
     let client: GlideClient | GlideClusterClient | undefined;
+    let clientCreated = false;
 
     try {
-        client = cluster_mode
-            ? await GlideClusterClient.createClient(option)
-            : await GlideClient.createClient(option);
+        // Try to reuse existing client if available
+        if (existingClient) {
+            try {
+                client = existingClient as GlideClient | GlideClusterClient;
+                // Test if client is still usable by trying a quick operation
+                await client.ping();
+            } catch {
+                // If existing client fails, create a new one
+                client = cluster_mode
+                    ? await GlideClusterClient.createClient(option)
+                    : await GlideClient.createClient(option);
+                clientCreated = true;
+            }
+        } else {
+            // Create new client if existing one is not available
+            client = cluster_mode
+                ? await GlideClusterClient.createClient(option)
+                : await GlideClient.createClient(option);
+            clientCreated = true;
+        }
 
         await client.flushall();
     } catch (error) {
@@ -500,7 +520,8 @@ export async function testTeardown(
             error as Error,
         );
     } finally {
-        if (client) {
+        // Only close client if we created it (don't close existing client)
+        if (client && clientCreated) {
             client.close();
         }
     }
@@ -535,13 +556,18 @@ export async function flushAndCloseClient(
                 cluster_mode,
                 getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
                     ...tlsConfig,
-                    requestTimeout: 2000,
+                    requestTimeout: 1500, // Reduced timeout to fail faster on socket exhaustion
                 }),
+                client, // Pass existing client to reuse if possible
             );
         }
     } finally {
-        // some tests don't initialize a client
+        // Close the client
         client?.close();
+
+        // Add a small delay to allow sockets to be properly released
+        // This prevents socket exhaustion when running many tests sequentially
+        await new Promise((resolve) => setTimeout(resolve, 10));
     }
 }
 
@@ -890,7 +916,8 @@ export async function batchTest(
         key25, // Geospatial Data/ZSET
         key26, // sorted set
         key27, // sorted set
-    ] = Array.from({ length: 27 }, () =>
+        key28, // move
+    ] = Array.from({ length: 28 }, () =>
         decodeString("{key}" + getRandomKey(), decoder),
     );
 
@@ -1021,6 +1048,14 @@ export async function batchTest(
 
     baseBatch.set(key2, baz, { returnOldValue: true });
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
+
+    if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
+        baseBatch.set(key28, foo);
+        responseData.push(['set(key1, "foo")', "OK"]);
+        baseBatch.move(key28, 1);
+        responseData.push(["move(key1, 1)", true]);
+    }
+
     baseBatch.customCommand(["MGET", key1, key2]);
     responseData.push(['customCommand(["MGET", key1, key2])', ["bar", "baz"]]);
     baseBatch.mset([{ key: key3, value }]);
@@ -1106,6 +1141,94 @@ export async function batchTest(
     responseData.push(["hexists(key4, field)", false]);
     baseBatch.hrandfield(key4);
     responseData.push(["hrandfield(key4)", null]);
+
+    // HSETEX tests - only run if server version is 9.0.0 or higher
+    if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
+        // Test basic HSETEX with expiry
+        baseBatch.hsetex(
+            key4,
+            { [field.toString()]: value },
+            {
+                expiry: { type: TimeUnit.Seconds, count: 60 },
+            },
+        );
+        responseData.push([
+            "hsetex(key4, { [field]: value }, { expiry: { type: TimeUnit.Seconds, count: 60 } })",
+            1,
+        ]);
+
+        // Test HSETEX with KEEPTTL
+        baseBatch.hsetex(
+            key4,
+            { [field2.toString()]: value },
+            {
+                expiry: "KEEPTTL",
+            },
+        );
+        responseData.push([
+            "hsetex(key4, { [field2]: value }, { expiry: 'KEEPTTL' })",
+            1,
+        ]);
+
+        // Test HSETEX with basic expiry
+        baseBatch.hsetex(
+            key4,
+            { [field3.toString()]: value },
+            {
+                expiry: { type: TimeUnit.Seconds, count: 60 },
+            },
+        );
+        responseData.push([
+            "hsetex(key4, { [field3]: value }, { expiry: { type: TimeUnit.Seconds, count: 60 } })",
+            1,
+        ]);
+
+        // Test HSETEX with field conditional changes
+        baseBatch.hsetex(
+            key4,
+            { [field4.toString()]: value },
+            {
+                fieldConditionalChange:
+                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+                expiry: { type: TimeUnit.Seconds, count: 60 },
+            },
+        );
+        responseData.push([
+            "hsetex(key4, { [field4]: value }, { fieldConditionalChange: HashFieldConditionalChange.ONLY_IF_NONE_EXIST, expiry: { type: TimeUnit.Seconds, count: 60 } })",
+            1,
+        ]);
+
+        // HGETEX tests - only run if server version is 9.0.0 or higher
+        // Test basic HGETEX with expiry
+        baseBatch.hgetex(key4, [field.toString(), field2.toString()], {
+            expiry: { type: TimeUnit.Seconds, count: 60 },
+        });
+        responseData.push([
+            "hgetex(key4, [field, field2], { expiry: { type: TimeUnit.Seconds, count: 60 } })",
+            [value.toString(), value.toString()],
+        ]);
+
+        // Test HGETEX with PERSIST
+        baseBatch.hgetex(key4, [field.toString()], {
+            expiry: "PERSIST",
+        });
+        responseData.push([
+            "hgetex(key4, [field], { expiry: 'PERSIST' })",
+            [value.toString()],
+        ]);
+
+        // Test HTTL
+        baseBatch.httl(key4, [
+            field.toString(),
+            field2.toString(),
+            field3.toString(),
+        ]);
+        // Note: TTL values are dynamic, so we'll validate the structure rather than exact values
+        responseData.push([
+            "httl(key4, [field, field2, field3])",
+            [-1, 60, 60],
+        ]);
+    }
 
     baseBatch.lpush(key5, [field1, field2, field3, field4]);
     responseData.push(["lpush(key5, [1, 2, 3, 4])", 4]);

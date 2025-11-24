@@ -4,36 +4,40 @@
 
 import * as net from "net";
 import { Writer } from "protobufjs/minimal";
+import { ClusterScanCursor, Script } from "../build-ts/native";
+import {
+    command_request,
+    connection_request,
+} from "../build-ts/ProtobufMessage";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
-    ClusterBatch,
-    ClusterBatchOptions,
-    ClusterScanCursor,
-    ClusterScanOptions,
     Decoder,
     DecoderOption,
+    GlideRecord,
+    GlideReturnType,
+    GlideString,
+    PubSubMsg,
+    convertGlideRecordToRecord,
+} from "./BaseClient";
+import { ClusterBatch } from "./Batch";
+import {
+    ClusterBatchOptions,
+    ClusterScanOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
     FunctionRestorePolicy,
     FunctionStatsSingleResponse,
-    GlideRecord,
-    GlideReturnType,
-    GlideString,
     InfoOptions,
     LolwutOptions,
-    PubSubMsg,
-    Script,
-    convertGlideRecordToRecord,
     createClientGetName,
     createClientId,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
     createConfigSet,
-    createCopy,
     createCustomCommand,
     createDBSize,
     createEcho,
@@ -62,11 +66,7 @@ import {
     createScriptKill,
     createTime,
     createUnWatch,
-} from ".";
-import {
-    command_request,
-    connection_request,
-} from "../build-ts/ProtobufMessage";
+} from "./Commands";
 /** An extension to command option types with {@link Routes}. */
 export interface RouteOption {
     /**
@@ -166,6 +166,11 @@ export namespace GlideClusterClientConfiguration {
  * @example
  * ```typescript
  * const config: GlideClusterClientConfiguration = {
+ *   addresses: [
+ *     { host: 'cluster-node-1.example.com', port: 6379 },
+ *     { host: 'cluster-node-2.example.com', port: 6379 },
+ *   ],
+ *   databaseId: 5, // Connect to database 5 (requires Valkey 9.0+ with multi-database cluster mode)
  *   periodicChecks: {
  *     duration_in_sec: 30, // Perform periodic checks every 30 seconds
  *   },
@@ -211,11 +216,23 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
  *   tlsAdvancedConfiguration: {
  *     insecure: true, // Skip TLS certificate verification (use only in development)
  *   },
+ *   refreshTopologyFromInitialNodes: true, // Refresh topology from initial seed nodes
  * };
  * ```
  */
 export type AdvancedGlideClusterClientConfiguration =
-    AdvancedBaseClientConfiguration & {};
+    AdvancedBaseClientConfiguration & {
+        /**
+         * Enables refreshing the cluster topology using only the initial nodes.
+         *
+         * When this option is enabled, all topology updates (both the periodic checks and on-demand
+         * refreshes triggered by topology changes) will query only the initial nodes provided when
+         * creating the client, rather than using the internal cluster view.
+         *
+         * If not set, defaults to `false` (uses internal cluster view for topology refresh).
+         */
+        refreshTopologyFromInitialNodes?: boolean;
+    };
 
 /**
  * If the command's routing is to one node we will get T as a response type,
@@ -536,6 +553,15 @@ export class GlideClusterClient extends BaseClient {
                 options.advancedConfiguration,
                 configuration,
             );
+
+            // Set refresh topology from initial nodes
+            if (
+                options.advancedConfiguration
+                    .refreshTopologyFromInitialNodes !== undefined
+            ) {
+                configuration.refreshTopologyFromInitialNodes =
+                    options.advancedConfiguration.refreshTopologyFromInitialNodes;
+            }
         }
 
         return configuration;
@@ -544,12 +570,12 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Creates a new `GlideClusterClient` instance and establishes connections to a Valkey Cluster.
      *
-     * @param options - The configuration options for the client, including cluster addresses, authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
+     * @param options - The configuration options for the client, including cluster addresses, database selection, authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
      * @returns A promise that resolves to a connected `GlideClusterClient` instance.
      *
      * @remarks
      * Use this static method to create and connect a `GlideClusterClient` to a Valkey Cluster.
-     * The client will automatically handle connection establishment, including cluster topology discovery and handling of authentication and TLS configurations.
+     * The client will automatically handle connection establishment, including cluster topology discovery, database selection, and handling of authentication and TLS configurations.
      *
      * @example
      * ```typescript
@@ -561,6 +587,7 @@ export class GlideClusterClient extends BaseClient {
      *     { host: 'address1.example.com', port: 6379 },
      *     { host: 'address2.example.com', port: 6379 },
      *   ],
+     *   databaseId: 5, // Connect to database 5 (requires Valkey 9.0+)
      *   credentials: {
      *     username: 'user1',
      *     password: 'passwordA',
@@ -589,6 +616,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @remarks
      * - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based on the seed addresses provided.
+     * - **Database Selection**: Use `databaseId` to specify which logical database to connect to. Requires Valkey 9.0+ with multi-database cluster mode enabled.
      * - **Authentication**: If `credentials` are provided, the client will attempt to authenticate using the specified username and password.
      * - **TLS**: If `useTLS` is set to `true`, the client will establish secure connections using TLS.
      *      Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
@@ -1185,37 +1213,6 @@ export class GlideClusterClient extends BaseClient {
             createTime(),
             options,
         ).then((res) => convertClusterGlideRecord(res, true, options?.route));
-    }
-
-    /**
-     * Copies the value stored at the `source` to the `destination` key. When `replace` is `true`,
-     * removes the `destination` key first if it already exists, otherwise performs no action.
-     *
-     * @see {@link https://valkey.io/commands/copy/|valkey.io} for details.
-     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
-     * @remarks Since Valkey version 6.2.0.
-     *
-     * @param source - The key to the source value.
-     * @param destination - The key where the value should be copied to.
-     * @param options - (Optional) Additional parameters:
-     * - (Optional) `replace`: if `true`, the `destination` key should be removed before copying the
-     *     value to it. If not provided, no action will be performed if the key already exists.
-     * @returns `true` if `source` was copied, `false` if the `source` was not copied.
-     *
-     * @example
-     * ```typescript
-     * const result = await client.copy("set1", "set2", { replace: true });
-     * console.log(result); // Output: true - "set1" was copied to "set2".
-     * ```
-     */
-    public async copy(
-        source: GlideString,
-        destination: GlideString,
-        options?: { replace?: boolean },
-    ): Promise<boolean> {
-        return this.createWritePromise(
-            createCopy(source, destination, options),
-        );
     }
 
     /**

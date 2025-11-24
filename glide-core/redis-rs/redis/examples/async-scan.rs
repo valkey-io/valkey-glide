@@ -9,8 +9,8 @@ async fn main() -> redis::RedisResult<()> {
         .get_multiplexed_async_connection(GlideConnectionOptions::default())
         .await?;
 
-    con.set("async-key1", b"foo").await?;
-    con.set("async-key2", b"foo").await?;
+    con.set::<_, _, ()>("async-key1", b"foo").await?;
+    con.set::<_, _, ()>("async-key2", b"foo").await?;
 
     let iter: AsyncIter<String> = con.scan().await?;
     let mut keys: Vec<_> = iter.collect().await;

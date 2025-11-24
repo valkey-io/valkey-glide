@@ -40,10 +40,13 @@ struct BuilderParams {
     #[cfg(feature = "cluster-async")]
     slots_refresh_rate_limit: SlotsRefreshRateLimit,
     client_name: Option<String>,
+    lib_name: Option<String>,
     response_timeout: Option<Duration>,
     protocol: ProtocolVersion,
     pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
     reconnect_retry_strategy: Option<RetryStrategy>,
+    refresh_topology_from_initial_nodes: bool,
+    database_id: i64,
 }
 
 #[derive(Clone)]
@@ -139,11 +142,14 @@ pub struct ClusterParams {
     pub(crate) connections_validation_interval: Option<Duration>,
     pub(crate) tls_params: Option<TlsConnParams>,
     pub(crate) client_name: Option<String>,
+    pub(crate) lib_name: Option<String>,
     pub(crate) connection_timeout: Duration,
     pub(crate) response_timeout: Duration,
     pub(crate) protocol: ProtocolVersion,
     pub(crate) pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
     pub(crate) reconnect_retry_strategy: Option<RetryStrategy>,
+    pub(crate) refresh_topology_from_initial_nodes: bool,
+    pub(crate) database_id: i64,
 }
 
 impl ClusterParams {
@@ -169,10 +175,13 @@ impl ClusterParams {
             connections_validation_interval: value.connections_validation_interval,
             tls_params,
             client_name: value.client_name,
+            lib_name: value.lib_name,
             response_timeout: value.response_timeout.unwrap_or(Duration::MAX),
             protocol: value.protocol,
             pubsub_subscriptions: value.pubsub_subscriptions,
             reconnect_retry_strategy: value.reconnect_retry_strategy,
+            refresh_topology_from_initial_nodes: value.refresh_topology_from_initial_nodes,
+            database_id: value.database_id,
         })
     }
 }
@@ -299,6 +308,12 @@ impl ClusterClientBuilder {
     /// Sets client name for the new ClusterClient.
     pub fn client_name(mut self, client_name: String) -> ClusterClientBuilder {
         self.builder_params.client_name = Some(client_name);
+        self
+    }
+
+    /// Sets library name for the new ClusterClient.
+    pub fn lib_name(mut self, lib_name: String) -> ClusterClientBuilder {
+        self.builder_params.lib_name = Some(lib_name);
         self
     }
 
@@ -467,6 +482,19 @@ impl ClusterClientBuilder {
         self
     }
 
+    /// Enables refreshing the cluster topology from seed nodes.
+    ///
+    /// When enabled, the client will periodically query the seed nodes (the nodes provided when
+    /// creating the client) to update its internal view of the cluster topology.
+    pub fn refresh_topology_from_initial_nodes(
+        mut self,
+        refresh_topology_from_initial_nodes: bool,
+    ) -> ClusterClientBuilder {
+        self.builder_params.refresh_topology_from_initial_nodes =
+            refresh_topology_from_initial_nodes;
+        self
+    }
+
     /// Enables timing out on slow connection time.
     ///
     /// If enabled, the cluster will only wait the given time on each connection attempt to each node.
@@ -486,6 +514,15 @@ impl ClusterClientBuilder {
     /// Sets the protocol with which the client should communicate with the server.
     pub fn use_protocol(mut self, protocol: ProtocolVersion) -> ClusterClientBuilder {
         self.builder_params.protocol = protocol;
+        self
+    }
+
+    /// Sets the database ID for the new ClusterClient.
+    ///
+    /// Note: Database selection in cluster mode requires server support for multiple databases.
+    /// Most cluster configurations only support database 0.
+    pub fn database_id(mut self, database_id: i64) -> ClusterClientBuilder {
+        self.builder_params.database_id = database_id;
         self
     }
 

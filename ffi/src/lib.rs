@@ -301,6 +301,36 @@ pub struct CommandError {
     pub command_error_type: RequestErrorType,
 }
 
+/// Represents the result of a logging operation.
+///
+/// This struct is used to communicate both success/failure status and relevant data
+/// across the FFI boundary. For initialization operations, it contains the log level
+/// that was set. For other operations, it primarily indicates success or failure.
+///
+/// # Fields
+///
+/// - `log_error`: A pointer to a null-terminated C string containing an error message.
+///   This field is `null` if the operation succeeded, or points to an error description
+///   if the operation failed.
+/// - `level`: The log level value. For initialization operations, this contains the
+///   actual level that was set by the logger. For other operations, this field may
+///   be ignored when there's an error.
+///
+/// # Safety
+///
+/// The returned `LogResult` must be freed using [`free_log_result`] to avoid memory leaks.
+/// This will properly deallocate both the struct itself and any error message it contains.
+///
+/// - The `log_error` field must either be null or point to a valid, null-terminated C string
+/// - The struct must be freed exactly once using [`free_log_result`]
+/// - The error string must not be accessed after the struct has been freed
+/// - The `level` field is only meaningful when `log_error` is null (success case)
+#[repr(C)]
+pub struct LogResult {
+    pub log_error: *mut c_char,
+    pub level: Level,
+}
+
 /// Represents the result of executing a command, either a successful response or an error.
 ///
 /// This is the  return type for FFI functions that execute commands synchronously (e.g. with a SyncClient).
@@ -1077,6 +1107,31 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             // Return as Ok to continue transaction processing
             Ok(command_response)
         }
+        Value::Push { kind, data } => {
+            // Create kind entry
+            let mut kind_entry = CommandResponse::default();
+            let map_key =
+                valkey_value_to_command_response(Value::SimpleString("kind".to_string()))?;
+            kind_entry.map_key = Box::into_raw(Box::new(map_key));
+            let map_val =
+                valkey_value_to_command_response(Value::SimpleString(format!("{:?}", kind)))?;
+            kind_entry.map_value = Box::into_raw(Box::new(map_val));
+
+            // Create values entry
+            let mut values_entry = CommandResponse::default();
+            let map_key =
+                valkey_value_to_command_response(Value::SimpleString("values".to_string()))?;
+            values_entry.map_key = Box::into_raw(Box::new(map_key));
+            let map_val = valkey_value_to_command_response(Value::Array(data))?;
+            values_entry.map_value = Box::into_raw(Box::new(map_val));
+
+            let (map_ptr, map_len) = convert_vec_to_pointer(vec![kind_entry, values_entry]);
+            command_response.array_value = map_ptr;
+            command_response.array_value_len = map_len;
+            command_response.response_type = ResponseType::Map;
+
+            Ok(command_response)
+        }
         // TODO: Add support for other return types.
         _ => todo!(),
     };
@@ -1392,6 +1447,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
         let mut pattern: &[u8] = &[];
         let mut object_type: &[u8] = &[];
         let mut count: &[u8] = &[];
+        let mut allow_non_covered_slots: bool = false;
 
         let mut iter = arg_vec.iter().peekable();
         while let Some(arg) = iter.next() {
@@ -1426,6 +1482,9 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
                         return unsafe { client_adapter.handle_redis_error(err, request_id) };
                     }
                 },
+                b"ALLOW_NON_COVERED_SLOTS" => {
+                    allow_non_covered_slots = true;
+                }
                 _ => {
                     // Unknown or unsupported arg — safely skip or log
                     continue;
@@ -1475,14 +1534,22 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
         if !object_type.is_empty() {
             cluster_scan_args_builder = cluster_scan_args_builder.with_object_type(converted_type);
         }
+        cluster_scan_args_builder =
+            cluster_scan_args_builder.allow_non_covered_slots(allow_non_covered_slots);
         cluster_scan_args_builder.build()
     } else {
         ClusterScanArgs::builder().build()
     };
 
-    let scan_state_cursor = match get_cluster_scan_cursor(cursor_id) {
-        Ok(existing_cursor) => existing_cursor,
-        Err(_error) => ScanStateRC::new(),
+    let scan_state_cursor = if cursor_id.is_empty() || cursor_id == "0" {
+        ScanStateRC::new()
+    } else {
+        match get_cluster_scan_cursor(cursor_id) {
+            Ok(existing_cursor) => existing_cursor,
+            Err(err) => {
+                return unsafe { client_adapter.handle_redis_error(err, request_id) };
+            }
+        }
     };
     let mut client = client_adapter.core.client.clone();
     client_adapter.execute_request(request_id, async move {
@@ -1554,6 +1621,46 @@ pub unsafe extern "C-unwind" fn update_connection_password(
         client
             .update_connection_password(password_option, immediate_auth)
             .await
+    })
+}
+
+/// Manually refresh the IAM authentication token.
+///
+/// This function triggers an immediate refresh of the IAM token and updates the connection.
+/// It is only available if the client was created with IAM authentication.
+///
+/// # Parameters
+///
+/// * `client_adapter_ptr`: Pointer to a valid client returned from [`create_client`].
+/// * `request_id`: Unique identifier for a valid payload buffer created in the calling language.
+///
+/// # Returns
+///
+/// * A pointer to a [`CommandResult`] containing "OK" on success, or an error if:
+///   - The client is not using IAM authentication
+///   - Token generation fails
+///   - Authentication with the new token fails
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`].
+/// * `request_id` must be valid until it is passed in a call to [`free_command_response`].
+/// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn refresh_iam_token(
+    client_adapter_ptr: *const c_void,
+    request_id: usize,
+) -> *mut CommandResult {
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
+
+    let mut client = client_adapter.core.client.clone();
+    client_adapter.execute_request(request_id, async move {
+        client.refresh_iam_token().await.map(|_| Value::Okay)
     })
 }
 
@@ -1943,23 +2050,67 @@ pub(crate) unsafe fn get_pipeline_options(
 ///
 #[unsafe(no_mangle)]
 pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
+    // Validate request type and extract command
     let cmd = match request_type.get_command() {
         Some(cmd) => cmd,
-        None => return 0, // Return 0 if no command available
-    };
-    let cmd_bytes = match cmd.command() {
-        Some(bytes) => bytes,
-        None => return 0, // Return 0 if no command bytes available
-    };
-    let command_name = match std::str::from_utf8(cmd_bytes.as_slice()) {
-        Ok(name) => name,
-        Err(_) => return 0, // Return 0 if command bytes are not valid UTF-8
+        None => {
+            logger_core::log_error(
+                "ffi_otel",
+                "create_otel_span: RequestType has no command available",
+            );
+            return 0;
+        }
     };
 
+    // Validate command bytes
+    let cmd_bytes = match cmd.command() {
+        Some(bytes) => bytes,
+        None => {
+            logger_core::log_error(
+                "ffi_otel",
+                "create_otel_span: Command has no bytes available",
+            );
+            return 0;
+        }
+    };
+
+    // Validate UTF-8 encoding
+    let command_name = match std::str::from_utf8(cmd_bytes.as_slice()) {
+        Ok(name) => name,
+        Err(e) => {
+            logger_core::log_error(
+                "ffi_otel",
+                format!("create_otel_span: Command bytes are not valid UTF-8: {e}"),
+            );
+            return 0;
+        }
+    };
+
+    // Validate command name length (reasonable limit to prevent abuse)
+    if command_name.len() > 256 {
+        logger_core::log_error(
+            "ffi_otel",
+            format!(
+                "create_otel_span: Command name too long ({} chars), max 256",
+                command_name.len()
+            ),
+        );
+        return 0;
+    }
+
+    // Create span and convert to pointer
     let span = GlideOpenTelemetry::new_span(command_name);
     let arc = Arc::new(span);
     let ptr = Arc::into_raw(arc);
-    ptr as u64
+    let span_ptr = ptr as u64;
+
+    logger_core::log_debug(
+        "ffi_otel",
+        format!(
+            "create_otel_span: Successfully created span '{command_name}' with pointer 0x{span_ptr:x}",
+        ),
+    );
+    span_ptr
 }
 
 /// Creates an OpenTelemetry span with a fixed name "batch" and returns a pointer to the span as u64.
@@ -1968,10 +2119,309 @@ pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
 pub extern "C" fn create_batch_otel_span() -> u64 {
     let command_name = "Batch";
 
+    // Create span and convert to pointer
     let span = GlideOpenTelemetry::new_span(command_name);
     let arc = Arc::new(span);
     let ptr = Arc::into_raw(arc);
-    ptr as u64
+    let span_ptr = ptr as u64;
+
+    logger_core::log_debug(
+        "ffi_otel",
+        format!(
+            "create_batch_otel_span: Successfully created batch span with pointer 0x{span_ptr:x}",
+        ),
+    );
+    span_ptr
+}
+
+/// Creates an OpenTelemetry batch span with a parent span and returns a pointer to the span as u64.
+/// This function creates a child span with the name "Batch" under the provided parent span.
+/// Returns 0 on failure.
+///
+/// # Parameters
+/// * `parent_span_ptr`: A u64 pointer to the parent span created by create_otel_span, create_named_otel_span, or create_batch_otel_span
+///
+/// # Returns
+/// * A u64 pointer to the created child batch span, or 0 if creation fails
+///
+/// # Safety
+/// * `parent_span_ptr` must be a valid pointer to a [`Arc<GlideSpan>`] span created by [`create_otel_span`], [`create_named_otel_span`], or [`create_batch_otel_span`], or 0.
+/// * If `parent_span_ptr` is 0 or invalid, the function will create an independent batch span as fallback.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64) -> u64 {
+    let command_name = "Batch";
+
+    // Handle parent span pointer validation with graceful fallback
+    if parent_span_ptr == 0 {
+        logger_core::log_warn(
+            "ffi_otel",
+            "create_batch_otel_span_with_parent: parent_span_ptr is null (0), creating independent batch span as fallback",
+        );
+        // Graceful fallback: create independent batch span
+        let span = GlideOpenTelemetry::new_span(command_name);
+        let arc = Arc::new(span);
+        let ptr = Arc::into_raw(arc);
+        let span_ptr = ptr as u64;
+        logger_core::log_debug(
+            "ffi_otel",
+            format!(
+                "create_batch_otel_span_with_parent: Created independent fallback batch span with pointer 0x{span_ptr:x}",
+            ),
+        );
+        return span_ptr;
+    }
+
+    // Convert parent pointer to GlideSpan and use existing add_span method
+    let span = match unsafe { GlideOpenTelemetry::span_from_pointer(parent_span_ptr) } {
+        Ok(parent_span) => {
+            // Use existing add_span method to create child batch span
+            match parent_span.add_span(command_name) {
+                Ok(child_span) => child_span,
+                Err(e) => {
+                    logger_core::log_warn(
+                        "ffi_otel",
+                        format!(
+                            "create_batch_otel_span_with_parent: Failed to create child batch span with parent 0x{parent_span_ptr:x}: {e}. Creating independent batch span as fallback.",
+                        ),
+                    );
+                    // Graceful fallback: create independent batch span
+                    GlideOpenTelemetry::new_span(command_name)
+                }
+            }
+        }
+        Err(e) => {
+            logger_core::log_warn(
+                "ffi_otel",
+                format!(
+                    "create_batch_otel_span_with_parent: Invalid parent span pointer 0x{parent_span_ptr:x}: {e}. Creating independent batch span as fallback.",
+                ),
+            );
+            // Graceful fallback: create independent batch span
+            GlideOpenTelemetry::new_span(command_name)
+        }
+    };
+
+    // Convert span to pointer and return
+    let arc = Arc::new(span);
+    let ptr = Arc::into_raw(arc);
+    let span_ptr = ptr as u64;
+
+    logger_core::log_debug(
+        "ffi_otel",
+        format!(
+            "create_batch_otel_span_with_parent: Successfully created batch span with parent 0x{parent_span_ptr:x}, child pointer 0x{span_ptr:x}",
+        ),
+    );
+    span_ptr
+}
+
+/// Creates an OpenTelemetry span with a custom name and returns a pointer to the span as u64.
+/// This function is intended for creating parent spans that can be used with create_otel_span_with_parent.
+/// Returns 0 on failure.
+///
+/// # Parameters
+/// * `span_name`: A null-terminated C string containing the name for the span
+///
+/// # Returns
+/// * A u64 pointer to the created span, or 0 if creation fails
+///
+/// # Safety
+/// * `span_name` must be a valid pointer to a null-terminated C string
+/// * The string must be valid UTF-8
+/// * The caller is responsible for eventually calling drop_otel_span with the returned pointer
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64 {
+    // Validate input pointer
+    if span_name.is_null() {
+        logger_core::log_error(
+            "ffi_otel",
+            "create_named_otel_span: span_name pointer is null",
+        );
+        return 0;
+    }
+
+    // Convert C string to Rust string with safe error handling
+    let c_str = unsafe { CStr::from_ptr(span_name) };
+
+    let name_str = match c_str.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            logger_core::log_error(
+                "ffi_otel",
+                format!("create_named_otel_span: span_name is not valid UTF-8: {e}",),
+            );
+            return 0;
+        }
+    };
+
+    // Validate string length (reasonable limit to prevent abuse)
+    // Note: Empty names are allowed as per test expectations
+    if name_str.len() > 256 {
+        logger_core::log_error(
+            "ffi_otel",
+            format!(
+                "create_named_otel_span: span_name too long ({} chars), max 256",
+                name_str.len()
+            ),
+        );
+        return 0;
+    }
+
+    // Validate string content (basic sanity check for control characters)
+    if name_str
+        .chars()
+        .any(|c| c.is_control() && c != '\t' && c != '\n' && c != '\r')
+    {
+        logger_core::log_error(
+            "ffi_otel",
+            "create_named_otel_span: span_name contains invalid control characters",
+        );
+        return 0;
+    }
+
+    // Create the named span using existing new_span method
+    let span = GlideOpenTelemetry::new_span(name_str);
+    let arc = Arc::new(span);
+    let ptr = Arc::into_raw(arc);
+    let span_ptr = ptr as u64;
+
+    logger_core::log_debug(
+        "ffi_otel",
+        format!(
+            "create_named_otel_span: Successfully created named span '{name_str}' with pointer 0x{span_ptr:x}",
+        ),
+    );
+    span_ptr
+}
+
+/// Creates an OpenTelemetry span with the given request type as a child of the provided parent span.
+/// Returns a pointer to the child span as u64, or 0 on failure.
+///
+/// # Parameters
+/// * `request_type`: The type of request to create a span for
+/// * `parent_span_ptr`: A pointer to the parent span (created by create_otel_span or create_named_otel_span)
+///
+/// # Returns
+/// * A u64 pointer to the created child span, or 0 if creation fails
+///
+/// # Safety
+/// * `parent_span_ptr` must be a valid pointer to a [`Arc<GlideSpan>`] span created by [`create_otel_span`], [`create_named_otel_span`], or [`create_batch_otel_span`], or 0.
+/// * If `parent_span_ptr` is 0 or invalid, the function will create an independent span as fallback.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_otel_span_with_parent(
+    request_type: RequestType,
+    parent_span_ptr: u64,
+) -> u64 {
+    // Validate request type and extract command first (this should fail hard)
+    let cmd = match request_type.get_command() {
+        Some(cmd) => cmd,
+        None => {
+            logger_core::log_error(
+                "ffi_otel",
+                "create_otel_span_with_parent: RequestType has no command available",
+            );
+            return 0;
+        }
+    };
+
+    // Validate command bytes
+    let cmd_bytes = match cmd.command() {
+        Some(bytes) => bytes,
+        None => {
+            logger_core::log_error(
+                "ffi_otel",
+                "create_otel_span_with_parent: Command has no bytes available",
+            );
+            return 0;
+        }
+    };
+
+    // Validate UTF-8 encoding
+    let command_name = match std::str::from_utf8(cmd_bytes.as_slice()) {
+        Ok(name) => name,
+        Err(e) => {
+            logger_core::log_error(
+                "ffi_otel",
+                format!("create_otel_span_with_parent: Command bytes are not valid UTF-8: {e}",),
+            );
+            return 0;
+        }
+    };
+
+    // Validate command name length (reasonable limit to prevent abuse)
+    if command_name.len() > 256 {
+        logger_core::log_error(
+            "ffi_otel",
+            format!(
+                "create_otel_span_with_parent: Command name too long ({} chars), max 256",
+                command_name.len()
+            ),
+        );
+        return 0;
+    }
+
+    // Handle parent span pointer validation with graceful fallback
+    if parent_span_ptr == 0 {
+        logger_core::log_warn(
+            "ffi_otel",
+            "create_otel_span_with_parent: parent_span_ptr is null (0), creating independent span as fallback",
+        );
+        // Graceful fallback: create independent span
+        let span = GlideOpenTelemetry::new_span(command_name);
+        let arc = Arc::new(span);
+        let ptr = Arc::into_raw(arc);
+        let span_ptr = ptr as u64;
+        logger_core::log_debug(
+            "ffi_otel",
+            format!(
+                "create_otel_span_with_parent: Created independent fallback span '{command_name}' with pointer 0x{span_ptr:x}",
+            ),
+        );
+        return span_ptr;
+    }
+
+    // Convert parent pointer to GlideSpan and use existing add_span method
+    let span = match unsafe { GlideOpenTelemetry::span_from_pointer(parent_span_ptr) } {
+        Ok(parent_span) => {
+            // Use existing add_span method to create child span
+            match parent_span.add_span(command_name) {
+                Ok(child_span) => child_span,
+                Err(e) => {
+                    logger_core::log_warn(
+                        "ffi_otel",
+                        format!(
+                            "create_otel_span_with_parent: Failed to create child span '{command_name}' with parent 0x{parent_span_ptr:x}: {e}. Creating independent span as fallback.",
+                        ),
+                    );
+                    // Graceful fallback: create independent span
+                    GlideOpenTelemetry::new_span(command_name)
+                }
+            }
+        }
+        Err(e) => {
+            logger_core::log_warn(
+                "ffi_otel",
+                format!(
+                    "create_otel_span_with_parent: Invalid parent span pointer 0x{parent_span_ptr:x}: {e}. Creating independent span as fallback.",
+                ),
+            );
+            // Graceful fallback: create independent span
+            GlideOpenTelemetry::new_span(command_name)
+        }
+    };
+
+    // Convert span to pointer and return
+    let arc = Arc::new(span);
+    let ptr = Arc::into_raw(arc);
+    let span_ptr = ptr as u64;
+
+    logger_core::log_debug(
+        "ffi_otel",
+        format!(
+            "create_otel_span_with_parent: Successfully created span '{command_name}' with parent 0x{parent_span_ptr:x}, child pointer 0x{span_ptr:x}",
+        ),
+    );
+    span_ptr
 }
 
 /// Drops an OpenTelemetry span given its pointer as u64.
@@ -1980,11 +2430,66 @@ pub extern "C" fn create_batch_otel_span() -> u64 {
 /// * `span_ptr` must be a valid pointer to a [`Arc<GlideSpan>`] span created by [`create_otel_span`] or `0`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
+    // Validate span pointer
     if span_ptr == 0 {
+        logger_core::log_debug("ffi_otel", "drop_otel_span: Ignoring null span pointer (0)");
         return;
     }
+
+    // Validate pointer alignment and bounds (basic safety checks)
+    if !span_ptr.is_multiple_of(8) {
+        logger_core::log_error(
+            "ffi_otel",
+            format!("drop_otel_span: Invalid span pointer - misaligned: 0x{span_ptr:x}",),
+        );
+        return;
+    }
+
+    // Check for obviously invalid pointer values
+    const MIN_VALID_ADDRESS: u64 = 0x1000; // 4KB, below this is likely invalid
+    const MAX_VALID_ADDRESS: u64 = 0x7FFF_FFFF_FFFF_FFF8; // Max user space on most 64-bit systems
+
+    if span_ptr < MIN_VALID_ADDRESS {
+        logger_core::log_error(
+            "ffi_otel",
+            format!("drop_otel_span: Invalid span pointer - address too low: 0x{span_ptr:x}",),
+        );
+        return;
+    }
+
+    if span_ptr > MAX_VALID_ADDRESS {
+        logger_core::log_error(
+            "ffi_otel",
+            format!("drop_otel_span: Invalid span pointer - address too high: 0x{span_ptr:x}",),
+        );
+        return;
+    }
+
+    // Attempt to safely drop the span
     unsafe {
-        Arc::from_raw(span_ptr as *const GlideSpan);
+        // Use std::panic::catch_unwind to handle potential panics during Arc::from_raw
+        let result = std::panic::catch_unwind(|| {
+            Arc::from_raw(span_ptr as *const GlideSpan);
+        });
+
+        match result {
+            Ok(_) => {
+                logger_core::log_debug(
+                    "ffi_otel",
+                    format!(
+                        "drop_otel_span: Successfully dropped span with pointer 0x{span_ptr:x}",
+                    ),
+                );
+            }
+            Err(_) => {
+                logger_core::log_error(
+                    "ffi_otel",
+                    format!(
+                        "drop_otel_span: Panic occurred while dropping span pointer 0x{span_ptr:x} - likely invalid pointer",
+                    ),
+                );
+            }
+        }
     }
 }
 
@@ -2201,5 +2706,184 @@ fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Result<GlideSpan, 
         Err(error_msg) => Err(format!(
             "Opentelemetry failed to create child span with name `{name}`. Error: {error_msg:?}"
         )),
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Level {
+    ERROR = 0,
+    WARN = 1,
+    INFO = 2,
+    DEBUG = 3,
+    TRACE = 4,
+    OFF = 5,
+}
+
+impl From<logger_core::Level> for Level {
+    fn from(level: logger_core::Level) -> Self {
+        match level {
+            logger_core::Level::Error => Level::ERROR,
+            logger_core::Level::Warn => Level::WARN,
+            logger_core::Level::Info => Level::INFO,
+            logger_core::Level::Debug => Level::DEBUG,
+            logger_core::Level::Trace => Level::TRACE,
+            logger_core::Level::Off => Level::OFF,
+        }
+    }
+}
+
+impl From<Level> for logger_core::Level {
+    fn from(level: Level) -> Self {
+        match level {
+            Level::ERROR => logger_core::Level::Error,
+            Level::WARN => logger_core::Level::Warn,
+            Level::INFO => logger_core::Level::Info,
+            Level::DEBUG => logger_core::Level::Debug,
+            Level::TRACE => logger_core::Level::Trace,
+            Level::OFF => logger_core::Level::Off,
+        }
+    }
+}
+
+/// Logs a message using the logger backend.
+///
+/// # Parameters
+///
+/// * `level` - The severity level of the current message (e.g., Error, Warn, Info).
+/// * `identifier` - A pointer to a null-terminated C string identifying the source of the log message.
+/// * `message` - A pointer to a null-terminated C string containing the actual log message.
+///
+/// # Safety
+///
+///  The returned pointer must be freed using [`free_log_result`].
+///
+/// * `identifier` must be a valid, non-null pointer to a null-terminated UTF-8 encoded C string.
+/// * `message` must be a valid, non-null pointer to a null-terminated UTF-8 encoded C string.
+///
+/// # Note
+///
+/// The caller (Python Sync wrapper, Go wrapper, etc.) is responsible for filtering log messages according to the logger's current log level.
+/// This function will log any message it receives.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn glide_log(
+    level: Level,
+    identifier: *const c_char,
+    message: *const c_char,
+) -> *mut LogResult {
+    let id_str = match unsafe { CStr::from_ptr(identifier).to_str() } {
+        Ok(s) => s,
+        Err(err) => {
+            let c_err = CString::new(format!("Log identifier contains invalid UTF-8: {err}"))
+                .unwrap_or_default()
+                .into_raw();
+            return Box::into_raw(Box::new(LogResult {
+                log_error: c_err,
+                level: Level::OFF, // Default value, should be ignored when there's an error
+            }));
+        }
+    };
+
+    let msg_str = match unsafe { CStr::from_ptr(message).to_str() } {
+        Ok(s) => s,
+        Err(err) => {
+            let c_err = CString::new(format!("Log message contains invalid UTF-8: {err}"))
+                .unwrap_or_default()
+                .into_raw();
+            return Box::into_raw(Box::new(LogResult {
+                log_error: c_err,
+                level: Level::OFF, // Default value, should be ignored when there's an error
+            }));
+        }
+    };
+
+    logger_core::log(level.into(), id_str, msg_str);
+
+    Box::into_raw(Box::new(LogResult {
+        log_error: std::ptr::null_mut(),
+        level, // Level is not meaningful for log operations, but set a default
+    }))
+}
+
+/// Initializes the logger with the provided log level and optional log file path.
+///
+/// Success is indicated by a `LogResult` with a null `log_error` field and the actual
+/// log level set in the `level` field. Failure is indicated by a `LogResult` with a non-null
+/// `log_error` field containing an error message, and the `level` field should be ignored.
+///
+/// # Parameters
+///
+/// * `level` - A pointer to a `Level` enum value that sets the maximum log level. If null, a WARN level will be used.
+/// * `file_name` - A pointer to a null-terminated C string representing the desired log file path.
+///
+/// # Returns
+///
+/// A pointer to a `LogResult` struct containing either:
+/// - Success: `log_error` is null, `level` contains the actual log level that was set
+/// - Error: `log_error` contains the error message, `level` should be ignored
+///
+///
+/// # Safety
+///
+/// The returned pointer must be freed using [`free_log_result`].
+///
+/// * `level` may be null. If not null, it must point to a valid instance of the `Level` enum.
+/// * `file_name` may be null. If not null, it must point to a valid, null-terminated C string.
+///   If the string contains invalid UTF-8, an error will be returned instead of panicking.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn init(level: *const Level, file_name: *const c_char) -> *mut LogResult {
+    let level_option = if level.is_null() {
+        None
+    } else {
+        Some(unsafe { *level }.into())
+    };
+
+    let file_name_option = if file_name.is_null() {
+        None
+    } else {
+        match unsafe { CStr::from_ptr(file_name).to_str() } {
+            Ok(file_str) => Some(file_str),
+            Err(err) => {
+                let c_err = CString::new(format!("File name contains invalid UTF-8: {err}"))
+                    .unwrap_or_default()
+                    .into_raw();
+                return Box::into_raw(Box::new(LogResult {
+                    log_error: c_err,
+                    level: Level::OFF, // Default value, should be ignored when there's an error
+                }));
+            }
+        }
+    };
+
+    let logger_level = logger_core::init(level_option, file_name_option);
+
+    Box::into_raw(Box::new(LogResult {
+        log_error: std::ptr::null_mut(),
+        level: logger_level.into(),
+    }))
+}
+
+/// Frees a log result.
+///
+/// This function deallocates a `LogResult` struct and any error message it contains.
+///
+/// # Parameters
+///
+/// * `result_ptr` - A pointer to the `LogResult` to free, or null.
+///
+/// # Safety
+///
+/// * `result_ptr` must be a valid pointer to a `LogResult` returned by [`glide_log`] or [`init`], or null.
+/// * This function must be called exactly once for each `LogResult`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_log_result(result_ptr: *mut LogResult) {
+    if result_ptr.is_null() {
+        return;
+    }
+    unsafe {
+        let result = Box::from_raw(result_ptr);
+        if !result.log_error.is_null() {
+            free_c_string(result.log_error);
+        }
     }
 }

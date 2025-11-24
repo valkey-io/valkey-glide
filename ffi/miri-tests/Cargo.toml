@@ -9,6 +9,7 @@ protobuf = { version = "3", features = [] }
 redis = { path = "./mock-redis", package = "mock-redis" }
 glide-core = { path = "./mock-glide-core",  package = "mock-glide-core" }
 tokio = { path = "./mock-tokio", package = "mock-tokio" }
+logger_core = { path = "./mock-logger-core", package = "mock-logger-core" }
 
 [lib]
 path = "../src/lib.rs"

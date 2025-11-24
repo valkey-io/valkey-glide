@@ -23,6 +23,19 @@ enum TlsMode {
 message AuthenticationInfo {
     string password = 1;
     string username = 2;
+    optional IamCredentials iam_credentials = 3;
+}
+
+enum ServiceType {
+  ELASTICACHE = 0;
+  MEMORYDB    = 1;
+}
+
+message IamCredentials {
+    string cluster_name = 1;
+    string region = 2;
+    ServiceType service_type = 3;
+    optional uint32 refresh_interval_seconds = 4;
 }
 
 enum ProtocolVersion {
@@ -74,6 +87,9 @@ message ConnectionRequest {
     string client_az = 15;
     uint32 connection_timeout = 16;
     bool lazy_connect = 17;
+    bool refresh_topology_from_initial_nodes = 18;
+    string lib_name = 19;
+    repeated bytes root_certs = 20;
 }
 
 message ConnectionRetryStrategy {

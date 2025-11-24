@@ -1,6 +1,6 @@
 # Welcome to Valkey GLIDE!
 
-Valkey General Language Independent Driver for the Enterprise (GLIDE) is the official open-source Valkey client library, proudly part of the Valkey organization. Our mission is to make your experience with Valkey and Redis OSS seamless and enjoyable. Whether you're a seasoned developer or just starting out, Valkey GLIDE is here to support you every step of the way.
+Valkey General Language Independent Driver for the Enterprise (GLIDE) is an official open-source Valkey client library, proudly part of the Valkey organization. Our mission is to make your experience with Valkey and Redis OSS seamless and enjoyable. Whether you're a seasoned developer or just starting out, Valkey GLIDE is here to support you every step of the way.
 
 ## Why Choose Valkey GLIDE?
 
@@ -27,14 +27,22 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE) is the off
 
 Valkey GLIDE is API-compatible with the following engine versions:
 
-| Engine Type           |  6.2  |  7.0  |   7.1  |  7.2  |  8.0  |  8.1  |
-|-----------------------|-------|-------|--------|-------|-------|-------|
-| Valkey                |   -   |   -   |   -    |   V   |   V   |   V   |
-| Redis                 |   V   |   V   |   V    |   V   |   -   |   -   |
+| Engine Type           |  6.2  |  7.0  |   7.1  |  7.2  |  8.0  |  8.1  |  9.0  |
+|-----------------------|-------|-------|--------|-------|-------|-------|-------|
+| Valkey                |   -   |   -   |   -    |   V   |   V   |   V   |   V   |
+| Redis                 |   V   |   V   |   V    |   V   |   -   |   -   |   -   |
 
 ## Current Status and Upcoming Releases
 
-The client currently supports Python, Java, Node.js, and Go. Active development continues for C#, C++, and Ruby clients, with Python synchronous operations targeted for the next release.
+The client currently supports Python, Java, Node.js, Go, C#, and PHP. C# and PHP have preview releases, and have been moved to separate repositories to simplify development. Active development continues for C#, PHP, C++ and Ruby clients. Python, Java, Node.js and Go clients will be moved to separate repositories in the near future.
+
+#### v2.1 (Sep. 2025)
+- Valkey 9 Support – First-class support for Multi-DB and Hash Field Expiration (HFE)
+- Python Sync Support – Full synchronous API support for Python
+- Lazy Connection – Extended lazy connection support to Go and Java clients
+- Jedis Compatibility – Added Jedis compatibility layer for Java client
+
+### Previous Releases
 
 #### v2.0 (June 2025)
 
@@ -42,8 +50,6 @@ The client currently supports Python, Java, Node.js, and Go. Active development 
 - OpenTelemetry Integration – Enhanced observability and tracing
 - Batching Support – Improved performance through batch operations
 - Lazy Connection – Allows client creation even when the server is not active, deferring connection establishment.
-
-### Previous Releases
 
 #### v1.3 (Feb. 2025)
 - Public preview release of Go client support
@@ -64,7 +70,7 @@ GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers d
 - [Go](./go/README.md)
 
 **Under Development SDKs**
-- [C#](./csharp/README.md)
+- [C#](https://github.com/valkey-io/valkey-glide-csharp)
 - [C++](https://github.com/valkey-io/valkey-glide-cpp)
 - [Ruby](https://github.com/valkey-io/valkey-glide-ruby)
 
@@ -81,8 +87,14 @@ GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers d
 - [OpenTelemetry](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#opentelemetry)
 
 **Migration Guides**
+- [go-redis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-go%E2%80%90redis)
 - [ioredis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-ioredis)
 - [Jedis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-Jedis)
+- [Lettuce](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-Lettuce)
+- [Redisson](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-redisson)
+- [redis-py](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-redis%E2%80%90py)
+- [StackExchange.Redis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-StackExchange.Redis)
+- [PHPRedis](https://github.com/valkey-io/valkey-glide-php/wiki/Migration-Guide-PHPRedis)
 
 **Community**
 - [Contributors meeting](https://github.com/valkey-io/valkey-glide/wiki/Contributors-meeting)

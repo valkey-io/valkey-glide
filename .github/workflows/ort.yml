@@ -1,7 +1,7 @@
 name: The OSS Review Toolkit (ORT)
 
 permissions:
-    contents: read
+    contents: write
     pull-requests: write
     actions: read
 
@@ -29,7 +29,8 @@ jobs:
 
         continue-on-error: true
         env:
-            PYTHON_ATTRIBUTIONS: "python/THIRD_PARTY_LICENSES_PYTHON"
+            PYTHON_ASYNC_ATTRIBUTIONS: "python/glide-async/THIRD_PARTY_LICENSES_PYTHON_ASYNC"
+            PYTHON_SYNC_ATTRIBUTIONS: "python/glide-sync/THIRD_PARTY_LICENSES_PYTHON_SYNC"
             NODE_ATTRIBUTIONS: "node/THIRD_PARTY_LICENSES_NODE"
             RUST_ATTRIBUTIONS: "glide-core/THIRD_PARTY_LICENSES_RUST"
             JAVA_ATTRIBUTIONS: "java/THIRD_PARTY_LICENSES_JAVA"
@@ -108,7 +109,7 @@ jobs:
 
               ### NodeJS ###
             - name: Set up Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
 
             - name: Run ORT tools for Node
               uses: ./.github/workflows/run-ort-tools
@@ -127,10 +128,20 @@ jobs:
                   python -m pip install --upgrade pip
                   pip install git+https://github.com/nexB/python-inspector
 
-            - name: Run ORT tools for Python
+            - name: Install dev requirements
+              working-directory: ./python
+              run: |
+                  python -m pip install -r dev_requirements.txt
+
+            - name: Run ORT tools for Python Async Client
               uses: ./.github/workflows/run-ort-tools
               with:
-                  folder_path: "${{ github.workspace }}/python"
+                  folder_path: "${{ github.workspace }}/python/glide-async"
+
+            - name: Run ORT tools for Python Sync Client
+              uses: ./.github/workflows/run-ort-tools
+              with:
+                  folder_path: "${{ github.workspace }}/python/glide-sync"
 
               ### Rust glide-core ###
             - name: Run ORT tools for glide-core
@@ -241,16 +252,18 @@ jobs:
               ### Check for attributions diff ### (FFI attributions merged to FFI clients' attributions)
             - name: Check for diff
               run: |
-                  cp python/ort_results/NOTICE_DEFAULT $PYTHON_ATTRIBUTIONS
+                  cp python/glide-async/ort_results/NOTICE_DEFAULT $PYTHON_ASYNC_ATTRIBUTIONS
+                  cp python/glide-sync/ort_results/NOTICE_DEFAULT $PYTHON_SYNC_ATTRIBUTIONS
                   cp node/ort_results/NOTICE_DEFAULT $NODE_ATTRIBUTIONS
                   cp glide-core/ort_results/NOTICE_DEFAULT $RUST_ATTRIBUTIONS
                   cp java/ort_results/NOTICE_DEFAULT $JAVA_ATTRIBUTIONS
                   : Workaround for empty attributions for go packages. See discussions in https://github.com/valkey-io/valkey-glide/pull/3469 and in https://github.com/oss-review-toolkit/ort/issues/10454
                   curl https://raw.githubusercontent.com/valkey-io/valkey-glide/9c9ef0ae2c2ee865c7867f6ac0d3f9aac054bac8/go/THIRD_PARTY_LICENSES_GO -o $GO_ATTRIBUTIONS
                   cat go/ort_results/NOTICE_DEFAULT >> $GO_ATTRIBUTIONS
-                  : Merge FFI attributions into GO attributions
+                  : Merge FFI attributions into GO and PYTHON_SYNC attributions
                   cat ffi/ort_results/NOTICE_DEFAULT >> $GO_ATTRIBUTIONS
-                  GIT_DIFF=`git diff $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS`
+                  cat ffi/ort_results/NOTICE_DEFAULT >> $PYTHON_SYNC_ATTRIBUTIONS
+                  GIT_DIFF=`git diff $PYTHON_ASYNC_ATTRIBUTIONS $PYTHON_SYNC_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS`
                   if [ -n "$GIT_DIFF" ]; then
                     echo "FOUND_DIFF=true" >> $GITHUB_ENV
                   else
@@ -266,9 +279,9 @@ jobs:
                   git config --global user.email "valkey-glide@lists.valkey.io"
                   git config --global user.name "ort-bot"
                   git checkout -b ${ORT_DIFF_BRANCH_NAME}
-                  git add $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS
+                  git add $PYTHON_ASYNC_ATTRIBUTIONS $PYTHON_SYNC_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS
                   git commit -m "Updated attribution files" -s
-                  git push --set-upstream origin ${ORT_DIFF_BRANCH_NAME} -f
+                  git push --set-upstream origin ${ORT_DIFF_BRANCH_NAME} -f || { echo "Failed to push branch."; exit 1; }
 
                   # Check if PR already exists
                   existing_pr=$(gh pr list --base ${TARGET_BRANCH} --head ${ORT_DIFF_BRANCH_NAME} --json number --jq '.[0].number')
@@ -276,12 +289,12 @@ jobs:
                   if [ -z "$existing_pr" ]; then
                     # Create a new PR if none exists
                     title="Updated attribution files for commit ${TARGET_COMMIT}"
-                    gh pr create -B ${TARGET_BRANCH} -H ${ORT_DIFF_BRANCH_NAME} --title "${title}" --body "Created by Github action. ${{ env.LICENSES_LIST }}"
+                    gh pr create -B ${TARGET_BRANCH} -H ${ORT_DIFF_BRANCH_NAME} --title "${title}" --body "Created by Github action. ${{ env.LICENSES_LIST }}" || { echo "Failed to create PR."; exit 1; }
                     echo "Pull request created successfully."
                   else
                     # Update the existing PR
                     echo "Pull request #$existing_pr already exists. Updating branch."
-                    gh pr edit $existing_pr --title "Updated attribution files for commit ${TARGET_COMMIT}" --body "Created by Github action. ${{ env.LICENSES_LIST }}"
+                    gh pr edit $existing_pr --title "Updated attribution files for commit ${TARGET_COMMIT}" --body "Created by Github action. ${{ env.LICENSES_LIST }}" || { echo "Failed to update PR."; exit 1; }
                     echo "Pull request updated successfully."
                   fi
               env:
@@ -293,7 +306,8 @@ jobs:
               if: ${{ env.FOUND_DIFF == 'true' && github.event_name == 'pull_request' }}
               run: |
                   ATTRIBUTION_FILES=(
-                    "${{ env.PYTHON_ATTRIBUTIONS }}"
+                    "${{ env.PYTHON_ASYNC_ATTRIBUTIONS }}"
+                    "${{ env.PYTHON_SYNC_ATTRIBUTIONS }}"
                     "${{ env.NODE_ATTRIBUTIONS }}"
                     "${{ env.RUST_ATTRIBUTIONS }}"
                     "${{ env.JAVA_ATTRIBUTIONS }}"

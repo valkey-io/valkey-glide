@@ -783,7 +783,11 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersion() {
 	options := options.NewLolwutOptions(8)
 	res, err := client.LolwutWithOptions(context.Background(), *options)
 	assert.NoError(suite.T(), err)
-	assert.Contains(suite.T(), res, "Redis ver.")
+	// Check for version string in LOLWUT output (dual contains approach)
+	hasVer := strings.Contains(res, "ver")
+	hasVersion := strings.Contains(res, suite.serverVersion)
+	assert.True(suite.T(), hasVer && hasVersion,
+		"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, res)
 }
 
 func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersionAndArgs() {
@@ -791,7 +795,11 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersionAndArgs() {
 	opts := options.NewLolwutOptions(8).SetArgs([]int{10, 20})
 	res, err := client.LolwutWithOptions(context.Background(), *opts)
 	assert.NoError(suite.T(), err)
-	assert.Contains(suite.T(), res, "Redis ver.")
+	// Check for version string in LOLWUT output (dual contains approach)
+	hasVer := strings.Contains(res, "ver")
+	hasVersion := strings.Contains(res, suite.serverVersion)
+	assert.True(suite.T(), hasVer && hasVersion,
+		"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, res)
 }
 
 func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
@@ -799,7 +807,39 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
 	opts := options.NewLolwutOptions(6).SetArgs([]int{})
 	res, err := client.LolwutWithOptions(context.Background(), *opts)
 	assert.NoError(suite.T(), err)
-	assert.Contains(suite.T(), res, "Redis ver.")
+	// Check for version string in LOLWUT output (dual contains approach)
+	hasVer := strings.Contains(res, "ver")
+	hasVersion := strings.Contains(res, suite.serverVersion)
+	assert.True(suite.T(), hasVer && hasVersion,
+		"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, res)
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_TwoParams() {
+	client := suite.defaultClient()
+	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
+	if suite.serverVersion >= "9.0.0" {
+		opts := options.NewLolwutOptions(9).SetArgs([]int{30, 4})
+		res, err := client.LolwutWithOptions(context.Background(), *opts)
+		assert.NoError(suite.T(), err)
+		hasVer := strings.Contains(res, "ver")
+		hasVersion := strings.Contains(res, suite.serverVersion)
+		assert.True(suite.T(), hasVer && hasVersion,
+			"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, res)
+	}
+}
+
+func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_FourParams() {
+	client := suite.defaultClient()
+	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
+	if suite.serverVersion >= "9.0.0" {
+		opts := options.NewLolwutOptions(9).SetArgs([]int{40, 20, 1, 2})
+		res, err := client.LolwutWithOptions(context.Background(), *opts)
+		assert.NoError(suite.T(), err)
+		hasVer := strings.Contains(res, "ver")
+		hasVersion := strings.Contains(res, suite.serverVersion)
+		assert.True(suite.T(), hasVer && hasVersion,
+			"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, res)
+	}
 }
 
 func (suite *GlideTestSuite) TestClientId() {
@@ -1306,10 +1346,34 @@ func (suite *GlideTestSuite) TestScriptKill() {
 
 	go invokeClient.InvokeScript(context.Background(), *script)
 
-	time.Sleep(1 * time.Second)
+	timeout := time.After(4 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 
-	result, err := killClient.ScriptKill(context.Background())
-	assert.NoError(suite.T(), err)
+	var result string
+	killed := false
+
+	for !killed {
+		select {
+		case <-timeout:
+			suite.T().Fatal("Timeout: SCRIPT KILL failed to execute in 4 seconds")
+		case <-ticker.C:
+			result, err = killClient.ScriptKill(context.Background())
+			if err == nil {
+				killed = true
+				// No 'break' needed here; select already exits after one case
+				continue // Or simply let it fall through
+			}
+
+			if !strings.Contains(strings.ToLower(err.Error()), "notbusy") {
+				assert.NoError(suite.T(), err) // Will fail the test if there's an unexpected error
+				killed = true                  // Stop polling on unexpected errors
+			}
+			// If it was "notbusy", loop continues naturally
+		}
+	}
+
+	assert.NoError(suite.T(), err) // This now checks the final error state after the loop
 	assert.Equal(suite.T(), "OK", result)
 	script.Close()
 

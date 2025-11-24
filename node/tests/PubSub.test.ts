@@ -1093,6 +1093,9 @@ describe("PubSub", () => {
                     pubSub,
                 );
 
+                // Wait for subscriptions to be established in cluster mode
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
                 // Publish messages to each channel
                 for (const [channel, message] of channelsAndMessages) {
                     const result = await (
@@ -1747,6 +1750,9 @@ describe("PubSub", () => {
                     pubSubPattern,
                 );
 
+                // Wait for subscriptions to be established in cluster mode
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
                 // Publish messages to all channels
                 for (const [channel, message] of allChannelsAndMessages) {
                     const result = await publishingClient.publish(
@@ -1937,6 +1943,9 @@ describe("PubSub", () => {
                     getOptions(clusterMode),
                     pubSub,
                 );
+
+                // Wait for subscriptions to be established in cluster mode
+                await new Promise((resolve) => setTimeout(resolve, 1000));
 
                 // Publish messages to exact and pattern channels
                 for (const [channel, message] of [
@@ -2161,6 +2170,9 @@ describe("PubSub", () => {
                         pubSubPattern,
                         pubSubSharded,
                     );
+
+                // Wait for subscriptions to be established in cluster mode
+                await new Promise((resolve) => setTimeout(resolve, 1000));
 
                 // Publish messages to exact and pattern channels
                 for (const [channel, message] of [

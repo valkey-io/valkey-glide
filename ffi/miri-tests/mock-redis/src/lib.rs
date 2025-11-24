@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-pub use redis::{RedisFuture, Value, ErrorKind, RedisError, RedisResult, ObjectType, PushKind};
+pub use redis::{ErrorKind, ObjectType, PushKind, RedisError, RedisFuture, RedisResult, Value};
 use telemetrylib::GlideSpan;
 
 pub mod cluster_routing;
@@ -11,7 +11,17 @@ pub use cluster_topology::*;
 
 pub use redis::ToRedisArgs;
 
-pub struct Cmd;
+pub struct Cmd {
+    command_bytes: Vec<u8>,
+}
+
+impl Default for Cmd {
+    fn default() -> Self {
+        Self {
+            command_bytes: b"GET".to_vec(),
+        }
+    }
+}
 
 impl Routable for Cmd {}
 
@@ -22,6 +32,14 @@ impl Cmd {
 
     pub fn set_span(&mut self, _span: Option<GlideSpan>) -> &mut Cmd {
         self
+    }
+
+    pub fn span(&self) -> Option<GlideSpan> {
+        None
+    }
+
+    pub fn command(&self) -> Option<Vec<u8>> {
+        Some(self.command_bytes.clone())
     }
 }
 
@@ -45,10 +63,10 @@ impl Pipeline {
     }
 
     pub fn set_pipeline_span(&mut self, _span: Option<GlideSpan>) {}
-    
+
     pub fn span(&self) -> Option<GlideSpan> {
         Some(GlideSpan)
-    }        
+    }
 }
 
 pub struct ScanStateRC;
@@ -91,11 +109,16 @@ impl ClusterScanArgsBuilder {
     pub fn with_match_pattern<T: Into<Vec<u8>>>(self, _pattern: T) -> Self {
         self
     }
+
+    pub fn allow_non_covered_slots(self, _allow: bool) -> Self {
+        self
+    }
+
 }
 
 pub struct PushInfo {
     pub kind: redis::PushKind,
-    pub data: Vec<redis::Value>
+    pub data: Vec<redis::Value>,
 }
 
 pub struct PipelineRetryStrategy;
@@ -105,4 +128,3 @@ impl PipelineRetryStrategy {
         PipelineRetryStrategy
     }
 }
-

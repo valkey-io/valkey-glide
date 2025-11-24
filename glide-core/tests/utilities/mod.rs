@@ -19,12 +19,13 @@ use std::{
 };
 use tempfile::TempDir;
 use tokio::sync::mpsc;
+use versions::Versioning;
 
 pub mod cluster;
 pub mod mocks;
 
-pub(crate) const SHORT_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(10_000);
-pub(crate) const LONG_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(20_000);
+pub(crate) const SHORT_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(20_000);
+pub(crate) const LONG_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(40_000);
 
 // Code copied from redis-rs
 
@@ -394,8 +395,8 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
         .wait()
         .expect("failed to create CA cert");
 
-    // Build x509v3 extensions file
-    fs::write(&ext_file, b"keyUsage = digitalSignature, keyEncipherment")
+    // Build x509v3 extensions file with SAN for 127.0.0.1
+    fs::write(&ext_file, b"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,DNS:localhost")
         .expect("failed to create x509v3 extensions file");
 
     // Read redis key
@@ -444,6 +445,12 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
         redis_crt,
         redis_key,
         ca_crt,
+    }
+}
+
+impl TlsFilePaths {
+    pub fn read_ca_cert_as_bytes(&self) -> Vec<u8> {
+        fs::read(&self.ca_crt).expect("Failed to read CA certificate file")
     }
 }
 
@@ -571,6 +578,7 @@ fn set_connection_info_to_connection_request(
             protobuf::MessageField(Some(Box::new(AuthenticationInfo {
                 password: connection_info.password.unwrap().into(),
                 username: connection_info.username.unwrap_or_default().into(),
+                iam_credentials: protobuf::MessageField::none(),
                 ..Default::default()
             })));
     }
@@ -696,19 +704,20 @@ pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration
         get_shared_server_address(configuration.use_tls)
     };
 
-    if let Some(redis_connection_info) = &configuration.connection_info {
-        if redis_connection_info.password.is_some() {
-            assert!(!configuration.shared_server);
-            setup_acl(&connection_addr, redis_connection_info).await;
-        }
+    if let Some(redis_connection_info) = &configuration.connection_info
+        && redis_connection_info.password.is_some()
+    {
+        assert!(!configuration.shared_server);
+        setup_acl(&connection_addr, redis_connection_info).await;
     }
     let mut connection_request = create_connection_request(&[connection_addr], configuration);
     connection_request.cluster_mode_enabled = false;
     connection_request.protocol = configuration.protocol.into();
     let (push_sender, push_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let client = StandaloneClient::create_client(connection_request.into(), Some(push_sender))
-        .await
-        .unwrap();
+    let client =
+        StandaloneClient::create_client(connection_request.into(), Some(push_sender), None)
+            .await
+            .unwrap();
 
     TestBasics {
         server,
@@ -768,4 +777,85 @@ pub async fn kill_connection_for_route(
 pub enum BackingServer {
     Standalone(Option<RedisServer>),
     Cluster(Option<cluster::RedisCluster>),
+}
+
+/// Get the server version from a client connection
+pub async fn get_server_version(
+    client: &mut impl glide_core::client::GlideClientForTests,
+) -> (u16, u16, u16) {
+    let mut info_cmd = redis::cmd("INFO");
+    info_cmd.arg("SERVER");
+
+    let info_result = client.send_command(&info_cmd, None).await.unwrap();
+    let info_string = match info_result {
+        Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+        Value::VerbatimString { text, .. } => text,
+        Value::Map(node_results) => {
+            // In cluster mode, INFO returns a map of node -> info string
+            // We just need to get the version from any node (they should all be the same)
+            if let Some((_, node_info)) = node_results.first() {
+                match node_info {
+                    Value::VerbatimString { text, .. } => text.clone(),
+                    Value::BulkString(bytes) => String::from_utf8_lossy(bytes).to_string(),
+                    _ => panic!(
+                        "Unexpected node info type in cluster INFO response: {:?}",
+                        node_info
+                    ),
+                }
+            } else {
+                panic!("Empty cluster INFO response");
+            }
+        }
+        _ => panic!("Unexpected INFO response type: {:?}", info_result),
+    };
+
+    // Parse the INFO response to extract version
+    // First try to find valkey_version, then fall back to redis_version
+    for line in info_string.lines() {
+        if let Some(version_str) = line.strip_prefix("valkey_version:") {
+            return parse_version_string(version_str);
+        }
+    }
+
+    // If no valkey_version found, look for redis_version
+    for line in info_string.lines() {
+        if let Some(version_str) = line.strip_prefix("redis_version:") {
+            return parse_version_string(version_str);
+        }
+    }
+
+    panic!("Could not find version information in INFO response");
+}
+
+/// Parse a version string like "8.1.3" into (8, 1, 3)
+fn parse_version_string(version_str: &str) -> (u16, u16, u16) {
+    let parts: Vec<&str> = version_str.split('.').collect();
+    if parts.len() >= 3 {
+        let major = parts[0].parse().unwrap_or(0);
+        let minor = parts[1].parse().unwrap_or(0);
+        let patch = parts[2].parse().unwrap_or(0);
+        (major, minor, patch)
+    } else {
+        panic!("Invalid version format: {}", version_str);
+    }
+}
+
+/// Check if the server version is greater than or equal to the specified version
+pub async fn version_greater_or_equal(
+    client: &mut impl glide_core::client::GlideClientForTests,
+    version: &str,
+) -> bool {
+    let (major, minor, patch) = get_server_version(client).await;
+    let server_version = Versioning::new(format!("{major}.{minor}.{patch}")).unwrap();
+    let compared_version = Versioning::new(version).unwrap();
+    server_version >= compared_version
+}
+
+/// Extract client ID from CLIENT INFO response string
+pub fn extract_client_id(client_info: &str) -> Option<String> {
+    client_info
+        .split_whitespace()
+        .find(|part| part.starts_with("id="))
+        .and_then(|id_part| id_part.strip_prefix("id="))
+        .map(|id| id.to_string())
 }

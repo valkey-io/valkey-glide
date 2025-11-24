@@ -28,7 +28,7 @@ jobs:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Trigger full-matrix-tests workflow
-              uses: actions/github-script@v7
+              uses: actions/github-script@v8
               with:
                   script: |
                       const branches = "${{ steps.get-branches.outputs.branches }}".split(" ");
@@ -43,7 +43,8 @@ jobs:
                             workflow_id: workflowFile,
                             ref: branch, // The branch where workflow_dispatch is triggered
                             inputs: {
-                              'run-modules-tests': 'false' // Dont run modules tests
+                              'run-modules-tests': 'false', // Don't run modules tests
+                              'run-with-macos': 'use-self-hosted' // Run on self hosted mac runners by default
                             }
                           });
                           console.log(`Successfully triggered workflow for branch: ${branch}`);

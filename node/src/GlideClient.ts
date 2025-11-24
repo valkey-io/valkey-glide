@@ -3,20 +3,28 @@
  */
 
 import * as net from "net";
+import { connection_request } from "../build-ts/ProtobufMessage";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
-    Batch,
-    BatchOptions,
     convertGlideRecordToRecord,
+    Decoder,
+    DecoderOption,
+    GlideRecord,
+    GlideReturnType,
+    GlideString,
+    PubSubMsg,
+} from "./BaseClient";
+import { Batch } from "./Batch";
+import {
+    BatchOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
     createConfigSet,
-    createCopy,
     createCustomCommand,
     createDBSize,
     createEcho,
@@ -33,7 +41,6 @@ import {
     createInfo,
     createLastSave,
     createLolwut,
-    createMove,
     createPing,
     createPublish,
     createRandomKey,
@@ -41,25 +48,17 @@ import {
     createScriptExists,
     createScriptFlush,
     createScriptKill,
-    createSelect,
     createTime,
     createUnWatch,
-    Decoder,
-    DecoderOption,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
     FunctionRestorePolicy,
     FunctionStatsFullResponse,
-    GlideRecord,
-    GlideReturnType,
-    GlideString,
     InfoOptions,
     LolwutOptions,
-    PubSubMsg,
     ScanOptions,
-} from ".";
-import { connection_request } from "../build-ts/ProtobufMessage";
+} from "./Commands";
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
 export namespace GlideClientConfiguration {
@@ -102,19 +101,19 @@ export namespace GlideClientConfiguration {
 /**
  * Configuration options for creating a {@link GlideClient | GlideClient}.
  *
- * Extends `BaseClientConfiguration` with properties specific to `GlideClient`, such as database selection,
+ * Extends `BaseClientConfiguration` with properties specific to `GlideClient`, such as
  * reconnection strategies, and Pub/Sub subscription settings.
  *
  * @remarks
  * This configuration allows you to tailor the client's behavior when connecting to a standalone Valkey Glide server.
  *
- * - **Database Selection**: Use `databaseId` to specify which logical database to connect to.
+ * - **Database Selection**: Use `databaseId` (inherited from BaseClientConfiguration) to specify which logical database to connect to.
  * - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
  *
  * @example
  * ```typescript
  * const config: GlideClientConfiguration = {
- *   databaseId: 1,
+ *   databaseId: 1, // Inherited from BaseClientConfiguration
  *   pubsubSubscriptions: {
  *     channelsAndPatterns: {
  *       [GlideClientConfiguration.PubSubChannelModes.Pattern]: new Set(['news.*']),
@@ -127,10 +126,6 @@ export namespace GlideClientConfiguration {
  * ```
  */
 export type GlideClientConfiguration = BaseClientConfiguration & {
-    /**
-     * index of the logical database to connect to.
-     */
-    databaseId?: number;
     /**
      * PubSub subscriptions to be used for the client.
      * Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
@@ -173,7 +168,6 @@ export class GlideClient extends BaseClient {
         options: GlideClientConfiguration,
     ): connection_request.IConnectionRequest {
         const configuration = super.createClientRequest(options);
-        configuration.databaseId = options.databaseId;
 
         this.configurePubsub(options, configuration);
 
@@ -407,27 +401,6 @@ export class GlideClient extends BaseClient {
     }
 
     /**
-     * Changes the currently selected database.
-     *
-     * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
-     *
-     * @param index - The index of the database to select.
-     * @returns A simple `"OK"` response.
-     *
-     * @example
-     * ```typescript
-     * // Example usage of select method
-     * const result = await client.select(2);
-     * console.log(result); // Output: 'OK'
-     * ```
-     */
-    public async select(index: number): Promise<"OK"> {
-        return this.createWritePromise(createSelect(index), {
-            decoder: Decoder.String,
-        });
-    }
-
-    /**
      * Gets the name of the primary's connection.
      *
      * @see {@link https://valkey.io/commands/client-getname/|valkey.io} for more details.
@@ -597,68 +570,6 @@ export class GlideClient extends BaseClient {
         return this.createWritePromise(createTime(), {
             decoder: Decoder.String,
         });
-    }
-
-    /**
-     * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
-     * the value will be copied to the database specified, otherwise the current database will be used.
-     * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
-     * no action.
-     *
-     * @see {@link https://valkey.io/commands/copy/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.2.0.
-     *
-     * @param source - The key to the source value.
-     * @param destination - The key where the value should be copied to.
-     * @param options - (Optional) Additional parameters:
-     * - (Optional) `destinationDB`: the alternative logical database index for the destination key.
-     *     If not provided, the current database will be used.
-     * - (Optional) `replace`: if `true`, the `destination` key should be removed before copying the
-     *     value to it. If not provided, no action will be performed if the key already exists.
-     * @returns `true` if `source` was copied, `false` if the `source` was not copied.
-     *
-     * @example
-     * ```typescript
-     * const result = await client.copy("set1", "set2");
-     * console.log(result); // Output: true - "set1" was copied to "set2".
-     * ```
-     * ```typescript
-     * const result = await client.copy("set1", "set2", { replace: true });
-     * console.log(result); // Output: true - "set1" was copied to "set2".
-     * ```
-     * ```typescript
-     * const result = await client.copy("set1", "set2", { destinationDB: 1, replace: false });
-     * console.log(result); // Output: true - "set1" was copied to "set2".
-     * ```
-     */
-    public async copy(
-        source: GlideString,
-        destination: GlideString,
-        options?: { destinationDB?: number; replace?: boolean },
-    ): Promise<boolean> {
-        return this.createWritePromise(
-            createCopy(source, destination, options),
-        );
-    }
-
-    /**
-     * Move `key` from the currently selected database to the database specified by `dbIndex`.
-     *
-     * @see {@link https://valkey.io/commands/move/|valkey.io} for more details.
-     *
-     * @param key - The key to move.
-     * @param dbIndex - The index of the database to move `key` to.
-     * @returns `true` if `key` was moved, or `false` if the `key` already exists in the destination
-     *     database or does not exist in the source database.
-     *
-     * @example
-     * ```typescript
-     * const result = await client.move("key", 1);
-     * console.log(result); // Output: true
-     * ```
-     */
-    public async move(key: GlideString, dbIndex: number): Promise<boolean> {
-        return this.createWritePromise(createMove(key, dbIndex));
     }
 
     /**

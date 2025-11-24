@@ -36,6 +36,8 @@ import {
     GlideReturnType,
     GlideString,
     HashDataType,
+    HashExpirationCondition,
+    HashFieldConditionalChange,
     InfBoundary,
     InfoOptions,
     InsertPosition,
@@ -55,7 +57,6 @@ import {
     UnsignedEncoding,
     UpdateByScore,
     convertElementsAndScores,
-    convertFieldsAndValuesToHashDataType,
     convertGlideRecordToRecord,
     parseInfoResponse,
 } from "../build-ts";
@@ -1436,7 +1437,11 @@ export function runBaseTests(config: {
 
                 // set up hash with two keys/values
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
-                expect(await client.hkeys(key)).toEqual([field1, field2]);
+                const hkeysResult1 = await client.hkeys(key);
+                expect(hkeysResult1.length).toEqual(2);
+                // order is not guaranteed here
+                expect(hkeysResult1).toContainEqual(field1);
+                expect(hkeysResult1).toContainEqual(field2);
 
                 // remove one key
                 expect(await client.hdel(key, [field1])).toEqual(1);
@@ -1846,25 +1851,31 @@ export function runBaseTests(config: {
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
 
-                expect(await client.hgetall(key)).toEqual(
-                    convertFieldsAndValuesToHashDataType({
-                        [field1]: value,
-                        [field2]: value,
-                    }),
-                );
+                const hgetallResult1 = await client.hgetall(key);
+                expect(hgetallResult1.length).toEqual(2);
+                // order is not guaranteed here
+                expect(hgetallResult1).toContainEqual({
+                    field: field1,
+                    value: value,
+                });
+                expect(hgetallResult1).toContainEqual({
+                    field: field2,
+                    value: value,
+                });
 
-                expect(
-                    await client.hgetall(key, { decoder: Decoder.Bytes }),
-                ).toEqual([
-                    {
-                        field: Buffer.from(field1),
-                        value: Buffer.from(value),
-                    },
-                    {
-                        field: Buffer.from(field2),
-                        value: Buffer.from(value),
-                    },
-                ]);
+                const hgetallResult2 = await client.hgetall(key, {
+                    decoder: Decoder.Bytes,
+                });
+                expect(hgetallResult2.length).toEqual(2);
+                // order is not guaranteed here
+                expect(hgetallResult2).toContainEqual({
+                    field: Buffer.from(field1),
+                    value: Buffer.from(value),
+                });
+                expect(hgetallResult2).toContainEqual({
+                    field: Buffer.from(field2),
+                    value: Buffer.from(value),
+                });
 
                 expect(
                     await client.hgetall(Buffer.from("nonExistingKey")),
@@ -1998,7 +2009,11 @@ export function runBaseTests(config: {
                 expect(
                     await client.hset(Buffer.from(key1), fieldValueMap),
                 ).toEqual(2);
-                expect(await client.hvals(key1)).toEqual(["value1", "value2"]);
+                const hvalsResult1 = await client.hvals(key1);
+                expect(hvalsResult1.length).toEqual(2);
+                // order is not guaranteed here
+                expect(hvalsResult1).toContainEqual("value1");
+                expect(hvalsResult1).toContainEqual("value2");
                 expect(await client.hdel(key1, [field1])).toEqual(1);
                 expect(await client.hvals(Buffer.from(key1))).toEqual([
                     "value2",
@@ -2007,9 +2022,13 @@ export function runBaseTests(config: {
 
                 //hvals with binary buffers
                 expect(await client.hset(key2, fieldValueMap)).toEqual(2);
-                expect(
-                    await client.hvals(key2, { decoder: Decoder.Bytes }),
-                ).toEqual([value1Encoded, value2Encoded]);
+                const hvalsResult2 = await client.hvals(key2, {
+                    decoder: Decoder.Bytes,
+                });
+                expect(hvalsResult2.length).toEqual(2);
+                // order is not guaranteed here
+                expect(hvalsResult2).toContainEqual(value1Encoded);
+                expect(hvalsResult2).toContainEqual(value2Encoded);
                 expect(await client.hdel(key2, [field1])).toEqual(1);
                 expect(
                     await client.hvals(key2, { decoder: Decoder.Bytes }),
@@ -2106,7 +2125,9 @@ export function runBaseTests(config: {
 
                 // With Count - positive count
                 let result = await client.hrandfieldCount(key1, 5);
-                expect(result).toEqual(fields);
+                expect(result.length).toEqual(fields.length);
+                // order is not guaranteed with random fields
+                result.map((r) => expect(fields).toContainEqual(r));
 
                 // With Count - negative count
                 result = await client.hrandfieldCount(Buffer.from(key1), -5, {
@@ -2121,7 +2142,9 @@ export function runBaseTests(config: {
                     5,
                     { decoder: Decoder.Bytes },
                 );
-                expect(result2).toEqual(encodedEntries);
+                expect(result2.length).toEqual(encodedEntries.length);
+                // order is not guaranteed with random fields
+                result2.map((r) => expect(encodedEntries).toContainEqual(r));
 
                 // With values - negative count
                 result2 = await client.hrandfieldWithValues(key1, -5);
@@ -2140,6 +2163,900 @@ export function runBaseTests(config: {
                     client.hrandfieldWithValues(key2, 42),
                 ).rejects.toThrow(RequestError);
             }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hsetex basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Test basic HSETEX with expiry
+                    const fieldValueMap = {
+                        [field1]: value1,
+                        [field2]: value2,
+                    };
+                    expect(
+                        await client.hsetex(key, fieldValueMap, {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        }),
+                    ).toEqual(1);
+
+                    // Verify fields were set
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
+
+                    // Test with KEEPTTL
+                    const field3 = getRandomKey();
+                    const value3 = getRandomKey();
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field3]: value3 },
+                            {
+                                expiry: "KEEPTTL",
+                            },
+                        ),
+                    ).toEqual(1);
+                    expect(await client.hget(key, field3)).toEqual(value3);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hsetex with field conditional changes_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+                    const value3 = getRandomKey();
+
+                    // Set up initial fields
+                    expect(
+                        await client.hset(key, { [field1]: value1 }),
+                    ).toEqual(1);
+
+                    // Test FXX (only if all fields exist)
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field1]: value2, [field2]: value2 },
+                            {
+                                fieldConditionalChange:
+                                    HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(0); // field2 doesn't exist
+
+                    // Test FNX (only if none of the fields exist)
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field2]: value2, [field3]: value3 },
+                            {
+                                fieldConditionalChange:
+                                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(1); // both fields don't exist
+
+                    // Should fail because field2 now exists
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field2]: value2, [field3]: value3 },
+                            {
+                                fieldConditionalChange:
+                                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(0);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hgetex basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Test basic HGETEX without options
+                    const result1 = await client.hgetex(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1).toEqual([value1, value2, null]);
+
+                    // Test HGETEX with expiry setting
+                    const result2 = await client.hgetex(key, [field1, field2], {
+                        expiry: { type: TimeUnit.Seconds, count: 60 },
+                    });
+                    expect(result2).toEqual([value1, value2]);
+
+                    // Test HGETEX with PERSIST option
+                    const result3 = await client.hgetex(key, [field1], {
+                        expiry: "PERSIST",
+                    });
+                    expect(result3).toEqual([value1]);
+
+                    // Test HGETEX on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result5 = await client.hgetex(nonExistentKey, [
+                        field1,
+                        field2,
+                    ]);
+                    expect(result5).toEqual([null, null]);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hexpire basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Test basic HEXPIRE
+                    const result1 = await client.hexpire(key, 60, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
+
+                    // Verify fields still exist
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
+
+                    // Verify expiration was set using HTTL
+                    const ttlResult = await client.httl(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(ttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
+                    expect(ttlResult[0]).toBeLessThanOrEqual(60); // should be <= 60 seconds
+                    expect(ttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
+                    expect(ttlResult[1]).toBeLessThanOrEqual(60); // should be <= 60 seconds
+                    expect(ttlResult[2]).toEqual(-2); // field3 doesn't exist
+
+                    // Test with 0 seconds (immediate deletion)
+                    const result2 = await client.hexpire(key, 0, [field1]);
+                    expect(result2).toEqual([2]);
+                    expect(await client.hget(key, field1)).toEqual(null);
+
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hexpire(nonExistentKey, 60, [
+                        field1,
+                    ]);
+                    expect(result3).toEqual([-2]);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hexpire with conditions_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Set initial expiration on field1
+                    await client.hexpire(key, 120, [field1]);
+
+                    // Test NX condition (only if no expiry)
+                    const result1 = await client.hexpire(
+                        key,
+                        60,
+                        [field1, field2],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_NO_EXPIRY,
+                        },
+                    );
+                    expect(result1).toEqual([0, 1]); // field1 already has expiry, field2 doesn't
+
+                    // Test XX condition (only if has expiry)
+                    const result2 = await client.hexpire(
+                        key,
+                        180,
+                        [field1, field2],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_HAS_EXPIRY,
+                        },
+                    );
+                    expect(result2).toEqual([1, 1]); // both should have expiry now
+
+                    // Verify expiration was updated using HTTL
+                    const ttlResult2 = await client.httl(key, [field1, field2]);
+                    expect(ttlResult2[0]).toBeGreaterThan(0);
+                    expect(ttlResult2[0]).toBeLessThanOrEqual(180);
+                    expect(ttlResult2[1]).toBeGreaterThan(0);
+                    expect(ttlResult2[1]).toBeLessThanOrEqual(180);
+
+                    // Test GT condition (only if greater than current)
+                    const result3 = await client.hexpire(key, 300, [field1], {
+                        condition:
+                            HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT,
+                    });
+                    expect(result3).toEqual([1]); // 300 > 180
+
+                    // Verify expiration was updated using HTTL
+                    const ttlResult3 = await client.httl(key, [field1]);
+                    expect(ttlResult3[0]).toBeGreaterThan(180); // Should be greater than previous TTL
+                    expect(ttlResult3[0]).toBeLessThanOrEqual(300);
+
+                    // Test LT condition (only if less than current)
+                    const result4 = await client.hexpire(key, 150, [field1], {
+                        condition:
+                            HashExpirationCondition.ONLY_IF_LESS_THAN_CURRENT,
+                    });
+                    expect(result4).toEqual([1]); // 150 < 300
+
+                    // Verify expiration was updated using HTTL
+                    const ttlResult4 = await client.httl(key, [field1]);
+                    expect(ttlResult4[0]).toBeGreaterThan(0);
+                    expect(ttlResult4[0]).toBeLessThanOrEqual(150);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hpersist basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey(); // non-existent field
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Set expiration on fields
+                    await client.hexpire(key, 60, [field1, field2]);
+
+                    // Test basic HPERSIST
+                    const result1 = await client.hpersist(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
+
+                    // Verify fields still exist but no longer have expiration
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
+
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result2 = await client.hpersist(nonExistentKey, [
+                        field1,
+                    ]);
+                    expect(result2).toEqual([-2]);
+
+                    // Test on fields without expiration
+                    const key2 = getRandomKey();
+                    await client.hset(key2, { [field1]: value1 });
+                    const result3 = await client.hpersist(key2, [field1]);
+                    expect(result3).toEqual([-1]); // field has no expiration to remove
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hpexpire basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Test basic HPEXPIRE
+                    const result1 = await client.hpexpire(key, 60000, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
+
+                    // Verify fields still exist
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
+
+                    // Verify expiration was set using HPTTL
+                    const pttlResult = await client.hpttl(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(pttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
+                    expect(pttlResult[0]).toBeLessThanOrEqual(60000); // should be <= 60000 milliseconds
+                    expect(pttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
+                    expect(pttlResult[1]).toBeLessThanOrEqual(60000); // should be <= 60000 milliseconds
+                    expect(pttlResult[2]).toEqual(-2); // field3 doesn't exist
+
+                    // Test with 0 milliseconds (immediate deletion)
+                    const result2 = await client.hpexpire(key, 0, [field1]);
+                    expect(result2).toEqual([2]);
+                    expect(await client.hget(key, field1)).toEqual(null);
+
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hpexpire(
+                        nonExistentKey,
+                        60000,
+                        [field1],
+                    );
+                    expect(result3).toEqual([-2]);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hexpireat basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Test basic HEXPIREAT with future timestamp
+                    const futureTimestamp =
+                        Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+                    const result1 = await client.hexpireat(
+                        key,
+                        futureTimestamp,
+                        [field1, field2, field3],
+                    );
+                    expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
+
+                    // Verify fields still exist
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
+
+                    // Verify expiration was set using HTTL and HEXPIRETIME
+                    const ttlResult = await client.httl(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(ttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
+                    expect(ttlResult[0]).toBeLessThanOrEqual(3600); // should be <= 3600 seconds
+                    expect(ttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
+                    expect(ttlResult[1]).toBeLessThanOrEqual(3600); // should be <= 3600 seconds
+                    expect(ttlResult[2]).toEqual(-2); // field3 doesn't exist
+
+                    const expireTimeResult = await client.hexpiretime(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(expireTimeResult[0]).toBeGreaterThan(
+                        Math.floor(Date.now() / 1000),
+                    ); // Should be in the future
+                    expect(expireTimeResult[0]).toBeLessThanOrEqual(
+                        futureTimestamp,
+                    ); // Should be <= set timestamp
+                    expect(expireTimeResult[1]).toBeGreaterThan(
+                        Math.floor(Date.now() / 1000),
+                    ); // Should be in the future
+                    expect(expireTimeResult[1]).toBeLessThanOrEqual(
+                        futureTimestamp,
+                    ); // Should be <= set timestamp
+                    expect(expireTimeResult[2]).toEqual(-2); // field3 doesn't exist
+
+                    // Test with past timestamp (immediate deletion)
+                    const pastTimestamp = Math.floor(Date.now() / 1000) - 3600; // 1 hour ago
+                    const result2 = await client.hexpireat(key, pastTimestamp, [
+                        field1,
+                    ]);
+                    expect(result2).toEqual([2]);
+                    expect(await client.hget(key, field1)).toEqual(null);
+
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hexpireat(
+                        nonExistentKey,
+                        futureTimestamp,
+                        [field1],
+                    );
+                    expect(result3).toEqual([-2]);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hpexpireat basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Test basic HPEXPIREAT with future timestamp in milliseconds
+                    const futureTimestamp = Date.now() + 3600000; // 1 hour from now
+                    const result1 = await client.hpexpireat(
+                        key,
+                        futureTimestamp,
+                        [field1, field2, field3],
+                    );
+                    expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
+
+                    // Verify fields still exist and have expiration
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
+
+                    // Verify expiration was set using HPTTL and HPEXPIRETIME
+                    const pttlResult = await client.hpttl(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(pttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
+                    expect(pttlResult[0]).toBeLessThanOrEqual(3600000); // should be <= 3600000 milliseconds
+                    expect(pttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
+                    expect(pttlResult[1]).toBeLessThanOrEqual(3600000); // should be <= 3600000 milliseconds
+                    expect(pttlResult[2]).toEqual(-2); // field3 doesn't exist
+
+                    const pexpireTimeResult = await client.hpexpiretime(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(pexpireTimeResult[0]).toBeGreaterThan(Date.now()); // Should be in the future
+                    expect(pexpireTimeResult[0]).toBeLessThanOrEqual(
+                        futureTimestamp,
+                    ); // Should be <= set timestamp
+                    expect(pexpireTimeResult[1]).toBeGreaterThan(Date.now()); // Should be in the future
+                    expect(pexpireTimeResult[1]).toBeLessThanOrEqual(
+                        futureTimestamp,
+                    ); // Should be <= set timestamp
+                    expect(pexpireTimeResult[2]).toEqual(-2); // field3 doesn't exist
+
+                    // Test with past timestamp (immediate deletion)
+                    const pastTimestamp = Date.now() - 3600000; // 1 hour ago
+                    const result2 = await client.hpexpireat(
+                        key,
+                        pastTimestamp,
+                        [field1],
+                    );
+                    expect(result2).toEqual([2]);
+                    expect(await client.hget(key, field1)).toEqual(null);
+
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hpexpireat(
+                        nonExistentKey,
+                        futureTimestamp,
+                        [field1],
+                    );
+                    expect(result3).toEqual([-2]);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `httl basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Set expiration on fields
+                    await client.hexpire(key, 60, [field1, field2]);
+
+                    // Test basic HTTL
+                    const result1 = await client.httl(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1.length).toEqual(3);
+                    expect(result1[0]).toBeGreaterThan(0); // field1 has TTL
+                    expect(result1[1]).toBeGreaterThan(0); // field2 has TTL
+                    expect(result1[2]).toEqual(-2); // field3 doesn't exist
+
+                    // Remove expiration from field1
+                    await client.hpersist(key, [field1]);
+
+                    // Test HTTL after persist
+                    const result2 = await client.httl(key, [field1, field2]);
+                    expect(result2[0]).toEqual(-1); // field1 has no expiration
+                    expect(result2[1]).toBeGreaterThan(0); // field2 still has TTL
+
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.httl(nonExistentKey, [field1]);
+                    expect(result3).toEqual([-2]);
+
+                    // Test on fields without expiration
+                    const key2 = getRandomKey();
+                    await client.hset(key2, { [field1]: value1 });
+                    const result4 = await client.httl(key2, [field1]);
+                    expect(result4).toEqual([-1]); // field has no expiration
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hexpiretime basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Set expiration on fields using absolute timestamp
+                    const futureTimestamp =
+                        Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+                    await client.hexpireat(key, futureTimestamp, [
+                        field1,
+                        field2,
+                    ]);
+
+                    // Test basic HEXPIRETIME
+                    const result1 = await client.hexpiretime(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1.length).toEqual(3);
+                    expect(result1[0]).toBeGreaterThan(0); // field1 has expiration timestamp
+                    expect(result1[1]).toBeGreaterThan(0); // field2 has expiration timestamp
+                    expect(result1[2]).toEqual(-2); // field3 doesn't exist
+
+                    // Remove expiration from field1
+                    await client.hpersist(key, [field1]);
+
+                    // Test HEXPIRETIME after persist
+                    const result2 = await client.hexpiretime(key, [
+                        field1,
+                        field2,
+                    ]);
+                    expect(result2[0]).toEqual(-1); // field1 has no expiration
+                    expect(result2[1]).toBeGreaterThan(0); // field2 still has expiration timestamp
+
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hexpiretime(nonExistentKey, [
+                        field1,
+                    ]);
+                    expect(result3).toEqual([-2]);
+
+                    // Test on fields without expiration
+                    const key2 = getRandomKey();
+                    await client.hset(key2, { [field1]: value1 });
+                    const result4 = await client.hexpiretime(key2, [field1]);
+                    expect(result4).toEqual([-1]); // field has no expiration
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hpexpiretime basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Set expiration on fields using absolute timestamp in milliseconds
+                    const futureTimestampMs = Date.now() + 3600000; // 1 hour from now in milliseconds
+                    await client.hpexpireat(key, futureTimestampMs, [
+                        field1,
+                        field2,
+                    ]);
+
+                    // Test basic HPEXPIRETIME
+                    const result1 = await client.hpexpiretime(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1.length).toEqual(3);
+                    expect(result1[0]).toBeGreaterThan(0); // field1 has expiration timestamp in milliseconds
+                    expect(result1[1]).toBeGreaterThan(0); // field2 has expiration timestamp in milliseconds
+                    expect(result1[2]).toEqual(-2); // field3 doesn't exist
+
+                    // Verify timestamp is in milliseconds (should be much larger than seconds)
+                    expect(result1[0]).toBeGreaterThan(Date.now()); // Should be in the future
+                    expect(result1[1]).toBeGreaterThan(Date.now()); // Should be in the future
+
+                    // Remove expiration from field1
+                    await client.hpersist(key, [field1]);
+
+                    // Test HPEXPIRETIME after persist
+                    const result2 = await client.hpexpiretime(key, [
+                        field1,
+                        field2,
+                    ]);
+                    expect(result2[0]).toEqual(-1); // field1 has no expiration
+                    expect(result2[1]).toBeGreaterThan(0); // field2 still has expiration timestamp
+
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hpexpiretime(nonExistentKey, [
+                        field1,
+                    ]);
+                    expect(result3).toEqual([-2]);
+
+                    // Test on fields without expiration
+                    const key2 = getRandomKey();
+                    await client.hset(key2, { [field1]: value1 });
+                    const result4 = await client.hpexpiretime(key2, [field1]);
+                    expect(result4).toEqual([-1]); // field has no expiration
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hpttl basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Set expiration on fields using HPEXPIRE (milliseconds)
+                    await client.hpexpire(key, 60000, [field1, field2]);
+
+                    // Test basic HPTTL
+                    const result1 = await client.hpttl(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1.length).toEqual(3);
+                    expect(result1[0]).toBeGreaterThan(0); // field1 has TTL in milliseconds
+                    expect(result1[1]).toBeGreaterThan(0); // field2 has TTL in milliseconds
+                    expect(result1[2]).toEqual(-2); // field3 doesn't exist
+
+                    // Verify TTL is in milliseconds (should be much larger than seconds)
+                    expect(result1[0]).toBeGreaterThan(1000); // Should be > 1 second in ms
+                    expect(result1[1]).toBeGreaterThan(1000); // Should be > 1 second in ms
+
+                    // Remove expiration from field1
+                    await client.hpersist(key, [field1]);
+
+                    // Test HPTTL after persist
+                    const result2 = await client.hpttl(key, [field1, field2]);
+                    expect(result2[0]).toEqual(-1); // field1 has no expiration
+                    expect(result2[1]).toBeGreaterThan(0); // field2 still has TTL
+
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hpttl(nonExistentKey, [
+                        field1,
+                    ]);
+                    expect(result3).toEqual([-2]);
+
+                    // Test on fields without expiration
+                    const key2 = getRandomKey();
+                    await client.hset(key2, { [field1]: value1 });
+                    const result4 = await client.hpttl(key2, [field1]);
+                    expect(result4).toEqual([-1]); // field has no expiration
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -4171,6 +5088,7 @@ export function runBaseTests(config: {
                 await expect(
                     client.scriptShow("non existing sha1"),
                 ).rejects.toThrow(RequestError);
+                script.release();
             }, protocol);
         },
         config.timeout,

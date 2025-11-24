@@ -6,18 +6,13 @@
     },
     {
         "language": "python",
-        "versions": ["3.9", "3.10", "3.11", "3.12", "3.13"],
+        "versions": ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"],
         "always-run-versions": ["3.9", "3.13"]
     },
     {
         "language": "node",
         "versions": ["16.x", "20.x", "22.x", "23.x"],
         "always-run-versions": ["20.x", "23.x"]
-    },
-    {
-        "language": "dotnet",
-        "versions": ["8.0", "6.0"],
-        "always-run-versions": ["8.0"]
     },
     {
         "language": "go",

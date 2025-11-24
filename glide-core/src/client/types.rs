@@ -8,11 +8,13 @@ use std::time::Duration;
 
 #[cfg(feature = "proto")]
 use crate::connection_request as protobuf;
+use crate::iam::ServiceType;
 
 #[derive(Default, Clone, Debug)]
 pub struct ConnectionRequest {
     pub read_from: Option<ReadFrom>,
     pub client_name: Option<String>,
+    pub lib_name: Option<String>,
     pub authentication_info: Option<AuthenticationInfo>,
     pub database_id: i64,
     pub protocol: Option<redis::ProtocolVersion>,
@@ -26,12 +28,43 @@ pub struct ConnectionRequest {
     pub pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo>,
     pub inflight_requests_limit: Option<u32>,
     pub lazy_connect: bool,
+    pub refresh_topology_from_initial_nodes: bool,
+    pub root_certs: Vec<Vec<u8>>,
 }
 
+/// Authentication information for connecting to Redis/Valkey servers
+///
+/// Supports traditional username/password authentication and AWS IAM authentication.
+/// IAM authentication takes priority when both are configured.
 #[derive(PartialEq, Eq, Clone, Default, Debug)]
 pub struct AuthenticationInfo {
+    /// Username for authentication (required for IAM)
     pub username: Option<String>,
+
+    /// Password for traditional authentication (fallback when IAM unavailable)
     pub password: Option<String>,
+
+    /// IAM authentication configuration (takes precedence over password)
+    pub iam_config: Option<IamAuthenticationConfig>,
+}
+
+/// AWS IAM authentication configuration for ElastiCache and MemoryDB
+///
+/// Handles AWS credential resolution, SigV4 token signing, and automatic token refresh.
+/// Tokens are valid for 15 minutes and refreshed every 14 minutes by default.
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct IamAuthenticationConfig {
+    /// AWS ElastiCache or MemoryDB cluster name
+    pub cluster_name: String,
+
+    /// AWS region where the cluster is located
+    pub region: String,
+
+    /// AWS service type (ElastiCache or MemoryDB)
+    pub service_type: ServiceType,
+
+    /// Token refresh interval in seconds (1 second to 12 hours, default 14 minutes)
+    pub refresh_interval_seconds: Option<u32>,
 }
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -133,14 +166,33 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         });
 
         let client_name = chars_to_string_option(&value.client_name);
-        let authentication_info = value.authentication_info.0.and_then(|authentication_info| {
+        let lib_name = chars_to_string_option(&value.lib_name);
+        let authentication_info = value.authentication_info.0.map(|authentication_info| {
             let password = chars_to_string_option(&authentication_info.password);
             let username = chars_to_string_option(&authentication_info.username);
-            if password.is_none() && username.is_none() {
-                return None;
-            }
+            let iam_config = authentication_info.iam_credentials.0.map(|iam_creds| {
+                let cluster_name =
+                    chars_to_string_option(&iam_creds.cluster_name).unwrap_or_default();
+                let region = chars_to_string_option(&iam_creds.region).unwrap_or_default();
+                let service_type = match iam_creds.service_type.enum_value() {
+                    Ok(protobuf::ServiceType::MEMORYDB) => ServiceType::MemoryDB,
+                    _ => ServiceType::ElastiCache,
+                };
+                let refresh_interval_seconds = iam_creds.refresh_interval_seconds;
 
-            Some(AuthenticationInfo { password, username })
+                IamAuthenticationConfig {
+                    cluster_name,
+                    region,
+                    service_type,
+                    refresh_interval_seconds,
+                }
+            });
+
+            AuthenticationInfo {
+                password,
+                username,
+                iam_config,
+            }
         });
 
         let database_id = value.database_id as i64;
@@ -224,10 +276,17 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
 
         let inflight_requests_limit = none_if_zero(value.inflight_requests_limit);
         let lazy_connect = value.lazy_connect;
+        let refresh_topology_from_initial_nodes = value.refresh_topology_from_initial_nodes;
+        let root_certs = value
+            .root_certs
+            .into_iter()
+            .map(|cert| cert.to_vec())
+            .collect();
 
         ConnectionRequest {
             read_from,
             client_name,
+            lib_name,
             authentication_info,
             database_id,
             protocol,
@@ -241,6 +300,8 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             pubsub_subscriptions,
             inflight_requests_limit,
             lazy_connect,
+            refresh_topology_from_initial_nodes,
+            root_certs,
         }
     }
 }

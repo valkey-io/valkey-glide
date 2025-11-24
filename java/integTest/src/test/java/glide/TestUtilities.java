@@ -19,10 +19,16 @@ import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.configuration.AdvancedGlideClientConfiguration;
+import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.cluster.ValkeyCluster;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -32,6 +38,7 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -86,6 +93,9 @@ public class TestUtilities {
                                     .addresses(seedNodes)
                                     .requestTimeout(2000)
                                     .lazyConnect(lazyConnect)
+                                    // Explicitly set no credentials for dedicated clusters to avoid
+                                    // authentication issues from environment or global state
+                                    .credentials(null)
                                     .build())
                     .get();
         } else {
@@ -97,6 +107,9 @@ public class TestUtilities {
                                     .addresses(nodeAddresses)
                                     .requestTimeout(2000)
                                     .lazyConnect(lazyConnect)
+                                    // Explicitly set no credentials for dedicated clusters to avoid
+                                    // authentication issues from environment or global state
+                                    .credentials(null)
                                     .build())
                     .get();
         }
@@ -113,9 +126,14 @@ public class TestUtilities {
         return 0;
     }
 
+    /** Extract first key from {@link ClusterValue} assuming it contains a multi-value. */
+    public static <T> String getFirstKeyFromMultiValue(ClusterValue<T> data) {
+        return data.getMultiValue().keySet().toArray(String[]::new)[0];
+    }
+
     /** Extract first value from {@link ClusterValue} assuming it contains a multi-value. */
     public static <T> T getFirstEntryFromMultiValue(ClusterValue<T> data) {
-        return data.getMultiValue().get(data.getMultiValue().keySet().toArray(String[]::new)[0]);
+        return data.getMultiValue().get(getFirstKeyFromMultiValue(data));
     }
 
     /** Generates a random string of a specified length using ASCII letters. */
@@ -172,6 +190,20 @@ public class TestUtilities {
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
         return builder.useTLS(TLS);
+    }
+
+    /**
+     * Reads the CA certificate from the cluster_manager's TLS certificates directory.
+     *
+     * @return The CA certificate bytes in PEM format
+     * @throws Exception if the certificate file cannot be read
+     */
+    @SneakyThrows
+    public static byte[] getCaCertificate() {
+        String glideHome =
+                System.getenv().getOrDefault("GLIDE_HOME_DIR", System.getProperty("user.dir") + "/../..");
+        Path caCertPath = Paths.get(glideHome, "utils/tls_crts/ca.crt");
+        return Files.readAllBytes(caCertPath);
     }
 
     public static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>
@@ -278,7 +310,7 @@ public class TestUtilities {
         assertTrue(hasLib);
     }
 
-    private <T> void assertSetsEqual(Set<T> expected, Set<T> actual) {
+    private static <T> void assertSetsEqual(Set<T> expected, Set<T> actual) {
         // Convert both sets to lists. It is needed due to issue that rust return the flags as string
         List<GlideString> expectedList =
                 expected.stream().sorted().map(GlideString::of).collect(Collectors.toList());
@@ -603,6 +635,46 @@ public class TestUtilities {
                             .getSingleValue());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    public static GlideClientConfiguration createStandaloneConfigWithRootCert(
+            byte[] caCert, NodeAddress nodeAddr) {
+        TlsAdvancedConfiguration tlsConfig =
+                TlsAdvancedConfiguration.builder().rootCertificates(caCert).build();
+        AdvancedGlideClientConfiguration advancedConfig =
+                AdvancedGlideClientConfiguration.builder().tlsAdvancedConfiguration(tlsConfig).build();
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(nodeAddr)
+                        .useTLS(true)
+                        .advancedConfiguration(advancedConfig)
+                        .build();
+        return config;
+    }
+
+    public static GlideClusterClientConfiguration createClusterConfigWithRootCert(
+            byte[] caCert, List<NodeAddress> clusterNodes) {
+        TlsAdvancedConfiguration tlsConfig =
+                TlsAdvancedConfiguration.builder().rootCertificates(caCert).build();
+        AdvancedGlideClusterClientConfiguration advancedConfig =
+                AdvancedGlideClusterClientConfiguration.builder()
+                        .tlsAdvancedConfiguration(tlsConfig)
+                        .build();
+        GlideClusterClientConfiguration config =
+                GlideClusterClientConfiguration.builder()
+                        .addresses(clusterNodes)
+                        .useTLS(true)
+                        .advancedConfiguration(advancedConfig)
+                        .build();
+        return config;
+    }
+
+    public static void createAndTestClient(GlideClusterClientConfiguration config)
+            throws InterruptedException, ExecutionException {
+        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
+            String result = client.ping().get();
+            assertEquals("PONG", result);
         }
     }
 }

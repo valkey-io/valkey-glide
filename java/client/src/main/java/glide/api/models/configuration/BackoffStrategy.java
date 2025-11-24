@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
@@ -22,7 +23,7 @@ import lombok.ToString;
  * BackoffStrategy reconnectionConfiguration = BackoffStrategy.builder()
  *     .numOfRetries(5)
  *     .exponentBase(2)
- *     .factor(3)
+ *     .factor(100)  // 100 milliseconds base delay
  *     .jitterPercent(20)
  *     .build()
  * }</pre>
@@ -30,6 +31,9 @@ import lombok.ToString;
 @Getter
 @Builder
 @ToString
+@SuppressFBWarnings(
+        value = "CT_CONSTRUCTOR_THROW",
+        justification = "Builder enforces non-null invariants and throws before exposing instance")
 public class BackoffStrategy {
     /**
      * Number of retry attempts that the client should perform when disconnected from the server,
@@ -38,7 +42,10 @@ public class BackoffStrategy {
      */
     @NonNull private final Integer numOfRetries;
 
-    /** The multiplier that will be applied to the waiting time between each retry. */
+    /**
+     * The multiplier that will be applied to the waiting time between each retry. This value is
+     * specified in milliseconds.
+     */
     @NonNull private final Integer factor;
 
     /** The exponent base configured for the strategy. */

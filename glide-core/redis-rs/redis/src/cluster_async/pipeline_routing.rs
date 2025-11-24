@@ -164,9 +164,8 @@ where
     let mut pipelines_per_node = NodePipelineMap::new();
     let mut response_policies = HashMap::new();
 
-    if route.is_some() {
+    if let Some(route) = route {
         // If we have a route, we will use it to route the commands to the given route, instead of finding the route for each command
-        let route = route.unwrap();
 
         let (addr, conn) = ClusterConnInner::get_connection(route, core, None)
             .await

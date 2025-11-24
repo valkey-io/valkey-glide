@@ -2,7 +2,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
 # C extensions
 *.so
 
@@ -122,7 +121,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
+**/.env*
 .venv
 env/
 venv/
@@ -158,3 +157,14 @@ cython_debug/
 *_pb2.py
 *_pb2.pyi
 protoc-*.zip
+
+# python build artifact folders
+glide-sync/ffi
+glide-sync/glide-core
+glide-sync/logger_core
+glide-sync/glide_shared
+glide-async/python/glide_shared
+
+# Copied README files for packaging
+glide-sync/README.md
+glide-async/README.md

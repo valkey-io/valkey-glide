@@ -5,7 +5,7 @@ mod types;
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::{log_error, log_info, log_warn};
+use logger_core::{log_debug, log_error, log_info, log_warn};
 use once_cell::sync::OnceCell;
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
@@ -42,7 +42,7 @@ pub const DEFAULT_RETRIES: u32 = 3;
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
 /// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
-pub const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
+pub const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(2000);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 
 /// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
@@ -132,43 +132,82 @@ pub(super) fn get_port(address: &NodeAddress) -> u16 {
     }
 }
 
-pub(super) fn get_redis_connection_info(
+/// Get Valkey connection info with IAM token integration
+///
+/// If IAM config + token manager exist, use the IAM token as the password; otherwise use the provided password.
+///
+/// `iam_token_manager: Option<&Arc<IAMTokenManager>>`
+/// — `Option` because IAM is optional; `&Arc` gives shared, non-owning, cheap access to a shared manager (we only read a token).
+pub async fn get_valkey_connection_info(
     connection_request: &ConnectionRequest,
+    iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
 ) -> redis::RedisConnectionInfo {
     let protocol = connection_request.protocol.unwrap_or_default();
     let db = connection_request.database_id;
     let client_name = connection_request.client_name.clone();
+    let lib_name = connection_request.lib_name.clone();
     let pubsub_subscriptions = connection_request.pubsub_subscriptions.clone();
+
     match &connection_request.authentication_info {
-        Some(info) => redis::RedisConnectionInfo {
-            db,
-            username: info.username.clone(),
-            password: info.password.clone(),
-            protocol,
-            client_name,
-            pubsub_subscriptions,
-        },
+        Some(info) => {
+            // If we have IAM configuration and a token manager, use the IAM token as password
+            if info.iam_config.is_some() && iam_token_manager.is_some() {
+                let token = if let Some(manager) = iam_token_manager {
+                    manager.get_token().await
+                } else {
+                    // Fallback to regular password if no token manager
+                    info.password.clone().unwrap_or_default()
+                };
+
+                redis::RedisConnectionInfo {
+                    db,
+                    username: info.username.clone(),
+                    password: Some(token),
+                    protocol,
+                    client_name,
+                    lib_name,
+                    pubsub_subscriptions,
+                }
+            } else {
+                // Regular password-based authentication
+                redis::RedisConnectionInfo {
+                    db,
+                    username: info.username.clone(),
+                    password: info.password.clone(),
+                    protocol,
+                    client_name,
+                    lib_name,
+                    pubsub_subscriptions,
+                }
+            }
+        }
         None => redis::RedisConnectionInfo {
             db,
             protocol,
             client_name,
+            lib_name,
             pubsub_subscriptions,
             ..Default::default()
         },
     }
 }
 
+use redis::{TlsCertificates, retrieve_tls_certificates};
+
+// tls_params should be only set if tls_mode is SecureTls
+// this should be validated before calling this function
 pub(super) fn get_connection_info(
     address: &NodeAddress,
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
+    tls_params: Option<redis::TlsConnParams>,
 ) -> redis::ConnectionInfo {
     let addr = if tls_mode != TlsMode::NoTls {
         redis::ConnectionAddr::TcpTls {
             host: address.host.to_string(),
             port: get_port(address),
             insecure: tls_mode == TlsMode::InsecureTls,
-            tls_params: None,
+            tls_params,
         }
     } else {
         redis::ConnectionAddr::Tcp(address.host.to_string(), get_port(address))
@@ -199,6 +238,8 @@ pub struct Client {
     request_timeout: Duration,
     // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error to the customer.
     inflight_requests_allowed: Arc<AtomicIsize>,
+    // IAM token manager for automatic credential refresh
+    iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
 }
 
 async fn run_with_timeout<T>(
@@ -330,6 +371,127 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
 }
 
 impl Client {
+    /// Checks if the given command is a SELECT command.
+    /// Returns true if the command is "SELECT", false otherwise.
+    /// Handles cases where command() returns None gracefully.
+    /// Note: The underlying redis-rs library normalizes commands to uppercase.
+    fn is_select_command(&self, cmd: &Cmd) -> bool {
+        cmd.command().is_some_and(|bytes| bytes == b"SELECT")
+    }
+
+    /// Extracts the database ID from a SELECT command.
+    /// Parses the first argument of the SELECT command as an i64 database ID.
+    /// Returns appropriate errors for invalid formats or missing arguments.
+    fn extract_database_id_from_select(&self, cmd: &Cmd) -> RedisResult<i64> {
+        // For both redis::cmd("SELECT").arg("5") and redis::Cmd::new().arg("SELECT").arg("5")
+        // the database ID is at arg_idx(1)
+        cmd.arg_idx(1)
+            .ok_or_else(|| {
+                RedisError::from((
+                    ErrorKind::ResponseError,
+                    "SELECT command missing database argument",
+                ))
+            })
+            .and_then(|db_bytes| {
+                std::str::from_utf8(db_bytes)
+                    .map_err(|_| {
+                        RedisError::from((ErrorKind::ResponseError, "Invalid database ID format"))
+                    })
+                    .and_then(|db_str| {
+                        db_str.parse::<i64>().map_err(|_| {
+                            RedisError::from((
+                                ErrorKind::ResponseError,
+                                "Database ID must be a valid integer",
+                            ))
+                        })
+                    })
+            })
+    }
+
+    /// Handles SELECT command processing after successful execution.
+    /// Updates database state for standalone, cluster, and lazy clients.
+    async fn handle_select_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
+        // Extract database ID from the SELECT command
+        let database_id = self.extract_database_id_from_select(cmd)?;
+
+        // Update database state for all client types
+        self.update_stored_database_id(database_id).await?;
+        Ok(())
+    }
+
+    /// Updates the stored database ID for different client types.
+    /// Handles standalone, cluster, and lazy clients appropriately.
+    /// Ensures thread-safe updates using existing synchronization mechanisms.
+    async fn update_stored_database_id(&self, database_id: i64) -> RedisResult<()> {
+        let mut guard = self.internal_client.write().await;
+        match &mut *guard {
+            ClientWrapper::Standalone(client) => {
+                client.update_connection_database(database_id).await?;
+                Ok(())
+            }
+            ClientWrapper::Cluster { client } => {
+                // Update cluster connection database configuration
+                client.update_connection_database(database_id).await?;
+                Ok(())
+            }
+            ClientWrapper::Lazy(_) => {
+                unreachable!("Lazy client should have been initialized")
+            }
+        }
+    }
+
+    /// Checks if the given command is a CLIENT SETNAME command.
+    /// Returns true if the command is "CLIENT SETNAME", false otherwise.
+    fn is_client_set_name_command(&self, cmd: &Cmd) -> bool {
+        // Check if the command is "CLIENT SETNAME"
+        cmd.command()
+            .is_some_and(|bytes| bytes == b"CLIENT SETNAME")
+    }
+
+    /// Extracts the client name from a CLIENT SETNAME command.
+    /// Parses the client name argument from the CLIENT SETNAME command.
+    /// Returns None if the argument is missing or invalid.
+    fn extract_client_name_from_client_set_name(&self, cmd: &Cmd) -> Option<String> {
+        // For redis::cmd("CLIENT").arg("SETNAME").arg("name")
+        // the client name is at arg_idx(2) (after "SETNAME")
+        cmd.arg_idx(2).and_then(|name_bytes| {
+            std::str::from_utf8(name_bytes)
+                .ok()
+                .map(|name_str| name_str.to_string())
+        })
+    }
+
+    /// Handles CLIENT SETNAME command processing after successful execution.
+    /// Updates connection name state for standalone, cluster, and lazy clients.
+    async fn handle_client_set_name_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
+        // Extract client name from the CLIENT SETNAME command
+        let client_name = self.extract_client_name_from_client_set_name(cmd);
+
+        // Update client name state for all client types
+        self.update_stored_client_name(client_name).await?;
+        Ok(())
+    }
+
+    /// Updates the stored client name for different client types.
+    /// Handles standalone, cluster, and lazy clients appropriately.
+    /// Ensures thread-safe updates using existing synchronization mechanisms.
+    async fn update_stored_client_name(&self, client_name: Option<String>) -> RedisResult<()> {
+        let mut guard = self.internal_client.write().await;
+        match &mut *guard {
+            ClientWrapper::Standalone(client) => {
+                client.update_connection_client_name(client_name).await?;
+                Ok(())
+            }
+            ClientWrapper::Cluster { client } => {
+                // Update cluster connection database configuration
+                client.update_connection_client_name(client_name).await?;
+                Ok(())
+            }
+            ClientWrapper::Lazy(_) => {
+                unreachable!("Lazy client should have been initialized")
+            }
+        }
+    }
     async fn get_or_initialize_client(&self) -> RedisResult<ClientWrapper> {
         {
             let guard = self.internal_client.read().await;
@@ -338,24 +500,34 @@ impl Client {
             }
         }
 
+        // Handle lazy client initialization
+        let (config, push_sender) = {
+            let mut guard = self.internal_client.write().await;
+            if let ClientWrapper::Lazy(lazy_client) = &mut *guard {
+                let config = lazy_client.config.clone();
+                let push_sender = lazy_client.push_sender.clone();
+                (config, push_sender)
+            } else {
+                // Another thread initialized it while we were waiting
+                return Ok(guard.clone());
+            }
+        };
+
+        // Continue with client initialization
+        let mut config = config;
+        config.lazy_connect = false;
+
         let mut guard = self.internal_client.write().await;
-
-        if let ClientWrapper::Lazy(lazy_client) = &mut *guard {
-            let mut config = lazy_client.config.clone();
-            let push_sender = lazy_client.push_sender.clone();
-
-            // When initializing the actual connection from a lazy client,
-            // the underlying connection attempt itself should not be lazy.
-            config.lazy_connect = false;
-
+        let iam_manager_ref = self.iam_token_manager.as_ref();
+        if let ClientWrapper::Lazy(_) = &*guard {
             // Create the appropriate client based on configuration
             let real_client = if config.cluster_mode_enabled {
                 // Create cluster client
-                let client = create_cluster_client(config, push_sender).await?;
+                let client = create_cluster_client(config, push_sender, iam_manager_ref).await?;
                 ClientWrapper::Cluster { client }
             } else {
                 // Create standalone client
-                let client = StandaloneClient::create_client(config, push_sender)
+                let client = StandaloneClient::create_client(config, push_sender, iam_manager_ref)
                     .await
                     .map_err(|e| {
                         RedisError::from((
@@ -390,7 +562,7 @@ impl Client {
                 Err(err) => return Err(err),
             };
 
-            let value = run_with_timeout(request_timeout, async move {
+            let result = run_with_timeout(request_timeout, async move {
                 match client {
                     ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
                     ClientWrapper::Cluster {mut client } => {
@@ -427,7 +599,19 @@ impl Client {
             })
             .await?;
 
-            Ok(value)
+            // Intercept CLIENT SETNAME commands after regular processing
+            // Only handle CLIENT SETNAME commands if they executed successfully (no error)
+            if self.is_client_set_name_command(cmd) {
+                self.handle_client_set_name_command(cmd).await?;
+            }
+
+            // Intercept SELECT commands after regular processing
+            // Only handle SELECT commands if they executed successfully (no error)
+            if self.is_select_command(cmd) {
+                self.handle_select_command(cmd).await?;
+            }
+
+            Ok(result)
         })
     }
 
@@ -793,33 +977,45 @@ impl Client {
         }
     }
 
+    /// Send AUTH command using IAM token (preferred) or the provided password
     async fn send_immediate_auth(&mut self, password: Option<String>) -> RedisResult<Value> {
-        match &password {
-            Some(pw) if pw.is_empty() => Err(RedisError::from((
-                ErrorKind::UserOperationError,
-                "Empty password provided for authentication",
-            ))),
-            None => Err(RedisError::from((
+        // Determine the password to use for authentication
+        let pass = if let Some(iam_manager) = &self.iam_token_manager {
+            log_debug("send_immediate_auth", "Using IAM token for authentication");
+            iam_manager.get_token().await
+        } else if let Some(ref password) = password {
+            if password.is_empty() {
+                return Err(RedisError::from((
+                    ErrorKind::UserOperationError,
+                    "Empty password provided for authentication",
+                )));
+            }
+            log_debug("send_immediate_auth", "Using password for authentication");
+            password.to_string()
+        } else {
+            return Err(RedisError::from((
                 ErrorKind::UserOperationError,
                 "No password provided for authentication",
-            ))),
-            Some(password) => {
-                let routing = RoutingInfo::MultiNode((
-                    MultipleNodeRoutingInfo::AllNodes,
-                    Some(ResponsePolicy::AllSucceeded),
-                ));
-                let mut cmd = redis::cmd("AUTH");
-                if let Some(username) = self.get_username().await? {
-                    cmd.arg(username);
-                }
-                cmd.arg(password);
-                self.send_command(&cmd, Some(routing)).await
-            }
+            )));
+        };
+
+        let routing = RoutingInfo::MultiNode((
+            MultipleNodeRoutingInfo::AllNodes,
+            Some(ResponsePolicy::AllSucceeded),
+        ));
+
+        let username = self.get_username().await.ok().flatten();
+
+        let mut cmd = redis::cmd("AUTH");
+        if let Some(username) = username {
+            cmd.arg(&username);
         }
+        cmd.arg(pass);
+        self.send_command(&cmd, Some(routing)).await
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
-    async fn get_username(&mut self) -> RedisResult<Option<String>> {
+    pub async fn get_username(&mut self) -> RedisResult<Option<String>> {
         let client = self.get_or_initialize_client().await?;
 
         match client {
@@ -840,6 +1036,97 @@ impl Client {
             ClientWrapper::Standalone(client) => Ok(client.get_username()),
             ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
         }
+    }
+
+    /// IAM token refresh callback function
+    ///
+    /// On new token, spawns a task that write-locks the `Client` and calls
+    /// `update_connection_password(Some(new_token), true)`. Uses a strong `Arc<RwLock<Client>>`.
+    /// Note: this can form a retain cycle; call `stop_refresh_task()` and drop the manager to tear down.
+    fn iam_callback(
+        client_arc: Arc<tokio::sync::RwLock<Client>>,
+    ) -> impl Fn(String) + Send + 'static {
+        move |new_token: String| {
+            let client_arc = Arc::clone(&client_arc);
+            tokio::spawn(async move {
+                let mut client = client_arc.write().await;
+                let result = client
+                    .update_connection_password(Some(new_token.clone()), true)
+                    .await;
+
+                if let Err(e) = result {
+                    log_error(
+                        "IAM token refresh",
+                        format!("Failed to update connection password with immediate auth: {e}"),
+                    );
+                }
+            });
+        }
+    }
+
+    /// Create an `IAMTokenManager` when IAM auth is configured.
+    ///
+    /// Uses a **strong** `Arc<RwLock<Client>>` in the refresh callback so the callback
+    /// can always reach the client. (Note: this can create a retain cycle unless you
+    /// stop the refresh task and drop the manager explicitly.)
+    async fn create_iam_token_manager(
+        auth_info: &crate::client::types::AuthenticationInfo,
+        client_arc: std::sync::Arc<tokio::sync::RwLock<Client>>,
+    ) -> Option<std::sync::Arc<crate::iam::IAMTokenManager>> {
+        if let Some(iam_config) = &auth_info.iam_config {
+            if let Some(username) = &auth_info.username {
+                // Set up callback to update connection password when token refreshes
+                let iam_callback = Self::iam_callback(std::sync::Arc::clone(&client_arc));
+
+                match crate::iam::IAMTokenManager::new(
+                    iam_config.cluster_name.clone(),
+                    username.clone(),
+                    iam_config.region.clone(),
+                    iam_config.service_type,
+                    iam_config.refresh_interval_seconds,
+                    Some(std::sync::Arc::new(iam_callback)),
+                )
+                .await
+                {
+                    Ok(mut token_manager) => {
+                        token_manager.start_refresh_task();
+                        Some(std::sync::Arc::new(token_manager))
+                    }
+                    Err(e) => {
+                        log_error("IAM", format!("Failed to create IAM token manager: {e}"));
+                        None
+                    }
+                }
+            } else {
+                log_error("IAM", "IAM authentication requires a username");
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Manually refresh the IAM token and update connection authentication
+    ///
+    /// This method generates a new IAM token using the configured IAM token manager
+    /// and immediately authenticates all connections with the new token.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the token was successfully refreshed and authentication succeeded
+    /// - `Err(RedisError)` if no IAM token manager is configured, token generation fails,
+    ///   or authentication with the new token fails.
+    pub async fn refresh_iam_token(&mut self) -> RedisResult<()> {
+        // Check if IAM token manager is available
+        let iam_manager = self.iam_token_manager.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::ClientError,
+                "No IAM token manager configured - IAM token refresh requires IAM authentication to be enabled during client creation",
+            ))
+        })?;
+
+        // Refresh the token using the IAM token manager
+        iam_manager.refresh_token().await;
+        Ok(())
     }
 }
 
@@ -870,15 +1157,50 @@ fn to_duration(time_in_millis: Option<u32>, default: Duration) -> Duration {
 async fn create_cluster_client(
     request: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+    iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
 ) -> RedisResult<redis::cluster_async::ClusterConnection> {
-    // TODO - implement timeout for each connection attempt
     let tls_mode = request.tls_mode.unwrap_or_default();
-    let redis_connection_info = get_redis_connection_info(&request);
+
+    let valkey_connection_info = get_valkey_connection_info(&request, iam_token_manager).await;
+    let (tls_params, tls_certificates) = if !request.root_certs.is_empty() {
+        if tls_mode == TlsMode::NoTls {
+            return Err(RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Custom root certificates provided but TLS is disabled",
+            )));
+        }
+        let mut combined_certs = Vec::new();
+        for cert in &request.root_certs {
+            if cert.is_empty() {
+                return Err(RedisError::from((
+                    ErrorKind::InvalidClientConfig,
+                    "Root certificate cannot be empty byte string",
+                )));
+            }
+            combined_certs.extend_from_slice(cert);
+        }
+        let tls_certs = TlsCertificates {
+            client_tls: None,
+            root_cert: Some(combined_certs),
+        };
+        let params = retrieve_tls_certificates(tls_certs.clone())?;
+        (Some(params), Some(tls_certs))
+    } else {
+        (None, None)
+    };
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
-        .map(|address| get_connection_info(&address, tls_mode, redis_connection_info.clone()))
+        .map(|address| {
+            get_connection_info(
+                &address,
+                tls_mode,
+                valkey_connection_info.clone(),
+                tls_params.clone(),
+            )
+        })
         .collect();
+
     let periodic_topology_checks = match request.periodic_checks {
         Some(PeriodicCheck::Disabled) => None,
         Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
@@ -902,8 +1224,12 @@ async fn create_cluster_client(
         builder = builder.periodic_topology_checks(interval_duration);
     }
     builder = builder.use_protocol(request.protocol.unwrap_or_default());
-    if let Some(client_name) = redis_connection_info.client_name {
+    builder = builder.database_id(valkey_connection_info.db);
+    if let Some(client_name) = valkey_connection_info.client_name {
         builder = builder.client_name(client_name);
+    }
+    if let Some(lib_name) = valkey_connection_info.lib_name {
+        builder = builder.lib_name(lib_name);
     }
     if tls_mode != TlsMode::NoTls {
         let tls = if tls_mode == TlsMode::SecureTls {
@@ -912,8 +1238,11 @@ async fn create_cluster_client(
             redis::cluster::TlsMode::Insecure
         };
         builder = builder.tls(tls);
+        if let Some(certs) = tls_certificates {
+            builder = builder.certs(certs);
+        }
     }
-    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions.clone() {
+    if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions.clone() {
         builder = builder.pubsub_subscriptions(pubsub_subscriptions);
     }
 
@@ -927,6 +1256,9 @@ async fn create_cluster_client(
         None => RetryStrategy::default(),
     };
     builder = builder.reconnect_retry_strategy(retry_strategy);
+
+    builder =
+        builder.refresh_topology_from_initial_nodes(request.refresh_topology_from_initial_nodes);
 
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
@@ -944,42 +1276,41 @@ async fn create_cluster_client(
     // However, this approach would leave the application unaware that the subscriptions were not applied, requiring the user to analyze logs to identify the issue.
     // Instead, we explicitly check the engine version here and fail the connection creation if it is incompatible with sharded subscriptions.
 
-    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions {
-        if pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded) {
-            let info_res = con
-                .route_command(
-                    redis::cmd("INFO").arg("SERVER"),
-                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
-                )
-                .await?;
-            let info_dict: InfoDict = FromRedisValue::from_redis_value(&info_res)?;
-            match info_dict.get::<String>("redis_version") {
-                Some(version) => match (Versioning::new(version), Versioning::new("7.0")) {
-                    (Some(server_ver), Some(min_ver)) => {
-                        if server_ver < min_ver {
-                            return Err(RedisError::from((
-                                ErrorKind::InvalidClientConfig,
-                                "Sharded subscriptions provided, but the engine version is < 7.0",
-                            )));
-                        }
-                    }
-                    _ => {
+    if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions
+        && pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded)
+    {
+        let info_res = con
+            .route_command(
+                redis::cmd("INFO").arg("SERVER"),
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
+            )
+            .await?;
+        let info_dict: InfoDict = FromRedisValue::from_redis_value(&info_res)?;
+        match info_dict.get::<String>("redis_version") {
+            Some(version) => match (Versioning::new(version), Versioning::new("7.0")) {
+                (Some(server_ver), Some(min_ver)) => {
+                    if server_ver < min_ver {
                         return Err(RedisError::from((
-                            ErrorKind::ResponseError,
-                            "Failed to parse engine version",
+                            ErrorKind::InvalidClientConfig,
+                            "Sharded subscriptions provided, but the engine version is < 7.0",
                         )));
                     }
-                },
+                }
                 _ => {
                     return Err(RedisError::from((
                         ErrorKind::ResponseError,
-                        "Could not determine engine version from INFO result",
+                        "Failed to parse engine version",
                     )));
                 }
+            },
+            _ => {
+                return Err(RedisError::from((
+                    ErrorKind::ResponseError,
+                    "Could not determine engine version from INFO result",
+                )));
             }
         }
     }
-
     Ok(con)
 }
 
@@ -1049,9 +1380,18 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     } else {
         "\nStandalone mode"
     };
-    let request_timeout = format_optional_value("Request timeout", request.request_timeout);
-    let connection_timeout =
-        format_optional_value("Connection timeout", request.connection_timeout);
+    let request_timeout = format!(
+        "\nRequest timeout: {}",
+        request
+            .request_timeout
+            .unwrap_or(DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32)
+    );
+    let connection_timeout = format!(
+        "\nConnection timeout: {}",
+        request
+            .connection_timeout
+            .unwrap_or(DEFAULT_CONNECTION_TIMEOUT.as_millis() as u32)
+    );
     let database_id = format!("\ndatabase ID: {}", request.database_id);
     let rfr_strategy = request
         .read_from
@@ -1133,29 +1473,73 @@ impl Client {
         ));
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
+            // Create shared, thread-safe wrapper for the internal client that starts as lazy
+            // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
+            let internal_client_arc =
+                Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(LazyClient {
+                    config: request.clone(),
+                    push_sender: push_sender.clone(),
+                }))));
+
+            // Create the Client first without IAM token manager
+            let client = Self {
+                internal_client: internal_client_arc.clone(),
+                request_timeout,
+                inflight_requests_allowed,
+                iam_token_manager: None,
+            };
+
+            let client_arc = Arc::new(RwLock::new(client));
+
+            // Create IAM token manager if needed, passing a strong Arc to the callback
+            let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
+                Self::create_iam_token_manager(auth_info, Arc::clone(&client_arc)).await
+            } else {
+                None
+            };
+
+            // Update the client with the IAM token manager
+            {
+                let mut client_guard = client_arc.write().await;
+                client_guard.iam_token_manager = iam_token_manager.clone();
+            }
+
             let internal_client = if request.lazy_connect {
                 ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request,
                     push_sender,
                 }))
             } else if request.cluster_mode_enabled {
-                let client = create_cluster_client(request, push_sender)
-                    .await
-                    .map_err(ConnectionError::Cluster)?;
+                let client =
+                    create_cluster_client(request, push_sender, iam_token_manager.as_ref())
+                        .await
+                        .map_err(ConnectionError::Cluster)?;
                 ClientWrapper::Cluster { client }
             } else {
                 ClientWrapper::Standalone(
-                    StandaloneClient::create_client(request, push_sender)
-                        .await
-                        .map_err(ConnectionError::Standalone)?,
+                    StandaloneClient::create_client(
+                        request,
+                        push_sender,
+                        iam_token_manager.as_ref(),
+                    )
+                    .await
+                    .map_err(ConnectionError::Standalone)?,
                 )
             };
 
-            Ok(Self {
-                internal_client: Arc::new(RwLock::new(internal_client)),
-                request_timeout,
-                inflight_requests_allowed,
-            })
+            // Update the internal client with the actual client
+            {
+                let mut guard = internal_client_arc.write().await;
+                *guard = internal_client;
+            }
+
+            // Return the client from the Arc
+            let client = {
+                let client_guard = client_arc.read().await;
+                client_guard.clone()
+            };
+
+            Ok(client)
         })
         .await
         .map_err(|_| ConnectionError::Timeout)?
@@ -1196,11 +1580,12 @@ mod tests {
 
     use redis::Cmd;
 
+    use crate::client::types::{ConnectionRequest, NodeAddress};
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, RequestTimeoutOption, TimeUnit, get_request_timeout,
     };
 
-    use super::get_timeout_from_cmd_arg;
+    use super::{Client, ClientWrapper, LazyClient, get_timeout_from_cmd_arg};
 
     #[test]
     fn test_get_timeout_from_cmd_returns_correct_duration_int() {
@@ -1348,5 +1733,153 @@ mod tests {
         let result = get_request_timeout(&cmd, Duration::from_millis(100));
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), Some(Duration::from_millis(100)));
+    }
+
+    #[test]
+    fn test_is_select_command_detects_valid_select_commands() {
+        // Test detection of valid SELECT commands
+        let client = create_test_client();
+
+        // Test uppercase SELECT command
+        let mut cmd = Cmd::new();
+        cmd.arg("SELECT").arg("1");
+        assert!(client.is_select_command(&cmd));
+
+        // Test SELECT with different database IDs
+        let mut cmd = Cmd::new();
+        cmd.arg("SELECT").arg("0");
+        assert!(client.is_select_command(&cmd));
+    }
+
+    #[test]
+    fn test_extract_database_id_from_select() {
+        // Test detection of valid SELECT commands
+        let client = create_test_client();
+
+        // Test uppercase SELECT command
+        let mut cmd = Cmd::new();
+        cmd.arg("SELECT").arg("1");
+        assert_eq!(client.extract_database_id_from_select(&cmd), Ok(1));
+
+        // Test SELECT with different database IDs
+        let mut cmd = Cmd::new();
+        cmd.arg("SELECT").arg("0");
+        assert_eq!(client.extract_database_id_from_select(&cmd), Ok(0));
+    }
+
+    #[test]
+    fn test_is_select_command_rejects_non_select_commands() {
+        // Test rejection of non-SELECT commands
+        let client = create_test_client();
+
+        // Test common Redis commands
+        let mut cmd = Cmd::new();
+        cmd.arg("GET").arg("key");
+        assert!(!client.is_select_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("SET").arg("key").arg("value");
+        assert!(!client.is_select_command(&cmd));
+    }
+
+    #[test]
+    fn test_is_select_command_case_normalization() {
+        // Test that redis-rs normalizes commands to uppercase
+        let client = create_test_client();
+
+        // Test lowercase select (redis-rs normalizes to uppercase, so this works too)
+        let mut cmd = Cmd::new();
+        cmd.arg("select").arg("1");
+        assert!(client.is_select_command(&cmd));
+    }
+
+    #[test]
+    fn test_is_select_command_handles_empty_command() {
+        // Test handling of empty or malformed commands
+        let client = create_test_client();
+
+        // Test empty command
+        let cmd = Cmd::new();
+        assert!(!client.is_select_command(&cmd));
+    }
+
+    /// Helper function to create a test client for unit tests
+    fn create_test_client() -> Client {
+        use std::sync::Arc;
+        use std::sync::atomic::AtomicIsize;
+        use tokio::sync::RwLock;
+
+        let config = ConnectionRequest {
+            database_id: 0,
+            cluster_mode_enabled: false,
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 6379,
+            }],
+            lazy_connect: true,
+            ..Default::default()
+        };
+
+        let lazy_client = LazyClient {
+            config,
+            push_sender: None,
+        };
+
+        Client {
+            internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),
+            request_timeout: Duration::from_millis(250),
+            inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+            iam_token_manager: None,
+        }
+    }
+
+    #[test]
+    fn test_is_client_set_name_command() {
+        // Create a mock client for testing
+        let client = create_test_client();
+
+        // Test valid CLIENT SETNAME command
+        let mut cmd = Cmd::new();
+        cmd.arg("CLIENT").arg("SETNAME").arg("test_client");
+        assert!(client.is_client_set_name_command(&cmd));
+
+        // Test CLIENT SETNAME with different case (should work due to case-insensitive comparison)
+        let mut cmd = Cmd::new();
+        cmd.arg("client").arg("setname").arg("test_client");
+        assert!(client.is_client_set_name_command(&cmd));
+
+        // Test CLIENT command without SETNAME
+        let mut cmd = Cmd::new();
+        cmd.arg("CLIENT").arg("INFO");
+        assert!(!client.is_client_set_name_command(&cmd));
+
+        // Test non-CLIENT command
+        let mut cmd = Cmd::new();
+        cmd.arg("SET").arg("key").arg("value");
+        assert!(!client.is_client_set_name_command(&cmd));
+
+        // Test CLIENT SETNAME without client name argument
+        let mut cmd = Cmd::new();
+        cmd.arg("CLIENT").arg("SETNAME");
+        assert!(client.is_client_set_name_command(&cmd));
+
+        // Test CLIENT only
+        let mut cmd = Cmd::new();
+        cmd.arg("CLIENT");
+        assert!(!client.is_client_set_name_command(&cmd));
+    }
+
+    #[test]
+    fn test_extract_client_name_from_client_set_name() {
+        // Test detection of valid CLIENT SETNAME commands
+        let client = create_test_client();
+
+        // Test uppercase CLIENT SETNAME command
+        let mut cmd = Cmd::new();
+        cmd.arg("CLIENT").arg("SETNAME").arg("test_name");
+        assert_eq!(
+            client.extract_client_name_from_client_set_name(&cmd),
+            Some("test_name".to_string())
+        );
     }
 }

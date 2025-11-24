@@ -1,280 +1,190 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package compatibility.jedis;
 
+import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.*;
 
-import compatibility.clients.jedis.Jedis;
-import compatibility.clients.jedis.JedisPool;
-import java.lang.reflect.Method;
+import java.util.UUID;
 import org.junit.jupiter.api.*;
+import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.GlideJedisFactory;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
 
-/**
- * JedisPool compatibility test that validates GLIDE JedisPool behavior matches actual Jedis pool
- * implementation.
- *
- * <p>This test focuses on connection pool functionality to ensure that the GLIDE compatibility
- * layer provides identical pooling behavior to actual Jedis.
- */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+/** Simplified JedisPool compatibility test that validates basic GLIDE JedisPool functionality. */
 public class JedisPoolTest {
 
-    private static final String TEST_KEY_PREFIX = "jedis_pool_test:";
-
     // Server configuration - dynamically resolved from CI environment
-    private static String redisHost;
-    private static int redisPort;
+    private static final String valkeyHost;
+    private static final int valkeyPort;
 
-    // GLIDE compatibility layer pool
-    private JedisPool glideJedisPool;
+    static {
+        String[] standaloneHosts = STANDALONE_HOSTS;
 
-    // Actual Jedis pool (loaded via reflection if available)
-    private Object actualJedisPool;
-    private Class<?> actualJedisClass;
-    private Class<?> actualJedisPoolClass;
-
-    // Availability flags
-    private boolean hasGlideJedisPool = false;
-    private boolean hasActualJedisPool = false;
-
-    @BeforeAll
-    static void setupClass() {
-        resolveServerAddress();
-    }
-
-    /**
-     * Resolve Redis/Valkey server address from CI environment properties. Falls back to
-     * localhost:6379 if no CI configuration is found.
-     */
-    private static void resolveServerAddress() {
-        String standaloneHosts = System.getProperty("test.server.standalone");
-
-        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
-            String firstHost = standaloneHosts.split(",")[0].trim();
-            String[] hostPort = firstHost.split(":");
-
-            if (hostPort.length == 2) {
-                redisHost = hostPort[0];
-                try {
-                    redisPort = Integer.parseInt(hostPort[1]);
-                    return;
-                } catch (NumberFormatException e) {
-                    // Fall through to default
-                }
-            }
+        // Fail if standalone server configuration is not found in system properties
+        if (standaloneHosts.length == 0 || standaloneHosts[0].trim().isEmpty()) {
+            throw new IllegalStateException(
+                    "Standalone server configuration not found in system properties. "
+                            + "Please set 'test.server.standalone' system property with server address "
+                            + "(e.g., -Dtest.server.standalone=localhost:6379)");
         }
 
-        // Fallback to localhost for local development
-        redisHost = "localhost";
-        redisPort = 6379;
-    }
+        String firstHost = standaloneHosts[0].trim();
+        String[] hostPort = firstHost.split(":");
 
-    @BeforeEach
-    void setup() {
-        // Initialize GLIDE JedisPool
-        try {
-            glideJedisPool = new JedisPool(redisHost, redisPort);
-            hasGlideJedisPool = true;
-        } catch (Exception e) {
-            hasGlideJedisPool = false;
-        }
-
-        // Try to load actual Jedis pool via reflection (optional)
-        try {
-            String jedisJarPath = System.getProperty("jedis.jar.path");
-            if (jedisJarPath != null) {
-                // Load actual Jedis classes and create pool instance
-                actualJedisClass = Class.forName("redis.clients.jedis.Jedis");
-                actualJedisPoolClass = Class.forName("redis.clients.jedis.JedisPool");
-
-                actualJedisPool =
-                        actualJedisPoolClass
-                                .getConstructor(String.class, int.class)
-                                .newInstance(redisHost, redisPort);
-                hasActualJedisPool = true;
-            }
-        } catch (Exception e) {
-            hasActualJedisPool = false;
-        }
-    }
-
-    @AfterEach
-    void cleanup() {
-        // Cleanup test keys and close pools
-        if (hasGlideJedisPool && glideJedisPool != null) {
-            try (Jedis jedis = glideJedisPool.getResource()) {
-                cleanupTestKeys(jedis);
-            } catch (Exception e) {
-                // Ignore cleanup errors
-            }
-
+        if (hostPort.length == 2) {
             try {
-                glideJedisPool.close();
-            } catch (Exception e) {
-                // Ignore cleanup errors
+                valkeyHost = hostPort[0];
+                valkeyPort = Integer.parseInt(hostPort[1]);
+            } catch (NumberFormatException e) {
+                throw new IllegalStateException(
+                        "Invalid port number in standalone server configuration: "
+                                + firstHost
+                                + ". "
+                                + "Expected format: host:port (e.g., localhost:6379)",
+                        e);
             }
-        }
-
-        if (hasActualJedisPool && actualJedisPool != null) {
-            try {
-                Method getResourceMethod = actualJedisPoolClass.getMethod("getResource");
-                Object actualJedis = getResourceMethod.invoke(actualJedisPool);
-
-                cleanupTestKeys(actualJedis);
-
-                Method closeJedisMethod = actualJedisClass.getMethod("close");
-                closeJedisMethod.invoke(actualJedis);
-
-                Method closePoolMethod = actualJedisPoolClass.getMethod("close");
-                closePoolMethod.invoke(actualJedisPool);
-            } catch (Exception e) {
-                // Ignore cleanup errors
-            }
+        } else {
+            throw new IllegalStateException(
+                    "Invalid standalone server format: "
+                            + firstHost
+                            + ". "
+                            + "Expected format: host:port (e.g., localhost:6379)");
         }
     }
 
-    /**
-     * Test connection pool operations.
-     *
-     * <p>This test is important because:
-     *
-     * <ul>
-     *   <li>Connection pooling is a critical feature for production applications
-     *   <li>Pool behavior differs significantly between GLIDE and actual Jedis:
-     *       <ul>
-     *         <li>GLIDE uses internal connection management
-     *         <li>Actual Jedis uses Apache Commons Pool2
-     *       </ul>
-     *   <li>Validates that pool.getResource() returns working connections
-     *   <li>Ensures proper resource lifecycle management (try-with-resources)
-     *   <li>Tests that pooled connections produce identical results to direct connections
-     * </ul>
-     */
     @Test
-    @Order(1)
-    @DisplayName("Basic Pool Operations")
-    void testBasicPoolOperations() {
-        assumeTrue(hasGlideJedisPool, "GLIDE JedisPool not available");
-
-        String testKey = TEST_KEY_PREFIX + "basic";
-        String testValue = "pool_test_value";
-
-        // Test GLIDE JedisPool
-        String glideSetResult;
-        String glideGetResult;
-
-        try (Jedis pooledJedis = glideJedisPool.getResource()) {
-            glideSetResult = pooledJedis.set(testKey, testValue);
-            glideGetResult = pooledJedis.get(testKey);
+    void pool_creation() {
+        // Test basic pool creation
+        try (JedisPool pool = new JedisPool(valkeyHost, valkeyPort)) {
+            assertNotNull(pool, "JedisPool should be created successfully");
+            assertFalse(pool.isClosed(), "JedisPool should not be closed after creation");
         }
+    }
 
-        assertEquals("OK", glideSetResult, "GLIDE pooled Jedis SET should return OK");
-        assertEquals(testValue, glideGetResult, "GLIDE pooled Jedis GET should return the set value");
+    @Test
+    void pool_basic_operations() {
+        // Test basic pool operations
+        try (JedisPool pool = new JedisPool(valkeyHost, valkeyPort)) {
+            assertNotNull(pool, "Pool should be initialized");
+            assertFalse(pool.isClosed(), "Pool should not be closed");
 
-        // Compare with actual Jedis pool if available
-        if (hasActualJedisPool) {
-            try {
-                Method getResourceMethod = actualJedisPoolClass.getMethod("getResource");
-                Object actualPooledJedis = getResourceMethod.invoke(actualJedisPool);
+            // Test getting a resource
+            try (Jedis jedis = pool.getResource()) {
+                assertNotNull(jedis, "Should be able to get Jedis resource from pool");
 
-                Method setMethod = actualJedisClass.getMethod("set", String.class, String.class);
-                Method getMethod = actualJedisClass.getMethod("get", String.class);
-                Method closeMethod = actualJedisClass.getMethod("close");
+                // Test basic Valkey operations
+                String testKey = UUID.randomUUID().toString();
+                String testValue = "test_value";
 
-                String actualSetResult = (String) setMethod.invoke(actualPooledJedis, testKey, testValue);
-                String actualGetResult = (String) getMethod.invoke(actualPooledJedis, testKey);
-                closeMethod.invoke(actualPooledJedis);
+                String setResult = jedis.set(testKey, testValue);
+                assertEquals("OK", setResult, "SET operation should succeed");
 
-                assertEquals(
-                        actualSetResult,
-                        glideSetResult,
-                        "GLIDE and actual Jedis pool SET results should be identical");
-                assertEquals(
-                        actualGetResult,
-                        glideGetResult,
-                        "GLIDE and actual Jedis pool GET results should be identical");
-            } catch (Exception e) {
-                fail("Failed to compare with actual Jedis pool: " + e.getMessage());
+                String getValue = jedis.get(testKey);
+                assertEquals(testValue, getValue, "GET should return the set value");
+
+                // Cleanup
+                jedis.del(testKey);
             }
         }
     }
 
     @Test
-    @Order(2)
-    @DisplayName("Pool Resource Management")
-    void testPoolResourceManagement() {
-        assumeTrue(hasGlideJedisPool, "GLIDE JedisPool not available");
+    void pool_with_timeout() {
+        // Test pool with custom timeout using simple constructor
+        try (JedisPool timeoutPool = new JedisPool(valkeyHost, valkeyPort, 5000)) {
+            assertNotNull(timeoutPool, "Timeout pool should be created");
 
-        String testKey = TEST_KEY_PREFIX + "resource";
-        String testValue = "resource_test_value";
+            try (Jedis jedis = timeoutPool.getResource()) {
+                String testKey = UUID.randomUUID().toString();
+                String testValue = "timeout_value";
 
-        // Test multiple resource acquisitions
-        for (int i = 0; i < 5; i++) {
-            try (Jedis pooledJedis = glideJedisPool.getResource()) {
-                String setResult = pooledJedis.set(testKey + i, testValue + i);
-                String getResult = pooledJedis.get(testKey + i);
+                String setResult = jedis.set(testKey, testValue);
+                assertEquals("OK", setResult, "SET with timeout pool should work");
 
-                assertEquals("OK", setResult, "SET should succeed for iteration " + i);
-                assertEquals(
-                        testValue + i, getResult, "GET should return correct value for iteration " + i);
-            }
-        }
+                String getResult = jedis.get(testKey);
+                assertEquals(testValue, getResult, "GET with timeout pool should work");
 
-        // Verify all values were set correctly by acquiring a new resource
-        try (Jedis pooledJedis = glideJedisPool.getResource()) {
-            for (int i = 0; i < 5; i++) {
-                String getResult = pooledJedis.get(testKey + i);
-                assertEquals(testValue + i, getResult, "Value should persist for key " + i);
+                // Cleanup
+                jedis.del(testKey);
             }
         }
     }
 
     @Test
-    @Order(3)
-    @DisplayName("Pool Configuration")
-    void testPoolConfiguration() {
-        assumeTrue(hasGlideJedisPool, "GLIDE JedisPool not available");
+    void pool_with_authentication() {
+        // Test pool with authentication using simple constructor
+        String password = ""; // Empty password for test environment
 
-        // Test that pool provides basic configuration information
-        assertNotNull(glideJedisPool, "Pool should not be null");
+        try (JedisPool authPool = new JedisPool(valkeyHost, valkeyPort, 2000, password)) {
+            assertNotNull(authPool, "Authenticated pool should be created");
 
-        // Test pool stats (basic functionality)
-        String stats = glideJedisPool.getPoolStats();
-        assertNotNull(stats, "Pool stats should not be null");
+            try (Jedis jedis = authPool.getResource()) {
+                String testKey = UUID.randomUUID().toString();
+                String testValue = "auth_value";
 
-        // Test pool configuration methods exist and return reasonable values
-        assertTrue(glideJedisPool.getMaxTotal() > 0, "Max total should be positive");
-        assertTrue(glideJedisPool.getMaxWaitMillis() >= 0, "Max wait should be non-negative");
-        assertNotNull(glideJedisPool.getConfig(), "Pool config should not be null");
+                String setResult = jedis.set(testKey, testValue);
+                assertEquals("OK", setResult, "SET with authenticated pool should work");
+
+                String getResult = jedis.get(testKey);
+                assertEquals(testValue, getResult, "GET with authenticated pool should work");
+
+                // Cleanup
+                jedis.del(testKey);
+            }
+        }
     }
 
-    /** Clean up test keys to avoid interference between tests. */
-    private void cleanupTestKeys(Object jedisInstance) {
-        try {
-            if (jedisInstance instanceof Jedis) {
-                // GLIDE Jedis cleanup
-                Jedis jedis = (Jedis) jedisInstance;
-                jedis.del(TEST_KEY_PREFIX + "basic");
-                jedis.del(TEST_KEY_PREFIX + "resource0");
-                jedis.del(TEST_KEY_PREFIX + "resource1");
-                jedis.del(TEST_KEY_PREFIX + "resource2");
-                jedis.del(TEST_KEY_PREFIX + "resource3");
-                jedis.del(TEST_KEY_PREFIX + "resource4");
-            } else {
-                // Actual Jedis cleanup via reflection
-                Method delMethod = actualJedisClass.getMethod("del", String[].class);
-                String[] keysToDelete = {
-                    TEST_KEY_PREFIX + "basic",
-                    TEST_KEY_PREFIX + "resource0",
-                    TEST_KEY_PREFIX + "resource1",
-                    TEST_KEY_PREFIX + "resource2",
-                    TEST_KEY_PREFIX + "resource3",
-                    TEST_KEY_PREFIX + "resource4"
-                };
-                delMethod.invoke(jedisInstance, (Object) keysToDelete);
+    @Test
+    void pool_factory_pattern() {
+        // Test pool creation with factory using simple constructor
+        GlideJedisFactory factory =
+                new GlideJedisFactory(valkeyHost, valkeyPort, DefaultJedisClientConfig.builder().build());
+
+        try (JedisPool factoryPool = new JedisPool(factory)) {
+            assertNotNull(factoryPool, "Factory-based pool should be created");
+
+            try (Jedis jedis = factoryPool.getResource()) {
+                String testKey = UUID.randomUUID().toString();
+                String testValue = "factory_value";
+
+                String setResult = jedis.set(testKey, testValue);
+                assertEquals("OK", setResult, "SET with factory pool should work");
+
+                String getResult = jedis.get(testKey);
+                assertEquals(testValue, getResult, "GET with factory pool should work");
+
+                // Cleanup
+                jedis.del(testKey);
             }
-        } catch (Exception e) {
-            // Ignore cleanup errors
+        }
+    }
+
+    @Test
+    void pool_statistics() {
+        // Test pool statistics and monitoring
+        try (JedisPool pool = new JedisPool(valkeyHost, valkeyPort)) {
+            assertNotNull(pool, "Pool should be initialized");
+
+            // Get initial statistics
+            int initialActive = pool.getNumActive();
+            int initialIdle = pool.getNumIdle();
+            int maxTotal = pool.getMaxTotal();
+
+            assertTrue(initialActive >= 0, "Active connections should be non-negative");
+            assertTrue(initialIdle >= 0, "Idle connections should be non-negative");
+            assertTrue(maxTotal > 0, "Max total should be positive");
+
+            // Test with active connection
+            try (Jedis jedis = pool.getResource()) {
+                // Active count might increase (depending on pool state)
+                int activeWithConnection = pool.getNumActive();
+                assertTrue(activeWithConnection >= initialActive, "Active count should not decrease");
+            }
+
+            // After returning connection, active should decrease
+            int finalActive = pool.getNumActive();
+            assertTrue(finalActive >= 0, "Final active connections should be non-negative");
         }
     }
 }

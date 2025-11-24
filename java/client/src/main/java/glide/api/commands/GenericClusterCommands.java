@@ -198,7 +198,7 @@ public interface GenericClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
      * @param cursor The {@link ClusterScanCursor} object that wraps the scan state. To start a new
-     *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initalCursor()}.
+     *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initialCursor()}.
      * @return An <code>Array</code> with two elements. The first element is always the {@link
      *     ClusterScanCursor} for the next iteration of results. To see if there is more data on the
      *     given cursor, call {@link ClusterScanCursor#isFinished()}. To release resources for the
@@ -257,7 +257,7 @@ public interface GenericClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
      * @param cursor The {@link ClusterScanCursor} object that wraps the scan state. To start a new
-     *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initalCursor()}.
+     *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initialCursor()}.
      * @return An <code>Array</code> with two elements. The first element is always the {@link
      *     ClusterScanCursor} for the next iteration of results. To see if there is more data on the
      *     given cursor, call {@link ClusterScanCursor#isFinished()}. To release resources for the
@@ -315,7 +315,7 @@ public interface GenericClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
      * @param cursor The {@link ClusterScanCursor} object that wraps the scan state. To start a new
-     *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initalCursor()}.
+     *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initialCursor()}.
      * @param options The {@link ScanOptions}.
      * @return An <code>Array</code> with two elements. The first element is always the {@link
      *     ClusterScanCursor} for the next iteration of results. To see if there is more data on the
@@ -376,7 +376,7 @@ public interface GenericClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
      * @param cursor The {@link ClusterScanCursor} object that wraps the scan state. To start a new
-     *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initalCursor()}.
+     *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initialCursor()}.
      * @param options The {@link ScanOptions}.
      * @return An <code>Array</code> with two elements. The first element is always the {@link
      *     ClusterScanCursor} for the next iteration of results. To see if there is more data on the

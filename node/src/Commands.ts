@@ -2,24 +2,30 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+/**
+ * Note: 'eslint-disable-line @typescript-eslint/no-unused-vars' is used intentionally
+ * to suppress unused import errors for types referenced only in JSDoc.
+ */
+
 import Long from "long";
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     BaseClientConfiguration, // eslint-disable-line @typescript-eslint/no-unused-vars
     convertRecordToGlideRecord,
-    createLeakedStringVec,
     ElementAndScore,
-    GlideClient, // eslint-disable-line @typescript-eslint/no-unused-vars
-    GlideClusterClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideRecord,
     GlideString,
     HashDataType,
-    MAX_REQUEST_ARGS_LEN,
     ObjectType,
     Score,
-    SingleNodeRoute,
     SortedSetDataType,
-} from ".";
+} from "./BaseClient";
+import { GlideClient } from "./GlideClient"; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { GlideClusterClient, SingleNodeRoute } from "./GlideClusterClient"; // eslint-disable-line @typescript-eslint/no-unused-vars
+import {
+    createLeakedStringVec,
+    MAX_REQUEST_ARGS_LEN,
+} from "../build-ts/native";
 
 import { command_request } from "../build-ts/ProtobufMessage";
 import RequestType = command_request.RequestType;
@@ -502,6 +508,271 @@ export function createHSetNX(
     value: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HSetNX, [key, field, value]);
+}
+
+/**
+ * @internal
+ */
+export function createHSetEx(
+    key: GlideString,
+    fieldValueMap: HashDataType,
+    options?: HSetExOptions,
+): command_request.Command {
+    const args: GlideString[] = [key];
+
+    // Add field conditional change options (FNX | FXX)
+    if (options?.fieldConditionalChange) {
+        args.push(options.fieldConditionalChange);
+    }
+
+    // Add expiry options (EX | PX | EXAT | PXAT | KEEPTTL)
+    // Note: PERSIST is not supported by HSETEX
+    if (options?.expiry) {
+        if (options.expiry === "KEEPTTL") {
+            args.push("KEEPTTL");
+        } else {
+            // Validate that count is an integer
+            if (!Number.isInteger(options.expiry.count)) {
+                throw new Error(
+                    `HSETEX received expiry '${JSON.stringify(
+                        options.expiry,
+                    )}'. Count must be an integer`,
+                );
+            }
+
+            args.push(options.expiry.type, options.expiry.count.toString());
+        }
+    }
+
+    // Only add FIELDS keyword and field count if fieldValueMap is not empty
+    if (fieldValueMap.length > 0) {
+        args.push("FIELDS", fieldValueMap.length.toString());
+
+        // Add field-value pairs
+        fieldValueMap.forEach((fieldValueObject) => {
+            args.push(fieldValueObject.field, fieldValueObject.value);
+        });
+    }
+
+    return createCommand(RequestType.HSetEx, args);
+}
+
+/**
+ * @internal
+ */
+export function createHGetEx(
+    key: GlideString,
+    fields: GlideString[],
+    options?: HGetExOptions,
+): command_request.Command {
+    const args: GlideString[] = [key];
+
+    // Add expiry options (EX | PX | EXAT | PXAT | PERSIST)
+    // Note: HGETEX does not support KEEPTTL
+    if (options?.expiry) {
+        if (options.expiry === "PERSIST") {
+            args.push("PERSIST");
+        } else {
+            // Validate that count is an integer
+            if (!Number.isInteger(options.expiry.count)) {
+                throw new Error(
+                    `HGETEX received expiry '${JSON.stringify(
+                        options.expiry,
+                    )}'. Count must be an integer`,
+                );
+            }
+
+            args.push(options.expiry.type, options.expiry.count.toString());
+        }
+    }
+
+    // Add FIELDS keyword and field count - always required when fields parameter exists
+    args.push("FIELDS", fields.length.toString());
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HGetEx, args);
+}
+
+/**
+ * @internal
+ */
+export function createHExpire(
+    key: GlideString,
+    seconds: number,
+    fields: GlideString[],
+    options?: HExpireOptions,
+): command_request.Command {
+    const args: GlideString[] = [key, seconds.toString()];
+
+    // Add condition options (NX | XX | GT | LT)
+    if (options?.condition) {
+        args.push(options.condition);
+    }
+
+    // Add FIELDS keyword and field count - always required when fields parameter exists
+    args.push("FIELDS", fields.length.toString());
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HExpire, args);
+}
+
+/**
+ * @internal
+ */
+export function createHPersist(
+    key: GlideString,
+    fields: GlideString[],
+): command_request.Command {
+    const args: GlideString[] = [key];
+
+    // Add FIELDS keyword and field count - always required when fields parameter exists
+    args.push("FIELDS", fields.length.toString());
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HPersist, args);
+}
+
+/**
+ * @internal
+ */
+export function createHPExpire(
+    key: GlideString,
+    milliseconds: number,
+    fields: GlideString[],
+    options?: HExpireOptions,
+): command_request.Command {
+    const args: GlideString[] = [key, milliseconds.toString()];
+
+    // Add condition options (NX | XX | GT | LT)
+    if (options?.condition) {
+        args.push(options.condition);
+    }
+
+    // Add FIELDS keyword and field count - always required when fields parameter exists
+    args.push("FIELDS", fields.length.toString());
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HPExpire, args);
+}
+
+/**
+ * @internal
+ */
+export function createHExpireAt(
+    key: GlideString,
+    unixTimestampSeconds: number,
+    fields: GlideString[],
+    options?: HExpireOptions,
+): command_request.Command {
+    const args: GlideString[] = [key, unixTimestampSeconds.toString()];
+
+    // Add condition options (NX | XX | GT | LT)
+    if (options?.condition) {
+        args.push(options.condition);
+    }
+
+    // Add FIELDS keyword and field count - always required when fields parameter exists
+    args.push("FIELDS", fields.length.toString());
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HExpireAt, args);
+}
+
+/**
+ * @internal
+ */
+export function createHPExpireAt(
+    key: GlideString,
+    unixTimestampMilliseconds: number,
+    fields: GlideString[],
+    options?: HExpireOptions,
+): command_request.Command {
+    const args: GlideString[] = [key, unixTimestampMilliseconds.toString()];
+
+    // Add condition options (NX | XX | GT | LT)
+    if (options?.condition) {
+        args.push(options.condition);
+    }
+
+    // Add FIELDS keyword and field count - always required when fields parameter exists
+    args.push("FIELDS", fields.length.toString());
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HPExpireAt, args);
+}
+
+/**
+ * @internal
+ */
+export function createHTtl(
+    key: GlideString,
+    fields: GlideString[],
+): command_request.Command {
+    const args: GlideString[] = [key];
+
+    // Add FIELDS keyword and field count - always required when fields parameter exists
+    args.push("FIELDS", fields.length.toString());
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HTtl, args);
+}
+
+/**
+ * @internal
+ */
+export function createHPTtl(
+    key: GlideString,
+    fields: GlideString[],
+): command_request.Command {
+    const args: GlideString[] = [key];
+
+    // Add FIELDS keyword and field count - always required when fields parameter exists
+    args.push("FIELDS", fields.length.toString());
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HPTtl, args);
+}
+
+/**
+ * @internal
+ */
+export function createHExpireTime(
+    key: GlideString,
+    fields: GlideString[],
+): command_request.Command {
+    const args: GlideString[] = [key];
+
+    // Add FIELDS keyword and field count - always required when fields parameter exists
+    args.push("FIELDS", fields.length.toString());
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HExpireTime, args);
+}
+
+/**
+ * @internal
+ */
+export function createHPExpireTime(
+    key: GlideString,
+    fields: GlideString[],
+): command_request.Command {
+    const args: GlideString[] = [key];
+
+    // Add FIELDS keyword and field count - always required when fields parameter exists
+    args.push("FIELDS", fields.length.toString());
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HPExpireTime, args);
 }
 
 /**
@@ -3250,6 +3521,191 @@ export enum ConditionalChange {
      * Only add new elements. Don't update already existing elements. Equivalent to `NX` in the Valkey API.
      */
     ONLY_IF_DOES_NOT_EXIST = "NX",
+}
+
+/**
+ * Field conditional change options for hash field expiration commands.
+ * Used with HSETEX command to control field setting behavior.
+ */
+export enum HashFieldConditionalChange {
+    /**
+     * Only set fields if all of them already exist. Equivalent to `FXX` in the Valkey API.
+     */
+    ONLY_IF_ALL_EXIST = "FXX",
+
+    /**
+     * Only set fields if none of them already exist. Equivalent to `FNX` in the Valkey API.
+     */
+    ONLY_IF_NONE_EXIST = "FNX",
+}
+
+/**
+ * Expiry set options for hash field expiration commands.
+ * Supports setting expiration time in various formats.
+ */
+export type ExpirySet =
+    | {
+          type: TimeUnit;
+          count: number;
+      }
+    | "KEEPTTL";
+
+/**
+ * Expiry options specifically for HSETEX command.
+ * Supports standard expiry options (EX/PX/EXAT/PXAT) and KEEPTTL, but excludes PERSIST.
+ *
+ * @example
+ * ```typescript
+ * // Set expiration to 60 seconds
+ * const expiry: HSetExExpiry = { type: TimeUnit.Seconds, count: 60 };
+ *
+ * // Keep existing TTL
+ * const keepTtl: HSetExExpiry = "KEEPTTL";
+ * ```
+ */
+export type HSetExExpiry =
+    | {
+          type: TimeUnit;
+          count: number;
+      }
+    | "KEEPTTL";
+
+/**
+ * Expiry options specifically for HGETEX command.
+ * Supports standard expiry options (EX/PX/EXAT/PXAT) and PERSIST, but excludes KEEPTTL.
+ *
+ * @example
+ * ```typescript
+ * // Set expiration to 30 seconds
+ * const expiry: HGetExExpiry = { type: TimeUnit.Seconds, count: 30 };
+ *
+ * // Remove expiration
+ * const persist: HGetExExpiry = "PERSIST";
+ * ```
+ */
+export type HGetExExpiry =
+    | {
+          type: TimeUnit;
+          count: number;
+      }
+    | "PERSIST";
+
+/**
+ * Optional arguments for the HSETEX command.
+ *
+ * @example
+ * ```typescript
+ * // Set fields with 60 second expiration, only if none exist
+ * const options: HSetExOptions = {
+ *     fieldConditionalChange: HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+ *     expiry: { type: TimeUnit.Seconds, count: 60 }
+ * };
+ *
+ * // Set fields and keep existing TTL
+ * const keepTtlOptions: HSetExOptions = {
+ *     expiry: "KEEPTTL"
+ * };
+ * ```
+ *
+ * See https://valkey.io/commands/hsetex/ for more details.
+ */
+export interface HSetExOptions {
+    /** Options for handling existing fields. See {@link HashFieldConditionalChange}. */
+    fieldConditionalChange?: HashFieldConditionalChange;
+    /** Expiry settings for the fields. See {@link HSetExExpiry}. */
+    expiry?: HSetExExpiry;
+}
+
+/**
+ * Optional arguments for the HGETEX command.
+ *
+ * @example
+ * ```typescript
+ * // Get fields and set 30 second expiration
+ * const options: HGetExOptions = {
+ *     expiry: { type: TimeUnit.Seconds, count: 30 }
+ * };
+ *
+ * // Get fields and remove expiration
+ * const persistOptions: HGetExOptions = {
+ *     expiry: "PERSIST"
+ * };
+ * ```
+ *
+ * See https://valkey.io/commands/hgetex/ for more details.
+ */
+export interface HGetExOptions {
+    /** Expiry settings for the fields. Can be a time-based expiry or "PERSIST" to remove expiration. */
+    expiry?: HGetExExpiry;
+}
+
+/**
+ * Expiration condition options for hash field expiration commands.
+ * Used with HEXPIRE, HPEXPIRE, HEXPIREAT, and HPEXPIREAT commands to control expiration setting behavior.
+ */
+export enum HashExpirationCondition {
+    /**
+     * Only set expiration when field has no expiration. Equivalent to `NX` in the Valkey API.
+     */
+    ONLY_IF_NO_EXPIRY = "NX",
+
+    /**
+     * Only set expiration when field has existing expiration. Equivalent to `XX` in the Valkey API.
+     */
+    ONLY_IF_HAS_EXPIRY = "XX",
+
+    /**
+     * Only set expiration when new expiration is greater than current. Equivalent to `GT` in the Valkey API.
+     */
+    ONLY_IF_GREATER_THAN_CURRENT = "GT",
+
+    /**
+     * Only set expiration when new expiration is less than current. Equivalent to `LT` in the Valkey API.
+     */
+    ONLY_IF_LESS_THAN_CURRENT = "LT",
+}
+
+/**
+ * Shared optional arguments for HEXPIRE, HPEXPIRE, HEXPIREAT, and HPEXPIREAT commands.
+ *
+ * This interface provides a unified way to specify expiration conditions for hash field
+ * expiration commands that support conditional expiration setting.
+ *
+ * @example
+ * ```typescript
+ * // Set expiration only if field has no existing expiration
+ * const options: HExpireOptions = {
+ *     condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY
+ * };
+ *
+ * // Set expiration only if new expiration is greater than current
+ * const gtOptions: HExpireOptions = {
+ *     condition: HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT
+ * };
+ *
+ * // Set expiration only if field has existing expiration
+ * const xxOptions: HExpireOptions = {
+ *     condition: HashExpirationCondition.ONLY_IF_HAS_EXPIRY
+ * };
+ *
+ * // Set expiration only if new expiration is less than current
+ * const ltOptions: HExpireOptions = {
+ *     condition: HashExpirationCondition.ONLY_IF_LESS_THAN_CURRENT
+ * };
+ * ```
+ *
+ * @see {@link https://valkey.io/commands/hexpire/|HEXPIRE}
+ * @see {@link https://valkey.io/commands/hpexpire/|HPEXPIRE}
+ * @see {@link https://valkey.io/commands/hexpireat/|HEXPIREAT}
+ * @see {@link https://valkey.io/commands/hpexpireat/|HPEXPIREAT}
+ */
+export interface HExpireOptions {
+    /**
+     * Condition for setting expiration. Controls when the expiration should be set
+     * based on the current state of the field's expiration.
+     * See {@link HashExpirationCondition} for available options.
+     */
+    condition?: HashExpirationCondition;
 }
 
 /**

@@ -703,7 +703,7 @@ pub(crate) fn convert_to_expected_type(
                           2) 1) "1719710688676-0"
                              2) (integer) 1719710718373
                              3) (integer) 1
-        
+
         RESP3 response example
 
         1# "length" => (integer) 2
@@ -741,7 +741,7 @@ pub(crate) fn convert_to_expected_type(
                        2) 1) "1719710688676-0"
                           2) (integer) 1719710718373
                           3) (integer) 1
-        
+
         Another RESP3 example on an empty stream
 
         1# "length" => (integer) 0
@@ -1374,7 +1374,7 @@ fn convert_flat_array_to_array_of_pairs(
     array: Vec<Value>,
     value_expected_return_type: Option<ExpectedReturnType>,
 ) -> RedisResult<Value> {
-    if array.len() % 2 != 0 {
+    if !array.len().is_multiple_of(2) {
         return Err((
             ErrorKind::TypeError,
             "Response has odd number of items, and cannot be converted to an array of key-value pairs"
@@ -1396,7 +1396,7 @@ fn is_array(val: Value) -> bool {
     matches!(val, Value::Array(_))
 }
 
-pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
+pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>> {
     let command = cmd.command()?;
 
     // TODO use enum to avoid mistakes

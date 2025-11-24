@@ -9,6 +9,7 @@ Go provides native support for Examples which are a great way to document how to
 - [hash_commands_test.go](../hash_commands_test.go)
 - [hyperloglog_commands_test.go](../hyperloglog_commands_test.go)
 - [list_commands_test.go](../list_commands_test.go)
+- [opentelemetry_examples_test.go](../opentelemetry_examples_test.go)
 - [server_management_commands_test.go](../server_management_commands_test.go)
 - [set_commands_test.go](../set_commands_test.go)
 - [sorted_set_commands_test.go](../sorted_set_commands_test.go)

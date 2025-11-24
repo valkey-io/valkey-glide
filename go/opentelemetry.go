@@ -31,6 +31,7 @@ package glide
 import "C"
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"log"
@@ -55,6 +56,13 @@ import (
 //				Endpoint: "http://localhost:4318/v1/metrics",
 //			},
 //			FlushIntervalMs: &interval, // Optional, defaults to 5000, e.g. interval := int64(1000)
+//			SpanFromContext: func(ctx context.Context) uint64 {
+//				// Extract span pointer from context for parent-child span relationships
+//				if spanPtr, ok := ctx.Value(glide.SpanContextKey).(uint64); ok && spanPtr != 0 {
+//					return spanPtr
+//				}
+//				return 0
+//			},
 //		}
 //		err := glide.GetOtelInstance().Init(config)
 //		if err != nil {
@@ -68,6 +76,27 @@ type OpenTelemetryConfig struct {
 	// (Optional)FlushIntervalMs is the interval in milliseconds between consecutive exports of telemetry data.
 	// If not specified, defaults to 5000.
 	FlushIntervalMs *int64
+	// (Optional) SpanFromContext is a function that extracts parent span information from a context.Context.
+	// When provided, Glide will use this function to create child spans under existing parent spans,
+	// enabling end-to-end tracing across your application and database operations.
+	//
+	// The function should return:
+	//   - spanPtr: A span pointer (uint64) obtained from CreateSpan() or 0 if no parent span is found
+	//
+	// If this function is not provided or returns 0, Glide will create independent spans
+	// as it currently does. If the function panics, Glide will gracefully fallback to creating
+	// independent spans.
+	//
+	// Example implementation:
+	//   SpanFromContext: func(ctx context.Context) uint64 {
+	//       if spanPtr, ok := ctx.Value(glide.SpanContextKey).(uint64); ok && spanPtr != 0 {
+	//           return spanPtr
+	//       }
+	//       return 0
+	//   }
+	//
+	// Note: This function must be thread-safe as it may be called concurrently from multiple goroutines.
+	SpanFromContext func(ctx context.Context) (spanPtr uint64)
 }
 
 // OpenTelemetryTracesConfig represents the configuration for exporting OpenTelemetry traces.
@@ -97,6 +126,13 @@ type OpenTelemetryTracesConfig struct {
 type OpenTelemetryMetricsConfig struct {
 	Endpoint string
 }
+
+// Context key type for consistent span storage
+type spanContextKeyType struct{}
+
+// SpanContextKey is the default context key used to store Glide span pointers in context.Context.
+// This key is used by WithSpan() and DefaultSpanFromContext() functions.
+var SpanContextKey = spanContextKeyType{}
 
 var (
 	otelInstance    *OpenTelemetry
@@ -271,6 +307,27 @@ func (o *OpenTelemetry) createBatchSpan() uint64 {
 	return uint64(C.create_batch_otel_span())
 }
 
+// createSpanWithParent creates a new OpenTelemetry span with the given request type and parent span pointer.
+// This is an internal method used by command execution to create child spans.
+func (o *OpenTelemetry) createSpanWithParent(requestType C.RequestType, parentSpanPtr uint64) uint64 {
+	if !o.IsInitialized() {
+		return 0
+	}
+	return uint64(C.create_otel_span_with_parent(C.enum_RequestType(requestType), C.uint64_t(parentSpanPtr)))
+}
+
+// createBatchSpanWithParent creates a new OpenTelemetry batch span with the given parent span pointer.
+// This is an internal method used by batch execution to create child batch spans.
+// Uses the dedicated create_batch_otel_span_with_parent FFI function for proper batch span creation.
+func (o *OpenTelemetry) createBatchSpanWithParent(parentSpanPtr uint64) uint64 {
+	if !o.IsInitialized() {
+		return 0
+	}
+
+	// Use the dedicated FFI function for creating batch spans with parent context
+	return uint64(C.create_batch_otel_span_with_parent(C.uint64_t(parentSpanPtr)))
+}
+
 // DropSpan drops an OpenTelemetry span given its pointer.
 func (o *OpenTelemetry) dropSpan(spanPtr uint64) {
 	if spanPtr == 0 {
@@ -278,3 +335,165 @@ func (o *OpenTelemetry) dropSpan(spanPtr uint64) {
 	}
 	C.drop_otel_span(C.uint64_t(spanPtr))
 }
+
+// CreateSpan creates a new OpenTelemetry span with the given name and returns a pointer to the span.
+// This is a PUBLIC API for users to create parent spans that can be used with command execution.
+//
+// Parameters:
+//   - name: The name of the span to create
+//
+// Returns:
+//   - uint64: A pointer to the created span (0 on failure)
+//   - error: An error if the span creation fails or OpenTelemetry is not initialized
+//
+// Example usage:
+//
+//	spanPtr, err := glide.GetOtelInstance().CreateSpan("user-operation")
+//	if err != nil {
+//		log.Printf("Failed to create span: %v", err)
+//		return
+//	}
+//	defer glide.GetOtelInstance().EndSpan(spanPtr)
+//
+// Note: The caller is responsible for calling EndSpan() to properly clean up the span.
+func (o *OpenTelemetry) CreateSpan(name string) (uint64, error) {
+	// Thread-safe check for initialization
+	if !o.IsInitialized() {
+		return 0, fmt.Errorf("openTelemetry not initialized")
+	}
+
+	// Validate input parameters
+	if name == "" {
+		return 0, fmt.Errorf("span name cannot be empty")
+	}
+
+	// Validate name length (reasonable limit to prevent abuse)
+	if len(name) > 256 {
+		return 0, fmt.Errorf("span name too long (%d chars), maximum 256 characters allowed", len(name))
+	}
+
+	// Convert Go string to C string
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+
+	// Call FFI function to create named span
+	spanPtr := uint64(C.create_named_otel_span(cName))
+	if spanPtr == 0 {
+		return 0, fmt.Errorf("failed to create span '%s'", name)
+	}
+
+	return spanPtr, nil
+}
+
+// EndSpan ends and drops an OpenTelemetry span given its pointer.
+// This is a PUBLIC API for users to properly clean up spans created with CreateSpan().
+//
+// Parameters:
+//   - spanPtr: A pointer to the span to end (obtained from CreateSpan)
+//
+// Note: This method is safe to call with a zero pointer (no-op).
+// It is the caller's responsibility to ensure the span pointer is valid.
+//
+// Example usage:
+//
+//	spanPtr, err := glide.GetOtelInstance().CreateSpan("user-operation")
+//	if err != nil {
+//		log.Printf("Failed to create span: %v", err)
+//		return
+//	}
+//	defer glide.GetOtelInstance().EndSpan(spanPtr)
+func (o *OpenTelemetry) EndSpan(spanPtr uint64) {
+	// Safe to call with zero pointer - dropSpan handles this case
+	o.dropSpan(spanPtr)
+}
+
+// Context Integration Helper Functions
+
+// WithSpan stores a Glide span pointer in a context.Context for later retrieval.
+// This is a helper function that users can use to attach span pointers to contexts
+// for parent-child span relationships.
+//
+// Parameters:
+//   - ctx: The parent context
+//   - spanPtr: A span pointer obtained from CreateSpan()
+//
+// Returns:
+//   - context.Context: A new context containing the span pointer
+//
+// Example usage:
+//
+//	spanPtr, err := glide.GetOtelInstance().CreateSpan("user-operation")
+//	if err != nil {
+//		return err
+//	}
+//	defer glide.GetOtelInstance().EndSpan(spanPtr)
+//
+//	// Store span in context
+//	ctx = glide.WithSpan(ctx, spanPtr)
+//
+//	// Now all Glide operations with this context will be child spans
+//	result, err := client.Get(ctx, "key")
+func WithSpan(ctx context.Context, spanPtr uint64) context.Context {
+	return context.WithValue(ctx, SpanContextKey, spanPtr)
+}
+
+// DefaultSpanFromContext is a default implementation of the SpanFromContext function
+// that extracts span pointers stored using WithSpan().
+//
+// This function can be used directly in OpenTelemetryConfig or as a reference
+// for implementing custom span extraction logic.
+//
+// Parameters:
+//   - ctx: The context to extract the span pointer from
+//
+// Returns:
+//   - spanPtr: The span pointer if found, 0 if no parent span is available
+//
+// Example usage:
+//
+//	config := glide.OpenTelemetryConfig{
+//		Traces: &glide.OpenTelemetryTracesConfig{
+//			Endpoint:         "http://localhost:4318/v1/traces",
+//			SamplePercentage: 10,
+//		},
+//		SpanFromContext: glide.DefaultSpanFromContext,
+//	}
+func DefaultSpanFromContext(ctx context.Context) uint64 {
+	if ctx == nil {
+		return 0
+	}
+	if spanPtr, ok := ctx.Value(SpanContextKey).(uint64); ok && spanPtr != 0 {
+		return spanPtr
+	}
+	return 0
+}
+
+// extractSpanPointer is an internal method that safely extracts parent span pointer from context
+// using the configured SpanFromContext function. It includes error handling and fallback logic.
+func (o *OpenTelemetry) extractSpanPointer(ctx context.Context) uint64 {
+	// Thread-safe access to configuration
+	configMutex.RLock()
+	spanFromContextFunc := otelConfig.SpanFromContext
+	configMutex.RUnlock()
+
+	// If no SpanFromContext function is configured, return no parent span
+	if spanFromContextFunc == nil {
+		return 0
+	}
+
+	// Call the user-provided function with panic recovery
+	var spanPtr uint64
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("SpanFromContext function panicked: %v, falling back to independent span creation", r)
+				spanPtr = 0
+			}
+		}()
+		spanPtr = spanFromContextFunc(ctx)
+	}()
+
+	return spanPtr
+}
+
+// For runnable examples demonstrating OpenTelemetry usage, see the examples in opentelemetry_examples_test.go

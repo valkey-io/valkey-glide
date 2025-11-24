@@ -8,15 +8,29 @@ repositories {
     mavenLocal()
 }
 
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
 dependencies {
-    // client
-    implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
+    def classifier 
+    if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+        classifier = "linux_musl-${osdetector.arch}"
+    }
+    else {
+        classifier = osdetector.classifier
+    }
+    // Use published GLIDE artifact
+    implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: classifier
+    
+    // Use published jedis-compatibility artifact
+    testImplementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
 
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
-    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.18.0'
+    implementation 'com.google.code.gson:gson:2.13.2'
 
-    // Add commons-pool2 as runtime dependency (required by glide.api module)
-    runtimeOnly group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.0'
+    // Add commons-pool2 as compile-time dependency for tests
+    implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
 
 
 
@@ -28,12 +42,14 @@ dependencies {
     implementation group: 'org.semver4j', name: 'semver4j', version: '5.6.0'
 
     //lombok
-    testCompileOnly 'org.projectlombok:lombok:1.18.38'
-    testAnnotationProcessor 'org.projectlombok:lombok:1.18.38'
+    testCompileOnly 'org.projectlombok:lombok:1.18.42'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.42'
 }
 
 def standaloneHosts = ''
+def standaloneTlsHosts = ''
 def clusterHosts = ''
+def clusterTlsHosts = ''
 def azClusterHosts = ''
 
 ext {
@@ -48,18 +64,37 @@ ext {
     }
 }
 
-tasks.register('stopAllAfterTests', Exec) {
-    workingDir "${project.rootDir}/../utils"
-    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
+tasks.register('stopAllAfterTests') {
+    doLast {
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
+            ignoreExitValue true // ignore fail if servers are stopped before
+        }
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            commandLine 'python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster', '--keep-folder'
+            ignoreExitValue true
+        }
+    }
 }
 
 // We need to call for stop before and after the test, but gradle doesn't support executing a task
 // twice. So there are two identical tasks with different names.
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
-tasks.register('stopAllBeforeTests', Exec) {
-    workingDir "${project.rootDir}/../utils"
-    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'
-    ignoreExitValue true // ignore fail if servers are stopped before
+tasks.register('stopAllBeforeTests') {
+    doLast {
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'
+            ignoreExitValue true // ignore fail if servers are stopped before
+        }
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            commandLine 'python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster'
+            ignoreExitValue true
+        }
+    }
 }
 
 // delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
@@ -126,15 +161,44 @@ tasks.register('startStandalone') {
     }
 }
 
+tasks.register('startStandaloneTls') {
+    doLast {
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '-r', '0'
+                standardOutput = os
+            }
+            standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+        }
+    }
+}
+
+tasks.register('startClusterTls') {
+    doLast {
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '--cluster-mode'
+                standardOutput = os
+            }
+            clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+        }
+    }
+}
+
 beforeTests.dependsOn 'stopAllBeforeTests'
 stopAllBeforeTests.finalizedBy 'clearDirs'
 clearDirs.finalizedBy 'startStandalone'
+clearDirs.finalizedBy 'startStandaloneTls'
 clearDirs.finalizedBy 'startCluster'
+clearDirs.finalizedBy 'startClusterTls'
 clearDirs.finalizedBy 'startClusterForAz'
 afterTests.finalizedBy 'stopAllAfterTests'
-compileTestJava.dependsOn ':client:publishToMavenLocal'
+compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
 
 tasks.withType(Test) {
+    dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
     useJUnitPlatform()
     if (!project.gradle.startParameter.taskNames.contains(':integTest:modulesTest')) {
         dependsOn 'beforeTests'
@@ -143,7 +207,9 @@ tasks.withType(Test) {
 
     doFirst {
         systemProperty 'test.server.standalone', standaloneHosts
+        systemProperty 'test.server.standalone.tls', standaloneTlsHosts
         systemProperty 'test.server.cluster', clusterHosts
+        systemProperty 'test.server.cluster.tls', clusterTlsHosts
         systemProperty 'test.server.azcluster', azClusterHosts
         systemProperty 'test.server.tls', System.getProperty("tls")
     }
@@ -156,6 +222,15 @@ tasks.withType(Test) {
 
     minHeapSize = "2048m" // Initial heap size. Needed for max size tests.
     maxHeapSize = "2048m" // Maximum heap size. Needed for max size tests.
+    
+    // Native library path for GLIDE FFI - needed for Jedis compatibility tests
+    jvmArgs "-Djava.library.path=${project.rootDir}/../target/release"
+    
+    // Disable modularity for jedis compatibility tests
+    if (name.contains('jedis') || filter.includePatterns.any { it.contains('jedis') }) {
+        jvmArgs += "--add-opens=java.base/java.lang=ALL-UNNAMED"
+        jvmArgs += "--add-opens=java.base/java.util=ALL-UNNAMED"
+    }
 
     afterTest { desc, result ->
         logger.quiet "${desc.className}.${desc.name}: ${result.resultType} ${(result.getEndTime() - result.getStartTime())/1000}s"

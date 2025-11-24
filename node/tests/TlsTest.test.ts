@@ -26,7 +26,7 @@ const TLS_OPTIONS = {
 // tls cluster tests
 describe("tls GlideClusterClient", () => {
     let cluster: ValkeyCluster;
-    let client: GlideClusterClient;
+    let client: GlideClusterClient | undefined;
 
     beforeAll(async () => {
         cluster = await ValkeyCluster.createCluster(
@@ -37,7 +37,7 @@ describe("tls GlideClusterClient", () => {
             true,
             TLS_OPTIONS,
         );
-    }, 40000);
+    }, TIMEOUT);
 
     afterEach(async () => {
         await flushAndCloseClient(
@@ -46,6 +46,7 @@ describe("tls GlideClusterClient", () => {
             client,
             TLS_OPTIONS,
         );
+        client = undefined;
     });
 
     afterAll(async () => {
@@ -87,7 +88,7 @@ describe("tls GlideClusterClient", () => {
 // tls cluster tests
 describe("tls GlideClient", () => {
     let cluster: ValkeyCluster;
-    let client: GlideClient;
+    let client: GlideClient | undefined;
 
     beforeAll(async () => {
         cluster = await ValkeyCluster.createCluster(
@@ -98,7 +99,7 @@ describe("tls GlideClient", () => {
             true,
             TLS_OPTIONS,
         );
-    }, 40000);
+    }, TIMEOUT);
 
     afterEach(async () => {
         await flushAndCloseClient(
@@ -107,6 +108,7 @@ describe("tls GlideClient", () => {
             client,
             TLS_OPTIONS,
         );
+        client = undefined;
     });
 
     afterAll(async () => {

@@ -43,6 +43,14 @@ on:
                 description: "Run the full engine, host, and language version matrix"
                 type: boolean
                 default: false
+            run-with-macos:
+                description: "Run with macos included (only when necessary)"
+                type: choice
+                options:
+                    - false
+                    - use-self-hosted
+                    - use-github
+                default: false
             name:
                 required: false
                 type: string
@@ -51,8 +59,23 @@ on:
                 description: "Run modules tests"
                 type: boolean
                 default: false
+            run_async_tests:
+                description: "Run only async tests"
+                required: false
+                type: boolean
+                default: false
+            run_sync_tests:
+                description: "run only sync tests"
+                required: false
+                type: boolean
+                default: false
 
     workflow_call:
+        inputs:
+            run-with-macos:
+                description: "Run with macos included (only when necessary)"
+                type: string
+                default: false
 
 concurrency:
     group: python-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
@@ -70,6 +93,9 @@ run-name:
 env:
     # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
     RUN_FULL_MATRIX: ${{ (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule') }}
+    RUN_WITH_MACOS: ${{ (github.event.inputs.run-with-macos) }}
+    RUN_SYNC_ONLY: ${{ (github.event.inputs.run_sync_tests == 'true' && github.event.inputs.run_async_tests == 'false') }}
+    RUN_ASYNC_ONLY: ${{ (github.event.inputs.run_async_tests == 'true' && github.event.inputs.run_sync_tests == 'false') }}
 
 jobs:
     get-matrices:
@@ -85,12 +111,13 @@ jobs:
               with:
                   language-name: python
                   run-full-matrix: ${{ env.RUN_FULL_MATRIX == 'true' }}
+                  run-with-macos: ${{ env.RUN_WITH_MACOS }}
 
     test-python:
         name: Python Tests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
-        timeout-minutes: 90
+        timeout-minutes: 120
         strategy:
             fail-fast: false
             matrix:
@@ -133,17 +160,31 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - name: Test with pytest (asyncio only)
-              if: ${{ env.RUN_FULL_MATRIX != 'true' }}
+            - name: Test with pytest
+              if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY == 'false' && env.RUN_ASYNC_ONLY == 'false' }}
               working-directory: ./python
+              env:
+                  TEST_NAME_ARG: ${{ inputs.name && format('-k {0}', inputs.name) || '' }}
               run: |
-                  python3 dev.py test --args --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args --async-backend=asyncio --html=pytest_report.html --self-contained-html "$TEST_NAME_ARG"
 
-            - name: Test with pytest (full matrix)
+            - name: Test with pytest (full matrix, all async backends)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
               working-directory: ./python
               run: |
                   python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+
+            - name: Test with pytest (async only)
+              if: ${{ env.RUN_ASYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+
+            - name: Test with pytest (sync only)
+              if: ${{ env.RUN_SYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args tests/sync_tests --html=pytest_report.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.13' }}
@@ -155,7 +196,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
+                  name: test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
                       python/tests/pytest_report.html
                       utils/clusters/**
@@ -204,24 +245,36 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - name: Test pubsub with pytest (asyncio only)
-              if: ${{ env.RUN_FULL_MATRIX != 'true' }}
+            - name: Test pubsub with pytest
+              if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY == 'false' && env.RUN_ASYNC_ONLY == 'false' }}
               working-directory: ./python
               run: |
-                  python3 dev.py test --args -k test_pubsub --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args -k pubsub --html=pytest_report.html --self-contained-html
 
             - name: Test pubsub with pytest (full matrix)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
               working-directory: ./python
               run: |
-                  python3 dev.py test --args -k test_pubsub --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args -k pubsub --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+
+            - name: Test pubsub with pytest (async only)
+              if: ${{ env.RUN_ASYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args -k pubsub tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+
+            - name: Test pubsub with pytest (sync only)
+              if: ${{ env.RUN_SYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args -k pubsub tests/sync_tests --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: pubsub-test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
+                  name: pubsub-test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
                       python/tests/pytest_report.html
 
@@ -234,7 +287,7 @@ jobs:
             - name: lint rust
               uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: python
+                  cargo-toml-folder: python/glide-async
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install dependencies
@@ -264,7 +317,9 @@ jobs:
             - name: Build docs
               working-directory: ./python/docs
               run: |
-                  sphinx-apidoc -o . ../python/glide
+                  sphinx-apidoc -o glide_async ../glide-async/python
+                  sphinx-apidoc -o glide_sync ../glide-sync/glide_sync
+                  sphinx-apidoc -o glide_shared ../glide-shared/glide_shared
                   make clean
                   make html SPHINXOPTS="-W --keep-going"
 
@@ -382,7 +437,7 @@ jobs:
                   target: aarch64-unknown-linux-gnu
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Test with pytest (asyncio only)
+            - name: Test with pytest
               if: ${{ env.RUN_FULL_MATRIX != 'true' }}
               working-directory: ./python
               run: |
@@ -393,6 +448,18 @@ jobs:
               working-directory: ./python
               run: |
                   python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+
+            - name: Test with pytest (async only)
+              if: ${{ env.RUN_ASYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+
+            - name: Test with pytest (sync only)
+              if: ${{ env.RUN_SYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules tests/sync_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()

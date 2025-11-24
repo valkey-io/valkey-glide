@@ -2,6 +2,11 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+/**
+ * Note: 'eslint-disable-line @typescript-eslint/no-unused-vars' is used intentionally
+ * to suppress unused import errors for types referenced only in JSDoc.
+ */
+
 import {
     AggregationType,
     BaseScanOptions,
@@ -35,7 +40,10 @@ import {
     GlideClusterClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideRecord,
     GlideString,
+    HExpireOptions,
+    HGetExOptions,
     HScanOptions,
+    HSetExOptions,
     HashDataType,
     InfoOptions,
     InsertPosition,
@@ -120,18 +128,29 @@ import {
     createGetRange,
     createHDel,
     createHExists,
+    createHExpire,
+    createHExpireAt,
+    createHExpireTime,
     createHGet,
     createHGetAll,
+    createHGetEx,
     createHIncrBy,
     createHIncrByFloat,
     createHKeys,
     createHLen,
     createHMGet,
+    createHPExpire,
+    createHPExpireAt,
+    createHPExpireTime,
+    createHPTtl,
+    createHPersist,
     createHRandField,
     createHScan,
     createHSet,
+    createHSetEx,
     createHSetNX,
     createHStrlen,
+    createHTtl,
     createHVals,
     createIncr,
     createIncrBy,
@@ -410,6 +429,31 @@ export class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
+     * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
+     * the value will be copied to the database specified, otherwise the current database will be used.
+     * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
+     * no action.
+     *
+     * @see {@link https://valkey.io/commands/copy/|valkey.io} for details.
+     * @remarks Since Valkey version 6.2.0. destinationDB parameter for cluster mode is supported since Valkey 9.0.0 and above
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param destinationDB - (Optional) The alternative logical database index for the destination key.
+     *     If not provided, the current database will be used.
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     *
+     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
+     */
+    public copy(
+        source: GlideString,
+        destination: GlideString,
+        options?: { destinationDB?: number; replace?: boolean },
+    ): T {
+        return this.addAndReturn(createCopy(source, destination, options));
+    }
+    /**
      * Gets information and statistics about the server.
      *
      * Starting from server version 7, command supports multiple section arguments.
@@ -548,6 +592,23 @@ export class BaseBatch<T extends BaseBatch<T>> {
         return this.addAndReturn(
             createMSetNX(convertGlideRecord(keysAndValues)),
         );
+    }
+
+    /**
+     * Move `key` from the currently selected database to the database specified by `dbIndex`.
+     *
+     * @remarks Move is available for cluster mode since Valkey 9.0.0 and above.
+     *
+     * @see {@link https://valkey.io/commands/move/|valkey.io} for details.
+     *
+     * @param key - The key to move.
+     * @param dbIndex - The index of the database to move `key` to.
+     *
+     * Command Response - `true` if `key` was moved, or `false` if the `key` already exists in the destination
+     *     database or does not exist in the source database.
+     */
+    public move(key: GlideString, dbIndex: number): T {
+        return this.addAndReturn(createMove(key, dbIndex));
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -1029,6 +1090,285 @@ export class BaseBatch<T extends BaseBatch<T>> {
      */
     public hrandfieldWithValues(key: GlideString, count: number): T {
         return this.addAndReturn(createHRandField(key, count, true));
+    }
+
+    /**
+     * Sets hash fields with expiration times and optional conditional changes.
+     *
+     * @param key - The key of the hash.
+     * @param fieldsAndValues - A map or array of field-value pairs to set.
+     * @param options - Optional parameters including field conditional changes and expiry settings.
+     *                  See {@link HSetExOptions}.
+     *
+     * @example
+     * ```typescript
+     * // Set fields with 60 second expiration, only if none exist
+     * batch.hsetex(
+     *     "myHash",
+     *     { field1: "value1", field2: "value2" },
+     *     {
+     *         fieldConditionalChange: HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+     *         expiry: { type: TimeUnit.Seconds, count: 60 }
+     *     }
+     * );
+     *
+     * // Set fields and keep existing TTL
+     * batch.hsetex(
+     *     "myHash",
+     *     { field3: "value3" },
+     *     { expiry: "KEEPTTL" }
+     * );
+     *
+     * // Set fields with Unix timestamp expiration
+     * batch.hsetex(
+     *     "myHash",
+     *     { field4: "value4" },
+     *     { expiry: { type: TimeUnit.UnixSeconds, count: Math.floor(Date.now() / 1000) + 3600 } }
+     * );
+     * ```
+     *
+     * Command Response - The number of fields that were added to the hash.
+     *
+     * @since Valkey 9.0.0
+     * @see https://valkey.io/commands/hsetex/
+     */
+    public hsetex(
+        key: GlideString,
+        fieldsAndValues: HashDataType | Record<string, GlideString>,
+        options?: HSetExOptions,
+    ): T {
+        return this.addAndReturn(
+            createHSetEx(
+                key,
+                convertFieldsAndValuesToHashDataType(fieldsAndValues),
+                options,
+            ),
+        );
+    }
+
+    /**
+     * Gets hash fields and optionally sets their expiration.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The fields in the hash stored at `key` to retrieve from the database.
+     * @param options - Optional arguments for the HGETEX command. See {@link HGetExOptions}.
+     *
+     * @example
+     * ```typescript
+     * // Get fields without setting expiration
+     * batch.hgetex("myHash", ["field1", "field2"]);
+     *
+     * // Get fields and set 30 second expiration
+     * batch.hgetex(
+     *     "myHash",
+     *     ["field1", "field2"],
+     *     { expiry: { type: TimeUnit.Seconds, count: 30 } }
+     * );
+     *
+     * // Get fields and remove expiration (make persistent)
+     * batch.hgetex(
+     *     "myHash",
+     *     ["field1", "field2"],
+     *     { expiry: "PERSIST" }
+     * );
+     *
+     * // Get fields and set millisecond precision expiration
+     * batch.hgetex(
+     *     "myHash",
+     *     ["field3"],
+     *     { expiry: { type: TimeUnit.Milliseconds, count: 5000 } }
+     * );
+     * ```
+     *
+     * Command Response - An array of values associated with the given fields, in the same order as they are requested.
+     *     For every field that does not exist in the hash, a null value is returned.
+     *     If `key` does not exist, returns an array of null values.
+     *
+     * @since Valkey 9.0.0
+     * @see https://valkey.io/commands/hgetex/
+     */
+    public hgetex(
+        key: GlideString,
+        fields: GlideString[],
+        options?: HGetExOptions,
+    ): T {
+        return this.addAndReturn(createHGetEx(key, fields, options));
+    }
+
+    /**
+     * Sets expiration time for hash fields in seconds. Creates the hash if it doesn't exist.
+     * @see {@link https://valkey.io/commands/hexpire/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param seconds - The expiration time in seconds.
+     * @param fields - The fields to set expiration for.
+     * @param options - Optional arguments for the HEXPIRE command. See {@link HExpireOptions}.
+     *
+     * Command Response - An array of numbers indicating the result for each field:
+     *     - `1` if expiration was set successfully
+     *     - `0` if the specified condition (NX, XX, GT, LT) was not met
+     *     - `-2` if the field does not exist or the key does not exist
+     *     - `2` when called with 0 seconds (field deleted)
+     */
+    public hexpire(
+        key: GlideString,
+        seconds: number,
+        fields: GlideString[],
+        options?: HExpireOptions,
+    ): T {
+        return this.addAndReturn(createHExpire(key, seconds, fields, options));
+    }
+
+    /**
+     * Removes the expiration time associated with each specified field, causing them to persist.
+     * @see {@link https://valkey.io/commands/hpersist/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The fields in the hash to remove expiration from.
+     *
+     * Command Response - An array of numbers indicating the result for each field:
+     *     - `1` if the field's expiration was removed successfully.
+     *     - `-1` if the field exists but has no associated expiration.
+     *     - `-2` if the field does not exist or the key does not exist.
+     */
+    public hpersist(key: GlideString, fields: GlideString[]): T {
+        return this.addAndReturn(createHPersist(key, fields));
+    }
+
+    /**
+     * Sets expiration time for hash fields in milliseconds. Creates the hash if it doesn't exist.
+     * @see {@link https://valkey.io/commands/hpexpire/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param milliseconds - The expiration time in milliseconds.
+     * @param fields - The fields to set expiration for.
+     * @param options - Optional arguments for the HPEXPIRE command. See {@link HExpireOptions}.
+     *
+     * Command Response - An array of boolean values indicating whether expiration was set for each field.
+     *     `true` if expiration was set, `false` if the field doesn't exist or the condition wasn't met.
+     */
+    public hpexpire(
+        key: GlideString,
+        milliseconds: number,
+        fields: GlideString[],
+        options?: HExpireOptions,
+    ): T {
+        return this.addAndReturn(
+            createHPExpire(key, milliseconds, fields, options),
+        );
+    }
+
+    /**
+     * Sets expiration time for hash fields using an absolute Unix timestamp in seconds. Creates the hash if it doesn't exist.
+     * @see {@link https://valkey.io/commands/hexpireat/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param unixTimestampSeconds - The expiration time as a Unix timestamp in seconds.
+     * @param fields - The fields to set expiration for.
+     * @param options - Optional arguments for the HEXPIREAT command. See {@link HExpireOptions}.
+     *
+     * Command Response - An array of numbers indicating the result for each field:
+     *     - `1` if expiration was set successfully
+     *     - `0` if the specified condition (NX, XX, GT, LT) was not met
+     *     - `-2` if the field does not exist or the key does not exist
+     *     - `2` when called with 0 seconds (field deleted)
+     */
+    public hexpireat(
+        key: GlideString,
+        unixTimestampSeconds: number,
+        fields: GlideString[],
+        options?: HExpireOptions,
+    ): T {
+        return this.addAndReturn(
+            createHExpireAt(key, unixTimestampSeconds, fields, options),
+        );
+    }
+
+    /**
+     * Sets expiration time for hash fields using an absolute Unix timestamp in milliseconds. Creates the hash if it doesn't exist.
+     * @see {@link https://valkey.io/commands/hpexpireat/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param unixTimestampMilliseconds - The expiration time as a Unix timestamp in milliseconds.
+     * @param fields - The fields to set expiration for.
+     * @param options - Optional arguments for the HPEXPIREAT command. See {@link HExpireOptions}.
+     *
+     * Command Response - An array of boolean values indicating whether expiration was set for each field.
+     *     `true` if expiration was set, `false` if the field doesn't exist or the condition wasn't met.
+     */
+    public hpexpireat(
+        key: GlideString,
+        unixTimestampMilliseconds: number,
+        fields: GlideString[],
+        options?: HExpireOptions,
+    ): T {
+        return this.addAndReturn(
+            createHPExpireAt(key, unixTimestampMilliseconds, fields, options),
+        );
+    }
+
+    /**
+     * Returns the remaining time to live of hash fields that have a timeout, in seconds.
+     * @see {@link https://valkey.io/commands/httl/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The fields in the hash stored at `key` to retrieve the TTL for.
+     *
+     * Command Response - An array of TTL values in seconds for the specified fields.
+     *     - For fields with a timeout, returns the remaining time in seconds.
+     *     - For fields that exist but have no associated expire, returns -1.
+     *     - For fields that do not exist, returns -2.
+     */
+    public httl(key: GlideString, fields: GlideString[]): T {
+        return this.addAndReturn(createHTtl(key, fields));
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (in seconds) at which hash fields will expire.
+     * @see {@link https://valkey.io/commands/hexpiretime/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The list of fields to get the expiration timestamp for.
+     *
+     * Command Response - An array of expiration timestamps in seconds for the specified fields:
+     *     - For fields with a timeout, returns the absolute Unix timestamp in seconds.
+     *     - For fields without a timeout, returns -1.
+     *     - For fields that do not exist, returns -2.
+     */
+    public hexpiretime(key: GlideString, fields: GlideString[]): T {
+        return this.addAndReturn(createHExpireTime(key, fields));
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (in milliseconds) at which hash fields will expire.
+     * @see {@link https://valkey.io/commands/hpexpiretime/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The list of fields to get the expiration timestamp for.
+     *
+     * Command Response - An array of expiration timestamps in milliseconds for the specified fields:
+     *     - For fields with a timeout, returns the absolute Unix timestamp in milliseconds.
+     *     - For fields without a timeout, returns -1.
+     *     - For fields that do not exist, returns -2.
+     */
+    public hpexpiretime(key: GlideString, fields: GlideString[]): T {
+        return this.addAndReturn(createHPExpireTime(key, fields));
+    }
+
+    /**
+     * Returns the remaining time to live of hash fields that have a timeout, in milliseconds.
+     * @see {@link https://valkey.io/commands/hpttl/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The list of fields to get the TTL for.
+     *
+     * Command Response - An array of TTL values in milliseconds for the specified fields:
+     *     - For fields with a timeout, returns the remaining TTL in milliseconds.
+     *     - For fields without a timeout, returns -1.
+     *     - For fields that do not exist, returns -2.
+     */
+    public hpttl(key: GlideString, fields: GlideString[]): T {
+        return this.addAndReturn(createHPTtl(key, fields));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
@@ -4091,6 +4431,14 @@ export class Batch extends BaseBatch<Batch> {
     /**
      * Change the currently selected database.
      *
+     * **WARNING**: This command is NOT RECOMMENDED for production use.
+     * Upon reconnection, the client will revert to the database_id specified
+     * in the client configuration (default: 0), NOT the database selected
+     * via this command.
+     *
+     * **RECOMMENDED APPROACH**: Use the `databaseId` parameter in client
+     * configuration instead of using SELECT in batch operations.
+     *
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
      * @param index - The index of the database to select.
@@ -4099,47 +4447,6 @@ export class Batch extends BaseBatch<Batch> {
      */
     public select(index: number): Batch {
         return this.addAndReturn(createSelect(index));
-    }
-
-    /**
-     * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
-     * the value will be copied to the database specified, otherwise the current database will be used.
-     * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
-     * no action.
-     *
-     * @see {@link https://valkey.io/commands/copy/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
-     *
-     * @param source - The key to the source value.
-     * @param destination - The key where the value should be copied to.
-     * @param destinationDB - (Optional) The alternative logical database index for the destination key.
-     *     If not provided, the current database will be used.
-     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
-     *     value to it. If not provided, no action will be performed if the key already exists.
-     *
-     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
-     */
-    public copy(
-        source: GlideString,
-        destination: GlideString,
-        options?: { destinationDB?: number; replace?: boolean },
-    ): Batch {
-        return this.addAndReturn(createCopy(source, destination, options));
-    }
-
-    /**
-     * Move `key` from the currently selected database to the database specified by `dbIndex`.
-     *
-     * @see {@link https://valkey.io/commands/move/|valkey.io} for details.
-     *
-     * @param key - The key to move.
-     * @param dbIndex - The index of the database to move `key` to.
-     *
-     * Command Response - `true` if `key` was moved, or `false` if the `key` already exists in the destination
-     *     database or does not exist in the source database.
-     */
-    public move(key: GlideString, dbIndex: number): Batch {
-        return this.addAndReturn(createMove(key, dbIndex));
     }
 
     /** Publish a message on pubsub channel.
@@ -4197,28 +4504,6 @@ export class Batch extends BaseBatch<Batch> {
  */
 export class ClusterBatch extends BaseBatch<ClusterBatch> {
     /// TODO: add all CLUSTER commands
-
-    /**
-     * Copies the value stored at the `source` to the `destination` key. When `replace` is true,
-     * removes the `destination` key first if it already exists, otherwise performs no action.
-     *
-     * @see {@link https://valkey.io/commands/copy/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
-     *
-     * @param source - The key to the source value.
-     * @param destination - The key where the value should be copied to.
-     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
-     *     value to it. If not provided, no action will be performed if the key already exists.
-     *
-     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
-     */
-    public copy(
-        source: GlideString,
-        destination: GlideString,
-        options?: { replace?: boolean },
-    ): ClusterBatch {
-        return this.addAndReturn(createCopy(source, destination, options));
-    }
 
     /** Publish a message on pubsub channel.
      * This command aggregates PUBLISH and SPUBLISH commands functionalities.

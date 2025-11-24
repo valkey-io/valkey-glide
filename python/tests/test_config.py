@@ -1,8 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import pytest
-
-from glide.config import (
+from glide_shared.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
@@ -16,9 +15,9 @@ from glide.config import (
     ReadFrom,
     TlsAdvancedConfiguration,
 )
-from glide.protobuf.connection_request_pb2 import ConnectionRequest
-from glide.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
-from glide.protobuf.connection_request_pb2 import TlsMode
+from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
+from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
+from glide_shared.protobuf.connection_request_pb2 import TlsMode
 
 
 def test_default_client_config():
@@ -196,3 +195,330 @@ def test_tls_insecure_in_protobuf_request():
 
     assert isinstance(request, ConnectionRequest)
     assert request.tls_mode is TlsMode.InsecureTls
+
+
+# Database ID configuration tests
+def test_database_id_validation_in_base_config():
+    """Test database_id validation in BaseClientConfiguration."""
+    # Valid database_id values
+    config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=0)
+    assert config.database_id == 0
+
+    config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=5)
+    assert config.database_id == 5
+
+    config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=15)
+    assert config.database_id == 15
+
+    # Test broader range of database IDs
+    config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=100)
+    assert config.database_id == 100
+
+    config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=1000)
+    assert config.database_id == 1000
+
+    # None should be allowed (defaults to 0)
+    config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=None)
+    assert config.database_id is None
+
+
+def test_database_id_in_standalone_config():
+    """Test database_id configuration in GlideClientConfiguration."""
+    config = GlideClientConfiguration([NodeAddress("127.0.0.1")], database_id=5)
+    assert config.database_id == 5
+
+    request = config._create_a_protobuf_conn_request()
+    assert request.database_id == 5
+    assert request.cluster_mode_enabled is False
+
+
+def test_database_id_in_cluster_config():
+    """Test database_id configuration in GlideClusterClientConfiguration."""
+    config = GlideClusterClientConfiguration([NodeAddress("127.0.0.1")], database_id=3)
+    assert config.database_id == 3
+
+    request = config._create_a_protobuf_conn_request(cluster_mode=True)
+    assert request.database_id == 3
+    assert request.cluster_mode_enabled is True
+
+
+def test_database_id_default_behavior():
+    """Test default database_id behavior (None/0)."""
+    # Standalone config without database_id
+    config = GlideClientConfiguration([NodeAddress("127.0.0.1")])
+    assert config.database_id is None
+
+    request = config._create_a_protobuf_conn_request()
+    # When database_id is None, it should be 0 in protobuf (default value)
+    assert request.database_id == 0
+
+    # Cluster config without database_id
+    config = GlideClusterClientConfiguration([NodeAddress("127.0.0.1")])
+    assert config.database_id is None
+
+    request = config._create_a_protobuf_conn_request(cluster_mode=True)
+    # When database_id is None, it should be 0 in protobuf (default value)
+    assert request.database_id == 0
+
+
+def test_database_id_protobuf_inclusion():
+    """Test that database_id is properly included in protobuf when set."""
+    # Test with database_id = 0 (should be included)
+    config = GlideClientConfiguration([NodeAddress("127.0.0.1")], database_id=0)
+    request = config._create_a_protobuf_conn_request()
+    assert request.database_id == 0
+
+    # Test with database_id = 5 (should be included)
+    config = GlideClientConfiguration([NodeAddress("127.0.0.1")], database_id=5)
+    request = config._create_a_protobuf_conn_request()
+    assert request.database_id == 5
+
+    # Test with database_id = None (should default to 0)
+    config = GlideClientConfiguration([NodeAddress("127.0.0.1")])
+    request = config._create_a_protobuf_conn_request()
+    assert request.database_id == 0
+
+
+def test_refresh_topology_from_initial_nodes_in_cluster_config():
+    """Test refresh_topology_from_initial_nodes configuration in GlideClusterClientConfiguration."""
+    config = GlideClusterClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        advanced_config=AdvancedGlideClusterClientConfiguration(
+            refresh_topology_from_initial_nodes=True
+        ),
+    )
+    request = config._create_a_protobuf_conn_request(cluster_mode=True)
+    assert request.refresh_topology_from_initial_nodes is True
+
+
+# Test constants
+TEST_ADDRESSES = [NodeAddress("127.0.0.1")]
+TEST_CERT_DATA_1 = b"-----BEGIN CERTIFICATE-----\nMIIC1...\n-----END CERTIFICATE-----"
+TEST_CERT_DATA_2 = b"-----BEGIN CERTIFICATE-----\nMIIC2...\n-----END CERTIFICATE-----"
+
+
+def _build_standalone_config(tls_config=None):
+    """Helper to build standalone client configuration."""
+    return GlideClientConfiguration(
+        TEST_ADDRESSES,
+        use_tls=True,
+        advanced_config=AdvancedGlideClientConfiguration(tls_config=tls_config),
+    )
+
+
+def _build_cluster_config(tls_config=None):
+    """Helper to build cluster client configuration."""
+    return GlideClusterClientConfiguration(
+        TEST_ADDRESSES,
+        use_tls=True,
+        advanced_config=AdvancedGlideClusterClientConfiguration(tls_config=tls_config),
+    )
+
+
+# TLS Root Certificate Configuration Tests
+def test_tls_root_certificates_with_custom_certs():
+    """Test TLS configuration with custom root certificates."""
+    tls_config = TlsAdvancedConfiguration(root_pem_cacerts=TEST_CERT_DATA_1)
+
+    # Test standalone client
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+
+    assert isinstance(request, ConnectionRequest)
+    assert request.tls_mode == TlsMode.SecureTls
+    assert len(request.root_certs) == 1
+    assert request.root_certs[0] == TEST_CERT_DATA_1
+
+    # Test cluster client
+    cluster_config = _build_cluster_config(tls_config)
+    cluster_request = cluster_config._create_a_protobuf_conn_request(cluster_mode=True)
+
+    assert isinstance(cluster_request, ConnectionRequest)
+    assert cluster_request.tls_mode == TlsMode.SecureTls
+    assert len(cluster_request.root_certs) == 1
+    assert cluster_request.root_certs[0] == TEST_CERT_DATA_1
+
+
+def test_tls_root_certificates_with_none():
+    """Test TLS configuration with None root certificates (uses platform verifier)."""
+    tls_config = TlsAdvancedConfiguration(root_pem_cacerts=None)
+
+    # Test standalone client
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+
+    assert isinstance(request, ConnectionRequest)
+    assert request.tls_mode == TlsMode.SecureTls
+    assert len(request.root_certs) == 0  # Should not be set
+
+    # Test cluster client
+    cluster_config = _build_cluster_config(tls_config)
+    cluster_request = cluster_config._create_a_protobuf_conn_request(cluster_mode=True)
+
+    assert isinstance(cluster_request, ConnectionRequest)
+    assert cluster_request.tls_mode == TlsMode.SecureTls
+    assert len(cluster_request.root_certs) == 0  # Should not be set
+
+
+def test_tls_root_certificates_with_empty_bytes():
+    """Test that empty bytes (non-None but length 0) raises ConfigurationError."""
+    empty_certs = b""
+    tls_config = TlsAdvancedConfiguration(root_pem_cacerts=empty_certs)
+
+    # Test standalone client
+    config = _build_standalone_config(tls_config)
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request()
+    assert "root_pem_cacerts cannot be an empty bytes object" in str(exc_info.value)
+
+    # Test cluster client
+    cluster_config = _build_cluster_config(tls_config)
+    with pytest.raises(ConfigurationError) as exc_info:
+        cluster_config._create_a_protobuf_conn_request(cluster_mode=True)
+    assert "root_pem_cacerts cannot be an empty bytes object" in str(exc_info.value)
+
+
+def test_tls_root_certificates_without_advanced_config():
+    """Test that TLS works without advanced config (uses platform verifier)."""
+    # Test standalone client
+    config = GlideClientConfiguration(
+        TEST_ADDRESSES,
+        use_tls=True,
+    )
+    request = config._create_a_protobuf_conn_request()
+
+    assert isinstance(request, ConnectionRequest)
+    assert request.tls_mode == TlsMode.SecureTls
+    assert len(request.root_certs) == 0  # Should use platform verifier
+
+    # Test cluster client
+    cluster_config = GlideClusterClientConfiguration(
+        TEST_ADDRESSES,
+        use_tls=True,
+    )
+    cluster_request = cluster_config._create_a_protobuf_conn_request(cluster_mode=True)
+
+    assert isinstance(cluster_request, ConnectionRequest)
+    assert cluster_request.tls_mode == TlsMode.SecureTls
+    assert len(cluster_request.root_certs) == 0  # Should use platform verifier
+
+
+def test_tls_root_certificates_with_multiple_certs():
+    """Test TLS configuration with multiple certificates (concatenated PEM)."""
+    multi_cert_data = TEST_CERT_DATA_1 + TEST_CERT_DATA_2
+
+    tls_config = TlsAdvancedConfiguration(root_pem_cacerts=multi_cert_data)
+
+    # Test standalone client
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+
+    assert isinstance(request, ConnectionRequest)
+    assert request.tls_mode == TlsMode.SecureTls
+    assert len(request.root_certs) == 1
+    assert request.root_certs[0] == multi_cert_data
+
+    # Test cluster client
+    cluster_config = _build_cluster_config(tls_config)
+    cluster_request = cluster_config._create_a_protobuf_conn_request(cluster_mode=True)
+
+    assert isinstance(cluster_request, ConnectionRequest)
+    assert cluster_request.tls_mode == TlsMode.SecureTls
+    assert len(cluster_request.root_certs) == 1
+    assert cluster_request.root_certs[0] == multi_cert_data
+
+
+def test_tls_root_certificates_with_insecure_tls():
+    """Test that root certificates can be combined with insecure TLS."""
+    tls_config = TlsAdvancedConfiguration(
+        use_insecure_tls=True, root_pem_cacerts=TEST_CERT_DATA_1
+    )
+
+    # Test standalone client
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+
+    assert isinstance(request, ConnectionRequest)
+    assert request.tls_mode == TlsMode.InsecureTls
+    assert len(request.root_certs) == 1
+    assert request.root_certs[0] == TEST_CERT_DATA_1
+
+
+def test_load_root_certificates_from_file_success(tmp_path):
+    """Test loading certificates from a file successfully."""
+    from glide_shared.config import load_root_certificates_from_file
+
+    # Create a temporary certificate file
+    cert_path = tmp_path / "test-cert.pem"
+    cert_content = b"-----BEGIN CERTIFICATE-----\nMIIC...\n-----END CERTIFICATE-----"
+    cert_path.write_bytes(cert_content)
+
+    # Load the certificate
+    loaded_cert = load_root_certificates_from_file(str(cert_path))
+    assert loaded_cert == cert_content
+
+
+def test_load_root_certificates_from_file_not_found():
+    """Test loading certificates from a non-existent file."""
+    from glide_shared.config import load_root_certificates_from_file
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        load_root_certificates_from_file("/nonexistent/path/cert.pem")
+    assert "Certificate file not found" in str(exc_info.value)
+
+
+def test_load_root_certificates_from_file_empty(tmp_path):
+    """Test loading certificates from an empty file."""
+    from glide_shared.config import load_root_certificates_from_file
+
+    # Create an empty certificate file
+    cert_path = tmp_path / "empty-cert.pem"
+    cert_path.write_bytes(b"")
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_root_certificates_from_file(str(cert_path))
+    assert "Certificate file is empty" in str(exc_info.value)
+
+
+def test_load_root_certificates_from_file_multiple_certs(tmp_path):
+    """Test loading multiple certificates from a file."""
+    from glide_shared.config import load_root_certificates_from_file
+
+    # Create a file with multiple certificates
+    cert_path = tmp_path / "multi-cert.pem"
+    multi_cert_content = TEST_CERT_DATA_1 + TEST_CERT_DATA_2
+    cert_path.write_bytes(multi_cert_content)
+
+    # Load the certificates
+    loaded_certs = load_root_certificates_from_file(str(cert_path))
+    assert loaded_certs == multi_cert_content
+
+
+def test_load_root_certificates_integration(tmp_path):
+    """Integration test: Load certificate and use it in configuration."""
+    from glide_shared.config import load_root_certificates_from_file
+
+    # Create a temporary certificate file
+    cert_path = tmp_path / "ca-cert.pem"
+    cert_path.write_bytes(TEST_CERT_DATA_1)
+
+    # Load certificate
+    certs = load_root_certificates_from_file(str(cert_path))
+
+    # Use in standalone configuration
+    tls_config = TlsAdvancedConfiguration(root_pem_cacerts=certs)
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+
+    assert request.tls_mode == TlsMode.SecureTls
+    assert len(request.root_certs) == 1
+    assert request.root_certs[0] == TEST_CERT_DATA_1
+
+    # Use in cluster configuration
+    cluster_tls_config = TlsAdvancedConfiguration(root_pem_cacerts=certs)
+    cluster_config = _build_cluster_config(cluster_tls_config)
+    cluster_request = cluster_config._create_a_protobuf_conn_request(cluster_mode=True)
+
+    assert cluster_request.tls_mode == TlsMode.SecureTls
+    assert len(cluster_request.root_certs) == 1
+    assert cluster_request.root_certs[0] == TEST_CERT_DATA_1

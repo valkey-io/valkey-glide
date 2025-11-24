@@ -70,6 +70,7 @@ impl Drop for RedisCluster {
             ],
             self.use_tls,
             self.password.clone(),
+            None,
         );
     }
 }
@@ -124,6 +125,24 @@ impl RedisCluster {
         shards: Option<u16>,
         replicas: Option<u16>,
     ) -> RedisCluster {
+        Self::new_with_tls_paths(use_tls, conn_info, shards, replicas, None)
+    }
+
+    pub fn new_with_tls(
+        shards: u16,
+        replicas: u16,
+        tls_paths: Option<super::TlsFilePaths>,
+    ) -> RedisCluster {
+        Self::new_with_tls_paths(true, &None, Some(shards), Some(replicas), tls_paths)
+    }
+
+    fn new_with_tls_paths(
+        use_tls: bool,
+        conn_info: &Option<RedisConnectionInfo>,
+        shards: Option<u16>,
+        replicas: Option<u16>,
+        tls_paths: Option<super::TlsFilePaths>,
+    ) -> RedisCluster {
         let mut script_args = vec!["start", "--cluster-mode"];
         let shards_num: String;
         let replicas_num: String;
@@ -137,7 +156,8 @@ impl RedisCluster {
             script_args.push("-r");
             script_args.push(&replicas_num);
         }
-        let (stdout, stderr) = Self::execute_cluster_script(script_args, use_tls, None);
+        let (stdout, stderr) =
+            Self::execute_cluster_script(script_args, use_tls, None, tls_paths.as_ref());
         let (cluster_folder, servers) = Self::parse_start_script_output(&stdout, &stderr);
         let mut password: Option<String> = None;
         if let Some(info) = conn_info {
@@ -184,23 +204,57 @@ impl RedisCluster {
         args: Vec<&str>,
         use_tls: bool,
         password: Option<String>,
+        tls_paths: Option<&super::TlsFilePaths>,
     ) -> (String, String) {
         let python_binary = which("python3").unwrap();
         let mut script_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         script_path.push("../utils/cluster_manager.py");
         assert!(script_path.exists());
-        let cmd = format!(
-            "{} {} {} {} {}",
-            python_binary.display(),
-            script_path.display(),
-            if use_tls { "--tls" } else { "" },
-            if let Some(pass) = password {
-                format!("--auth {pass}")
+
+        // Helper to quote shell arguments
+        fn shell_quote(s: &str) -> String {
+            if s.contains(' ')
+                || s.contains('\t')
+                || s.contains('\n')
+                || s.contains('"')
+                || s.contains('$')
+            {
+                // Use single quotes and escape any single quotes in the string
+                let escaped = s.replace("'", "'\"'\"'");
+                format!("'{}'", escaped)
             } else {
-                "".to_string()
-            },
-            args.join(" ")
-        );
+                s.to_string()
+            }
+        }
+
+        let mut cmd_parts = vec![
+            shell_quote(&python_binary.to_string_lossy()),
+            shell_quote(&script_path.to_string_lossy()),
+        ];
+
+        if use_tls {
+            cmd_parts.push("--tls".to_string());
+        }
+
+        if let Some(pass) = password {
+            cmd_parts.push("--auth".to_string());
+            cmd_parts.push(shell_quote(&pass));
+        }
+
+        for arg in args {
+            cmd_parts.push(arg.to_string());
+        }
+
+        if let Some(paths) = tls_paths {
+            cmd_parts.push("--tls-cert-file".to_string());
+            cmd_parts.push(shell_quote(&paths.redis_crt.to_string_lossy()));
+            cmd_parts.push("--tls-key-file".to_string());
+            cmd_parts.push(shell_quote(&paths.redis_key.to_string_lossy()));
+            cmd_parts.push("--tls-ca-cert-file".to_string());
+            cmd_parts.push(shell_quote(&paths.ca_crt.to_string_lossy()));
+        }
+
+        let cmd = cmd_parts.join(" ");
 
         let output = if cfg!(target_os = "windows") {
             Command::new("cmd")
@@ -259,11 +313,11 @@ pub async fn create_cluster_client(
         get_shared_cluster_addresses(configuration.use_tls)
     };
 
-    if let Some(redis_connection_info) = &configuration.connection_info {
-        if redis_connection_info.password.is_some() {
-            assert!(!configuration.shared_server);
-            setup_acl_for_cluster(&addresses, redis_connection_info).await;
-        }
+    if let Some(redis_connection_info) = &configuration.connection_info
+        && redis_connection_info.password.is_some()
+    {
+        assert!(!configuration.shared_server);
+        setup_acl_for_cluster(&addresses, redis_connection_info).await;
     }
     configuration.cluster_mode = ClusterMode::Enabled;
     configuration.request_timeout = configuration.request_timeout.or(Some(10000));

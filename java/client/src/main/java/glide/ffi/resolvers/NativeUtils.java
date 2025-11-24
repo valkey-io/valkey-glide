@@ -31,10 +31,18 @@ public class NativeUtils {
     /** Temporary directory which will contain the dynamic library files. */
     private static File temporaryDir;
 
+    /** Track if the Glide library has already been loaded */
+    private static volatile boolean glideLibLoaded = false;
+
     /** Private constructor - this class will never be instanced */
     private NativeUtils() {}
 
-    public static void loadGlideLib() {
+    public static synchronized void loadGlideLib() {
+        // Check if already loaded to avoid multiple loads
+        if (glideLibLoaded) {
+            return;
+        }
+
         String glideLib = "/libglide_rs";
         try {
             String osName = System.getProperty("os.name").toLowerCase();
@@ -42,10 +50,13 @@ public class NativeUtils {
                 NativeUtils.loadLibraryFromJar(glideLib + ".dylib");
             } else if (osName.contains("linux")) {
                 NativeUtils.loadLibraryFromJar(glideLib + ".so");
+            } else if (osName.contains("windows")) {
+                NativeUtils.loadLibraryFromJar("/glide_rs.dll");
             } else {
                 throw new UnsupportedOperationException(
-                        "OS not supported. Glide is only available on Mac OS and Linux systems.");
+                        "OS not supported. Glide is only available on Mac OS, Linux, and Windows systems.");
             }
+            glideLibLoaded = true; // Mark as loaded after successful load
         } catch (java.io.IOException e) {
             e.printStackTrace();
         }
@@ -92,13 +103,14 @@ public class NativeUtils {
         File temp = new File(temporaryDir, filename);
 
         try (InputStream is = NativeUtils.class.getResourceAsStream(path)) {
+            if (is == null) {
+                cleanupTempFile(temp);
+                throw new FileNotFoundException("File " + path + " was not found inside JAR.");
+            }
             Files.copy(is, temp.toPath(), StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
-            temp.delete();
+            cleanupTempFile(temp);
             throw e;
-        } catch (NullPointerException e) {
-            temp.delete();
-            throw new FileNotFoundException("File " + path + " was not found inside JAR.");
         }
 
         try {
@@ -106,11 +118,17 @@ public class NativeUtils {
         } finally {
             if (isPosixCompliant()) {
                 // Assume POSIX compliant file system, can be deleted after loading
-                temp.delete();
+                cleanupTempFile(temp);
             } else {
                 // Assume non-POSIX, and don't delete until last file descriptor closed
                 temp.deleteOnExit();
             }
+        }
+    }
+
+    private static void cleanupTempFile(File temp) {
+        if (!temp.delete() && temp.exists()) {
+            temp.deleteOnExit();
         }
     }
 

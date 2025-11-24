@@ -202,8 +202,8 @@ import static command_request.CommandRequestOuterClass.RequestType.ZScore;
 import static command_request.CommandRequestOuterClass.RequestType.ZUnion;
 import static command_request.CommandRequestOuterClass.RequestType.ZUnionStore;
 import static glide.api.BaseClient.OK;
+import static glide.api.commands.GenericBaseCommands.DB_VALKEY_API;
 import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
-import static glide.api.commands.GenericCommands.DB_VALKEY_API;
 import static glide.api.commands.HashBaseCommands.WITH_VALUES_VALKEY_API;
 import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_VALKEY_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
@@ -9836,7 +9836,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(Type), eq(arguments), any()))
+        when(commandManager.<String>submitNewCommandWithResponseType(
+                        eq(Type), eq(arguments), any(), eq(true)))
                 .thenReturn(testResponse);
 
         // exercise

@@ -33,8 +33,10 @@ import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
+import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
+import static command_request.CommandRequestOuterClass.RequestType.Wait;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
@@ -69,6 +71,7 @@ import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.ServerCredentials;
 import glide.ffi.resolvers.ClusterScanCursorResolver;
@@ -102,8 +105,8 @@ public class GlideClusterClient extends BaseClient
                 TransactionsClusterCommands,
                 PubSubClusterCommands {
 
-    /** A private constructor. Use {@link #createClient} to get a client. */
-    GlideClusterClient(ClientBuilder builder) {
+    /** Constructor using ClientParams from BaseClient. */
+    protected GlideClusterClient(ClientBuilder builder) {
         super(builder);
     }
 
@@ -156,7 +159,7 @@ public class GlideClusterClient extends BaseClient
      */
     public static CompletableFuture<GlideClusterClient> createClient(
             @NonNull GlideClusterClientConfiguration config) {
-        return createClient(config, GlideClusterClient::new);
+        return BaseClient.createClient(config, GlideClusterClient::new);
     }
 
     @Override
@@ -326,6 +329,12 @@ public class GlideClusterClient extends BaseClient
                 Info,
                 Stream.of(sections).map(Enum::toString).toArray(String[]::new),
                 response -> ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> select(long index) {
+        return commandManager.submitNewCommand(
+                Select, new String[] {Long.toString(index)}, this::handleStringResponse);
     }
 
     @Override
@@ -856,14 +865,14 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<byte[]> functionDump() {
         return commandManager.submitNewCommand(
-                FunctionDump, new GlideString[] {}, this::handleBytesOrNullResponse);
+                FunctionDump, BaseClient.EMPTY_GLIDE_STRING_ARRAY, this::handleBytesOrNullResponse);
     }
 
     @Override
     public CompletableFuture<ClusterValue<byte[]>> functionDump(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionDump,
-                new GlideString[] {},
+                BaseClient.EMPTY_GLIDE_STRING_ARRAY,
                 route,
                 response ->
                         route instanceof SingleNodeRoute
@@ -909,7 +918,7 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> fcall(@NonNull GlideString function) {
-        return fcall(function, new GlideString[0]);
+        return fcall(function, BaseClient.EMPTY_GLIDE_STRING_ARRAY);
     }
 
     @Override
@@ -921,7 +930,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<Object>> fcall(
             @NonNull GlideString function, @NonNull Route route) {
-        return fcall(function, new GlideString[0], route);
+        return fcall(function, BaseClient.EMPTY_GLIDE_STRING_ARRAY, route);
     }
 
     @Override
@@ -974,7 +983,7 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> fcallReadOnly(@NonNull GlideString function) {
-        return fcallReadOnly(function, new GlideString[0]);
+        return fcallReadOnly(function, BaseClient.EMPTY_GLIDE_STRING_ARRAY);
     }
 
     @Override
@@ -986,7 +995,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<Object>> fcallReadOnly(
             @NonNull GlideString function, @NonNull Route route) {
-        return fcallReadOnly(function, new GlideString[0], route);
+        return fcallReadOnly(function, BaseClient.EMPTY_GLIDE_STRING_ARRAY, route);
     }
 
     @Override
@@ -1156,7 +1165,7 @@ public class GlideClusterClient extends BaseClient
             functionStatsBinary() {
         return commandManager.submitNewCommand(
                 FunctionStats,
-                new GlideString[0],
+                BaseClient.EMPTY_GLIDE_STRING_ARRAY,
                 response -> handleFunctionStatsBinaryResponse(response, false));
     }
 
@@ -1225,7 +1234,7 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<GlideString[]> pubsubShardChannelsBinary() {
         return commandManager.submitNewCommand(
                 PubSubShardChannels,
-                new GlideString[0],
+                BaseClient.EMPTY_GLIDE_STRING_ARRAY,
                 response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
@@ -1277,7 +1286,10 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<GlideString> randomKeyBinary(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                RandomKey, new GlideString[0], route, this::handleGlideStringOrNullResponse);
+                RandomKey,
+                BaseClient.EMPTY_GLIDE_STRING_ARRAY,
+                route,
+                this::handleGlideStringOrNullResponse);
     }
 
     @Override
@@ -1289,39 +1301,55 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<GlideString> randomKeyBinary() {
         return commandManager.submitNewCommand(
-                RandomKey, new GlideString[0], this::handleGlideStringOrNullResponse);
+                RandomKey, BaseClient.EMPTY_GLIDE_STRING_ARRAY, this::handleGlideStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> wait(long numreplicas, long timeout) {
+        String[] arguments = new String[] {Long.toString(numreplicas), Long.toString(timeout)};
+        return commandManager.submitNewCommand(
+                Wait, arguments, SimpleSingleNodeRoute.RANDOM, this::handleLongResponse);
+    }
+
+    /**
+     * Helper method to transform cluster scan results into the expected format. Handles the case
+     * where the scan is complete or results are invalid.
+     */
+    private Object[] transformClusterScanResult(Object[] result) {
+        if (result == null || result.length < 2 || result[0] == null) {
+            return new Object[] {
+                new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE), new Object[0]
+            };
+        }
+        return new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]};
     }
 
     @Override
     public CompletableFuture<Object[]> scan(ClusterScanCursor cursor) {
         return commandManager
                 .submitClusterScan(cursor, ScanOptions.builder().build(), this::handleArrayResponse)
-                .thenApply(
-                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+                .thenApply(this::transformClusterScanResult);
     }
 
     @Override
     public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor) {
         return commandManager
                 .submitClusterScan(cursor, ScanOptions.builder().build(), this::handleArrayResponseBinary)
-                .thenApply(
-                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+                .thenApply(this::transformClusterScanResult);
     }
 
     @Override
     public CompletableFuture<Object[]> scan(ClusterScanCursor cursor, ScanOptions options) {
         return commandManager
                 .submitClusterScan(cursor, options, this::handleArrayResponse)
-                .thenApply(
-                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+                .thenApply(this::transformClusterScanResult);
     }
 
     @Override
     public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor, ScanOptions options) {
         return commandManager
                 .submitClusterScan(cursor, options, this::handleArrayResponseBinary)
-                .thenApply(
-                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+                .thenApply(this::transformClusterScanResult);
     }
 
     /** A {@link ClusterScanCursor} implementation for interacting with the Rust layer. */
@@ -1340,6 +1368,11 @@ public class GlideClusterClient extends BaseClient
 
         @Override
         public String getCursorHandle() {
+            return cursorHandle;
+        }
+
+        @Override
+        public String getCursorId() {
             return cursorHandle;
         }
 

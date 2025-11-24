@@ -3,10 +3,11 @@
 
 import argparse
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
-from shutil import which
+from shutil import copy2, copytree, rmtree, which
 from typing import Any, Dict, List, Optional
 
 
@@ -16,15 +17,56 @@ def find_project_root() -> Path:
     return root
 
 
+venv_ctx: Dict[str, Optional[Path]] = {
+    "venv_dir": None,
+    "venv_bin_dir": None,
+    "python_exe": None,
+}
+
 # Constants
 PROTO_REL_PATH = "glide-core/src/protobuf"
-PYTHON_CLIENT_PATH = "python/python/glide"
-VENV_NAME = ".env"
 GLIDE_ROOT = find_project_root()
 PYTHON_DIR = GLIDE_ROOT / "python"
-VENV_DIR = PYTHON_DIR / VENV_NAME
-VENV_BIN_DIR = VENV_DIR / "bin"
-PYTHON_EXE = VENV_BIN_DIR / "python"
+GLIDE_SHARED_DIR = PYTHON_DIR / "glide-shared"
+GLIDE_SYNC_DIR = PYTHON_DIR / "glide-sync"
+GLIDE_ASYNC_DIR = PYTHON_DIR / "glide-async"
+FFI_DIR = GLIDE_ROOT / "ffi"
+FFI_OUTPUT_DIR_DEBUG = FFI_DIR / "target" / "debug"
+FFI_OUTPUT_DIR_RELEASE = FFI_DIR / "target" / "release"
+FFI_TARGET_LIB_NAME = "libglide_ffi.so"
+GLIDE_SYNC_NAME = "GlidePySync"
+GLIDE_ASYNC_NAME = "GlidePy"
+
+
+def find_libglide_ffi(lib_dir: Path) -> Path:
+    """
+    Searches for the correct shared library file depending on the OS.
+    """
+    possible_names = {
+        "Linux": "libglide_ffi.so",
+        "Darwin": "libglide_ffi.dylib",
+        "Windows": "glide_ffi.dll",
+    }
+
+    system = platform.system()
+    lib_name = possible_names.get(system)
+    if not lib_name:
+        raise RuntimeError(f"Unsupported platform: {system}")
+
+    lib_path = lib_dir / lib_name
+    if not lib_path.exists():
+        raise FileNotFoundError(f"Could not find {lib_name} in {lib_dir}")
+
+    return lib_path
+
+
+def set_venv_paths(custom_path: Optional[str] = None):
+    venv_dir = Path(custom_path).resolve() if custom_path else PYTHON_DIR / ".env"
+    venv_bin_dir = venv_dir / "bin"
+    python_exe = venv_bin_dir / "python"
+    venv_ctx["venv_dir"] = venv_dir
+    venv_ctx["venv_bin_dir"] = venv_bin_dir
+    venv_ctx["python_exe"] = python_exe
 
 
 def check_dependencies() -> None:
@@ -49,13 +91,18 @@ def check_dependencies() -> None:
 
 
 def prepare_python_env(no_cache: bool = False):
-    if not VENV_DIR.exists():
+    if venv_ctx["venv_dir"] is None or venv_ctx["venv_bin_dir"] is None:
+        print("❌ Error: virtual environment isn't set")
+        sys.exit(1)
+    if not venv_ctx["venv_dir"].exists():
         print("[INFO] Creating new Python virtual environment...")
-        run_command(["python3", "-m", "venv", str(VENV_DIR)], label="venv creation")
+        run_command(
+            ["python3", "-m", "venv", str(venv_ctx["venv_dir"])], label="venv creation"
+        )
     else:
         print("[INFO] Using existing Python virtual environment")
 
-    pip_path = VENV_BIN_DIR / "pip"
+    pip_path = venv_ctx["venv_bin_dir"] / "pip"
     install_cmd = [
         str(pip_path),
         "install",
@@ -87,15 +134,15 @@ def prepare_python_env(no_cache: bool = False):
 
 def get_venv_env() -> Dict[str, str]:
     env = os.environ.copy()
-    env["VIRTUAL_ENV"] = str(VENV_DIR)
+    env["VIRTUAL_ENV"] = str(venv_ctx["venv_dir"])
     env_path = env.get("PATH", "")
-    env["PATH"] = f"{VENV_BIN_DIR}{os.pathsep}{env_path}"
+    env["PATH"] = f"{venv_ctx['venv_bin_dir']}{os.pathsep}{env_path}"
     return env
 
 
 def generate_protobuf_files() -> None:
     proto_src = GLIDE_ROOT / PROTO_REL_PATH
-    proto_dst = GLIDE_ROOT / PYTHON_CLIENT_PATH
+    proto_dst = GLIDE_ROOT / GLIDE_SHARED_DIR / "glide_shared"
     proto_files = list(proto_src.glob("*.proto"))
 
     if not proto_files:
@@ -104,11 +151,14 @@ def generate_protobuf_files() -> None:
 
     print(f"[INFO] Generating Python and .pyi files from Protobuf in: {proto_src}")
 
-    mypy_plugin_path = VENV_BIN_DIR / "protoc-gen-mypy"
+    if venv_ctx["venv_bin_dir"] is None:
+        print("❌ Error: virtual environment isn't set")
+        sys.exit(1)
+    mypy_plugin_path = venv_ctx["venv_bin_dir"] / "protoc-gen-mypy"
     if not mypy_plugin_path.exists():
         print("❌ Error: protoc-gen-mypy not found in venv.")
         print(
-            "Hint: Try `pip install --requirement python/dev_requirements.txt` again."
+            f"Hint: Try 'pip install --requirement {PYTHON_DIR}/dev_requirements.txt'"
         )
         sys.exit(1)
 
@@ -125,22 +175,214 @@ def generate_protobuf_files() -> None:
         env=get_venv_env(),
     )
 
-    print(f"[OK] Protobuf files (.py + .pyi) generated at: {proto_dst}")
+    print(f"[OK] Protobuf files (.py + .pyi) generated at: {proto_dst}/protobuf")
 
 
-def build_async_client(release: bool, no_cache: bool = False) -> None:
-    print(
-        f"[INFO] Building async client in {'release' if release else 'debug'} mode..."
+def copy_readme_to_package(package_dir: Path) -> None:
+    """Copy README.md from python/ to the package directory"""
+    source = PYTHON_DIR / "README.md"
+    dest = package_dir / "README.md"
+
+    if not source.exists():
+        print(f"[WARN] README.md not found at {source}")
+        return
+
+    print(f"[INFO] Copying README.md: {source} → {dest}")
+    copy2(source, dest)
+
+
+def install_glide_shared(env: Dict[str, str]) -> None:
+    shared_dir = PYTHON_DIR / "glide-shared"
+    run_command(
+        [str(venv_ctx["python_exe"]), "-m", "pip", "install", "."],
+        cwd=shared_dir,
+        env=env,
+        label="install glide-shared",
     )
+
+
+def build_async_client_wheel(env: Dict[str, str], release: bool) -> None:
+    # 1. Copy shared module
+    dest_shared = GLIDE_ASYNC_DIR / "python" / "glide_shared"
+    if dest_shared.exists():
+        rmtree(dest_shared)
+    dest_shared.parent.mkdir(parents=True, exist_ok=True)
+    origin_shared = GLIDE_SHARED_DIR / "glide_shared"
+    print(f"[INFO] Copying glide_shared from: {origin_shared} to: {dest_shared}")
+    copytree(origin_shared, dest_shared)
+
+    # 2. Build wheel using maturin
+    maturin_cmd = ["maturin", "build"]
+    if release:
+        maturin_cmd += ["--release", "--strip"]
+
+    run_command(
+        maturin_cmd,
+        cwd=GLIDE_ASYNC_DIR,
+        env=env,
+        label="maturin build async wheel",
+    )
+
+    # 3. Find and install wheel
+    wheel_dir = GLIDE_ASYNC_DIR / "target" / "wheels"
+    wheel_files = list(wheel_dir.glob("*.whl"))
+    if not wheel_files:
+        raise FileNotFoundError(f"No wheel found in {wheel_dir}")
+
+    wheel_path = wheel_files[0]
+    print(f"[INFO] Installing async client wheel: {wheel_path}")
+    run_command(
+        [
+            str(venv_ctx["python_exe"]),
+            "-m",
+            "pip",
+            "install",
+            "--force-reinstall",
+            str(wheel_path),
+        ],
+        env=env,
+        label="install async client wheel",
+    )
+
+
+def build_async_client(
+    glide_version: str, release: bool, no_cache: bool = False, wheel: bool = False
+) -> None:
+    print(
+        f"[INFO] Building async client with version={glide_version} in {'release' if release else 'debug'} mode..."
+    )
+
+    # copying README.md is needed for it to be included in the sdist
+    copy_readme_to_package(GLIDE_ASYNC_DIR)
     env = activate_venv(no_cache)
+    env.update(
+        {  # Update it with your GLIDE variables
+            "GLIDE_NAME": GLIDE_ASYNC_NAME,
+            "GLIDE_VERSION": glide_version,
+        }
+    )
+    install_glide_shared(env)
     generate_protobuf_files()
 
-    cmd = [str(PYTHON_EXE), "-m", "maturin", "develop"]
+    if wheel:
+        return build_async_client_wheel(env, release)
+
+    cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop"]
     if release:
         cmd += ["--release", "--strip"]
 
-    run_command(cmd, cwd=PYTHON_DIR, env=env, label="maturin develop")
+    run_command(
+        cmd,
+        cwd=GLIDE_ASYNC_DIR,
+        env=env,
+        label="maturin develop",
+    )
     print("[OK] Async client build completed")
+
+
+def build_sync_client_wheel(env: Dict[str, str]) -> None:
+    print("[INFO] Building sync client wheel with `python -m build`")
+
+    # copying README.md is needed for it to be included in the sdist
+    copy_readme_to_package(GLIDE_SYNC_DIR)
+    run_command(
+        [str(venv_ctx["python_exe"]), "-m", "build"],
+        cwd=GLIDE_SYNC_DIR,
+        env=env,
+        label="build sync wheel",
+    )
+
+    wheel_files = list((GLIDE_SYNC_DIR / "dist").glob("*.whl"))
+    if not wheel_files:
+        raise FileNotFoundError("No wheel found in 'dist/' after building sync client.")
+
+    wheel_path = wheel_files[0]
+    print(f"[INFO] Installing sync client wheel: {wheel_path}")
+    run_command(
+        [
+            str(venv_ctx["python_exe"]),
+            "-m",
+            "pip",
+            "install",
+            "--force-reinstall",
+            str(wheel_path),
+        ],
+        env=env,
+        label="install sync wheel",
+    )
+
+
+def build_sync_client(
+    glide_version: str, release: bool, no_cache: bool, wheel: bool = False
+) -> None:
+    print(
+        f"[INFO] Building sync client with version={glide_version} in {'release' if release else 'debug'} mode..."
+    )
+    generate_protobuf_files()
+    env = activate_venv(no_cache)
+    env = {
+        "GLIDE_NAME": GLIDE_SYNC_NAME,
+        "GLIDE_VERSION": glide_version,
+        **os.environ,
+    }
+    if release:
+        env["RELEASE_MODE"] = "1"
+
+    # Optionally clean build artifacts
+    if no_cache:
+        run_command(
+            [str(venv_ctx["python_exe"]), "setup.py", "clean"],
+            cwd=GLIDE_SYNC_DIR,
+            label="Clean all build artifacts",
+            env=env,
+        )
+
+    if wheel:
+        return build_sync_client_wheel(env)
+
+    install_glide_shared(env)
+    env.update(
+        {  # Update it with your GLIDE variables
+            "GLIDE_NAME": GLIDE_SYNC_NAME,
+            "GLIDE_VERSION": glide_version,
+        }
+    )
+    # Build the FFI library
+    build_args = ["cargo", "build"]
+    if release:
+        build_args += ["--release"]
+
+    run_command(
+        build_args,
+        cwd=FFI_DIR,
+        label="Build the FFI rust library",
+        env=env,
+    )
+
+    # Locate the FFI library output file
+    libglide_ffi_path = (
+        find_libglide_ffi(FFI_OUTPUT_DIR_RELEASE)
+        if release
+        else find_libglide_ffi(FFI_OUTPUT_DIR_DEBUG)
+    )
+    if not libglide_ffi_path.exists():
+        raise FileNotFoundError(
+            f"Expected shared object not found at {libglide_ffi_path}"
+        )
+
+    # Copy to glide_sync package dir
+    dest_path = GLIDE_SYNC_DIR / "glide_sync" / FFI_TARGET_LIB_NAME
+    print(f"[INFO] Copying: {libglide_ffi_path} to: {dest_path}")
+    copy2(libglide_ffi_path, dest_path)
+
+    print(f"[INFO] Installing glide-sync: {GLIDE_SYNC_DIR}")
+    run_command(
+        [str(venv_ctx["python_exe"]), "-m", "pip", "install", "."],
+        cwd=GLIDE_SYNC_DIR,
+        env=env,
+        label="install glide-sync",
+    )
+    print("[OK] Sync client build completed")
 
 
 def run_command(
@@ -175,9 +417,9 @@ def run_command(
 def activate_venv(no_cache: bool = False) -> Dict[Any, Any]:
     prepare_python_env(no_cache)
     env = os.environ.copy()
-    env["VIRTUAL_ENV"] = str(VENV_BIN_DIR.parent)
+    env["VIRTUAL_ENV"] = str(venv_ctx["venv_dir"])
     env_path = env["PATH"]
-    env["PATH"] = f"{VENV_BIN_DIR}:{env_path}"  # noqa: E231
+    env["PATH"] = f"{venv_ctx['venv_bin_dir']}:{env_path}"  # noqa: E231
     return env
 
 
@@ -220,6 +462,7 @@ def main() -> None:
 Examples:
     python dev.py build                                   # Build the async client in debug mode
     python dev.py build --client async --mode release     # Build the async client in release mode
+    python dev.py build --client sync                     # Build the sync client
     python dev.py protobuf                                # Generate Python protobuf files (.py and .pyi)
     python dev.py lint                                    # Run Python linters
     python dev.py test                                    # Run all tests
@@ -227,11 +470,22 @@ Examples:
         formatter_class=argparse.RawTextHelpFormatter,
     )
 
+    # Parse venv path globally before subparsers
+    parser.add_argument(
+        "--venv",
+        type=str,
+        default=None,
+        help="Optional path to the virtual environment to use (default: python/.env)",
+    )
+
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     build_parser = subparsers.add_parser("build", help="Build the Python clients")
     build_parser.add_argument(
-        "--client", default="async", choices=["async"], help="Which client to build"
+        "--client",
+        default="all",
+        choices=["async", "sync", "all"],
+        help="Which client to build: 'async', 'sync', or 'all' to build both.",
     )
     build_parser.add_argument(
         "--mode", choices=["debug", "release"], default="debug", help="Build mode"
@@ -240,6 +494,17 @@ Examples:
         "--no-cache",
         action="store_true",
         help="Install Python dependencies without cache",
+    )
+    build_parser.add_argument(
+        "--glide-version",
+        type=str,
+        default="unknown",
+        help="Specify the client version that will be used for server identification and displayed in CLIENT INFO output",
+    )
+    build_parser.add_argument(
+        "--wheel",
+        action="store_true",
+        help="Build the client to wheel and install it from the built wheel.",
     )
 
     subparsers.add_parser(
@@ -262,6 +527,7 @@ Examples:
 
     args = parser.parse_args()
     check_dependencies()
+    set_venv_paths(args.venv)
 
     if args.command == "protobuf":
         print("📦 Generating protobuf Python files...")
@@ -277,11 +543,16 @@ Examples:
         run_tests(args.args)
 
     elif args.command == "build":
+        version = args.glide_version
         release = args.mode == "release"
         no_cache = args.no_cache
-        if args.client in ("async"):
+        wheel = args.wheel
+        if args.client in ["async", "all"]:
             print(f"🛠 Building async client ({args.mode} mode)...")
-            build_async_client(release, no_cache)
+            build_async_client(version, release, no_cache, wheel)
+        if args.client in ["sync", "all"]:
+            print("🛠 Building sync client ({args.mode} mode)...")
+            build_sync_client(version, release, no_cache, wheel)
 
     print("[✅ DONE] Task completed successfully.")
 

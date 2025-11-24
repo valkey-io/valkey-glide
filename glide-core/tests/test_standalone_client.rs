@@ -247,7 +247,7 @@ mod standalone_client_tests {
         let mut addresses = get_mock_addresses(&servers);
         for i in 4 - config.number_of_missing_replicas..4 {
             addresses.push(redis::ConnectionAddr::Tcp(
-                "foo".to_string(),
+                "192.0.2.1".to_string(), // Use non-routable IP for fast connection failure
                 6379 + i as u16,
             ));
         }
@@ -256,7 +256,7 @@ mod standalone_client_tests {
         connection_request.read_from = config.read_from.into();
 
         block_on_all(async {
-            let mut client = StandaloneClient::create_client(connection_request.into(), None)
+            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
                 .await
                 .unwrap();
             logger_core::log_info(
@@ -402,7 +402,7 @@ mod standalone_client_tests {
         let connection_request =
             create_connection_request(addresses.as_slice(), &Default::default());
         block_on_all(async {
-            let client_res = StandaloneClient::create_client(connection_request.into(), None)
+            let client_res = StandaloneClient::create_client(connection_request.into(), None, None)
                 .await
                 .map_err(ConnectionError::Standalone);
             assert!(client_res.is_err());
@@ -441,7 +441,7 @@ mod standalone_client_tests {
             create_connection_request(addresses.as_slice(), &Default::default());
 
         block_on_all(async {
-            let mut client = StandaloneClient::create_client(connection_request.into(), None)
+            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
                 .await
                 .unwrap();
 
@@ -524,14 +524,6 @@ mod standalone_client_tests {
         });
     }
 
-    fn extract_client_id(client_info: &str) -> Option<String> {
-        client_info
-            .split_whitespace()
-            .find(|part| part.starts_with("id="))
-            .and_then(|id_part| id_part.strip_prefix("id="))
-            .map(|id| id.to_string())
-    }
-
     #[rstest]
     #[serial_test::serial]
     #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
@@ -583,7 +575,7 @@ mod standalone_client_tests {
             lazy_client_config.lazy_connect = true;
 
             let mut lazy_client_connection_request_pb = utilities::create_connection_request(
-                &[dedicated_server_address.clone()],
+                std::slice::from_ref(&dedicated_server_address),
                 &lazy_client_config,
             );
             lazy_client_connection_request_pb.cluster_mode_enabled = false;
@@ -646,6 +638,265 @@ mod standalone_client_tests {
                 clients_after_first_command,
                 clients_before_lazy_init + 1,
                 "Lazy client (on dedicated server) should connect after the first command. Before: {clients_before_lazy_init}, After: {clients_after_first_command}. protocol={protocol:?}"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_tls_connection_with_custom_root_cert() {
+        block_on_all(async move {
+            // Create a dedicated TLS server with custom certificates
+            let tempdir = tempfile::Builder::new()
+                .prefix("tls_test")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+
+            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                redis::ConnectionAddr::TcpTls {
+                    host: "127.0.0.1".to_string(),
+                    port: get_available_port(),
+                    insecure: false,
+                    tls_params: None,
+                },
+                Some(tls_paths),
+                &[],
+                |cmd| cmd.spawn().expect("Failed to spawn server"),
+            );
+
+            let server_addr = server.get_client_addr();
+            // Skip wait_for_server_to_become_ready since it uses default OS verifier
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await; // Give server time to start
+
+            // Create connection request with custom root certificate
+            let mut connection_request = create_connection_request(
+                &[server_addr],
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            connection_request.root_certs = vec![ca_cert_bytes.into()];
+
+            // Test that connection works with custom root cert
+            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
+                .await
+                .expect("Failed to create client with custom root cert");
+
+            // Verify connection works by sending a command
+            let ping_result = client.send_command(&redis::cmd("PING")).await;
+            assert_eq!(
+                ping_result.unwrap(),
+                Value::SimpleString("PONG".to_string())
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_tls_connection_fails_with_wrong_root_cert() {
+        block_on_all(async move {
+            // Create a TLS server with one set of certificates
+            let tempdir1 = tempfile::Builder::new()
+                .prefix("tls_test_server")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let server_tls_paths = build_keys_and_certs_for_tls(&tempdir1);
+
+            // Create different CA certificate for client
+            let tempdir2 = tempfile::Builder::new()
+                .prefix("tls_test_client")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let client_tls_paths = build_keys_and_certs_for_tls(&tempdir2);
+            let wrong_ca_cert_bytes = client_tls_paths.read_ca_cert_as_bytes();
+
+            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                redis::ConnectionAddr::TcpTls {
+                    host: "127.0.0.1".to_string(),
+                    port: get_available_port(),
+                    insecure: false,
+                    tls_params: None,
+                },
+                Some(server_tls_paths),
+                &[],
+                |cmd| cmd.spawn().expect("Failed to spawn server"),
+            );
+
+            let server_addr = server.get_client_addr();
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+            // Try to connect with wrong root certificate
+            let mut connection_request = create_connection_request(
+                &[server_addr],
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            connection_request.root_certs = vec![wrong_ca_cert_bytes.into()];
+            // Use minimal retries to fail fast
+            connection_request.connection_retry_strategy =
+                Some(glide_core::connection_request::ConnectionRetryStrategy {
+                    number_of_retries: 1,
+                    factor: 1,
+                    exponent_base: 1,
+                    ..Default::default()
+                })
+                .into();
+
+            // Connection should fail due to certificate mismatch
+            let client_result =
+                StandaloneClient::create_client(connection_request.into(), None, None).await;
+            assert!(
+                client_result.is_err(),
+                "Expected connection to fail with wrong root certificate"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_tls_connection_fails_with_invalid_cert_bytes() {
+        block_on_all(async move {
+            let server_addr = redis::ConnectionAddr::TcpTls {
+                host: "127.0.0.1".to_string(),
+                port: get_available_port(),
+                insecure: false,
+                tls_params: None,
+            };
+
+            let mut connection_request = create_connection_request(
+                &[server_addr],
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            // Provide invalid certificate bytes that will fail PEM parsing
+            // Using a PEM-like structure but with invalid base64 content
+            connection_request.root_certs = vec![
+                b"-----BEGIN CERTIFICATE-----\n!!!invalid base64!!!\n-----END CERTIFICATE-----"
+                    .to_vec()
+                    .into(),
+            ];
+
+            // Client creation should fail during certificate parsing
+            let client_result =
+                StandaloneClient::create_client(connection_request.into(), None, None).await;
+            assert!(
+                client_result.is_err(),
+                "Expected client creation to fail with invalid certificate bytes"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_tls_connection_fails_with_custom_certs_and_no_tls() {
+        block_on_all(async move {
+            let server_addr =
+                redis::ConnectionAddr::Tcp("127.0.0.1".to_string(), get_available_port());
+
+            let mut connection_request = create_connection_request(
+                &[server_addr],
+                &TestConfiguration {
+                    use_tls: false,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::NoTls.into();
+            // Provide custom root certs but with NoTls mode
+            connection_request.root_certs = vec![b"some certificate".to_vec().into()];
+
+            // Client creation should fail due to invalid configuration
+            let client_result =
+                StandaloneClient::create_client(connection_request.into(), None, None).await;
+            assert!(
+                client_result.is_err(),
+                "Expected client creation to fail when custom certs provided with NoTls mode"
+            );
+            let err = client_result.unwrap_err();
+            let err_msg = format!("{:?}", err).to_lowercase();
+            assert!(
+                err_msg.contains("tls") && err_msg.contains("disabled"),
+                "Error message should mention TLS being disabled, got: {}",
+                err_msg
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_tls_connection_with_multiple_root_certs_first_invalid() {
+        block_on_all(async move {
+            // Create server with valid certificates
+            let tempdir_server = tempfile::Builder::new()
+                .prefix("tls_test_server")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let server_tls_paths = build_keys_and_certs_for_tls(&tempdir_server);
+            let valid_ca_cert_bytes = server_tls_paths.read_ca_cert_as_bytes();
+
+            // Create invalid CA certificate
+            let tempdir_invalid = tempfile::Builder::new()
+                .prefix("tls_test_invalid")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let invalid_tls_paths = build_keys_and_certs_for_tls(&tempdir_invalid);
+            let invalid_ca_cert_bytes = invalid_tls_paths.read_ca_cert_as_bytes();
+
+            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                redis::ConnectionAddr::TcpTls {
+                    host: "127.0.0.1".to_string(),
+                    port: get_available_port(),
+                    insecure: false,
+                    tls_params: None,
+                },
+                Some(server_tls_paths),
+                &[],
+                |cmd| cmd.spawn().expect("Failed to spawn server"),
+            );
+
+            let server_addr = server.get_client_addr();
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+            // Provide two root certs: first invalid, second valid
+            let mut connection_request = create_connection_request(
+                &[server_addr],
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            connection_request.root_certs =
+                vec![invalid_ca_cert_bytes.into(), valid_ca_cert_bytes.into()];
+
+            // Connection should succeed using the second (valid) certificate
+            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
+                .await
+                .expect("Failed to create client with multiple root certs");
+
+            let ping_result = client.send_command(&redis::cmd("PING")).await;
+            assert_eq!(
+                ping_result.unwrap(),
+                Value::SimpleString("PONG".to_string())
             );
         });
     }

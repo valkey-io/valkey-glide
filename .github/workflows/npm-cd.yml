@@ -149,7 +149,7 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available
+                  # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available, replace "ephemeral" with "persistent" in RUNNER
                   export PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
                       | .runner = (
@@ -187,7 +187,7 @@ jobs:
                   fetch-depth: 0
 
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: latest
 
@@ -225,7 +225,7 @@ jobs:
               working-directory: ./node/rust-client
               id: build-action
               run: |
-                  npm install -g @napi-rs/cli prettier
+                  npm install -g @napi-rs/cli@2
 
                   # Set up the env parameters for the build
                   if [[ "${{ matrix.build_type }}" == "musl" ]]; then
@@ -250,11 +250,11 @@ jobs:
 
                   # For darwin arm we just build native
                   elif [[ "${{ matrix.TARGET }}" == "aarch64-apple-darwin" ]]; then
-                    napi build --release --strip --platform --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide --pipe 'prettier -w' $npm_config_build_flags
+                    napi build --release --strip --platform --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
 
                   # For macos x86 we build on mac darwin, since mac allow that easily, for musl we use zig
                   else
-                    napi build --platform --release $additional_param --strip --target "${{ matrix.TARGET }}" --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide --pipe 'prettier -w' $npm_config_build_flags
+                    napi build --platform --release $additional_param --strip --target "${{ matrix.TARGET }}" --js ../build-ts/native.js --dts ../build-ts/native.d.ts --js-package-name @valkey/valkey-glide $npm_config_build_flags
                   fi
 
                   # Create directory for this target's node file
@@ -271,7 +271,7 @@ jobs:
             - name: Upload Native Modules
               uses: actions/upload-artifact@v4
               with:
-                  name: bindings-${{ matrix.TARGET }}
+                  name: bindings-${{ matrix.TARGET }}-${{ matrix.RUNNER }}
                   path: ./node/${{ matrix.TARGET }}
                   retention-days: 1
                   if-no-files-found: error
@@ -321,7 +321,7 @@ jobs:
 
             # Setup Node.js for publishing to NPM and caching
             - name: Setup Node.js with npm cache
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"
@@ -339,7 +339,7 @@ jobs:
                   npm install --only=prod
 
                   # Install only dev dependencies needed for building TypeScript
-                  npm install --no-save typescript protobufjs-cli replace @napi-rs/cli prettier
+                  npm install --no-save typescript protobufjs-cli replace @napi-rs/cli@2
 
             # Setup npm package directories using NAPI-RS artifacts command
             - name: Setup npm package directories
@@ -418,7 +418,7 @@ jobs:
 
             - name: Install NAPI-RS CLI
               shell: bash
-              run: npm install -g @napi-rs/cli
+              run: npm install -g @napi-rs/cli@2
 
             # Use prepublishOnly, which call to napi prepublish -t npm to set up everything properly, versions of native modules reflecting the base package version, and optional dependencies base on triples are added to the base package.
             - name: Publish packages
@@ -447,9 +447,9 @@ jobs:
               uses: geekyeggo/delete-artifact@v2
               with:
                   name: |
-                      npm-packages-${{ github.run_id }}
                       artifacts-*
                       js-files-${{ github.run_id }}
+                  failOnError: false
 
     test-published-release:
         needs: [get-build-parameters, prepare-and-publish]
@@ -494,7 +494,7 @@ jobs:
 
             - name: Setup Node.js
               if: ${{ !(matrix.build_type == 'musl') }}
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: latest
 
@@ -550,9 +550,9 @@ jobs:
               uses: geekyeggo/delete-artifact@v2
               with:
                   name: |
-                      npm-packages-${{ github.run_id }}
                       bindings-*
                       js-files-${{ github.run_id }}
+                  failOnError: false
 
     deprecate-on-failure:
         needs: [test-published-release, get-build-parameters]
@@ -560,7 +560,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"

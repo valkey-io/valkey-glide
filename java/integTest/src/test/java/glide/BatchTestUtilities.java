@@ -13,7 +13,12 @@ import static glide.api.models.commands.ScoreFilter.MIN;
 
 import glide.api.models.BaseBatch;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.ExpirySet;
 import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.HGetExExpiry;
+import glide.api.models.commands.HGetExOptions;
+import glide.api.models.commands.HSetExOptions;
+import glide.api.models.commands.HashFieldExpirationConditionOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -56,6 +61,7 @@ import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
@@ -85,8 +91,12 @@ public class BatchTestUtilities {
             // Use keySlot to force the same hash slot with a random suffix.
             return "{" + keySlot + "}-" + generateRandomNumericSuffix();
         }
-        // Generate a random key
-        return generateRandomNumericSuffix();
+        // Generate a random key with UUID for better uniqueness to avoid flaky test collisions
+        return keySlot
+                + "-"
+                + UUID.randomUUID().toString().substring(0, 8)
+                + "-"
+                + generateRandomNumericSuffix();
     }
 
     private static String generateRandomNumericSuffix() {
@@ -154,6 +164,7 @@ public class BatchTestUtilities {
         String genericKey2 = generateKeySameSlot(genericKey1);
         String genericKey3 = generateKey("GenericKey", isAtomic);
         String genericKey4 = generateKeySameSlot(genericKey3);
+        String genericKey5 = generateKeySameSlot(genericKey3);
         String[] ascendingList = new String[] {"1", "2", "3"};
         String[] descendingList = new String[] {"3", "2", "1"};
 
@@ -201,6 +212,15 @@ public class BatchTestUtilities {
                     .set(genericKey4, "value2")
                     .copy(genericKey3, genericKey4, false)
                     .copy(genericKey3, genericKey4, true);
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            batch
+                    .set(genericKey3, "value")
+                    .copy(genericKey3, genericKey4, 1)
+                    .copy(genericKey3, genericKey4, 1, false)
+                    .copy(genericKey3, genericKey4, 1, true);
+            batch.set(genericKey5, "value").move(genericKey5, 1);
         }
 
         var expectedResults =
@@ -256,6 +276,20 @@ public class BatchTestUtilities {
                                 OK, // set(genericKey4, "value2")
                                 false, // copy(genericKey3, genericKey4, false)
                                 true, // copy(genericKey3, genericKey4, true)
+                            });
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(genericKey3, "value1")
+                                true, // copy(genericKey3, genericKey4, 1)
+                                false, // copy(genericKey3, genericKey4, 1, false)
+                                true, // copy(genericKey3, genericKey4, 1, true)
+                                OK, // set(genericKey5, "value")
+                                true, // move(genericKey5, 1)
                             });
         }
         return expectedResults;
@@ -414,6 +448,47 @@ public class BatchTestUtilities {
                 .hscan(hashKey2, "0")
                 .hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
 
+        // Hash field expiration commands (Valkey 9.0.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            String hashKey3 = generateKey("HashKey", isAtomic);
+
+            // Create command-specific option classes
+            HSetExOptions hsetexOptions = HSetExOptions.builder().expiry(ExpirySet.Seconds(60L)).build();
+
+            HGetExOptions hgetexOptions =
+                    HGetExOptions.builder().expiry(HGetExExpiry.Seconds(60L)).build();
+
+            // Hash field expiration commands (Valkey 9.0.0+)
+            batch
+                    .hsetex(hashKey3, Map.of(field1, value1, field2, value2), hsetexOptions)
+                    .hgetex(hashKey3, new String[] {field1, field2}, hgetexOptions)
+                    .hexpire(
+                            hashKey3,
+                            60L,
+                            new String[] {field1, field2},
+                            HashFieldExpirationConditionOptions.builder().build())
+                    .hpersist(hashKey3, new String[] {field1, field2})
+                    .hpexpire(
+                            hashKey3,
+                            60000L,
+                            new String[] {field1, field2},
+                            HashFieldExpirationConditionOptions.builder().build())
+                    .hexpireat(
+                            hashKey3,
+                            42, // expire immediately (timestamp in the past)
+                            new String[] {field1, field2},
+                            HashFieldExpirationConditionOptions.builder().build())
+                    .hpexpireat(
+                            hashKey3,
+                            42, // expire immediately (timestamp in the past)
+                            new String[] {field1, field2},
+                            HashFieldExpirationConditionOptions.builder().build())
+                    .httl(hashKey3, new String[] {field1, field2})
+                    .hpttl(hashKey3, new String[] {field1, field2})
+                    .hexpiretime(hashKey3, new String[] {field1, field2})
+                    .hpexpiretime(hashKey3, new String[] {field1, field2});
+        }
+
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             batch
                     .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(false).build())
@@ -448,6 +523,49 @@ public class BatchTestUtilities {
                         "0", new Object[] {field1, value1}
                     }, // hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
                 };
+
+        // Add expected results for hash field expiration commands (Valkey 9.0.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            // Expected results for hash field expiration commands
+            result =
+                    concatenateArrays(
+                            result,
+                            new Object[] {
+                                1L, // hsetex(hashKey3, Map.of(field1, value1, field2, value2), expiryOptions) -
+                                // returns 1 for success
+                                new Object[] {
+                                    value1, value2
+                                }, // hgetex(hashKey3, new String[] {field1, field2}, expiryOptions)
+                                new Object[] {
+                                    1L, 1L
+                                }, // hexpire(hashKey3, 60L, new String[] {field1, field2}, options)
+                                new Object[] {1L, 1L}, // hpersist(hashKey3, new String[] {field1, field2})
+                                new Object[] {
+                                    1L, 1L
+                                }, // hpexpire(hashKey3, 60000L, new String[] {field1, field2}, options)
+                                new Object[] {
+                                    2L, 2L
+                                }, // hexpireat(hashKey3, timestamp, new String[] {field1, field2}, options)
+                                new Object[] {
+                                    -2L, -2L
+                                }, // hpexpireat(hashKey3, timestamp, new String[] {field1, field2}, options) -
+                                // fields already expired
+                                new Object[] {
+                                    -2L, -2L
+                                }, // httl(hashKey3, new String[] {field1, field2}) - fields expired (don't exist)
+                                new Long[] {
+                                    -2L, -2L
+                                }, // hpttl(hashKey3, new String[] {field1, field2}) - fields expired (don't exist)
+                                new Object[] {
+                                    -2L, -2L
+                                }, // hexpiretime(hashKey3, new String[] {field1, field2}) - fields expired (don't
+                                // exist)
+                                new Object[] {
+                                    -2L, -2L
+                                }, // hpexpiretime(hashKey3, new String[] {field1, field2}) - fields expired (don't
+                                // exist)
+                            });
+        }
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             result =
@@ -856,7 +974,21 @@ public class BatchTestUtilities {
                     OK, // configSet(Map.of("timeout", "1000"))
                     Map.of("timeout", "1000"), // configGet(new String[] {"timeout"})
                     OK, // configResetStat()
-                    "Redis ver. " + SERVER_VERSION + '\n', // lolwut(1)
+                    new Object() {
+                        @Override
+                        public boolean equals(Object obj) {
+                            if (obj instanceof String) {
+                                String response = (String) obj;
+                                return response.contains("ver") && response.contains(SERVER_VERSION.toString());
+                            }
+                            return false;
+                        }
+
+                        @Override
+                        public String toString() {
+                            return "LOLWUT version matcher for " + SERVER_VERSION;
+                        }
+                    }, // lolwut(1) - accepts both Redis and Valkey formats
                     OK, // flushall()
                     OK, // flushall(ASYNC)
                     OK, // flushdb()

@@ -18,7 +18,7 @@ The Valkey GLIDE Java wrapper consists of both Java and Rust code. Rust bindings
 - GCC
 - pkg-config
 - cmake
-- protoc (protobuf compiler) >= 29.1
+- protoc (protobuf compiler) >= v29.1
 - openssl
 - openssl-dev
 - rustup
@@ -59,24 +59,20 @@ Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuil
 
 ```bash
 brew update
-brew install openjdk@11 git gcc pkgconfig protobuf openssl cmake
+brew install openjdk@11 git gcc pkgconfig openssl cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
 Continue with **Install protobuf compiler** below.
+It is not necessary to **Install `ziglang` and `zigbuild`** for MacOS.
 
 **Install protobuf compiler**
 
-To install protobuf for MacOS, run:
+Only protobuf v29.1 is supported. Other versions are not supported and may cause build issues.
 
-```bash
-brew install protobuf
-# Check that the protobuf compiler version 29.1 or higher is installed
-protoc --version
-```
-
-For the remaining systems, do the following:
+Various platform-specific zips can be found [here](https://github.com/protocolbuffers/protobuf/releases/tag/v29.1).
+Choose the appropriate zip for your system and run the commands below, adjusting for the zip you chose:
 
 ```bash
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
@@ -86,6 +82,9 @@ export PATH="$PATH:$HOME/.local/bin"
 # Check that the protobuf compiler version 29.1 or higher is installed
 protoc --version
 ```
+
+> [!NOTE]
+> You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
 
 **Install `ziglang` and `zigbuild`**
 
@@ -174,7 +173,6 @@ Some troubleshooting issues:
   you may need to restart your machine. In particular, this may solve the following problems:
   - Failed to find `cargo` after `rustup`.
   - No Protobuf compiler (protoc) found.
-- If protobuf 29.0 or earlier is detected, upgrade to the latest protobuf release.
 
 ## Running Examples App
 
@@ -230,12 +228,6 @@ To run the unit tests, use the following command:
 
 ```bash
 ./gradlew :client:test
-```
-
-To run FFI tests between Java and Rust, use the following command:
-
-```bash
-./gradlew :client:testFfi
 ```
 
 To run end-to-end tests, use the following command:
@@ -355,18 +347,9 @@ In the command interface each command's javadoc should contain:
 
 Refer to [closed-PRs](https://github.com/valkey-io/valkey-glide/pulls?q=is%3Apr+is%3Aclosed+label%3Ajava) to see commands that have been previously merged.
 
-### FFI naming and signatures, and features
+### JNI naming and signatures
 
-Javac will create the name of the signature in Rust convention which can be called on native code.
-
-- In the command line write:
-
-```bash
-javac -h . GlideValueResolver.java
-```
-
-The results can be found in the `glide_ffi_resolvers_GlideValueResolver` file once the `javac -h. GlideValueResolver.java` command is ran.
-In this project, only the function name and signature name is necessary. lib.rs method names explicitly point to the native functions defined there.
+The Java client now uses JNI (Java Native Interface) for direct communication with the Rust core library. Native methods are declared in `GlideNativeBridge.java` and implemented in the Rust `lib.rs` file. The JNI layer handles marshalling data between Java and Rust, including command serialization, response parsing, and callback management.
 
 ### Module Information
 

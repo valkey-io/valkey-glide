@@ -52,9 +52,25 @@ def get_command(commands: List[str]) -> str:
     raise Exception(f"Neither {' nor '.join(commands)} found in the system.")
 
 
-# Determine which server to use by checking `valkey-server` and `redis-server`
-SERVER_COMMAND = get_command(["valkey-server", "redis-server"])
-CLI_COMMAND = get_command(["valkey-cli", "redis-cli"])
+# Global variables for caching server commands (set lazily)
+_SERVER_COMMAND = None
+_CLI_COMMAND = None
+
+
+def get_server_command() -> str:
+    """Get server command, checking valkey-server first, then redis-server"""
+    global _SERVER_COMMAND
+    if _SERVER_COMMAND is None:
+        _SERVER_COMMAND = get_command(["valkey-server", "redis-server"])
+    return _SERVER_COMMAND
+
+
+def get_cli_command() -> str:
+    """Get CLI command, checking valkey-cli first, then redis-cli"""
+    global _CLI_COMMAND
+    if _CLI_COMMAND is None:
+        _CLI_COMMAND = get_command(["valkey-cli", "redis-cli"])
+    return _CLI_COMMAND
 
 
 def init_logger(logfile: str):
@@ -105,7 +121,7 @@ def generate_tls_certs():
     ext_file = f"{TLS_FOLDER}/openssl.cnf"
 
     f = open(ext_file, "w")
-    f.write("keyUsage = digitalSignature, keyEncipherment")
+    f.write("keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,DNS:localhost")
     f.close()
 
     def make_key(name: str, size: int):
@@ -219,17 +235,20 @@ def generate_tls_certs():
 
 
 def get_cli_option_args(
-    cluster_folder: str, use_tls: bool, auth: Optional[str] = None
+    cluster_folder: str, use_tls: bool, auth: Optional[str] = None,
+    tls_cert_file: Optional[str] = None,
+    tls_key_file: Optional[str] = None,
+    tls_ca_cert_file: Optional[str] = None,
 ) -> List[str]:
     args = (
         [
             "--tls",
             "--cert",
-            SERVER_CRT,
+            tls_cert_file or SERVER_CRT,
             "--key",
-            SERVER_KEY,
+            tls_key_file or SERVER_KEY,
             "--cacert",
-            CA_CRT,
+            tls_ca_cert_file or CA_CRT,
         ]
         if use_tls
         else []
@@ -342,22 +361,6 @@ def start_server(
     node_folder = f"{cluster_folder}/{port}"
     Path(node_folder).mkdir(exist_ok=True)
 
-    # Determine which server to use by checking `valkey-server` and `redis-server`
-    def get_server_command() -> str:
-        for server in ["valkey-server", "redis-server"]:
-            try:
-                result = subprocess.run(
-                    ["which", server],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
-                if result.returncode == 0:
-                    return server
-            except Exception as e:
-                logging.error(f"Error checking {server}: {e}")
-        raise Exception("Neither valkey-server nor redis-server found in the system.")
-
     def get_server_version(server_name):
         result = subprocess.run(
             [server_name, "--version"], capture_output=True, text=True
@@ -377,7 +380,7 @@ def start_server(
     # Define command arguments
     logfile = f"{node_folder}/server.log"
     cmd_args = [
-        SERVER_COMMAND,
+        get_server_command(),
         f"{'--tls-port' if tls else '--port'}",
         str(port),
         "--cluster-enabled",
@@ -397,6 +400,9 @@ def start_server(
     ]
     if server_version >= (7, 0, 0):
         cmd_args.extend(["--enable-debug-command", "yes"])
+    # Enable multi-database support in cluster mode for Valkey 9.0+
+    if cluster_mode and server_version >= (9, 0, 0):
+        cmd_args.extend(["--cluster-databases", "16"])
     if load_module:
         if len(load_module) == 0:
             raise ValueError(
@@ -440,6 +446,9 @@ def create_servers(
     cluster_mode: bool,
     load_module: Optional[List[str]] = None,
     json_output: bool = False,
+    tls_cert_file: Optional[str] = None,
+    tls_key_file: Optional[str] = None,
+    tls_ca_cert_file: Optional[str] = None,
 ) -> List[Server]:
     tic = time.perf_counter()
     logging.debug("## Creating servers")
@@ -447,17 +456,24 @@ def create_servers(
     nodes_count = shard_count * (1 + replica_count)
     tls_args = []
     if tls is True:
-        if should_generate_new_tls_certs():
+        # Use custom TLS files if provided, otherwise use default ones
+        cert_file = tls_cert_file or SERVER_CRT
+        key_file = tls_key_file or SERVER_KEY
+        ca_file = tls_ca_cert_file or CA_CRT
+        
+        # Only generate default certs if using default paths and they don't exist
+        if not tls_cert_file and should_generate_new_tls_certs():
             generate_tls_certs()
+            
         tls_args = [
             "--tls-cluster",
             "yes",
             "--tls-cert-file",
-            SERVER_CRT,
+            cert_file,
             "--tls-key-file",
-            SERVER_KEY,
+            key_file,
             "--tls-ca-cert-file",
-            CA_CRT,
+            ca_file,
             "--tls-auth-clients",  # Make it so client doesn't have to send cert
             "no",
             "--bind",
@@ -501,7 +517,7 @@ def create_servers(
                 )
             )
             continue
-        if not wait_for_server(server, cluster_folder, tls):
+        if not wait_for_server(server, cluster_folder, tls, 10, tls_cert_file, tls_key_file, tls_ca_cert_file):
             raise Exception(
                 f"Waiting for server {server.host}:{server.port} to start exceeded timeout.\n"
                 f"See {node_folder}/server.log for more information"
@@ -519,14 +535,17 @@ def create_cluster(
     replica_count: int,
     cluster_folder: str,
     use_tls: bool,
+    tls_cert_file: Optional[str] = None,
+    tls_key_file: Optional[str] = None,
+    tls_ca_cert_file: Optional[str] = None,
 ):
     tic = time.perf_counter()
     servers_tuple = (str(server) for server in servers)
     logging.debug("## Starting cluster creation...")
     p = subprocess.Popen(
         [
-            CLI_COMMAND,
-            *get_cli_option_args(cluster_folder, use_tls),
+            get_cli_command(),
+            *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
             "--cluster",
             "create",
             *servers_tuple,
@@ -543,7 +562,7 @@ def create_cluster(
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
     wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
-    wait_for_all_topology_views(servers, cluster_folder, use_tls)
+    wait_for_all_topology_views(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
     print_servers_json(servers)
 
     logging.debug("The cluster was successfully created!")
@@ -566,7 +585,7 @@ def create_standalone_replication(
         if i == 0:
             continue  # Skip the primary server
         replica_of_command = [
-            CLI_COMMAND,
+            get_cli_command(),
             *get_cli_option_args(cluster_folder, use_tls),
             "-h",
             str(server.host),
@@ -673,7 +692,12 @@ def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
 
 
 def wait_for_all_topology_views(
-    servers: List[Server], cluster_folder: str, use_tls: bool
+    servers: List[Server],
+    cluster_folder: str,
+    use_tls: bool,
+    tls_cert_file: Optional[str] = None,
+    tls_key_file: Optional[str] = None,
+    tls_ca_cert_file: Optional[str] = None,
 ):
     """
     Wait for each of the nodes to have a topology view that contains all nodes.
@@ -681,12 +705,12 @@ def wait_for_all_topology_views(
     """
     for server in servers:
         cmd_args = [
-            CLI_COMMAND,
+            get_cli_command(),
             "-h",
             server.host,
             "-p",
             str(server.port),
-            *get_cli_option_args(cluster_folder, use_tls),
+            *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
             "cluster",
             "slots",
         ]
@@ -697,12 +721,12 @@ def wait_for_all_topology_views(
             if output is not None and output.count(f"{server.host}") == len(servers):
                 # Server is ready, get the node's role
                 cmd_args = [
-                    CLI_COMMAND,
+                    get_cli_command(),
                     "-h",
                     server.host,
                     "-p",
                     str(server.port),
-                    *get_cli_option_args(cluster_folder, use_tls),
+                    *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
                     "cluster",
                     "nodes",
                 ]
@@ -714,7 +738,7 @@ def wait_for_all_topology_views(
                 break
             else:
                 retries -= 1
-                time.sleep(0.5)
+                time.sleep(1)
                 continue
 
         if retries < 0:
@@ -729,18 +753,21 @@ def wait_for_server(
     cluster_folder: str,
     use_tls: bool,
     timeout: int = 10,
+    tls_cert_file: Optional[str] = None,
+    tls_key_file: Optional[str] = None,
+    tls_ca_cert_file: Optional[str] = None,
 ):
     logging.debug(f"Waiting for server: {server}")
     timeout_start = time.time()
     while time.time() < timeout_start + timeout:
         p = subprocess.Popen(
             [
-                CLI_COMMAND,
+                get_cli_command(),
                 "-h",
                 server.host,
                 "-p",
                 str(server.port),
-                *get_cli_option_args(cluster_folder, use_tls),
+                *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
                 "PING",
             ],
             stdout=subprocess.PIPE,
@@ -812,7 +839,7 @@ def wait_for_regex_in_log(
 def is_address_already_in_use(
     server: Server,
     log_file: str,
-    timeout: int = 5,
+    timeout: int = 10,
 ):
     logging.debug(f"checking is address already bind for: {server}")
     timeout_start = time.time()
@@ -822,6 +849,10 @@ def is_address_already_in_use(
         "address in use",
     ]
     while time.time() < timeout_start + timeout:
+        if not os.path.exists(log_file):
+            time.sleep(0.1)
+            continue
+        
         with open(log_file, "r") as f:
             server_log = f.read()
             # Check for known error message variants because different C libraries
@@ -855,7 +886,7 @@ def dir_path(path: str):
 def stop_server(server: Server, cluster_folder: str, use_tls: bool, auth: str):
     logging.debug(f"Stopping server {server}")
     cmd_args = [
-        CLI_COMMAND,
+        get_cli_command(),
         "-h",
         server.host,
         "-p",
@@ -910,7 +941,7 @@ def wait_for_server_shutdown(
     while time.time() < timeout_start + timeout:
         p = subprocess.Popen(
             [
-                CLI_COMMAND,
+                get_cli_command(),
                 "-h",
                 server.host,
                 "-p",
@@ -1125,6 +1156,27 @@ def main():
         help="The paths of the server modules to load.",
         required=False,
     )
+    
+    parser_start.add_argument(
+        "--tls-cert-file",
+        type=str,
+        help="Path to TLS certificate file (default: uses generated certificates)",
+        required=False,
+    )
+    
+    parser_start.add_argument(
+        "--tls-key-file",
+        type=str,
+        help="Path to TLS key file (default: uses generated certificates)",
+        required=False,
+    )
+    
+    parser_start.add_argument(
+        "--tls-ca-cert-file",
+        type=str,
+        help="Path to TLS CA certificate file (default: uses generated certificates)",
+        required=False,
+    )
 
     # Stop parser
     parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
@@ -1209,6 +1261,10 @@ def main():
             args.tls,
             args.cluster_mode,
             args.load_module,
+            False,
+            getattr(args, 'tls_cert_file', None),
+            getattr(args, 'tls_key_file', None),
+            getattr(args, 'tls_ca_cert_file', None),
         )
         if args.cluster_mode:
             # Create a cluster
@@ -1218,6 +1274,9 @@ def main():
                 args.replica_count,
                 cluster_folder,
                 args.tls,
+                getattr(args, 'tls_cert_file', None),
+                getattr(args, 'tls_key_file', None),
+                getattr(args, 'tls_ca_cert_file', None),
             )
         elif args.replica_count > 0:
             # Create a standalone replication group

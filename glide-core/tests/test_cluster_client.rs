@@ -367,6 +367,108 @@ mod cluster_client_tests {
 
     #[rstest]
     #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    /// Test that verifies the client maintains the correct database ID after an automatic reconnection.
+    /// This test:
+    /// 1. Creates a client connected to database 4
+    /// 2. Verifies the initial connection is to the correct database
+    /// 3. Simulates a connection drop by killing the connection
+    /// 4. Sends another command which either:
+    ///    - Fails due to the dropped connection, then retries and verifies reconnection to db=4
+    ///    - Succeeds with a new client ID (indicating reconnection) and verifies still on db=4
+    /// This ensures that database selection persists across reconnections.
+    fn test_set_database_id_after_reconnection() {
+        let mut client_info_cmd = redis::cmd("CLIENT");
+        client_info_cmd.arg("INFO");
+        block_on_all(async {
+            // First create a basic client to check server version
+            let mut version_check_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
+                ..Default::default()
+            })
+            .await;
+
+            // Skip test if server version is less than 9.0 (database isolation not supported)
+            if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0").await
+            {
+                return;
+            }
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
+                database_id: 4, // Set a specific database ID
+                ..Default::default()
+            })
+            .await;
+
+            let client_info = test_basics
+                .client
+                .send_command(&client_info_cmd, None)
+                .await
+                .unwrap();
+            let client_info_str = match client_info {
+                redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                redis::Value::VerbatimString { text, .. } => text,
+                _ => panic!("Unexpected CLIENT INFO response type: {:?}", client_info),
+            };
+            assert!(client_info_str.contains("db=4"));
+
+            // Extract initial client ID
+            let initial_client_id =
+                extract_client_id(&client_info_str).expect("Failed to extract initial client ID");
+
+            kill_connection(&mut test_basics.client).await;
+
+            let res = test_basics
+                .client
+                .send_command(&client_info_cmd, None)
+                .await;
+            match res {
+                Err(err) => {
+                    // Connection was dropped as expected
+                    assert!(
+                        err.is_connection_dropped() || err.is_timeout(),
+                        "Expected connection dropped or timeout error, got: {err:?}",
+                    );
+                    let client_info = repeat_try_create(|| async {
+                        let mut client = test_basics.client.clone();
+                        let response = client.send_command(&client_info_cmd, None).await.ok()?;
+                        match response {
+                            redis::Value::BulkString(bytes) => {
+                                Some(String::from_utf8_lossy(&bytes).to_string())
+                            }
+                            redis::Value::VerbatimString { text, .. } => Some(text),
+                            _ => None,
+                        }
+                    })
+                    .await;
+                    assert!(client_info.contains("db=4"));
+                }
+                Ok(response) => {
+                    // Command succeeded, extract new client ID and compare
+                    let new_client_info = match response {
+                        redis::Value::BulkString(bytes) => {
+                            String::from_utf8_lossy(&bytes).to_string()
+                        }
+                        redis::Value::VerbatimString { text, .. } => text,
+                        _ => panic!("Unexpected CLIENT INFO response type: {:?}", response),
+                    };
+                    let new_client_id = extract_client_id(&new_client_info)
+                        .expect("Failed to extract new client ID");
+                    assert_ne!(
+                        initial_client_id, new_client_id,
+                        "Client ID should change after reconnection if command succeeds"
+                    );
+                    // Check that the database ID is still 4
+                    assert!(new_client_info.contains("db=4"));
+                }
+            }
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
     #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
     fn test_lazy_cluster_connection_establishes_on_first_command(
         #[values(GlideProtocolVersion::RESP2, GlideProtocolVersion::RESP3)]
@@ -476,6 +578,95 @@ mod cluster_client_tests {
             assert!(
                 clients_after_first_command > clients_before_lazy_init,
                 "Lazy client (on dedicated cluster A) should establish new connections after the first command. Before: {clients_before_lazy_init}, After: {clients_after_first_command}. protocol={protocol:?}"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_tls_connection_with_custom_root_cert() {
+        block_on_all(async move {
+            // Create a dedicated TLS cluster with custom certificates
+            let tempdir = tempfile::Builder::new()
+                .prefix("tls_cluster_test")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+
+            let cluster = utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
+            let cluster_addresses = cluster.get_server_addresses();
+
+            // Create connection request with custom root certificate
+            let mut connection_request = create_connection_request(
+                &cluster_addresses,
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    cluster_mode: ClusterMode::Enabled,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            connection_request.root_certs = vec![ca_cert_bytes.into()];
+
+            // Test that connection works with custom root cert
+            let mut client = Client::new(connection_request.into(), None)
+                .await
+                .expect("Failed to create cluster client with custom root cert");
+
+            // Verify connection works by sending a command
+            let ping_result = client.send_command(&redis::cmd("PING"), None).await;
+            assert_eq!(
+                ping_result.unwrap(),
+                Value::SimpleString("PONG".to_string())
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_tls_connection_fails_with_wrong_root_cert() {
+        block_on_all(async move {
+            // Create a TLS cluster with one set of certificates
+            let tempdir1 = tempfile::Builder::new()
+                .prefix("tls_cluster_server")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let server_tls_paths = build_keys_and_certs_for_tls(&tempdir1);
+
+            // Create different CA certificate for client
+            let tempdir2 = tempfile::Builder::new()
+                .prefix("tls_cluster_client")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let client_tls_paths = build_keys_and_certs_for_tls(&tempdir2);
+            let wrong_ca_cert_bytes = client_tls_paths.read_ca_cert_as_bytes();
+
+            let cluster =
+                utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(server_tls_paths));
+            let cluster_addresses = cluster.get_server_addresses();
+
+            // Try to connect with wrong root certificate
+            let mut connection_request = create_connection_request(
+                &cluster_addresses,
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    cluster_mode: ClusterMode::Enabled,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            connection_request.root_certs = vec![wrong_ca_cert_bytes.into()];
+
+            // Connection should fail due to certificate mismatch
+            let client_result = Client::new(connection_request.into(), None).await;
+            assert!(
+                client_result.is_err(),
+                "Expected cluster connection to fail with wrong root certificate"
             );
         });
     }

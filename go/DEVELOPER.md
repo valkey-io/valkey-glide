@@ -47,6 +47,9 @@ source "$HOME/.cargo/env"
 rustc --version
 ```
 
+> [!NOTE]
+> You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
+
 Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 **Dependencies installation for CentOS**
@@ -66,13 +69,16 @@ source "$HOME/.cargo/env"
 rustc --version
 ```
 
+> [!NOTE]
+> You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
+
 Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 **Dependencies installation for MacOS**
 
 ```bash
 brew update
-brew install go make git gcc pkgconfig protobuf@3 openssl cmake
+brew install go make git gcc pkgconfig openssl cmake
 export PATH="$PATH:$HOME/go/bin"
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
@@ -80,22 +86,16 @@ source "$HOME/.cargo/env"
 rustc --version
 ```
 
+> [!NOTE]
+> You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
+
+Continue with **Install protobuf compiler** below.
+It is not necessary to **Install `ziglang` and `zigbuild`** for MacOS.
+
 **Install protobuf compiler**
 
-To install protobuf for MacOS, run:
-
-```bash
-brew install protobuf@3
-# Verify the Protobuf compiler installation
-protoc --version
-
-# If protoc is not found or does not work correctly, update the PATH
-echo 'export PATH="/opt/homebrew/opt/protobuf@3/bin:$PATH"' >> /Users/$USER/.bash_profile
-source /Users/$USER/.bash_profile
-protoc --version
-```
-
-For the remaining systems, do the following:
+Various platform-specific zips can be found [here](https://github.com/protocolbuffers/protobuf/releases/v3.20.3).
+Choose the appropriate zip for your system and run the commands below, adjusting for the zip you chose:
 
 ```bash
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
@@ -105,6 +105,9 @@ export PATH="$PATH:$HOME/.local/bin"
 # Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
 protoc --version
 ```
+
+> [!NOTE]
+> You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
 
 **Install `ziglang` and `zigbuild`**
 
@@ -138,15 +141,7 @@ Before starting this step, make sure you've installed all software requirements.
     make build
     ```
 
-4. Run tests:
-    1. Ensure that you have installed valkey-server and valkey-cli on your host. You can find the Valkey installation guide at the following link: [Valkey Installation Guide](https://valkey.io/topics/installation/).
-    2. Execute the following command from the go folder:
-
-        ```bash
-        go test -race ./...
-        ```
-
-5. Install Go development tools with:
+4. Install Go development tools with:
 
     ```bash
     make install-dev-tools

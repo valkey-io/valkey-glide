@@ -11,6 +11,10 @@ repositories {
     mavenCentral()
 }
 
+tasks.withType<JavaCompile> {
+    options.encoding = "UTF-8"
+}
+
 val os = osdetector.os
 val classifier = osdetector.classifier
 fun nettyTransport(): String {

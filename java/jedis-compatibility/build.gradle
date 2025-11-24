@@ -1,0 +1,179 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+    id 'io.freefair.lombok' version '8.6'
+    id 'com.google.osdetector' version '1.7.3'
+}
+
+repositories {
+    mavenCentral()
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Javadoc) {
+    options.encoding = 'UTF-8'
+    options.charSet = 'UTF-8'
+    options.docEncoding = 'UTF-8'
+}
+
+ext {
+    // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
+    arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
+}
+
+dependencies {
+    implementation project(':client')
+
+    // Transitive dependencies needed by GLIDE client
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.18.0'
+
+    implementation('com.google.protobuf:protobuf-java') {
+        version {
+            require '[4.29.1,5.0)'
+            prefer '4.29.1'
+        }
+    }
+
+    // Apache Commons Pool 2 for connection pooling - part of public API
+    implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
+
+    // Test dependencies
+    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
+    testImplementation group: 'org.mockito', name: 'mockito-inline', version: '5.2.0'
+    testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '5.2.0'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok:1.18.42'
+    annotationProcessor 'org.projectlombok:lombok:1.18.42'
+    testCompileOnly 'org.projectlombok:lombok:1.18.42'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.42'
+
+    // SpotBugs annotations for static analysis (compile-only to avoid IDE errors)
+    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.0'
+}
+
+java {
+    modularity.inferModulePath = false // Disable module system for compatibility
+}
+
+javadoc {
+    dependsOn delombok
+    source = delombok.outputs
+    options.tags = [ "example:a:Example:", "apiNote:a:API Note:" ]
+    failOnError = false // Disable javadoc errors for compatibility layer
+}
+
+tasks.register('copyNativeLib', Copy) {
+    def target
+    if (project.hasProperty('target')) {
+        target = project.target
+        from "${projectDir}/../target/${target}/release/"
+    } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
+    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+        from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
+    } else {
+        from "${projectDir}/../target/release/"
+    }
+    include "*.dylib", "*.so", "*.dll"
+    into sourceSets.main.output.resourcesDir
+}
+
+jar.dependsOn('copyNativeLib')
+javadoc.dependsOn('copyNativeLib')
+compileTestJava.dependsOn('copyNativeLib')
+delombok.dependsOn('compileJava')
+copyNativeLib.dependsOn(':client:buildRust')
+compileJava.dependsOn(':client:jar')
+
+tasks.withType(Test) {
+    useJUnitPlatform()
+    testLogging {
+        exceptionFormat "full"
+        events "started", "skipped", "passed", "failed"
+        showStandardStreams true
+    }
+    // Native library path for tests
+    if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+        jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-unknown-linux-musl/release"
+    } else {
+        jvmArgs "-Djava.library.path=${projectDir}/../target/release"
+    }
+}
+
+jar {
+    if (project.hasProperty('target') && project.target.contains("musl")) {
+        archiveClassifier = "linux_musl_${arch}"
+    } else {
+        archiveClassifier = osdetector.classifier
+    }
+}
+
+tasks.register('javadocJar', Jar) {
+    dependsOn javadoc
+    archiveClassifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+tasks.register('sourcesJar', Jar) {
+    dependsOn classes
+    archiveClassifier = 'sources'
+    from sourceSets.main.allSource
+    exclude 'glide/models' // exclude protobuf files
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifact tasks.named('javadocJar')
+            artifact tasks.named('sourcesJar')
+            groupId = 'io.valkey'
+            artifactId = 'valkey-glide-jedis-compatibility'
+            version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
+            pom {
+                name = 'valkey-glide-jedis-compatibility'
+                description = 'Jedis compatibility layer for Valkey GLIDE'
+                url = 'https://github.com/valkey-io/valkey-glide.git'
+                inceptionYear = '2024'
+                scm {
+                    url = 'https://github.com/valkey-io/valkey-glide'
+                    connection = 'scm:git:ssh://git@github.com/valkey-io/valkey-glide.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/valkey-io/valkey-glide.git'
+                }
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                        distribution = 'repo'
+                    }
+                }
+                developers {
+                    developer {
+                        name = 'Valkey GLIDE Maintainers'
+                        url = 'https://github.com/valkey-io/valkey-glide.git'
+                    }
+                }
+            }
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
+}
+
+publishMavenJavaPublicationToMavenLocal.dependsOn jar
+
+tasks.withType(Sign) {
+    def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion;
+    def isReleaseVersion = !releaseVersion.endsWith("SNAPSHOT") && releaseVersion != project.ext.defaultReleaseVersion;
+    onlyIf("isReleaseVersion is set") { isReleaseVersion }
+}
+
+signing {
+    sign publishing.publications
+}
