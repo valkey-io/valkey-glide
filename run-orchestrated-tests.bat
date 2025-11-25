@@ -34,20 +34,7 @@ timeout /t 15 /nobreak >nul
 REM Step 2: Start Windows resource monitoring
 echo.
 echo Step 2: Starting Windows resource monitoring...
-start "Windows Monitor" /min cmd /c "
-:monitor_loop
-for /f \"tokens=2 delims==\" %%a in ('wmic cpu get loadpercentage /value ^| find \"LoadPercentage\"') do set cpu=%%a
-for /f \"skip=1 tokens=4\" %%a in ('wmic OS get TotalVisibleMemorySize^,FreePhysicalMemory /format:table') do set free=%%a& goto :got_free
-:got_free
-for /f \"skip=1 tokens=3\" %%a in ('wmic OS get TotalVisibleMemorySize^,FreePhysicalMemory /format:table') do set total=%%a& goto :got_total
-:got_total
-set /a mem_used=total-free
-set /a mem_pct=mem_used*100/total
-if !cpu! gtr 80 echo [%date% %time%] Windows Alert - CPU: !cpu!%%, Memory: !mem_pct!%%
-if !mem_pct! gtr 80 echo [%date% %time%] Windows Alert - CPU: !cpu!%%, Memory: !mem_pct!%%
-timeout /t 2 /nobreak >nul
-goto monitor_loop
-"
+start "Windows Monitor" /min powershell -WindowStyle Hidden -Command "while($true) { try { $cpu = Get-Counter '\Processor(_Total)\%% Processor Time' | Select -ExpandProperty CounterSamples | Select -ExpandProperty CookedValue; $mem = Get-CimInstance Win32_OperatingSystem; $memPct = [math]::Round((($mem.TotalVisibleMemorySize - $mem.FreePhysicalMemory) / $mem.TotalVisibleMemorySize) * 100, 1); $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'; if($cpu -gt 80 -or $memPct -gt 80) { Write-Host \"[$timestamp] Windows Alert - CPU: $cpu%%, Memory: $memPct%%\" } } catch { } Start-Sleep 2 }"
 
 echo Resource monitoring started
 
