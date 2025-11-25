@@ -718,7 +718,9 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ClusterAddSlots => RequestType::ClusterAddSlots,
             ProtobufRequestType::ClusterAddSlotsRange => RequestType::ClusterAddSlotsRange,
             ProtobufRequestType::ClusterBumpEpoch => RequestType::ClusterBumpEpoch,
-            ProtobufRequestType::ClusterCountFailureReports => RequestType::ClusterCountFailureReports,
+            ProtobufRequestType::ClusterCountFailureReports => {
+                RequestType::ClusterCountFailureReports
+            }
             ProtobufRequestType::ClusterCountKeysInSlot => RequestType::ClusterCountKeysInSlot,
             ProtobufRequestType::ClusterDelSlots => RequestType::ClusterDelSlots,
             ProtobufRequestType::ClusterDelSlotsRange => RequestType::ClusterDelSlotsRange,
@@ -744,7 +746,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ClusterSlots => RequestType::ClusterSlots,
             ProtobufRequestType::ReadOnly => RequestType::ReadOnly,
             ProtobufRequestType::ReadWrite => RequestType::ReadWrite,
-            
+
             _ => todo!(),
         }
     }
@@ -1028,16 +1030,26 @@ impl RequestType {
             RequestType::ModuleUnload => Some(get_two_word_command("MODULE", "UNLOAD")),
             RequestType::Asking => Some(cmd("ASKING")),
             RequestType::ClusterAddSlots => Some(get_two_word_command("CLUSTER", "ADDSLOTS")),
-            RequestType::ClusterAddSlotsRange => Some(get_two_word_command("CLUSTER", "ADDSLOTSRANGE")),
+            RequestType::ClusterAddSlotsRange => {
+                Some(get_two_word_command("CLUSTER", "ADDSLOTSRANGE"))
+            }
             RequestType::ClusterBumpEpoch => Some(get_two_word_command("CLUSTER", "BUMPEPOCH")),
-            RequestType::ClusterCountFailureReports => Some(get_two_word_command("CLUSTER", "COUNT-FAILURE-REPORTS")),
-            RequestType::ClusterCountKeysInSlot => Some(get_two_word_command("CLUSTER", "COUNTKEYSINSLOT")),
+            RequestType::ClusterCountFailureReports => {
+                Some(get_two_word_command("CLUSTER", "COUNT-FAILURE-REPORTS"))
+            }
+            RequestType::ClusterCountKeysInSlot => {
+                Some(get_two_word_command("CLUSTER", "COUNTKEYSINSLOT"))
+            }
             RequestType::ClusterDelSlots => Some(get_two_word_command("CLUSTER", "DELSLOTS")),
-            RequestType::ClusterDelSlotsRange => Some(get_two_word_command("CLUSTER", "DELSLOTSRANGE")),
+            RequestType::ClusterDelSlotsRange => {
+                Some(get_two_word_command("CLUSTER", "DELSLOTSRANGE"))
+            }
             RequestType::ClusterFailover => Some(get_two_word_command("CLUSTER", "FAILOVER")),
             RequestType::ClusterFlushSlots => Some(get_two_word_command("CLUSTER", "FLUSHSLOTS")),
             RequestType::ClusterForget => Some(get_two_word_command("CLUSTER", "FORGET")),
-            RequestType::ClusterGetKeysInSlot => Some(get_two_word_command("CLUSTER", "GETKEYSINSLOT")),
+            RequestType::ClusterGetKeysInSlot => {
+                Some(get_two_word_command("CLUSTER", "GETKEYSINSLOT"))
+            }
             RequestType::ClusterInfo => Some(get_two_word_command("CLUSTER", "INFO")),
             RequestType::ClusterKeySlot => Some(get_two_word_command("CLUSTER", "KEYSLOT")),
             RequestType::ClusterLinks => Some(get_two_word_command("CLUSTER", "LINKS")),
@@ -1049,13 +1061,15 @@ impl RequestType {
             RequestType::ClusterReplicate => Some(get_two_word_command("CLUSTER", "REPLICATE")),
             RequestType::ClusterReset => Some(get_two_word_command("CLUSTER", "RESET")),
             RequestType::ClusterSaveConfig => Some(get_two_word_command("CLUSTER", "SAVECONFIG")),
-            RequestType::ClusterSetConfigEpoch => Some(get_two_word_command("CLUSTER", "SET-CONFIG-EPOCH")),
+            RequestType::ClusterSetConfigEpoch => {
+                Some(get_two_word_command("CLUSTER", "SET-CONFIG-EPOCH"))
+            }
             RequestType::ClusterSetslot => Some(get_two_word_command("CLUSTER", "SETSLOT")),
             RequestType::ClusterShards => Some(get_two_word_command("CLUSTER", "SHARDS")),
             RequestType::ClusterSlaves => Some(get_two_word_command("CLUSTER", "SLAVES")),
             RequestType::ClusterSlots => Some(get_two_word_command("CLUSTER", "SLOTS")),
             RequestType::ReadOnly => Some(cmd("READONLY")),
-            RequestType::ReadWrite => Some(cmd("READWRITE")), 
+            RequestType::ReadWrite => Some(cmd("READWRITE")),
             _ => todo!(),
         }
     }
