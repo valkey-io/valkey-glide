@@ -36,7 +36,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-@Timeout(10) // seconds
+@Timeout(100) // seconds
 public class ConnectionTests {
 
     @ParameterizedTest

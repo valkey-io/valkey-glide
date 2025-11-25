@@ -184,10 +184,73 @@ public class TestUtilities {
         return Stream.of(arrays).flatMap(Stream::of).toArray(size -> Arrays.copyOf(arrays[0], size));
     }
 
+    /**
+     * Creates a ValkeyCluster with strace signal monitoring enabled
+     * This uses the enhanced_cluster_manager.py script to monitor signals
+     *
+     * @param tls Whether to use TLS
+     * @param clusterMode Whether to use cluster mode
+     * @param shardCount Number of shards
+     * @param replicaCount Number of replicas
+     * @return ValkeyCluster instance with strace monitoring
+     */
+    @SneakyThrows
+    public static ValkeyCluster createClusterWithStraceMonitoring(
+            boolean tls, boolean clusterMode, int shardCount, int replicaCount) {
+        return new ValkeyCluster(tls, clusterMode, shardCount, replicaCount, true, null, null);
+    }
+
+    /**
+     * Creates a ValkeyCluster from an existing configuration file
+     * Useful when you've manually started servers and written a config file
+     *
+     * @param configFilePath Path to the JSON configuration file
+     * @return ValkeyCluster instance
+     */
+    @SneakyThrows
+    public static ValkeyCluster createClusterFromConfig(String configFilePath) {
+        return new ValkeyCluster(configFilePath);
+    }
+
+    /**
+     * Creates a standalone ValkeyCluster with strace monitoring for debugging SIGTERM issues
+     */
+    @SneakyThrows
+    public static ValkeyCluster createStandaloneWithStraceMonitoring() {
+        return createClusterWithStraceMonitoring(TLS, false, 1, 0);
+    }
+
+    /**
+     * Creates a cluster ValkeyCluster with strace monitoring for debugging SIGTERM issues
+     */
+    @SneakyThrows
+    public static ValkeyCluster createClusterWithStraceMonitoring() {
+        return createClusterWithStraceMonitoring(TLS, true, 3, 1);
+    }
+
+    /**
+     * Analyze strace signals for a cluster and print results
+     */
+    @SneakyThrows
+    public static void analyzeClusterSignals(ValkeyCluster cluster) {
+        cluster.analyzeStraceSignals();
+    }
+
     // Shared standalone instance for tests
     private static ValkeyCluster sharedStandalone = null;
     
     public static synchronized ValkeyCluster getSharedStandalone() {
+        // Check if config file exists first
+        String configFile = "/tmp/connection_test_standalone_config.json";
+        if (new java.io.File(configFile).exists()) {
+            try {
+                System.out.println("[DEBUG] Using remote standalone from config file: " + configFile);
+                return new ValkeyCluster(configFile);
+            } catch (Exception e) {
+                System.err.println("[ERROR] Failed to load from config file, falling back to local: " + e.getMessage());
+            }
+        }
+        
         if (sharedStandalone == null) {
             try {
                 System.out.println("[DEBUG] Creating shared standalone (1 shard, 0 replicas)");
@@ -228,18 +291,29 @@ public class TestUtilities {
      * @return The CA certificate bytes in PEM format
      * @throws Exception if the certificate file cannot be read
      */
-    @SneakyThrows
-    public static byte[] getCaCertificate() {
-        String glideHome =
-                System.getenv().getOrDefault("GLIDE_HOME_DIR", System.getProperty("user.dir") + "/../..");
-        Path caCertPath = Paths.get(glideHome, "utils/tls_crts/ca.crt");
-        return Files.readAllBytes(caCertPath);
-    }
+   // @SneakyThrows
+   // public static byte[] getCaCertificate() {
+   //     String glideHome =
+   //             System.getenv().getOrDefault("GLIDE_HOME_DIR", System.getProperty("user.dir") + "/../..");
+   //     Path caCertPath = Paths.get(glideHome, "utils/tls_crts/ca.crt");
+   //     return Files.readAllBytes(caCertPath);
+   // }
 
     // Shared cluster instance for tests that need persistent cluster state
     private static ValkeyCluster sharedCluster = null;
     
     public static synchronized ValkeyCluster getSharedCluster() {
+        // Check if config file exists first
+        String configFile = "/tmp/connection_test_cluster_config.json";
+        if (new java.io.File(configFile).exists()) {
+            try {
+                System.out.println("[DEBUG] Using remote cluster from config file: " + configFile);
+                return new ValkeyCluster(configFile);
+            } catch (Exception e) {
+                System.err.println("[ERROR] Failed to load from config file, falling back to local: " + e.getMessage());
+            }
+        }
+        
         if (sharedCluster == null) {
             try {
                 System.out.println("[DEBUG] Creating shared cluster (3 shards, 1 replica)");
@@ -278,6 +352,17 @@ public class TestUtilities {
     private static ValkeyCluster sharedAzCluster = null;
     
     public static synchronized ValkeyCluster getSharedAzCluster() {
+        // Check if config file exists first
+        String configFile = "/tmp/connection_test_az_cluster_config.json";
+        if (new java.io.File(configFile).exists()) {
+            try {
+                System.out.println("[DEBUG] Using remote AZ cluster from config file: " + configFile);
+                return new ValkeyCluster(configFile);
+            } catch (Exception e) {
+                System.err.println("[ERROR] Failed to load from config file, falling back to local: " + e.getMessage());
+            }
+        }
+        
         if (sharedAzCluster == null) {
             try {
                 System.out.println("[DEBUG] Creating shared AZ cluster (3 shards, 4 replicas)");

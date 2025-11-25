@@ -5,6 +5,7 @@ import glide.api.models.configuration.NodeAddress;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -26,12 +27,21 @@ public class ValkeyCluster implements AutoCloseable {
                     .getParent()
                     .resolve("utils")
                     .resolve("remote_cluster_manager.py");
+                    
+    private static final Path ENHANCED_SCRIPT_FILE =
+            Paths.get(System.getProperty("user.dir"))
+                    .getParent()
+                    .getParent()
+                    .resolve("utils")
+                    .resolve("enhanced_cluster_manager.py");
 
     private boolean tls = false;
     private String clusterFolder;
     private List<NodeAddress> nodesAddr;
     private boolean isRemoteCluster = false;
     private String remoteHost = null;
+    private boolean useConfigFile = false;
+    private String configFilePath = "/tmp/valkey_cluster_config.json";
 
     /**
      * Creates a new ValkeyCluster instance
@@ -68,6 +78,46 @@ public class ValkeyCluster implements AutoCloseable {
     /** Constructor with default values */
     public ValkeyCluster(boolean tls) throws IOException, InterruptedException {
         this(tls, false, 3, 1, null, null);
+    }
+
+    /**
+     * Creates a ValkeyCluster by reading configuration from a file
+     * This is useful when using the enhanced_cluster_manager.py script
+     *
+     * @param configFilePath Path to the JSON configuration file
+     */
+    public ValkeyCluster(String configFilePath) throws IOException, InterruptedException {
+        this.useConfigFile = true;
+        this.configFilePath = configFilePath;
+        initFromConfigFile();
+    }
+
+    /**
+     * Creates a ValkeyCluster using the enhanced cluster manager with strace monitoring
+     *
+     * @param tls Whether to use TLS
+     * @param clusterMode Whether to use cluster mode
+     * @param shardCount Number of shards
+     * @param replicaCount Number of replicas
+     * @param enableStrace Whether to enable strace signal monitoring
+     * @param configFilePath Path where config file should be written (null for default)
+     * @param straceOutputDir Directory for strace logs (null for default)
+     */
+    public ValkeyCluster(
+            boolean tls,
+            boolean clusterMode,
+            int shardCount,
+            int replicaCount,
+            boolean enableStrace,
+            String configFilePath,
+            String straceOutputDir)
+            throws IOException, InterruptedException {
+        
+        this.useConfigFile = true;
+        this.configFilePath = configFilePath != null ? configFilePath : "/tmp/valkey_cluster_config.json";
+        
+        startEnhancedCluster(tls, clusterMode, shardCount, replicaCount, enableStrace, straceOutputDir);
+        initFromConfigFile();
     }
 
     private void parseClusterScriptStartOutput(String output) {
@@ -274,8 +324,228 @@ public class ValkeyCluster implements AutoCloseable {
         }
     }
 
+    private void startEnhancedCluster(
+            boolean tls, 
+            boolean clusterMode, 
+            int shardCount, 
+            int replicaCount, 
+            boolean enableStrace,
+            String straceOutputDir) throws IOException, InterruptedException {
+        
+        List<String> command = new ArrayList<>();
+        command.add("python3");
+        command.add(ENHANCED_SCRIPT_FILE.toString());
+        
+        command.add("--config-file");
+        command.add(this.configFilePath);
+        
+        if (straceOutputDir != null) {
+            command.add("--strace-output");
+            command.add(straceOutputDir);
+        }
+        
+        if (enableStrace) {
+            command.add("--enable-strace");
+        }
+        
+        if (tls) {
+            command.add("--tls");
+        }
+        
+        if (clusterMode) {
+            command.add("--cluster-mode");
+        }
+        
+        command.add("--shard-count");
+        command.add(String.valueOf(shardCount));
+        command.add("--replica-count");
+        command.add(String.valueOf(replicaCount));
+        
+        command.add("start");
+        
+        System.out.println("Starting enhanced cluster with command: " + String.join(" ", command));
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader =
+                new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+        }
+
+        if (!process.waitFor(120, TimeUnit.SECONDS)) {
+            process.destroy();
+            throw new RuntimeException("Timeout waiting for enhanced cluster creation");
+        }
+
+        if (process.exitValue() != 0) {
+            System.err.println("Enhanced cluster creation failed with exit code: " + process.exitValue());
+            System.err.println("Output: " + output);
+            throw new RuntimeException("Failed to create enhanced cluster: " + output);
+        }
+        
+        System.out.println("Enhanced cluster started successfully. Output: " + output);
+    }
+
+    private void initFromConfigFile() throws IOException {
+        Path configPath = Paths.get(this.configFilePath);
+        
+        if (!Files.exists(configPath)) {
+            throw new IOException("Configuration file not found: " + this.configFilePath);
+        }
+        
+        try {
+            String configContent = Files.readString(configPath);
+            
+            // Simple JSON parsing without external libraries
+            this.tls = configContent.contains("\"tls_enabled\": true");
+            
+            // Extract cluster folder
+            String folderPattern = "\"cluster_folder\": \"";
+            int folderStart = configContent.indexOf(folderPattern);
+            if (folderStart != -1) {
+                folderStart += folderPattern.length();
+                int folderEnd = configContent.indexOf("\"", folderStart);
+                if (folderEnd != -1) {
+                    this.clusterFolder = configContent.substring(folderStart, folderEnd);
+                }
+            }
+            
+            // Extract node addresses
+            this.nodesAddr = new ArrayList<>();
+            String nodesPattern = "\"nodes\": [";
+            int nodesStart = configContent.indexOf(nodesPattern);
+            if (nodesStart != -1) {
+                int nodesEnd = configContent.indexOf("]", nodesStart);
+                if (nodesEnd != -1) {
+                    String nodesSection = configContent.substring(nodesStart + nodesPattern.length(), nodesEnd);
+                    
+                    // Parse each node entry
+                    String[] nodeEntries = nodesSection.split("\\},\\s*\\{");
+                    for (String nodeEntry : nodeEntries) {
+                        // Clean up the entry
+                        nodeEntry = nodeEntry.replace("{", "").replace("}", "").trim();
+                        
+                        String host = null;
+                        int port = 0;
+                        
+                        // Extract host
+                        String hostPattern = "\"host\": \"";
+                        int hostStart = nodeEntry.indexOf(hostPattern);
+                        if (hostStart != -1) {
+                            hostStart += hostPattern.length();
+                            int hostEnd = nodeEntry.indexOf("\"", hostStart);
+                            if (hostEnd != -1) {
+                                host = nodeEntry.substring(hostStart, hostEnd);
+                            }
+                        }
+                        
+                        // Extract port
+                        String portPattern = "\"port\": ";
+                        int portStart = nodeEntry.indexOf(portPattern);
+                        if (portStart != -1) {
+                            portStart += portPattern.length();
+                            int portEnd = nodeEntry.indexOf(",", portStart);
+                            if (portEnd == -1) portEnd = nodeEntry.length();
+                            String portStr = nodeEntry.substring(portStart, portEnd).trim();
+                            try {
+                                port = Integer.parseInt(portStr);
+                            } catch (NumberFormatException e) {
+                                // Skip invalid port
+                                continue;
+                            }
+                        }
+                        
+                        if (host != null && port > 0) {
+                            this.nodesAddr.add(
+                                NodeAddress.builder().host(host).port(port).build());
+                        }
+                    }
+                }
+            }
+            
+            if (this.nodesAddr.isEmpty()) {
+                throw new IOException("No valid node addresses found in configuration file");
+            }
+            
+            System.out.println("Loaded cluster configuration from: " + this.configFilePath);
+            System.out.println("TLS: " + this.tls + ", Nodes: " + this.nodesAddr.size());
+            
+        } catch (Exception e) {
+            throw new IOException("Failed to parse configuration file: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Analyze strace logs for SIGTERM and other signals
+     * Only works if the cluster was started with strace monitoring enabled
+     */
+    public void analyzeStraceSignals() throws IOException, InterruptedException {
+        if (!useConfigFile) {
+            System.out.println("Strace analysis only available for enhanced cluster manager");
+            return;
+        }
+        
+        List<String> command = new ArrayList<>();
+        command.add("python3");
+        command.add(ENHANCED_SCRIPT_FILE.toString());
+        command.add("--config-file");
+        command.add(this.configFilePath);
+        command.add("analyze");
+        
+        System.out.println("Analyzing strace signals with command: " + String.join(" ", command));
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader =
+                new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+                System.out.println(line); // Print analysis results in real-time
+            }
+        }
+
+        if (!process.waitFor(30, TimeUnit.SECONDS)) {
+            process.destroy();
+            throw new RuntimeException("Timeout waiting for strace analysis");
+        }
+        
+        if (process.exitValue() != 0) {
+            System.err.println("Strace analysis failed: " + output);
+        }
+    }
+
     @Override
     public void close() throws IOException {
+        // Stop strace monitoring if using enhanced cluster manager
+        if (useConfigFile) {
+            try {
+                List<String> command = new ArrayList<>();
+                command.add("python3");
+                command.add(ENHANCED_SCRIPT_FILE.toString());
+                command.add("--config-file");
+                command.add(this.configFilePath);
+                command.add("stop");
+                
+                ProcessBuilder pb = new ProcessBuilder(command);
+                pb.redirectErrorStream(true);
+                Process process = pb.start();
+                
+                if (!process.waitFor(10, TimeUnit.SECONDS)) {
+                    process.destroy();
+                }
+            } catch (Exception e) {
+                System.err.println("Warning: Failed to stop strace monitoring: " + e.getMessage());
+            }
+        }
+        
         if (isRemoteCluster && remoteHost != null) {
             // Stop remote cluster
             List<String> command = new ArrayList<>();
