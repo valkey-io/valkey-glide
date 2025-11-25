@@ -349,6 +349,13 @@ tasks.withType(Test) {
         systemProperty 'test.server.tls', System.getProperty("tls")
     }
 
+    // Skip lazy connection tests if flag is set
+    if (project.hasProperty('skipLazyConnectionTests')) {
+        filter {
+            excludeTestsMatching '*test_lazy_connection_establishes_on_first_command*'
+        }
+    }
+
     testLogging {
         exceptionFormat "full"
         events "started", "skipped", "passed", "failed"
@@ -369,6 +376,11 @@ tasks.withType(Test) {
 
     afterTest { desc, result ->
         logger.quiet "${desc.className}.${desc.name}: ${result.resultType} ${(result.getEndTime() - result.getStartTime())/1000}s"
+        
+        // Add delay between tests if flag is set
+        if (project.hasProperty('testDelay')) {
+            Thread.sleep(project.property('testDelay') as Integer)
+        }
     }
 
     finalizedBy jacocoTestReport, jacocoTestCoverageVerification
@@ -407,6 +419,13 @@ test {
 tasks.register('pubsubTest', Test) {
     filter {
         includeTestsMatching 'glide.PubSubTests'
+    }
+    finalizedBy jacocoTestReport, jacocoTestCoverageVerification
+}
+
+tasks.register('lazyConnectionTest', Test) {
+    filter {
+        includeTestsMatching '*test_lazy_connection_establishes_on_first_command*'
     }
     finalizedBy jacocoTestReport, jacocoTestCoverageVerification
 }
