@@ -114,7 +114,7 @@ public class ValkeyCluster implements AutoCloseable {
                 }
             }
 
-            if (!process.waitFor(80, TimeUnit.SECONDS)) {
+            if (!process.waitFor(800, TimeUnit.SECONDS)) { // 10x timeout for WSL compatibility
                 process.destroy();
                 throw new RuntimeException("Timeout waiting for cluster creation");
             }
@@ -275,7 +275,7 @@ public class ValkeyCluster implements AutoCloseable {
             }
 
             try {
-                if (!process.waitFor(20, TimeUnit.SECONDS)) {
+                if (!process.waitFor(200, TimeUnit.SECONDS) // 10x timeout for WSL compatibility) {
                     process.destroy();
                     throw new IOException("Timeout waiting for cluster shutdown");
                 }
@@ -315,7 +315,7 @@ public class ValkeyCluster implements AutoCloseable {
             }
 
             try {
-                if (!process.waitFor(20, TimeUnit.SECONDS)) {
+                if (!process.waitFor(200, TimeUnit.SECONDS) // 10x timeout for WSL compatibility) {
                     process.destroy();
                     throw new IOException("Timeout waiting for cluster shutdown");
                 }

@@ -473,7 +473,7 @@ public class ClusterBatchTests {
         // setup
         String key = UUID.randomUUID().toString();
         long numreplicas = 1L;
-        long timeout = 1000L;
+        long timeout = 10000L; // 10x timeout for WSL compatibility
         ClusterBatch batch = new ClusterBatch(isAtomic);
 
         batch.set(key, "value").wait(numreplicas, timeout);

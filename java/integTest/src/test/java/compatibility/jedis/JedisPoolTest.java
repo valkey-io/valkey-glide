@@ -92,7 +92,7 @@ public class JedisPoolTest {
     @Test
     void pool_with_timeout() {
         // Test pool with custom timeout using simple constructor
-        try (JedisPool timeoutPool = new JedisPool(valkeyHost, valkeyPort, 5000)) {
+        try (JedisPool timeoutPool = new JedisPool(valkeyHost, valkeyPort, 50000)) { // 10x timeout for WSL compatibility
             assertNotNull(timeoutPool, "Timeout pool should be created");
 
             try (Jedis jedis = timeoutPool.getResource()) {

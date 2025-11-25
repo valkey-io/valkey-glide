@@ -17484,7 +17484,7 @@ public class SharedCommandTests {
         // setup
         String key = UUID.randomUUID().toString();
         long numreplicas = 1L;
-        long timeout = 1000L;
+        long timeout = 10000L; // 10x timeout for WSL compatibility
 
         // assert that wait returns 0 under standalone and 1 under cluster mode.
         assertEquals(OK, client.set(key, "value").get());

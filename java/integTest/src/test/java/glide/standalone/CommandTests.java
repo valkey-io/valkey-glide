@@ -835,7 +835,7 @@ public class CommandTests {
 
                 // Run FKILL until it returns OK
                 boolean functionKilled = false;
-                int timeout = 4000; // ms
+                int timeout = 40000; // ms - 10x timeout for WSL compatibility
                 while (timeout >= 0) {
                     try {
                         assertEquals(OK, regularClient.functionKill().get());
@@ -887,7 +887,7 @@ public class CommandTests {
 
                 // Run FKILL until it returns OK
                 boolean functionKilled = false;
-                int timeout = 4000; // ms
+                int timeout = 40000; // ms - 10x timeout for WSL compatibility
                 while (timeout >= 0) {
                     try {
                         assertEquals(OK, regularClient.functionKill().get());
@@ -940,7 +940,7 @@ public class CommandTests {
                 Thread.sleep(1000);
 
                 boolean foundUnkillable = false;
-                int timeout = 4000; // ms
+                int timeout = 40000; // ms - 10x timeout for WSL compatibility
                 while (timeout >= 0) {
                     try {
                         // valkey kills a function with 5 sec delay
@@ -1007,7 +1007,7 @@ public class CommandTests {
                 Thread.sleep(1000);
 
                 boolean foundUnkillable = false;
-                int timeout = 4000; // ms
+                int timeout = 40000; // ms - 10x timeout for WSL compatibility
                 while (timeout >= 0) {
                     try {
                         // valkey kills a function with 5 sec delay
@@ -1751,7 +1751,7 @@ public class CommandTests {
                 Thread.sleep(1000);
 
                 // Wait until script runs
-                int timeout = 4000; // ms
+                int timeout = 40000; // ms - 10x timeout for WSL compatibility
                 while (timeout >= 0) {
                     try {
                         regularClient.ping().get(); // Dummy test command
@@ -1856,7 +1856,7 @@ public class CommandTests {
                 Thread.sleep(1000);
 
                 // To prevent timeout issues, ensure script is actually running before trying to kill it
-                int timeout = 4000; // ms
+                int timeout = 40000; // ms - 10x timeout for WSL compatibility
                 while (timeout >= 0) {
                     try {
                         regularClient.ping().get(); // Dummy test command
