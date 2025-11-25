@@ -75,6 +75,7 @@ ext {
 }
 
 tasks.register('stopAllAfterTests') {
+    onlyIf { !project.hasProperty('skipClusterShutdown') }
     doLast {
         exec {
             workingDir "${project.rootDir}/../utils"
@@ -93,6 +94,7 @@ tasks.register('stopAllAfterTests') {
 // twice. So there are two identical tasks with different names.
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
 tasks.register('stopAllBeforeTests') {
+    onlyIf { !project.hasProperty('skipClusterShutdown') }
     doLast {
         println "=== DEBUG: stopAllBeforeTests task running ==="
         try {
