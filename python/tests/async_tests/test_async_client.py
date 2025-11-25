@@ -330,7 +330,9 @@ class TestGlideClients:
         assert isinstance(stats, dict)
         assert "total_connections" in stats
         assert "total_clients" in stats
-        assert len(stats) == 2
+        assert "subscription_out_of_sync_count" in stats
+        assert "subscription_last_sync_timestamp" in stats
+        assert len(stats) == 4
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
