@@ -778,6 +778,36 @@ class BaseClient(CoreCommands):
 
             return self._pubsub_queue.pop(0)
 
+    def get_statistics(self) -> dict:
+        """
+        Get compression and connection statistics for this client.
+
+        Returns:
+            dict: A dictionary containing statistics with integer values:
+                - total_connections: Total number of connections
+                - total_clients: Total number of clients
+                - total_values_compressed: Number of values successfully compressed
+                - total_values_decompressed: Number of values successfully decompressed
+                - total_original_bytes: Total bytes of original data before compression
+                - total_bytes_compressed: Total bytes after compression
+                - total_bytes_decompressed: Total bytes after decompression
+                - compression_skipped_count: Number of times compression was skipped
+        """
+        # Call the C FFI get_statistics function (returns by value, no manual free needed)
+        stats = self._lib.get_statistics()
+
+        # Access the struct fields and convert to a dictionary
+        return {
+            "total_connections": stats.total_connections,
+            "total_clients": stats.total_clients,
+            "total_values_compressed": stats.total_values_compressed,
+            "total_values_decompressed": stats.total_values_decompressed,
+            "total_original_bytes": stats.total_original_bytes,
+            "total_bytes_compressed": stats.total_bytes_compressed,
+            "total_bytes_decompressed": stats.total_bytes_decompressed,
+            "compression_skipped_count": stats.compression_skipped_count,
+        }
+
     def close(self):
         if not self._is_closed:
             self._is_closed = True
