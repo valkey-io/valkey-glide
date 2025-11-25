@@ -499,7 +499,7 @@ public class ConnectionTests {
         }
     }
 
-    @ParameterizedTest 
+    @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void test_lazy_connection_establishes_on_first_command(boolean clusterMode)
             throws Exception {

@@ -1981,7 +1981,7 @@ public class CommandTests {
 
                 // Run FKILL until it returns OK
                 boolean functionKilled = false;
-                int timeout = 40000; // ms - 10x timeout for WSL compatibility
+                int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
                         assertEquals(OK, clusterClient.functionKill().get());
@@ -2037,7 +2037,7 @@ public class CommandTests {
 
                 // Run FKILL until it returns OK
                 boolean functionKilled = false;
-                int timeout = 40000; // ms - 10x timeout for WSL compatibility
+                int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
                         assertEquals(OK, clusterClient.functionKill().get());
@@ -2090,7 +2090,7 @@ public class CommandTests {
 
                 Thread.sleep(1000);
                 boolean functionKilled = false;
-                int timeout = 40000; // ms - 10x timeout for WSL compatibility
+                int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
                         assertEquals(OK, clusterClient.functionKill().get());
@@ -2145,7 +2145,7 @@ public class CommandTests {
                 Thread.sleep(1000);
 
                 boolean functionKilled = false;
-                int timeout = 40000; // ms - 10x timeout for WSL compatibility
+                int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
                         assertEquals(OK, clusterClient.functionKill().get());
@@ -2200,7 +2200,7 @@ public class CommandTests {
                 Thread.sleep(1000);
 
                 boolean foundUnkillable = false;
-                int timeout = 40000; // ms - 10x timeout for WSL compatibility
+                int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
                         // valkey kills a function with 5 sec delay
@@ -2269,7 +2269,7 @@ public class CommandTests {
                 Thread.sleep(1000);
 
                 boolean foundUnkillable = false;
-                int timeout = 40000; // ms - 10x timeout for WSL compatibility
+                int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
                         // valkey kills a function with 5 sec delay
@@ -3489,7 +3489,7 @@ public class CommandTests {
 
                 // Run script kill until it returns OK
                 boolean scriptKilled = false;
-                int timeout = 40000; // ms - 10x timeout for WSL compatibility
+                int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
                         assertEquals(OK, clusterClient.scriptKill(route).get());
@@ -3544,7 +3544,7 @@ public class CommandTests {
                 Thread.sleep(1000);
 
                 // To prevent timeout issues, ensure script is actually running before trying to kill it
-                int timeout = 40000; // ms - 10x timeout for WSL compatibility
+                int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
                         clusterClient.ping().get(); // Dummy test command
