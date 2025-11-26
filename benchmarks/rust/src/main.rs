@@ -7,12 +7,12 @@ use tikv_jemallocator::Jemalloc;
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
+use average::{Mean, Variance};
 use clap::Parser;
 use futures::{self, StreamExt, future::join_all, stream};
 use glide_core::client::{Client, ConnectionRequest, NodeAddress, TlsMode};
 use rand::{Rng, thread_rng};
 use serde_json::Value;
-use average::{Mean, Variance};
 use std::{
     cmp::max,
     collections::HashMap,
@@ -198,10 +198,10 @@ fn calculate_latencies(values: &[Duration], prefix: &str) -> HashMap<String, Val
     let p50 = latencies[(len * 0.5) as usize];
     let p90 = latencies[(len * 0.9) as usize];
     let p99 = latencies[(len * 0.99) as usize];
-    
+
     let mean_calc: Mean = latencies.iter().copied().collect();
     let avg = mean_calc.mean();
-    
+
     let variance_calc: Variance = latencies.iter().copied().collect();
     let stddev = variance_calc.population_variance().sqrt();
 

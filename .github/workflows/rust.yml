@@ -22,6 +22,7 @@ on:
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
             - deny.toml
+            - benchmarks/rust/**
     pull_request:
         paths:
             - logger_core/**
@@ -36,6 +37,7 @@ on:
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
             - deny.toml
+            - benchmarks/rust/**
     workflow_dispatch:
         inputs:
             full-matrix:
