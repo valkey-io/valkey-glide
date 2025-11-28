@@ -52,6 +52,16 @@ def clusterHosts = ''
 def clusterTlsHosts = ''
 def azClusterHosts = ''
 
+// Platform-specific Python executable and WSL handling
+def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+def pythonCmd = isWindows ? ['wsl', '--', 'python3'] : ['python3']
+
+// Use integration test IP from environment variable if available, otherwise default to localhost
+def clusterHost = System.getenv('VALKEY_INTEG_TEST_IP') ?: '127.0.0.1'
+
+// Get workspace root - use system property or derive from project root
+def workspaceRoot = System.getProperty('workspace.root') ?: "${project.rootDir}/../.."
+
 ext {
     extractAddressesFromClusterManagerOutput = { String output ->
         for (def line : output.split("\n")) {
@@ -65,15 +75,16 @@ ext {
 }
 
 tasks.register('stopAllAfterTests') {
+    onlyIf { !project.hasProperty('skipClusterShutdown') }
     doLast {
         exec {
             workingDir "${project.rootDir}/../utils"
-            commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
+            commandLine *pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
             ignoreExitValue true // ignore fail if servers are stopped before
         }
         exec {
             workingDir "${project.rootDir}/../utils"
-            commandLine 'python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster', '--keep-folder'
+            commandLine *pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'tls-cluster', '--keep-folder'
             ignoreExitValue true
         }
     }
@@ -83,37 +94,85 @@ tasks.register('stopAllAfterTests') {
 // twice. So there are two identical tasks with different names.
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
 tasks.register('stopAllBeforeTests') {
+    onlyIf { !project.hasProperty('skipClusterShutdown') }
     doLast {
-        exec {
-            workingDir "${project.rootDir}/../utils"
-            commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'
-            ignoreExitValue true // ignore fail if servers are stopped before
+        println "=== DEBUG: stopAllBeforeTests task running ==="
+        try {
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine *pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'cluster'
+                ignoreExitValue true // ignore fail if servers are stopped before
+            }
+        } catch (Exception e) {
+            println "=== INFO: No cluster servers to stop (expected): ${e.message} ==="
         }
-        exec {
-            workingDir "${project.rootDir}/../utils"
-            commandLine 'python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster'
-            ignoreExitValue true
+        
+        try {
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine *pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'tls-cluster'
+                ignoreExitValue true
+            }
+        } catch (Exception e) {
+            println "=== INFO: No TLS cluster servers to stop (expected): ${e.message} ==="
         }
+        println "=== DEBUG: stopAllBeforeTests task completed ==="
     }
 }
 
 // delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
 tasks.register('clearDirs', Delete) {
     delete "${project.rootDir}/../utils/clusters"
+    
+    // Also clean up bash script cluster directories in WSL/Linux temp
+    if (isWindows) {
+        exec {
+            commandLine 'wsl', '--', 'bash', '-c', 'rm -rf /tmp/clusters /tmp/cluster-* || true'
+            ignoreExitValue true
+        }
+    } else {
+        exec {
+            commandLine 'bash', '-c', 'rm -rf /tmp/clusters /tmp/cluster-* || true'
+            ignoreExitValue true
+        }
+    }
 }
 
 tasks.register('startCluster') {
     doLast {
         if (System.getProperty("cluster-endpoints") == null) {
+            if (isWindows) {
+                println "=== Starting cluster setup via WSL bash script ==="
+            }
+            
             new ByteArrayOutputStream().withStream { os ->
-                exec {
-                    workingDir "${project.rootDir}/../utils"
-                    def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode']
-                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
-                    commandLine args
-                    standardOutput = os
+                if (isWindows) {
+                    // Use WSL to run bash script
+                    exec {
+                        workingDir "${project.rootDir}/../utils"
+                        commandLine 'wsl', '--', 'bash', './start-cluster.sh'
+                        standardOutput = os
+                        errorOutput = System.err  // Show debug output from script
+                    }
+                    def output = os.toString()
+                    def matcher = output =~ /CLUSTER_HOSTS=([^\n\r]+)/
+                    if (matcher.find()) {
+                        clusterHosts = matcher.group(1)
+                    } else {
+                        throw new Exception("Could not extract cluster hosts from script output")
+                    }
+                } else {
+                    exec {
+                        workingDir "${project.rootDir}/../utils"
+                        def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode']
+                        if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                        commandLine args
+                        standardOutput = os
+                        errorOutput = System.out
+                    }
+                    clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
                 }
-                clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
+                println "=== Cluster hosts: ${clusterHosts} ==="
             }
         } else {
             clusterHosts = System.getProperty("cluster-endpoints")
@@ -125,14 +184,31 @@ tasks.register('startClusterForAz') {
     doLast {
         if (System.getProperty("cluster-endpoints") == null) {
             new ByteArrayOutputStream().withStream { os ->
-                exec {
-                    workingDir "${project.rootDir}/../utils"
-                    def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4']
-                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
-                    commandLine args
-                    standardOutput = os
+                if (isWindows) {
+                    // Use WSL to run AZ bash script
+                    exec {
+                        workingDir "${project.rootDir}/../utils"
+                        commandLine 'wsl', '--', 'bash', './start-cluster-az.sh'
+                        standardOutput = os
+                        errorOutput = System.err  // Show debug output from script
+                    }
+                    def output = os.toString()
+                    def matcher = output =~ /AZ_CLUSTER_HOSTS=([^\n\r]+)/
+                    if (matcher.find()) {
+                        azClusterHosts = matcher.group(1)
+                    } else {
+                        throw new Exception("Could not extract AZ cluster hosts from script output")
+                    }
+                } else {
+                    exec {
+                        workingDir "${project.rootDir}/../utils"
+                        def args = [*pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4']
+                        if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                        commandLine args
+                        standardOutput = os
+                    }
+                    azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
                 }
-                azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
             }
         } else {
             azClusterHosts = System.getProperty("cluster-endpoints")
@@ -140,65 +216,124 @@ tasks.register('startClusterForAz') {
     }
 }
 
-tasks.register('beforeTests') {}
-tasks.register('afterTests') {}
+tasks.register('beforeTests') {
+    doLast {
+        println "=== DEBUG: beforeTests task running ==="
+    }
+}
+tasks.register('afterTests') {
+    doLast {
+        println "=== DEBUG: afterTests task running ==="
+    }
+}
 tasks.register('startStandalone') {
     doLast {
+        println "=== DEBUG: startStandalone task starting ==="
         if (System.getProperty("standalone-endpoints") == null) {
-            new ByteArrayOutputStream().withStream { os ->
-                exec {
-                    workingDir "${project.rootDir}/../utils"
-                    def args = ['python3', 'cluster_manager.py', 'start', '-r', '0']
-                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
-                    commandLine args
-                    standardOutput = os
+            try {
+                new ByteArrayOutputStream().withStream { os ->
+                    exec {
+                        workingDir "${project.rootDir}/../utils"
+                        if (isWindows) {
+                            def args = ['wsl', '--', 'python3', 'cluster_manager.py', 'start', '-r', '0']
+                            if (System.getProperty("tls") == 'true') args.add(5, '--tls')
+                            commandLine args
+                        } else {
+                            def args = ['python3', 'cluster_manager.py', 'start', '-r', '0']
+                            if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                            commandLine args
+                        }
+                        standardOutput = os
+                        errorOutput = System.err  // Show Python logging
+                    }
+                    def output = os.toString()
+                    println "=== Standalone command output: ${output.take(200)}... ==="
+                    standaloneHosts = extractAddressesFromClusterManagerOutput(output)
+                    println "=== Standalone hosts: ${standaloneHosts} ==="
                 }
-                standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            } catch (Exception e) {
+                println "=== ERROR: startStandalone failed: ${e.message} ==="
+                standaloneHosts = "127.0.0.1:6379"  // Fallback value
             }
         } else {
             standaloneHosts = System.getProperty("standalone-endpoints")
         }
+        println "=== DEBUG: startStandalone task completed ==="
     }
 }
 
 tasks.register('startStandaloneTls') {
     doLast {
+        println "=== DEBUG: startStandaloneTls task starting ==="
         new ByteArrayOutputStream().withStream { os ->
             exec {
                 workingDir "${project.rootDir}/../utils"
-                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '-r', '0'
+                if (isWindows) {
+                    commandLine 'wsl', '--', 'python3', 'cluster_manager.py', '--tls', 'start', '-r', '0'
+                } else {
+                    commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '-r', '0'
+                }
                 standardOutput = os
+                errorOutput = System.err  // Show Python logging
             }
-            standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            def output = os.toString()
+            println "=== Standalone TLS command output: ${output.take(200)}... ==="
+            standaloneTlsHosts = extractAddressesFromClusterManagerOutput(output)
+            println "=== Standalone TLS hosts: ${standaloneTlsHosts} ==="
         }
+        println "=== DEBUG: startStandaloneTls task completed ==="
     }
 }
 
 tasks.register('startClusterTls') {
     doLast {
         new ByteArrayOutputStream().withStream { os ->
-            exec {
-                workingDir "${project.rootDir}/../utils"
-                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '--cluster-mode'
-                standardOutput = os
+            if (isWindows) {
+                // Use WSL to run TLS bash script
+                exec {
+                    workingDir "${project.rootDir}/../utils"
+                    commandLine 'wsl', '--', 'bash', './start-cluster-tls.sh'
+                    standardOutput = os
+                    errorOutput = System.err  // Show debug output from script
+                }
+                def output = os.toString()
+                def matcher = output =~ /CLUSTER_TLS_HOSTS=([^\n\r]+)/
+                if (matcher.find()) {
+                    clusterTlsHosts = matcher.group(1)
+                } else {
+                    throw new Exception("Could not extract TLS cluster hosts from script output")
+                }
+                
+                // Copy certificates from script output location if needed
+                exec {
+                    commandLine 'wsl', '--', 'bash', '-c',
+                        'find ${workspaceRoot}/utils/clusters -name "tls" -type d -exec cp -r {} ${workspaceRoot}/utils/tls_crts \\; 2>/dev/null || true'
+                    ignoreExitValue true
+                }
+            } else {
+                exec {
+                    workingDir "${project.rootDir}/../utils"
+                    commandLine(*pythonCmd, 'cluster_manager.py', 'start', '--tls', '--cluster-mode')
+                    standardOutput = os
+                }
+                clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
             }
-            clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
         }
     }
 }
 
-beforeTests.dependsOn 'stopAllBeforeTests'
-stopAllBeforeTests.finalizedBy 'clearDirs'
-clearDirs.finalizedBy 'startStandalone'
-clearDirs.finalizedBy 'startStandaloneTls'
-clearDirs.finalizedBy 'startCluster'
-clearDirs.finalizedBy 'startClusterTls'
-clearDirs.finalizedBy 'startClusterForAz'
-afterTests.finalizedBy 'stopAllAfterTests'
-compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
+beforeTests.dependsOn stopAllBeforeTests
+stopAllBeforeTests.finalizedBy clearDirs
+clearDirs.finalizedBy startStandalone
+clearDirs.finalizedBy startStandaloneTls
+clearDirs.finalizedBy startCluster
+clearDirs.finalizedBy startClusterTls
+clearDirs.finalizedBy startClusterForAz
+afterTests.finalizedBy stopAllAfterTests
+compileTestJava.dependsOn(':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal')
 
 tasks.withType(Test) {
-    dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
+    dependsOn(':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal')
     useJUnitPlatform()
     if (!project.gradle.startParameter.taskNames.contains(':integTest:modulesTest')) {
         dependsOn 'beforeTests'
@@ -212,6 +347,13 @@ tasks.withType(Test) {
         systemProperty 'test.server.cluster.tls', clusterTlsHosts
         systemProperty 'test.server.azcluster', azClusterHosts
         systemProperty 'test.server.tls', System.getProperty("tls")
+    }
+
+    // Skip lazy connection tests if flag is set
+    if (project.hasProperty('skipLazyConnectionTests')) {
+        filter {
+            excludeTestsMatching '*test_lazy_connection_establishes_on_first_command*'
+        }
     }
 
     testLogging {
@@ -234,6 +376,11 @@ tasks.withType(Test) {
 
     afterTest { desc, result ->
         logger.quiet "${desc.className}.${desc.name}: ${result.resultType} ${(result.getEndTime() - result.getStartTime())/1000}s"
+        
+        // Add delay between tests if flag is set
+        if (project.hasProperty('testDelay')) {
+            Thread.sleep(project.property('testDelay') as Integer)
+        }
     }
 
     finalizedBy jacocoTestReport, jacocoTestCoverageVerification
@@ -272,6 +419,13 @@ test {
 tasks.register('pubsubTest', Test) {
     filter {
         includeTestsMatching 'glide.PubSubTests'
+    }
+    finalizedBy jacocoTestReport, jacocoTestCoverageVerification
+}
+
+tasks.register('lazyConnectionTest', Test) {
+    filter {
+        includeTestsMatching '*test_lazy_connection_establishes_on_first_command*'
     }
     finalizedBy jacocoTestReport, jacocoTestCoverageVerification
 }

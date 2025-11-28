@@ -1,0 +1,7 @@
+# Ensure shell scripts and Python files always use Unix line endings (LF)
+*.sh text eol=lf
+*.py text eol=lf
+
+# Ensure these specific files use Unix line endings
+utils/cluster_manager.py text eol=lf
+utils/*.sh text eol=lf
