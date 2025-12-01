@@ -306,14 +306,6 @@ impl std::fmt::Display for CommandCompressionBehavior {
     }
 }
 
-pub fn get_command_compression_behavior(request_type: RequestType) -> CommandCompressionBehavior {
-    match request_type {
-        RequestType::Set => CommandCompressionBehavior::CompressValues,
-        RequestType::Get => CommandCompressionBehavior::DecompressValues,
-        _ => CommandCompressionBehavior::NoCompression,
-    }
-}
-
 #[derive(Debug)]
 pub struct CompressionManager {
     backend: Box<dyn CompressionBackend>,
@@ -574,7 +566,11 @@ pub mod lz4_backend {
 
             self.validate_compression_level(Some(compression_level))?;
 
-            let original_size = data.len() as u32;
+            let original_size =
+                u32::try_from(data.len()).map_err(|_| CompressionError::InvalidConfiguration {
+                    backend: self.backend_name().to_string(),
+                    reason: format!("Data too large for LZ4: {} bytes (max: 4GB)", data.len()),
+                })?;
             let size_bytes = original_size.to_le_bytes();
 
             // Choose compression mode based on level:
@@ -697,7 +693,7 @@ pub fn process_command_args_for_compression(
         return Ok(());
     }
 
-    let behavior = get_command_compression_behavior(request_type);
+    let behavior = request_type.compression_behavior();
     if behavior != CommandCompressionBehavior::CompressValues {
         return Ok(());
     }
@@ -737,7 +733,7 @@ pub fn process_response_for_decompression(
         return Ok(value);
     }
 
-    let behavior = get_command_compression_behavior(request_type);
+    let behavior = request_type.compression_behavior();
     if behavior != CommandCompressionBehavior::DecompressValues {
         return Ok(value);
     }
@@ -776,7 +772,7 @@ pub fn decompress_single_value_response(
     }
 }
 
-pub const MAGIC_BYTES: [u8; 4] = [0x47, 0x4C, 0x49, 0x44];
+pub const MAGIC_BYTES: [u8; 4] = [0x00, 0x01, 0x02, 0x03];
 pub const HEADER_SIZE: usize = MAGIC_BYTES.len() + 1;
 pub const MIN_COMPRESSED_SIZE: usize = HEADER_SIZE + 1;
 

@@ -106,6 +106,8 @@ class CompressionConfiguration:
         backend (CompressionBackend): The compression backend to use. Defaults to CompressionBackend.ZSTD.
         compression_level (Optional[int]): The compression level to use. If not set, the backend's default level will be used.
             Valid ranges are backend-specific and validated by the Rust core.
+            ZSTD default is 3
+            LZ4 default is 0
         min_compression_size (int): The minimum size in bytes for values to be compressed. Values smaller than this will not be compressed. Defaults to 64 bytes.
     """
 

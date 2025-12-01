@@ -249,8 +249,6 @@ pub enum ClientWrapper {
 pub struct LazyClient {
     config: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
-    #[allow(dead_code)]
-    compression_manager: Option<Arc<CompressionManager>>,
 }
 
 #[derive(Clone)]
@@ -1566,7 +1564,6 @@ impl Client {
                 Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request.clone(),
                     push_sender: push_sender.clone(),
-                    compression_manager: compression_manager.clone(),
                 }))));
 
             // Create the Client first without IAM token manager
@@ -1597,7 +1594,6 @@ impl Client {
                 ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request,
                     push_sender,
-                    compression_manager: compression_manager.clone(),
                 }))
             } else if request.cluster_mode_enabled {
                 let client =
@@ -1760,20 +1756,6 @@ mod compression_integration_tests {
     }
 
     #[test]
-    fn test_lazy_client_with_compression_manager() {
-        let config = ConnectionRequest::default();
-        let compression_manager = None;
-
-        let lazy_client = LazyClient {
-            config: config.clone(),
-            push_sender: None,
-            compression_manager: compression_manager.clone(),
-        };
-
-        assert!(lazy_client.compression_manager.is_none());
-    }
-
-    #[test]
     fn test_batch_compression_integration() {
         use crate::compression::{CompressionBackendType, CompressionConfig};
         use crate::request_type::RequestType;
@@ -1794,7 +1776,7 @@ mod compression_integration_tests {
         let compress_commands = vec![RequestType::Set];
 
         for cmd_type in compress_commands {
-            let behavior = crate::compression::get_command_compression_behavior(cmd_type);
+            let behavior = cmd_type.compression_behavior();
             assert_eq!(
                 behavior,
                 crate::compression::CommandCompressionBehavior::CompressValues
@@ -1805,7 +1787,7 @@ mod compression_integration_tests {
         let decompress_commands = vec![RequestType::Get];
 
         for cmd_type in decompress_commands {
-            let behavior = crate::compression::get_command_compression_behavior(cmd_type);
+            let behavior = cmd_type.compression_behavior();
             assert_eq!(
                 behavior,
                 crate::compression::CommandCompressionBehavior::DecompressValues
@@ -1827,34 +1809,12 @@ mod compression_integration_tests {
         ];
 
         for cmd_type in no_compression_commands {
-            let behavior = crate::compression::get_command_compression_behavior(cmd_type);
+            let behavior = cmd_type.compression_behavior();
             assert_eq!(
                 behavior,
                 crate::compression::CommandCompressionBehavior::NoCompression
             );
         }
-    }
-
-    #[test]
-    fn test_lazy_client_with_compression_manager_enabled() {
-        let config = ConnectionRequest {
-            compression_config: Some(CompressionConfig::new(CompressionBackendType::Zstd)),
-            ..Default::default()
-        };
-
-        let compression_manager =
-            create_compression_manager(config.compression_config.clone()).unwrap();
-
-        let lazy_client = LazyClient {
-            config: config.clone(),
-            push_sender: None,
-            compression_manager: compression_manager.clone(),
-        };
-
-        assert!(lazy_client.compression_manager.is_some());
-        let manager = lazy_client.compression_manager.unwrap();
-        assert!(manager.is_enabled());
-        assert_eq!(manager.backend_name(), "zstd");
     }
 }
 
@@ -2135,7 +2095,6 @@ mod tests {
         let lazy_client = LazyClient {
             config,
             push_sender: None,
-            compression_manager: None,
         };
 
         Client {

@@ -272,21 +272,21 @@ mod compression_tests {
             "NoCompression"
         );
 
-        // Test get_command_compression_behavior()
+        // Test compression_behavior() method
         assert_eq!(
-            get_command_compression_behavior(RequestType::Set),
+            RequestType::Set.compression_behavior(),
             CommandCompressionBehavior::CompressValues
         );
         assert_eq!(
-            get_command_compression_behavior(RequestType::Get),
+            RequestType::Get.compression_behavior(),
             CommandCompressionBehavior::DecompressValues
         );
         assert_eq!(
-            get_command_compression_behavior(RequestType::Del),
+            RequestType::Del.compression_behavior(),
             CommandCompressionBehavior::NoCompression
         );
         assert_eq!(
-            get_command_compression_behavior(RequestType::Ping),
+            RequestType::Ping.compression_behavior(),
             CommandCompressionBehavior::NoCompression
         );
     }
