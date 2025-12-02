@@ -84,6 +84,8 @@ jobs:
 
         steps:
             - name: Setup self-hosted runner access
+              if: runner.os != 'Windows'
+              shell: bash
               run: |
                   GHA_HOME=/home/ubuntu/actions-runner/_work/valkey-glide
                   if [ -d $GHA_HOME ]; then
@@ -132,6 +134,7 @@ jobs:
 
             - name: Create secret key ring file for all Java submodules
               working-directory: java/client
+              shell: bash
               run: |
                   # Decode the provided base64 GPG key into the client module
                   echo "$SECRING_GPG" | base64 --decode > ./secring.gpg
@@ -187,6 +190,7 @@ jobs:
 
             - name: Bundle JAR
               working-directory: java
+              shell: bash
               run: |
                   # Bundle client JAR
                   src_folder=~/.m2/repository/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
@@ -226,18 +230,21 @@ jobs:
               uses: actions/download-artifact@v4
 
             - name: Move all required files to one directory
+              shell: bash
               run: |
                   mkdir maven-files
                   cd maven-files
                   for file in $(find ../. -name "*.jar"); do jar xf "$file" ; done
 
             - name: Generate sha1 and md5 files for all Maven files
+              shell: bash
               run: |
                   cd maven-files
                   for i in *.jar *.pom *.module; do md5sum $i | cut -d ' ' -f 1 > $i.md5; done
                   for i in *.jar *.pom *.module; do sha1sum $i | cut -d ' ' -f 1 > $i.sha1; done
 
             - name: Move files to the correct directory tree
+              shell: bash
               run: |
                   mkdir -p build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
                   mkdir -p build/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
@@ -262,6 +269,7 @@ jobs:
 
             - name: Publish to Maven Central
               id: maven-deployment
+              shell: bash
               run: |
                   export DEPLOYMENT_ID=`curl --request POST \
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
@@ -272,6 +280,7 @@ jobs:
                   echo Uploaded to Maven deployment with deployment ID $DEPLOYMENT_ID. Will be released if smoke tests pass and approved for release.
 
             - name: Check status of deployment
+              shell: bash
               run: |
                   for ((retries = 0; retries < 20; retries++)); do
                       sleep 5
