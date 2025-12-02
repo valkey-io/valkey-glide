@@ -205,15 +205,17 @@ jobs:
     test-pubsub:
         name: Java PubSubTests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
-        # TODO: Remove Windows exclusion when Windows integration tests are implemented
-        if: ${{ matrix.host.OS != 'windows' }}
-        timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 35 }}
+        timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
                 java: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
+                # TODO: Remove Windows exclusion when Windows integration tests are implemented
+                exclude:
+                    - host:
+                          OS: windows
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
@@ -267,13 +269,7 @@ jobs:
 
             - name: Test pubsub
               working-directory: java
-              shell: bash
-              run: |
-                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
-                      ./gradlew.bat --build-cache :integTest:pubsubTest
-                  else
-                      ./gradlew --build-cache :integTest:pubsubTest
-                  fi
+              run: ./gradlew --build-cache :integTest:pubsubTest
 
             - name: Upload test & spotbugs reports
               if: always()
