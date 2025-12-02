@@ -1180,24 +1180,6 @@ pub unsafe extern "C-unwind" fn command(
         Vec::new()
     };
 
-    // Convert arg_vec to owned Vec<Vec<u8>> for compression processing
-    let mut owned_args: Vec<Vec<u8>> = arg_vec.iter().map(|&arg| arg.to_vec()).collect();
-
-    // Apply compression to command arguments if compression is enabled
-    let compression_manager = client_adapter.core.client.compression_manager();
-    if let Err(err) = glide_core::compression::process_command_args_for_compression(
-        &mut owned_args,
-        command_type,
-        compression_manager.as_deref(),
-    ) {
-        let err = RedisError::from((
-            ErrorKind::ClientError,
-            "Compression failed",
-            err.to_string(),
-        ));
-        return unsafe { client_adapter.handle_redis_error(err, request_id) };
-    }
-
     // Create the command outside of the task to ensure that the command arguments passed
     // from the foreign code are still valid
     let mut cmd = match command_type.get_command() {
@@ -1207,9 +1189,41 @@ pub unsafe extern "C-unwind" fn command(
             return unsafe { client_adapter.handle_redis_error(err, request_id) };
         }
     };
-    // Use the potentially compressed arguments
-    for command_arg in &owned_args {
-        cmd.arg(command_arg);
+
+    // Check if compression is enabled before converting args
+    let compression_manager = client_adapter.core.client.compression_manager();
+    let should_process_compression = compression_manager
+        .as_ref()
+        .map(|cm| cm.is_enabled())
+        .unwrap_or(false);
+
+    if should_process_compression {
+        // Convert arg_vec to owned Vec<Vec<u8>> for compression processing
+        let mut owned_args: Vec<Vec<u8>> = arg_vec.iter().map(|&arg| arg.to_vec()).collect();
+
+        // Apply compression to command arguments
+        if let Err(err) = glide_core::compression::process_command_args_for_compression(
+            &mut owned_args,
+            command_type,
+            compression_manager.as_deref(),
+        ) {
+            let err = RedisError::from((
+                ErrorKind::ClientError,
+                "Compression failed",
+                err.to_string(),
+            ));
+            return unsafe { client_adapter.handle_redis_error(err, request_id) };
+        }
+
+        // Use the compressed arguments
+        for command_arg in &owned_args {
+            cmd.arg(command_arg);
+        }
+    } else {
+        // Use the original arguments
+        for command_arg in &arg_vec {
+            cmd.arg(command_arg);
+        }
     }
     if span_ptr != 0 {
         cmd.set_span(unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) });
@@ -2010,25 +2024,40 @@ pub(crate) unsafe fn create_cmd(
         )
     };
 
-    // Convert arg_vec to owned Vec<Vec<u8>> for compression processing
-    let mut owned_args: Vec<Vec<u8>> = arg_vec.iter().map(|&arg| arg.to_vec()).collect();
-
-    // Apply compression to command arguments if compression is enabled
-    if let Err(err) = glide_core::compression::process_command_args_for_compression(
-        &mut owned_args,
-        info.request_type,
-        compression_manager.map(|m| m.as_ref()),
-    ) {
-        return Err(format!("Compression failed: {}", err));
-    }
-
     let Some(mut cmd) = info.request_type.get_command() else {
         return Err("Couldn't fetch command type".into());
     };
-    // Use the potentially compressed arguments
-    for command_arg in &owned_args {
-        cmd.arg(command_arg);
+
+    // Check if compression is enabled before converting args
+    let should_process_compression = compression_manager
+        .as_ref()
+        .map(|cm| cm.is_enabled())
+        .unwrap_or(false);
+
+    if should_process_compression {
+        // Convert arg_vec to owned Vec<Vec<u8>> for compression processing
+        let mut owned_args: Vec<Vec<u8>> = arg_vec.iter().map(|&arg| arg.to_vec()).collect();
+
+        // Apply compression to command arguments
+        if let Err(err) = glide_core::compression::process_command_args_for_compression(
+            &mut owned_args,
+            info.request_type,
+            compression_manager.map(|m| m.as_ref()),
+        ) {
+            return Err(format!("Compression failed: {}", err));
+        }
+
+        // Use the compressed arguments
+        for command_arg in &owned_args {
+            cmd.arg(command_arg);
+        }
+    } else {
+        // Use the original arguments
+        for command_arg in &arg_vec {
+            cmd.arg(command_arg);
+        }
     }
+
     Ok(cmd)
 }
 
