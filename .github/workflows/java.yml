@@ -163,7 +163,6 @@ jobs:
 
             - name: Build java client
               working-directory: java
-              env:
               shell: bash
               run: |
                   if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
