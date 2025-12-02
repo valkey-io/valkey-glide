@@ -65,6 +65,7 @@ socket-layer = [
 ]
 standalone_heartbeat = []
 iam_tests = []
+mock-pubsub = []
 
 [dev-dependencies]
 rsevents = "0.3.1"

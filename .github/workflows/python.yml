@@ -237,7 +237,22 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
-            - name: Build Python wrapper
+            - name: Build Python wrapper with mock build (for async pubsub tests)
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+                  features: "mock-pubsub"
+
+            - name: Test async pubsub with pytest - with mock build
+              if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY == 'false' && env.RUN_ASYNC_ONLY == 'false' }}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args -k pubsub tests/async_tests --html=pytest_report.html --self-contained-html
+
+            - name: Rebuild Python wrapper (for sync tests)
               uses: ./.github/workflows/build-python-wrapper
               with:
                   os: ${{ matrix.host.OS }}
@@ -245,11 +260,11 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - name: Test pubsub with pytest
+            - name: Test sync pubsub with pytest (non-mock)
               if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY == 'false' && env.RUN_ASYNC_ONLY == 'false' }}
               working-directory: ./python
               run: |
-                  python3 dev.py test --args -k pubsub --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args -k pubsub tests/sync_tests --html=pytest_report.html --self-contained-html
 
             - name: Test pubsub with pytest (full matrix)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
