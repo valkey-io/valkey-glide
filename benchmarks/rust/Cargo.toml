@@ -18,7 +18,7 @@ itoa = "1.0.6"
 clap = { version = "4.3.8", features = ["derive"] }
 chrono = "0.4.26"
 serde_json = "1.0.99"
-statistical = "1.0.0"
+statrs = { version = "0.18.0", default-features = false }
 tikv-jemallocator = "0.5.4"
 
 [profile.release]

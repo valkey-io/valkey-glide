@@ -197,8 +197,11 @@ fn calculate_latencies(values: &[Duration], prefix: &str) -> HashMap<String, Val
     let p50 = latencies[(len * 0.5) as usize];
     let p90 = latencies[(len * 0.9) as usize];
     let p99 = latencies[(len * 0.99) as usize];
-    let avg = statistical::mean(&latencies);
-    let stddev = statistical::standard_deviation(&latencies, None);
+
+    use statrs::statistics::{Data, Distribution};
+    let data = Data::new(latencies.clone());
+    let avg = data.mean().unwrap_or(0.0);
+    let stddev = data.std_dev().unwrap_or(0.0);
 
     map.insert(format!("{prefix}_p50_latency"), p50.into());
     map.insert(format!("{prefix}_p90_latency"), p90.into());
