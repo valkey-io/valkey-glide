@@ -27,9 +27,32 @@ LOG_LEVELS = {
 }
 
 GLIDE_HOME_DIR = os.getenv("GLIDE_HOME_DIR") or f"{__file__}/.."
-CLUSTERS_FOLDER = os.getenv("CLUSTERS_FOLDER") or os.path.abspath(
-    f"{GLIDE_HOME_DIR}/clusters"
-)
+
+# Use WSL-accessible directory on Windows/WSL, regular clusters folder otherwise
+try:
+    if os.path.exists('/proc/version'):
+        with open('/proc/version', 'r') as f:
+            version_info = f.read().lower()
+            if 'microsoft' in version_info or 'wsl' in version_info:
+                # We're in WSL - use WSL filesystem
+                CLUSTERS_FOLDER = os.getenv("CLUSTERS_FOLDER") or "/tmp/valkey-clusters"
+                print(f"WSL detected, using clusters folder: {CLUSTERS_FOLDER}")
+            else:
+                # Regular Linux - use relative path
+                CLUSTERS_FOLDER = os.getenv("CLUSTERS_FOLDER") or os.path.abspath(
+                    f"{GLIDE_HOME_DIR}/clusters"
+                )
+    else:
+        # macOS or other - use relative path
+        CLUSTERS_FOLDER = os.getenv("CLUSTERS_FOLDER") or os.path.abspath(
+            f"{GLIDE_HOME_DIR}/clusters"
+        )
+except Exception as e:
+    print(f"Error detecting WSL, using default clusters folder: {e}")
+    # Fallback to regular path
+    CLUSTERS_FOLDER = os.getenv("CLUSTERS_FOLDER") or os.path.abspath(
+        f"{GLIDE_HOME_DIR}/clusters"
+    )
 TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/tls_crts")
 CA_CRT = f"{TLS_FOLDER}/ca.crt"
 SERVER_CRT = f"{TLS_FOLDER}/server.crt"
@@ -529,6 +552,118 @@ def create_servers(
     return ready_servers
 
 
+def create_cluster_manual_wsl(
+    servers: List[Server],
+    shard_count: int,
+    replica_count: int,
+    cluster_folder: str,
+    use_tls: bool,
+    tls_cert_file: Optional[str] = None,
+    tls_key_file: Optional[str] = None,
+    tls_ca_cert_file: Optional[str] = None,
+):
+    """
+    WSL-specific manual cluster creation that bypasses redis-cli --cluster create
+    """
+    logging.debug("WSL: Creating cluster manually")
+    
+    # Step 1: Make all nodes meet each other
+    logging.debug("Step 1: Making all nodes meet each other")
+    for i, server in enumerate(servers):
+        for j, other_server in enumerate(servers):
+            if i != j:
+                meet_cmd = [
+                    get_cli_command(),
+                    "-h", server.host, "-p", str(server.port),
+                    *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                    "cluster", "meet", other_server.host, str(other_server.port)
+                ]
+                result = subprocess.run(meet_cmd, capture_output=True, text=True, timeout=10)
+                if result.returncode != 0:
+                    logging.warning(f"CLUSTER MEET failed: {result.stderr}")
+    
+    # Wait for cluster to form
+    time.sleep(3)
+    
+    # Step 2: Assign slots to primary nodes
+    logging.debug("Step 2: Assigning slots to primary nodes")
+    primaries = servers[:shard_count]  # First N nodes are primaries
+    slots_per_primary = 16384 // shard_count
+    
+    for i, primary in enumerate(primaries):
+        start_slot = i * slots_per_primary
+        end_slot = (i + 1) * slots_per_primary - 1 if i < shard_count - 1 else 16383
+        
+        # Create slot range
+        slot_range = list(range(start_slot, end_slot + 1))
+        
+        # Add slots in batches to avoid command line length issues
+        batch_size = 100
+        for batch_start in range(0, len(slot_range), batch_size):
+            batch_slots = slot_range[batch_start:batch_start + batch_size]
+            addslots_cmd = [
+                get_cli_command(),
+                "-h", primary.host, "-p", str(primary.port),
+                *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                "cluster", "addslots"
+            ] + [str(slot) for slot in batch_slots]
+            
+            result = subprocess.run(addslots_cmd, capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                logging.error(f"CLUSTER ADDSLOTS failed for {primary}: {result.stderr}")
+                raise Exception(f"Failed to assign slots to {primary}")
+        
+        primary.set_primary(True)
+        logging.debug(f"Assigned slots {start_slot}-{end_slot} to {primary}")
+    
+    # Step 3: Set up replication
+    if replica_count > 0:
+        logging.debug("Step 3: Setting up replication")
+        replicas = servers[shard_count:]  # Remaining nodes are replicas
+        
+        for i, replica in enumerate(replicas):
+            primary_index = i % shard_count  # Round-robin assignment
+            primary = primaries[primary_index]
+            
+            # Get primary's node ID
+            nodes_cmd = [
+                get_cli_command(),
+                "-h", primary.host, "-p", str(primary.port),
+                *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                "cluster", "nodes"
+            ]
+            result = subprocess.run(nodes_cmd, capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                raise Exception(f"Failed to get node ID for {primary}")
+            
+            # Parse node ID from CLUSTER NODES output
+            primary_node_id = None
+            for line in result.stdout.split('\n'):
+                if f"{primary.host}:{primary.port}" in line and "master" in line:
+                    primary_node_id = line.split()[0]
+                    break
+            
+            if not primary_node_id:
+                raise Exception(f"Could not find node ID for primary {primary}")
+            
+            # Set up replication
+            replicate_cmd = [
+                get_cli_command(),
+                "-h", replica.host, "-p", str(replica.port),
+                *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                "cluster", "replicate", primary_node_id
+            ]
+            result = subprocess.run(replicate_cmd, capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                logging.error(f"CLUSTER REPLICATE failed for {replica}: {result.stderr}")
+                raise Exception(f"Failed to set up replication for {replica}")
+            
+            replica.set_primary(False)
+            logging.debug(f"Set {replica} as replica of {primary}")
+    
+    logging.debug("WSL: Manual cluster creation completed")
+
+
 def create_cluster(
     servers: List[Server],
     shard_count: int,
@@ -540,26 +675,35 @@ def create_cluster(
     tls_ca_cert_file: Optional[str] = None,
 ):
     tic = time.perf_counter()
-    servers_tuple = (str(server) for server in servers)
-    logging.debug("## Starting cluster creation...")
-    p = subprocess.Popen(
-        [
-            get_cli_command(),
-            *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
-            "--cluster",
-            "create",
-            *servers_tuple,
-            "--cluster-replicas",
-            str(replica_count),
-            "--cluster-yes",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    output, err = p.communicate(timeout=40)
-    if err or "[OK] All 16384 slots covered." not in output:
-        raise Exception(f"Failed to create cluster: {err if err else output}")
+    
+    # Check if we're running in WSL environment
+    is_wsl = os.path.exists('/proc/version') and 'microsoft' in open('/proc/version').read().lower()
+    
+    if is_wsl:
+        # Use manual cluster creation for WSL
+        create_cluster_manual_wsl(servers, shard_count, replica_count, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
+    else:
+        # Use standard redis-cli --cluster create for Linux
+        servers_tuple = (str(server) for server in servers)
+        logging.debug("## Starting cluster creation...")
+        p = subprocess.Popen(
+            [
+                get_cli_command(),
+                *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                "--cluster",
+                "create",
+                *servers_tuple,
+                "--cluster-replicas",
+                str(replica_count),
+                "--cluster-yes",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        output, err = p.communicate(timeout=40)
+        if err or "[OK] All 16384 slots covered." not in output:
+            raise Exception(f"Failed to create cluster: {err if err else output}")
 
     wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
     wait_for_all_topology_views(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
@@ -691,6 +835,44 @@ def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
         return None
 
 
+def refresh_cluster_topology_wsl(
+    servers: List[Server],
+    cluster_folder: str,
+    use_tls: bool,
+    tls_cert_file: Optional[str] = None,
+    tls_key_file: Optional[str] = None,
+    tls_ca_cert_file: Optional[str] = None,
+):
+    """
+    WSL-specific: Force all nodes to meet each other explicitly
+    """
+    logging.debug("WSL: Refreshing cluster topology with explicit CLUSTER MEET commands")
+    
+    # Make sure every node knows about every other node
+    for server in servers:
+        for other_server in servers:
+            if server != other_server:
+                meet_cmd = [
+                    get_cli_command(),
+                    "-h",
+                    server.host,
+                    "-p",
+                    str(server.port),
+                    *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                    "cluster",
+                    "meet",
+                    other_server.host,
+                    str(other_server.port),
+                ]
+                logging.debug(f"Executing: {meet_cmd}")
+                try:
+                    result = subprocess.run(meet_cmd, capture_output=True, text=True, timeout=5)
+                    if result.returncode != 0:
+                        logging.warning(f"CLUSTER MEET failed: {result.stderr}")
+                except subprocess.TimeoutExpired:
+                    logging.warning(f"CLUSTER MEET timeout for {server} -> {other_server}")
+
+
 def wait_for_all_topology_views(
     servers: List[Server],
     cluster_folder: str,
@@ -703,6 +885,14 @@ def wait_for_all_topology_views(
     Wait for each of the nodes to have a topology view that contains all nodes.
     Only when a replica finished syncing and loading, it will be included in the CLUSTER SLOTS output.
     """
+    # Check if we're running in WSL environment
+    is_wsl = os.path.exists('/proc/version') and 'microsoft' in open('/proc/version').read().lower()
+    
+    if is_wsl:
+        # WSL: Force topology refresh first
+        refresh_cluster_topology_wsl(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
+        time.sleep(2)  # Give time for MEET commands to propagate
+    
     for server in servers:
         cmd_args = [
             get_cli_command(),
@@ -872,15 +1062,56 @@ def is_address_already_in_use(
 
 
 def dir_path(path: str):
+    import subprocess
+    import sys
+    
+    print(f"dir_path called with: {path}")
+    
+    # First try standard Python methods
     try:
         # Try to create the path folder if it isn't exist
-        Path(path).mkdir(exist_ok=True)
-    except Exception:
-        pass
+        Path(path).mkdir(exist_ok=True, parents=True)
+        print(f"Path.mkdir succeeded for: {path}")
+    except Exception as e:
+        print(f"Path.mkdir failed for {path}: {e}")
+        # If Path.mkdir fails, try os.makedirs as fallback
+        try:
+            os.makedirs(path, exist_ok=True)
+            print(f"os.makedirs succeeded for: {path}")
+        except Exception as e2:
+            print(f"os.makedirs failed for {path}: {e2}")
+            # If both fail, try basic mkdir
+            try:
+                os.mkdir(path)
+                print(f"os.mkdir succeeded for: {path}")
+            except FileExistsError:
+                print(f"Directory {path} already exists")
+                pass  # Directory already exists, that's fine
+            except Exception as e3:
+                print(f"os.mkdir failed for {path}: {e3}")
+                # Last resort: try system mkdir if we're in WSL
+                try:
+                    if sys.platform.startswith('linux'):
+                        result = subprocess.run(['mkdir', '-p', path], check=True, capture_output=True, text=True)
+                        print(f"system mkdir succeeded for: {path}")
+                except Exception as e4:
+                    print(f"system mkdir failed for {path}: {e4}")
+                    pass  # Give up on creation, just check if it exists
+    
+    # Final verification
     if os.path.isdir(path):
+        print(f"Directory verified to exist: {path}")
         return path
     else:
-        raise NotADirectoryError(path)
+        # Try one more time with absolute path
+        abs_path = os.path.abspath(path)
+        print(f"Trying absolute path: {abs_path}")
+        if os.path.isdir(abs_path):
+            print(f"Absolute path exists: {abs_path}")
+            return abs_path
+        else:
+            print(f"FINAL FAILURE: Cannot create or access directory: {path} (absolute: {abs_path})")
+            raise NotADirectoryError(f"Cannot create or access directory: {path} (absolute: {abs_path})")
 
 
 def stop_server(server: Server, cluster_folder: str, use_tls: bool, auth: str):
