@@ -153,7 +153,6 @@ jobs:
               working-directory: java
               shell: bash
               env:
-                  CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
                   GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
               run: |
                   # Determine gradle command based on OS

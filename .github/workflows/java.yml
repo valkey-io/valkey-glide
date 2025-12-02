@@ -164,7 +164,6 @@ jobs:
             - name: Build java client
               working-directory: java
               env:
-                  CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
               shell: bash
               run: |
                   if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
@@ -390,7 +389,6 @@ jobs:
               working-directory: java
               env:
                   GLIDE_CONTAINER_BUILD: true
-                  CARGO_BUILD_JOBS: ${{ github.runner_cores || '2' }}
               run: |
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
                       export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-amazon-corretto.x86_64
