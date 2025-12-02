@@ -19,13 +19,6 @@ pub fn get_mock_broker() -> Arc<MockPubSubBroker> {
     Arc::clone(&MOCK_BROKER)
 }
 
-/// Check if mock PubSub is enabled via environment variable
-pub fn is_mock_enabled() -> bool {
-    std::env::var("GLIDE_USE_MOCK_PUBSUB")
-        .map(|v| v == "1" || v.to_lowercase() == "true")
-        .unwrap_or(false)
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SubscriptionType {
     Exact,

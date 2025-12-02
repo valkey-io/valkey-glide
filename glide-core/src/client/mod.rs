@@ -35,6 +35,7 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
+#[cfg(feature = "mock-pubsub")]
 use crate::mock_pubsub;
 use crate::request_type::RequestType;
 use redis::InfoDict;
@@ -408,35 +409,6 @@ impl Client {
         cmd.command().is_some_and(|bytes| bytes == b"SUNSUBSCRIBE")
     }
 
-    /// Register config-based pubsub subscriptions with the mock broker
-    async fn register_config_subscriptions_with_mock(
-        broker: &Arc<mock_pubsub::MockPubSubBroker>,
-        client_id: &str,
-        pubsub_subscriptions: std::collections::HashMap<
-            redis::PubSubSubscriptionKind,
-            std::collections::HashSet<Vec<u8>>,
-        >,
-    ) {
-        for (kind, channels) in pubsub_subscriptions {
-            let channels: Vec<String> = channels
-                .into_iter()
-                .filter_map(|bytes| String::from_utf8(bytes).ok())
-                .collect();
-
-            if channels.is_empty() {
-                continue;
-            }
-
-            let sub_type = match kind {
-                redis::PubSubSubscriptionKind::Exact => mock_pubsub::SubscriptionType::Exact,
-                redis::PubSubSubscriptionKind::Pattern => mock_pubsub::SubscriptionType::Pattern,
-                redis::PubSubSubscriptionKind::Sharded => mock_pubsub::SubscriptionType::Sharded,
-            };
-
-            broker.subscribe_lazy(client_id, channels, sub_type).await;
-        }
-    }
-
     /// Extracts the database ID from a SELECT command.
     /// Parses the first argument of the SELECT command as an i64 database ID.
     /// Returns appropriate errors for invalid formats or missing arguments.
@@ -619,12 +591,13 @@ impl Client {
                 cmd.set_fenced(true);
             }
 
-            if mock_pubsub::is_mock_enabled()
-                && mock_pubsub::MockPubSubBroker::is_pubsub_command(cmd)
+            #[cfg(feature = "mock-pubsub")]
             {
-                let broker = mock_pubsub::get_mock_broker();
-                let client_id = self.get_client_id();
-                return broker.handle_pubsub_command(&client_id, cmd).await;
+                if mock_pubsub::MockPubSubBroker::is_pubsub_command(cmd) {
+                    let broker = mock_pubsub::get_mock_broker();
+                    let client_id = self.get_client_id();
+                    return broker.handle_pubsub_command(&client_id, cmd).await;
+                }
             }
 
             // let expected_type = expected_type_for_cmd(cmd);
@@ -1230,9 +1203,40 @@ impl Client {
         Ok(())
     }
 
+    #[cfg(feature = "mock-pubsub")]
     /// Get unique client ID for mock broker
     fn get_client_id(&self) -> String {
         format!("{:p}", &*self.internal_client)
+    }
+
+    #[cfg(feature = "mock-pubsub")]
+    /// Register config-based pubsub subscriptions with the mock broker
+    async fn register_config_subscriptions_with_mock(
+        broker: &Arc<mock_pubsub::MockPubSubBroker>,
+        client_id: &str,
+        pubsub_subscriptions: std::collections::HashMap<
+            redis::PubSubSubscriptionKind,
+            std::collections::HashSet<Vec<u8>>,
+        >,
+    ) {
+        for (kind, channels) in pubsub_subscriptions {
+            let channels: Vec<String> = channels
+                .into_iter()
+                .filter_map(|bytes| String::from_utf8(bytes).ok())
+                .collect();
+
+            if channels.is_empty() {
+                continue;
+            }
+
+            let sub_type = match kind {
+                redis::PubSubSubscriptionKind::Exact => mock_pubsub::SubscriptionType::Exact,
+                redis::PubSubSubscriptionKind::Pattern => mock_pubsub::SubscriptionType::Pattern,
+                redis::PubSubSubscriptionKind::Sharded => mock_pubsub::SubscriptionType::Sharded,
+            };
+
+            broker.subscribe_lazy(client_id, channels, sub_type).await;
+        }
     }
 }
 
@@ -1613,8 +1617,9 @@ impl Client {
             let is_cluster = request.cluster_mode_enabled;
             let lazy_connect = request.lazy_connect;
 
-            // Clone push_sender before it's moved
+            #[cfg(feature = "mock-pubsub")]
             let push_sender_for_mock = push_sender.clone();
+            #[cfg(feature = "mock-pubsub")]
             let pubsub_subscriptions_for_mock = request.pubsub_subscriptions.clone();
 
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
@@ -1678,22 +1683,24 @@ impl Client {
                 *guard = internal_client;
             }
 
-            // Compute client ID for mock registration
-            let client_id = format!("{:p}", &*internal_client_arc);
-
-            // Register with mock broker immediately if enabled
-            if mock_pubsub::is_mock_enabled()
-                && let Some(sender) = push_sender_for_mock
+            #[cfg(feature = "mock-pubsub")]
             {
-                let broker = mock_pubsub::get_mock_broker();
-                broker
-                    .register_client(client_id.clone(), sender, is_cluster)
-                    .await;
+                let client_id = format!("{:p}", &*internal_client_arc);
 
-                // Register config-based subscriptions with mock broker
-                if let Some(pubsub_subs) = pubsub_subscriptions_for_mock {
-                    Self::register_config_subscriptions_with_mock(&broker, &client_id, pubsub_subs)
+                if let Some(sender) = push_sender_for_mock {
+                    let broker = mock_pubsub::get_mock_broker();
+                    broker
+                        .register_client(client_id.clone(), sender, is_cluster)
                         .await;
+
+                    if let Some(pubsub_subs) = pubsub_subscriptions_for_mock {
+                        Self::register_config_subscriptions_with_mock(
+                            &broker,
+                            &client_id,
+                            pubsub_subs,
+                        )
+                        .await;
+                    }
                 }
             }
 

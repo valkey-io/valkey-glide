@@ -15,6 +15,7 @@ pub mod scripts_container;
 pub use client::ConnectionRequest;
 pub mod cluster_scan_container;
 pub mod iam;
+#[cfg(feature = "mock-pubsub")]
 mod mock_pubsub;
 pub mod request_type;
 pub use telemetrylib::{
