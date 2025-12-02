@@ -429,7 +429,6 @@ async def client_cleanup(
             raise cleanup_error
 
 
-@pytest.mark.use_mock_pubsub
 @pytest.mark.anyio
 class TestPubSub:
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -2949,7 +2948,6 @@ class TestPubSub:
             await client_cleanup(client2)
 
 
-@pytest.mark.use_mock_pubsub
 @pytest.mark.anyio
 class TestDynamicPubSub:
     """Tests for dynamic PubSub subscription/unsubscription API"""
@@ -2973,8 +2971,8 @@ class TestDynamicPubSub:
         """
         listening_client, publishing_client = None, None
         try:
-            channel = get_random_string(10)
-            message = get_random_string(5)
+            channel = "channel_1"
+            message = "message_1"
 
             callback, context = None, None
             callback_messages: List[PubSubMsg] = []
@@ -3051,9 +3049,9 @@ class TestDynamicPubSub:
         """
         listening_client, publishing_client = None, None
         try:
-            channel = get_random_string(10)
-            message1 = get_random_string(5)
-            message2 = get_random_string(5)
+            channel = "channel_1"
+            message1 = "message_1"
+            message2 = "message_2"
 
             callback, context = None, None
             callback_messages: List[PubSubMsg] = []
@@ -3123,7 +3121,7 @@ class TestDynamicPubSub:
         try:
             pattern = "news.*"
             channel1 = "news.sports"
-            message = get_random_string(5)
+            message = "message_1"
 
             callback, context = None, None
             callback_messages: List[PubSubMsg] = []
@@ -3207,8 +3205,8 @@ class TestDynamicPubSub:
         try:
             pattern = "news.*"
             channel = "news.sports"
-            message1 = get_random_string(5)
-            message2 = get_random_string(5)
+            message1 = "message_1"
+            message2 = "message_2"
 
             callback, context = None, None
             callback_messages: List[PubSubMsg] = []
@@ -3277,8 +3275,8 @@ class TestDynamicPubSub:
         """
         listening_client, publishing_client = None, None
         try:
-            channel = get_random_string(10)
-            message = get_random_string(5)
+            channel = "channel_sharded_1"
+            message = "message_1"
 
             callback, context = None, None
             callback_messages: List[PubSubMsg] = []
@@ -3357,9 +3355,9 @@ class TestDynamicPubSub:
         """
         listening_client, publishing_client = None, None
         try:
-            channel = get_random_string(10)
-            message1 = get_random_string(5)
-            message2 = get_random_string(5)
+            channel = "channel_sharded_1"
+            message1 = "message_1"
+            message2 = "message_2"
 
             callback, context = None, None
             callback_messages: List[PubSubMsg] = []
@@ -3425,9 +3423,9 @@ class TestDynamicPubSub:
         """
         listening_client, publishing_client = None, None
         try:
-            channel = get_random_string(10)
-            message1 = get_random_string(5)
-            message2 = get_random_string(5)
+            channel = "channel_1"
+            message1 = "message_1"
+            message2 = "message_2"
 
             listening_client = await create_client(request, cluster_mode)
             publishing_client = await create_client(request, cluster_mode)
@@ -3474,8 +3472,8 @@ class TestDynamicPubSub:
         """
         listening_client, publishing_client = None, None
         try:
-            channels = {get_random_string(10) for _ in range(3)}
-            messages = {ch: get_random_string(5) for ch in channels}
+            channels = {"channel_1", "channel_2", "channel_3"}
+            messages = {ch: f"message_{ch}" for ch in channels}
 
             callback, context = None, None
             callback_messages: List[PubSubMsg] = []
@@ -3554,8 +3552,8 @@ class TestDynamicPubSub:
         """
         listening_client, publishing_client = None, None
         try:
-            channels = {get_random_string(10) for _ in range(3)}
-            message = get_random_string(5)
+            channels = {"channel_1", "channel_2", "channel_3"}
+            message = "message_1"
 
             callback, context = None, None
             callback_messages: List[PubSubMsg] = []
@@ -3603,10 +3601,10 @@ class TestDynamicPubSub:
         """
         listening_client, publishing_client = None, None
         try:
-            channel1 = get_random_string(10)
-            channel2 = get_random_string(10)
-            message1 = get_random_string(5)
-            message2 = get_random_string(5)
+            channel1 = "channel_1"
+            channel2 = "channel_2"
+            message1 = "message_1"
+            message2 = "message_2"
 
             listening_client = await create_client(request, cluster_mode)
             publishing_client = await create_client(request, cluster_mode)
@@ -3691,9 +3689,9 @@ class TestDynamicPubSub:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_lazy_vs_blocking_timeout(self, request, cluster_mode: bool):
         """Test that blocking subscribe times out when reconciliation can't complete"""
-        username = f"mock_test_user_{get_random_string(8)}"
-        password = get_random_string(10)
-        channel = get_random_string(10)
+        username = "mock_test_user_1"
+        password = "password_1"
+        channel = "channel_1"
 
         admin_client = await create_client(request, cluster_mode)
 
@@ -3717,7 +3715,14 @@ class TestDynamicPubSub:
             await admin_client.custom_command(acl_command)
 
         client = await create_client(request, cluster_mode)
-        await client.custom_command(["AUTH", username, password])
+
+        auth_cmd: List[Union[str, bytes]] = ["AUTH", username, password]
+        if cluster_mode:
+            await cast(GlideClusterClient, client).custom_command(
+                auth_cmd, route=AllNodes()
+            )
+        else:
+            await client.custom_command(auth_cmd)
 
         # Lazy subscribe should succeed (desired state updated)
         await client.subscribe_lazy({channel})
@@ -3734,9 +3739,9 @@ class TestDynamicPubSub:
         self, request, cluster_mode: bool
     ):
         """Test that desired state updates immediately but actual state updates after delay"""
-        username = f"mock_test_user_{get_random_string(8)}"
-        password = get_random_string(10)
-        channel = get_random_string(10)
+        username = "mock_test_user_1"
+        password = "[REDACTED:PASSWORD]"
+        channel = "channel_1"
 
         admin_client = await create_client(request, cluster_mode)
 
@@ -3760,7 +3765,13 @@ class TestDynamicPubSub:
             await admin_client.custom_command(acl_command)
 
         client = await create_client(request, cluster_mode)
-        await client.custom_command(["AUTH", username, password])
+        auth_cmd: List[Union[str, bytes]] = ["AUTH", username, password]
+        if cluster_mode:
+            await cast(GlideClusterClient, client).custom_command(
+                auth_cmd, route=AllNodes()
+            )
+        else:
+            await client.custom_command(auth_cmd)
 
         # Subscribe (will be blocked)
         await client.subscribe_lazy({channel})
@@ -3792,7 +3803,7 @@ class TestDynamicPubSub:
     ):
         """Test that unsubscribing from non-subscribed channel is safe"""
         client = await create_client(request, cluster_mode)
-        channel = get_random_string(10)
+        channel = "channel_1"
 
         # Unsubscribe without ever subscribing (should be no-op)
         await unsubscribe_by_method(client, subscription_method, {channel})
@@ -3833,7 +3844,7 @@ class TestDynamicPubSub:
         try:
             channel = "news.sports"
             pattern = "news.*"
-            message = get_random_string(5)
+            message = "message_1"
 
             callback, context = None, None
             callback_messages: List[PubSubMsg] = []
@@ -3931,10 +3942,10 @@ class TestDynamicPubSub:
         """
         listening_client, publishing_client = None, None
         try:
-            initial_channel = get_random_string(10)
-            dynamic_channel = get_random_string(10)
-            initial_message = get_random_string(5)
-            dynamic_message = get_random_string(5)
+            initial_channel = "channel_initial"
+            dynamic_channel = "channel_dynamic"
+            initial_message = "message_initial"
+            dynamic_message = "message_dynamic"
 
             callback, context = None, None
             callback_messages: List[PubSubMsg] = []
@@ -4091,7 +4102,6 @@ class TestDynamicPubSub:
             await client_cleanup(publishing_client)
 
 
-@pytest.mark.use_mock_pubsub
 @pytest.mark.anyio
 class TestPubSubMetrics:
     """Tests for subscription metrics"""
@@ -4105,10 +4115,10 @@ class TestPubSubMetrics:
         """
         listening_client, admin_client = None, None
         try:
-            channel = get_random_string(10)
+            channel = "channel_1"
             # Must use this special prefix for mock interception
-            username = f"mock_test_user_{get_random_string(8)}"
-            password = get_random_string(10)
+            username = "mock_test_user_1"
+            password = "password_1"
 
             # Create admin client to manage ACL (this gets intercepted by mock)
             admin_client = await create_client(request, cluster_mode)
@@ -4239,11 +4249,11 @@ class TestPubSubMetrics:
         """
         listening_client, admin_client = None, None
         try:
-            channel1 = get_random_string(10)
-            channel2 = get_random_string(10)
+            channel1 = "channel_1"
+            channel2 = "channel_2"
             # Must use this special prefix for mock interception
-            username = f"mock_test_user_{get_random_string(8)}"
-            password = get_random_string(10)
+            username = "mock_test_user_1"
+            password = "password_1"
 
             admin_client = await create_client(request, cluster_mode)
 
@@ -4327,9 +4337,9 @@ class TestPubSubMetrics:
         try:
             import time
 
-            channel1 = get_random_string(10)
-            channel2 = get_random_string(10)
-            message = get_random_string(5)
+            channel1 = "channel_1"
+            channel2 = "channel_2"
+            message = "message_1"
 
             listening_client = await create_client(request, cluster_mode)
             publishing_client = await create_client(request, cluster_mode)

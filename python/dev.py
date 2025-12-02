@@ -201,7 +201,11 @@ def install_glide_shared(env: Dict[str, str]) -> None:
     )
 
 
-def build_async_client_wheel(env: Dict[str, str], release: bool) -> None:
+def build_async_client_wheel(
+    env: Dict[str, str],
+    release: bool,
+    features: Optional[str] = "",
+) -> None:
     # 1. Copy shared module
     dest_shared = GLIDE_ASYNC_DIR / "python" / "glide_shared"
     if dest_shared.exists():
@@ -215,6 +219,9 @@ def build_async_client_wheel(env: Dict[str, str], release: bool) -> None:
     maturin_cmd = ["maturin", "build"]
     if release:
         maturin_cmd += ["--release", "--strip"]
+    if features:
+        feature_list = [f.strip() for f in features.split(",") if f.strip()]
+        maturin_cmd += ["--features", ",".join(feature_list)]
 
     run_command(
         maturin_cmd,
@@ -246,7 +253,11 @@ def build_async_client_wheel(env: Dict[str, str], release: bool) -> None:
 
 
 def build_async_client(
-    glide_version: str, release: bool, no_cache: bool = False, wheel: bool = False
+    glide_version: str,
+    release: bool,
+    no_cache: bool = False,
+    wheel: bool = False,
+    features: Optional[str] = None,
 ) -> None:
     print(
         f"[INFO] Building async client with version={glide_version} in {'release' if release else 'debug'} mode..."
@@ -265,11 +276,14 @@ def build_async_client(
     generate_protobuf_files()
 
     if wheel:
-        return build_async_client_wheel(env, release)
+        return build_async_client_wheel(env, release, features)
 
     cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop"]
     if release:
         cmd += ["--release", "--strip"]
+    if features:
+        feature_list = [f.strip() for f in features.split(",") if f.strip()]
+        cmd += ["--features", ",".join(feature_list)]
 
     run_command(
         cmd,
@@ -506,6 +520,9 @@ Examples:
         action="store_true",
         help="Build the client to wheel and install it from the built wheel.",
     )
+    build_parser.add_argument(
+        "--features", help="Comma separated list of features for maturin", default=""
+    )
 
     subparsers.add_parser(
         "protobuf", help="Generate Python protobuf files including .pyi stubs"
@@ -547,9 +564,10 @@ Examples:
         release = args.mode == "release"
         no_cache = args.no_cache
         wheel = args.wheel
+        features = args.features
         if args.client in ["async", "all"]:
             print(f"🛠 Building async client ({args.mode} mode)...")
-            build_async_client(version, release, no_cache, wheel)
+            build_async_client(version, release, no_cache, wheel, features)
         if args.client in ["sync", "all"]:
             print("🛠 Building sync client ({args.mode} mode)...")
             build_sync_client(version, release, no_cache, wheel)
