@@ -10,6 +10,7 @@ from glide.glide import (
     OpenTelemetryMetricsConfig,
     OpenTelemetryTracesConfig,
     Script,
+    get_min_compressed_size,
 )
 from glide_shared import (
     OK,
@@ -222,6 +223,8 @@ __all__ = [
     "TGlideClient",
     "GlideClient",
     "GlideClusterClient",
+    # Internal utilities
+    "get_min_compressed_size",
     "Batch",
     "ClusterBatch",
     "ClusterTransaction",

@@ -2975,3 +2975,20 @@ pub extern "C" fn get_statistics() -> Statistics {
         compression_skipped_count: Telemetry::compression_skipped_count() as c_ulong,
     }
 }
+
+/// Returns the minimum size in bytes for compression.
+///
+/// This constant represents the minimum size a value must be to be eligible for compression.
+/// It is calculated as `HEADER_SIZE + 1` to ensure that compressed data is always larger
+/// than just the compression header itself.
+///
+/// This function allows language bindings to validate compression configuration without
+/// hardcoding the constant, ensuring consistency with the Rust core implementation.
+///
+/// # Returns
+///
+/// The minimum compression size in bytes (currently 6 bytes: 5-byte header + 1 byte data).
+#[unsafe(no_mangle)]
+pub extern "C" fn get_min_compressed_size() -> c_ulong {
+    glide_core::compression::MIN_COMPRESSED_SIZE as c_ulong
+}

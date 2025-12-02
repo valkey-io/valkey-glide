@@ -256,10 +256,16 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_otel_span, m)?)?;
     m.add_function(wrap_pyfunction!(drop_otel_span, m)?)?;
     m.add_function(wrap_pyfunction!(init_opentelemetry, m)?)?;
+    m.add_function(wrap_pyfunction!(get_min_compressed_size, m)?)?;
 
     #[pyfunction]
     fn py_log(log_level: Level, log_identifier: String, message: String) {
         log(log_level, log_identifier, message);
+    }
+
+    #[pyfunction]
+    fn get_min_compressed_size() -> usize {
+        glide_core::compression::MIN_COMPRESSED_SIZE
     }
 
     #[pyfunction]

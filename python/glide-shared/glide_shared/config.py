@@ -96,6 +96,25 @@ class CompressionBackend(Enum):
     """
 
 
+def _get_min_compressed_size() -> int:
+    """
+    Get the minimum compressed size from the Rust core.
+    This ensures Python validation stays in sync with Rust implementation.
+    """
+    try:
+        from glide import get_min_compressed_size
+
+        return get_min_compressed_size()
+    except ImportError:
+        # Fallback to a reasonable default if the native module isn't available yet
+        # (e.g., during build or in environments where the module isn't loaded)
+        return 6  # HEADER_SIZE (5) + 1
+
+
+# Cache the minimum compression size at module load time
+_MIN_COMPRESSED_SIZE = _get_min_compressed_size()
+
+
 @dataclass
 class CompressionConfiguration:
     """
@@ -127,8 +146,10 @@ class CompressionConfiguration:
         Raises:
             ConfigurationError: If any configuration parameter is invalid.
         """
-        if self.min_compression_size < 64:
-            raise ConfigurationError("min_compression_size should be at least 64 bytes")
+        if self.min_compression_size < _MIN_COMPRESSED_SIZE:
+            raise ConfigurationError(
+                f"min_compression_size should be at least {_MIN_COMPRESSED_SIZE} bytes"
+            )
 
         # Note: compression_level validation is performed by the Rust core,
         # which uses the actual compression library's valid ranges.
