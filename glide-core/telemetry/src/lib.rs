@@ -16,6 +16,10 @@ pub struct Telemetry {
     total_connections: usize,
     /// Total number of GLIDE clients
     total_clients: usize,
+    /// Number of times subscriptions were detected as out of sync
+    subscription_out_of_sync_count: u64,
+    /// Unix timestamp (in milliseconds) of the last time subscriptions were in sync
+    subscription_last_sync_timestamp: u64,
 }
 
 lazy_static! {
@@ -66,6 +70,38 @@ impl Telemetry {
     /// Return the number of active clients
     pub fn total_clients() -> usize {
         TELEMETRY.read().expect(MUTEX_READ_ERR).total_clients
+    }
+
+    /// Increment the subscription out of sync count
+    /// Return the new count after increment
+    pub fn incr_subscription_out_of_sync() -> u64 {
+        let mut t = TELEMETRY.write().expect(MUTEX_WRITE_ERR);
+        t.subscription_out_of_sync_count = t.subscription_out_of_sync_count.saturating_add(1);
+        t.subscription_out_of_sync_count
+    }
+
+    /// Get the current subscription out of sync count
+    pub fn subscription_out_of_sync_count() -> u64 {
+        TELEMETRY
+            .read()
+            .expect(MUTEX_READ_ERR)
+            .subscription_out_of_sync_count
+    }
+
+    /// Update the subscription last sync timestamp
+    /// Return the new timestamp
+    pub fn update_subscription_last_sync_timestamp(timestamp: u64) -> u64 {
+        let mut t = TELEMETRY.write().expect(MUTEX_WRITE_ERR);
+        t.subscription_last_sync_timestamp = timestamp;
+        t.subscription_last_sync_timestamp
+    }
+
+    /// Get the subscription last sync timestamp
+    pub fn subscription_last_sync_timestamp() -> u64 {
+        TELEMETRY
+            .read()
+            .expect(MUTEX_READ_ERR)
+            .subscription_last_sync_timestamp
     }
 
     /// Reset the telemetry collected thus far

@@ -25,3 +25,6 @@ logger_core = { path = "../../logger_core" }
 [profile.release]
 lto = true
 strip = "symbols"
+
+[features]
+mock-pubsub = ["glide-core/mock-pubsub"]
