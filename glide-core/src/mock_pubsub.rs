@@ -406,8 +406,7 @@ impl MockPubSubBroker {
         }
 
         self.subscribe_blocking(client_id, channels, sub_type, timeout_ms)
-            .await
-            .map_err(|e| RedisError::from((ErrorKind::IoError, "Subscription timeout", e)))?;
+            .await?;
 
         Ok(Value::Nil)
     }
@@ -427,8 +426,7 @@ impl MockPubSubBroker {
         };
 
         self.unsubscribe_blocking(client_id, channels, sub_type, timeout_ms)
-            .await
-            .map_err(|e| RedisError::from((ErrorKind::IoError, "Unsubscription timeout", e)))?;
+            .await?;
 
         Ok(Value::Nil)
     }
@@ -526,12 +524,10 @@ impl MockPubSubBroker {
         channels: Vec<String>,
         sub_type: SubscriptionType,
         timeout_ms: u64,
-    ) -> Result<(), String> {
+    ) -> RedisResult<()> {
         // First do lazy subscribe
         self.subscribe_lazy(client_id, channels.clone(), sub_type.clone())
             .await;
-
-        let timeout_ms = if timeout_ms == 0 { 5000 } else { timeout_ms };
 
         // Wait for actual state to match
         let start = std::time::Instant::now();
@@ -552,7 +548,7 @@ impl MockPubSubBroker {
             }
 
             if timeout_ms > 0 && start.elapsed().as_millis() as u64 >= timeout_ms {
-                return Err(format!("Timeout waiting for subscription to {channels:?}",));
+                return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
             }
 
             sleep(Duration::from_millis(10)).await;
@@ -616,11 +612,9 @@ impl MockPubSubBroker {
         channels: Option<Vec<String>>,
         sub_type: SubscriptionType,
         timeout_ms: u64,
-    ) -> Result<(), String> {
+    ) -> RedisResult<()> {
         self.unsubscribe_lazy(client_id, channels.clone(), sub_type.clone())
             .await;
-
-        let timeout_ms = if timeout_ms == 0 { 5000 } else { timeout_ms };
 
         let start = std::time::Instant::now();
         loop {
@@ -646,7 +640,7 @@ impl MockPubSubBroker {
             }
 
             if timeout_ms > 0 && start.elapsed().as_millis() as u64 >= timeout_ms {
-                return Err("Timeout waiting for unsubscribe".to_string());
+                return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
             }
 
             sleep(Duration::from_millis(10)).await;
