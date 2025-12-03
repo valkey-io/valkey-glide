@@ -567,11 +567,15 @@ pub mod lz4_backend {
             self.validate_compression_level(Some(compression_level))?;
 
             let original_size =
-                u32::try_from(data.len()).map_err(|_| CompressionError::InvalidConfiguration {
+                i32::try_from(data.len()).map_err(|_| CompressionError::InvalidConfiguration {
                     backend: self.backend_name().to_string(),
-                    reason: format!("Data too large for LZ4: {} bytes (max: 4GB)", data.len()),
+                    reason: format!(
+                        "Data too large for LZ4: {} bytes (max: {} bytes)",
+                        data.len(),
+                        i32::MAX
+                    ),
                 })?;
-            let size_bytes = original_size.to_le_bytes();
+            let size_bytes = (original_size as u32).to_le_bytes();
 
             // Choose compression mode based on level:
             // - level > 0: High compression mode
@@ -630,19 +634,34 @@ pub mod lz4_backend {
             }
 
             let size_bytes = &compressed_data[0..4];
-            let original_size =
-                u32::from_le_bytes([size_bytes[0], size_bytes[1], size_bytes[2], size_bytes[3]])
-                    as i32;
+            let original_size_u32 =
+                u32::from_le_bytes([size_bytes[0], size_bytes[1], size_bytes[2], size_bytes[3]]);
             let compressed_block = &compressed_data[4..];
 
-            let decompressed_data = lz4::block::decompress(compressed_block, Some(original_size))
-                .map_err(|e| {
+            // LZ4 block decompression requires knowing the uncompressed size
+            // The API uses i32, so we must reject sizes that don't fit
+            let original_size = i32::try_from(original_size_u32).map_err(|_| {
                 CompressionError::decompression_failed(
                     self.backend_name(),
                     data.len(),
-                    e.to_string(),
+                    format!(
+                        "Uncompressed size {} bytes exceeds LZ4 block API limit ({} bytes)",
+                        original_size_u32,
+                        i32::MAX
+                    ),
                 )
             })?;
+
+            let decompressed_data =
+                lz4::block::decompress(compressed_block, Some(original_size)).map_err(
+                    |e| {
+                        CompressionError::decompression_failed(
+                            self.backend_name(),
+                            data.len(),
+                            e.to_string(),
+                        )
+                    },
+                )?;
 
             Ok(decompressed_data)
         }
