@@ -782,9 +782,7 @@ pub fn decompress_single_value_response(
             let decompressed = manager.try_decompress_value(s.as_bytes());
             match String::from_utf8(decompressed) {
                 Ok(decompressed_string) => Ok(Value::SimpleString(decompressed_string)),
-                Err(_) => Ok(Value::BulkString(
-                    manager.try_decompress_value(s.as_bytes()),
-                )),
+                Err(e) => Ok(Value::BulkString(e.into_bytes())),
             }
         }
         _ => Ok(value),
