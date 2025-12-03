@@ -48,12 +48,6 @@ def generate_xml_data(size_bytes: int) -> str:
     pattern = "<record><id>123</id><name>Test</name><value>Data</value></record>"
     return (pattern * (size_bytes // len(pattern) + 1))[:size_bytes]
 
-
-def generate_random_binary(size_bytes: int) -> bytes:
-    """Generate random binary data (incompressible)."""
-    return os.urandom(size_bytes)
-
-
 def generate_base64_data(size_bytes: int) -> str:
     """Generate base64 encoded data (low compressibility)."""
     binary_data = os.urandom(size_bytes // 2)
