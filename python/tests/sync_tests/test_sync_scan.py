@@ -97,38 +97,19 @@ class TestSyncScan:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_cluster_scan_simple(self, glide_sync_client: GlideClusterClient):
-        # Flush the database to ensure clean state
-        glide_sync_client.custom_command(["FLUSHALL"])
-
         key = get_random_string(10)
         expected_keys = [f"{key}{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in expected_keys})
-        expected_keys_encoded = {k.encode() for k in expected_keys}
+        expected_keys_encoded = map(lambda k: k.encode(), expected_keys)
         cursor = ClusterScanCursor()
-        keys: List[bytes] = []
+        keys: List[str] = []
         while not cursor.is_finished():
             result = glide_sync_client.scan(cursor)
             cursor = cast(ClusterScanCursor, result[0])
-            result_keys = cast(List[bytes], result[1])
+            result_keys = cast(List[str], result[1])
             keys.extend(result_keys)
 
-        keys_set = set(keys)
-        # Check for duplicates
-        if len(keys) != len(keys_set):
-            from collections import Counter
-
-            duplicates = [k for k, count in Counter(keys).items() if count > 1]
-            assert (
-                False
-            ), f"Duplicate keys found: {duplicates[:10]}, Total keys: {len(keys)}, Unique: {len(keys_set)}"
-
-        if expected_keys_encoded != keys_set:
-            missing = expected_keys_encoded - keys_set
-            extra = keys_set - expected_keys_encoded
-            assert (
-                False
-            ), f"Key mismatch! Expected: {len(expected_keys_encoded)}, Got: {len(keys_set)}, Missing: {len(missing)}, Extra: {len(extra)}, Extra keys sample: {list(extra)[:5]}"
-        assert expected_keys_encoded == keys_set
+        assert set(expected_keys_encoded) == set(keys)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -138,22 +119,24 @@ class TestSyncScan:
         key = get_random_string(10)
         expected_keys = [f"key-{key}-{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in expected_keys})
-        encoded_expected_keys = {k.encode() for k in expected_keys}
+        encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
         unexpected_type_keys = [f"{key}-{i}" for i in range(100, 200)]
         for key in unexpected_type_keys:
             glide_sync_client.sadd(key, ["value"])
-        encoded_unexpected_type_keys = {k.encode() for k in unexpected_type_keys}
+        encoded_unexpected_type_keys = map(lambda k: k.encode(), unexpected_type_keys)
         unexpected_pattern_keys = [f"{i}" for i in range(200, 300)]
         glide_sync_client.mset({k: "value" for k in unexpected_pattern_keys})
-        encoded_unexpected_pattern_keys = {k.encode() for k in unexpected_pattern_keys}
-        keys: List[bytes] = []
+        encoded_unexpected_pattern_keys = map(
+            lambda k: k.encode(), unexpected_pattern_keys
+        )
+        keys: List[str] = []
         cursor = ClusterScanCursor()
         while not cursor.is_finished():
             result = glide_sync_client.scan(
                 cursor, match=b"key-*", type=ObjectType.STRING
             )
             cursor = cast(ClusterScanCursor, result[0])
-            result_keys = cast(List[bytes], result[1])
+            result_keys = cast(List[str], result[1])
             keys.extend(result_keys)
 
         assert set(encoded_expected_keys) == set(keys)
@@ -166,20 +149,20 @@ class TestSyncScan:
         key = get_random_string(10)
         expected_keys = [f"{key}{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in expected_keys})
-        encoded_expected_keys = {k.encode() for k in expected_keys}
+        encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
         cursor = ClusterScanCursor()
-        keys: List[bytes] = []
+        keys: List[str] = []
         successful_compared_scans = 0
         while not cursor.is_finished():
             result_of_1 = glide_sync_client.scan(cursor, count=1)
             cursor = cast(ClusterScanCursor, result_of_1[0])
-            result_keys_of_1 = cast(List[bytes], result_of_1[1])
+            result_keys_of_1 = cast(List[str], result_of_1[1])
             keys.extend(result_keys_of_1)
             if cursor.is_finished():
                 break
             result_of_100 = glide_sync_client.scan(cursor, count=100)
             cursor = cast(ClusterScanCursor, result_of_100[0])
-            result_keys_of_100 = cast(List[bytes], result_of_100[1])
+            result_keys_of_100 = cast(List[str], result_of_100[1])
             keys.extend(result_keys_of_100)
             if len(result_keys_of_100) > len(result_keys_of_1):
                 successful_compared_scans += 1
@@ -192,17 +175,17 @@ class TestSyncScan:
     def test_sync_cluster_scan_with_match(self, glide_sync_client: GlideClusterClient):
         unexpected_keys = [f"{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in unexpected_keys})
-        encoded_unexpected_keys = {k.encode() for k in unexpected_keys}
+        encoded_unexpected_keys = map(lambda k: k.encode(), unexpected_keys)
         key = get_random_string(10)
         expected_keys = [f"key-{key}-{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in expected_keys})
-        encoded_expected_keys = {k.encode() for k in expected_keys}
+        encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
         cursor = ClusterScanCursor()
-        keys: List[bytes] = []
+        keys: List[str] = []
         while not cursor.is_finished():
             result = glide_sync_client.scan(cursor, match="key-*")
             cursor = cast(ClusterScanCursor, result[0])
-            result_keys = cast(List[bytes], result[1])
+            result_keys = cast(List[str], result[1])
             keys.extend(result_keys)
         assert set(encoded_expected_keys) == set(keys)
         assert not set(encoded_unexpected_keys).intersection(set(keys))
@@ -419,41 +402,21 @@ class TestSyncScan:
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_standalone_scan_simple(self, glide_sync_client: GlideClient):
-        # Flush the database to ensure clean state
-        glide_sync_client.custom_command(["FLUSHALL"])
-
         key = get_random_string(10)
         expected_keys = [f"{key}{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in expected_keys})
-        encoded_expected_keys = {k.encode() for k in expected_keys}
-        keys: List[bytes] = []
+        encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
+        keys: List[str] = []
         cursor = b"0"
         while True:
             result = glide_sync_client.scan(cursor)
             cursor_bytes = cast(bytes, result[0])
             cursor = cursor_bytes
-            new_keys = cast(List[bytes], result[1])
+            new_keys = cast(List[str], result[1])
             keys.extend(new_keys)
             if cursor == b"0":
                 break
-
-        keys_set = set(keys)
-        # Check for duplicates
-        if len(keys) != len(keys_set):
-            from collections import Counter
-
-            duplicates = [k for k, count in Counter(keys).items() if count > 1]
-            assert (
-                False
-            ), f"Duplicate keys found: {duplicates[:10]}, Total keys: {len(keys)}, Unique: {len(keys_set)}"
-
-        if encoded_expected_keys != keys_set:
-            missing = encoded_expected_keys - keys_set
-            extra = keys_set - encoded_expected_keys
-            assert (
-                False
-            ), f"Key mismatch! Expected: {len(encoded_expected_keys)}, Got: {len(keys_set)}, Missing: {len(missing)}, Extra: {len(extra)}, Extra keys sample: {list(extra)[:5]}"
-        assert encoded_expected_keys == keys_set
+        assert set(encoded_expected_keys) == set(keys)
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -489,20 +452,20 @@ class TestSyncScan:
         key = get_random_string(10)
         expected_keys = [f"{key}{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in expected_keys})
-        encoded_expected_keys = {k.encode() for k in expected_keys}
+        encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
         cursor = "0"
-        keys: List[bytes] = []
+        keys: List[str] = []
         successful_compared_scans = 0
         while True:
             result_of_1 = glide_sync_client.scan(cursor, count=1)
             cursor_bytes = cast(bytes, result_of_1[0])
             cursor = cursor_bytes.decode()
-            keys_of_1 = cast(List[bytes], result_of_1[1])
+            keys_of_1 = cast(List[str], result_of_1[1])
             keys.extend(keys_of_1)
             result_of_100 = glide_sync_client.scan(cursor, count=100)
             cursor_bytes = cast(bytes, result_of_100[0])
             cursor = cursor_bytes.decode()
-            keys_of_100 = cast(List[bytes], result_of_100[1])
+            keys_of_100 = cast(List[str], result_of_100[1])
             keys.extend(keys_of_100)
             if len(keys_of_100) > len(keys_of_1):
                 successful_compared_scans += 1
@@ -517,17 +480,17 @@ class TestSyncScan:
         key = get_random_string(10)
         expected_keys = [f"key-{key}-{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in expected_keys})
-        encoded_expected_keys = {k.encode() for k in expected_keys}
+        encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
         unexpected_keys = [f"{i}" for i in range(100)]
         glide_sync_client.mset({k: "value" for k in [f"{i}" for i in range(100)]})
-        encoded_unexpected_keys = {k.encode() for k in unexpected_keys}
+        encoded_unexpected_keys = map(lambda k: k.encode(), unexpected_keys)
         cursor = "0"
-        keys: List[bytes] = []
+        keys: List[str] = []
         while True:
             result = glide_sync_client.scan(cursor, match="key-*")
             cursor_bytes = cast(bytes, result[0])
             cursor = cursor_bytes.decode()
-            new_keys = cast(List[bytes], result[1])
+            new_keys = cast(List[str], result[1])
             keys.extend(new_keys)
             if cursor == "0":
                 break
