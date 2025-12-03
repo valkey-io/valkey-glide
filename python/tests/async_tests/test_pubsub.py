@@ -16,6 +16,7 @@ from glide_shared.config import (
 )
 from glide_shared.constants import OK
 from glide_shared.exceptions import ConfigurationError, RequestError
+from glide_shared.exceptions import TimeoutError as GlideTimeoutError
 from glide_shared.routes import AllNodes
 
 from tests.async_tests.conftest import create_client
@@ -3728,7 +3729,7 @@ class TestDynamicPubSub:
         await client.subscribe_lazy({channel})
 
         # Blocking subscribe should timeout
-        with pytest.raises(RequestError, match="Subscription timeout"):
+        with pytest.raises(GlideTimeoutError):
             await client.subscribe({channel}, timeout_ms=1000)
 
         await client_cleanup(client)
