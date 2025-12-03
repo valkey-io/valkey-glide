@@ -652,16 +652,14 @@ pub mod lz4_backend {
                 )
             })?;
 
-            let decompressed_data =
-                lz4::block::decompress(compressed_block, Some(original_size)).map_err(
-                    |e| {
-                        CompressionError::decompression_failed(
-                            self.backend_name(),
-                            data.len(),
-                            e.to_string(),
-                        )
-                    },
-                )?;
+            let decompressed_data = lz4::block::decompress(compressed_block, Some(original_size))
+                .map_err(|e| {
+                CompressionError::decompression_failed(
+                    self.backend_name(),
+                    data.len(),
+                    e.to_string(),
+                )
+            })?;
 
             Ok(decompressed_data)
         }
