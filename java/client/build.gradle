@@ -176,6 +176,7 @@ sourceSets {
     main {
         java {
             srcDir 'src/main/java'
+            srcDir 'src/main/java/glide/models/protobuf'
         }
         resources {
             srcDir 'src/main/resources'

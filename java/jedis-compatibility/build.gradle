@@ -31,6 +31,8 @@ dependencies {
     // Transitive dependencies needed by GLIDE client
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.18.0'
 
+    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.6'
+
     implementation('com.google.protobuf:protobuf-java') {
         version {
             require '[4.29.1,5.0)'
