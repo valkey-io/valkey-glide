@@ -4,6 +4,9 @@
 
 use crate::request_type::RequestType;
 
+/// Re-export the minimum compressed size constant from glide-core
+pub use glide_core::compression::MIN_COMPRESSED_SIZE;
+
 /// Mock compression manager
 #[derive(Debug)]
 pub struct CompressionManager;
@@ -17,6 +20,11 @@ impl CompressionManager {
     /// Mock decompression method - does nothing
     pub fn decompress(&self, _data: &[u8]) -> Result<Vec<u8>, String> {
         Ok(Vec::new())
+    }
+
+    /// Mock is_enabled method - always returns false
+    pub fn is_enabled(&self) -> bool {
+        false
     }
 }
 
