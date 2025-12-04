@@ -9,6 +9,7 @@ inputs:
             - amazon-linux
             - macos
             - ubuntu
+            - windows
     target:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
         type: string
@@ -21,8 +22,13 @@ inputs:
             - aarch64-apple-darwin
             - aarch64-unknown-linux-musl
             - x86_64-unknown-linux-musl
+            - x86_64-pc-windows-msvc
     engine-version:
         description: "Engine version to install"
+        required: false
+        type: string
+    language:
+        description: "The language being built (optional, for language-specific setup)"
         required: false
         type: string
     github-token:
@@ -62,6 +68,20 @@ runs:
           run: |
               yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
+        - name: Install software dependencies for Windows
+          shell: pwsh
+          if: "${{ inputs.os == 'windows' }}"
+          run: |
+              # Verify Rust toolchain is available
+              rustc --version
+              cargo --version
+
+        - name: Setup Python for Windows
+          if: "${{ inputs.os == 'windows' }}"
+          uses: actions/setup-python@v5
+          with:
+              python-version: "3.x"
+
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
           uses: ./.github/workflows/install-rust-and-protoc
@@ -70,7 +90,8 @@ runs:
               github-token: ${{ inputs.github-token }}
 
         - name: Install engine
-          if: "${{ inputs.engine-version }}"
+          # TODO: Remove Windows exclusion when Windows integration tests are implemented
+          if: "${{ inputs.engine-version && inputs.os != 'windows' }}"
           uses: ./.github/workflows/install-engine
           with:
               engine-version: ${{ inputs.engine-version }}

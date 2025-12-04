@@ -94,7 +94,7 @@ jobs:
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
-        timeout-minutes: 35
+        timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 35 }}
         strategy:
             fail-fast: false
             matrix:
@@ -126,6 +126,7 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+                  language: java
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -153,13 +154,33 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
+            - name: Setup Python3 for Windows
+              if: ${{ matrix.host.OS == 'windows' }}
+              shell: bash
+              run: |
+                  # Create python3 symlink for Windows
+                  ln -sf $(which python) /usr/bin/python3
+
             - name: Build java client
               working-directory: java
-              run: ./gradlew --build-cache --continue build test -x javadoc
+              shell: bash
+              run: |
+                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                      # TODO: Remove -x :integTest:test when Windows integration tests are implemented
+                      ./gradlew.bat --build-cache --continue build test -x javadoc -x :integTest:test
+                  else
+                      ./gradlew --build-cache --continue build test -x javadoc
+                  fi
 
             - name: Ensure no skipped files by linter
               working-directory: java
-              run: ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+              shell: bash
+              run: |
+                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                      ./gradlew.bat --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+                  else
+                      ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+                  fi
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
@@ -189,6 +210,10 @@ jobs:
                 java: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
+                # TODO: Remove Windows exclusion when Windows integration tests are implemented
+                exclude:
+                    - host:
+                          OS: windows
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
@@ -212,6 +237,7 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+                  language: java
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -319,6 +345,7 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  language: java
                   engine-version: ${{ matrix.engine.version }}
 
             - name: Install protoc (protobuf)
