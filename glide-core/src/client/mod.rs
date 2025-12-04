@@ -35,13 +35,12 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
-#[cfg(feature = "mock-pubsub")]
-use crate::mock_pubsub;
 use crate::request_type::RequestType;
 use redis::InfoDict;
 use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock, mpsc, oneshot};
 use versions::Versioning;
+use crate::pubsub::{create_pubsub_synchronizer, PubSubSynchronizer};
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
 pub const DEFAULT_RETRIES: u32 = 3;
@@ -263,6 +262,7 @@ pub struct Client {
     iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
     // Optional compression manager for automatic compression/decompression
     compression_manager: Option<Arc<CompressionManager>>,
+    pubsub_synchronizer: Option<Arc<dyn PubSubSynchronizer>>,
 }
 
 async fn run_with_timeout<T>(
@@ -591,12 +591,9 @@ impl Client {
                 cmd.set_fenced(true);
             }
 
-            #[cfg(feature = "mock-pubsub")]
-            {
-                if mock_pubsub::MockPubSubBroker::is_pubsub_command(cmd) {
-                    let broker = mock_pubsub::get_mock_broker();
-                    let client_id = self.get_client_id();
-                    return broker.handle_pubsub_command(&client_id, cmd).await;
+            if let Some(sync) = &self.pubsub_synchronizer {
+                if let Some(result) = sync.intercept_pubsub_command(cmd).await {
+                    return result;
                 }
             }
 
@@ -1202,42 +1199,6 @@ impl Client {
         iam_manager.refresh_token().await;
         Ok(())
     }
-
-    #[cfg(feature = "mock-pubsub")]
-    /// Get unique client ID for mock broker
-    fn get_client_id(&self) -> String {
-        format!("{:p}", &*self.internal_client)
-    }
-
-    #[cfg(feature = "mock-pubsub")]
-    /// Register config-based pubsub subscriptions with the mock broker
-    async fn register_config_subscriptions_with_mock(
-        broker: &Arc<mock_pubsub::MockPubSubBroker>,
-        client_id: &str,
-        pubsub_subscriptions: std::collections::HashMap<
-            redis::PubSubSubscriptionKind,
-            std::collections::HashSet<Vec<u8>>,
-        >,
-    ) {
-        for (kind, channels) in pubsub_subscriptions {
-            let channels: Vec<String> = channels
-                .into_iter()
-                .filter_map(|bytes| String::from_utf8(bytes).ok())
-                .collect();
-
-            if channels.is_empty() {
-                continue;
-            }
-
-            let sub_type = match kind {
-                redis::PubSubSubscriptionKind::Exact => mock_pubsub::SubscriptionType::Exact,
-                redis::PubSubSubscriptionKind::Pattern => mock_pubsub::SubscriptionType::Pattern,
-                redis::PubSubSubscriptionKind::Sharded => mock_pubsub::SubscriptionType::Sharded,
-            };
-
-            broker.subscribe_lazy(client_id, channels, sub_type).await;
-        }
-    }
 }
 
 fn load_cmd(code: &[u8]) -> Cmd {
@@ -1617,11 +1578,6 @@ impl Client {
             let is_cluster = request.cluster_mode_enabled;
             let lazy_connect = request.lazy_connect;
 
-            #[cfg(feature = "mock-pubsub")]
-            let push_sender_for_mock = push_sender.clone();
-            #[cfg(feature = "mock-pubsub")]
-            let pubsub_subscriptions_for_mock = request.pubsub_subscriptions.clone();
-
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
             let internal_client_arc =
@@ -1630,6 +1586,15 @@ impl Client {
                     push_sender: push_sender.clone(),
                 }))));
 
+            
+            let initial_subscriptions = request.pubsub_subscriptions.clone();
+            
+            let pubsub_synchronizer = Some(create_pubsub_synchronizer(
+                is_cluster,
+                push_sender.clone(),
+                initial_subscriptions,
+            ));
+
             // Create the Client first without IAM token manager
             let client = Self {
                 internal_client: internal_client_arc.clone(),
@@ -1637,6 +1602,7 @@ impl Client {
                 inflight_requests_allowed,
                 compression_manager: compression_manager.clone(),
                 iam_token_manager: None,
+                pubsub_synchronizer,
             };
 
             let client_arc = Arc::new(RwLock::new(client));
@@ -1681,27 +1647,6 @@ impl Client {
             {
                 let mut guard = internal_client_arc.write().await;
                 *guard = internal_client;
-            }
-
-            #[cfg(feature = "mock-pubsub")]
-            {
-                let client_id = format!("{:p}", &*internal_client_arc);
-
-                if let Some(sender) = push_sender_for_mock {
-                    let broker = mock_pubsub::get_mock_broker();
-                    broker
-                        .register_client(client_id.clone(), sender, is_cluster)
-                        .await;
-
-                    if let Some(pubsub_subs) = pubsub_subscriptions_for_mock {
-                        Self::register_config_subscriptions_with_mock(
-                            &broker,
-                            &client_id,
-                            pubsub_subs,
-                        )
-                        .await;
-                    }
-                }
             }
 
             // Return the client from the Arc
@@ -2023,6 +1968,7 @@ mod tests {
             inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
             iam_token_manager: None,
             compression_manager: None,
+            pubsub_synchronizer: None,
         }
     }
 
