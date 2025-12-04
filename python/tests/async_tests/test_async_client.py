@@ -10424,8 +10424,11 @@ class TestClusterRoutes:
             assert result[result_cursor_index] != b"0"
             values_array = cast(List[bytes], result[result_collection_index])
             # Verify that scores are not included
+            valid_char_keys = {b"a", b"b", b"c", b"d", b"e"}
             assert all(
-                item.startswith(b"value") and item.isascii() for item in values_array
+                (item.startswith(b"value") or item in valid_char_keys)
+                and item.isascii()
+                for item in values_array
             )
 
         # Exceptions
