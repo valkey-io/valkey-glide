@@ -10,12 +10,23 @@ use jni::JNIEnv;
 use jni::JavaVM;
 use jni::objects::{GlobalRef, JClass, JObject, JStaticMethodID, JValue};
 use jni::signature;
-use jni::sys::{jlong, jstring};
+use jni::sys::{jint, jlong, jstring};
 use redis::{RedisError, Value as ServerValue};
+use std::ffi::c_void;
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, channel};
 use std::thread;
 use tokio::runtime::Runtime;
+
+const JNI_VERSION_1_8: jint = 0x00010008;
+
+#[unsafe(no_mangle)]
+pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
+    // Cache the JavaVM for later use (needed by callbacks)
+    // This ensures method IDs are cached with the correct classloader context
+    let _ = JVM.set(Arc::new(vm));
+    JNI_VERSION_1_8
+}
 
 // Type aliases for complex types
 type PushMessageTuple = (Vec<u8>, Vec<u8>, Option<Vec<u8>>);
