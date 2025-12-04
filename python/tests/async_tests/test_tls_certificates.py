@@ -1,5 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import time
 from typing import Union
 
 import pytest
@@ -80,7 +81,14 @@ class TestTlsCertificates:
                 protocol=protocol,
                 advanced_config=cluster_advanced_config,
             )
-            client = await GlideClusterClient.create(cluster_config)
+            for i in range(3):
+                try:
+                    client = await GlideClusterClient.create(cluster_config)
+                    break
+                except Exception:
+                    if i == 2:
+                        raise
+                    time.sleep(2**i)
         else:
             standalone_advanced_config = AdvancedGlideClientConfiguration(
                 tls_config=tls_config
@@ -91,7 +99,14 @@ class TestTlsCertificates:
                 protocol=protocol,
                 advanced_config=standalone_advanced_config,
             )
-            client = await GlideClient.create(standalone_config)
+            for i in range(3):
+                try:
+                    client = await GlideClient.create(standalone_config)
+                    break
+                except Exception:
+                    if i == 2:
+                        raise
+                    time.sleep(2**i)
 
         try:
             result = await client.ping()
