@@ -309,6 +309,7 @@ class _GlideFFI:
 
             // ============== UTILITY FUNCTIONS ==============
             void free_c_string(char* s);
+            unsigned long get_min_compressed_size();
             """
         )
 

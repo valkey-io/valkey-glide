@@ -102,17 +102,41 @@ def _get_min_compressed_size() -> int:
     This ensures Python validation stays in sync with Rust implementation.
     """
     try:
+        # Try async module first
         from glide import get_min_compressed_size
 
         return get_min_compressed_size()
     except ImportError:
-        # Fallback to a reasonable default if the native module isn't available yet
-        # (e.g., during build or in environments where the module isn't loaded)
-        return 6  # HEADER_SIZE (5) + 1
+        pass
+
+    try:
+        # Try sync module
+        from glide_sync import get_min_compressed_size
+
+        return get_min_compressed_size()
+    except ImportError:
+        pass
+
+    # If neither module is available, fail fast
+    raise ImportError(
+        "Cannot import get_min_compressed_size from either 'glide' or 'glide_sync'. "
+        "Ensure the native module is built and available."
+    )
 
 
-# Cache the minimum compression size at module load time
-_MIN_COMPRESSED_SIZE = _get_min_compressed_size()
+# Lazy cache for minimum compression size to avoid circular import issues
+_MIN_COMPRESSED_SIZE_CACHE: Optional[int] = None
+
+
+def _get_min_compressed_size_cached() -> int:
+    """
+    Get the minimum compressed size with caching.
+    Uses lazy initialization to avoid circular import issues.
+    """
+    global _MIN_COMPRESSED_SIZE_CACHE
+    if _MIN_COMPRESSED_SIZE_CACHE is None:
+        _MIN_COMPRESSED_SIZE_CACHE = _get_min_compressed_size()
+    return _MIN_COMPRESSED_SIZE_CACHE
 
 
 @dataclass
@@ -146,9 +170,10 @@ class CompressionConfiguration:
         Raises:
             ConfigurationError: If any configuration parameter is invalid.
         """
-        if self.min_compression_size < _MIN_COMPRESSED_SIZE:
+        min_size = _get_min_compressed_size_cached()
+        if self.min_compression_size < min_size:
             raise ConfigurationError(
-                f"min_compression_size should be at least {_MIN_COMPRESSED_SIZE} bytes"
+                f"min_compression_size should be at least {min_size} bytes"
             )
 
         # Note: compression_level validation is performed by the Rust core,
