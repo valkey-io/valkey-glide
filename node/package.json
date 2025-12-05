@@ -85,7 +85,7 @@
         "docs": "npm run build && ./docs/build-docs"
     },
     "devDependencies": {
-        "@jest/globals": "29",
+        "@jest/globals": "30",
         "@types/jest": "29",
         "@types/minimist": "1",
         "@types/semver": "7",
