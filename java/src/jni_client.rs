@@ -27,10 +27,10 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
 
     // Pre-cache only MethodCache with correct classloader context
     // GlideCoreClientCache will be cached later
-    if let Some(jvm) = JVM.get() {
-        if let Ok(mut env) = jvm.get_env() {
-            let _ = get_method_cache(&mut env);
-        }
+    if let Some(jvm) = JVM.get()
+        && let Ok(mut env) = jvm.get_env()
+    {
+        let _ = get_method_cache(&mut env);
     }
 
     JNI_VERSION_1_8
@@ -783,10 +783,10 @@ static GLIDE_CORE_CLIENT_CACHE: std::sync::OnceLock<
 /// Get GLIDE core client cache using correct classloader context
 fn get_glide_core_client_cache_safe(fallback_env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
     // Try cached JVM env first
-    if let Some(cached_jvm) = JVM.get() {
-        if let Ok(mut cached_env) = cached_jvm.get_env() {
-            return get_glide_core_client_cache(&mut cached_env);
-        }
+    if let Some(cached_jvm) = JVM.get()
+        && let Ok(mut cached_env) = cached_jvm.get_env()
+    {
+        return get_glide_core_client_cache(&mut cached_env);
     }
     // Otherwise fallback to provided env
     get_glide_core_client_cache(fallback_env)
