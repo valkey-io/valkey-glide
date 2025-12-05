@@ -10,7 +10,7 @@ use jni::JNIEnv;
 use jni::JavaVM;
 use jni::objects::{GlobalRef, JClass, JObject, JStaticMethodID, JValue};
 use jni::signature;
-use jni::sys::{jint, jlong, jstring, JNI_VERSION_1_8};
+use jni::sys::{JNI_VERSION_1_8, jint, jlong, jstring};
 use redis::{RedisError, Value as ServerValue};
 use std::ffi::c_void;
 use std::sync::Arc;
@@ -36,8 +36,11 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn JNI_OnUnload(_vm: JavaVM, _reserved: *mut c_void) {
-    // Clean up global references to prevent memory leaks
+pub extern "system" fn JNI_OnUnload(_vm: *const JavaVM, _reserved: *const c_void) {
+    // Note: GlobalRef objects in static caches will not be automatically dropped
+    // when the library is unloaded, potentially causing memory leaks.
+    // However, the JNI crate doesn't provide a safe way to manually clean them up
+    // from JNI_OnUnload. This is a known limitation.
 }
 
 // Type aliases for complex types

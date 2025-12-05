@@ -65,7 +65,9 @@ fn get_registry_method_cache(env: &mut JNIEnv) -> Result<&'static RegistryMethod
 }
 
 /// Get registry method cache using correct classloader context
-fn get_registry_method_cache_safe(fallback_env: &mut JNIEnv) -> Result<&'static RegistryMethodCache, FFIError> {
+fn get_registry_method_cache_safe(
+    fallback_env: &mut JNIEnv,
+) -> Result<&'static RegistryMethodCache, FFIError> {
     // Try cached JVM env first
     if let Some(cached_jvm) = jni_client::JVM.get()
         && let Ok(mut cached_env) = cached_jvm.get_env()
