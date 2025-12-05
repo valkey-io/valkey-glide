@@ -23,13 +23,13 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
     // Cache JavaVM env for later use
     let _ = JVM.set(Arc::new(vm));
 
-    // Pre-cache MethodCache with correct classloader context
-    // Other caches (GlideCoreClientCache, RegistryMethodCache, JavaValueConversionCache)
-    // will be cached later using the cached JavaVM
+    // Pre-cache MethodCache and JavaValueConversionCache with correct classloader context
+    // GlideCoreClientCache and RegistryMethodCache will be cached automatically later
     if let Some(jvm) = JVM.get()
         && let Ok(mut env) = jvm.get_env()
     {
         let _ = get_method_cache(&mut env);
+        let _ = crate::get_java_value_conversion_cache(&mut env);
     }
 
     JNI_VERSION_1_8
