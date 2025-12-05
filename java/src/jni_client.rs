@@ -36,6 +36,11 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
     JNI_VERSION_1_8
 }
 
+#[unsafe(no_mangle)]
+pub extern "system" fn JNI_OnUnload(_vm: JavaVM, _reserved: *mut c_void) {
+    // Clean up global references to prevent memory leaks
+}
+
 // Type aliases for complex types
 type PushMessageTuple = (Vec<u8>, Vec<u8>, Option<Vec<u8>>);
 type CallbackResult = Result<ServerValue, RedisError>;
@@ -765,7 +770,7 @@ pub extern "system" fn Java_glide_internal_GlideCoreClient_freeNativeBuffer(
 }
 
 #[derive(Clone)]
-struct GlideCoreClientCache {
+pub(crate) struct GlideCoreClientCache {
     class: GlobalRef,
     on_native_push: JStaticMethodID,
     register_native_buffer_cleaner: JStaticMethodID,
@@ -777,13 +782,13 @@ static GLIDE_CORE_CLIENT_CACHE: std::sync::OnceLock<
 
 /// Get GLIDE core client cache using correct classloader context
 pub(crate) fn get_glide_core_client_cache_safe(fallback_env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
-    // Try MethodCache first
+    // Try cached JVM env first
     if let Some(cached_jvm) = JVM.get() {
         if let Ok(mut cached_env) = cached_jvm.get_env() {
             return get_glide_core_client_cache(&mut cached_env);
         }
     }
-    // Otherwise fallback to GlideCoreClientCache
+    // Otherwise fallback to provided env
     get_glide_core_client_cache(fallback_env)
 }
 
