@@ -770,7 +770,7 @@ pub extern "system" fn Java_glide_internal_GlideCoreClient_freeNativeBuffer(
 }
 
 #[derive(Clone)]
-pub(crate) struct GlideCoreClientCache {
+struct GlideCoreClientCache {
     class: GlobalRef,
     on_native_push: JStaticMethodID,
     register_native_buffer_cleaner: JStaticMethodID,
@@ -781,7 +781,7 @@ static GLIDE_CORE_CLIENT_CACHE: std::sync::OnceLock<
 > = std::sync::OnceLock::new();
 
 /// Get GLIDE core client cache using correct classloader context
-pub(crate) fn get_glide_core_client_cache_safe(fallback_env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
+fn get_glide_core_client_cache_safe(fallback_env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
     // Try cached JVM env first
     if let Some(cached_jvm) = JVM.get() {
         if let Ok(mut cached_env) = cached_jvm.get_env() {
