@@ -7,6 +7,7 @@ plugins {
     id 'io.freefair.lombok' version '8.6'
     id 'com.github.spotbugs' version '6.4.2'
     id 'com.google.osdetector' version '1.7.3'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 repositories {
@@ -166,7 +167,7 @@ tasks.register('copyNativeLib', Copy) {
 }
 
 delombok.dependsOn('compileJava')
-jar.dependsOn('copyNativeLib')
+shadowJar.dependsOn('copyNativeLib')
 javadoc.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRust')
 compileTestJava.dependsOn('copyNativeLib')
@@ -199,7 +200,8 @@ tasks.register('sourcesJar', Jar) {
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            from components.java
+            // Use shadowJar instead of regular jar
+            artifact shadowJar
             artifact tasks.named('javadocJar')
             artifact tasks.named('sourcesJar')
             groupId = 'io.valkey'
@@ -238,6 +240,10 @@ publishing {
 
 java {
     modularity.inferModulePath = true
+}
+
+tasks.withType(GenerateModuleMetadata) {
+    dependsOn shadowJar
 }
 
 tasks.withType(Sign) {
@@ -280,6 +286,32 @@ jar {
     } else {
         archiveClassifier = osdetector.classifier
     }
+}
+
+shadowJar {
+    // Relocate protobuf to avoid version conflicts
+    relocate 'com.google.protobuf', 'glide.com.google.protobuf'
+    
+    // Keep the same classifier as regular jar
+    if (
+        (project.hasProperty('target') && project.target.contains("musl")) ||
+        (osdetector.os == 'linux' && osdetector.release.id == 'alpine')
+        ) {
+        archiveClassifier = "linux_musl-${osdetector.arch}"
+    } else {
+        archiveClassifier = osdetector.classifier
+    }
+    
+    // Important configurations from original shadow setup
+    excludes.remove("module-info.class")
+    mergeServiceFiles()
+    minimize()
+}
+
+// Make shadowJar the default artifact
+jar {
+    enabled = false
+    dependsOn shadowJar
 }
 
 sourcesJar {
