@@ -10,7 +10,7 @@ use jni::JNIEnv;
 use jni::JavaVM;
 use jni::objects::{GlobalRef, JClass, JObject, JStaticMethodID, JValue};
 use jni::signature;
-use jni::sys::{jint, jlong, jstring};
+use jni::sys::{jint, jlong, jstring, JNI_VERSION_1_8};
 use redis::{RedisError, Value as ServerValue};
 use std::ffi::c_void;
 use std::sync::Arc;
@@ -18,15 +18,14 @@ use std::sync::mpsc::{Sender, channel};
 use std::thread;
 use tokio::runtime::Runtime;
 
-const JNI_VERSION_1_8: jint = 0x00010008;
-
 #[unsafe(no_mangle)]
 pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
-    // Cache the JavaVM for later use
+    // Cache JavaVM env for later use
     let _ = JVM.set(Arc::new(vm));
 
-    // Pre-cache only MethodCache with correct classloader context
-    // GlideCoreClientCache will be cached later
+    // Pre-cache MethodCache with correct classloader context
+    // Other caches (GlideCoreClientCache, RegistryMethodCache, JavaValueConversionCache)
+    // will be cached later using the cached JavaVM
     if let Some(jvm) = JVM.get()
         && let Ok(mut env) = jvm.get_env()
     {

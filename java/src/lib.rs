@@ -64,6 +64,18 @@ fn get_registry_method_cache(env: &mut JNIEnv) -> Result<&'static RegistryMethod
         .expect("RegistryMethodCache should be initialized"))
 }
 
+/// Get registry method cache using correct classloader context
+fn get_registry_method_cache_safe(fallback_env: &mut JNIEnv) -> Result<&'static RegistryMethodCache, FFIError> {
+    // Try cached JVM env first
+    if let Some(cached_jvm) = jni_client::JVM.get()
+        && let Ok(mut cached_env) = cached_jvm.get_env()
+    {
+        return get_registry_method_cache(&mut cached_env);
+    }
+    // Otherwise fallback to provided env
+    get_registry_method_cache(fallback_env)
+}
+
 // Internal helper: execute a parsed CommandRequest and complete Java callback
 async fn execute_command_request_and_complete(
     handle_id: u64,
@@ -316,7 +328,7 @@ fn resp_value_to_java<'local>(
             Ok(JObject::from(ok))
         }
         Value::Int(num) => {
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let cls = to_local_jclass(env, &cache.long_class)?;
             let arg = jni::sys::jvalue {
                 j: num as jni::sys::jlong,
@@ -339,7 +351,7 @@ fn resp_value_to_java<'local>(
         }
         Value::Array(array) => array_to_java_array(env, array, encoding_utf8),
         Value::Map(map) => {
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let cls = to_local_jclass(env, &cache.linked_hash_map_class)?;
             let linked_hash_map =
                 unsafe { env.new_object_unchecked(cls, cache.linked_hash_map_ctor, &[])? };
@@ -367,7 +379,7 @@ fn resp_value_to_java<'local>(
             Ok(linked_hash_map)
         }
         Value::Double(float) => {
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             // Use cached Double.valueOf for minimal overhead
             let jclass = to_local_jclass(env, &cache.double_class)?;
             let obj = unsafe {
@@ -382,7 +394,7 @@ fn resp_value_to_java<'local>(
             Ok(obj)
         }
         Value::Boolean(bool) => {
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let jclass = to_local_jclass(env, &cache.boolean_class)?;
             let z = if bool { 1 } else { 0 };
             let obj = unsafe {
@@ -408,7 +420,7 @@ fn resp_value_to_java<'local>(
             // BigNumbers in Valkey are represented as strings
             let big_int_str = num.to_string();
             let java_string = env.new_string(big_int_str)?;
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let cls = to_local_jclass(env, &cache.big_integer_class)?;
             let raw = java_string.into_raw();
             let obj = unsafe {
@@ -423,7 +435,7 @@ fn resp_value_to_java<'local>(
             Ok(obj)
         }
         Value::Set(array) => {
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let cls = to_local_jclass(env, &cache.hash_set_class)?;
             let set = unsafe { env.new_object_unchecked(cls, cache.hash_set_ctor, &[])? };
 
@@ -446,7 +458,7 @@ fn resp_value_to_java<'local>(
         Value::Attribute { data, attributes } => {
             // Convert Valkey Attribute to Java Map<String, Object>
             // Create a HashMap with both data and attributes
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let cls = to_local_jclass(env, &cache.hash_map_class)?;
             let hash_map = unsafe { env.new_object_unchecked(cls, cache.hash_map_ctor, &[])? };
 
@@ -489,7 +501,7 @@ fn resp_value_to_java<'local>(
         //   - "values" which corresponds to the array of values received, stored as `Object[]`
         // Only string messages are supported now by Valkey and `redis-rs`.
         Value::Push { kind, data } => {
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let cls = to_local_jclass(env, &cache.hash_map_class)?;
             let hash_map = unsafe { env.new_object_unchecked(cls, cache.hash_map_ctor, &[])? };
 
@@ -532,7 +544,7 @@ fn resp_value_to_java<'local>(
         Value::ServerError(server_error) => {
             let err_msg = error_message(&server_error.into());
             let jmsg = env.new_string(err_msg)?;
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let cls = to_local_jclass(env, &cache.request_exception_class)?;
             let raw = jmsg.into_raw();
             let obj = unsafe {
@@ -610,7 +622,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
                     return Ok(JObject::null());
                 }
 
-                let cache = get_registry_method_cache(env)?;
+                let cache = get_registry_method_cache_safe(env)?;
                 let class_j = to_local_jclass(env, &cache.class)?;
                 let result = unsafe {
                     env.call_static_method_unchecked(
@@ -659,7 +671,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
                     return Ok(JObject::null());
                 }
 
-                let cache = get_registry_method_cache(env)?;
+                let cache = get_registry_method_cache_safe(env)?;
                 let class_j = to_local_jclass(env, &cache.class)?;
                 let result = unsafe {
                     env.call_static_method_unchecked(
@@ -2398,6 +2410,20 @@ fn get_java_value_conversion_cache(
     Ok(JAVA_VALUE_CONVERSION_CACHE
         .get()
         .expect("JavaValueConversionCache should be initialized"))
+}
+
+/// Get Java value conversion cache using correct classloader context
+fn get_java_value_conversion_cache_safe(
+    fallback_env: &mut JNIEnv,
+) -> Result<&'static JavaValueConversionCache, FFIError> {
+    // Try cached JVM env first
+    if let Some(cached_jvm) = jni_client::JVM.get()
+        && let Ok(mut cached_env) = cached_jvm.get_env()
+    {
+        return get_java_value_conversion_cache(&mut cached_env);
+    }
+    // Otherwise fallback to provided env
+    get_java_value_conversion_cache(fallback_env)
 }
 
 fn to_local_jclass<'a>(env: &mut JNIEnv<'a>, global: &GlobalRef) -> Result<JClass<'a>, FFIError> {
