@@ -70,6 +70,7 @@ linux-aarch_64
 linux-x86_64
 linux_musl-aarch_64
 linux_musl-x86_64
+windows-x86_64
 ```
 
 Gradle:
@@ -104,6 +105,11 @@ dependencies {
 // linux_musl-x86_64
 dependencies {
     implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'linux_musl-x86_64'
+}
+
+// windows-x86_64
+dependencies {
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'windows-x86_64'
 }
 
 // with osdetector - does not work for musl
@@ -167,6 +173,14 @@ Maven:
    <version>[1.0.0,)</version>
 </dependency>
 
+<!-- windows-x86_64 -->
+<dependency>
+   <groupId>io.valkey</groupId>
+   <artifactId>valkey-glide</artifactId>
+   <classifier>windows-x86_64</classifier>
+   <version>[1.0.0,)</version>
+</dependency>
+
 <!-- with os-maven-plugin -->
 <build>
     <extensions>
@@ -206,6 +220,9 @@ libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "linux_mu
 
 // linux_musl-x86_64
 libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "linux_musl-x86_64"
+
+// windows-x86_64
+libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "windows-x86_64"
 ```
 
 ## Setting up the Java module
@@ -362,4 +379,4 @@ The following arguments are accepted:
 * `tls`: Valkey TLS configured
 
 ### Known issues
-* Conflict in netty and protobuf internal valkey glide dependencies with project dependencies using valkey glide. Issue link: https://github.com/valkey-io/valkey-glide/issues/3402. Workarounds mentioned in this issue: https://github.com/valkey-io/valkey-glide/issues/3367 
+* Conflict in netty and protobuf internal valkey glide dependencies with project dependencies using valkey glide. Issue link: https://github.com/valkey-io/valkey-glide/issues/3402. Workarounds mentioned in this issue: https://github.com/valkey-io/valkey-glide/issues/3367
