@@ -16,6 +16,7 @@ pub struct PushInfo {
 #[derive(Clone, Default)]
 pub struct PushManager {
     sender: Arc<ArcSwap<Option<mpsc::UnboundedSender<PushInfo>>>>,
+    pubsub_synchronizer: Arc<ArcSwap<Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>>>,
 }
 impl PushManager {
     /// It checks if value's type is Push
@@ -40,17 +41,70 @@ impl PushManager {
                     self.sender.compare_and_swap(guard, Arc::new(None));
                 }
             }
+
+            let sync_guard = self.pubsub_synchronizer.load();
+            if let Some(sync) = sync_guard.as_ref() {
+                Self::handle_pubsub_push(sync, kind, data);
+            }
         }
     }
+
+    fn handle_pubsub_push(
+        sync: &Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>,
+        kind: &PushKind,
+        data: &[Value],
+    ) {
+        use crate::pubsub_synchronizer::SubscriptionType;
+        use std::collections::HashSet;
+        
+        // Only process subscription-related pushes
+        let (subscription_type, is_subscribe) = match kind {
+            PushKind::Subscribe => (SubscriptionType::Exact, true),
+            PushKind::Unsubscribe => (SubscriptionType::Exact, false),
+            PushKind::PSubscribe => (SubscriptionType::Pattern, true),
+            PushKind::PUnsubscribe => (SubscriptionType::Pattern, false),
+            PushKind::SSubscribe => (SubscriptionType::Sharded, true),
+            PushKind::SUnsubscribe => (SubscriptionType::Sharded, false),
+            PushKind::Message => (SubscriptionType::Exact, true),
+            PushKind::PMessage => (SubscriptionType::Pattern, true),
+            PushKind::SMessage => (SubscriptionType::Sharded, true),
+            _ => return,
+        };
+        
+        // Extract channel/pattern from push data
+        let channel_or_pattern = match data.first() {
+            Some(Value::BulkString(bytes)) => String::from_utf8_lossy(bytes).to_string(),
+            _ => return,
+        };
+        
+        let channels = HashSet::from([channel_or_pattern]);
+        
+        // Spawn async task to update synchronizer (we're in a sync context)
+        let sync = Arc::clone(sync);
+        tokio::spawn(async move {
+            if is_subscribe {
+                sync.add_current_subscriptions(channels, subscription_type).await;
+            } else {
+                sync.remove_current_subscriptions(channels, subscription_type).await;
+            }
+        });
+    }
+
     /// Replace mpsc channel of `PushManager` with provided sender.
     pub fn replace_sender(&self, sender: mpsc::UnboundedSender<PushInfo>) {
         self.sender.store(Arc::new(Some(sender)));
+    }
+
+    /// Set the PubSub synchronizer for this PushManager
+    pub fn set_synchronizer(&self, synchronizer: Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>) {
+        self.pubsub_synchronizer.store(Arc::new(Some(synchronizer)));
     }
 
     /// Creates new `PushManager`
     pub fn new() -> Self {
         PushManager {
             sender: Arc::from(ArcSwap::from(Arc::new(None))),
+            pubsub_synchronizer: Arc::from(ArcSwap::from(Arc::new(None))),
         }
     }
 }

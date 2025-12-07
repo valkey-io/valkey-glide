@@ -2,37 +2,54 @@
 
 use super::{PubSubSynchronizer, SubscriptionType};
 use async_trait::async_trait;
-use redis::{Cmd, PushInfo, RedisResult, Value};
-use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use std::collections::{HashMap, HashSet};
+use tokio::sync::RwLock;
 
+/// Real implementation of PubSub synchronizer (stub for now)
 pub struct RealPubSubSynchronizer {
-    // TODO: Add fields for real implementation
+    client: once_cell::sync::OnceCell<std::sync::Weak<RwLock<crate::client::Client>>>,
+    is_cluster: bool,
+    desired_subscriptions: RwLock<redis::PubSubSubscriptionInfo>,
+    current_subscriptions: RwLock<redis::PubSubSubscriptionInfo>,
 }
 
-
 impl RealPubSubSynchronizer {
-    /// Public constructor
     pub fn new(
-        _cluster_mode: bool,
-        _push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
-        _initial_subscriptions: Option<redis::PubSubSubscriptionInfo>,
+        is_cluster: bool,
+        initial_subscriptions: Option<redis::PubSubSubscriptionInfo>,
     ) -> Arc<dyn PubSubSynchronizer> {
         Arc::new(Self {
-            // TODO: Initialize fields
+            client: once_cell::sync::OnceCell::new(),
+            is_cluster,
+            desired_subscriptions: RwLock::new(initial_subscriptions.unwrap_or_default()),
+            current_subscriptions: RwLock::new(Default::default()),
         })
+    }
+
+    /// ✅ Public method to set client reference (called from glide-core)
+    pub fn set_client(&self, client: std::sync::Weak<RwLock<crate::client::Client>>) -> Result<(), String> {
+        self.client.set(client)
+            .map_err(|_| "Client already set".to_string())?;
+        
+        // TODO: When implementing the real synchronizer, start reconciliation task here
+        
+        Ok(())
     }
 }
 
 #[async_trait]
 impl PubSubSynchronizer for RealPubSubSynchronizer {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     async fn add_desired_subscriptions(
         &self,
         _channels: HashSet<String>,
         _subscription_type: SubscriptionType,
     ) {
-        unimplemented!("Real pubsub synchronizer not yet implemented")
+        // TODO: Implement for real synchronizer
     }
 
     async fn remove_desired_subscriptions(
@@ -40,7 +57,7 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
         _channels: Option<HashSet<String>>,
         _subscription_type: SubscriptionType,
     ) {
-        unimplemented!("Real pubsub synchronizer not yet implemented")
+        // TODO: Implement for real synchronizer
     }
 
     async fn add_current_subscriptions(
@@ -48,7 +65,7 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
         _channels: HashSet<String>,
         _subscription_type: SubscriptionType,
     ) {
-        unimplemented!("Real pubsub synchronizer not yet implemented")
+        // TODO: Implement for real synchronizer
     }
 
     async fn remove_current_subscriptions(
@@ -56,7 +73,7 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
         _channels: HashSet<String>,
         _subscription_type: SubscriptionType,
     ) {
-        unimplemented!("Real pubsub synchronizer not yet implemented")
+        // TODO: Implement for real synchronizer
     }
 
     async fn get_subscription_state(
@@ -65,24 +82,12 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
         HashMap<String, HashSet<String>>,
         HashMap<String, HashSet<String>>,
     ) {
-        unimplemented!("Real pubsub synchronizer not yet implemented")
+        // TODO: Implement for real synchronizer
+        (HashMap::new(), HashMap::new())
     }
 
     async fn reconcile(&self) -> Result<(), String> {
-        unimplemented!("Real pubsub synchronizer not yet implemented")
-    }
-
-    async fn intercept_pubsub_command(&self, _cmd: &Cmd) -> Option<RedisResult<Value>> {
-        // Real implementation: no interception needed, commands go through normal redis-rs path
-        None
-    }
-
-    async fn set_initial_subscriptions(
-        &self,
-        _channels: HashSet<String>,
-        _patterns: HashSet<String>,
-        _sharded: HashSet<String>,
-    ) {
-        unimplemented!("Real pubsub synchronizer not yet implemented")
+        // TODO: Implement for real synchronizer
+        Ok(())
     }
 }
