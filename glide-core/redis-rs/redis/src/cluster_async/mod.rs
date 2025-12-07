@@ -137,8 +137,9 @@ where
         initial_nodes: &[ConnectionInfo],
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
     ) -> RedisResult<ClusterConnection<C>> {
-        ClusterConnInner::new(initial_nodes, cluster_params, push_sender)
+        ClusterConnInner::new(initial_nodes, cluster_params, push_sender, pubsub_synchronizer)
             .await
             .map(|inner| {
                 let (tx, mut rx) = mpsc::channel::<Message<_>>(100);
@@ -1108,6 +1109,7 @@ where
         initial_nodes: &[ConnectionInfo],
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
     ) -> RedisResult<Disposable<Self>> {
         let disconnect_notifier = {
             #[cfg(feature = "tokio-comp")]
@@ -1132,6 +1134,7 @@ where
             discover_az,
             connection_timeout: Some(cluster_params.connection_timeout),
             connection_retry_strategy: Some(connection_retry_strategy),
+            pubsub_synchronizer,
         };
 
         let connections = Self::create_initial_connections(
@@ -1445,6 +1448,12 @@ where
         check_existing_conn: bool,
     ) -> Vec<Arc<Notify>> {
         debug!("Triggering refresh connections tasks to {:?} ", addresses);
+
+        if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
+            for address in &addresses {
+                sync.remove_current_subscriptions_for_address(address).await;
+            }
+        }
 
         let mut notifiers = Vec::<Arc<Notify>>::new();
 

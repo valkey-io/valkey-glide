@@ -615,6 +615,9 @@ impl MultiplexedConnection {
         if let Some(sender) = glide_connection_options.push_sender {
             pm.replace_sender(sender);
         }
+        if let Some(sync) = glide_connection_options.pubsub_synchronizer {
+            pm.set_synchronizer(sync);
+        }
 
         pipeline.set_push_manager(pm.clone()).await;
 

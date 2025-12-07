@@ -10,6 +10,7 @@ use crate::{PubSubSubscriptionInfo, PushInfo, RetryStrategy};
 use rand::Rng;
 #[cfg(feature = "cluster-async")]
 use std::ops::Add;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::tls::TlsConnParams;
@@ -610,11 +611,13 @@ impl ClusterClient {
     pub async fn get_async_connection(
         &self,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
     ) -> RedisResult<cluster_async::ClusterConnection> {
         cluster_async::ClusterConnection::new(
             &self.initial_nodes,
             self.cluster_params.clone(),
             push_sender,
+            pubsub_synchronizer,
         )
         .await
     }
@@ -651,6 +654,7 @@ impl ClusterClient {
         cluster_async::ClusterConnection::new(
             &self.initial_nodes,
             self.cluster_params.clone(),
+            None,
             None,
         )
         .await

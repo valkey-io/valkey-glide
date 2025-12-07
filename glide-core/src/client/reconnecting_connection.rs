@@ -123,6 +123,7 @@ async fn create_connection(
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     discover_az: bool,
     connection_timeout: Duration,
+    pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
 ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
     let client = {
         let guard = connection_backend
@@ -140,6 +141,7 @@ async fn create_connection(
         discover_az,
         connection_timeout: Some(connection_timeout),
         connection_retry_strategy: Some(retry_strategy),
+        pubsub_synchronizer,
     };
 
     let action = || async {
@@ -224,6 +226,7 @@ impl ReconnectingConnection {
         discover_az: bool,
         connection_timeout: Duration,
         tls_params: Option<redis::TlsConnParams>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
@@ -242,6 +245,7 @@ impl ReconnectingConnection {
             push_sender,
             discover_az,
             connection_timeout,
+            pubsub_synchronizer,
         )
         .await
     }
@@ -361,6 +365,11 @@ impl ReconnectingConnection {
                                 .set();
                             *guard = ConnectionState::Connected(connection);
                         }
+
+                        if let Some(sync) = &connection_clone.connection_options.pubsub_synchronizer {
+                            sync.remove_current_subscriptions_for_address(&connection_clone.node_address()).await;
+                        }
+                        
                         Telemetry::incr_total_connections(1);
                         return;
                     }

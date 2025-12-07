@@ -117,6 +117,7 @@ impl StandaloneClient {
         connection_request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
     ) -> Result<Self, StandaloneClientConnectionError> {
         if connection_request.addresses.is_empty() {
             return Err(StandaloneClientConnectionError::NoAddressesProvided);
@@ -192,9 +193,10 @@ impl StandaloneClient {
                 let discover = discover_az;
                 let timeout = connection_timeout;
                 let params = tls_params.clone();
+                let sync = pubsub_synchronizer.clone();
                 async move {
                     get_connection_and_replication_info(
-                        &address, &retry, &info, tls, &sender, discover, timeout, params,
+                        &address, &retry, &info, tls, &sender, discover, timeout, params, &sync,
                     )
                     .await
                     .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -692,6 +694,7 @@ async fn get_connection_and_replication_info(
     discover_az: bool,
     connection_timeout: Duration,
     tls_params: Option<redis::TlsConnParams>,
+    pubsub_synchronizer: &Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
 ) -> Result<(ReconnectingConnection, Value), (ReconnectingConnection, RedisError)> {
     let reconnecting_connection = ReconnectingConnection::new(
         address,
@@ -702,6 +705,7 @@ async fn get_connection_and_replication_info(
         discover_az,
         connection_timeout,
         tls_params,
+        pubsub_synchronizer.clone(),
     )
     .await?;
 
