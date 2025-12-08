@@ -15,7 +15,7 @@
 //! async fn fetch_an_integer() -> String {
 //!     let nodes = vec!["redis://127.0.0.1/"];
 //!     let client = ClusterClient::new(nodes).unwrap();
-//!     let mut connection = client.get_async_connection(None).await.unwrap();
+//!     let mut connection = client.get_async_connection(None, None).await.unwrap();
 //!     let _: () = connection.set("test", "test_data").await.unwrap();
 //!     let rv: String = connection.get("test").await.unwrap();
 //!     return rv;
@@ -139,20 +139,25 @@ where
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
     ) -> RedisResult<ClusterConnection<C>> {
-        ClusterConnInner::new(initial_nodes, cluster_params, push_sender, pubsub_synchronizer)
-            .await
-            .map(|inner| {
-                let (tx, mut rx) = mpsc::channel::<Message<_>>(100);
-                let stream = async move {
-                    let _ = stream::poll_fn(move |cx| rx.poll_recv(cx))
-                        .map(Ok)
-                        .forward(inner)
-                        .await;
-                };
-                #[cfg(feature = "tokio-comp")]
-                tokio::spawn(stream);
-                ClusterConnection(tx)
-            })
+        ClusterConnInner::new(
+            initial_nodes,
+            cluster_params,
+            push_sender,
+            pubsub_synchronizer,
+        )
+        .await
+        .map(|inner| {
+            let (tx, mut rx) = mpsc::channel::<Message<_>>(100);
+            let stream = async move {
+                let _ = stream::poll_fn(move |cx| rx.poll_recv(cx))
+                    .map(Ok)
+                    .forward(inner)
+                    .await;
+            };
+            #[cfg(feature = "tokio-comp")]
+            tokio::spawn(stream);
+            ClusterConnection(tx)
+        })
     }
 
     /// Special handling for `SCAN` command, using `cluster_scan_with_pattern`.
@@ -184,7 +189,7 @@ where
     /// async fn scan_all_cluster() -> Vec<String> {
     ///     let nodes = vec!["redis://127.0.0.1/"];
     ///     let client = ClusterClient::new(nodes).unwrap();
-    ///     let mut connection = client.get_async_connection(None).await.unwrap();
+    ///     let mut connection = client.get_async_connection(None, None).await.unwrap();
     ///     let mut scan_state_rc = ScanStateRC::new();
     ///     let mut keys: Vec<String> = vec![];
     ///     let cluster_scan_args = ClusterScanArgs::builder().with_count(1000).with_object_type(ObjectType::String).build();
@@ -1401,13 +1406,20 @@ where
 
         if !addrs_to_refresh.is_empty() {
             // don't try existing nodes since we know a. it does not exist. b. exist but its connection is closed
-            Self::trigger_refresh_connection_tasks(
+            let notifiers = Self::trigger_refresh_connection_tasks(
                 inner.clone(),
                 addrs_to_refresh,
                 RefreshConnectionType::AllConnections,
                 false,
             )
             .await;
+
+            futures::future::join_all(notifiers.iter().map(|notify| notify.notified())).await;
+
+            // Trigger reconciliation after connections are refreshed
+            if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
+                sync.trigger_reconciliation().await;
+            }
         }
     }
 
@@ -2034,6 +2046,11 @@ where
             .await;
         }
         in_progress.store(false, Ordering::Relaxed);
+
+        // Trigger reconciliation to align subscriptions with new topology
+        if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
+            sync.trigger_reconciliation().await;
+        }
 
         Self::refresh_pubsub_subscriptions(inner).await;
 

@@ -1746,30 +1746,31 @@ async def wait_for_subscription_state(
     expected_channels: Optional[Set[str]] = None,
     expected_patterns: Optional[Set[str]] = None,
     expected_sharded: Optional[Set[str]] = None,
-    timeout: float = 5.0,
+    timeout_ms: int = 5000,
     poll_interval: float = 0.1,
 ) -> Dict[str, Set[str]]:
     """
     Helper function that polls get_subscriptions until expected actual state is reached.
 
     Returns:
-        A dictionary with string keys for backward compatibility:
+        A dictionary with:
             - "channels": Set of exact channel names
             - "patterns": Set of channel patterns
             - "sharded_channels": Set of sharded channel names
 
     Raises:
-        TimeoutError: If the expected state is not reached within the timeout period
+        TimeoutError: If the expected state is not reached within timeout_ms
     """
 
+    timeout_seconds = timeout_ms / 1000.0
     start_time = anyio.current_time()
     last_actual_state = None
 
     while True:
         elapsed = anyio.current_time() - start_time
-        if elapsed > timeout:
+        if elapsed > timeout_seconds:
             error_msg = (
-                f"Subscription state not reached within {timeout}s.\n"
+                f"Subscription state not reached within {timeout_ms}ms.\n"
                 f"Expected - channels: {expected_channels}, patterns: {expected_patterns}, "
                 f"sharded: {expected_sharded}\n"
             )
@@ -1782,7 +1783,6 @@ async def wait_for_subscription_state(
             raise TimeoutError(error_msg)
 
         try:
-            # Get subscription state using the new API
             state = await client.get_subscriptions()
             actual_subscriptions = state.actual_subscriptions
 
@@ -1790,41 +1790,31 @@ async def wait_for_subscription_state(
                 type[GlideClusterClientConfiguration.PubSubChannelModes],
                 type[GlideClientConfiguration.PubSubChannelModes],
             ]
+
             if isinstance(client, GlideClusterClient):
                 modes = GlideClusterClientConfiguration.PubSubChannelModes
             else:
                 modes = GlideClientConfiguration.PubSubChannelModes
 
-            # Type ignore needed: actual_subscriptions is a union of Dict[ClusterPubSubChannelModes, Set[str]]
-            # and Dict[StandalonePubSubChannelModes, Set[str]]. Mypy cannot track that isinstance() narrows both
-            # the client type AND the valid enum type for dictionary keys, so it sees mismatched enum types.
-            channels_actual = actual_subscriptions.get(modes.Exact, set())  # type: ignore[call-overload, arg-type]
-            patterns_actual = actual_subscriptions.get(modes.Pattern, set())  # type: ignore[call-overload, arg-type]
+            channels_actual = actual_subscriptions.get(modes.Exact, set())  # type: ignore
+            patterns_actual = actual_subscriptions.get(modes.Pattern, set())  # type: ignore
             sharded_actual = (
-                actual_subscriptions.get(modes.Sharded, set())  # type: ignore[call-overload, arg-type, union-attr]
+                actual_subscriptions.get(modes.Sharded, set())  # type: ignore
                 if isinstance(client, GlideClusterClient)
                 else set()
             )
 
-            # Store for error reporting
             last_actual_state = {
                 "channels": channels_actual,
                 "patterns": patterns_actual,
                 "sharded_channels": sharded_actual,
             }
 
-            # Compare
-            channels_match = (
-                expected_channels is None or channels_actual == expected_channels
-            )
-            patterns_match = (
-                expected_patterns is None or patterns_actual == expected_patterns
-            )
-            sharded_match = (
-                expected_sharded is None or sharded_actual == expected_sharded
-            )
-
-            if channels_match and patterns_match and sharded_match:
+            if (
+                (expected_channels is None or channels_actual == expected_channels)
+                and (expected_patterns is None or patterns_actual == expected_patterns)
+                and (expected_sharded is None or sharded_actual == expected_sharded)
+            ):
                 return last_actual_state
 
         except Exception as e:

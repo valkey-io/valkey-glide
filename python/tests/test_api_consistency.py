@@ -98,6 +98,9 @@ EXCLUDED_TESTS = {
         "sunsubscribe_by_method",
         "wait_for_subscription_if_needed",
         "get_pubsub_channel_modes_from_client",
+        "create_pubsub_subscription",
+        "decode_pubsub_msg",
+        "new_message",
     ],
     "sync_only": ["test_sync_fork"],
 }

@@ -14,7 +14,6 @@ from glide_shared.config import (
     GlideClusterClientConfiguration,
     ProtocolVersion,
 )
-from glide_shared.constants import OK
 from glide_shared.exceptions import RequestError
 from glide_shared.exceptions import TimeoutError as GlideTimeoutError
 from glide_shared.routes import AllNodes
@@ -55,84 +54,44 @@ class SubscriptionMethod(IntEnum):
 async def create_two_clients_with_pubsub(
     request,
     cluster_mode,
-    client1_pubsub: Optional[Any] = None,
-    client2_pubsub: Optional[Any] = None,
+    pubsubs: list[Optional[Any]],
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
     timeout: Optional[int] = None,
-    wait_for_subscriptions: bool = True,
-    subscription_timeout: float = 5.0,
 ) -> Tuple[TGlideClient, TGlideClient]:
-    """
-    Sets 2 up clients for testing purposes with optional pubsub configuration.
-
-    Args:
-        request: pytest request for creating a client.
-        cluster_mode: the cluster mode.
-        client1_pubsub: pubsub configuration subscription for the first client.
-        client2_pubsub: pubsub configuration subscription for the second client.
-        protocol: what protocol to use, used for the test: `test_pubsub_resp2_raise_an_error`.
-        timeout: request timeout for the clients.
-        wait_for_subscriptions: if True, wait for subscriptions to be actually applied before returning.
-        subscription_timeout: timeout for waiting for subscriptions to be applied.
-    """
-    cluster_mode_pubsub1, standalone_mode_pubsub1 = None, None
-    cluster_mode_pubsub2, standalone_mode_pubsub2 = None, None
-    if cluster_mode:
-        cluster_mode_pubsub1 = client1_pubsub
-        cluster_mode_pubsub2 = client2_pubsub
+    if len(pubsubs) == 0:
+        pubsubs = [None, None]
+    elif len(pubsubs) == 1:
+        pubsubs = [pubsubs[0], None]
     else:
-        standalone_mode_pubsub1 = client1_pubsub
-        standalone_mode_pubsub2 = client2_pubsub
+        pubsubs = pubsubs[:2]
 
-    client1 = await create_client(
-        request,
-        cluster_mode=cluster_mode,
-        cluster_mode_pubsub=cluster_mode_pubsub1,
-        standalone_mode_pubsub=standalone_mode_pubsub1,
-        protocol=protocol,
-        request_timeout=timeout,
-    )
-    try:
-        client2 = await create_client(
-            request,
-            cluster_mode=cluster_mode,
-            cluster_mode_pubsub=cluster_mode_pubsub2,
-            standalone_mode_pubsub=standalone_mode_pubsub2,
-            protocol=protocol,
-            request_timeout=timeout,
-        )
-    except Exception as e:
-        await client1.close()
-        raise e
+    clients = []
 
-    if wait_for_subscriptions:
-        # Wait for client1's subscriptions
-        if client1_pubsub:
-            expected_channels, expected_patterns, expected_sharded = (
-                _extract_expected_subscriptions(client1_pubsub, cluster_mode, client1)
-            )
-            await wait_for_subscription_state(
-                client1,
-                expected_channels=expected_channels,
-                expected_patterns=expected_patterns,
-                expected_sharded=expected_sharded,
-                timeout=subscription_timeout,
+    for pubsub in pubsubs:
+        if cluster_mode:
+            cluster_mode_pubsub = pubsub
+            standalone_mode_pubsub = None
+        else:
+            cluster_mode_pubsub = None
+            standalone_mode_pubsub = pubsub
+
+        try:
+            client = await create_client(
+                request,
+                cluster_mode=cluster_mode,
+                cluster_mode_pubsub=cluster_mode_pubsub,
+                standalone_mode_pubsub=standalone_mode_pubsub,
+                protocol=protocol,
+                request_timeout=timeout,
             )
 
-        # Wait for client2's subscriptions
-        if client2_pubsub:
-            expected_channels, expected_patterns, expected_sharded = (
-                _extract_expected_subscriptions(client2_pubsub, cluster_mode, client2)
-            )
-            await wait_for_subscription_state(
-                client2,
-                expected_channels=expected_channels,
-                expected_patterns=expected_patterns,
-                expected_sharded=expected_sharded,
-                timeout=subscription_timeout,
-            )
+            clients.append(client)
+        except Exception:
+            for c in clients:
+                await c.close()
+            raise
 
-    return client1, client2
+    return clients[0], clients[1]
 
 
 def _extract_expected_subscriptions(
@@ -302,7 +261,7 @@ async def wait_for_subscription_if_needed(
     expected_channels: Optional[Set[str]] = None,
     expected_patterns: Optional[Set[str]] = None,
     expected_sharded: Optional[Set[str]] = None,
-    timeout: float = 5.0,
+    timeout: int = 5000,
 ) -> None:
     """
     Wait for subscription state if using lazy method.
@@ -314,7 +273,7 @@ async def wait_for_subscription_if_needed(
             expected_channels=expected_channels,
             expected_patterns=expected_patterns,
             expected_sharded=expected_sharded,
-            timeout=timeout,
+            timeout_ms=timeout,
         )
     else:
         # For blocking, verify immediately
@@ -415,7 +374,6 @@ async def client_cleanup(
                 expected_channels=set(),
                 expected_patterns=set(),
                 expected_sharded=set(),
-                timeout=5.0,
             )
 
     except Exception as e:
@@ -427,8 +385,6 @@ async def client_cleanup(
 
         if cleanup_error:
             raise cleanup_error
-
-
 
 
 @pytest.mark.anyio
@@ -550,7 +506,7 @@ class TestDynamicPubSub:
                 context=context,
             )
             listening_client, publishing_client = await create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
+                request, cluster_mode, [pub_sub]
             )
 
             # Verify subscription is active
@@ -705,7 +661,7 @@ class TestDynamicPubSub:
                 context=context,
             )
             listening_client, publishing_client = await create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
+                request, cluster_mode, [pub_sub]
             )
 
             # Verify pattern subscription is active
@@ -856,7 +812,7 @@ class TestDynamicPubSub:
                 context=context,
             )
             listening_client, publishing_client = await create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
+                request, cluster_mode, [pub_sub]
             )
 
             await wait_for_subscription_if_needed(
@@ -1052,7 +1008,7 @@ class TestDynamicPubSub:
                 context=context,
             )
             listening_client, publishing_client = await create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
+                request, cluster_mode, [pub_sub]
             )
 
             # Verify all subscriptions are active
@@ -1450,7 +1406,7 @@ class TestDynamicPubSub:
             )
 
             listening_client, publishing_client = await create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
+                request, cluster_mode, [pub_sub]
             )
 
             # Verify initial subscription is active
@@ -1584,11 +1540,6 @@ class TestDynamicPubSub:
             await client_cleanup(listening_client)
             await client_cleanup(publishing_client)
 
-
-@pytest.mark.anyio
-class TestMetricsPubSub:
-    """Tests for subscription metrics"""
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_subscription_metrics_on_acl_failure(
         self, request, cluster_mode: bool
@@ -1691,7 +1642,7 @@ class TestMetricsPubSub:
             await wait_for_subscription_state(
                 listening_client,
                 expected_channels={channel},
-                timeout=6.0,
+                timeout_ms=6000,
             )
 
             # Verify sync timestamp was updated (should be greater than initial)

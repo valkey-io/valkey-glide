@@ -36,11 +36,11 @@ mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
 use crate::request_type::RequestType;
+use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
 use redis::InfoDict;
 use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock, mpsc, oneshot};
 use versions::Versioning;
-use crate::pubsub::{create_pubsub_synchronizer, PubSubSynchronizer};
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
 pub const DEFAULT_RETRIES: u32 = 3;
@@ -263,7 +263,6 @@ pub struct Client {
     // Optional compression manager for automatic compression/decompression
     compression_manager: Option<Arc<CompressionManager>>,
     pubsub_synchronizer: Option<Arc<dyn PubSubSynchronizer>>,
-    push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
 }
 
 async fn run_with_timeout<T>(
@@ -554,19 +553,30 @@ impl Client {
             // Create the appropriate client based on configuration
             let real_client = if config.cluster_mode_enabled {
                 // Create cluster client
-                let client = create_cluster_client(config, push_sender, iam_manager_ref, self.pubsub_synchronizer.clone(),).await?;
+                let client = create_cluster_client(
+                    config,
+                    push_sender,
+                    iam_manager_ref,
+                    self.pubsub_synchronizer.clone(),
+                )
+                .await?;
                 ClientWrapper::Cluster { client }
             } else {
                 // Create standalone client
-                let client = StandaloneClient::create_client(config, push_sender, iam_manager_ref, self.pubsub_synchronizer.clone(),)
-                    .await
-                    .map_err(|e| {
-                        RedisError::from((
-                            ErrorKind::IoError,
-                            "Standalone connect failed",
-                            format!("{e:?}"),
-                        ))
-                    })?;
+                let client = StandaloneClient::create_client(
+                    config,
+                    push_sender,
+                    iam_manager_ref,
+                    self.pubsub_synchronizer.clone(),
+                )
+                .await
+                .map_err(|e| {
+                    RedisError::from((
+                        ErrorKind::IoError,
+                        "Standalone connect failed",
+                        format!("{e:?}"),
+                    ))
+                })?;
                 ClientWrapper::Standalone(client)
             };
 
@@ -592,10 +602,10 @@ impl Client {
                 cmd.set_fenced(true);
             }
 
-            if let Some(sync) = &self.pubsub_synchronizer {
-                if let Some(result) = sync.intercept_pubsub_command(cmd).await {
-                    return result;
-                }
+            if let Some(sync) = &self.pubsub_synchronizer
+                && let Some(result) = sync.intercept_pubsub_command(cmd).await
+            {
+                return result;
             }
 
             // let expected_type = expected_type_for_cmd(cmd);
@@ -1200,12 +1210,6 @@ impl Client {
         iam_manager.refresh_token().await;
         Ok(())
     }
-
-    /// Get the push sender for this client (if configured)
-    pub(crate) fn get_push_sender(&self) -> Option<mpsc::UnboundedSender<PushInfo>> {
-        self.push_sender.clone()
-    }
-    
 }
 
 fn load_cmd(code: &[u8]) -> Cmd {
@@ -1236,7 +1240,7 @@ async fn create_cluster_client(
     request: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
-    pubsub_synchronizer: Option<Arc<dyn redis::pubsub_synchronizer::PubSubSynchronizer>>,
+    pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
 ) -> RedisResult<redis::cluster_async::ClusterConnection> {
     let tls_mode = request.tls_mode.unwrap_or_default();
 
@@ -1343,7 +1347,9 @@ async fn create_cluster_client(
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
     let client = builder.build()?;
-    let mut con = client.get_async_connection(push_sender, pubsub_synchronizer).await?;
+    let mut con = client
+        .get_async_connection(push_sender, pubsub_synchronizer)
+        .await?;
 
     // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,
     // preventing scenarios where the client becomes inoperable or, worse, unaware that sharded pubsub messages are not being received.
@@ -1583,9 +1589,6 @@ impl Client {
         let compression_manager = create_compression_manager(request.compression_config.clone())?;
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
-            let is_cluster = request.cluster_mode_enabled;
-            let lazy_connect = request.lazy_connect;
-
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
             let internal_client_arc =
@@ -1594,13 +1597,10 @@ impl Client {
                     push_sender: push_sender.clone(),
                 }))));
 
-            
             let initial_subscriptions = request.pubsub_subscriptions.clone();
-            
-            let pubsub_synchronizer = Some(create_pubsub_synchronizer(
-                is_cluster,
-                initial_subscriptions,
-            ));
+
+            let pubsub_synchronizer =
+                Some(create_pubsub_synchronizer(push_sender.clone(), initial_subscriptions).await);
 
             // Create the Client first without IAM token manager
             let client = Self {
@@ -1610,17 +1610,17 @@ impl Client {
                 compression_manager: compression_manager.clone(),
                 iam_token_manager: None,
                 pubsub_synchronizer: pubsub_synchronizer.clone(),
-                push_sender: push_sender.clone(),
             };
 
             let client_arc = Arc::new(RwLock::new(client));
 
             if let Some(sync) = &pubsub_synchronizer {
-                crate::pubsub::set_synchronizer_client(sync, Arc::downgrade(&client_arc))
-                    .map_err(|e| ConnectionError::IoError(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        e
-                    )))?;
+                crate::pubsub::set_synchronizer_client(
+                    sync,
+                    Arc::downgrade(&client_arc),
+                    request.cluster_mode_enabled,
+                )
+                .expect("Failed to set synchronizer client during initialization");
             }
 
             // Create IAM token manager if needed, passing a strong Arc to the callback
@@ -1636,16 +1636,20 @@ impl Client {
                 client_guard.iam_token_manager = iam_token_manager.clone();
             }
 
-            let internal_client = if lazy_connect {
+            let internal_client = if request.lazy_connect {
                 ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request,
                     push_sender,
                 }))
-            } else if is_cluster {
-                let client =
-                    create_cluster_client(request, push_sender, iam_token_manager.as_ref(), pubsub_synchronizer.clone(),)
-                        .await
-                        .map_err(ConnectionError::Cluster)?;
+            } else if request.cluster_mode_enabled {
+                let client = create_cluster_client(
+                    request,
+                    push_sender,
+                    iam_token_manager.as_ref(),
+                    pubsub_synchronizer.clone(),
+                )
+                .await
+                .map_err(ConnectionError::Cluster)?;
                 ClientWrapper::Cluster { client }
             } else {
                 ClientWrapper::Standalone(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
+from typing import Any, List, Optional, Tuple, Union, cast
 
 import anyio
 import pytest
@@ -18,7 +18,13 @@ from glide_shared.constants import OK
 from glide_shared.exceptions import ConfigurationError
 
 from tests.async_tests.conftest import create_client
-from tests.utils.utils import check_if_server_version_lt, get_random_string
+from tests.utils.utils import (
+    check_if_server_version_lt,
+    create_pubsub_subscription,
+    decode_pubsub_msg,
+    get_random_string,
+    new_message,
+)
 
 
 class MethodTesting(IntEnum):
@@ -85,16 +91,6 @@ async def create_two_clients_with_pubsub(
     return client1, client2
 
 
-def decode_pubsub_msg(msg: Optional[PubSubMsg]) -> PubSubMsg:
-    if not msg:
-        return PubSubMsg("", "", None)
-    string_msg = cast(bytes, msg.message).decode()
-    string_channel = cast(bytes, msg.channel).decode()
-    string_pattern = cast(bytes, msg.pattern).decode() if msg.pattern else None
-    decoded_msg = PubSubMsg(string_msg, string_channel, string_pattern)
-    return decoded_msg
-
-
 async def get_message_by_method(
     method: MethodTesting,
     client: TGlideClient,
@@ -125,35 +121,6 @@ async def check_no_messages_left(
     else:
         assert callback is not None
         assert len(callback) == expected_callback_messages_count
-
-
-def create_pubsub_subscription(
-    cluster_mode,
-    cluster_channels_and_patterns: Dict[
-        GlideClusterClientConfiguration.PubSubChannelModes, Set[str]
-    ],
-    standalone_channels_and_patterns: Dict[
-        GlideClientConfiguration.PubSubChannelModes, Set[str]
-    ],
-    callback=None,
-    context=None,
-):
-    if cluster_mode:
-        return GlideClusterClientConfiguration.PubSubSubscriptions(
-            channels_and_patterns=cluster_channels_and_patterns,
-            callback=callback,
-            context=context,
-        )
-    return GlideClientConfiguration.PubSubSubscriptions(
-        channels_and_patterns=standalone_channels_and_patterns,
-        callback=callback,
-        context=context,
-    )
-
-
-def new_message(msg: PubSubMsg, context: Any):
-    received_messages: List[PubSubMsg] = context
-    received_messages.append(msg)
 
 
 async def client_cleanup(
@@ -926,16 +893,16 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
-                    10
-                )
-                for _ in range(NUM_CHANNELS)
+                "{{{}}}:{}:{}".format(
+                    "channel", get_random_string(5), i
+                ): get_random_string(10)
+                for i in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(
-                    5
-                )
-                for _ in range(NUM_CHANNELS)
+                "{{{}}}:{}:{}".format(
+                    "pattern", get_random_string(5), i
+                ): get_random_string(5)
+                for i in range(NUM_CHANNELS)
             }
 
             all_channels_and_messages = {
@@ -1046,16 +1013,16 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
-                    10
-                )
-                for _ in range(NUM_CHANNELS)
+                "{{{}}}:{}:{}".format(
+                    "channel", get_random_string(5), i
+                ): get_random_string(10)
+                for i in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(
-                    5
-                )
-                for _ in range(NUM_CHANNELS)
+                "{{{}}}:{}:{}".format(
+                    "pattern", get_random_string(5), i
+                ): get_random_string(5)
+                for i in range(NUM_CHANNELS)
             }
 
             all_channels_and_messages = {
@@ -1205,20 +1172,20 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
-                    10
-                )
-                for _ in range(NUM_CHANNELS)
+                "{{{}}}:{}:{}".format(
+                    "channel", get_random_string(5), i
+                ): get_random_string(10)
+                for i in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(
-                    5
-                )
-                for _ in range(NUM_CHANNELS)
+                "{{{}}}:{}:{}".format(
+                    "pattern", get_random_string(5), i
+                ): get_random_string(5)
+                for i in range(NUM_CHANNELS)
             }
             sharded_channels_and_messages = {
-                f"{SHARD_PREFIX}: {get_random_string(10)}": get_random_string(7)
-                for _ in range(NUM_CHANNELS)
+                f"{SHARD_PREFIX}:{i}:{get_random_string(10)}": get_random_string(7)
+                for i in range(NUM_CHANNELS)
             }
 
             publish_response = 1
@@ -1353,20 +1320,20 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
-                    10
-                )
-                for _ in range(NUM_CHANNELS)
+                "{{{}}}:{}:{}".format(
+                    "channel", get_random_string(5), i
+                ): get_random_string(10)
+                for i in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(
-                    5
-                )
-                for _ in range(NUM_CHANNELS)
+                "{{{}}}:{}:{}".format(
+                    "pattern", get_random_string(5), i
+                ): get_random_string(5)
+                for i in range(NUM_CHANNELS)
             }
             sharded_channels_and_messages = {
-                f"{SHARD_PREFIX}: {get_random_string(10)}": get_random_string(7)
-                for _ in range(NUM_CHANNELS)
+                f"{SHARD_PREFIX}:{i}:{get_random_string(10)}": get_random_string(7)
+                for i in range(NUM_CHANNELS)
             }
 
             publish_response = 1

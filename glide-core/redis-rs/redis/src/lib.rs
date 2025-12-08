@@ -349,6 +349,7 @@ pub use crate::connection::{
 };
 pub use crate::parser::{parse_redis_value, Parser};
 pub use crate::pipeline::{Pipeline, PipelineRetryStrategy};
+pub use crate::pubsub_synchronizer::{PubSubSynchronizer, SubscriptionType};
 pub use push_manager::{PushInfo, PushManager};
 pub use retry_strategies::RetryStrategy;
 
@@ -451,7 +452,7 @@ mod cmd;
 mod commands;
 mod connection;
 mod parser;
+mod pubsub_synchronizer;
 mod push_manager;
 mod retry_strategies;
 mod types;
-pub mod pubsub_synchronizer;
