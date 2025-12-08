@@ -3,3 +3,4 @@
 anyio>=4.9.0
 typing-extensions>=4.8.0
 protobuf>=3.20
+sniffio
