@@ -31,6 +31,7 @@
 * Python: Add Python 3.14 support ([#4897](https://github.com/valkey-io/valkey-glide/pull/4897))
 * JAVA: Implement TLS support for Java client ([#4905](https://github.com/valkey-io/valkey-glide/pull/4905))
 * Node: Implement TLS support for Node client ([#4911](https://github.com/valkey-io/valkey-glide/pull/4911))
+* JAVA: Add protobuf shading to prevent version conflicts with user dependencies
 
 #### Fixes
 
