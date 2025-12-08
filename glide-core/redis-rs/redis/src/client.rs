@@ -18,8 +18,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-use crate::tls::{inner_build_with_tls, TlsCertificates};
 use crate::pubsub_synchronizer::PubSubSynchronizer;
+use crate::tls::{inner_build_with_tls, TlsCertificates};
 
 /// The client type.
 #[derive(Debug, Clone)]

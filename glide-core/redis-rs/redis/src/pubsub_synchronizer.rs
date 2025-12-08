@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use async_trait::async_trait;
 use crate::{Cmd, RedisResult, Value};
+use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
 
 /// Type of PubSub subscription
@@ -58,6 +58,9 @@ pub trait PubSubSynchronizer: Send + Sync {
     /// Reconcile desired and actual subscriptions
     async fn reconcile(&self) -> Result<(), String>;
 
+    /// Trigger the reconciliation task to run immediately (non-blocking)
+    async fn trigger_reconciliation(&self);
+
     /// Check if desired and actual subscriptions are synchronized
     async fn is_synchronized(&self) -> bool {
         let (desired, actual) = self.get_subscription_state().await;
@@ -80,22 +83,13 @@ pub trait PubSubSynchronizer: Send + Sync {
     /// Set initial subscriptions from client configuration and trigger immediate reconciliation
     async fn set_initial_subscriptions(
         &self,
-        channels: HashSet<String>,
-        patterns: HashSet<String>,
-        sharded: HashSet<String>,
+        _channels: HashSet<String>,
+        _patterns: HashSet<String>,
+        _sharded: HashSet<String>,
     ) {
-        if !channels.is_empty() {
-            self.add_desired_subscriptions(channels, SubscriptionType::Exact).await;
-        }
-        if !patterns.is_empty() {
-            self.add_desired_subscriptions(patterns, SubscriptionType::Pattern).await;
-        }
-        if !sharded.is_empty() {
-            self.add_desired_subscriptions(sharded, SubscriptionType::Sharded).await;
-        }
-        let _ = self.reconcile().await;
+        // Default: no-op
     }
-    
+
     /// Allows downcasting to concrete types
     /// This is needed for glide-core to call implementation-specific methods
     fn as_any(&self) -> &dyn std::any::Any;
