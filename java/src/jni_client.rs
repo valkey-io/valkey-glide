@@ -11,6 +11,7 @@ use jni::JavaVM;
 use jni::objects::{GlobalRef, JClass, JObject, JStaticMethodID, JValue};
 use jni::signature;
 use jni::sys::{JNI_VERSION_1_8, jint, jlong, jstring};
+use parking_lot::Mutex;
 use redis::{RedisError, Value as ServerValue};
 use std::ffi::c_void;
 use std::sync::Arc;
@@ -37,10 +38,21 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
 
 #[unsafe(no_mangle)]
 pub extern "system" fn JNI_OnUnload(_vm: *const JavaVM, _reserved: *const c_void) {
-    // Note: GlobalRef objects in static caches will not be automatically dropped
-    // when the library is unloaded, potentially causing memory leaks.
-    // However, the JNI crate doesn't provide a safe way to manually clean them up
-    // from JNI_OnUnload. This is a known limitation.
+    // Clean up global references by setting cached Options to None
+    // This triggers Drop on GlobalRef objects, which calls delete_global_ref
+    // Note: All cache functions use unsafe transmute to return static references
+    // from OnceLock data that lives for the entire program duration
+
+    if let Some(cache_mutex) = METHOD_CACHE.get() {
+        *cache_mutex.lock() = None;
+    }
+
+    if let Some(cache_mutex) = GLIDE_CORE_CLIENT_CACHE.get() {
+        *cache_mutex.lock() = None;
+    }
+
+    // Clean up caches in lib.rs
+    crate::cleanup_global_caches();
 }
 
 // Type aliases for complex types
@@ -268,12 +280,11 @@ pub(crate) struct MethodCache {
     complete_error_with_code_method: JStaticMethodID,
 }
 
-static METHOD_CACHE: std::sync::OnceLock<parking_lot::Mutex<Option<MethodCache>>> =
-    std::sync::OnceLock::new();
+static METHOD_CACHE: std::sync::OnceLock<Mutex<Option<MethodCache>>> = std::sync::OnceLock::new();
 
 /// Get or initialize the method cache.
 pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
-    let cache_mutex = METHOD_CACHE.get_or_init(|| parking_lot::Mutex::new(None));
+    let cache_mutex = METHOD_CACHE.get_or_init(|| Mutex::new(None));
 
     {
         let cache_guard = cache_mutex.lock();
@@ -778,9 +789,8 @@ struct GlideCoreClientCache {
     register_native_buffer_cleaner: JStaticMethodID,
 }
 
-static GLIDE_CORE_CLIENT_CACHE: std::sync::OnceLock<
-    parking_lot::Mutex<Option<GlideCoreClientCache>>,
-> = std::sync::OnceLock::new();
+static GLIDE_CORE_CLIENT_CACHE: std::sync::OnceLock<Mutex<Option<GlideCoreClientCache>>> =
+    std::sync::OnceLock::new();
 
 /// Get GLIDE core client cache using correct classloader context
 fn get_glide_core_client_cache_safe(fallback_env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
@@ -795,7 +805,7 @@ fn get_glide_core_client_cache_safe(fallback_env: &mut JNIEnv) -> Result<GlideCo
 }
 
 fn get_glide_core_client_cache(env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
-    let cache_mutex = GLIDE_CORE_CLIENT_CACHE.get_or_init(|| parking_lot::Mutex::new(None));
+    let cache_mutex = GLIDE_CORE_CLIENT_CACHE.get_or_init(|| Mutex::new(None));
     {
         let guard = cache_mutex.lock();
         if let Some(c) = guard.as_ref() {

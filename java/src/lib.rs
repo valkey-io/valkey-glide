@@ -22,6 +22,7 @@ use jni::objects::{
     GlobalRef, JByteArray, JClass, JMethodID, JObject, JObjectArray, JStaticMethodID, JString,
 };
 use jni::sys::{jint, jlong};
+use parking_lot::Mutex;
 use redis::Value;
 use std::str::FromStr;
 use std::sync::{Arc, OnceLock};
@@ -41,11 +42,17 @@ pub struct RegistryMethodCache {
     retrieve_method: JStaticMethodID,
 }
 
-static REGISTRY_METHOD_CACHE: OnceLock<RegistryMethodCache> = OnceLock::new();
+static REGISTRY_METHOD_CACHE: OnceLock<Mutex<Option<RegistryMethodCache>>> = OnceLock::new();
 
 fn get_registry_method_cache(env: &mut JNIEnv) -> Result<&'static RegistryMethodCache, FFIError> {
-    if let Some(cache) = REGISTRY_METHOD_CACHE.get() {
-        return Ok(cache);
+    let cache_mutex = REGISTRY_METHOD_CACHE.get_or_init(|| Mutex::new(None));
+    {
+        let guard = cache_mutex.lock();
+        if let Some(ref cache) = *guard {
+            return Ok(unsafe {
+                std::mem::transmute::<&RegistryMethodCache, &RegistryMethodCache>(cache)
+            });
+        }
     }
 
     let class = env.find_class("glide/managers/JniResponseRegistry")?;
@@ -58,10 +65,18 @@ fn get_registry_method_cache(env: &mut JNIEnv) -> Result<&'static RegistryMethod
     };
 
     // If another thread initialized concurrently, prefer the existing value.
-    let _ = REGISTRY_METHOD_CACHE.set(cache);
-    Ok(REGISTRY_METHOD_CACHE
-        .get()
-        .expect("RegistryMethodCache should be initialized"))
+    {
+        let mut guard = cache_mutex.lock();
+        if guard.is_none() {
+            *guard = Some(cache);
+        }
+    }
+
+    let guard = cache_mutex.lock();
+    let cache_ref = guard
+        .as_ref()
+        .expect("RegistryMethodCache should be initialized");
+    Ok(unsafe { std::mem::transmute::<&RegistryMethodCache, &RegistryMethodCache>(cache_ref) })
 }
 
 /// Get registry method cache using correct classloader context
@@ -2331,13 +2346,20 @@ pub struct JavaValueConversionCache {
     request_exception_ctor: JMethodID,
 }
 
-static JAVA_VALUE_CONVERSION_CACHE: OnceLock<JavaValueConversionCache> = OnceLock::new();
+static JAVA_VALUE_CONVERSION_CACHE: OnceLock<Mutex<Option<JavaValueConversionCache>>> =
+    OnceLock::new();
 
 fn get_java_value_conversion_cache(
     env: &mut JNIEnv,
 ) -> Result<&'static JavaValueConversionCache, FFIError> {
-    if let Some(cache) = JAVA_VALUE_CONVERSION_CACHE.get() {
-        return Ok(cache);
+    let cache_mutex = JAVA_VALUE_CONVERSION_CACHE.get_or_init(|| Mutex::new(None));
+    {
+        let guard = cache_mutex.lock();
+        if let Some(ref cache) = *guard {
+            return Ok(unsafe {
+                std::mem::transmute::<&JavaValueConversionCache, &JavaValueConversionCache>(cache)
+            });
+        }
     }
 
     let long_cls = env.find_class("java/lang/Long")?;
@@ -2408,10 +2430,20 @@ fn get_java_value_conversion_cache(
     };
 
     // Prefer existing value if concurrently initialized
-    let _ = JAVA_VALUE_CONVERSION_CACHE.set(cache);
-    Ok(JAVA_VALUE_CONVERSION_CACHE
-        .get()
-        .expect("JavaValueConversionCache should be initialized"))
+    {
+        let mut guard = cache_mutex.lock();
+        if guard.is_none() {
+            *guard = Some(cache);
+        }
+    }
+
+    let guard = cache_mutex.lock();
+    let cache_ref = guard
+        .as_ref()
+        .expect("JavaValueConversionCache should be initialized");
+    Ok(unsafe {
+        std::mem::transmute::<&JavaValueConversionCache, &JavaValueConversionCache>(cache_ref)
+    })
 }
 
 /// Get Java value conversion cache using correct classloader context
@@ -2426,6 +2458,17 @@ fn get_java_value_conversion_cache_safe(
     }
     // Otherwise fallback to provided env
     get_java_value_conversion_cache(fallback_env)
+}
+
+/// Clean up global references in lib.rs caches
+pub(crate) fn cleanup_global_caches() {
+    if let Some(cache_mutex) = JAVA_VALUE_CONVERSION_CACHE.get() {
+        *cache_mutex.lock() = None;
+    }
+
+    if let Some(cache_mutex) = REGISTRY_METHOD_CACHE.get() {
+        *cache_mutex.lock() = None;
+    }
 }
 
 fn to_local_jclass<'a>(env: &mut JNIEnv<'a>, global: &GlobalRef) -> Result<JClass<'a>, FFIError> {
