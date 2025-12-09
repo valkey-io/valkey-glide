@@ -210,10 +210,6 @@ jobs:
                 java: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
-                # TODO: Remove Windows exclusion when Windows integration tests are implemented
-                exclude:
-                    - host:
-                          OS: windows
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
