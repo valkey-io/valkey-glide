@@ -55,8 +55,9 @@ subprojects {
     java {
         toolchain {
             languageVersion.set(JavaLanguageVersion.of(11))
-            // Only specify vendor for non-container environments to allow flexibility in CI containers
-            if (!System.getenv("GLIDE_CONTAINER_BUILD")) {
+            // Only specify vendor when no JAVA_HOME is set (i.e., no setup-java used)
+            if (!System.getenv("GLIDE_CONTAINER_BUILD") && 
+                !System.getenv("JAVA_HOME")) {
                 vendor = JvmVendorSpec.ADOPTIUM // Temurin
             }
         }
