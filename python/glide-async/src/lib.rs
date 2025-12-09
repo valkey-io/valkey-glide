@@ -274,6 +274,15 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
             Telemetry::total_clients().to_string(),
         );
 
+        stats_map.insert(
+            "subscription_out_of_sync_count".to_string(),
+            Telemetry::subscription_out_of_sync_count().to_string(),
+        );
+        stats_map.insert(
+            "subscription_last_sync_timestamp".to_string(),
+            Telemetry::subscription_last_sync_timestamp().to_string(),
+        );
+
         Python::with_gil(|py| {
             let py_dict = PyDict::new(py);
 

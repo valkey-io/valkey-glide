@@ -137,21 +137,27 @@ where
         initial_nodes: &[ConnectionInfo],
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
     ) -> RedisResult<ClusterConnection<C>> {
-        ClusterConnInner::new(initial_nodes, cluster_params, push_sender)
-            .await
-            .map(|inner| {
-                let (tx, mut rx) = mpsc::channel::<Message<_>>(100);
-                let stream = async move {
-                    let _ = stream::poll_fn(move |cx| rx.poll_recv(cx))
-                        .map(Ok)
-                        .forward(inner)
-                        .await;
-                };
-                #[cfg(feature = "tokio-comp")]
-                tokio::spawn(stream);
-                ClusterConnection(tx)
-            })
+        ClusterConnInner::new(
+            initial_nodes,
+            cluster_params,
+            push_sender,
+            pubsub_synchronizer,
+        )
+        .await
+        .map(|inner| {
+            let (tx, mut rx) = mpsc::channel::<Message<_>>(100);
+            let stream = async move {
+                let _ = stream::poll_fn(move |cx| rx.poll_recv(cx))
+                    .map(Ok)
+                    .forward(inner)
+                    .await;
+            };
+            #[cfg(feature = "tokio-comp")]
+            tokio::spawn(stream);
+            ClusterConnection(tx)
+        })
     }
 
     /// Special handling for `SCAN` command, using `cluster_scan_with_pattern`.
@@ -1108,6 +1114,7 @@ where
         initial_nodes: &[ConnectionInfo],
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
     ) -> RedisResult<Disposable<Self>> {
         let disconnect_notifier = {
             #[cfg(feature = "tokio-comp")]
@@ -1132,6 +1139,7 @@ where
             discover_az,
             connection_timeout: Some(cluster_params.connection_timeout),
             connection_retry_strategy: Some(connection_retry_strategy),
+            pubsub_synchronizer,
         };
 
         let connections = Self::create_initial_connections(
@@ -1398,13 +1406,20 @@ where
 
         if !addrs_to_refresh.is_empty() {
             // don't try existing nodes since we know a. it does not exist. b. exist but its connection is closed
-            Self::trigger_refresh_connection_tasks(
+            let notifiers = Self::trigger_refresh_connection_tasks(
                 inner.clone(),
                 addrs_to_refresh,
                 RefreshConnectionType::AllConnections,
                 false,
             )
             .await;
+
+            futures::future::join_all(notifiers.iter().map(|notify| notify.notified())).await;
+
+            // Trigger reconciliation after connections are refreshed
+            if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
+                sync.trigger_reconciliation().await;
+            }
         }
     }
 
@@ -1445,6 +1460,12 @@ where
         check_existing_conn: bool,
     ) -> Vec<Arc<Notify>> {
         debug!("Triggering refresh connections tasks to {:?} ", addresses);
+
+        if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
+            for address in &addresses {
+                sync.remove_current_subscriptions_for_address(address).await;
+            }
+        }
 
         let mut notifiers = Vec::<Arc<Notify>>::new();
 
@@ -2025,6 +2046,11 @@ where
             .await;
         }
         in_progress.store(false, Ordering::Relaxed);
+
+        // Trigger reconciliation to align subscriptions with new topology
+        if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
+            sync.trigger_reconciliation().await;
+        }
 
         Self::refresh_pubsub_subscriptions(inner).await;
 
