@@ -27,7 +27,7 @@ tokio = { version = "1", features = ["macros", "time"] }
 logger_core = { path = "../logger_core" }
 tokio-util = { version = "^0.7", features = ["rt"], optional = true }
 num_cpus = { version = "^1", optional = true }
-tokio-retry2 = { version = "0.6", features = ["jitter"] }
+tokio-retry2 = { version = "0.7", features = ["jitter"] }
 aws-config = "1"
 aws-credential-types = "1"
 aws-sigv4 = "1"
