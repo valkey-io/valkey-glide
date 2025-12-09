@@ -1,6 +1,7 @@
-use std::io::{BufRead, Error, ErrorKind as IOErrorKind};
+use std::io::{Error, ErrorKind as IOErrorKind};
 
 use rustls::RootCertStore;
+use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
 use crate::{Client, ConnectionAddr, ConnectionInfo, ErrorKind, RedisError, RedisResult};
@@ -71,18 +72,22 @@ pub fn retrieve_tls_certificates(certificates: TlsCertificates) -> RedisResult<T
         client_key,
     }) = client_tls
     {
-        let buf = &mut client_cert.as_slice() as &mut dyn BufRead;
-        let certs = rustls_pemfile::certs(buf);
-        let client_cert_chain = certs.collect::<Result<Vec<_>, _>>()?;
+        // Parse certificates using rustls-pki-types v1.9.0+ API
+        let certs = CertificateDer::pem_slice_iter(&client_cert);
+        let client_cert_chain = certs.collect::<Result<Vec<_>, _>>().map_err(|e| {
+            Error::new(
+                IOErrorKind::Other,
+                format!("Failed to parse certificate: {}", e),
+            )
+        })?;
 
-        let client_key =
-            rustls_pemfile::private_key(&mut client_key.as_slice() as &mut dyn BufRead)?
-                .ok_or_else(|| {
-                    Error::new(
-                        IOErrorKind::Other,
-                        "Unable to extract private key from PEM file",
-                    )
-                })?;
+        // Parse private key using rustls-pki-types v1.9.0+ API
+        let client_key = PrivateKeyDer::from_pem_slice(&client_key).map_err(|e| {
+            Error::new(
+                IOErrorKind::Other,
+                format!("Failed to parse private key: {}", e),
+            )
+        })?;
 
         Some(ClientTlsParams {
             client_cert_chain,
@@ -93,11 +98,17 @@ pub fn retrieve_tls_certificates(certificates: TlsCertificates) -> RedisResult<T
     };
 
     let root_cert_store = if let Some(root_cert) = root_cert {
-        let buf = &mut root_cert.as_slice() as &mut dyn BufRead;
-        let certs = rustls_pemfile::certs(buf);
+        // Parse root certificates using rustls-pki-types v1.9.0+ API
+        let certs = CertificateDer::pem_slice_iter(&root_cert);
         let mut root_cert_store = RootCertStore::empty();
         for result in certs {
-            if root_cert_store.add(result?.to_owned()).is_err() {
+            let cert = result.map_err(|e| {
+                Error::new(
+                    IOErrorKind::Other,
+                    format!("Failed to parse root certificate: {}", e),
+                )
+            })?;
+            if root_cert_store.add(cert.to_owned()).is_err() {
                 return Err(
                     Error::new(IOErrorKind::Other, "Unable to parse TLS trust anchors").into(),
                 );
