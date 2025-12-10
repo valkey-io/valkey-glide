@@ -3,7 +3,6 @@
 #### Security Fixes
 
 * JAVA: Update Apache Commons Lang3 from 3.13.0 to 3.20.0 to address CVE-2025-48924
-* JAVA: Add proper shading and relocation of Apache Commons to prevent version conflicts
 
 #### Fixes
 

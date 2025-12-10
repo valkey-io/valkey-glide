@@ -284,9 +284,8 @@ jar {
 }
 
 shadowJar {
-    // Relocate protobuf and Apache Commons to avoid version conflicts
+    // Relocate protobuf to avoid version conflicts
     relocate 'com.google.protobuf', 'glide.com.google.protobuf'
-    relocate 'org.apache.commons', 'glide.org.apache.commons'
 
     // Keep the same classifier as regular jar
     if (
