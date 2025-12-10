@@ -26,7 +26,7 @@ tasks.withType(Javadoc) {
 
 dependencies {
     implementation group: 'com.google.protobuf', name:'protobuf-java', version: '4.29.1'
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
+    api group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
 
     compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.6'
 
