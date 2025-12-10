@@ -1,3 +1,22 @@
+## 2.2.2
+
+#### Security Fixes
+
+* JAVA: Update Apache Commons Lang3 from 3.13.0 to 3.20.0 to address CVE-2025-48924
+* JAVA: Add proper shading and relocation of Apache Commons to prevent version conflicts
+
+#### Fixes
+
+* JAVA: Add protobuf shading to prevent version conflicts with user dependencies
+* JAVA: Fix classloader issues in JNI method caching ([#5029](https://github.com/valkey-io/valkey-glide/pull/5029))
+* PYTHON: Update sniffio dependency
+
+## 2.2.1
+
+#### Changes
+
+* JAVA: Windows Java binaries are now available
+
 ## 2.2
 
 #### Changes

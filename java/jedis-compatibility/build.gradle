@@ -29,7 +29,7 @@ dependencies {
     implementation project(':client')
 
     // Transitive dependencies needed by GLIDE client
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.18.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
 
     implementation('com.google.protobuf:protobuf-java') {
         version {

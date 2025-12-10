@@ -26,7 +26,7 @@ tasks.withType(Javadoc) {
 
 dependencies {
     implementation group: 'com.google.protobuf', name:'protobuf-java', version: '4.29.1'
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
 
     compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.6'
 
@@ -284,8 +284,9 @@ jar {
 }
 
 shadowJar {
-    // Relocate protobuf to avoid version conflicts
+    // Relocate protobuf and Apache Commons to avoid version conflicts
     relocate 'com.google.protobuf', 'glide.com.google.protobuf'
+    relocate 'org.apache.commons', 'glide.org.apache.commons'
 
     // Keep the same classifier as regular jar
     if (
