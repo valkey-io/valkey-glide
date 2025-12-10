@@ -1264,7 +1264,7 @@ export class BaseClient {
             options?.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS;
         this.socket = socket;
         this.socket
-            .on("data", (data) => this.handleReadData(data))
+            .on("data", (data) => this.handleReadData(data as Buffer))
             .on("error", (err) => {
                 console.error(`Server closed: ${err}`);
                 this.close();

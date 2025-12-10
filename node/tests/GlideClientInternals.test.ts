@@ -142,7 +142,7 @@ function getConnectionAndSocket(
         let connectionPromise: Promise<GlideClient | GlideClusterClient>; // eslint-disable-line prefer-const
         const server = net
             .createServer(async (socket) => {
-                socket.once("data", (data) => {
+                socket.once("data", (data: Buffer) => {
                     const reader = Reader.create(data);
                     const request =
                         connection_request.ConnectionRequest.decodeDelimited(
@@ -244,7 +244,7 @@ async function testSentValueMatches(config: {
 }) {
     let counter = 0;
     await testWithResources(async (connection, socket) => {
-        socket.on("data", (data) => {
+        socket.on("data", (data: Buffer) => {
             const reader = Reader.create(data);
             const request =
                 command_request.CommandRequest.decodeDelimited(reader);
@@ -293,7 +293,7 @@ describe("SocketConnectionInternals", () => {
             expected: GlideReturnType, // value received from rust
         ) => {
             await testWithResources(async (connection, socket) => {
-                socket.once("data", (data) => {
+                socket.once("data", (data: Buffer) => {
                     const reader = Reader.create(data);
                     const request = CommandRequest.decodeDelimited(reader);
                     expect(request.singleCommand?.requestType).toEqual(
@@ -372,7 +372,7 @@ describe("SocketConnectionInternals", () => {
 
     it("should pass null returned from socket", async () => {
         await testWithResources(async (connection, socket) => {
-            socket.once("data", (data) => {
+            socket.once("data", (data: Buffer) => {
                 const reader = Reader.create(data);
                 const request = CommandRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
@@ -391,7 +391,7 @@ describe("SocketConnectionInternals", () => {
 
     it("should pass transaction (deprecated) with SlotKeyType", async () => {
         await testWithClusterResources(async (connection, socket) => {
-            socket.once("data", (data) => {
+            socket.once("data", (data: Buffer) => {
                 const reader = Reader.create(data);
                 const request = CommandRequest.decodeDelimited(reader);
 
@@ -423,7 +423,7 @@ describe("SocketConnectionInternals", () => {
 
     it("should pass transaction (deprecated) with random node", async () => {
         await testWithClusterResources(async (connection, socket) => {
-            socket.once("data", (data) => {
+            socket.once("data", (data: Buffer) => {
                 const reader = Reader.create(data);
                 const request = CommandRequest.decodeDelimited(reader);
 
@@ -453,7 +453,7 @@ describe("SocketConnectionInternals", () => {
 
     it("should pass batch with all params", async () => {
         await testWithClusterResources(async (connection, socket) => {
-            socket.once("data", (data) => {
+            socket.once("data", (data: Buffer) => {
                 const reader = Reader.create(data);
                 const request = CommandRequest.decodeDelimited(reader);
 
@@ -490,7 +490,7 @@ describe("SocketConnectionInternals", () => {
 
     it("should pass OK returned from socket", async () => {
         await testWithResources(async (connection, socket) => {
-            socket.once("data", (data) => {
+            socket.once("data", (data: Buffer) => {
                 const reader = Reader.create(data);
                 const request = CommandRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
@@ -510,7 +510,7 @@ describe("SocketConnectionInternals", () => {
     it("should reject requests that received a response error", async () => {
         await testWithResources(async (connection, socket) => {
             const error = "check";
-            socket.once("data", (data) => {
+            socket.once("data", (data: Buffer) => {
                 const reader = Reader.create(data);
                 const request = CommandRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
@@ -535,7 +535,7 @@ describe("SocketConnectionInternals", () => {
     it("should close all requests when receiving a closing error", async () => {
         await testWithResources(async (connection, socket) => {
             const error = "check";
-            socket.once("data", (data) => {
+            socket.once("data", (data: Buffer) => {
                 const reader = Reader.create(data);
                 const request = CommandRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
@@ -562,7 +562,7 @@ describe("SocketConnectionInternals", () => {
     it("should fail all requests when receiving a closing error with an unknown callback index", async () => {
         await testWithResources(async (connection, socket) => {
             const error = "check";
-            socket.once("data", (data) => {
+            socket.once("data", (data: Buffer) => {
                 const reader = Reader.create(data);
                 const request =
                     command_request.CommandRequest.decodeDelimited(reader);
@@ -586,7 +586,7 @@ describe("SocketConnectionInternals", () => {
 
     it("should pass SET arguments", async () => {
         await testWithResources(async (connection, socket) => {
-            socket.once("data", (data) => {
+            socket.once("data", (data: Buffer) => {
                 const reader = Reader.create(data);
                 const request = CommandRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
@@ -619,7 +619,7 @@ describe("SocketConnectionInternals", () => {
 
     it("should send pointer for request with large size arguments", async () => {
         await testWithResources(async (connection, socket) => {
-            socket.once("data", (data) => {
+            socket.once("data", (data: Buffer) => {
                 const reader = Reader.create(data);
                 const request =
                     command_request.CommandRequest.decodeDelimited(reader);
@@ -640,7 +640,7 @@ describe("SocketConnectionInternals", () => {
 
     it("should send vector of strings for request with small size arguments", async () => {
         await testWithResources(async (connection, socket) => {
-            socket.once("data", (data) => {
+            socket.once("data", (data: Buffer) => {
                 const reader = Reader.create(data);
                 const request =
                     command_request.CommandRequest.decodeDelimited(reader);
@@ -733,7 +733,7 @@ describe("SocketConnectionInternals", () => {
             key: "foo",
         };
         await testWithClusterResources(async (connection, socket) => {
-            socket.on("data", (data) => {
+            socket.on("data", (data: Buffer) => {
                 const reader = Reader.create(data);
                 const request =
                     command_request.CommandRequest.decodeDelimited(reader);
