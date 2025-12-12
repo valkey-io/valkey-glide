@@ -293,8 +293,23 @@ class _GlideFFI:
             void drop_otel_span(uint64_t span_ptr);
             const char* init_open_telemetry(const OpenTelemetryConfig* open_telemetry_config);
 
+            // ============== STATISTICS ==============
+            typedef struct {
+                unsigned long total_connections;
+                unsigned long total_clients;
+                unsigned long total_values_compressed;
+                unsigned long total_values_decompressed;
+                unsigned long total_original_bytes;
+                unsigned long total_bytes_compressed;
+                unsigned long total_bytes_decompressed;
+                unsigned long compression_skipped_count;
+            } Statistics;
+
+            Statistics get_statistics();
+
             // ============== UTILITY FUNCTIONS ==============
             void free_c_string(char* s);
+            unsigned long get_min_compressed_size();
             """
         )
 
