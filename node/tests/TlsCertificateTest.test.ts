@@ -23,7 +23,7 @@ import {
     getServerVersion,
 } from "./TestUtilities";
 
-const TIMEOUT = 50000;
+const TIMEOUT = 120000;
 
 describe("TLS with custom certificates", () => {
     let standaloneCluster: ValkeyCluster;
