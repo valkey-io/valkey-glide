@@ -2112,8 +2112,8 @@ public class JedisTest {
     }
 
     @Test
+    @Disabled("HGETDEL command is currently unsupported")
     void hgetdel_command() {
-        assumeTrue(SERVER_VERSION.isGreaterThan("9.0.0"), "HGETDEL command requires Valkey 9.0.0+");
 
         String key = UUID.randomUUID().toString();
         String field1 = "field1";
@@ -2481,11 +2481,10 @@ public class JedisTest {
 
     @Test
     void hash_commands_binary_newer() {
-        // Hash field expiration commands (HSETEX, HGETEX) are available in:
-        // - Valkey 9.0.0+ (HSETEX, HGETEX only - HGETDEL not available)
+        // Hash field expiration commands (HSETEX, HGETEX) are available in Valkey 9.0.0+
         assumeTrue(
-                SERVER_VERSION.isGreaterThan("9.0.0"),
-                "Newer hash commands require Valkey 9.0.0 and HGETDEL requires Valkey greater than 9");
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "HSETEX/HGETEX commands require Valkey 9.0.0+");
 
         byte[] key = (UUID.randomUUID().toString()).getBytes();
         byte[] field1 = "field1".getBytes();
@@ -2512,6 +2511,21 @@ public class JedisTest {
                 value1, getResult.get(0), "Binary HGETEX should return correct value for field1");
         assertArrayEquals(
                 value2, getResult.get(1), "Binary HGETEX should return correct value for field2");
+    }
+
+    @Test
+    @Disabled("HGETDEL command is currently unsupported")
+    void hash_commands_binary_hgetdel() {
+
+        byte[] key = (UUID.randomUUID().toString()).getBytes();
+        byte[] field1 = "field1".getBytes();
+        byte[] field2 = "field2".getBytes();
+        byte[] value1 = "value1".getBytes();
+        byte[] value2 = "value2".getBytes();
+
+        // Setup data
+        jedis.hset(key, field1, value1);
+        jedis.hset(key, field2, value2);
 
         // Test HGETDEL - binary
         List<byte[]> delResult = jedis.hgetdel(key, field1, field2);
