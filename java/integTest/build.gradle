@@ -8,7 +8,7 @@ def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
 
 def getClusterCommand(args) {
     if (isWindows) {
-        return ['wsl', '-d', 'Ubuntu-22.04'] + args
+        return ['wsl', '-d', 'Ubuntu'] + args
     } else {
         return args
     }
@@ -215,7 +215,7 @@ gradle.buildFinished {
     try {
         exec {
             if (isWindowsRuntime) {
-                commandLine 'wsl', '-d', 'Ubuntu-22.04', 'pkill', '-f', 'valkey-server'
+                commandLine 'wsl', '-d', 'Ubuntu', 'pkill', '-f', 'valkey-server'
             } else {
                 commandLine 'pkill', '-f', 'valkey-server'
             }
@@ -229,7 +229,7 @@ gradle.buildFinished {
     try {
         exec {
             if (isWindowsRuntime) {
-                commandLine 'wsl', '-d', 'Ubuntu-22.04', 'pkill', '-f', 'redis-server'
+                commandLine 'wsl', '-d', 'Ubuntu', 'pkill', '-f', 'redis-server'
             } else {
                 commandLine 'pkill', '-f', 'redis-server'
             }
@@ -245,7 +245,7 @@ gradle.buildFinished {
             workingDir "${project.rootDir}/../utils"
             def cleanupArgs = ['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster']
             if (isWindowsRuntime) {
-                commandLine(['wsl', '-d', 'Ubuntu-22.04'] + cleanupArgs)
+                commandLine(['wsl', '-d', 'Ubuntu'] + cleanupArgs)
             } else {
                 commandLine cleanupArgs
             }

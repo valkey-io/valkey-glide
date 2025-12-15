@@ -84,7 +84,7 @@ runs:
               echo "=== Installing Valkey directly in WSL ==="
 
               # Install Valkey directly in WSL
-              wsl -d Ubuntu-22.04 -- bash -c "
+              wsl -- bash -c "
                 # Clone and build Valkey
                 cd /tmp
                 git clone https://github.com/valkey-io/valkey.git
