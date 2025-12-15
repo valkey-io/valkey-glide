@@ -81,39 +81,29 @@ runs:
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
           shell: pwsh
           run: |
-              echo "=== Installing Valkey directly in WSL ==="
+              Write-Host "=== Installing Valkey directly in WSL ==="
 
-              # Install Valkey directly in WSL
-              wsl -- bash -c "
-                # Clone and build Valkey
-                cd /tmp
-                git clone https://github.com/valkey-io/valkey.git
-                cd valkey
-                git checkout '${{ inputs.engine-version }}'
-                make -j4
-                sudo make install
-                
-                # Verify installation
-                valkey-server --version
-                valkey-cli --version
-                
-                # Test basic functionality
-                echo 'Testing Valkey server startup...'
-                valkey-server --port 6379 --daemonize yes
-                sleep 2
-                valkey-cli ping || echo 'Valkey server not responding'
-                pkill valkey-server || true
-                
-                # Fix system configuration for cluster mode
-                echo 'Configuring system for cluster mode...'
-                sudo sysctl vm.overcommit_memory=1 || echo 'Cannot set overcommit'
-                sudo bash -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' || echo 'Cannot disable hugepage'
-                
-                # Set file descriptor limits
-                ulimit -n 65536 || echo 'Cannot set file descriptor limit'
-                
-                echo 'Valkey installation complete in WSL'
-              "
+              # Install Valkey directly in WSL using proper PowerShell syntax
+              wsl bash -c @"
+              cd /tmp &&
+              git clone https://github.com/valkey-io/valkey.git &&
+              cd valkey &&
+              git checkout '${{ inputs.engine-version }}' &&
+              make -j4 &&
+              sudo make install &&
+              valkey-server --version &&
+              valkey-cli --version &&
+              echo 'Testing Valkey server startup...' &&
+              valkey-server --port 6379 --daemonize yes &&
+              sleep 2 &&
+              valkey-cli ping || echo 'Valkey server not responding' &&
+              pkill valkey-server || true &&
+              echo 'Configuring system for cluster mode...' &&
+              sudo sysctl vm.overcommit_memory=1 || echo 'Cannot set overcommit' &&
+              sudo bash -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' || echo 'Cannot disable hugepage' &&
+              ulimit -n 65536 || echo 'Cannot set file descriptor limit' &&
+              echo 'Valkey installation complete in WSL'
+              "@
 
         - name: Setup Python for Windows
           if: "${{ inputs.os == 'windows' }}"
