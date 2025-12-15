@@ -75,19 +75,14 @@ runs:
               distribution: Ubuntu-22.04
               use-cache: false
 
-        - name: Configure WSL2 (Windows + Java)
-          shell: pwsh
-          if: "${{ inputs.os == 'windows' && inputs.engine-version && inputs.language == 'java' }}"
-          run: |
-              # Ensure WSL2 is the default version
-              wsl --set-default-version 2
-              # Convert the distribution to WSL2 if it's not already
-              wsl --set-version Ubuntu-22.04 2
-
         - name: Install Valkey in WSL (Windows + Java)
           shell: pwsh
           if: "${{ inputs.os == 'windows' && inputs.engine-version && inputs.language == 'java' }}"
           run: |
+              # Test WSL is working
+              Write-Host "Testing WSL..."
+              wsl -d Ubuntu-22.04 -- echo "WSL is working"
+
               # Install dependencies and Valkey in WSL
               wsl -d Ubuntu-22.04 -- sudo apt update
               wsl -d Ubuntu-22.04 -- sudo apt install -y build-essential git pkg-config libssl-dev
