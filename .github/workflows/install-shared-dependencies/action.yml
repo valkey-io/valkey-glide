@@ -68,13 +68,31 @@ runs:
           run: |
               yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
-        - name: Install software dependencies for Windows
+        - name: Setup WSL (Windows + Java)
+          if: "${{ inputs.os == 'windows' && inputs.engine-version && inputs.language == 'java' }}"
+          uses: Vampire/setup-wsl@v3
+          with:
+              distribution: Ubuntu-22.04
+              use-cache: false
+
+        - name: Configure WSL2 (Windows + Java)
           shell: pwsh
-          if: "${{ inputs.os == 'windows' }}"
+          if: "${{ inputs.os == 'windows' && inputs.engine-version && inputs.language == 'java' }}"
           run: |
-              # Verify Rust toolchain is available
-              rustc --version
-              cargo --version
+              # Ensure WSL2 is the default version
+              wsl --set-default-version 2
+              # Convert the distribution to WSL2 if it's not already
+              wsl --set-version Ubuntu-22.04 2
+
+        - name: Install Valkey in WSL (Windows + Java)
+          shell: pwsh
+          if: "${{ inputs.os == 'windows' && inputs.engine-version && inputs.language == 'java' }}"
+          run: |
+              # Install dependencies and Valkey in WSL
+              wsl -d Ubuntu-22.04 -- sudo apt update
+              wsl -d Ubuntu-22.04 -- sudo apt install -y build-essential git pkg-config libssl-dev
+              wsl -d Ubuntu-22.04 -- git clone https://github.com/valkey-io/valkey.git
+              wsl -d Ubuntu-22.04 -- bash -c "cd valkey && git checkout ${{ inputs.engine-version }} && make BUILD_TLS=yes && sudo make install"
 
         - name: Setup Python for Windows
           if: "${{ inputs.os == 'windows' }}"

@@ -154,31 +154,6 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
-            - name: Setup WSL (Windows)
-              if: ${{ matrix.host.OS == 'windows' }}
-              uses: Vampire/setup-wsl@v3
-              with:
-                  distribution: Ubuntu-22.04
-                  use-cache: false
-
-            - name: Install Valkey in WSL (Windows)
-              if: ${{ matrix.host.OS == 'windows' }}
-              shell: powershell
-              run: |
-                  # Build Valkey from source using engine version
-                  wsl -d Ubuntu-22.04 -- bash -c "
-                      export DEBIAN_FRONTEND=noninteractive &&
-                      sudo apt update -qq &&
-                      sudo apt install -y -qq build-essential git pkg-config libssl-dev &&
-                      git clone https://github.com/valkey-io/valkey.git &&
-                      cd valkey &&
-                      git checkout '${{ matrix.engine.version }}' &&
-                      make -j\$(nproc) BUILD_TLS=yes &&
-                      sudo make install
-                  "
-                  
-                  Write-Host "Valkey built and installed in WSL"
-
             - name: Build java client
               working-directory: java
               shell: bash
