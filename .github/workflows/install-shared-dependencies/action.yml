@@ -83,27 +83,30 @@ runs:
           run: |
               Write-Host "=== Installing Valkey directly in WSL ==="
 
-              # Install Valkey directly in WSL using proper PowerShell syntax
-              wsl bash -c @"
-              cd /tmp &&
-              git clone https://github.com/valkey-io/valkey.git &&
-              cd valkey &&
-              git checkout '${{ inputs.engine-version }}' &&
-              make -j4 &&
-              sudo make install &&
-              valkey-server --version &&
-              valkey-cli --version &&
-              echo 'Testing Valkey server startup...' &&
-              valkey-server --port 6379 --daemonize yes &&
-              sleep 2 &&
-              valkey-cli ping || echo 'Valkey server not responding' &&
-              pkill valkey-server || true &&
-              echo 'Configuring system for cluster mode...' &&
-              sudo sysctl vm.overcommit_memory=1 || echo 'Cannot set overcommit' &&
-              sudo bash -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' || echo 'Cannot disable hugepage' &&
-              ulimit -n 65536 || echo 'Cannot set file descriptor limit' &&
-              echo 'Valkey installation complete in WSL'
-              "@
+              # Clone Valkey
+              wsl bash -c "cd /tmp && git clone https://github.com/valkey-io/valkey.git"
+
+              # Checkout version and build
+              wsl bash -c "cd /tmp/valkey && git checkout '${{ inputs.engine-version }}'"
+              wsl bash -c "cd /tmp/valkey && make -j4"
+              wsl bash -c "cd /tmp/valkey && sudo make install"
+
+              # Verify installation
+              wsl bash -c "valkey-server --version"
+              wsl bash -c "valkey-cli --version"
+
+              # Test basic functionality
+              wsl bash -c "valkey-server --port 6379 --daemonize yes"
+              Start-Sleep 2
+              wsl bash -c "valkey-cli ping || echo 'Valkey server not responding'"
+              wsl bash -c "pkill valkey-server || true"
+
+              # Configure system for cluster mode
+              wsl bash -c "sudo sysctl vm.overcommit_memory=1 || echo 'Cannot set overcommit'"
+              wsl bash -c "sudo bash -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' || echo 'Cannot disable hugepage'"
+              wsl bash -c "ulimit -n 65536 || echo 'Cannot set file descriptor limit'"
+
+              Write-Host "Valkey installation complete in WSL"
 
         - name: Setup Python for Windows
           if: "${{ inputs.os == 'windows' }}"
