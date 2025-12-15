@@ -79,19 +79,17 @@ runs:
 
         - name: Install Valkey directly in WSL (Windows)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
-          shell: bash
-          env:
-              ENGINE_VERSION: ${{ inputs.engine-version }}
+          shell: pwsh
           run: |
               echo "=== Installing Valkey directly in WSL ==="
 
               # Install Valkey directly in WSL
-              wsl -- bash -c "
+              wsl -d Ubuntu-22.04 -- bash -c "
                 # Clone and build Valkey
                 cd /tmp
                 git clone https://github.com/valkey-io/valkey.git
                 cd valkey
-                git checkout \"$ENGINE_VERSION\"
+                git checkout '${{ inputs.engine-version }}'
                 make -j4
                 sudo make install
                 
