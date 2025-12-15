@@ -458,10 +458,13 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ConfigSet => RequestType::ConfigSet,
             ProtobufRequestType::ConfigResetStat => RequestType::ConfigResetStat,
             ProtobufRequestType::ConfigRewrite => RequestType::ConfigRewrite,
+            ProtobufRequestType::Auth => RequestType::Auth,
+            ProtobufRequestType::ClientCaching => RequestType::ClientCaching,
             ProtobufRequestType::ClientGetName => RequestType::ClientGetName,
             ProtobufRequestType::ClientGetRedir => RequestType::ClientGetRedir,
             ProtobufRequestType::ClientId => RequestType::ClientId,
             ProtobufRequestType::ClientInfo => RequestType::ClientInfo,
+            ProtobufRequestType::ClientKillSimple => RequestType::ClientKillSimple,
             ProtobufRequestType::ClientKill => RequestType::ClientKill,
             ProtobufRequestType::ClientList => RequestType::ClientList,
             ProtobufRequestType::ClientNoEvict => RequestType::ClientNoEvict,
@@ -470,8 +473,13 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ClientReply => RequestType::ClientReply,
             ProtobufRequestType::ClientSetInfo => RequestType::ClientSetInfo,
             ProtobufRequestType::ClientSetName => RequestType::ClientSetName,
+            ProtobufRequestType::ClientTracking => RequestType::ClientTracking,
+            ProtobufRequestType::ClientTrackingInfo => RequestType::ClientTrackingInfo,
             ProtobufRequestType::ClientUnblock => RequestType::ClientUnblock,
             ProtobufRequestType::ClientUnpause => RequestType::ClientUnpause,
+            ProtobufRequestType::Hello => RequestType::Hello,
+            ProtobufRequestType::Quit => RequestType::Quit,
+            ProtobufRequestType::Reset => RequestType::Reset,
             ProtobufRequestType::Expire => RequestType::Expire,
             ProtobufRequestType::HSet => RequestType::HSet,
             ProtobufRequestType::HGet => RequestType::HGet,
@@ -714,6 +722,39 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ModuleLoad => RequestType::ModuleLoad,
             ProtobufRequestType::ModuleLoadEx => RequestType::ModuleLoadEx,
             ProtobufRequestType::ModuleUnload => RequestType::ModuleUnload,
+            ProtobufRequestType::Asking => RequestType::Asking,
+            ProtobufRequestType::ClusterAddSlots => RequestType::ClusterAddSlots,
+            ProtobufRequestType::ClusterAddSlotsRange => RequestType::ClusterAddSlotsRange,
+            ProtobufRequestType::ClusterBumpEpoch => RequestType::ClusterBumpEpoch,
+            ProtobufRequestType::ClusterCountFailureReports => {
+                RequestType::ClusterCountFailureReports
+            }
+            ProtobufRequestType::ClusterCountKeysInSlot => RequestType::ClusterCountKeysInSlot,
+            ProtobufRequestType::ClusterDelSlots => RequestType::ClusterDelSlots,
+            ProtobufRequestType::ClusterDelSlotsRange => RequestType::ClusterDelSlotsRange,
+            ProtobufRequestType::ClusterFailover => RequestType::ClusterFailover,
+            ProtobufRequestType::ClusterFlushSlots => RequestType::ClusterFlushSlots,
+            ProtobufRequestType::ClusterForget => RequestType::ClusterForget,
+            ProtobufRequestType::ClusterGetKeysInSlot => RequestType::ClusterGetKeysInSlot,
+            ProtobufRequestType::ClusterInfo => RequestType::ClusterInfo,
+            ProtobufRequestType::ClusterKeySlot => RequestType::ClusterKeySlot,
+            ProtobufRequestType::ClusterLinks => RequestType::ClusterLinks,
+            ProtobufRequestType::ClusterMeet => RequestType::ClusterMeet,
+            ProtobufRequestType::ClusterMyId => RequestType::ClusterMyId,
+            ProtobufRequestType::ClusterMyShardId => RequestType::ClusterMyShardId,
+            ProtobufRequestType::ClusterNodes => RequestType::ClusterNodes,
+            ProtobufRequestType::ClusterReplicas => RequestType::ClusterReplicas,
+            ProtobufRequestType::ClusterReplicate => RequestType::ClusterReplicate,
+            ProtobufRequestType::ClusterReset => RequestType::ClusterReset,
+            ProtobufRequestType::ClusterSaveConfig => RequestType::ClusterSaveConfig,
+            ProtobufRequestType::ClusterSetConfigEpoch => RequestType::ClusterSetConfigEpoch,
+            ProtobufRequestType::ClusterSetslot => RequestType::ClusterSetslot,
+            ProtobufRequestType::ClusterShards => RequestType::ClusterShards,
+            ProtobufRequestType::ClusterSlaves => RequestType::ClusterSlaves,
+            ProtobufRequestType::ClusterSlots => RequestType::ClusterSlots,
+            ProtobufRequestType::ReadOnly => RequestType::ReadOnly,
+            ProtobufRequestType::ReadWrite => RequestType::ReadWrite,
+
             _ => todo!(),
         }
     }
@@ -735,10 +776,13 @@ impl RequestType {
             RequestType::ConfigSet => Some(get_two_word_command("CONFIG", "SET")),
             RequestType::ConfigResetStat => Some(get_two_word_command("CONFIG", "RESETSTAT")),
             RequestType::ConfigRewrite => Some(get_two_word_command("CONFIG", "REWRITE")),
+            RequestType::Auth => Some(cmd("AUTH")),
+            RequestType::ClientCaching => Some(get_two_word_command("CLIENT", "CACHING")),
             RequestType::ClientGetName => Some(get_two_word_command("CLIENT", "GETNAME")),
             RequestType::ClientGetRedir => Some(get_two_word_command("CLIENT", "GETREDIR")),
             RequestType::ClientId => Some(get_two_word_command("CLIENT", "ID")),
             RequestType::ClientInfo => Some(get_two_word_command("CLIENT", "INFO")),
+            RequestType::ClientKillSimple => Some(get_two_word_command("CLIENT", "KILL")),
             RequestType::ClientKill => Some(get_two_word_command("CLIENT", "KILL")),
             RequestType::ClientList => Some(get_two_word_command("CLIENT", "LIST")),
             RequestType::ClientNoEvict => Some(get_two_word_command("CLIENT", "NO-EVICT")),
@@ -747,8 +791,13 @@ impl RequestType {
             RequestType::ClientReply => Some(get_two_word_command("CLIENT", "REPLY")),
             RequestType::ClientSetInfo => Some(get_two_word_command("CLIENT", "SETINFO")),
             RequestType::ClientSetName => Some(get_two_word_command("CLIENT", "SETNAME")),
+            RequestType::ClientTracking => Some(get_two_word_command("CLIENT", "TRACKING")),
+            RequestType::ClientTrackingInfo => Some(get_two_word_command("CLIENT", "TRACKINGINFO")),
             RequestType::ClientUnblock => Some(get_two_word_command("CLIENT", "UNBLOCK")),
             RequestType::ClientUnpause => Some(get_two_word_command("CLIENT", "UNPAUSE")),
+            RequestType::Hello => Some(cmd("HELLO")),
+            RequestType::Quit => Some(cmd("QUIT")),
+            RequestType::Reset => Some(cmd("RESET")),
             RequestType::Expire => Some(cmd("EXPIRE")),
             RequestType::HSet => Some(cmd("HSET")),
             RequestType::HGet => Some(cmd("HGET")),
@@ -995,6 +1044,48 @@ impl RequestType {
             RequestType::ModuleLoad => Some(get_two_word_command("MODULE", "LOAD")),
             RequestType::ModuleLoadEx => Some(get_two_word_command("MODULE", "LOADEX")),
             RequestType::ModuleUnload => Some(get_two_word_command("MODULE", "UNLOAD")),
+            RequestType::Asking => Some(cmd("ASKING")),
+            RequestType::ClusterAddSlots => Some(get_two_word_command("CLUSTER", "ADDSLOTS")),
+            RequestType::ClusterAddSlotsRange => {
+                Some(get_two_word_command("CLUSTER", "ADDSLOTSRANGE"))
+            }
+            RequestType::ClusterBumpEpoch => Some(get_two_word_command("CLUSTER", "BUMPEPOCH")),
+            RequestType::ClusterCountFailureReports => {
+                Some(get_two_word_command("CLUSTER", "COUNT-FAILURE-REPORTS"))
+            }
+            RequestType::ClusterCountKeysInSlot => {
+                Some(get_two_word_command("CLUSTER", "COUNTKEYSINSLOT"))
+            }
+            RequestType::ClusterDelSlots => Some(get_two_word_command("CLUSTER", "DELSLOTS")),
+            RequestType::ClusterDelSlotsRange => {
+                Some(get_two_word_command("CLUSTER", "DELSLOTSRANGE"))
+            }
+            RequestType::ClusterFailover => Some(get_two_word_command("CLUSTER", "FAILOVER")),
+            RequestType::ClusterFlushSlots => Some(get_two_word_command("CLUSTER", "FLUSHSLOTS")),
+            RequestType::ClusterForget => Some(get_two_word_command("CLUSTER", "FORGET")),
+            RequestType::ClusterGetKeysInSlot => {
+                Some(get_two_word_command("CLUSTER", "GETKEYSINSLOT"))
+            }
+            RequestType::ClusterInfo => Some(get_two_word_command("CLUSTER", "INFO")),
+            RequestType::ClusterKeySlot => Some(get_two_word_command("CLUSTER", "KEYSLOT")),
+            RequestType::ClusterLinks => Some(get_two_word_command("CLUSTER", "LINKS")),
+            RequestType::ClusterMeet => Some(get_two_word_command("CLUSTER", "MEET")),
+            RequestType::ClusterMyId => Some(get_two_word_command("CLUSTER", "MYID")),
+            RequestType::ClusterMyShardId => Some(get_two_word_command("CLUSTER", "MYSHARDID")),
+            RequestType::ClusterNodes => Some(get_two_word_command("CLUSTER", "NODES")),
+            RequestType::ClusterReplicas => Some(get_two_word_command("CLUSTER", "REPLICAS")),
+            RequestType::ClusterReplicate => Some(get_two_word_command("CLUSTER", "REPLICATE")),
+            RequestType::ClusterReset => Some(get_two_word_command("CLUSTER", "RESET")),
+            RequestType::ClusterSaveConfig => Some(get_two_word_command("CLUSTER", "SAVECONFIG")),
+            RequestType::ClusterSetConfigEpoch => {
+                Some(get_two_word_command("CLUSTER", "SET-CONFIG-EPOCH"))
+            }
+            RequestType::ClusterSetslot => Some(get_two_word_command("CLUSTER", "SETSLOT")),
+            RequestType::ClusterShards => Some(get_two_word_command("CLUSTER", "SHARDS")),
+            RequestType::ClusterSlaves => Some(get_two_word_command("CLUSTER", "SLAVES")),
+            RequestType::ClusterSlots => Some(get_two_word_command("CLUSTER", "SLOTS")),
+            RequestType::ReadOnly => Some(cmd("READONLY")),
+            RequestType::ReadWrite => Some(cmd("READWRITE")),
             _ => todo!(),
         }
     }
