@@ -62,17 +62,17 @@ runs:
           if: ${{ steps.cache-valkey.outputs.cache-hit == 'true' }}
           shell: bash
           run: |
-              cd valkey/src
               if [[ "${{ inputs.target }}" == "x86_64-pc-windows-msvc" ]]; then
-                  # Install in WSL for Windows
-                  wsl -d Ubuntu -u root -- bash -c "
-                      cp /mnt/c/Users/runneradmin/work/valkey-glide/valkey-glide/valkey/src/valkey-server /usr/local/bin/ &&
-                      cp /mnt/c/Users/runneradmin/work/valkey-glide/valkey-glide/valkey/src/valkey-cli /usr/local/bin/ &&
-                      ln -sf /usr/local/bin/valkey-server /usr/local/bin/redis-server &&
-                      ln -sf /usr/local/bin/valkey-cli /usr/local/bin/redis-cli
+                  # Install cached binaries in WSL for Windows
+                  wsl -d Ubuntu-22.04 -- bash -c "
+                      sudo cp /mnt/c/Users/runneradmin/work/valkey-glide/valkey-glide/valkey/src/valkey-server /usr/local/bin/ &&
+                      sudo cp /mnt/c/Users/runneradmin/work/valkey-glide/valkey-glide/valkey/src/valkey-cli /usr/local/bin/ &&
+                      sudo ln -sf /usr/local/bin/valkey-server /usr/local/bin/redis-server &&
+                      sudo ln -sf /usr/local/bin/valkey-cli /usr/local/bin/redis-cli
                   "
               else
                   # Install on Linux/macOS
+                  cd valkey/src
                   if command -v sudo &> /dev/null
                   then
                       echo "sudo command exists"
@@ -97,16 +97,17 @@ runs:
           shell: bash
           run: |
               if [[ "${{ inputs.target }}" == "x86_64-pc-windows-msvc" ]]; then
-                  # Build in WSL for Windows
-                  wsl -d Ubuntu -u root -- bash -c "
+                  # Build from source in WSL for Windows
+                  wsl -d Ubuntu-22.04 -- bash -c "
+                      export DEBIAN_FRONTEND=noninteractive &&
+                      sudo apt update -qq &&
+                      sudo apt install -y -qq build-essential git pkg-config libssl-dev &&
                       cd /mnt/c/Users/runneradmin/work/valkey-glide/valkey-glide/valkey &&
-                      apt update &&
-                      apt install -y build-essential pkg-config libssl-dev &&
-                      make BUILD_TLS=yes &&
-                      cp src/valkey-server /usr/local/bin/ &&
-                      cp src/valkey-cli /usr/local/bin/ &&
-                      ln -sf /usr/local/bin/valkey-server /usr/local/bin/redis-server &&
-                      ln -sf /usr/local/bin/valkey-cli /usr/local/bin/redis-cli
+                      make -j\$(nproc) BUILD_TLS=yes &&
+                      sudo cp src/valkey-server /usr/local/bin/ &&
+                      sudo cp src/valkey-cli /usr/local/bin/ &&
+                      sudo ln -sf /usr/local/bin/valkey-server /usr/local/bin/redis-server &&
+                      sudo ln -sf /usr/local/bin/valkey-cli /usr/local/bin/redis-cli
                   "
               else
                   # Build on Linux/macOS

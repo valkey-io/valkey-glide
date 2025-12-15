@@ -154,31 +154,30 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
-            - name: Setup Python3 for Windows
+            - name: Setup WSL (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              uses: Vampire/setup-wsl@v3
+              with:
+                  distribution: Ubuntu-22.04
+                  use-cache: false
+
+            - name: Install Valkey in WSL (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
               shell: powershell
               run: |
-                  # Enable WSL feature
-                  Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart
-
-                  # Install Ubuntu
-                  wsl --install Ubuntu --no-launch
-
-                  # Wait for installation
-                  Start-Sleep -Seconds 30
-
-                  # Initialize WSL and install Python
-                  wsl -d Ubuntu -u root -- apt update
-                  wsl -d Ubuntu -u root -- apt install -y python3 python3-pip redis-tools build-essential pkg-config libssl-dev git
-
-                  # Create python3 symlink for Windows
-                  if (Get-Command python -ErrorAction SilentlyContinue) {
-                      $pythonPath = (Get-Command python).Source
-                      $python3Path = Join-Path (Split-Path $pythonPath) "python3.exe"
-                      if (-not (Test-Path $python3Path)) {
-                          New-Item -ItemType HardLink -Path $python3Path -Target $pythonPath -Force
-                      }
-                  }
+                  # Build Valkey from source using engine version
+                  wsl -d Ubuntu-22.04 -- bash -c "
+                      export DEBIAN_FRONTEND=noninteractive &&
+                      sudo apt update -qq &&
+                      sudo apt install -y -qq build-essential git pkg-config libssl-dev &&
+                      git clone https://github.com/valkey-io/valkey.git &&
+                      cd valkey &&
+                      git checkout '${{ matrix.engine.version }}' &&
+                      make -j\$(nproc) BUILD_TLS=yes &&
+                      sudo make install
+                  "
+                  
+                  Write-Host "Valkey built and installed in WSL"
 
             - name: Build java client
               working-directory: java
