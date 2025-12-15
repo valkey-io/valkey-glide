@@ -1,3 +1,8 @@
+plugins {
+    id 'java-library'
+    id "com.google.osdetector" version "1.7.3"
+}
+
 // Platform-specific Python executable
 def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
 
@@ -204,10 +209,12 @@ clearDirs.finalizedBy 'startClusterForAz'
 gradle.buildFinished {
     println "Finding and stopping all running Valkey processes..."
     
+    def isWindowsRuntime = System.getProperty('os.name').toLowerCase().contains('windows')
+    
     // Find and kill all Valkey processes
     try {
         exec {
-            if (isWindows) {
+            if (isWindowsRuntime) {
                 commandLine 'wsl', 'pkill', '-f', 'valkey-server'
             } else {
                 commandLine 'pkill', '-f', 'valkey-server'
@@ -221,7 +228,7 @@ gradle.buildFinished {
     // Also try redis-server processes
     try {
         exec {
-            if (isWindows) {
+            if (isWindowsRuntime) {
                 commandLine 'wsl', 'pkill', '-f', 'redis-server'
             } else {
                 commandLine 'pkill', '-f', 'redis-server'
@@ -236,7 +243,12 @@ gradle.buildFinished {
     try {
         exec {
             workingDir "${project.rootDir}/../utils"
-            commandLine getClusterCommand(['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'])
+            def cleanupArgs = ['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster']
+            if (isWindowsRuntime) {
+                commandLine(['wsl'] + cleanupArgs)
+            } else {
+                commandLine cleanupArgs
+            }
             ignoreExitValue true
         }
     } catch (Exception e) {
