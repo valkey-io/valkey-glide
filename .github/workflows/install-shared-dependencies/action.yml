@@ -90,8 +90,7 @@ runs:
               github-token: ${{ inputs.github-token }}
 
         - name: Install engine
-          # TODO: Remove Windows exclusion when Windows integration tests are implemented
-          if: "${{ inputs.engine-version && inputs.os != 'windows' }}"
+          if: "${{ inputs.engine-version }}"
           uses: ./.github/workflows/install-engine
           with:
               engine-version: ${{ inputs.engine-version }}

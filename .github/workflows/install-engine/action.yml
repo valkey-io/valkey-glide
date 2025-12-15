@@ -16,6 +16,7 @@ inputs:
             - aarch64-apple-darwin
             - aarch64-unknown-linux-musl
             - x86_64-unknown-linux-musl
+            - x86_64-pc-windows-msvc
 
 env:
     CARGO_TERM_COLOR: always
@@ -62,39 +63,65 @@ runs:
           shell: bash
           run: |
               cd valkey/src
-              if command -v sudo &> /dev/null
-              then
-                  echo "sudo command exists"
-                  SUDO=sudo
-              fi
-              # Remove existing binaries to prevent version mismatches on persistent self-hosted runners
-              $SUDO rm -f /usr/local/bin/valkey-server /usr/local/bin/valkey-cli /usr/local/bin/redis-server /usr/local/bin/redis-cli
-              # Copy files individually, as valkey and redis usually won't exist at the same time
-              for file in valkey-server valkey-cli redis-server redis-cli; do
-                  if [[ -f $file ]]; then
-                      $SUDO cp $file /usr/local/bin/
+              if [[ "${{ inputs.target }}" == "x86_64-pc-windows-msvc" ]]; then
+                  # Install in WSL for Windows
+                  wsl -d Ubuntu -u root -- bash -c "
+                      cp /mnt/c/Users/runneradmin/work/valkey-glide/valkey-glide/valkey/src/valkey-server /usr/local/bin/ &&
+                      cp /mnt/c/Users/runneradmin/work/valkey-glide/valkey-glide/valkey/src/valkey-cli /usr/local/bin/ &&
+                      ln -sf /usr/local/bin/valkey-server /usr/local/bin/redis-server &&
+                      ln -sf /usr/local/bin/valkey-cli /usr/local/bin/redis-cli
+                  "
+              else
+                  # Install on Linux/macOS
+                  if command -v sudo &> /dev/null
+                  then
+                      echo "sudo command exists"
+                      SUDO=sudo
                   fi
-              done
-              if [[ ! -e /usr/local/bin/redis-server ]]; then
-                  $SUDO cp valkey-server /usr/local/bin/redis-server
+                  # Remove existing binaries to prevent version mismatches on persistent self-hosted runners
+                  $SUDO rm -f /usr/local/bin/valkey-server /usr/local/bin/valkey-cli /usr/local/bin/redis-server /usr/local/bin/redis-cli
+                  # Copy files individually, as valkey and redis usually won't exist at the same time
+                  for file in valkey-server valkey-cli redis-server redis-cli; do
+                      if [[ -f $file ]]; then
+                          $SUDO cp $file /usr/local/bin/
+                      fi
+                  done
+                  if [[ ! -e /usr/local/bin/redis-server ]]; then
+                      $SUDO cp valkey-server /usr/local/bin/redis-server
+                  fi
+                  echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
               fi
-              echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
         - name: Build and install engine
           if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
           shell: bash
           run: |
-              cd valkey
-              make BUILD_TLS=yes
-              if command -v sudo &> /dev/null
-              then
-                  echo "sudo command exists"
-                  sudo make install
+              if [[ "${{ inputs.target }}" == "x86_64-pc-windows-msvc" ]]; then
+                  # Build in WSL for Windows
+                  wsl -d Ubuntu -u root -- bash -c "
+                      cd /mnt/c/Users/runneradmin/work/valkey-glide/valkey-glide/valkey &&
+                      apt update &&
+                      apt install -y build-essential pkg-config libssl-dev &&
+                      make BUILD_TLS=yes &&
+                      cp src/valkey-server /usr/local/bin/ &&
+                      cp src/valkey-cli /usr/local/bin/ &&
+                      ln -sf /usr/local/bin/valkey-server /usr/local/bin/redis-server &&
+                      ln -sf /usr/local/bin/valkey-cli /usr/local/bin/redis-cli
+                  "
               else
-                  echo "sudo command does not exist"
-                  make install
+                  # Build on Linux/macOS
+                  cd valkey
+                  make BUILD_TLS=yes
+                  if command -v sudo &> /dev/null
+                  then
+                      echo "sudo command exists"
+                      sudo make install
+                  else
+                      echo "sudo command does not exist"
+                      make install
+                  fi
+                  echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
               fi
-              echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
         # TODO: This seems redundant to me. Is it necessary? Do we check that the Python we install is the correct version?
         # Why here and not elsewhere? All Git git repos were created equal
