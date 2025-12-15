@@ -2113,6 +2113,7 @@ public class JedisTest {
 
     @Test
     @Disabled("HGETDEL command is currently unsupported")
+    // Keep this disabled until https://github.com/valkey-io/valkey-glide/issues/5069 is completed
     void hgetdel_command() {
 
         String key = UUID.randomUUID().toString();
@@ -2480,7 +2481,7 @@ public class JedisTest {
     }
 
     @Test
-    void hash_commands_binary_newer() {
+    void hash_commands_binary_hsetex_hgetex() {
         // Hash field expiration commands (HSETEX, HGETEX) are available in Valkey 9.0.0+
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
@@ -2515,6 +2516,7 @@ public class JedisTest {
 
     @Test
     @Disabled("HGETDEL command is currently unsupported")
+    // Keep this disabled until https://github.com/valkey-io/valkey-glide/issues/5069 is completed
     void hash_commands_binary_hgetdel() {
 
         byte[] key = (UUID.randomUUID().toString()).getBytes();
