@@ -1,3 +1,7 @@
+## 2.2.3
+
+* JAVA: Unshadow Apache Commons Lang3 to avoid failures due to dependency conflicts
+
 ## 2.2.2
 
 #### Security Fixes
