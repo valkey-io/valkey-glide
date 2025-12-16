@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use redis::{PubSubSynchronizer, SubscriptionType};
+use redis::{PubSubSynchronizer, SlotMap, SubscriptionType};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -71,6 +71,7 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
         &self,
         _channels: HashSet<String>,
         _subscription_type: SubscriptionType,
+        _address: String,
     ) {
         // TODO: Implement for real synchronizer
     }
@@ -79,6 +80,7 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
         &self,
         _channels: HashSet<String>,
         _subscription_type: SubscriptionType,
+        _address: String,
     ) {
         // TODO: Implement for real synchronizer
     }
@@ -99,6 +101,10 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
     }
 
     async fn trigger_reconciliation(&self) {
+        // TODO: Implement for real synchronizer
+    }
+
+    fn handle_topology_refresh(&self, _new_slot_map: &SlotMap) {
         // TODO: Implement for real synchronizer
     }
 }

@@ -1,5 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use crate::cluster_slotmap::SlotMap;
 use crate::{Cmd, RedisResult, Value};
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
@@ -38,6 +39,7 @@ pub trait PubSubSynchronizer: Send + Sync {
         &self,
         channels: HashSet<String>,
         subscription_type: SubscriptionType,
+        address: String,
     );
 
     /// Remove channels from current (actual) subscriptions
@@ -45,6 +47,7 @@ pub trait PubSubSynchronizer: Send + Sync {
         &self,
         channels: HashSet<String>,
         subscription_type: SubscriptionType,
+        address: String,
     );
 
     /// Get the current state of both desired and actual subscriptions
@@ -73,8 +76,16 @@ pub trait PubSubSynchronizer: Send + Sync {
         // Default: no-op
     }
 
-    /// Try to intercept and handle a pubsub command
-    /// Returns Some(result) if the command was handled, None if it should go through normal path
+    /// Handle a topology refresh event.
+    ///
+    /// This method is called when the cluster topology changes (e.g., after slot refresh,
+    /// node failover, or cluster rebalancing).
+    fn handle_topology_refresh(&self, _new_slot_map: &SlotMap) {
+        // Default: no-op
+    }
+
+    /// Try to intercept and handle a pubsub command.
+    /// Returns Some(result) if the command was handled, None if it should go through normal path.
     async fn intercept_pubsub_command(&self, _cmd: &Cmd) -> Option<RedisResult<Value>> {
         // Default: don't intercept
         None

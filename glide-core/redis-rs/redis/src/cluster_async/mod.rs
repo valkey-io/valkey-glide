@@ -2047,11 +2047,6 @@ where
         }
         in_progress.store(false, Ordering::Relaxed);
 
-        // Trigger reconciliation to align subscriptions with new topology
-        if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
-            sync.trigger_reconciliation().await;
-        }
-
         Self::refresh_pubsub_subscriptions(inner).await;
 
         res
@@ -2334,19 +2329,35 @@ where
 
         info!("refresh_slots found nodes:\n{new_connections}");
         // Reset the current slot map and connection vector with the new ones
-        let mut write_guard = inner.conn_lock.write().expect(MUTEX_WRITE_ERR);
-        // Clear the refresh tasks of the prev instance
-        // TODO - Maybe we can take the running refresh tasks and use them instead of running new connection creation
-        write_guard.refresh_conn_state.clear_refresh_state();
-        let read_from_replicas = inner
-            .get_cluster_param(|params| params.read_from_replicas.clone())
-            .expect(MUTEX_READ_ERR);
-        *write_guard = ConnectionsContainer::new(
-            new_slots,
-            new_connections,
-            read_from_replicas,
-            topology_hash,
-        );
+        {
+            let mut write_guard = inner.conn_lock.write().expect(MUTEX_WRITE_ERR);
+            // Clear the refresh tasks of the prev instance
+            // TODO - Maybe we can take the running refresh tasks and use them instead of running new connection creation
+            write_guard.refresh_conn_state.clear_refresh_state();
+            let read_from_replicas = inner
+                .get_cluster_param(|params| params.read_from_replicas.clone())
+                .expect(MUTEX_READ_ERR);
+            *write_guard = ConnectionsContainer::new(
+                new_slots,
+                new_connections,
+                read_from_replicas,
+                topology_hash,
+            );
+        }
+
+        println!("DEBUG: About to call handle_topology_refresh");
+
+        // Notify the PubSub synchronizer about the new topology
+        if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
+            println!("DEBUG: Synchronizer exists, calling handle_topology_refresh");
+            let guard = inner.conn_lock.read().expect(MUTEX_READ_ERR);
+            sync.handle_topology_refresh(&guard.slot_map);
+            println!("DEBUG: handle_topology_refresh completed");
+        } else {
+            println!("DEBUG: No synchronizer");
+        }
+
+        println!("DEBUG: refresh_slots_inner returning Ok");
         Ok(())
     }
 

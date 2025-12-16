@@ -612,6 +612,11 @@ impl MultiplexedConnection {
             Pipeline::new(codec, glide_connection_options.disconnect_notifier);
         let driver = Box::pin(driver);
         let pm = PushManager::default();
+
+        // Set the address on the PushManager so it can track subscriptions by node
+        let address = connection_info.addr.to_string();
+        pm.set_address(address);
+
         if let Some(sender) = glide_connection_options.push_sender {
             pm.replace_sender(sender);
         }

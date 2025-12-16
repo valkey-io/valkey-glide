@@ -2712,4 +2712,41 @@ pub(crate) mod shared_client_tests {
             }
         });
     }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_topology_change_and_reconnect(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // 1. Do a PING to verify connection works
+            let ping_result = test_basics
+                .client
+                .send_command(&mut redis::cmd("PING"), None)
+                .await;
+            assert!(ping_result.is_ok(), "Initial PING should succeed: {ping_result:?}");
+            assert_eq!(ping_result.unwrap(), Value::SimpleString("PONG".to_string()));
+
+            // 2. Trigger topology change by killing connections
+            kill_connection(&mut test_basics.client).await;
+
+            // 3. Sleep a bit to allow reconnection
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+            // 4. Verify client can still work after topology change
+            let ping_after = test_basics
+                .client
+                .send_command(&mut redis::cmd("PING"), None)
+                .await;
+            assert!(ping_after.is_ok(), "PING after topology change should succeed: {ping_after:?}");
+        });
+    }
 }

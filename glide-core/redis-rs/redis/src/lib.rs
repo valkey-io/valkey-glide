@@ -418,6 +418,9 @@ pub use crate::commands::ObjectType;
 pub use crate::commands::ClusterScanArgs;
 
 #[cfg(feature = "cluster")]
+pub use cluster_slotmap::SlotMap;
+
+#[cfg(feature = "cluster")]
 mod cluster_client;
 
 /// for testing purposes

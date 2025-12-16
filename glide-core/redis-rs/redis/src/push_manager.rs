@@ -17,6 +17,7 @@ pub struct PushInfo {
 pub struct PushManager {
     sender: Arc<ArcSwap<Option<mpsc::UnboundedSender<PushInfo>>>>,
     pubsub_synchronizer: Arc<ArcSwap<Option<Arc<dyn PubSubSynchronizer>>>>,
+    address: Arc<ArcSwap<Option<String>>>,
 }
 impl PushManager {
     /// It checks if value's type is Push
@@ -44,14 +45,25 @@ impl PushManager {
 
             let sync_guard = self.pubsub_synchronizer.load();
             if let Some(sync) = sync_guard.as_ref() {
-                Self::handle_pubsub_push(sync, kind, data);
+                let address = self.address.load().as_ref().clone();
+                Self::handle_pubsub_push(sync, kind, data, address);
             }
         }
     }
 
-    fn handle_pubsub_push(sync: &Arc<dyn PubSubSynchronizer>, kind: &PushKind, data: &[Value]) {
+    fn handle_pubsub_push(
+        sync: &Arc<dyn PubSubSynchronizer>,
+        kind: &PushKind,
+        data: &[Value],
+        address: Option<String>,
+    ) {
         use crate::pubsub_synchronizer::SubscriptionType;
         use std::collections::HashSet;
+
+        // We need an address to track subscriptions properly
+        let Some(address) = address else {
+            return;
+        };
 
         // Only process subscription-related pushes
         let (subscription_type, is_subscribe) = match kind {
@@ -79,10 +91,10 @@ impl PushManager {
         let sync = Arc::clone(sync);
         tokio::spawn(async move {
             if is_subscribe {
-                sync.add_current_subscriptions(channels, subscription_type)
+                sync.add_current_subscriptions(channels, subscription_type, address)
                     .await;
             } else {
-                sync.remove_current_subscriptions(channels, subscription_type)
+                sync.remove_current_subscriptions(channels, subscription_type, address)
                     .await;
             }
         });
@@ -101,11 +113,23 @@ impl PushManager {
         self.pubsub_synchronizer.store(Arc::new(Some(synchronizer)));
     }
 
+    /// Set the address of the connection this PushManager is associated with.
+    /// This address will be passed to the synchronizer when handling subscription pushes.
+    pub fn set_address(&self, address: String) {
+        self.address.store(Arc::new(Some(address)));
+    }
+
+    /// Get the address associated with this PushManager
+    pub fn get_address(&self) -> Option<String> {
+        self.address.load().as_ref().clone()
+    }
+
     /// Creates new `PushManager`
     pub fn new() -> Self {
         PushManager {
             sender: Arc::from(ArcSwap::from(Arc::new(None))),
             pubsub_synchronizer: Arc::from(ArcSwap::from(Arc::new(None))),
+            address: Arc::from(ArcSwap::from(Arc::new(None))),
         }
     }
 }

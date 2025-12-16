@@ -5,7 +5,7 @@ use logger_core::{log_debug, log_warn};
 use once_cell::sync::Lazy;
 use redis::cluster_routing::Routable;
 use redis::{Cmd, ErrorKind, PushInfo, PushKind, RedisError, RedisResult, Value};
-use redis::{PubSubSynchronizer, SubscriptionType};
+use redis::{PubSubSynchronizer, SlotMap, SubscriptionType};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -255,6 +255,7 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
         &self,
         channels: HashSet<String>,
         subscription_type: SubscriptionType,
+        _address: String,
     ) {
         let mut set = match subscription_type {
             SubscriptionType::Exact => self.actual_channels.write().await,
@@ -271,6 +272,7 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
         &self,
         channels: HashSet<String>,
         subscription_type: SubscriptionType,
+        _address: String,
     ) {
         let mut set = match subscription_type {
             SubscriptionType::Exact => self.actual_channels.write().await,
@@ -281,6 +283,10 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
         for channel in channels {
             set.remove(&channel);
         }
+    }
+
+    fn handle_topology_refresh(&self, _new_slot_map: &SlotMap) {
+        // No-op, mock doesn't track topology
     }
 
     async fn get_subscription_state(
