@@ -57,7 +57,6 @@ public class ValkeyCluster implements AutoCloseable {
             }
 
             command.add("start");
-            command.add("--skip-topology-wait");
 
             if (clusterMode) {
                 command.add("--cluster-mode");

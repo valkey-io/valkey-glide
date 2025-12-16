@@ -114,14 +114,16 @@ def should_generate_new_tls_certs() -> bool:
 def generate_tls_certs():
     # Based on shell script in valkey's server tests
     # https://github.com/valkey-io/valkey/blob/0d2ba9b94d28d4022ea475a2b83157830982c941/utils/gen-test-certs.sh
-    logging.debug("## Generating TLS certificates")
+    logging.info("## Generating TLS certificates")
     tic = time.perf_counter()
     ca_key = f"{TLS_FOLDER}/ca.key"
     ca_serial = f"{TLS_FOLDER}/ca.txt"
     ext_file = f"{TLS_FOLDER}/openssl.cnf"
 
     f = open(ext_file, "w")
-    f.write("keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,DNS:localhost")
+    subject_alt_name = "IP:127.0.0.1,DNS:localhost"
+    logging.debug(f"Certificate subjectAltName: {subject_alt_name}")
+    f.write(f"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = {subject_alt_name}")
     f.close()
 
     def make_key(name: str, size: int):
@@ -463,6 +465,7 @@ def create_servers(
         
         # Only generate default certs if using default paths and they don't exist
         if not tls_cert_file and should_generate_new_tls_certs():
+            logging.info("Generating TLS certificates for cluster")
             generate_tls_certs()
             
         tls_args = [
@@ -538,7 +541,6 @@ def create_cluster(
     tls_cert_file: Optional[str] = None,
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
-    skip_topology_wait: bool = False,
 ):
     tic = time.perf_counter()
     servers_tuple = (str(server) for server in servers)
@@ -563,8 +565,7 @@ def create_cluster(
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
     wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
-    if not skip_topology_wait:
-        wait_for_all_topology_views(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
+    wait_for_all_topology_views(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
     print_servers_json(servers)
 
     logging.debug("The cluster was successfully created!")
@@ -718,35 +719,44 @@ def wait_for_all_topology_views(
         ]
         logging.debug(f"Executing: {cmd_args}")
         retries = 80
+        output = ""
         while retries >= 0:
             output = redis_cli_run_command(cmd_args)
-            if output is not None and output.count(f"{server.host}") == len(servers):
-                # Server is ready, get the node's role
-                cmd_args = [
-                    get_cli_command(),
-                    "-h",
-                    server.host,
-                    "-p",
-                    str(server.port),
-                    *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
-                    "cluster",
-                    "nodes",
-                ]
-                cluster_slots_output = redis_cli_run_command(cmd_args)
-                node_info = parse_cluster_nodes(cluster_slots_output)
-                if node_info:
-                    server.set_primary(node_info["is_primary"])
-                logging.debug(f"Server {server} is ready!")
-                break
+            logging.debug(
+                f"Checking server {server.host}:{server.port}, output: {output}"
+            )
+            if output is not None:
+                host_count = output.count(f"{server.host}")
+                logging.debug(
+                    f"Found {host_count} occurrences of '{server.host}' in output, need {len(servers)}"
+                )
+                if host_count == len(servers):
+                    # Server is ready, get the node's role
+                    cmd_args = [
+                        get_cli_command(),
+                        "-h",
+                        server.host,
+                        "-p",
+                        str(server.port),
+                        *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                        "cluster",
+                        "nodes",
+                    ]
+                    cluster_slots_output = redis_cli_run_command(cmd_args)
+                    node_info = parse_cluster_nodes(cluster_slots_output)
+                    if node_info:
+                        server.set_primary(node_info["is_primary"])
+                    logging.debug(f"Server {server} is ready!")
+                    break
             else:
-                retries -= 1
-                time.sleep(1)
-                continue
+                logging.debug(f"No output received from server {server.host}:{server.port}, retries left: {retries}")
+            retries -= 1
+            time.sleep(1)
 
         if retries < 0:
             raise Exception(
-                f"Timeout exceeded trying to wait for server {server} to know all hosts.\n"
-                f"Current CLUSTER SLOTS output:\n{output}"
+                f"Timeout exceeded trying to wait for server {server.host}:{server.port} to know all hosts.\n"
+                f"Current CLUSTER SLOTS output:\n{output if output else 'No output received'}"
             )
 
 
@@ -1179,13 +1189,6 @@ def main():
         help="Path to TLS CA certificate file (default: uses generated certificates)",
         required=False,
     )
-    
-    parser_start.add_argument(
-        "--skip-topology-wait",
-        action="store_true",
-        help="Skip waiting for topology views to converge (useful for CI environments)",
-        required=False,
-    )
 
     # Stop parser
     parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
@@ -1286,7 +1289,6 @@ def main():
                 getattr(args, 'tls_cert_file', None),
                 getattr(args, 'tls_key_file', None),
                 getattr(args, 'tls_ca_cert_file', None),
-                args.skip_topology_wait,
             )
         elif args.replica_count > 0:
             # Create a standalone replication group

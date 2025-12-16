@@ -63,13 +63,6 @@ def clusterHosts = ''
 def clusterTlsHosts = ''
 def azClusterHosts = ''
 
-// Store cluster folder paths for targeted cleanup
-def standaloneFolders = []
-def standaloneTlsFolders = []
-def clusterFolders = []
-def clusterTlsFolders = []
-def azClusterFolders = []
-
 ext {
     extractAddressesFromClusterManagerOutput = { String output ->
         for (def line : output.split("\n")) {
@@ -80,31 +73,19 @@ ext {
         }
         return ''
     }
-    
-    extractClusterFolderFromOutput = { String output ->
-        for (def line : output.split("\n")) {
-            if (!line.startsWith("CLUSTER_FOLDER="))
-                continue
-
-            return line.split("=")[1]
-        }
-        return ''
-    }
 }
 
 tasks.register('stopAllAfterTests') {
     doLast {
-        // Stop specific clusters that were started by Gradle
-        [standaloneFolders, standaloneTlsFolders, clusterFolders, clusterTlsFolders, azClusterFolders].each { folderList ->
-            folderList.each { folder ->
-                if (folder) {
-                    exec {
-                        workingDir "${project.rootDir}/../utils"
-                        commandLine getClusterCommand(['python3', 'cluster_manager.py', 'stop', '--cluster-folder', folder, '--keep-folder'])
-                        ignoreExitValue true
-                    }
-                }
-            }
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            commandLine getClusterCommand(['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'])
+            ignoreExitValue true // ignore fail if servers are stopped before
+        }
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            commandLine getClusterCommand(['python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster', '--keep-folder'])
+            ignoreExitValue true
         }
     }
 }
@@ -114,7 +95,6 @@ tasks.register('stopAllAfterTests') {
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
 tasks.register('stopAllBeforeTests') {
     doLast {
-        // Stop any existing clusters with the standard prefixes (cleanup from previous runs)
         exec {
             workingDir "${project.rootDir}/../utils"
             commandLine getClusterCommand(['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'])
@@ -145,10 +125,6 @@ tasks.register('startCluster') {
                     standardOutput = os
                 }
                 clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
-                def clusterFolder = extractClusterFolderFromOutput(os.toString())
-                if (clusterFolder) {
-                    clusterFolders.add(clusterFolder)
-                }
             }
         } else {
             clusterHosts = System.getProperty("cluster-endpoints")
@@ -168,10 +144,6 @@ tasks.register('startClusterForAz') {
                     standardOutput = os
                 }
                 azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
-                def azClusterFolder = extractClusterFolderFromOutput(os.toString())
-                if (azClusterFolder) {
-                    azClusterFolders.add(azClusterFolder)
-                }
             }
         } else {
             azClusterHosts = System.getProperty("cluster-endpoints")
@@ -193,10 +165,6 @@ tasks.register('startStandalone') {
                     standardOutput = os
                 }
                 standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
-                def standaloneFolder = extractClusterFolderFromOutput(os.toString())
-                if (standaloneFolder) {
-                    standaloneFolders.add(standaloneFolder)
-                }
             }
         } else {
             standaloneHosts = System.getProperty("standalone-endpoints")
@@ -213,10 +181,6 @@ tasks.register('startStandaloneTls') {
                 standardOutput = os
             }
             standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
-            def standaloneTlsFolder = extractClusterFolderFromOutput(os.toString())
-            if (standaloneTlsFolder) {
-                standaloneTlsFolders.add(standaloneTlsFolder)
-            }
         }
     }
 }
@@ -230,10 +194,6 @@ tasks.register('startClusterTls') {
                 standardOutput = os
             }
             clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
-            def clusterTlsFolder = extractClusterFolderFromOutput(os.toString())
-            if (clusterTlsFolder) {
-                clusterTlsFolders.add(clusterTlsFolder)
-            }
         }
     }
 }
