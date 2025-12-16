@@ -209,6 +209,7 @@ clearDirs.finalizedBy 'startClusterForAz'
 gradle.buildFinished {
     println "Finding and stopping all running Valkey processes..."
     
+    // OS detection
     def isWindowsRuntime = System.getProperty('os.name').toLowerCase().contains('windows')
     
     // Find and kill all Valkey processes
