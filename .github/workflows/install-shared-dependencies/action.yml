@@ -131,7 +131,7 @@ runs:
               github-token: ${{ inputs.github-token }}
 
         - name: Install engine
-          if: "${{ inputs.engine-version }}"
+          if: "${{ inputs.engine-version && inputs.os != 'windows' }}"
           uses: ./.github/workflows/install-engine
           with:
               engine-version: ${{ inputs.engine-version }}
