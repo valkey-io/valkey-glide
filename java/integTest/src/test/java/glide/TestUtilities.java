@@ -190,7 +190,8 @@ public class TestUtilities {
             }
             var parts = host.split(":");
             if (parts.length < 2) {
-                throw new IllegalArgumentException("Invalid host format: " + host + ". Expected format: host:port");
+                throw new IllegalArgumentException(
+                        "Invalid host format: " + host + ". Expected format: host:port");
             }
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
@@ -221,7 +222,8 @@ public class TestUtilities {
             }
             var parts = host.split(":");
             if (parts.length < 2) {
-                throw new IllegalArgumentException("Invalid host format: " + host + ". Expected format: host:port");
+                throw new IllegalArgumentException(
+                        "Invalid host format: " + host + ". Expected format: host:port");
             }
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
@@ -238,7 +240,8 @@ public class TestUtilities {
             }
             var parts = host.split(":");
             if (parts.length < 2) {
-                throw new IllegalArgumentException("Invalid host format: " + host + ". Expected format: host:port");
+                throw new IllegalArgumentException(
+                        "Invalid host format: " + host + ". Expected format: host:port");
             }
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
