@@ -4,7 +4,7 @@ plugins {
 }
 
 // Platform-specific Python executable
-def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+project.ext.isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
 
 def getClusterCommand(args) {
     if (isWindows) {
