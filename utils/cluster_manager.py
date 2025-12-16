@@ -538,6 +538,7 @@ def create_cluster(
     tls_cert_file: Optional[str] = None,
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
+    skip_topology_wait: bool = False,
 ):
     tic = time.perf_counter()
     servers_tuple = (str(server) for server in servers)
@@ -562,8 +563,8 @@ def create_cluster(
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
     wait_for_a_message_in_logs(cluster_folder, "Cluster state changed: ok")
-    # Skip topology wait - causes hanging in CI environments
-    # wait_for_all_topology_views(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
+    if not skip_topology_wait:
+        wait_for_all_topology_views(servers, cluster_folder, use_tls, tls_cert_file, tls_key_file, tls_ca_cert_file)
     print_servers_json(servers)
 
     logging.debug("The cluster was successfully created!")
@@ -1178,6 +1179,13 @@ def main():
         help="Path to TLS CA certificate file (default: uses generated certificates)",
         required=False,
     )
+    
+    parser_start.add_argument(
+        "--skip-topology-wait",
+        action="store_true",
+        help="Skip waiting for topology views to converge (useful for CI environments)",
+        required=False,
+    )
 
     # Stop parser
     parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
@@ -1278,6 +1286,7 @@ def main():
                 getattr(args, 'tls_cert_file', None),
                 getattr(args, 'tls_key_file', None),
                 getattr(args, 'tls_ca_cert_file', None),
+                args.skip_topology_wait,
             )
         elif args.replica_count > 0:
             # Create a standalone replication group

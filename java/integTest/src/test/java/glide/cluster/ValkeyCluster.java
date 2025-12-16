@@ -48,6 +48,7 @@ public class ValkeyCluster implements AutoCloseable {
         } else {
             this.tls = tls;
             List<String> command = new ArrayList<>();
+            command.add("wsl");
             command.add("python3");
             command.add(SCRIPT_FILE.toString());
 
@@ -56,6 +57,7 @@ public class ValkeyCluster implements AutoCloseable {
             }
 
             command.add("start");
+            command.add("--skip-topology-wait");
 
             if (clusterMode) {
                 command.add("--cluster-mode");
@@ -171,6 +173,46 @@ public class ValkeyCluster implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        // Skip stopping servers - let Gradle manage server lifecycle
+        if (clusterFolder != null && !clusterFolder.isEmpty()) {
+            List<String> command = new ArrayList<>();
+            command.add("wsl");
+            command.add("python3");
+            command.add(SCRIPT_FILE.toString());
+
+            if (tls) {
+                command.add("--tls");
+            }
+
+            command.add("stop");
+            command.add("--cluster-folder");
+            command.add(clusterFolder);
+
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader =
+                    new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                }
+            }
+
+            try {
+                if (!process.waitFor(20, TimeUnit.SECONDS)) {
+                    process.destroy();
+                    throw new IOException("Timeout waiting for cluster shutdown");
+                }
+
+                if (process.exitValue() != 0) {
+                    throw new IOException("Failed to stop cluster: " + output);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted while stopping cluster", e);
+            }
+        }
     }
 }
