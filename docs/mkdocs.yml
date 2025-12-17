@@ -5,20 +5,36 @@ repo_name: GitHub
 docs_dir: markdown
 nav:
   - Python:
-      - Client:
-          - Standalone: python/glide_client.md
-          - Cluster: python/glide_cluster_client.md
-          - Base: python/base_client.md
-      - Config: python/config.md
-      - Commands:
-          - Core Commands: python/core.md
-          - Cluster Commands: python/cluster_commands.md
-          - Standalone Commands: python/standalone_commands.md
-          - Base Batch: python/base_batch.md
-          - Standalone Batch: python/standalone_batch.md
-          - Cluster Batch: python/cluster_batch.md
-      - Exceptions: python/exceptions.md
-      - Logger: python/logger.md
+      - Python async:
+        - Client:
+            - Standalone: python/async/glide_client.md
+            - Cluster: python/async/glide_cluster_client.md
+            - Base: python/async/base_client.md
+        - Config: python/shared/config.md
+        - Commands:
+            - Core Commands: python/async/core.md
+            - Cluster Commands: python/async/cluster_commands.md
+            - Standalone Commands: python/async/standalone_commands.md
+            - Base Batch: python/shared/base_batch.md
+            - Standalone Batch: python/shared/standalone_batch.md
+            - Cluster Batch: python/shared/cluster_batch.md
+        - Lua Scripting: python/lua-scripts-guide.md
+      - Python sync:
+            - Client:
+              - Standalone: python/sync/glide_client.md
+              - Cluster: python/sync/glide_cluster_client.md
+              - Base: python/sync/base_client.md
+            - Config: python/sync/config.md
+            - Commands:
+                - Core Commands: python/sync/core.md
+                - Cluster Commands: python/sync/cluster_commands.md
+                - Standalone Commands: python/sync/standalone_commands.md
+                - Base Batch: python/shared/base_batch.md
+                - Standalone Batch: python/shared/standalone_batch.md
+                - Cluster Batch: python/shared/cluster_batch.md
+            - Lua Scripting: python/sync/lua-scripts-guide.md
+      - Logger: python/shared/logger.md
+      - Exceptions: python/shared/exceptions.md
   - TypeScript:
       - Client and Commands:
           - Standalone: node/GlideClient/classes/GlideClient.md
@@ -81,6 +97,9 @@ plugins:
       additional_index_folders:
         - temp_dir
       generate_home_index: false
+  - redirects:
+      redirect_maps:
+        'index.md': 'https://glide.valkey.io/'
 extra:
   generator: false
 extra_css:
