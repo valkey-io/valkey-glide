@@ -14,8 +14,7 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE) is the off
 
 ## Documentation
 
-See GLIDE's [documentation site](https://valkey.io/valkey-glide/).  
-Visit our [wiki](https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper) for examples and further details on TLS, Read strategy, Timeouts and various other configurations.
+See GLIDE's Node.js [documentation site](https://glide.valkey.io/languages/nodejs).  
 
 ## Supported Engine Versions
 
