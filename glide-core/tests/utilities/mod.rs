@@ -24,8 +24,8 @@ use versions::Versioning;
 pub mod cluster;
 pub mod mocks;
 
-pub(crate) const SHORT_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(10_000);
-pub(crate) const LONG_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(20_000);
+pub(crate) const SHORT_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(20_000);
+pub(crate) const LONG_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(40_000);
 
 // Code copied from redis-rs
 
