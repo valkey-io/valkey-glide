@@ -1,0 +1,5455 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://valkey.io/valkey-glide/node/server-modules/GlideFt/classes/GlideFt/">
+      
+      
+        <link rel="prev" href="../../../GlideJson/classes/GlideJson/">
+      
+      
+        <link rel="next" href="../../../../Errors/classes/ClosingError/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>Vector Search - GLIDE for Valkey - API Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../../../../style.css">
+    
+    <script>__md_scope=new URL("../../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="valkey-glide" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#class-glideft" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../../.." title="GLIDE for Valkey - API Documentation" class="md-header__button md-logo" aria-label="GLIDE for Valkey - API Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GLIDE for Valkey - API Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Vector Search
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/valkey-io/valkey-glide" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../../.." title="GLIDE for Valkey - API Documentation" class="md-nav__button md-logo" aria-label="GLIDE for Valkey - API Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    GLIDE for Valkey - API Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/valkey-io/valkey-glide" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_1" id="__nav_1_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python async
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_1_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python async
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_1_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_1_1" id="__nav_1_1_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_1_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_1_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/async/glide_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/async/glide_cluster_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/async/base_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_1_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_1_3" id="__nav_1_1_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_1_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_1_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/async/core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/async/cluster_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/async/standalone_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/base_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/standalone_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/cluster_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/lua-scripts-guide.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua Scripting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_2" id="__nav_1_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python sync
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_1_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python sync
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_2_1" id="__nav_1_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/glide_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/glide_cluster_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/base_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_2_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_2_3" id="__nav_1_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_2_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/cluster_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/standalone_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/base_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/standalone_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/cluster_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/lua-scripts-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua Scripting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/logger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TypeScript
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    TypeScript
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_1" id="__nav_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client and Commands
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client and Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../GlideClient/classes/GlideClient/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../GlideClusterClient/classes/GlideClusterClient/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../BaseClient/classes/BaseClient/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Batch/classes/BaseBatch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Batch/classes/Batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Batch/classes/ClusterBatch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../BaseClient/interfaces/BaseClientConfiguration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2_3" id="__nav_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modules
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Modules
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../GlideJson/classes/GlideJson/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector Search
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#constructors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constructors
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Constructors">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constructor
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Constructor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aggregate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aggregate()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="aggregate()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        query
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aliasadd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aliasadd()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="aliasadd()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alias" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        alias
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aliasdel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aliasdel()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="aliasdel()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alias_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        alias
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aliaslist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aliaslist()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="aliaslist()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aliasupdate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aliasupdate()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="aliasupdate()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alias_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        alias
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#create" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        create()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="create()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        schema
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dropindex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dropindex()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="dropindex()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#explain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        explain()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="explain()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        query
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#explaincli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        explaincli()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="explaincli()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        query
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#info" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        info()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="info()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="list()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#profileaggregate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        profileAggregate()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="profileAggregate()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        query
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#profilesearch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        profileSearch()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="profileSearch()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        query
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="search()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        query
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_4" id="__nav_2_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Errors
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Errors/classes/ClosingError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ClosingError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Errors/classes/ConfigurationError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ConfigurationError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Errors/classes/ConnectionError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ConnectionError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Errors/classes/ExecAbortError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ExecAbortError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Errors/classes/RequestError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RequestError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Errors/classes/TimeoutError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TimeoutError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Errors/classes/ValkeyError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ValkeyError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Logger/classes/Logger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#constructors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constructors
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Constructors">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constructor
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Constructor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aggregate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aggregate()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="aggregate()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        query
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aliasadd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aliasadd()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="aliasadd()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alias" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        alias
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aliasdel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aliasdel()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="aliasdel()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alias_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        alias
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aliaslist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aliaslist()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="aliaslist()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aliasupdate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aliasupdate()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="aliasupdate()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alias_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        alias
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#create" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        create()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="create()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        schema
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dropindex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dropindex()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="dropindex()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#explain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        explain()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="explain()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        query
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#explaincli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        explaincli()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="explaincli()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        query
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#info" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        info()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="info()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="list()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#profileaggregate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        profileAggregate()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="profileAggregate()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        query
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#profilesearch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        profileSearch()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="profileSearch()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        query
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="search()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#client_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexname_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        indexName
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        query
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+      
+        
+  
+  
+    
+    
+      
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../../../../GlideClient/classes/GlideClient/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    TypeScript
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../../../GlideJson/classes/GlideJson/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Modules
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<p><a href="/valkey-glide/">Home</a> / <a href="/valkey-glide/node">node</a> / <a href="/valkey-glide/node/server-modules">server-modules</a> / <a href="/valkey-glide/node/server-modules/GlideFt">GlideFt</a> / <a href="/valkey-glide/node/server-modules/GlideFt/classes">classes</a> / <a href="/valkey-glide/node/server-modules/GlideFt/classes/GlideFt">GlideFt</a>
+<a href="../../../../"><strong>@valkey/valkey-glide</strong></a></p>
+<hr />
+<p><a href="../../../../modules/">@valkey/valkey-glide</a> / <a href="../../">server-modules/GlideFt</a> / GlideFt</p>
+<h1 id="class-glideft">Class: GlideFt</h1>
+<p>Module for Vector Search commands.</p>
+<h2 id="constructors">Constructors</h2>
+<h3 id="constructor">Constructor</h3>
+<blockquote>
+<p><strong>new GlideFt</strong>(): <code>GlideFt</code></p>
+</blockquote>
+<h4 id="returns">Returns</h4>
+<p><code>GlideFt</code></p>
+<h2 id="methods">Methods</h2>
+<h3 id="aggregate">aggregate()</h3>
+<blockquote>
+<p><code>static</code> <strong>aggregate</strong>(<code>client</code>, <code>indexName</code>, <code>query</code>, <code>options?</code>): <code>Promise</code>\&lt;<a href="../../type-aliases/FtAggregateReturnType/"><code>FtAggregateReturnType</code></a>&gt;</p>
+</blockquote>
+<p>Runs a search query on an index, and perform aggregate transformations on the results.</p>
+<h4 id="parameters">Parameters</h4>
+<h5 id="client">client</h5>
+<p>The client to execute the command.</p>
+<p><a href="../../../../GlideClient/classes/GlideClient/"><code>GlideClient</code></a> | <a href="../../../../GlideClusterClient/classes/GlideClusterClient/"><code>GlideClusterClient</code></a></p>
+<h5 id="indexname">indexName</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The index name.</p>
+<h5 id="query">query</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The text query to search.</p>
+<h5 id="options">options?</h5>
+<p>DecoderOption &amp; FtAggregateOptions</p>
+<p>Additional parameters for the command - see FtAggregateOptions and <a href="../../../../BaseClient/interfaces/DecoderOption/">DecoderOption</a>.</p>
+<h4 id="returns_1">Returns</h4>
+<p><code>Promise</code>\&lt;<a href="../../type-aliases/FtAggregateReturnType/"><code>FtAggregateReturnType</code></a>&gt;</p>
+<p>Results of the last stage of the pipeline.</p>
+<h4 id="example">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="kd">const</span><span class="w"> </span><span class="nx">options</span><span class="o">:</span><span class="w"> </span><span class="kt">FtAggregateOptions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">     </span><span class="nx">loadFields</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;__key&quot;</span><span class="p">],</span>
+<span class="w">     </span><span class="nx">clauses</span><span class="o">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">         </span><span class="p">{</span>
+<span class="w">             </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;GROUPBY&quot;</span><span class="p">,</span>
+<span class="w">             </span><span class="nx">properties</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;@condition&quot;</span><span class="p">],</span>
+<span class="w">             </span><span class="nx">reducers</span><span class="o">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">                 </span><span class="p">{</span>
+<span class="w">                     </span><span class="kd">function</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;TOLIST&quot;</span><span class="p">,</span>
+<span class="w">                     </span><span class="nx">args</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;__key&quot;</span><span class="p">],</span>
+<span class="w">                     </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;bicycles&quot;</span><span class="p">,</span>
+<span class="w">                 </span><span class="p">},</span>
+<span class="w">             </span><span class="p">],</span>
+<span class="w">         </span><span class="p">},</span>
+<span class="w">     </span><span class="p">],</span>
+<span class="w"> </span><span class="p">};</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">GlideFt</span><span class="p">.</span><span class="nx">aggregate</span><span class="p">(</span><span class="nx">client</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;myIndex&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">options</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span><span class="w"> </span><span class="c1">// Output:</span>
+<span class="c1">// [</span>
+<span class="c1">//     [</span>
+<span class="c1">//         {</span>
+<span class="c1">//             key: &quot;condition&quot;,</span>
+<span class="c1">//             value: &quot;refurbished&quot;</span>
+<span class="c1">//         },</span>
+<span class="c1">//         {</span>
+<span class="c1">//             key: &quot;bicycles&quot;,</span>
+<span class="c1">//             value: [ &quot;bicycle:9&quot; ]</span>
+<span class="c1">//         }</span>
+<span class="c1">//     ],</span>
+<span class="c1">//     [</span>
+<span class="c1">//         {</span>
+<span class="c1">//             key: &quot;condition&quot;,</span>
+<span class="c1">//             value: &quot;used&quot;</span>
+<span class="c1">//         },</span>
+<span class="c1">//         {</span>
+<span class="c1">//             key: &quot;bicycles&quot;,</span>
+<span class="c1">//             value: [ &quot;bicycle:1&quot;, &quot;bicycle:2&quot;, &quot;bicycle:3&quot; ]</span>
+<span class="c1">//         }</span>
+<span class="c1">//     ],</span>
+<span class="c1">//     [</span>
+<span class="c1">//         {</span>
+<span class="c1">//             key: &quot;condition&quot;,</span>
+<span class="c1">//             value: &quot;new&quot;</span>
+<span class="c1">//         },</span>
+<span class="c1">//         {</span>
+<span class="c1">//             key: &quot;bicycles&quot;,</span>
+<span class="c1">//             value: [ &quot;bicycle:0&quot;, &quot;bicycle:5&quot; ]</span>
+<span class="c1">//         }</span>
+<span class="c1">//     ]</span>
+<span class="c1">// ]</span>
+</code></pre></div>
+<hr />
+<h3 id="aliasadd">aliasadd()</h3>
+<blockquote>
+<p><code>static</code> <strong>aliasadd</strong>(<code>client</code>, <code>indexName</code>, <code>alias</code>): <code>Promise</code>\&lt;<code>"OK"</code>&gt;</p>
+</blockquote>
+<p>Adds an alias for an index. The new alias name can be used anywhere that an index name is required.</p>
+<h4 id="parameters_1">Parameters</h4>
+<h5 id="client_1">client</h5>
+<p>The client to execute the command.</p>
+<p><a href="../../../../GlideClient/classes/GlideClient/"><code>GlideClient</code></a> | <a href="../../../../GlideClusterClient/classes/GlideClusterClient/"><code>GlideClusterClient</code></a></p>
+<h5 id="indexname_1">indexName</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The alias to be added to the index.</p>
+<h5 id="alias">alias</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The index name for which the alias has to be added.</p>
+<h4 id="returns_2">Returns</h4>
+<p><code>Promise</code>\&lt;<code>"OK"</code>&gt;</p>
+<p><code>"OK"</code></p>
+<h4 id="example_1">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="c1">// Example usage of FT.ALIASADD to add an alias for an index.</span>
+<span class="k">await</span><span class="w"> </span><span class="nx">GlideFt</span><span class="p">.</span><span class="nx">aliasadd</span><span class="p">(</span><span class="nx">client</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;index&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;alias&quot;</span><span class="p">);</span><span class="w"> </span><span class="c1">// &quot;OK&quot;</span>
+</code></pre></div>
+<hr />
+<h3 id="aliasdel">aliasdel()</h3>
+<blockquote>
+<p><code>static</code> <strong>aliasdel</strong>(<code>client</code>, <code>alias</code>): <code>Promise</code>\&lt;<code>"OK"</code>&gt;</p>
+</blockquote>
+<p>Deletes an existing alias for an index.</p>
+<h4 id="parameters_2">Parameters</h4>
+<h5 id="client_2">client</h5>
+<p>The client to execute the command.</p>
+<p><a href="../../../../GlideClient/classes/GlideClient/"><code>GlideClient</code></a> | <a href="../../../../GlideClusterClient/classes/GlideClusterClient/"><code>GlideClusterClient</code></a></p>
+<h5 id="alias_1">alias</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The existing alias to be deleted for an index.</p>
+<h4 id="returns_3">Returns</h4>
+<p><code>Promise</code>\&lt;<code>"OK"</code>&gt;</p>
+<p><code>"OK"</code></p>
+<h4 id="example_2">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="c1">// Example usage of FT.ALIASDEL to delete an existing alias.</span>
+<span class="k">await</span><span class="w"> </span><span class="nx">GlideFt</span><span class="p">.</span><span class="nx">aliasdel</span><span class="p">(</span><span class="nx">client</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;alias&quot;</span><span class="p">);</span><span class="w"> </span><span class="c1">// &quot;OK&quot;</span>
+</code></pre></div>
+<hr />
+<h3 id="aliaslist">aliaslist()</h3>
+<blockquote>
+<p><code>static</code> <strong>aliaslist</strong>(<code>client</code>, <code>options?</code>): <code>Promise</code>\&lt;<a href="../../../../BaseClient/type-aliases/GlideRecord/"><code>GlideRecord</code></a>\&lt;<a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a>&gt;&gt;</p>
+</blockquote>
+<p>List the index aliases.</p>
+<h4 id="parameters_3">Parameters</h4>
+<h5 id="client_3">client</h5>
+<p>The client to execute the command.</p>
+<p><a href="../../../../GlideClient/classes/GlideClient/"><code>GlideClient</code></a> | <a href="../../../../GlideClusterClient/classes/GlideClusterClient/"><code>GlideClusterClient</code></a></p>
+<h5 id="options_1">options?</h5>
+<p><a href="../../../../BaseClient/interfaces/DecoderOption/"><code>DecoderOption</code></a></p>
+<p>(Optional) See <a href="../../../../BaseClient/interfaces/DecoderOption/">DecoderOption</a>.</p>
+<h4 id="returns_4">Returns</h4>
+<p><code>Promise</code>\&lt;<a href="../../../../BaseClient/type-aliases/GlideRecord/"><code>GlideRecord</code></a>\&lt;<a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a>&gt;&gt;</p>
+<p>A map of index aliases for indices being aliased.</p>
+<h4 id="example_3">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="c1">// Example usage of FT._ALIASLIST to query index aliases</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">GlideFt</span><span class="p">.</span><span class="nx">aliaslist</span><span class="p">(</span><span class="nx">client</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span><span class="w"> </span><span class="c1">// Output:</span>
+<span class="c1">//[{&quot;key&quot;: &quot;alias1&quot;, &quot;value&quot;: &quot;index1&quot;}, {&quot;key&quot;: &quot;alias2&quot;, &quot;value&quot;: &quot;index2&quot;}]</span>
+</code></pre></div>
+<hr />
+<h3 id="aliasupdate">aliasupdate()</h3>
+<blockquote>
+<p><code>static</code> <strong>aliasupdate</strong>(<code>client</code>, <code>alias</code>, <code>indexName</code>): <code>Promise</code>\&lt;<code>"OK"</code>&gt;</p>
+</blockquote>
+<p>Updates an existing alias to point to a different physical index. This command only affects future references to the alias.</p>
+<h4 id="parameters_4">Parameters</h4>
+<h5 id="client_4">client</h5>
+<p>The client to execute the command.</p>
+<p><a href="../../../../GlideClient/classes/GlideClient/"><code>GlideClient</code></a> | <a href="../../../../GlideClusterClient/classes/GlideClusterClient/"><code>GlideClusterClient</code></a></p>
+<h5 id="alias_2">alias</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The alias name. This alias will now be pointed to a different index.</p>
+<h5 id="indexname_2">indexName</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The index name for which an existing alias has to updated.</p>
+<h4 id="returns_5">Returns</h4>
+<p><code>Promise</code>\&lt;<code>"OK"</code>&gt;</p>
+<p><code>"OK"</code></p>
+<h4 id="example_4">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="c1">// Example usage of FT.ALIASUPDATE to update an alias to point to a different index.</span>
+<span class="k">await</span><span class="w"> </span><span class="nx">GlideFt</span><span class="p">.</span><span class="nx">aliasupdate</span><span class="p">(</span><span class="nx">client</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;newAlias&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;index&quot;</span><span class="p">);</span><span class="w"> </span><span class="c1">// &quot;OK&quot;</span>
+</code></pre></div>
+<hr />
+<h3 id="create">create()</h3>
+<blockquote>
+<p><code>static</code> <strong>create</strong>(<code>client</code>, <code>indexName</code>, <code>schema</code>, <code>options?</code>): <code>Promise</code>\&lt;<code>"OK"</code>&gt;</p>
+</blockquote>
+<p>Creates an index and initiates a backfill of that index.</p>
+<h4 id="parameters_5">Parameters</h4>
+<h5 id="client_5">client</h5>
+<p>The client to execute the command.</p>
+<p><a href="../../../../GlideClient/classes/GlideClient/"><code>GlideClient</code></a> | <a href="../../../../GlideClusterClient/classes/GlideClusterClient/"><code>GlideClusterClient</code></a></p>
+<h5 id="indexname_3">indexName</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The index name for the index to be created.</p>
+<h5 id="schema">schema</h5>
+<p><code>Field</code>[]</p>
+<p>The fields of the index schema, specifying the fields and their types.</p>
+<h5 id="options_2">options?</h5>
+<p><code>FtCreateOptions</code></p>
+<p>(Optional) Options for the <code>FT.CREATE</code> command. See FtCreateOptions.</p>
+<h4 id="returns_6">Returns</h4>
+<p><code>Promise</code>\&lt;<code>"OK"</code>&gt;</p>
+<p>If the index is successfully created, returns "OK".</p>
+<h4 id="example_5">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="c1">// Example usage of FT.CREATE to create a 6-dimensional JSON index using the HNSW algorithm</span>
+<span class="k">await</span><span class="w"> </span><span class="nx">GlideFt</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span><span class="nx">client</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;json_idx1&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">[{</span>
+<span class="w">     </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;VECTOR&quot;</span><span class="p">,</span>
+<span class="w">     </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;$.vec&quot;</span><span class="p">,</span>
+<span class="w">     </span><span class="nx">alias</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;VEC&quot;</span><span class="p">,</span>
+<span class="w">     </span><span class="nx">attributes</span><span class="o">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">         </span><span class="nx">algorithm</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;HNSW&quot;</span><span class="p">,</span>
+<span class="w">         </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;FLOAT32&quot;</span><span class="p">,</span>
+<span class="w">         </span><span class="nx">dimension</span><span class="o">:</span><span class="w"> </span><span class="kt">6</span><span class="p">,</span>
+<span class="w">         </span><span class="nx">distanceMetric</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;L2&quot;</span><span class="p">,</span>
+<span class="w">         </span><span class="nx">numberOfEdges</span><span class="o">:</span><span class="w"> </span><span class="kt">32</span><span class="p">,</span>
+<span class="w">     </span><span class="p">},</span>
+<span class="w"> </span><span class="p">}],</span><span class="w"> </span><span class="p">{</span>
+<span class="w">     </span><span class="nx">dataType</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;JSON&quot;</span><span class="p">,</span>
+<span class="w">     </span><span class="nx">prefixes</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;json:&quot;</span><span class="p">]</span>
+<span class="w"> </span><span class="p">});</span>
+</code></pre></div>
+<hr />
+<h3 id="dropindex">dropindex()</h3>
+<blockquote>
+<p><code>static</code> <strong>dropindex</strong>(<code>client</code>, <code>indexName</code>): <code>Promise</code>\&lt;<code>"OK"</code>&gt;</p>
+</blockquote>
+<p>Deletes an index and associated content. Indexed document keys are unaffected.</p>
+<h4 id="parameters_6">Parameters</h4>
+<h5 id="client_6">client</h5>
+<p>The client to execute the command.</p>
+<p><a href="../../../../GlideClient/classes/GlideClient/"><code>GlideClient</code></a> | <a href="../../../../GlideClusterClient/classes/GlideClusterClient/"><code>GlideClusterClient</code></a></p>
+<h5 id="indexname_4">indexName</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The index name.</p>
+<h4 id="returns_7">Returns</h4>
+<p><code>Promise</code>\&lt;<code>"OK"</code>&gt;</p>
+<p>"OK"</p>
+<h4 id="example_6">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="c1">// Example usage of FT.DROPINDEX to drop an index</span>
+<span class="k">await</span><span class="w"> </span><span class="nx">GlideFt</span><span class="p">.</span><span class="nx">dropindex</span><span class="p">(</span><span class="nx">client</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;json_idx1&quot;</span><span class="p">);</span><span class="w"> </span><span class="c1">// &quot;OK&quot;</span>
+</code></pre></div>
+<hr />
+<h3 id="explain">explain()</h3>
+<blockquote>
+<p><code>static</code> <strong>explain</strong>(<code>client</code>, <code>indexName</code>, <code>query</code>, <code>options?</code>): <code>Promise</code>\&lt;<a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a>&gt;</p>
+</blockquote>
+<p>Parse a query and return information about how that query was parsed.</p>
+<h4 id="parameters_7">Parameters</h4>
+<h5 id="client_7">client</h5>
+<p>The client to execute the command.</p>
+<p><a href="../../../../GlideClient/classes/GlideClient/"><code>GlideClient</code></a> | <a href="../../../../GlideClusterClient/classes/GlideClusterClient/"><code>GlideClusterClient</code></a></p>
+<h5 id="indexname_5">indexName</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The index name.</p>
+<h5 id="query_1">query</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The text query to search. It is the same as the query passed as
+an argument to <a href="#search">FT.SEARCH</a> or <a href="#aggregate">FT.AGGREGATE</a>.</p>
+<h5 id="options_3">options?</h5>
+<p><a href="../../../../BaseClient/interfaces/DecoderOption/"><code>DecoderOption</code></a></p>
+<p>(Optional) See <a href="../../../../BaseClient/interfaces/DecoderOption/">DecoderOption</a>.</p>
+<h4 id="returns_8">Returns</h4>
+<p><code>Promise</code>\&lt;<a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a>&gt;</p>
+<p>A query execution plan.</p>
+<h4 id="example_7">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">GlideFt</span><span class="p">.</span><span class="nx">explain</span><span class="p">(</span><span class="nx">client</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;myIndex&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;@price:[0 10]&quot;</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span><span class="w"> </span><span class="c1">// Output: &quot;Field {\n\tprice\n\t0\n\t10\n}&quot;</span>
+</code></pre></div>
+<hr />
+<h3 id="explaincli">explaincli()</h3>
+<blockquote>
+<p><code>static</code> <strong>explaincli</strong>(<code>client</code>, <code>indexName</code>, <code>query</code>, <code>options?</code>): <code>Promise</code>\&lt;<a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a>[]&gt;</p>
+</blockquote>
+<p>Parse a query and return information about how that query was parsed.
+Same as <a href="#explain">FT.EXPLAIN</a>, except that the results are
+displayed in a different format.</p>
+<h4 id="parameters_8">Parameters</h4>
+<h5 id="client_8">client</h5>
+<p>The client to execute the command.</p>
+<p><a href="../../../../GlideClient/classes/GlideClient/"><code>GlideClient</code></a> | <a href="../../../../GlideClusterClient/classes/GlideClusterClient/"><code>GlideClusterClient</code></a></p>
+<h5 id="indexname_6">indexName</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The index name.</p>
+<h5 id="query_2">query</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The text query to search. It is the same as the query passed as
+an argument to <a href="#search">FT.SEARCH</a> or <a href="#aggregate">FT.AGGREGATE</a>.</p>
+<h5 id="options_4">options?</h5>
+<p><a href="../../../../BaseClient/interfaces/DecoderOption/"><code>DecoderOption</code></a></p>
+<p>(Optional) See <a href="../../../../BaseClient/interfaces/DecoderOption/">DecoderOption</a>.</p>
+<h4 id="returns_9">Returns</h4>
+<p><code>Promise</code>\&lt;<a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a>[]&gt;</p>
+<p>A query execution plan.</p>
+<h4 id="example_8">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">GlideFt</span><span class="p">.</span><span class="nx">explaincli</span><span class="p">(</span><span class="nx">client</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;myIndex&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;@price:[0 10]&quot;</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span><span class="w"> </span><span class="c1">// Output: [&quot;Field {&quot;, &quot;price&quot;, &quot;0&quot;, &quot;10&quot;, &quot;}&quot;]</span>
+</code></pre></div>
+<hr />
+<h3 id="info">info()</h3>
+<blockquote>
+<p><code>static</code> <strong>info</strong>(<code>client</code>, <code>indexName</code>, <code>options?</code>): <code>Promise</code>\&lt;<a href="../../type-aliases/FtInfoReturnType/"><code>FtInfoReturnType</code></a>&gt;</p>
+</blockquote>
+<p>Returns information about a given index.</p>
+<h4 id="parameters_9">Parameters</h4>
+<h5 id="client_9">client</h5>
+<p>The client to execute the command.</p>
+<p><a href="../../../../GlideClient/classes/GlideClient/"><code>GlideClient</code></a> | <a href="../../../../GlideClusterClient/classes/GlideClusterClient/"><code>GlideClusterClient</code></a></p>
+<h5 id="indexname_7">indexName</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The index name.</p>
+<h5 id="options_5">options?</h5>
+<p><a href="../../../../BaseClient/interfaces/DecoderOption/"><code>DecoderOption</code></a></p>
+<p>(Optional) See <a href="../../../../BaseClient/interfaces/DecoderOption/">DecoderOption</a>.</p>
+<h4 id="returns_10">Returns</h4>
+<p><code>Promise</code>\&lt;<a href="../../type-aliases/FtInfoReturnType/"><code>FtInfoReturnType</code></a>&gt;</p>
+<p>Nested maps with info about the index. See example for more details.</p>
+<h4 id="example_9">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="kd">const</span><span class="w"> </span><span class="nx">info</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">GlideFt</span><span class="p">.</span><span class="nx">info</span><span class="p">(</span><span class="nx">client</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;myIndex&quot;</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">info</span><span class="p">);</span><span class="w"> </span><span class="c1">// Output:</span>
+<span class="c1">// {</span>
+<span class="c1">//     index_name: &#39;myIndex&#39;,</span>
+<span class="c1">//     index_status: &#39;AVAILABLE&#39;,</span>
+<span class="c1">//     key_type: &#39;JSON&#39;,</span>
+<span class="c1">//     creation_timestamp: 1728348101728771,</span>
+<span class="c1">//     key_prefixes: [ &#39;json:&#39; ],</span>
+<span class="c1">//     num_indexed_vectors: 0,</span>
+<span class="c1">//     space_usage: 653471,</span>
+<span class="c1">//     num_docs: 0,</span>
+<span class="c1">//     vector_space_usage: 653471,</span>
+<span class="c1">//     index_degradation_percentage: 0,</span>
+<span class="c1">//     fulltext_space_usage: 0,</span>
+<span class="c1">//     current_lag: 0,</span>
+<span class="c1">//     fields: [</span>
+<span class="c1">//         {</span>
+<span class="c1">//             identifier: &#39;$.vec&#39;,</span>
+<span class="c1">//             type: &#39;VECTOR&#39;,</span>
+<span class="c1">//             field_name: &#39;VEC&#39;,</span>
+<span class="c1">//             option: &#39;&#39;,</span>
+<span class="c1">//             vector_params: {</span>
+<span class="c1">//                 data_type: &#39;FLOAT32&#39;,</span>
+<span class="c1">//                 initial_capacity: 1000,</span>
+<span class="c1">//                 current_capacity: 1000,</span>
+<span class="c1">//                 distance_metric: &#39;L2&#39;,</span>
+<span class="c1">//                 dimension: 6,</span>
+<span class="c1">//                 block_size: 1024,</span>
+<span class="c1">//                 algorithm: &#39;FLAT&#39;</span>
+<span class="c1">//             }</span>
+<span class="c1">//         },</span>
+<span class="c1">//         {</span>
+<span class="c1">//             identifier: &#39;name&#39;,</span>
+<span class="c1">//             type: &#39;TEXT&#39;,</span>
+<span class="c1">//             field_name: &#39;name&#39;,</span>
+<span class="c1">//             option: &#39;&#39;</span>
+<span class="c1">//         },</span>
+<span class="c1">//     ]</span>
+<span class="c1">// }</span>
+</code></pre></div>
+<hr />
+<h3 id="list">list()</h3>
+<blockquote>
+<p><code>static</code> <strong>list</strong>(<code>client</code>, <code>options?</code>): <code>Promise</code>\&lt;<a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a>[]&gt;</p>
+</blockquote>
+<p>Lists all indexes.</p>
+<h4 id="parameters_10">Parameters</h4>
+<h5 id="client_10">client</h5>
+<p>The client to execute the command.</p>
+<p><a href="../../../../GlideClient/classes/GlideClient/"><code>GlideClient</code></a> | <a href="../../../../GlideClusterClient/classes/GlideClusterClient/"><code>GlideClusterClient</code></a></p>
+<h5 id="options_6">options?</h5>
+<p><a href="../../../../BaseClient/interfaces/DecoderOption/"><code>DecoderOption</code></a></p>
+<p>(Optional) See <a href="../../../../BaseClient/interfaces/DecoderOption/">DecoderOption</a>.</p>
+<h4 id="returns_11">Returns</h4>
+<p><code>Promise</code>\&lt;<a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a>[]&gt;</p>
+<p>An array of index names.</p>
+<h4 id="example_10">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="k">await</span><span class="w"> </span><span class="nx">GlideFt</span><span class="p">.</span><span class="nx">list</span><span class="p">(</span><span class="nx">client</span><span class="p">));</span><span class="w"> </span><span class="c1">// Output: [&quot;index1&quot;, &quot;index2&quot;]</span>
+</code></pre></div>
+<hr />
+<h3 id="profileaggregate">profileAggregate()</h3>
+<blockquote>
+<p><code>static</code> <strong>profileAggregate</strong>(<code>client</code>, <code>indexName</code>, <code>query</code>, <code>options?</code>): <code>Promise</code>\&lt;[<a href="../../type-aliases/FtAggregateReturnType/"><code>FtAggregateReturnType</code></a>, <code>Record</code>\&lt;<code>string</code>, <code>number</code>&gt;]&gt;</p>
+</blockquote>
+<p>Runs an aggregate query and collects performance profiling information.</p>
+<h4 id="parameters_11">Parameters</h4>
+<h5 id="client_11">client</h5>
+<p>The client to execute the command.</p>
+<p><a href="../../../../GlideClient/classes/GlideClient/"><code>GlideClient</code></a> | <a href="../../../../GlideClusterClient/classes/GlideClusterClient/"><code>GlideClusterClient</code></a></p>
+<h5 id="indexname_8">indexName</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The index name.</p>
+<h5 id="query_3">query</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The text query to search.</p>
+<h5 id="options_7">options?</h5>
+<p>DecoderOption &amp; (FtAggregateOptions &amp; { limited?: boolean | undefined; })</p>
+<p>(Optional) See FtAggregateOptions and <a href="../../../../BaseClient/interfaces/DecoderOption/">DecoderOption</a>. Additionally:
+- <code>limited</code> (Optional) - Either provide a full verbose output or some brief version.</p>
+<h4 id="returns_12">Returns</h4>
+<p><code>Promise</code>\&lt;[<a href="../../type-aliases/FtAggregateReturnType/"><code>FtAggregateReturnType</code></a>, <code>Record</code>\&lt;<code>string</code>, <code>number</code>&gt;]&gt;</p>
+<p>A two-element array. The first element contains results of the aggregate query being profiled, the
+    second element stores profiling information.</p>
+<h4 id="example_11">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="c1">// Example of running profile on an aggregate query</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">options</span><span class="o">:</span><span class="w"> </span><span class="kt">FtAggregateOptions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">     </span><span class="nx">loadFields</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;__key&quot;</span><span class="p">],</span>
+<span class="w">     </span><span class="nx">clauses</span><span class="o">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">         </span><span class="p">{</span>
+<span class="w">             </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;GROUPBY&quot;</span><span class="p">,</span>
+<span class="w">             </span><span class="nx">properties</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;@condition&quot;</span><span class="p">],</span>
+<span class="w">             </span><span class="nx">reducers</span><span class="o">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">                 </span><span class="p">{</span>
+<span class="w">                     </span><span class="kd">function</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;TOLIST&quot;</span><span class="p">,</span>
+<span class="w">                     </span><span class="nx">args</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;__key&quot;</span><span class="p">],</span>
+<span class="w">                     </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;bicycles&quot;</span><span class="p">,</span>
+<span class="w">                 </span><span class="p">},</span>
+<span class="w">             </span><span class="p">],</span>
+<span class="w">         </span><span class="p">},</span>
+<span class="w">     </span><span class="p">],</span>
+<span class="w"> </span><span class="p">};</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">GlideFt</span><span class="p">.</span><span class="nx">profileAggregate</span><span class="p">(</span><span class="nx">client</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;myIndex&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">options</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span><span class="w"> </span><span class="c1">// Output:</span>
+<span class="c1">// result[0] contains `FT.AGGREGATE` response with the given query</span>
+<span class="c1">// result[1] contains profiling data as a `Record&lt;string, number&gt;`</span>
+</code></pre></div>
+<hr />
+<h3 id="profilesearch">profileSearch()</h3>
+<blockquote>
+<p><code>static</code> <strong>profileSearch</strong>(<code>client</code>, <code>indexName</code>, <code>query</code>, <code>options?</code>): <code>Promise</code>\&lt;[<a href="../../type-aliases/FtSearchReturnType/"><code>FtSearchReturnType</code></a>, <code>Record</code>\&lt;<code>string</code>, <code>number</code>&gt;]&gt;</p>
+</blockquote>
+<p>Runs a search query and collects performance profiling information.</p>
+<h4 id="parameters_12">Parameters</h4>
+<h5 id="client_12">client</h5>
+<p>The client to execute the command.</p>
+<p><a href="../../../../GlideClient/classes/GlideClient/"><code>GlideClient</code></a> | <a href="../../../../GlideClusterClient/classes/GlideClusterClient/"><code>GlideClusterClient</code></a></p>
+<h5 id="indexname_9">indexName</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The index name.</p>
+<h5 id="query_4">query</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The text query to search.</p>
+<h5 id="options_8">options?</h5>
+<p>DecoderOption &amp; (FtSearchOptions &amp; { limited?: boolean | undefined; })</p>
+<p>(Optional) See FtSearchOptions and <a href="../../../../BaseClient/interfaces/DecoderOption/">DecoderOption</a>. Additionally:
+- <code>limited</code> (Optional) - Either provide a full verbose output or some brief version.</p>
+<h4 id="returns_13">Returns</h4>
+<p><code>Promise</code>\&lt;[<a href="../../type-aliases/FtSearchReturnType/"><code>FtSearchReturnType</code></a>, <code>Record</code>\&lt;<code>string</code>, <code>number</code>&gt;]&gt;</p>
+<p>A two-element array. The first element contains results of the search query being profiled, the
+    second element stores profiling information.</p>
+<h4 id="example_12">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="c1">// Example of running profile on a search query</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">vector</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Buffer</span><span class="p">.</span><span class="nx">alloc</span><span class="p">(</span><span class="mf">24</span><span class="p">);</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">GlideFt</span><span class="p">.</span><span class="nx">profileSearch</span><span class="p">(</span><span class="nx">client</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;json_idx1&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;*=&gt;[KNN 2 @VEC $query_vec]&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="nx">params</span><span class="o">:</span><span class="w"> </span><span class="p">[{</span><span class="nx">key</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;query_vec&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="kt">vector</span><span class="p">}]});</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span><span class="w"> </span><span class="c1">// Output:</span>
+<span class="c1">// result[0] contains `FT.SEARCH` response with the given query</span>
+<span class="c1">// result[1] contains profiling data as a `Record&lt;string, number&gt;`</span>
+</code></pre></div>
+<hr />
+<h3 id="search">search()</h3>
+<blockquote>
+<p><code>static</code> <strong>search</strong>(<code>client</code>, <code>indexName</code>, <code>query</code>, <code>options?</code>): <code>Promise</code>\&lt;<a href="../../type-aliases/FtSearchReturnType/"><code>FtSearchReturnType</code></a>&gt;</p>
+</blockquote>
+<p>Uses the provided query expression to locate keys within an index. Once located, the count
+and/or content of indexed fields within those keys can be returned.</p>
+<h4 id="parameters_13">Parameters</h4>
+<h5 id="client_13">client</h5>
+<p>The client to execute the command.</p>
+<p><a href="../../../../GlideClient/classes/GlideClient/"><code>GlideClient</code></a> | <a href="../../../../GlideClusterClient/classes/GlideClusterClient/"><code>GlideClusterClient</code></a></p>
+<h5 id="indexname_10">indexName</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The index name to search into.</p>
+<h5 id="query_5">query</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The text query to search.</p>
+<h5 id="options_9">options?</h5>
+<p>FtSearchOptions &amp; DecoderOption</p>
+<p>(Optional) See FtSearchOptions and <a href="../../../../BaseClient/interfaces/DecoderOption/">DecoderOption</a>.</p>
+<h4 id="returns_14">Returns</h4>
+<p><code>Promise</code>\&lt;<a href="../../type-aliases/FtSearchReturnType/"><code>FtSearchReturnType</code></a>&gt;</p>
+<p>A two-element array, where the first element is the number of documents in the result set, and the
+second element has the format: <code>GlideRecord&lt;GlideRecord&lt;GlideString&gt;&gt;</code>:
+a mapping between document names and a map of their attributes.</p>
+<p>If <code>count</code> or <code>limit</code> with values <code>{offset: 0, count: 0}</code> is
+set, the command returns array with only one element: the number of documents.</p>
+<h4 id="example_13">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="c1">//</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">vector</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Buffer</span><span class="p">.</span><span class="nx">alloc</span><span class="p">(</span><span class="mf">24</span><span class="p">);</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">GlideFt</span><span class="p">.</span><span class="nx">search</span><span class="p">(</span><span class="nx">client</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;json_idx1&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;*=&gt;[KNN 2 @VEC $query_vec]&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="nx">params</span><span class="o">:</span><span class="w"> </span><span class="p">[{</span><span class="nx">key</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;query_vec&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="kt">vector</span><span class="p">}]});</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span><span class="w"> </span><span class="c1">// Output:</span>
+<span class="c1">// [</span>
+<span class="c1">//   2,</span>
+<span class="c1">//   [</span>
+<span class="c1">//     {</span>
+<span class="c1">//       key: &quot;json:2&quot;,</span>
+<span class="c1">//       value: [</span>
+<span class="c1">//         {</span>
+<span class="c1">//           key: &quot;$&quot;,</span>
+<span class="c1">//           value: &#39;{&quot;vec&quot;:[1.1,1.2,1.3,1.4,1.5,1.6]}&#39;,</span>
+<span class="c1">//         },</span>
+<span class="c1">//         {</span>
+<span class="c1">//           key: &quot;__VEC_score&quot;,</span>
+<span class="c1">//           value: &quot;11.1100006104&quot;,</span>
+<span class="c1">//         },</span>
+<span class="c1">//       ],</span>
+<span class="c1">//     },</span>
+<span class="c1">//     {</span>
+<span class="c1">//       key: &quot;json:0&quot;,</span>
+<span class="c1">//       value: [</span>
+<span class="c1">//         {</span>
+<span class="c1">//           key: &quot;$&quot;,</span>
+<span class="c1">//           value: &#39;{&quot;vec&quot;:[1,2,3,4,5,6]}&#39;,</span>
+<span class="c1">//         },</span>
+<span class="c1">//         {</span>
+<span class="c1">//           key: &quot;__VEC_score&quot;,</span>
+<span class="c1">//           value: &quot;91&quot;,</span>
+<span class="c1">//         },</span>
+<span class="c1">//       ],</span>
+<span class="c1">//     },</span>
+<span class="c1">//   ],</span>
+<span class="c1">// ]</span>
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../../../GlideJson/classes/GlideJson/" class="md-footer__link md-footer__link--prev" aria-label="Previous: JSON">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                JSON
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../../../Errors/classes/ClosingError/" class="md-footer__link md-footer__link--next" aria-label="Next: ClosingError">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                ClosingError
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../../../..", "features": ["navigation.sections", "content.code.copy", "navigation.path", "navigation.footer", "navigation.top"], "search": "../../../../../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../../../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>

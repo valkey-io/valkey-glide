@@ -1,0 +1,4196 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://valkey.io/valkey-glide/python/sync/lua-scripts-guide/">
+      
+      
+        <link rel="prev" href="../../shared/cluster_batch/">
+      
+      
+        <link rel="next" href="../../shared/logger/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>Lua Scripting - GLIDE for Valkey - API Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../../style.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="valkey-glide" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#using-lua-scripts-with-valkey-glide-for-python" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="GLIDE for Valkey - API Documentation" class="md-header__button md-logo" aria-label="GLIDE for Valkey - API Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GLIDE for Valkey - API Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Lua Scripting
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/valkey-io/valkey-glide" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="GLIDE for Valkey - API Documentation" class="md-nav__button md-logo" aria-label="GLIDE for Valkey - API Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    GLIDE for Valkey - API Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/valkey-io/valkey-glide" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_1" id="__nav_1_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python async
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_1_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python async
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_1_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_1_1" id="__nav_1_1_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_1_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_1_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../async/glide_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../async/glide_cluster_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../async/base_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../shared/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_1_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_1_3" id="__nav_1_1_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_1_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_1_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../async/core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../async/cluster_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../async/standalone_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../shared/base_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../shared/standalone_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../shared/cluster_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../lua-scripts-guide.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua Scripting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_1_2" id="__nav_1_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python sync
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_1_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_1_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python sync
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_2_1" id="__nav_1_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glide_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glide_cluster_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../base_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_2_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_2_3" id="__nav_1_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_2_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cluster_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../standalone_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../shared/base_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../shared/standalone_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../shared/cluster_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua Scripting
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua Scripting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisites-and-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites and Setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prerequisites and Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-imports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Imports
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#basic-client-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Client Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cluster-client-setup-for-cluster-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cluster Client Setup (for cluster examples)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-benefits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Benefits
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#basic-script-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Script Usage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Basic Script Usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#creating-and-executing-simple-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating and Executing Simple Scripts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scripts-with-return-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scripts with Return Values
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scripts-with-keys-and-arguments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scripts with Keys and Arguments
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scripts with Keys and Arguments">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#using-keys-array" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using KEYS Array
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-argv-array" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using ARGV Array
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#combining-keys-and-arguments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Combining Keys and Arguments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#working-with-multiple-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Working with Multiple Keys
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#script-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Script Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Script Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#script-hashing-and-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Script Hashing and Caching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#viewing-script-source-valkey-80" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Viewing Script Source (Valkey 8.0+)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#checking-script-existence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checking Script Existence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flushing-script-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flushing Script Cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#killing-running-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Killing Running Scripts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cluster-mode-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cluster Mode Considerations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Cluster Mode Considerations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default Behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#explicit-routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Explicit Routing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multi-slot-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-Slot Scripts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Features
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#binary-data-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary Data Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#large-keys-and-arguments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Large Keys and Arguments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#script-reuse-and-performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Script Reuse and Performance
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-use-scripts-for-atomic-non-primitive-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Use Scripts for Atomic Non-primitive Operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-handle-nil-values-properly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Handle Nil Values Properly
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-use-appropriate-data-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Use Appropriate Data Types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-consider-cluster-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Consider Cluster Constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Handling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Error Handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-script-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Script Errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#script-timeout-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Script Timeout Handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cluster-specific-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cluster-Specific Errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#batch-operations-and-transactions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batch Operations and Transactions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Batch Operations and Transactions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#using-eval-in-atomic-batches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using EVAL in Atomic Batches
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#eval-with-keys-and-arguments-in-atomic-batches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EVAL with Keys and Arguments in Atomic Batches
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-from-direct-eval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration from Direct EVAL
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Migration from Direct EVAL">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#before-direct-eval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before (Direct EVAL)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#after-script-class" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        After (Script Class)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benefits-of-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Benefits of Migration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples-repository" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples Repository
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Examples Repository">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate Limiting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distributed-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distributed Lock
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#conditional-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conditional Update
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conclusion
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../shared/logger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../shared/exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TypeScript
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    TypeScript
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_1" id="__nav_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client and Commands
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client and Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/GlideClient/classes/GlideClient/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/GlideClusterClient/classes/GlideClusterClient/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/BaseClient/classes/BaseClient/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/Batch/classes/BaseBatch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/Batch/classes/Batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/Batch/classes/ClusterBatch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/BaseClient/interfaces/BaseClientConfiguration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_3" id="__nav_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modules
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Modules
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/server-modules/GlideJson/classes/GlideJson/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/server-modules/GlideFt/classes/GlideFt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_4" id="__nav_2_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Errors
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/Errors/classes/ClosingError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ClosingError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/Errors/classes/ConfigurationError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ConfigurationError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/Errors/classes/ConnectionError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ConnectionError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/Errors/classes/ExecAbortError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ExecAbortError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/Errors/classes/RequestError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RequestError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/Errors/classes/TimeoutError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TimeoutError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/Errors/classes/ValkeyError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ValkeyError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/Logger/classes/Logger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisites-and-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites and Setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prerequisites and Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-imports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Imports
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#basic-client-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Client Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cluster-client-setup-for-cluster-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cluster Client Setup (for cluster examples)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-benefits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Benefits
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#basic-script-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Script Usage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Basic Script Usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#creating-and-executing-simple-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating and Executing Simple Scripts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scripts-with-return-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scripts with Return Values
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scripts-with-keys-and-arguments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scripts with Keys and Arguments
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scripts with Keys and Arguments">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#using-keys-array" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using KEYS Array
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-argv-array" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using ARGV Array
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#combining-keys-and-arguments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Combining Keys and Arguments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#working-with-multiple-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Working with Multiple Keys
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#script-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Script Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Script Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#script-hashing-and-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Script Hashing and Caching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#viewing-script-source-valkey-80" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Viewing Script Source (Valkey 8.0+)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#checking-script-existence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checking Script Existence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flushing-script-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flushing Script Cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#killing-running-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Killing Running Scripts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cluster-mode-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cluster Mode Considerations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Cluster Mode Considerations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default Behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#explicit-routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Explicit Routing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multi-slot-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-Slot Scripts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Features
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#binary-data-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary Data Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#large-keys-and-arguments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Large Keys and Arguments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#script-reuse-and-performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Script Reuse and Performance
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-use-scripts-for-atomic-non-primitive-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Use Scripts for Atomic Non-primitive Operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-handle-nil-values-properly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Handle Nil Values Properly
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-use-appropriate-data-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Use Appropriate Data Types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-consider-cluster-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Consider Cluster Constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Handling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Error Handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-script-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Script Errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#script-timeout-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Script Timeout Handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cluster-specific-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cluster-Specific Errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#batch-operations-and-transactions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batch Operations and Transactions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Batch Operations and Transactions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#using-eval-in-atomic-batches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using EVAL in Atomic Batches
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#eval-with-keys-and-arguments-in-atomic-batches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EVAL with Keys and Arguments in Atomic Batches
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-from-direct-eval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration from Direct EVAL
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Migration from Direct EVAL">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#before-direct-eval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before (Direct EVAL)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#after-script-class" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        After (Script Class)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benefits-of-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Benefits of Migration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples-repository" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples Repository
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Examples Repository">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate Limiting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distributed-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distributed Lock
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#conditional-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conditional Update
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conclusion
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+      
+        
+  
+  
+    
+    
+      
+  
+  
+    
+    
+      
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../../async/glide_client/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Python
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+    
+    
+      
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../glide_client/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Python sync
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<p><a href="/valkey-glide/">Home</a> / <a href="/valkey-glide/python">python</a> / <a href="/valkey-glide/python/sync">sync</a> / <a href="/valkey-glide/python/sync/lua-scripts-guide">lua-scripts-guide</a></p>
+<h1 id="using-lua-scripts-with-valkey-glide-for-python">Using Lua Scripts with Valkey GLIDE for Python</h1>
+<p>This guide covers how to use Lua scripts with Valkey GLIDE for Python, including the <code>Script</code> class, script execution, management, and best practices.</p>
+<h2 id="table-of-contents">Table of Contents</h2>
+<ul>
+<li><a href="#prerequisites-and-setup">Prerequisites and Setup</a></li>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#basic-script-usage">Basic Script Usage</a></li>
+<li><a href="#scripts-with-keys-and-arguments">Scripts with Keys and Arguments</a></li>
+<li><a href="#script-management">Script Management</a></li>
+<li><a href="#cluster-mode-considerations">Cluster Mode Considerations</a></li>
+<li><a href="#advanced-features">Advanced Features</a></li>
+<li><a href="#best-practices">Best Practices</a></li>
+<li><a href="#error-handling">Error Handling</a></li>
+<li><a href="#migration-from-direct-eval">Migration from Direct EVAL</a></li>
+</ul>
+<h2 id="prerequisites-and-setup">Prerequisites and Setup</h2>
+<h3 id="required-imports">Required Imports</h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">glide_sync</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Script</span><span class="p">,</span>
+    <span class="n">GlideClient</span><span class="p">,</span>
+    <span class="n">GlideClientConfiguration</span><span class="p">,</span>
+    <span class="n">NodeAddress</span>
+<span class="p">)</span>
+
+<span class="c1"># For script management examples</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">glide_sync</span><span class="w"> </span><span class="kn">import</span> <span class="n">FlushMode</span>
+
+<span class="c1"># For error handling examples</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">glide_sync</span><span class="w"> </span><span class="kn">import</span> <span class="n">RequestError</span>
+
+<span class="c1"># For cluster examples</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">glide_sync</span><span class="w"> </span><span class="kn">import</span> <span class="n">GlideClusterClient</span><span class="p">,</span> <span class="n">GlideClusterClientConfiguration</span><span class="p">,</span> <span class="n">SlotKeyRoute</span><span class="p">,</span> <span class="n">SlotType</span><span class="p">,</span> <span class="n">AllPrimaries</span>
+</code></pre></div>
+<h3 id="basic-client-setup">Basic Client Setup</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Standalone client configuration</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">GlideClientConfiguration</span><span class="p">(</span><span class="n">addresses</span><span class="o">=</span><span class="p">[</span><span class="n">NodeAddress</span><span class="p">(</span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span> <span class="mi">6379</span><span class="p">)])</span>
+
+<span class="c1"># Create client</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">GlideClient</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+
+<span class="c1"># Always close the client when done</span>
+<span class="n">client</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="cluster-client-setup-for-cluster-examples">Cluster Client Setup (for cluster examples)</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Cluster client configuration</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">GlideClusterClientConfiguration</span><span class="p">(</span><span class="n">addresses</span><span class="o">=</span><span class="p">[</span><span class="n">NodeAddress</span><span class="p">(</span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span> <span class="mi">7000</span><span class="p">)])</span>
+
+<span class="c1"># Create cluster client</span>
+<span class="n">cluster_client</span> <span class="o">=</span> <span class="n">GlideClusterClient</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+
+<span class="c1"># Always close when done</span>
+<span class="n">cluster_client</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="requirements">Requirements</h3>
+<ul>
+<li>Running Valkey/Redis server on localhost:6379 (or cluster on ports 7000+)</li>
+<li>GLIDE Python client installed</li>
+<li>Python 3.8+</li>
+</ul>
+<p><strong>Important Notes:</strong>
+- All script arguments must be strings, not integers
+- Keys and arguments are automatically encoded by GLIDE
+- Scripts are cached automatically using SHA1 hashes</p>
+<h2 id="overview">Overview</h2>
+<p>Valkey GLIDE provides a <code>Script</code> class that wraps Lua scripts and handles their execution efficiently. Scripts are automatically cached using SHA1 hashes and executed via <code>EVALSHA</code> for optimal performance.</p>
+<h3 id="key-benefits">Key Benefits</h3>
+<ul>
+<li><strong>Automatic Caching</strong>: Scripts are cached using SHA1 hashes for efficient reuse</li>
+<li><strong>Cluster Support</strong>: Scripts work seamlessly in both standalone and cluster modes</li>
+<li><strong>Performance</strong>: Uses <code>EVALSHA</code> internally to avoid sending script code repeatedly</li>
+<li><strong>Management</strong>: Built-in methods for script lifecycle management</li>
+</ul>
+<h2 id="basic-script-usage">Basic Script Usage</h2>
+<h3 id="creating-and-executing-simple-scripts">Creating and Executing Simple Scripts</h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">glide_sync</span><span class="w"> </span><span class="kn">import</span> <span class="n">Script</span><span class="p">,</span> <span class="n">GlideClient</span><span class="p">,</span> <span class="n">GlideClientConfiguration</span><span class="p">,</span> <span class="n">NodeAddress</span>
+
+<span class="c1"># Create a client</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">GlideClientConfiguration</span><span class="p">(</span><span class="n">addresses</span><span class="o">=</span><span class="p">[</span><span class="n">NodeAddress</span><span class="p">(</span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span> <span class="mi">6379</span><span class="p">)])</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">GlideClient</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+
+<span class="c1"># Create a simple script</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return &#39;Hello, Valkey!&#39;&quot;</span><span class="p">)</span>
+
+<span class="c1"># Execute the script</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span><span class="n">script</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>  <span class="c1"># b&#39;Hello, Valkey!&#39;</span>
+</code></pre></div>
+<h3 id="scripts-with-return-values">Scripts with Return Values</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Script that returns a number</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return 42&quot;</span><span class="p">)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span><span class="n">script</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>  <span class="c1"># 42</span>
+
+<span class="c1"># Script that returns an array</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return {1, 2, 3, &#39;hello&#39;}&quot;</span><span class="p">)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span><span class="n">script</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>  <span class="c1"># [1, 2, 3, b&#39;hello&#39;]</span>
+</code></pre></div>
+<h2 id="scripts-with-keys-and-arguments">Scripts with Keys and Arguments</h2>
+<p>Scripts can access keys and arguments through the <code>KEYS</code> and <code>ARGV</code> arrays.</p>
+<h3 id="using-keys-array">Using KEYS Array</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Script that operates on keys</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return redis.call(&#39;GET&#39;, KEYS[1])&quot;</span><span class="p">)</span>
+
+<span class="c1"># Execute with keys</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span><span class="n">script</span><span class="p">,</span> <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;mykey&quot;</span><span class="p">])</span>
+</code></pre></div>
+<h3 id="using-argv-array">Using ARGV Array</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Script that uses arguments</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return &#39;Hello, &#39; .. ARGV[1]&quot;</span><span class="p">)</span>
+
+<span class="c1"># Execute with arguments</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span><span class="n">script</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;World&quot;</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>  <span class="c1"># b&#39;Hello, World&#39;</span>
+</code></pre></div>
+<h3 id="combining-keys-and-arguments">Combining Keys and Arguments</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Script that sets a key-value pair</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return redis.call(&#39;SET&#39;, KEYS[1], ARGV[1])&quot;</span><span class="p">)</span>
+
+<span class="c1"># Execute with both keys and arguments</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+    <span class="n">script</span><span class="p">,</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;user:1000:name&quot;</span><span class="p">],</span>
+    <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;John Doe&quot;</span><span class="p">]</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>  <span class="c1"># b&#39;OK&#39;</span>
+
+<span class="c1"># Script that gets and modifies a value</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    local current = redis.call(&#39;GET&#39;, KEYS[1])</span>
+<span class="s2">    if current then</span>
+<span class="s2">        return redis.call(&#39;SET&#39;, KEYS[1], current .. ARGV[1])</span>
+<span class="s2">    else</span>
+<span class="s2">        return redis.call(&#39;SET&#39;, KEYS[1], ARGV[1])</span>
+<span class="s2">    end</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+    <span class="n">script</span><span class="p">,</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;counter&quot;</span><span class="p">],</span>
+    <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;:increment&quot;</span><span class="p">]</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="working-with-multiple-keys">Working with Multiple Keys</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Script that works with multiple keys</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    local key1_val = redis.call(&#39;GET&#39;, KEYS[1])</span>
+<span class="s2">    local key2_val = redis.call(&#39;GET&#39;, KEYS[2])</span>
+<span class="s2">    return {key1_val, key2_val}</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+    <span class="n">script</span><span class="p">,</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;key1&quot;</span><span class="p">,</span> <span class="s2">&quot;key2&quot;</span><span class="p">]</span>
+<span class="p">)</span>
+</code></pre></div>
+<h2 id="script-management">Script Management</h2>
+<h3 id="script-hashing-and-caching">Script Hashing and Caching</h3>
+<p>Each script is automatically assigned a SHA1 hash for efficient caching:</p>
+<div class="highlight"><pre><span></span><code><span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return &#39;Hello&#39;&quot;</span><span class="p">)</span>
+
+<span class="c1"># Get the script&#39;s SHA1 hash</span>
+<span class="n">hash_value</span> <span class="o">=</span> <span class="n">script</span><span class="o">.</span><span class="n">get_hash</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Script hash: </span><span class="si">{</span><span class="n">hash_value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Scripts with the same code have the same hash</span>
+<span class="n">script2</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return &#39;Hello&#39;&quot;</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">script</span><span class="o">.</span><span class="n">get_hash</span><span class="p">()</span> <span class="o">==</span> <span class="n">script2</span><span class="o">.</span><span class="n">get_hash</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="viewing-script-source-valkey-80">Viewing Script Source (Valkey 8.0+)</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Load a script</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return &#39;Hello World&#39;&quot;</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span><span class="n">script</span><span class="p">)</span>
+
+<span class="c1"># Show the original source code</span>
+<span class="n">source</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">script_show</span><span class="p">(</span><span class="n">script</span><span class="o">.</span><span class="n">get_hash</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>  <span class="c1"># b&quot;return &#39;Hello World&#39;&quot;</span>
+</code></pre></div>
+<h3 id="checking-script-existence">Checking Script Existence</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Check if scripts exist in the server cache</span>
+<span class="n">script1</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return &#39;Script 1&#39;&quot;</span><span class="p">)</span>
+<span class="n">script2</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return &#39;Script 2&#39;&quot;</span><span class="p">)</span>
+
+<span class="c1"># Load script1 by executing it</span>
+<span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span><span class="n">script1</span><span class="p">)</span>
+
+<span class="c1"># Check existence of both scripts</span>
+<span class="n">exists</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">script_exists</span><span class="p">([</span>
+    <span class="n">script1</span><span class="o">.</span><span class="n">get_hash</span><span class="p">(),</span>
+    <span class="n">script2</span><span class="o">.</span><span class="n">get_hash</span><span class="p">()</span>
+<span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">exists</span><span class="p">)</span>  <span class="c1"># [True, False] - only script1 was loaded</span>
+</code></pre></div>
+<h3 id="flushing-script-cache">Flushing Script Cache</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Load a script</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return &#39;Test&#39;&quot;</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span><span class="n">script</span><span class="p">)</span>
+
+<span class="c1"># Verify it exists</span>
+<span class="n">exists</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">script_exists</span><span class="p">([</span><span class="n">script</span><span class="o">.</span><span class="n">get_hash</span><span class="p">()])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">exists</span><span class="p">)</span>  <span class="c1"># [True]</span>
+
+<span class="c1"># Flush the script cache on the server</span>
+<span class="n">client</span><span class="o">.</span><span class="n">script_flush</span><span class="p">()</span>
+
+<span class="c1"># Verify script is gone from server</span>
+<span class="n">exists</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">script_exists</span><span class="p">([</span><span class="n">script</span><span class="o">.</span><span class="n">get_hash</span><span class="p">()])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">exists</span><span class="p">)</span>  <span class="c1"># [False]</span>
+
+<span class="c1"># Flush with ASYNC mode (non-blocking)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">script_flush</span><span class="p">(</span><span class="n">FlushMode</span><span class="o">.</span><span class="n">ASYNC</span><span class="p">)</span>
+
+<span class="c1"># Verify script still exist from client</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Can still access hash: </span><span class="si">{</span><span class="n">script</span><span class="o">.</span><span class="n">get_hash</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Explicit cleanup of client-side Script object</span>
+<span class="k">del</span> <span class="n">script</span>
+</code></pre></div>
+<h3 id="killing-running-scripts">Killing Running Scripts</h3>
+<p>A script can be safely killed if it has only performed read-only operations. However, once it executes any write operation, it becomes uninterruptible and must either run to completion or reach a timeout.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># This long-running script CAN be killed (read-only)</span>
+<span class="n">killable_long_script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    local start = redis.call(&#39;TIME&#39;)[1]</span>
+<span class="s2">    while redis.call(&#39;TIME&#39;)[1] - start &lt; 10 do</span>
+<span class="s2">        redis.call(&#39;GET&#39;, &#39;some_key&#39;)  -- Read-only operations</span>
+<span class="s2">    end</span>
+<span class="s2">    return &#39;Done&#39;</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="c1"># This long-running script CANNOT be killed (performs writes)</span>
+<span class="n">unkillable_script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    redis.call(&#39;SET&#39;, &#39;temp&#39;, &#39;value&#39;)  -- Write operation</span>
+<span class="s2">    local start = redis.call(&#39;TIME&#39;)[1]</span>
+<span class="s2">    while redis.call(&#39;TIME&#39;)[1] - start &lt; 10 do</span>
+<span class="s2">        -- Long operation after write</span>
+<span class="s2">    end</span>
+<span class="s2">    return &#39;Done&#39;</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="c1"># In one task, run the script</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">run_script</span><span class="p">():</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span><span class="n">killable_long_script</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">RequestError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">if</span> <span class="s2">&quot;Script killed&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Script was killed&quot;</span><span class="p">)</span>
+
+<span class="c1"># In another task, kill the script</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">kill_script</span><span class="p">():</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>  <span class="c1"># Wait a bit</span>
+    <span class="n">client</span><span class="o">.</span><span class="n">script_kill</span><span class="p">()</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Script killed&quot;</span><span class="p">)</span>
+
+<span class="c1"># Run both tasks concurrently</span>
+<span class="n">thread1</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">run_script</span><span class="p">)</span>
+<span class="n">thread2</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">kill_script</span><span class="p">)</span>
+
+<span class="n">thread1</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+<span class="n">thread2</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+<span class="n">thread1</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+<span class="n">thread2</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</code></pre></div>
+<h2 id="cluster-mode-considerations">Cluster Mode Considerations</h2>
+<h3 id="default-behavior">Default Behavior</h3>
+<p>In cluster mode, scripts are automatically routed to the appropriate nodes:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">glide_sync</span><span class="w"> </span><span class="kn">import</span> <span class="n">GlideClusterClient</span>
+
+<span class="n">cluster_client</span> <span class="o">=</span> <span class="n">GlideClusterClient</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+
+<span class="c1"># This works the same in cluster mode</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return redis.call(&#39;SET&#39;, KEYS[1], ARGV[1])&quot;</span><span class="p">)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">cluster_client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+    <span class="n">script</span><span class="p">,</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;user:1000&quot;</span><span class="p">],</span>  <span class="c1"># Routed based on key hash</span>
+    <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;John&quot;</span><span class="p">]</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="explicit-routing">Explicit Routing</h3>
+<p>You can explicitly route scripts to specific nodes:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">glide_sync</span><span class="w"> </span><span class="kn">import</span> <span class="n">SlotKeyRoute</span><span class="p">,</span> <span class="n">SlotType</span><span class="p">,</span> <span class="n">AllPrimaries</span>
+
+<span class="c1"># Route to a specific slot</span>
+<span class="n">route</span> <span class="o">=</span> <span class="n">SlotKeyRoute</span><span class="p">(</span><span class="n">SlotType</span><span class="o">.</span><span class="n">PRIMARY</span><span class="p">,</span> <span class="s2">&quot;user:1000&quot;</span><span class="p">)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">cluster_client</span><span class="o">.</span><span class="n">invoke_script_route</span><span class="p">(</span>
+    <span class="n">script</span><span class="p">,</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;user:1000&quot;</span><span class="p">],</span>
+    <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;John&quot;</span><span class="p">],</span>
+    <span class="n">route</span><span class="o">=</span><span class="n">route</span>
+<span class="p">)</span>
+
+<span class="c1"># Route to all primary nodes</span>
+<span class="n">route</span> <span class="o">=</span> <span class="n">AllPrimaries</span><span class="p">()</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">cluster_client</span><span class="o">.</span><span class="n">invoke_script_route</span><span class="p">(</span>
+    <span class="n">script</span><span class="p">,</span>
+    <span class="n">route</span><span class="o">=</span><span class="n">route</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="multi-slot-scripts">Multi-Slot Scripts</h3>
+<p>Scripts that access multiple keys <strong>must</strong> ensure all keys belong to the same slot in cluster mode:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># This WILL ALWAYS FAIL in cluster mode if keys are in different slots</span>
+<span class="c1"># The server rejects the request immediately with CROSSSLOT error</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    redis.call(&#39;SET&#39;, KEYS[1], ARGV[1])</span>
+<span class="s2">    redis.call(&#39;SET&#39;, KEYS[2], ARGV[2])</span>
+<span class="s2">    return &#39;OK&#39;</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="c1"># This will be rejected before execution</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">cluster_client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+        <span class="n">script</span><span class="p">,</span>
+        <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;key1&quot;</span><span class="p">,</span> <span class="s2">&quot;key2&quot;</span><span class="p">],</span>  <span class="c1"># Different slots - ALWAYS fails</span>
+        <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;value1&quot;</span><span class="p">,</span> <span class="s2">&quot;value2&quot;</span><span class="p">]</span>
+    <span class="p">)</span>
+<span class="k">except</span> <span class="n">RequestError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="k">if</span> <span class="s2">&quot;CrossSlot&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Keys are in different slots - script rejected&quot;</span><span class="p">)</span>
+
+<span class="c1"># Keys must be in the same slot using hash tags</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">cluster_client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+    <span class="n">script</span><span class="p">,</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;user:</span><span class="si">{1000}</span><span class="s2">:name&quot;</span><span class="p">,</span> <span class="s2">&quot;user:</span><span class="si">{1000}</span><span class="s2">:email&quot;</span><span class="p">],</span>  <span class="c1"># Same slot due to {1000}</span>
+    <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;john@example.com&quot;</span><span class="p">]</span>
+<span class="p">)</span>
+</code></pre></div>
+<h2 id="advanced-features">Advanced Features</h2>
+<h3 id="binary-data-support">Binary Data Support</h3>
+<p>Scripts can work with binary data:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Script with binary input</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="nb">bytes</span><span class="p">(</span><span class="s2">&quot;return ARGV[1]&quot;</span><span class="p">,</span> <span class="s2">&quot;utf-8&quot;</span><span class="p">))</span>
+
+<span class="c1"># Execute with binary arguments</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+    <span class="n">script</span><span class="p">,</span>
+    <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="nb">bytes</span><span class="p">(</span><span class="s2">&quot;binary data&quot;</span><span class="p">,</span> <span class="s2">&quot;utf-8&quot;</span><span class="p">)]</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="large-keys-and-arguments">Large Keys and Arguments</h3>
+<p>GLIDE handles large keys and arguments efficiently:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Large key (8KB)</span>
+<span class="n">large_key</span> <span class="o">=</span> <span class="s2">&quot;0&quot;</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="mi">13</span><span class="p">)</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return KEYS[1]&quot;</span><span class="p">)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span><span class="n">script</span><span class="p">,</span> <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="n">large_key</span><span class="p">])</span>
+
+<span class="c1"># Large arguments (4KB each)</span>
+<span class="n">large_arg1</span> <span class="o">=</span> <span class="s2">&quot;0&quot;</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="mi">12</span><span class="p">)</span>
+<span class="n">large_arg2</span> <span class="o">=</span> <span class="s2">&quot;1&quot;</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="mi">12</span><span class="p">)</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return ARGV[2]&quot;</span><span class="p">)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span><span class="n">script</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="n">large_arg1</span><span class="p">,</span> <span class="n">large_arg2</span><span class="p">])</span>
+</code></pre></div>
+<h3 id="script-reuse-and-performance">Script Reuse and Performance</h3>
+<p>Scripts are automatically cached and reused:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Create a reusable script</span>
+<span class="n">increment_script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    local current = redis.call(&#39;GET&#39;, KEYS[1])</span>
+<span class="s2">    if current then</span>
+<span class="s2">        return redis.call(&#39;SET&#39;, KEYS[1], current + ARGV[1])</span>
+<span class="s2">    else</span>
+<span class="s2">        return redis.call(&#39;SET&#39;, KEYS[1], ARGV[1])</span>
+<span class="s2">    end</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="c1"># Use the same script multiple times - efficient due to caching</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
+    <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+        <span class="n">increment_script</span><span class="p">,</span>
+        <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;counter:</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">],</span>
+        <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;1&quot;</span><span class="p">]</span>
+    <span class="p">)</span>
+</code></pre></div>
+<h2 id="best-practices">Best Practices</h2>
+<h3 id="1-use-scripts-for-atomic-non-primitive-operations">1. Use Scripts for Atomic Non-primitive Operations</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Good: Conditional update with multiple data structures</span>
+<span class="n">conditional_update</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    local current = redis.call(&#39;GET&#39;, KEYS[1])</span>
+<span class="s2">    local threshold = tonumber(ARGV[2])</span>
+
+<span class="s2">    if current and tonumber(current) &gt;= threshold then</span>
+<span class="s2">        redis.call(&#39;SET&#39;, KEYS[1], ARGV[1])</span>
+<span class="s2">        redis.call(&#39;LPUSH&#39;, KEYS[2], ARGV[1])</span>
+<span class="s2">        redis.call(&#39;EXPIRE&#39;, KEYS[2], ARGV[3])</span>
+<span class="s2">        return 1</span>
+<span class="s2">    else</span>
+<span class="s2">        return 0</span>
+<span class="s2">    end</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+    <span class="n">conditional_update</span><span class="p">,</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;user:score&quot;</span><span class="p">,</span> <span class="s2">&quot;user:history&quot;</span><span class="p">],</span>
+    <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;100&quot;</span><span class="p">,</span> <span class="s2">&quot;50&quot;</span><span class="p">,</span> <span class="s2">&quot;86400&quot;</span><span class="p">]</span>  <span class="c1"># new score, threshold, expire in 1 day</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="2-handle-nil-values-properly">2. Handle Nil Values Properly</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Good: Proper nil handling</span>
+<span class="n">safe_script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    local val = redis.call(&#39;GET&#39;, KEYS[1])</span>
+<span class="s2">    if val then</span>
+<span class="s2">        return val</span>
+<span class="s2">    else</span>
+<span class="s2">        return &#39;default_value&#39;</span>
+<span class="s2">    end</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="3-use-appropriate-data-types">3. Use Appropriate Data Types</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Good: Return appropriate types</span>
+<span class="n">typed_script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    local value = redis.call(&#39;GET&#39;, KEYS[1])</span>
+<span class="s2">    return tonumber(value) or 0  -- Ensure numeric return, default to 0 if nil</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="4-consider-cluster-constraints">4. Consider Cluster Constraints</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Good: Use hash tags for related keys</span>
+<span class="n">cluster_script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    redis.call(&#39;SET&#39;, KEYS[1], ARGV[1])</span>
+<span class="s2">    redis.call(&#39;SET&#39;, KEYS[2], ARGV[2])</span>
+<span class="s2">    return &#39;OK&#39;</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="c1"># Execute with hash tags</span>
+<span class="n">cluster_client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+    <span class="n">cluster_script</span><span class="p">,</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;user:</span><span class="si">{123}</span><span class="s2">:name&quot;</span><span class="p">,</span> <span class="s2">&quot;user:</span><span class="si">{123}</span><span class="s2">:email&quot;</span><span class="p">],</span>
+    <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;john@example.com&quot;</span><span class="p">]</span>
+<span class="p">)</span>
+</code></pre></div>
+<h2 id="error-handling">Error Handling</h2>
+<h3 id="common-script-errors">Common Script Errors</h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">glide_sync</span><span class="w"> </span><span class="kn">import</span> <span class="n">RequestError</span>
+
+<span class="c1"># Handle script execution errors</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return redis.call(&#39;INCR&#39;, &#39;not_a_number&#39;)&quot;</span><span class="p">)</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span><span class="n">script</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">RequestError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="k">if</span> <span class="s2">&quot;WRONGTYPE&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;not an integer&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Type error in script&quot;</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="s2">&quot;syntax error&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Lua syntax error in script&quot;</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="s2">&quot;unknown command&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Invalid Redis command in script&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Script error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="script-timeout-handling">Script Timeout Handling</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Configure client timeout for long-running scripts</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">GlideClientConfiguration</span><span class="p">(</span>
+    <span class="n">addresses</span><span class="o">=</span><span class="p">[</span><span class="n">NodeAddress</span><span class="p">(</span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span> <span class="mi">6379</span><span class="p">)],</span>
+    <span class="n">request_timeout</span><span class="o">=</span><span class="mi">30000</span>  <span class="c1"># 30 seconds for long scripts (default is usually 5000ms)</span>
+<span class="p">)</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">GlideClient</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+
+<span class="c1"># Handle long-running scripts</span>
+<span class="n">long_script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    local start = redis.call(&#39;TIME&#39;)[1]</span>
+<span class="s2">    while redis.call(&#39;TIME&#39;)[1] - start &lt; 25 do</span>
+<span class="s2">        redis.call(&#39;GET&#39;, &#39;dummy_key&#39;)  -- Read-only operation</span>
+<span class="s2">    end</span>
+<span class="s2">    return &#39;Done&#39;</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span><span class="n">long_script</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Script completed: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">RequestError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="k">if</span> <span class="s2">&quot;timeout&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Client timeout - script may still be running on server!&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Consider increasing request_timeout in client configuration&quot;</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="s2">&quot;Script killed&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Script was killed by server (only possible for read-only scripts)&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Script error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Important: Client timeout != Script termination</span>
+<span class="c1"># - Client stops waiting for response</span>
+<span class="c1"># - Script continues running on server</span>
+<span class="c1"># - Use SCRIPT KILL to stop read-only scripts if needed</span>
+</code></pre></div>
+<h3 id="cluster-specific-errors">Cluster-Specific Errors</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Handle cluster routing errors</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">cluster_client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+        <span class="n">script</span><span class="p">,</span>
+        <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;key1&quot;</span><span class="p">,</span> <span class="s2">&quot;key2&quot;</span><span class="p">]</span>  <span class="c1"># Might be in different slots</span>
+    <span class="p">)</span>
+<span class="k">except</span> <span class="n">RequestError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="k">if</span> <span class="s2">&quot;CROSSSLOT&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Keys are in different slots&quot;</span><span class="p">)</span>
+        <span class="c1"># Use hash tags or route explicitly</span>
+</code></pre></div>
+<h2 id="batch-operations-and-transactions">Batch Operations and Transactions</h2>
+<p>Currently, <code>invoke_script</code> is not supported in batch operations (pipelines/transactions). To use Lua scripts within an atomic batch (MULTI/EXEC transaction), you must use the <code>EVAL</code> command with <code>custom_command</code>.</p>
+<p><strong>Note</strong>: The <code>Transaction</code> class is deprecated. Use <code>Batch(is_atomic=True)</code> instead.</p>
+<h3 id="using-eval-in-atomic-batches">Using EVAL in Atomic Batches</h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">glide_sync</span><span class="w"> </span><span class="kn">import</span> <span class="n">Batch</span>
+
+<span class="c1"># Create an atomic batch (transaction)</span>
+<span class="n">batch</span> <span class="o">=</span> <span class="n">Batch</span><span class="p">(</span><span class="n">is_atomic</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">batch</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;batch-key&quot;</span><span class="p">,</span> <span class="s2">&quot;batch-value&quot;</span><span class="p">)</span>
+<span class="n">batch</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;batch-key&quot;</span><span class="p">)</span>
+<span class="n">batch</span><span class="o">.</span><span class="n">custom_command</span><span class="p">([</span><span class="s2">&quot;EVAL&quot;</span><span class="p">,</span> <span class="s2">&quot;return &#39;Hello from Lua!&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;0&quot;</span><span class="p">])</span>
+
+<span class="c1"># Execute the batch</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span><span class="n">batch</span><span class="o">=</span><span class="n">batch</span><span class="p">,</span> <span class="n">raise_on_error</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Batch executed:&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SET result: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>      <span class="c1"># b&#39;OK&#39;</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;GET result: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>      <span class="c1"># b&#39;batch-value&#39;</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;EVAL result: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>     <span class="c1"># b&#39;Hello from Lua!&#39;</span>
+</code></pre></div>
+<h3 id="eval-with-keys-and-arguments-in-atomic-batches">EVAL with Keys and Arguments in Atomic Batches</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Script with keys and arguments</span>
+<span class="n">batch</span> <span class="o">=</span> <span class="n">Batch</span><span class="p">(</span><span class="n">is_atomic</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">batch</span><span class="o">.</span><span class="n">custom_command</span><span class="p">([</span>
+    <span class="s2">&quot;EVAL&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;return redis.call(&#39;SET&#39;, KEYS[1], ARGV[1])&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;1&quot;</span><span class="p">,</span>           <span class="c1"># Number of keys</span>
+    <span class="s2">&quot;script-key&quot;</span><span class="p">,</span>  <span class="c1"># Key</span>
+    <span class="s2">&quot;script-value&quot;</span> <span class="c1"># Argument</span>
+<span class="p">])</span>
+<span class="n">batch</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;script-key&quot;</span><span class="p">)</span>
+
+<span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">raise_on_error</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;EVAL result: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># b&#39;OK&#39;</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;GET result: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>   <span class="c1"># b&#39;script-value&#39;</span>
+</code></pre></div>
+<h2 id="migration-from-direct-eval">Migration from Direct EVAL</h2>
+<p>If you're migrating from direct <code>EVAL</code> commands, here's how to adapt:</p>
+<h3 id="before-direct-eval">Before (Direct EVAL)</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Old approach with custom commands (not recommended)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">custom_command</span><span class="p">([</span>
+    <span class="s2">&quot;EVAL&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;return redis.call(&#39;SET&#39;, KEYS[1], ARGV[1])&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;1&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;mykey&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;myvalue&quot;</span>
+<span class="p">])</span>
+</code></pre></div>
+<h3 id="after-script-class">After (Script Class)</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># New approach with Script class (recommended)</span>
+<span class="n">script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;return redis.call(&#39;SET&#39;, KEYS[1], ARGV[1])&quot;</span><span class="p">)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+    <span class="n">script</span><span class="p">,</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;mykey&quot;</span><span class="p">],</span>
+    <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;myvalue&quot;</span><span class="p">]</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="benefits-of-migration">Benefits of Migration</h3>
+<ol>
+<li><strong>Automatic Caching</strong>: Scripts are cached automatically</li>
+<li><strong>Better Error Handling</strong>: More specific error types</li>
+<li><strong>Cluster Support</strong>: Automatic routing in cluster mode</li>
+<li><strong>Type Safety</strong>: Better integration with GLIDE's type system</li>
+<li><strong>Performance</strong>: Optimized execution path</li>
+</ol>
+<h2 id="examples-repository">Examples Repository</h2>
+<p>Here are some common script patterns:</p>
+<h3 id="rate-limiting">Rate Limiting</h3>
+<div class="highlight"><pre><span></span><code><span class="n">rate_limit_script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    local key = KEYS[1]</span>
+<span class="s2">    local limit = tonumber(ARGV[1])</span>
+<span class="s2">    local window = tonumber(ARGV[2])</span>
+
+<span class="s2">    local current = redis.call(&#39;GET&#39;, key)</span>
+<span class="s2">    if current == false then</span>
+<span class="s2">        redis.call(&#39;SET&#39;, key, 1)</span>
+<span class="s2">        redis.call(&#39;EXPIRE&#39;, key, window)</span>
+<span class="s2">        return {1, limit}</span>
+<span class="s2">    end</span>
+
+<span class="s2">    current = tonumber(current)</span>
+<span class="s2">    if current &lt; limit then</span>
+<span class="s2">        local new_val = redis.call(&#39;INCR&#39;, key)</span>
+<span class="s2">        local ttl = redis.call(&#39;TTL&#39;, key)</span>
+<span class="s2">        return {new_val, limit}</span>
+<span class="s2">    else</span>
+<span class="s2">        local ttl = redis.call(&#39;TTL&#39;, key)</span>
+<span class="s2">        return {current, limit, ttl}</span>
+<span class="s2">    end</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="c1"># Usage</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+    <span class="n">rate_limit_script</span><span class="p">,</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;rate_limit:user:123&quot;</span><span class="p">],</span>
+    <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;10&quot;</span><span class="p">,</span> <span class="s2">&quot;60&quot;</span><span class="p">]</span>  <span class="c1"># 10 requests per 60 seconds</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="distributed-lock">Distributed Lock</h3>
+<div class="highlight"><pre><span></span><code><span class="n">acquire_lock_script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    if redis.call(&#39;SET&#39;, KEYS[1], ARGV[1], &#39;NX&#39;, &#39;EX&#39;, ARGV[2]) then</span>
+<span class="s2">        return 1</span>
+<span class="s2">    else</span>
+<span class="s2">        return 0</span>
+<span class="s2">    end</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="n">release_lock_script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    if redis.call(&#39;GET&#39;, KEYS[1]) == ARGV[1] then</span>
+<span class="s2">        return redis.call(&#39;DEL&#39;, KEYS[1])</span>
+<span class="s2">    else</span>
+<span class="s2">        return 0</span>
+<span class="s2">    end</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="c1"># Acquire lock</span>
+<span class="n">lock_acquired</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+    <span class="n">acquire_lock_script</span><span class="p">,</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;lock:resource:123&quot;</span><span class="p">],</span>
+    <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;unique_token&quot;</span><span class="p">,</span> <span class="s2">&quot;30&quot;</span><span class="p">]</span>  <span class="c1"># 30 second expiration</span>
+<span class="p">)</span>
+
+<span class="k">if</span> <span class="n">lock_acquired</span><span class="p">:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c1"># Do work while holding lock</span>
+        <span class="k">pass</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="c1"># Release lock</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+            <span class="n">release_lock_script</span><span class="p">,</span>
+            <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;lock:resource:123&quot;</span><span class="p">],</span>
+            <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;unique_token&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+</code></pre></div>
+<h3 id="conditional-update">Conditional Update</h3>
+<div class="highlight"><pre><span></span><code><span class="n">conditional_update_script</span> <span class="o">=</span> <span class="n">Script</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    local current = redis.call(&#39;GET&#39;, KEYS[1])</span>
+<span class="s2">    if current == ARGV[1] then</span>
+<span class="s2">        redis.call(&#39;SET&#39;, KEYS[1], ARGV[2])</span>
+<span class="s2">        return 1</span>
+<span class="s2">    else</span>
+<span class="s2">        return 0</span>
+<span class="s2">    end</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="c1"># Update only if current value matches expected</span>
+<span class="n">updated</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">invoke_script</span><span class="p">(</span>
+    <span class="n">conditional_update_script</span><span class="p">,</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;user:123:status&quot;</span><span class="p">],</span>
+    <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;pending&quot;</span><span class="p">,</span> <span class="s2">&quot;active&quot;</span><span class="p">]</span>  <span class="c1"># Change from &quot;pending&quot; to &quot;active&quot;</span>
+<span class="p">)</span>
+</code></pre></div>
+<h2 id="conclusion">Conclusion</h2>
+<p>Valkey GLIDE's <code>Script</code> class provides a powerful and efficient way to execute Lua scripts. By following the patterns and best practices outlined in this guide, you can:</p>
+<ul>
+<li>Write efficient, atomic operations</li>
+<li>Handle complex business logic server-side</li>
+<li>Ensure optimal performance through automatic caching</li>
+<li>Work seamlessly in both standalone and cluster environments</li>
+</ul>
+<p>For more information, see the <a href="https://valkey.io/commands/eval/">Valkey Lua scripting documentation</a> and the <a href="https://valkey.io/valkey-glide/">GLIDE API documentation</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../../shared/cluster_batch/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Cluster Batch">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Cluster Batch
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../shared/logger/" class="md-footer__link md-footer__link--next" aria-label="Next: Logger">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Logger
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "content.code.copy", "navigation.path", "navigation.footer", "navigation.top"], "search": "../../../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>

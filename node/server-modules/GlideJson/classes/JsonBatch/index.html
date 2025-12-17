@@ -1,0 +1,5118 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://valkey.io/valkey-glide/node/server-modules/GlideJson/classes/JsonBatch/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>JsonBatch - GLIDE for Valkey - API Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../../../../style.css">
+    
+    <script>__md_scope=new URL("../../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="valkey-glide" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#class-jsonbatch" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../../.." title="GLIDE for Valkey - API Documentation" class="md-header__button md-logo" aria-label="GLIDE for Valkey - API Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GLIDE for Valkey - API Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              JsonBatch
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/valkey-io/valkey-glide" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../../.." title="GLIDE for Valkey - API Documentation" class="md-nav__button md-logo" aria-label="GLIDE for Valkey - API Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    GLIDE for Valkey - API Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/valkey-io/valkey-glide" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_1" id="__nav_1_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python async
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_1_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python async
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_1_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_1_1" id="__nav_1_1_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_1_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_1_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/async/glide_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/async/glide_cluster_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/async/base_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_1_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_1_3" id="__nav_1_1_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_1_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_1_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/async/core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/async/cluster_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/async/standalone_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/base_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/standalone_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/cluster_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/lua-scripts-guide.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua Scripting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_2" id="__nav_1_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python sync
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_1_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python sync
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_2_1" id="__nav_1_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/glide_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/glide_cluster_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/base_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_2_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_2_3" id="__nav_1_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_2_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/cluster_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/standalone_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/base_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/standalone_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/cluster_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/sync/lua-scripts-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua Scripting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/logger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../../python/shared/exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TypeScript
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    TypeScript
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_1" id="__nav_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client and Commands
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client and Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../GlideClient/classes/GlideClient/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../GlideClusterClient/classes/GlideClusterClient/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../BaseClient/classes/BaseClient/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Batch/classes/BaseBatch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Batch/classes/Batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Batch/classes/ClusterBatch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../BaseClient/interfaces/BaseClientConfiguration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_3" id="__nav_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modules
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Modules
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GlideJson/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../GlideFt/classes/GlideFt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_4" id="__nav_2_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Errors
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Errors/classes/ClosingError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ClosingError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Errors/classes/ConfigurationError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ConfigurationError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Errors/classes/ConnectionError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ConnectionError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Errors/classes/ExecAbortError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ExecAbortError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Errors/classes/RequestError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RequestError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Errors/classes/TimeoutError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TimeoutError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Errors/classes/ValkeyError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ValkeyError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../Logger/classes/Logger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#constructors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constructors
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Constructors">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constructor
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Constructor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#arrappend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        arrappend()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="arrappend()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        values
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#arrindex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        arrindex()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="arrindex()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#path_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scalar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scalar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#end" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        end?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        start
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#arrinsert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        arrinsert()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="arrinsert()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#path_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        index
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#values_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        values
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#arrlen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        arrlen()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="arrlen()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#arrpop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        arrpop()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="arrpop()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#arrtrim" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        arrtrim()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="arrtrim()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#path_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#start_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#end_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        end
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clear()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="clear()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#debugfields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        debugFields()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="debugFields()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#debugmemory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        debugMemory()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="debugMemory()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#del" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        del()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="del()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forget()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="forget()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="get()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mget()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="mget()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        keys
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#path_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remarks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#numincrby" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        numincrby()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="numincrby()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#path_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#num" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        num
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nummultby" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nummultby()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nummultby()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#path_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#num_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        num
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#objkeys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        objkeys()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="objkeys()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#objlen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        objlen()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="objlen()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path_14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resp()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="resp()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path_15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        set()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="set()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#path_16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        value
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#conditionalchange" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        conditionalChange
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_19" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strappend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        strappend()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="strappend()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_19" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_19" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#value_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        value
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path_17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_20" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strlen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        strlen()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="strlen()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_20" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_20" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_19" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path_18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#toggle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        toggle()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="toggle()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_20" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path_19" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        type()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="type()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch_22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key_21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options_16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        options?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="options?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path_20" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns_23" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<p><a href="/valkey-glide/">Home</a> / <a href="/valkey-glide/node">node</a> / <a href="/valkey-glide/node/server-modules">server-modules</a> / <a href="/valkey-glide/node/server-modules/GlideJson">GlideJson</a> / <a href="/valkey-glide/node/server-modules/GlideJson/classes">classes</a> / <a href="/valkey-glide/node/server-modules/GlideJson/classes/JsonBatch">JsonBatch</a>
+<a href="../../../../"><strong>@valkey/valkey-glide</strong></a></p>
+<hr />
+<p><a href="../../../../modules/">@valkey/valkey-glide</a> / <a href="../../">server-modules/GlideJson</a> / JsonBatch</p>
+<h1 id="class-jsonbatch">Class: JsonBatch</h1>
+<p>Batch implementation for JSON module. Batches allow the execution of a group of
+commands in a single step. See <a href="../../../../Batch/classes/Batch/">Batch</a> and <a href="../../../../Batch/classes/ClusterBatch/">ClusterBatch</a>.</p>
+<h2 id="example">Example</h2>
+<div class="highlight"><pre><span></span><code><span class="kd">const</span><span class="w"> </span><span class="nx">transaction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">Batch</span><span class="p">(</span><span class="kc">true</span><span class="p">);</span>
+<span class="nx">JsonBatch</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="nx">transaction</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;doc&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;{&quot;a&quot;: 1.0, &quot;b&quot;: 2}&#39;</span><span class="p">);</span>
+<span class="nx">JsonBatch</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="nx">transaction</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;doc&quot;</span><span class="p">);</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">exec</span><span class="p">(</span><span class="nx">transaction</span><span class="p">);</span>
+
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">[</span><span class="mf">0</span><span class="p">]);</span><span class="w"> </span><span class="c1">// Output: &#39;OK&#39; - result of JsonBatch.set()</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">[</span><span class="mf">1</span><span class="p">]);</span><span class="w"> </span><span class="c1">// Output: &#39;{&quot;a&quot;: 1.0, &quot;b&quot;: 2}&#39; - result of JsonBatch.get()</span>
+</code></pre></div>
+<h2 id="constructors">Constructors</h2>
+<h3 id="constructor">Constructor</h3>
+<blockquote>
+<p><strong>new JsonBatch</strong>(): <code>JsonBatch</code></p>
+</blockquote>
+<h4 id="returns">Returns</h4>
+<p><code>JsonBatch</code></p>
+<h2 id="methods">Methods</h2>
+<h3 id="arrappend">arrappend()</h3>
+<blockquote>
+<p><code>static</code> <strong>arrappend</strong>(<code>batch</code>, <code>key</code>, <code>path</code>, <code>values</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Appends one or more <code>values</code> to the JSON array at the specified <code>path</code> within the JSON
+document stored at <code>key</code>.</p>
+<h4 id="parameters">Parameters</h4>
+<h5 id="batch">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="path">path</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The path within the JSON document.</p>
+<h5 id="values">values</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a>[]</p>
+<p>The JSON values to be appended to the array.
+    JSON string values must be wrapped with quotes. For example, to append <code>"foo"</code>, pass <code>"\"foo\""</code>.</p>
+<p>Command Response -
+- For JSONPath (path starts with <code>$</code>):
+      Returns an array with a list of integers for every possible path,
+      indicating the new length of the array, or <code>null</code> for JSON values matching
+      the path that are not an array. If <code>path</code> does not exist, an empty array
+      will be returned.
+- For legacy path (path doesn't start with <code>$</code>):
+      Returns an integer representing the new length of the array. If multiple paths are
+      matched, returns the length of the first modified array. If <code>path</code> doesn't
+      exist or the value at <code>path</code> is not an array, an error is raised.
+- If the index is out of bounds or <code>key</code> doesn't exist, an error is raised.</p>
+<h4 id="returns_1">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="arrindex">arrindex()</h3>
+<blockquote>
+<p><code>static</code> <strong>arrindex</strong>(<code>batch</code>, <code>key</code>, <code>path</code>, <code>scalar</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the <code>path</code>.
+Out of range errors are treated by rounding the index to the array's <code>start</code> and <code>end.
+If</code>start<code>&gt;</code>end<code>, return</code>-1` (not found).</p>
+<h4 id="parameters_1">Parameters</h4>
+<h5 id="batch_1">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_1">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="path_1">path</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The path within the JSON document.</p>
+<h5 id="scalar">scalar</h5>
+<p>The scalar value to search for.</p>
+<p><code>number</code> | <code>boolean</code> | <a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a> | <code>null</code></p>
+<h5 id="options">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>start</code>: The start index, inclusive. Default to 0 if not provided.
+- (Optional) <code>end</code>: The end index, exclusive. Default to 0 if not provided.
+                    0 or -1 means the last element is included.
+Command Response -
+- For JSONPath (path starts with <code>$</code>):
+      Returns an array with a list of integers for every possible path,
+      indicating the index of the matching element. The value is <code>-1</code> if not found.
+      If a value is not an array, its corresponding return value is <code>null</code>.
+- For legacy path (path doesn't start with <code>$</code>):
+      Returns an integer representing the index of matching element, or <code>-1</code> if
+      not found. If the value at the <code>path</code> is not an array, an error is raised.</p>
+<h6 id="end">end?</h6>
+<p><code>number</code></p>
+<h6 id="start">start</h6>
+<p><code>number</code></p>
+<h4 id="returns_2">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="arrinsert">arrinsert()</h3>
+<blockquote>
+<p><code>static</code> <strong>arrinsert</strong>(<code>batch</code>, <code>key</code>, <code>path</code>, <code>index</code>, <code>values</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Inserts one or more values into the array at the specified <code>path</code> within the JSON
+document stored at <code>key</code>, before the given <code>index</code>.</p>
+<h4 id="parameters_2">Parameters</h4>
+<h5 id="batch_2">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_2">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="path_2">path</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The path within the JSON document.</p>
+<h5 id="index">index</h5>
+<p><code>number</code></p>
+<p>The array index before which values are inserted.</p>
+<h5 id="values_1">values</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a>[]</p>
+<p>The JSON values to be inserted into the array.
+    JSON string values must be wrapped with quotes. For example, to insert <code>"foo"</code>, pass <code>"\"foo\""</code>.</p>
+<p>Command Response -
+- For JSONPath (path starts with <code>$</code>):
+      Returns an array with a list of integers for every possible path,
+      indicating the new length of the array, or <code>null</code> for JSON values matching
+      the path that are not an array. If <code>path</code> does not exist, an empty array
+      will be returned.
+- For legacy path (path doesn't start with <code>$</code>):
+      Returns an integer representing the new length of the array. If multiple paths are
+      matched, returns the length of the first modified array. If <code>path</code> doesn't
+      exist or the value at <code>path</code> is not an array, an error is raised.
+- If the index is out of bounds or <code>key</code> doesn't exist, an error is raised.</p>
+<h4 id="returns_3">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="arrlen">arrlen()</h3>
+<blockquote>
+<p><code>static</code> <strong>arrlen</strong>(<code>batch</code>, <code>key</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Retrieves the length of the array at the specified <code>path</code> within the JSON document stored at <code>key</code>.</p>
+<h4 id="parameters_3">Parameters</h4>
+<h5 id="batch_3">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_3">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="options_1">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>path</code>: The path within the JSON document. Defaults to the root (<code>"."</code>) if not specified.</p>
+<p>Command Response -
+- For JSONPath (path starts with <code>$</code>):
+      Returns an array with a list of integers for every possible path,
+      indicating the length of the array, or <code>null</code> for JSON values matching
+      the path that are not an array. If <code>path</code> does not exist, an empty array
+      will be returned.
+- For legacy path (path doesn't start with <code>$</code>):
+      Returns an integer representing the length of the array. If multiple paths are
+      matched, returns the length of the first matching array. If <code>path</code> doesn't
+      exist or the value at <code>path</code> is not an array, an error is raised.
+- If the index is out of bounds or <code>key</code> doesn't exist, an error is raised.</p>
+<h6 id="path_3">path</h6>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<h4 id="returns_4">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="arrpop">arrpop()</h3>
+<blockquote>
+<p><code>static</code> <strong>arrpop</strong>(<code>batch</code>, <code>key</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Pops an element from the array located at <code>path</code> in the JSON document stored at <code>key</code>.</p>
+<h4 id="parameters_4">Parameters</h4>
+<h5 id="batch_4">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_4">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="options_2">options?</h5>
+<p><a href="../../interfaces/JsonArrPopOptions/"><code>JsonArrPopOptions</code></a></p>
+<p>(Optional) See <a href="../../interfaces/JsonArrPopOptions/">JsonArrPopOptions</a>.</p>
+<p>Command Response -
+- For JSONPath (path starts with <code>$</code>):
+      Returns an array with a strings for every possible path, representing the popped JSON
+      values, or <code>null</code> for JSON values matching the path that are not an array
+      or an empty array.
+- For legacy path (path doesn't start with <code>$</code>):
+      Returns a string representing the popped JSON value, or <code>null</code> if the
+      array at <code>path</code> is empty. If multiple paths are matched, the value from
+      the first matching array that is not empty is returned. If <code>path</code> doesn't
+      exist or the value at <code>path</code> is not an array, an error is raised.
+- If the index is out of bounds or <code>key</code> doesn't exist, an error is raised.</p>
+<h4 id="returns_5">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="arrtrim">arrtrim()</h3>
+<blockquote>
+<p><code>static</code> <strong>arrtrim</strong>(<code>batch</code>, <code>key</code>, <code>path</code>, <code>start</code>, <code>end</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Trims an array at the specified <code>path</code> within the JSON document stored at <code>key</code> so that it becomes a subarray [start, end], both inclusive.
+If <code>start</code> &lt; 0, it is treated as 0.
+If <code>end</code> &gt;= size (size of the array), it is treated as size-1.
+If <code>start</code> &gt;= size or <code>start</code> &gt; <code>end</code>, the array is emptied and 0 is returned.</p>
+<h4 id="parameters_5">Parameters</h4>
+<h5 id="batch_5">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_5">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="path_4">path</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The path within the JSON document.</p>
+<h5 id="start_1">start</h5>
+<p><code>number</code></p>
+<p>The start index, inclusive.</p>
+<h5 id="end_1">end</h5>
+<p><code>number</code></p>
+<p>The end index, inclusive.</p>
+<p>Command Response -
+    - For JSONPath (<code>path</code> starts with <code>$</code>):
+      - Returns a list of integer replies for every possible path, indicating the new length of the array,
+        or <code>null</code> for JSON values matching the path that are not an array.
+      - If the array is empty, its corresponding return value is 0.
+      - If <code>path</code> doesn't exist, an empty array will be returned.
+      - If an index argument is out of bounds, an error is raised.
+    - For legacy path (<code>path</code> doesn't start with <code>$</code>):
+      - Returns an integer representing the new length of the array.
+      - If the array is empty, its corresponding return value is 0.
+      - If multiple paths match, the length of the first trimmed array match is returned.
+      - If <code>path</code> doesn't exist, or the value at <code>path</code> is not an array, an error is raised.
+      - If an index argument is out of bounds, an error is raised.</p>
+<h4 id="returns_6">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="clear">clear()</h3>
+<blockquote>
+<p><code>static</code> <strong>clear</strong>(<code>batch</code>, <code>key</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Clears arrays or objects at the specified JSON path in the document stored at <code>key</code>.
+Numeric values are set to <code>0</code>, boolean values are set to <code>false</code>, and string values are converted to empty strings.</p>
+<h4 id="parameters_6">Parameters</h4>
+<h5 id="batch_6">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_6">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="options_3">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>path</code>: The JSON path to the arrays or objects to be cleared. Defaults to root if not provided.</p>
+<p>Command Response - The number of containers cleared, numeric values zeroed, and booleans toggled to <code>false</code>,
+and string values converted to empty strings.
+If <code>path</code> doesn't exist, or the value at <code>path</code> is already empty (e.g., an empty array, object, or string), <code>0</code> is returned.
+If `key doesn't exist, an error is raised.</p>
+<h6 id="path_5">path</h6>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<h4 id="returns_7">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="debugfields">debugFields()</h3>
+<blockquote>
+<p><code>static</code> <strong>debugFields</strong>(<code>batch</code>, <code>key</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Reports the number of fields at the specified <code>path</code> within the JSON document stored at <code>key</code>.</p>
+<h4 id="parameters_7">Parameters</h4>
+<h5 id="batch_7">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_7">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="options_4">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>path</code>: The path within the JSON document, returns total number of fields if no path is given.</p>
+<p>Command Response -
+    - For JSONPath (path starts with <code>$</code>):
+      - Returns an array of numbers for every possible path, indicating the number of fields.
+        If <code>path</code> does not exist, an empty array will be returned.
+    - For legacy path (path doesn't start with <code>$</code>):
+      - Returns an integer representing the memory usage. If multiple paths are matched,
+        returns the data of the first matching object. If <code>path</code> doesn't exist, an error is raised.
+    - If <code>key</code> doesn't exist, returns <code>null</code>.</p>
+<h6 id="path_6">path</h6>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<h4 id="returns_8">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="debugmemory">debugMemory()</h3>
+<blockquote>
+<p><code>static</code> <strong>debugMemory</strong>(<code>batch</code>, <code>key</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Reports memory usage in bytes of a JSON object at the specified <code>path</code> within the JSON document stored at <code>key</code>.</p>
+<h4 id="parameters_8">Parameters</h4>
+<h5 id="batch_8">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_8">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="options_5">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>path</code>: The path within the JSON document, returns total memory usage if no path is given.</p>
+<p>Command Response -
+    - For JSONPath (path starts with <code>$</code>):
+      - Returns an array of numbers for every possible path, indicating the memory usage.
+        If <code>path</code> does not exist, an empty array will be returned.
+    - For legacy path (path doesn't start with <code>$</code>):
+      - Returns an integer representing the memory usage. If multiple paths are matched,
+        returns the data of the first matching object. If <code>path</code> doesn't exist, an error is raised.
+    - If <code>key</code> doesn't exist, returns <code>null</code>.</p>
+<h6 id="path_7">path</h6>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<h4 id="returns_9">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="del">del()</h3>
+<blockquote>
+<p><code>static</code> <strong>del</strong>(<code>batch</code>, <code>key</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Deletes the JSON value at the specified <code>path</code> within the JSON document stored at <code>key</code>.</p>
+<h4 id="parameters_9">Parameters</h4>
+<h5 id="batch_9">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_9">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="options_6">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>path</code>: If <code>null</code>, deletes the entire JSON document at <code>key</code>.</p>
+<p>Command Response - The number of elements removed. If <code>key</code> or <code>path</code> doesn't exist, returns 0.</p>
+<h6 id="path_8">path</h6>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<h4 id="returns_10">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="forget">forget()</h3>
+<blockquote>
+<p><code>static</code> <strong>forget</strong>(<code>batch</code>, <code>key</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Deletes the JSON value at the specified <code>path</code> within the JSON document stored at <code>key</code>. This command is
+an alias of <a href="#del">del</a>.</p>
+<h4 id="parameters_10">Parameters</h4>
+<h5 id="batch_10">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_10">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="options_7">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>path</code>: If <code>null</code>, deletes the entire JSON document at <code>key</code>.</p>
+<p>Command Response - The number of elements removed. If <code>key</code> or <code>path</code> doesn't exist, returns 0.</p>
+<h6 id="path_9">path</h6>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<h4 id="returns_11">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="get">get()</h3>
+<blockquote>
+<p><code>static</code> <strong>get</strong>(<code>batch</code>, <code>key</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Retrieves the JSON value at the specified <code>paths</code> stored at <code>key</code>.</p>
+<h4 id="parameters_11">Parameters</h4>
+<h5 id="batch_11">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_11">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="options_8">options?</h5>
+<p><a href="../../interfaces/JsonGetOptions/"><code>JsonGetOptions</code></a></p>
+<p>(Optional) Additional parameters:
+- (Optional) Options for formatting the byte representation of the JSON data. See <a href="../../interfaces/JsonGetOptions/">JsonGetOptions</a>.</p>
+<p>Command Response -
+  - If one path is given:
+    - For JSONPath (path starts with <code>$</code>):
+      - Returns a stringified JSON list of bytes replies for every possible path,
+        or a byte string representation of an empty array, if path doesn't exist.
+        If <code>key</code> doesn't exist, returns <code>null</code>.
+    - For legacy path (path doesn't start with <code>$</code>):
+        Returns a byte string representation of the value in <code>path</code>.
+        If <code>path</code> doesn't exist, an error is raised.
+        If <code>key</code> doesn't exist, returns <code>null</code>.
+ - If multiple paths are given:
+        Returns a stringified JSON object in bytes, in which each path is a key, and it's corresponding value, is the value as if the path was executed in the command as a single path.
+In case of multiple paths, and <code>paths</code> are a mix of both JSONPath and legacy path, the command behaves as if all are JSONPath paths.</p>
+<h4 id="returns_12">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="mget">mget()</h3>
+<blockquote>
+<p><code>static</code> <strong>mget</strong>(<code>batch</code>, <code>keys</code>, <code>path</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Retrieves the JSON values at the specified <code>path</code> stored at multiple <code>keys</code>.</p>
+<h4 id="parameters_12">Parameters</h4>
+<h5 id="batch_12">batch</h5>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="keys">keys</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a>[]</p>
+<p>The keys of the JSON documents.</p>
+<h5 id="path_10">path</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The path within the JSON documents.</p>
+<p>Command Response -
+- For JSONPath (path starts with <code>$</code>):
+      Returns a stringified JSON list replies for every possible path, or a string representation
+      of an empty array, if path doesn't exist.
+- For legacy path (path doesn't start with <code>$</code>):
+      Returns a string representation of the value in <code>path</code>. If <code>path</code> doesn't exist,
+      the corresponding array element will be <code>null</code>.
+- If a <code>key</code> doesn't exist, the corresponding array element will be <code>null</code>.</p>
+<h4 id="returns_13">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h4 id="remarks">Remarks</h4>
+<p>When in cluster mode, all keys in the batch must be mapped to the same slot.</p>
+<hr />
+<h3 id="numincrby">numincrby()</h3>
+<blockquote>
+<p><code>static</code> <strong>numincrby</strong>(<code>batch</code>, <code>key</code>, <code>path</code>, <code>num</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Increments or decrements the JSON value(s) at the specified <code>path</code> by <code>number</code> within the JSON document stored at <code>key</code>.</p>
+<h4 id="parameters_13">Parameters</h4>
+<h5 id="batch_13">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_12">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="path_11">path</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The path within the JSON document.</p>
+<h5 id="num">num</h5>
+<p><code>number</code></p>
+<p>The number to increment or decrement by.</p>
+<p>Command Response -
+    - For JSONPath (path starts with <code>$</code>):
+      - Returns a string representation of an array of strings, indicating the new values after incrementing for each matched <code>path</code>.
+        If a value is not a number, its corresponding return value will be <code>null</code>.
+        If <code>path</code> doesn't exist, a byte string representation of an empty array will be returned.
+    - For legacy path (path doesn't start with <code>$</code>):
+      - Returns a string representation of the resulting value after the increment or decrement.
+        If multiple paths match, the result of the last updated value is returned.
+        If the value at the <code>path</code> is not a number or <code>path</code> doesn't exist, an error is raised.
+    - If <code>key</code> does not exist, an error is raised.
+    - If the result is out of the range of 64-bit IEEE double, an error is raised.</p>
+<h4 id="returns_14">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="nummultby">nummultby()</h3>
+<blockquote>
+<p><code>static</code> <strong>nummultby</strong>(<code>batch</code>, <code>key</code>, <code>path</code>, <code>num</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Multiplies the JSON value(s) at the specified <code>path</code> by <code>number</code> within the JSON document stored at <code>key</code>.</p>
+<h4 id="parameters_14">Parameters</h4>
+<h5 id="batch_14">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_13">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="path_12">path</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The path within the JSON document.</p>
+<h5 id="num_1">num</h5>
+<p><code>number</code></p>
+<p>The number to multiply by.</p>
+<p>Command Response -
+    - For JSONPath (path starts with <code>$</code>):
+      - Returns a GlideString representation of an array of strings, indicating the new values after multiplication for each matched <code>path</code>.
+        If a value is not a number, its corresponding return value will be <code>null</code>.
+        If <code>path</code> doesn't exist, a byte string representation of an empty array will be returned.
+    - For legacy path (path doesn't start with <code>$</code>):
+      - Returns a GlideString representation of the resulting value after multiplication.
+        If multiple paths match, the result of the last updated value is returned.
+        If the value at the <code>path</code> is not a number or <code>path</code> doesn't exist, an error is raised.
+    - If <code>key</code> does not exist, an error is raised.
+    - If the result is out of the range of 64-bit IEEE double, an error is raised.</p>
+<h4 id="returns_15">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="objkeys">objkeys()</h3>
+<blockquote>
+<p><code>static</code> <strong>objkeys</strong>(<code>batch</code>, <code>key</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Retrieves key names in the object values at the specified <code>path</code> within the JSON document stored at <code>key</code>.</p>
+<h4 id="parameters_15">Parameters</h4>
+<h5 id="batch_15">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_14">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="options_9">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>path</code>: The path within the JSON document where the key names will be retrieved. Defaults to root (<code>"."</code>) if not provided.</p>
+<p>Command Response - ReturnTypeJson<GlideString[]>:
+   - For JSONPath (<code>path</code> starts with <code>$</code>):
+     - Returns a list of arrays containing key names for each matching object.
+     - If a value matching the path is not an object, an empty array is returned.
+     - If <code>path</code> doesn't exist, an empty array is returned.
+   - For legacy path (<code>path</code> starts with <code>.</code>):
+     - Returns a list of key names for the object value matching the path.
+     - If multiple objects match the path, the key names of the first object is returned.
+     - If a value matching the path is not an object, an error is raised.
+     - If <code>path</code> doesn't exist, <code>null</code> is returned.
+   - If <code>key</code> doesn't exist, <code>null</code> is returned.</p>
+<h6 id="path_13">path</h6>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<h4 id="returns_16">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="objlen">objlen()</h3>
+<blockquote>
+<p><code>static</code> <strong>objlen</strong>(<code>batch</code>, <code>key</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Retrieves the number of key-value pairs in the object stored at the specified <code>path</code> within the JSON document stored at <code>key</code>.</p>
+<h4 id="parameters_16">Parameters</h4>
+<h5 id="batch_16">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_15">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="options_10">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>path</code>: The path within the JSON document, Defaults to root (<code>"."</code>) if not provided.</p>
+<p>Command Response - ReturnTypeJson<number>:
+   - For JSONPath (<code>path</code> starts with <code>$</code>):
+     - Returns a list of integer replies for every possible path, indicating the length of the object,
+       or <code>null</code> for JSON values matching the path that are not an object.
+     - If <code>path</code> doesn't exist, an empty array will be returned.
+   - For legacy path (<code>path</code> doesn't starts with <code>$</code>):
+     - Returns the length of the object at <code>path</code>.
+     - If multiple paths match, the length of the first object match is returned.
+     - If the JSON value at <code>path</code> is not an object or if <code>path</code> doesn't exist, an error is raised.
+   - If <code>key</code> doesn't exist, <code>null</code> is returned.</p>
+<h6 id="path_14">path</h6>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<h4 id="returns_17">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="resp">resp()</h3>
+<blockquote>
+<p><code>static</code> <strong>resp</strong>(<code>batch</code>, <code>key</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Retrieve the JSON value at the specified <code>path</code> within the JSON document stored at <code>key</code>.
+The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).
+- JSON null is mapped to the RESP Null Bulk String.
+- JSON Booleans are mapped to RESP Simple string.
+- JSON integers are mapped to RESP Integers.
+- JSON doubles are mapped to RESP Bulk Strings.
+- JSON strings are mapped to RESP Bulk Strings.
+- JSON arrays are represented as RESP arrays, where the first element is the simple string [, followed by the array's elements.
+- JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.</p>
+<h4 id="parameters_17">Parameters</h4>
+<h5 id="batch_17">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_16">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="options_11">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>path</code>: The path within the JSON document, defaults to root (<code>"."</code>) if not provided.</p>
+<p>Command Response -
+    - For JSONPath (path starts with <code>$</code>):
+      - Returns an array of replies for every possible path, indicating the RESP form of the JSON value.
+        If <code>path</code> doesn't exist, returns an empty array.
+    - For legacy path (path doesn't start with <code>$</code>):
+      - Returns a single reply for the JSON value at the specified <code>path</code>, in its RESP form.
+        If multiple paths match, the value of the first JSON value match is returned. If <code>path</code> doesn't exist, an error is raised.
+    - If <code>key</code> doesn't exist, <code>null</code> is returned.</p>
+<h6 id="path_15">path</h6>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<h4 id="returns_18">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="set">set()</h3>
+<blockquote>
+<p><code>static</code> <strong>set</strong>(<code>batch</code>, <code>key</code>, <code>path</code>, <code>value</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Sets the JSON value at the specified <code>path</code> stored at <code>key</code>.</p>
+<h4 id="parameters_18">Parameters</h4>
+<h5 id="batch_18">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_17">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="path_16">path</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>Represents the path within the JSON document where the value will be set.
+     The key will be modified only if <code>value</code> is added as the last child in the specified <code>path</code>, or if the specified <code>path</code> acts as the parent of a new child being added.</p>
+<h5 id="value">value</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The value to set at the specific path, in JSON formatted bytes or str.</p>
+<h5 id="options_12">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>conditionalChange</code> - Set the value only if the given condition is met (within the key or path).
+     Equivalent to [<code>XX</code> | <code>NX</code>] in the module API.</p>
+<p>Command Response - If the value is successfully set, returns <code>"OK"</code>.
+      If <code>value</code> isn't set because of <code>conditionalChange</code>, returns <code>null</code>.</p>
+<h6 id="conditionalchange">conditionalChange</h6>
+<p><a href="../../../../Commands/enumerations/ConditionalChange/"><code>ConditionalChange</code></a></p>
+<h4 id="returns_19">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="strappend">strappend()</h3>
+<blockquote>
+<p><code>static</code> <strong>strappend</strong>(<code>batch</code>, <code>key</code>, <code>value</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Appends the specified <code>value</code> to the string stored at the specified <code>path</code> within the JSON document stored at <code>key</code>.</p>
+<h4 id="parameters_19">Parameters</h4>
+<h5 id="batch_19">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_18">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="value_1">value</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.</p>
+<h5 id="options_13">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>path</code>: The path within the JSON document, defaults to root (<code>"."</code>) if not provided.</p>
+<p>Command Response -
+    - For JSONPath (path starts with <code>$</code>):
+      - Returns a list of integer replies for every possible path, indicating the length of the resulting string after appending <code>value</code>,
+        or None for JSON values matching the path that are not string.
+      - If <code>key</code> doesn't exist, an error is raised.
+    - For legacy path (path doesn't start with <code>$</code>):
+      - Returns the length of the resulting string after appending <code>value</code> to the string at <code>path</code>.
+      - If multiple paths match, the length of the last updated string is returned.
+      - If the JSON value at <code>path</code> is not a string of if <code>path</code> doesn't exist, an error is raised.
+      - If <code>key</code> doesn't exist, an error is raised.</p>
+<h6 id="path_17">path</h6>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<h4 id="returns_20">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="strlen">strlen()</h3>
+<blockquote>
+<p><code>static</code> <strong>strlen</strong>(<code>batch</code>, <code>key</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Returns the length of the JSON string value stored at the specified <code>path</code> within
+the JSON document stored at <code>key</code>.</p>
+<h4 id="parameters_20">Parameters</h4>
+<h5 id="batch_20">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_19">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="options_14">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>path</code>: The path within the JSON document, Defaults to root (<code>"."</code>) if not provided.</p>
+<p>Command Response -
+    - For JSONPath (path starts with <code>$</code>):
+      - Returns a list of integer replies for every possible path, indicating the length of
+        the JSON string value, or <code>null</code> for JSON values matching the path that
+        are not string.
+    - For legacy path (path doesn't start with <code>$</code>):
+      - Returns the length of the JSON value at <code>path</code> or <code>null</code> if <code>key</code> doesn't exist.
+      - If multiple paths match, the length of the first matched string is returned.
+      - If the JSON value at<code>path</code> is not a string or if <code>path</code> doesn't exist, an error is raised.
+    - If <code>key</code> doesn't exist, <code>null</code> is returned.</p>
+<h6 id="path_18">path</h6>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<h4 id="returns_21">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="toggle">toggle()</h3>
+<blockquote>
+<p><code>static</code> <strong>toggle</strong>(<code>batch</code>, <code>key</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Toggles a Boolean value stored at the specified <code>path</code> within the JSON document stored at <code>key</code>.</p>
+<h4 id="parameters_21">Parameters</h4>
+<h5 id="batch_21">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_20">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="options_15">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>path</code>: The path within the JSON document. Defaults to the root (<code>"."</code>) if not specified.</p>
+<p>Command Response - For JSONPath (<code>path</code> starts with <code>$</code>), returns a list of boolean replies for every possible path, with the toggled boolean value,
+or <code>null</code> for JSON values matching the path that are not boolean.
+- For legacy path (<code>path</code> doesn't starts with <code>$</code>), returns the value of the toggled boolean in <code>path</code>.
+- Note that when sending legacy path syntax, If <code>path</code> doesn't exist or the value at <code>path</code> isn't a boolean, an error is raised.</p>
+<h6 id="path_19">path</h6>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<h4 id="returns_22">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<hr />
+<h3 id="type">type()</h3>
+<blockquote>
+<p><code>static</code> <strong>type</strong>(<code>batch</code>, <code>key</code>, <code>options?</code>): <a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+</blockquote>
+<p>Reports the type of values at the given path.</p>
+<h4 id="parameters_22">Parameters</h4>
+<h5 id="batch_22">batch</h5>
+<p>A batch to add commands to.</p>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+<h5 id="key_21">key</h5>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<p>The key of the JSON document.</p>
+<h5 id="options_16">options?</h5>
+<p>(Optional) Additional parameters:
+- (Optional) <code>path</code>: Defaults to root (<code>"."</code>) if not provided.</p>
+<p>Command Response -
+    - For JSONPath (path starts with <code>$</code>):
+      - Returns an array of strings that represents the type of value at each path.
+        The type is one of "null", "boolean", "string", "number", "integer", "object" and "array".
+      - If a path does not exist, its corresponding return value is <code>null</code>.
+      - Empty array if the document key does not exist.
+    - For legacy path (path doesn't start with <code>$</code>):
+      - String that represents the type of the value.
+      - <code>null</code> if the document key does not exist.
+      - <code>null</code> if the JSON path is invalid or does not exist.</p>
+<h6 id="path_20">path</h6>
+<p><a href="../../../../BaseClient/type-aliases/GlideString/"><code>GlideString</code></a></p>
+<h4 id="returns_23">Returns</h4>
+<p><a href="../../../../Batch/classes/Batch/"><code>Batch</code></a> | <a href="../../../../Batch/classes/ClusterBatch/"><code>ClusterBatch</code></a></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../../../..", "features": ["navigation.sections", "content.code.copy", "navigation.path", "navigation.footer", "navigation.top"], "search": "../../../../../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../../../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>

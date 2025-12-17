@@ -1,0 +1,3418 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://valkey.io/valkey-glide/node/BaseClient/interfaces/BaseClientConfiguration/">
+      
+      
+        <link rel="prev" href="../../../Batch/classes/ClusterBatch/">
+      
+      
+        <link rel="next" href="../../../server-modules/GlideJson/classes/GlideJson/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>config - GLIDE for Valkey - API Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../../../style.css">
+    
+    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="valkey-glide" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#interface-baseclientconfiguration" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../.." title="GLIDE for Valkey - API Documentation" class="md-header__button md-logo" aria-label="GLIDE for Valkey - API Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GLIDE for Valkey - API Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              config
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/valkey-io/valkey-glide" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../.." title="GLIDE for Valkey - API Documentation" class="md-nav__button md-logo" aria-label="GLIDE for Valkey - API Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    GLIDE for Valkey - API Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/valkey-io/valkey-glide" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_1" id="__nav_1_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python async
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_1_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python async
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_1_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_1_1" id="__nav_1_1_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_1_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_1_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/async/glide_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/async/glide_cluster_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/async/base_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/shared/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_1_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_1_3" id="__nav_1_1_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_1_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_1_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/async/core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/async/cluster_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/async/standalone_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/shared/base_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/shared/standalone_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/shared/cluster_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/lua-scripts-guide.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua Scripting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_2" id="__nav_1_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python sync
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_1_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Python sync
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_2_1" id="__nav_1_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/sync/glide_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/sync/glide_cluster_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/sync/base_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/sync/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_2_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_2_3" id="__nav_1_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_2_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/sync/core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/sync/cluster_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/sync/standalone_commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/shared/base_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/shared/standalone_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/shared/cluster_batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/sync/lua-scripts-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua Scripting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/shared/logger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../python/shared/exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TypeScript
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    TypeScript
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_1" id="__nav_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client and Commands
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client and Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../GlideClient/classes/GlideClient/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../GlideClusterClient/classes/GlideClusterClient/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../classes/BaseClient/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../Batch/classes/BaseBatch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../Batch/classes/Batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../Batch/classes/ClusterBatch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    config
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#remarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remarks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Remarks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#connection-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Connection Details
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database Selection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#communication-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Communication Settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#client-identification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Client Identification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read Strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#availability-zone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Availability Zone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decoder-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decoder Settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#concurrency-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concurrency Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reconnection-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reconnection Strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Properties
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Properties">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#addresses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        addresses
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="addresses">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#host" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        host
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#port" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        port?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clientaz" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clientAz?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="clientAz?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clientname" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clientName?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#connectionbackoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        connectionBackoff?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="connectionBackoff?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#exponentbase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        exponentBase
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        factor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#jitterpercent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        jitterPercent?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#numberofretries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        numberOfRetries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#credentials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        credentials?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#databaseid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        databaseId?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="databaseId?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#remarks_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remarks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#defaultdecoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        defaultDecoder?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inflightrequestslimit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        inflightRequestsLimit?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lazyconnect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lazyConnect?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="lazyConnect?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#remarks_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remarks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        protocol?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#readfrom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        readFrom?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requesttimeout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        requestTimeout?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usetls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        useTLS?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_3" id="__nav_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modules
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Modules
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../server-modules/GlideJson/classes/GlideJson/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../server-modules/GlideFt/classes/GlideFt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_4" id="__nav_2_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Errors
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../Errors/classes/ClosingError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ClosingError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../Errors/classes/ConfigurationError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ConfigurationError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../Errors/classes/ConnectionError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ConnectionError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../Errors/classes/ExecAbortError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ExecAbortError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../Errors/classes/RequestError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RequestError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../Errors/classes/TimeoutError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TimeoutError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../Errors/classes/ValkeyError/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ValkeyError
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../Logger/classes/Logger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#remarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remarks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Remarks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#connection-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Connection Details
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database Selection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#communication-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Communication Settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#client-identification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Client Identification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read Strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#availability-zone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Availability Zone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decoder-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decoder Settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#concurrency-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concurrency Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reconnection-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reconnection Strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Properties
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Properties">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#addresses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        addresses
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="addresses">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#host" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        host
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#port" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        port?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clientaz" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clientAz?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="clientAz?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clientname" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clientName?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#connectionbackoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        connectionBackoff?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="connectionBackoff?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#exponentbase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        exponentBase
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#factor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        factor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#jitterpercent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        jitterPercent?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#numberofretries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        numberOfRetries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#credentials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        credentials?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#databaseid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        databaseId?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="databaseId?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#remarks_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remarks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#defaultdecoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        defaultDecoder?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inflightrequestslimit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        inflightRequestsLimit?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lazyconnect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lazyConnect?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="lazyConnect?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#remarks_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remarks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        protocol?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#readfrom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        readFrom?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requesttimeout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        requestTimeout?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usetls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        useTLS?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<p><a href="/valkey-glide/">Home</a> / <a href="/valkey-glide/node">node</a> / <a href="/valkey-glide/node/BaseClient">BaseClient</a> / <a href="/valkey-glide/node/BaseClient/interfaces">interfaces</a> / <a href="/valkey-glide/node/BaseClient/interfaces/BaseClientConfiguration">BaseClientConfiguration</a>
+<a href="../../../"><strong>@valkey/valkey-glide</strong></a></p>
+<hr />
+<p><a href="../../../modules/">@valkey/valkey-glide</a> / <a href="../../">BaseClient</a> / BaseClientConfiguration</p>
+<h1 id="interface-baseclientconfiguration">Interface: BaseClientConfiguration</h1>
+<p>Configuration settings for creating a client. Shared settings for standalone and cluster clients.</p>
+<h2 id="remarks">Remarks</h2>
+<p>The <code>BaseClientConfiguration</code> interface defines the foundational configuration options used when creating a client to connect to a Valkey server or cluster. It includes connection details, authentication, communication protocols, and various settings that influence the client's behavior and interaction with the server.</p>
+<h3 id="connection-details">Connection Details</h3>
+<ul>
+<li><strong>Addresses</strong>: Use the <code>addresses</code> property to specify the hostnames and ports of the server(s) to connect to.</li>
+<li><strong>Cluster Mode</strong>: In cluster mode, the client will discover other nodes based on the provided addresses.</li>
+<li><strong>Standalone Mode</strong>: In standalone mode, only the provided nodes will be used.</li>
+<li><strong>Lazy Connect</strong>: Set <code>lazyConnect</code> to <code>true</code> to defer connection establishment until the first command is sent.</li>
+</ul>
+<h3 id="database-selection">Database Selection</h3>
+<ul>
+<li><strong>Database ID</strong>: Use <code>databaseId</code> to specify which logical database to connect to (0-15 by default).</li>
+<li><strong>Cluster Mode</strong>: Requires Valkey 9.0+ with multi-database cluster mode enabled.</li>
+<li><strong>Standalone Mode</strong>: Works with all Valkey versions.</li>
+<li><strong>Reconnection</strong>: Database selection persists across reconnections.</li>
+</ul>
+<h3 id="security-settings">Security Settings</h3>
+<ul>
+<li><strong>TLS</strong>: Enable secure communication using <code>useTLS</code>.
+     Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
+     For advanced tls configuration, , see <a href="../AdvancedBaseClientConfiguration/">AdvancedBaseClientConfiguration</a>.</li>
+<li><strong>Authentication</strong>: Provide <code>credentials</code> to authenticate with the server.</li>
+</ul>
+<h3 id="communication-settings">Communication Settings</h3>
+<ul>
+<li><strong>Request Timeout</strong>: Set <code>requestTimeout</code> to specify how long the client should wait for a request to complete.</li>
+<li><strong>Protocol Version</strong>: Choose the serialization protocol using <code>protocol</code>.</li>
+</ul>
+<h3 id="client-identification">Client Identification</h3>
+<ul>
+<li><strong>Client Name</strong>: Set <code>clientName</code> to identify the client connection.</li>
+</ul>
+<h3 id="read-strategy">Read Strategy</h3>
+<ul>
+<li>Use <code>readFrom</code> to specify the client's read strategy (e.g., primary, preferReplica, AZAffinity, AZAffinityReplicasAndPrimary).</li>
+</ul>
+<h3 id="availability-zone">Availability Zone</h3>
+<ul>
+<li>Use <code>clientAz</code> to specify the client's availability zone, which can influence read operations when using <code>readFrom: 'AZAffinity'or</code>readFrom: 'AZAffinityReplicasAndPrimary'`.</li>
+</ul>
+<h3 id="decoder-settings">Decoder Settings</h3>
+<ul>
+<li><strong>Default Decoder</strong>: Set <code>defaultDecoder</code> to specify how responses are decoded by default.</li>
+</ul>
+<h3 id="concurrency-control">Concurrency Control</h3>
+<ul>
+<li><strong>Inflight Requests Limit</strong>: Control the number of concurrent requests using <code>inflightRequestsLimit</code>.</li>
+</ul>
+<h3 id="reconnection-strategy">Reconnection Strategy</h3>
+<ul>
+<li><strong>Reconnection Strategy</strong>: Customize how the client should attempt reconnections using <code>connectionBackoff</code>.</li>
+<li><code>numberOfRetries</code>: The maximum number of retry attempts with increasing delays.<ul>
+<li>After this limit is reached, the retry interval becomes constant.</li>
+</ul>
+</li>
+<li><code>factor</code>: A multiplier applied to the base delay between retries, specified in milliseconds (e.g., <code>500</code> means a 500ms base delay).</li>
+<li><code>exponentBase</code>: The exponential growth factor for delays (e.g., <code>2</code> means the delay doubles with each retry).</li>
+<li><code>jitterPercent</code>: An optional percentage of jitter to add to the delay (e.g., <code>30</code> means the final delay will vary randomly between 70% and 130% of the calculated delay).</li>
+</ul>
+<h2 id="example">Example</h2>
+<div class="highlight"><pre><span></span><code><span class="kd">const</span><span class="w"> </span><span class="nx">config</span><span class="o">:</span><span class="w"> </span><span class="kt">BaseClientConfiguration</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nx">addresses</span><span class="o">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nx">host</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;redis-node-1.example.com&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">port</span><span class="o">:</span><span class="w"> </span><span class="kt">6379</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nx">host</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;redis-node-2.example.com&#39;</span><span class="w"> </span><span class="p">},</span><span class="w"> </span><span class="c1">// Defaults to port 6379</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nx">databaseId</span><span class="o">:</span><span class="w"> </span><span class="kt">5</span><span class="p">,</span><span class="w"> </span><span class="c1">// Connect to database 5</span>
+<span class="w">  </span><span class="nx">useTLS</span><span class="o">:</span><span class="w"> </span><span class="kt">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">credentials</span><span class="o">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">username</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;myUser&#39;</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">password</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;myPassword&#39;</span><span class="p">,</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nx">requestTimeout</span><span class="o">:</span><span class="w"> </span><span class="kt">5000</span><span class="p">,</span><span class="w"> </span><span class="c1">// 5 seconds</span>
+<span class="w">  </span><span class="nx">protocol</span><span class="o">:</span><span class="w"> </span><span class="kt">ProtocolVersion.RESP3</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">clientName</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;myValkeyClient&#39;</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">readFrom</span><span class="o">:</span><span class="w"> </span><span class="kt">ReadFrom.AZAffinity</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">clientAz</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;us-east-1a&#39;</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">defaultDecoder</span><span class="o">:</span><span class="w"> </span><span class="kt">Decoder.String</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">inflightRequestsLimit</span><span class="o">:</span><span class="w"> </span><span class="kt">1000</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">connectionBackoff</span><span class="o">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">numberOfRetries</span><span class="o">:</span><span class="w"> </span><span class="kt">10</span><span class="p">,</span><span class="w"> </span><span class="c1">// Maximum retries before delay becomes constant</span>
+<span class="w">    </span><span class="nx">factor</span><span class="o">:</span><span class="w"> </span><span class="kt">500</span><span class="p">,</span><span class="w">        </span><span class="c1">// Base delay in milliseconds</span>
+<span class="w">    </span><span class="nx">exponentBase</span><span class="o">:</span><span class="w"> </span><span class="kt">2</span><span class="p">,</span><span class="w">    </span><span class="c1">// Delay doubles with each retry (2^N)</span>
+<span class="w">    </span><span class="nx">jitterPercent</span><span class="o">:</span><span class="w"> </span><span class="kt">20</span><span class="p">,</span><span class="w">   </span><span class="c1">// Optional jitter percentage</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nx">lazyConnect</span><span class="o">:</span><span class="w"> </span><span class="kt">true</span><span class="p">,</span>
+<span class="p">};</span>
+</code></pre></div>
+<h2 id="properties">Properties</h2>
+<h3 id="addresses">addresses</h3>
+<blockquote>
+<p><strong>addresses</strong>: <code>object</code>[]</p>
+</blockquote>
+<p>DNS Addresses and ports of known nodes in the cluster.
+If the server is in cluster mode the list can be partial, as the client will attempt to map out the cluster and find all nodes.
+If the server is in standalone mode, only nodes whose addresses were provided will be used by the client.</p>
+<h4 id="host">host</h4>
+<blockquote>
+<p><strong>host</strong>: <code>string</code></p>
+</blockquote>
+<h4 id="port">port?</h4>
+<blockquote>
+<p><code>optional</code> <strong>port</strong>: <code>number</code></p>
+</blockquote>
+<p>If port isn't supplied, 6379 will be used</p>
+<h4 id="example_1">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="nx">configuration</span><span class="p">.</span><span class="nx">addresses</span><span class="w"> </span><span class="o">=</span>
+<span class="p">[</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="nx">address</span><span class="o">:</span><span class="w"> </span><span class="kt">sample</span><span class="o">-</span><span class="nx">address</span><span class="o">-</span><span class="mo">0001</span><span class="p">.</span><span class="nx">use1</span><span class="p">.</span><span class="nx">cache</span><span class="p">.</span><span class="nx">amazonaws</span><span class="p">.</span><span class="nx">com</span><span class="p">,</span><span class="w"> </span><span class="nx">port</span><span class="o">:</span><span class="kt">6378</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="nx">address</span><span class="o">:</span><span class="w"> </span><span class="kt">sample</span><span class="o">-</span><span class="nx">address</span><span class="o">-</span><span class="mo">0002</span><span class="p">.</span><span class="nx">use2</span><span class="p">.</span><span class="nx">cache</span><span class="p">.</span><span class="nx">amazonaws</span><span class="p">.</span><span class="nx">com</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="nx">address</span><span class="o">:</span><span class="w"> </span><span class="kt">sample</span><span class="o">-</span><span class="nx">address</span><span class="o">-</span><span class="mo">0003</span><span class="p">.</span><span class="nx">use2</span><span class="p">.</span><span class="nx">cache</span><span class="p">.</span><span class="nx">amazonaws</span><span class="p">.</span><span class="nx">com</span><span class="p">,</span><span class="w"> </span><span class="nx">port</span><span class="o">:</span><span class="kt">6380</span><span class="w"> </span><span class="p">}</span>
+<span class="p">]</span>
+</code></pre></div>
+<hr />
+<h3 id="clientaz">clientAz?</h3>
+<blockquote>
+<p><code>optional</code> <strong>clientAz</strong>: <code>string</code></p>
+</blockquote>
+<p>Availability Zone of the client.
+If ReadFrom strategy is AZAffinity or AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to nodes within the specified AZ if they exist.</p>
+<h4 id="example_2">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="c1">// Example configuration for setting client availability zone and read strategy</span>
+<span class="nx">configuration</span><span class="p">.</span><span class="nx">clientAz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;us-east-1a&#39;</span><span class="p">;</span><span class="w"> </span><span class="c1">// Sets the client&#39;s availability zone</span>
+<span class="nx">configuration</span><span class="p">.</span><span class="nx">readFrom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;AZAffinity&#39;</span><span class="p">;</span><span class="w"> </span><span class="c1">// Directs read operations to nodes within the same AZ</span>
+<span class="nx">Or</span>
+<span class="nx">configuration</span><span class="p">.</span><span class="nx">readFrom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;AZAffinityReplicasAndPrimary&#39;</span><span class="p">;</span><span class="w"> </span><span class="c1">// Directs read operations to any node (primary or replica) within the same AZ</span>
+</code></pre></div>
+<hr />
+<h3 id="clientname">clientName?</h3>
+<blockquote>
+<p><code>optional</code> <strong>clientName</strong>: <code>string</code></p>
+</blockquote>
+<p>Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.</p>
+<hr />
+<h3 id="connectionbackoff">connectionBackoff?</h3>
+<blockquote>
+<p><code>optional</code> <strong>connectionBackoff</strong>: <code>object</code></p>
+</blockquote>
+<p>Strategy used to determine how and when to reconnect, in case of connection failures.
+The time between attempts grows exponentially, following the formula rand(0 ... factor * (exponentBase ^ N)), where N is the number of failed attempts,
+and rand(...) applies a jitter of up to <code>jitterPercent</code>% to introduce randomness and reduce retry storms.
+The client will attempt to reconnect indefinitely. Once the maximum value is reached, that will remain the time between retry attempts until a
+reconnect attempt is successful.
+If not set, a default backoff strategy will be used.</p>
+<h4 id="exponentbase">exponentBase</h4>
+<blockquote>
+<p><strong>exponentBase</strong>: <code>number</code></p>
+</blockquote>
+<p>The exponent base configured for the strategy.
+Value must be an integer.</p>
+<h4 id="factor">factor</h4>
+<blockquote>
+<p><strong>factor</strong>: <code>number</code></p>
+</blockquote>
+<p>The multiplier that will be applied to the waiting time between each retry.
+This value is specified in milliseconds.
+Value must be an integer.</p>
+<h4 id="jitterpercent">jitterPercent?</h4>
+<blockquote>
+<p><code>optional</code> <strong>jitterPercent</strong>: <code>number</code></p>
+</blockquote>
+<p>The Jitter percent on the calculated duration.
+If not set, a default value will be used.
+Value is optional, and must be an integer.</p>
+<h4 id="numberofretries">numberOfRetries</h4>
+<blockquote>
+<p><strong>numberOfRetries</strong>: <code>number</code></p>
+</blockquote>
+<p>Number of retry attempts that the client should perform when disconnected from the server, where the time between retries increases.
+Once the retries have reached the maximum value, the time between retries will remain constant until a reconnect attempt is succesful.
+Value must be an integer.</p>
+<hr />
+<h3 id="credentials">credentials?</h3>
+<blockquote>
+<p><code>optional</code> <strong>credentials</strong>: <a href="../../type-aliases/ServerCredentials/"><code>ServerCredentials</code></a></p>
+</blockquote>
+<p>Credentials for authentication process.
+If none are set, the client will not authenticate itself with the server.</p>
+<hr />
+<h3 id="databaseid">databaseId?</h3>
+<blockquote>
+<p><code>optional</code> <strong>databaseId</strong>: <code>number</code></p>
+</blockquote>
+<p>Index of the logical database to connect to.</p>
+<h4 id="remarks_1">Remarks</h4>
+<ul>
+<li><strong>Standalone Mode</strong>: Works with all Valkey versions.</li>
+<li><strong>Cluster Mode</strong>: Requires Valkey 9.0+ with multi-database cluster mode enabled.</li>
+<li><strong>Reconnection</strong>: Database selection persists across reconnections.</li>
+<li><strong>Default</strong>: If not specified, defaults to database 0.</li>
+<li><strong>Range</strong>: Must be non-negative. The server will validate the upper limit based on its configuration.</li>
+<li><strong>Server Validation</strong>: The server determines the maximum database ID based on its <code>databases</code> configuration (standalone) or <code>cluster-databases</code> configuration (cluster mode).</li>
+</ul>
+<h4 id="example_3">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="c1">// Connect to database 5</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">config</span><span class="o">:</span><span class="w"> </span><span class="kt">BaseClientConfiguration</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nx">addresses</span><span class="o">:</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="nx">host</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;localhost&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">port</span><span class="o">:</span><span class="w"> </span><span class="kt">6379</span><span class="w"> </span><span class="p">}],</span>
+<span class="w">  </span><span class="nx">databaseId</span><span class="o">:</span><span class="w"> </span><span class="kt">5</span>
+<span class="p">};</span>
+
+<span class="c1">// Connect to a higher database ID (server will validate the limit)</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">configHighDb</span><span class="o">:</span><span class="w"> </span><span class="kt">BaseClientConfiguration</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nx">addresses</span><span class="o">:</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="nx">host</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;localhost&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">port</span><span class="o">:</span><span class="w"> </span><span class="kt">6379</span><span class="w"> </span><span class="p">}],</span>
+<span class="w">  </span><span class="nx">databaseId</span><span class="o">:</span><span class="w"> </span><span class="kt">100</span>
+<span class="p">};</span>
+</code></pre></div>
+<hr />
+<h3 id="defaultdecoder">defaultDecoder?</h3>
+<blockquote>
+<p><code>optional</code> <strong>defaultDecoder</strong>: <a href="../../enumerations/Decoder/"><code>Decoder</code></a></p>
+</blockquote>
+<p>Default decoder when decoder is not set per command.
+If not set, 'Decoder.String' will be used.</p>
+<hr />
+<h3 id="inflightrequestslimit">inflightRequestsLimit?</h3>
+<blockquote>
+<p><code>optional</code> <strong>inflightRequestsLimit</strong>: <code>number</code></p>
+</blockquote>
+<p>The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
+This limit is used to control the memory usage and prevent the client from overwhelming the
+server or getting stuck in case of a queue backlog. If not set, a default value of 1000 will be
+used.</p>
+<hr />
+<h3 id="lazyconnect">lazyConnect?</h3>
+<blockquote>
+<p><code>optional</code> <strong>lazyConnect</strong>: <code>boolean</code></p>
+</blockquote>
+<p>Enables lazy connection mode, where physical connections to the server(s) are deferred
+until the first command is sent. This can reduce startup latency and allow for client
+creation in disconnected environments.</p>
+<ul>
+<li><strong>Default</strong>: <code>false</code> – connections are established immediately during client creation.</li>
+</ul>
+<h4 id="remarks_2">Remarks</h4>
+<p>When <code>lazyConnect</code> is set to <code>true</code>, the client will not attempt to connect to the specified
+nodes during initialization. Instead, connections will be established only when a command is
+actually executed.</p>
+<p>Note that the first command executed with lazy connections may experience additional latency
+as it needs to establish the connection first. During this initial connection, the standard
+request timeout does not apply yet - instead, the connection establishment is governed by
+<code>AdvancedBaseClientConfiguration::connectionTimeout</code>. The request timeout (<code>requestTimeout</code>)
+only begins counting after the connection has been successfully established. This behavior
+can effectively increase the total time needed for the first command to complete.</p>
+<p>This setting applies to both standalone and cluster modes. Note that if an operation is
+attempted and connection fails (e.g., unreachable nodes), errors will surface at that point.</p>
+<h4 id="example_4">Example</h4>
+<div class="highlight"><pre><span></span><code><span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">GlideClient</span><span class="p">.</span><span class="nx">createClient</span><span class="p">({</span>
+<span class="w">  </span><span class="nx">addresses</span><span class="o">:</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="nx">host</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">port</span><span class="o">:</span><span class="w"> </span><span class="kt">6379</span><span class="w"> </span><span class="p">}],</span>
+<span class="w">  </span><span class="nx">lazyConnect</span><span class="o">:</span><span class="w"> </span><span class="kt">true</span>
+<span class="p">});</span>
+
+<span class="c1">// No connection is made yet</span>
+<span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">ping</span><span class="p">();</span><span class="w"> </span><span class="c1">// Now the client connects and sends the command</span>
+</code></pre></div>
+<hr />
+<h3 id="protocol">protocol?</h3>
+<blockquote>
+<p><code>optional</code> <strong>protocol</strong>: <a href="../../enumerations/ProtocolVersion/"><code>ProtocolVersion</code></a></p>
+</blockquote>
+<p>Serialization protocol to be used.
+If not set, <code>RESP3</code> will be used.</p>
+<hr />
+<h3 id="readfrom">readFrom?</h3>
+<blockquote>
+<p><code>optional</code> <strong>readFrom</strong>: <a href="../../type-aliases/ReadFrom/"><code>ReadFrom</code></a></p>
+</blockquote>
+<p>The client's read from strategy.
+If not set, <code>Primary</code> will be used.</p>
+<hr />
+<h3 id="requesttimeout">requestTimeout?</h3>
+<blockquote>
+<p><code>optional</code> <strong>requestTimeout</strong>: <code>number</code></p>
+</blockquote>
+<p>The duration in milliseconds that the client should wait for a request to complete.
+This duration encompasses sending the request, awaiting for a response from the server, and any required reconnection or retries.
+If the specified timeout is exceeded for a pending request, it will result in a timeout error.
+If not explicitly set, a default value of 250 milliseconds will be used.
+Value must be an integer.</p>
+<hr />
+<h3 id="usetls">useTLS?</h3>
+<blockquote>
+<p><code>optional</code> <strong>useTLS</strong>: <code>boolean</code></p>
+</blockquote>
+<p>True if communication with the cluster should use Transport Level Security.
+Should match the TLS configuration of the server/cluster,
+otherwise the connection attempt will fail.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../../../Batch/classes/ClusterBatch/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Cluster Batch">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Cluster Batch
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../../server-modules/GlideJson/classes/GlideJson/" class="md-footer__link md-footer__link--next" aria-label="Next: JSON">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                JSON
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": ["navigation.sections", "content.code.copy", "navigation.path", "navigation.footer", "navigation.top"], "search": "../../../../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>
