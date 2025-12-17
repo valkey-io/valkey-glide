@@ -84,6 +84,8 @@ jobs:
 
         steps:
             - name: Setup self-hosted runner access
+              if: runner.os != 'Windows'
+              shell: bash
               run: |
                   GHA_HOME=/home/ubuntu/actions-runner/_work/valkey-glide
                   if [ -d $GHA_HOME ]; then
@@ -106,6 +108,7 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.CD_TARGET || matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  language: java
 
             - name: Run rustup with correct target
               if: ${{ contains(matrix.host.TARGET, 'musl') }}
@@ -131,6 +134,7 @@ jobs:
 
             - name: Create secret key ring file for all Java submodules
               working-directory: java/client
+              shell: bash
               run: |
                   # Decode the provided base64 GPG key into the client module
                   echo "$SECRING_GPG" | base64 --decode > ./secring.gpg
@@ -150,31 +154,43 @@ jobs:
 
             - name: Build java client
               working-directory: java
-              run: |
-                  if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
-                    # Build and publish client first
-                    ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
-                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
-                    -Ptarget=${{ matrix.host.TARGET }}
-                    
-                    # Then build jedis-compatibility
-                    ./gradlew --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
-                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
-                    -Ptarget=${{ matrix.host.TARGET }}
-                  else
-                    # Build and publish client first
-                    ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
-                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
-                    
-                    # Then build jedis-compatibility
-                    ./gradlew --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
-                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
-                  fi
+              shell: bash
               env:
                   GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+              run: |
+                  # Determine gradle command based on OS
+                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                    GRADLE_CMD="./gradlew.bat"
+                    # TODO: Remove -x :integTest:test when Windows integration tests are implemented
+                    EXTRA_ARGS="-x :integTest:test"
+                  else
+                    GRADLE_CMD="./gradlew"
+                    EXTRA_ARGS=""
+                  fi
+
+                  if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
+                    # Build and publish client first
+                    $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
+                    -Ptarget=${{ matrix.host.TARGET }} $EXTRA_ARGS
+                    
+                    # Then build jedis-compatibility
+                    $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
+                    -Ptarget=${{ matrix.host.TARGET }} $EXTRA_ARGS
+                  else
+                    # Build and publish client first
+                    $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} $EXTRA_ARGS
+                    
+                    # Then build jedis-compatibility
+                    $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} $EXTRA_ARGS
+                  fi
 
             - name: Bundle JAR
               working-directory: java
+              shell: bash
               run: |
                   # Bundle client JAR
                   src_folder=~/.m2/repository/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
@@ -214,18 +230,21 @@ jobs:
               uses: actions/download-artifact@v4
 
             - name: Move all required files to one directory
+              shell: bash
               run: |
                   mkdir maven-files
                   cd maven-files
                   for file in $(find ../. -name "*.jar"); do jar xf "$file" ; done
 
             - name: Generate sha1 and md5 files for all Maven files
+              shell: bash
               run: |
                   cd maven-files
                   for i in *.jar *.pom *.module; do md5sum $i | cut -d ' ' -f 1 > $i.md5; done
                   for i in *.jar *.pom *.module; do sha1sum $i | cut -d ' ' -f 1 > $i.sha1; done
 
             - name: Move files to the correct directory tree
+              shell: bash
               run: |
                   mkdir -p build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
                   mkdir -p build/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
@@ -250,6 +269,7 @@ jobs:
 
             - name: Publish to Maven Central
               id: maven-deployment
+              shell: bash
               run: |
                   export DEPLOYMENT_ID=`curl --request POST \
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
@@ -260,6 +280,7 @@ jobs:
                   echo Uploaded to Maven deployment with deployment ID $DEPLOYMENT_ID. Will be released if smoke tests pass and approved for release.
 
             - name: Check status of deployment
+              shell: bash
               run: |
                   for ((retries = 0; retries < 20; retries++)); do
                       sleep 5
@@ -296,6 +317,9 @@ jobs:
                 exclude:
                     - host:
                           TARGET: aarch64-unknown-linux-musl
+                    # TODO: Remove Windows exclusion when Windows integration tests are implemented
+                    - host:
+                          OS: windows
         runs-on: ${{ matrix.host.test-runner || matrix.host.runner }}
         container:
             image: ${{ matrix.host.IMAGE || ''}}
