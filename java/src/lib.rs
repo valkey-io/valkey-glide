@@ -1274,7 +1274,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                         get_runtime().spawn(async move {
                             while let Some(push) = rx.recv().await {
                                 if let Some(jvm) = jvm_arc.as_ref()
-                                    && let Ok(mut env) = jvm.attach_current_thread_permanently()
+                                    && let Ok(mut env) = jvm.attach_current_thread_as_daemon()
                                 {
                                     handle_push_notification(&mut env, handle_for_java, push);
                                 }
@@ -1439,13 +1439,23 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_getClientInfo<'loca
     .unwrap_or(JString::default())
 }
 
-/// Get glide-core default timeout in milliseconds
+/// Get glide-core default connection timeout in milliseconds
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_internal_GlideNativeBridge_getGlideCoreDefaultTimeoutMs(
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_getGlideCoreDefaultConnectionTimeoutMs(
     _env: JNIEnv,
     _class: JClass,
 ) -> jlong {
-    // Return glide-core's default timeout in milliseconds
+    // Return glide-core's default connection timeout in milliseconds
+    glide_core::client::DEFAULT_CONNECTION_TIMEOUT.as_millis() as jlong
+}
+
+/// Get glide-core default request timeout in milliseconds
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_getGlideCoreDefaultRequestTimeoutMs(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jlong {
+    // Return glide-core's default request timeout in milliseconds
     glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as jlong
 }
 

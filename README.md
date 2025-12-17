@@ -2,6 +2,8 @@
 
 Valkey General Language Independent Driver for the Enterprise (GLIDE) is an official open-source Valkey client library, proudly part of the Valkey organization. Our mission is to make your experience with Valkey and Redis OSS seamless and enjoyable. Whether you're a seasoned developer or just starting out, Valkey GLIDE is here to support you every step of the way.
 
+Visit our official documentation at [glide.valkey.io](https://glide.valkey.io).
+
 ## Why Choose Valkey GLIDE?
 
 - **Community and Open Source**: Join our vibrant community and contribute to the project. We are always here to respond, and the client is for the community.
@@ -27,20 +29,20 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE) is an offi
 
 Valkey GLIDE is API-compatible with the following engine versions:
 
-| Engine Type           |  6.2  |  7.0  |   7.1  |  7.2  |  8.0  |  8.1  |
-|-----------------------|-------|-------|--------|-------|-------|-------|
-| Valkey                |   -   |   -   |   -    |   V   |   V   |   V   |
-| Redis                 |   V   |   V   |   V    |   V   |   -   |   -   |
+| Engine Type           |  6.2  |  7.0  |   7.1  |  7.2  |  8.0  |  8.1  |  9.0  |
+|-----------------------|-------|-------|--------|-------|-------|-------|-------|
+| Valkey                |   -   |   -   |   -   |   ✅   |   ✅   |   ✅   |   ✅   |
+| Redis                 |   ✅   |   ✅   |   ✅   |   ✅   |   -   |   -   |   -   |
 
 ## Current Status and Upcoming Releases
 
 The client currently supports Python, Java, Node.js, Go, C#, and PHP. C# and PHP have preview releases, and have been moved to separate repositories to simplify development. Active development continues for C#, PHP, C++ and Ruby clients. Python, Java, Node.js and Go clients will be moved to separate repositories in the near future.
 
 #### v2.1 (Sep. 2025)
- - Valkey 9 Support – First class support for Multi-DB and Hash Field Expiration (HFE)
- - Python Sync Support – Full synchronous API support for Python
- - Lazy Connection – Extended lazy connection support to Go and Java clients
- - Jedis Compatibility - Added Jedis compatibility layer for Java client
+- Valkey 9 Support – First-class support for Multi-DB and Hash Field Expiration (HFE)
+- Python Sync Support – Full synchronous API support for Python
+- Lazy Connection – Extended lazy connection support to Go and Java clients
+- Jedis Compatibility – Added Jedis compatibility layer for Java client
 
 ### Previous Releases
 
