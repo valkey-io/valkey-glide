@@ -1,7 +1,7 @@
 name: Deploy mkdocs website to GitHub Pages
 
 permissions:
-    contents: read
+    contents: write
     pages: write
 
 on:
@@ -10,7 +10,7 @@ on:
 jobs:
     build-and-deploy-docs:
         runs-on: ubuntu-latest
-        if: github.repository_owner == 'valkey-io' && startsWith(github.ref, 'refs/heads/release-')
+        if: github.repository_owner == 'valkey-io'
 
         steps:
             - name: Checkout your branch
