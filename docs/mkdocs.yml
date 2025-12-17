@@ -97,6 +97,9 @@ plugins:
       additional_index_folders:
         - temp_dir
       generate_home_index: false
+  - redirects:
+      redirect_maps:
+        'index.md': 'https://glide.valkey.io/'
 extra:
   generator: false
 extra_css:

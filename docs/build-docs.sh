@@ -14,10 +14,12 @@ function install_mkdocs() {
         pip3 install --upgrade pip
         pip3 install                           \
             mkdocs                             \
+            mkdocstrings==0.30.0               \
             mkdocstrings-python==1.13.0        \
             pymdown-extensions                 \
             mkdocs-breadcrumbs-plugin          \
-            mkdocs-material
+            mkdocs-material                    \
+            mkdocs-redirects                   
         echo "-- Done"
     fi
     command -v mkdocs
