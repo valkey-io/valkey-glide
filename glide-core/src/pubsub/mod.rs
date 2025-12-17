@@ -1,9 +1,10 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use crate::client::PubSubCommandApplier; // Import from client
 use redis::PushInfo;
-pub use redis::{PubSubSynchronizer, SubscriptionType};
+pub use redis::{PubSubSubscriptionKind, PubSubSynchronizer};
 use std::sync::{Arc, Weak};
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::mpsc;
 
 #[cfg(feature = "mock-pubsub")]
 mod mock;
@@ -30,25 +31,25 @@ pub async fn create_pubsub_synchronizer(
     }
 }
 
-/// Helper function to set client reference on synchronizer
-pub fn set_synchronizer_client(
+/// Helper function to set command applier on synchronizer
+pub fn set_synchronizer_applier(
     sync: &Arc<dyn PubSubSynchronizer>,
-    client: Weak<RwLock<crate::client::Client>>,
-    is_cluster: bool, // ← Add this parameter
+    applier: Weak<dyn PubSubCommandApplier>,
+    is_cluster: bool,
 ) -> Result<(), String> {
     let any = sync.as_any();
 
     #[cfg(feature = "mock-pubsub")]
     {
         if let Some(mock_sync) = any.downcast_ref::<mock::MockPubSubSynchronizer>() {
-            return mock_sync.set_client(client, is_cluster);
+            return mock_sync.set_applier(applier, is_cluster);
         }
     }
 
     #[cfg(not(feature = "mock-pubsub"))]
     {
         if let Some(real_sync) = any.downcast_ref::<real::RealPubSubSynchronizer>() {
-            return real_sync.set_client(client, is_cluster);
+            return real_sync.set_applier(applier, is_cluster);
         }
     }
 

@@ -2345,19 +2345,12 @@ where
             );
         }
 
-        println!("DEBUG: About to call handle_topology_refresh");
-
         // Notify the PubSub synchronizer about the new topology
         if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
-            println!("DEBUG: Synchronizer exists, calling handle_topology_refresh");
             let guard = inner.conn_lock.read().expect(MUTEX_READ_ERR);
             sync.handle_topology_refresh(&guard.slot_map);
-            println!("DEBUG: handle_topology_refresh completed");
-        } else {
-            println!("DEBUG: No synchronizer");
         }
 
-        println!("DEBUG: refresh_slots_inner returning Ok");
         Ok(())
     }
 

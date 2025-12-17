@@ -1,20 +1,10 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use crate::cluster_slotmap::SlotMap;
+use crate::connection::PubSubSubscriptionKind;
 use crate::{Cmd, RedisResult, Value};
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
-
-/// Type of PubSub subscription
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum SubscriptionType {
-    /// Exact channel name match
-    Exact,
-    /// Pattern-based subscription (glob patterns)
-    Pattern,
-    /// Sharded PubSub channel (cluster mode only)
-    Sharded,
-}
 
 /// Trait for managing PubSub subscription synchronization between desired and actual state.
 #[async_trait]
@@ -23,7 +13,7 @@ pub trait PubSubSynchronizer: Send + Sync {
     async fn add_desired_subscriptions(
         &self,
         channels: HashSet<String>,
-        subscription_type: SubscriptionType,
+        subscription_type: PubSubSubscriptionKind,
     );
 
     /// Remove channels from desired subscriptions
@@ -31,14 +21,14 @@ pub trait PubSubSynchronizer: Send + Sync {
     async fn remove_desired_subscriptions(
         &self,
         channels: Option<HashSet<String>>,
-        subscription_type: SubscriptionType,
+        subscription_type: PubSubSubscriptionKind,
     );
 
     /// Add channels to current (actual) subscriptions
     async fn add_current_subscriptions(
         &self,
         channels: HashSet<String>,
-        subscription_type: SubscriptionType,
+        subscription_type: PubSubSubscriptionKind,
         address: String,
     );
 
@@ -46,7 +36,7 @@ pub trait PubSubSynchronizer: Send + Sync {
     async fn remove_current_subscriptions(
         &self,
         channels: HashSet<String>,
-        subscription_type: SubscriptionType,
+        subscription_type: PubSubSubscriptionKind,
         address: String,
     );
 

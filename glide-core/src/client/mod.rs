@@ -36,8 +36,11 @@ mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
 use crate::request_type::RequestType;
+use crate::pubsub::set_synchronizer_applier;
 use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
 use redis::InfoDict;
+use std::future::Future;
+use std::pin::Pin;
 use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock, mpsc, oneshot};
 use versions::Versioning;
@@ -1211,6 +1214,27 @@ impl Client {
         Ok(())
     }
 }
+/// Trait for executing PubSub commands.
+/// Defined in glide-core so we can implement it for `RwLock<Client>`.
+pub trait PubSubCommandApplier: Send + Sync {
+    /// Send a subscription command (SUBSCRIBE, UNSUBSCRIBE, etc.)
+    fn apply_pubsub_command<'a>(
+        &'a self,
+        cmd: &'a mut Cmd,
+    ) -> Pin<Box<dyn Future<Output = RedisResult<Value>> + Send + 'a>>;
+}
+
+impl PubSubCommandApplier for RwLock<Client> {
+    fn apply_pubsub_command<'a>(
+        &'a self,
+        cmd: &'a mut Cmd,
+    ) -> Pin<Box<dyn Future<Output = RedisResult<Value>> + Send + 'a>> {
+        Box::pin(async move {
+            let mut guard = self.write().await;
+            guard.send_command(cmd, None).await
+        })
+    }
+}
 
 fn load_cmd(code: &[u8]) -> Cmd {
     let mut cmd = redis::cmd("SCRIPT");
@@ -1615,12 +1639,14 @@ impl Client {
             let client_arc = Arc::new(RwLock::new(client));
 
             if let Some(sync) = &pubsub_synchronizer {
-                crate::pubsub::set_synchronizer_client(
+                let applier: Arc<dyn PubSubCommandApplier> = client_arc.clone();
+
+                set_synchronizer_applier(
                     sync,
-                    Arc::downgrade(&client_arc),
+                    Arc::downgrade(&applier),
                     request.cluster_mode_enabled,
                 )
-                .expect("Failed to set synchronizer client during initialization");
+                .expect("Failed to set synchronizer applier during initialization");
             }
 
             // Create IAM token manager if needed, passing a strong Arc to the callback

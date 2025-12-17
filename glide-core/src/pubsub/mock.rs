@@ -1,15 +1,16 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use crate::client::PubSubCommandApplier;
 use async_trait::async_trait;
 use logger_core::{log_debug, log_warn};
 use once_cell::sync::Lazy;
 use redis::cluster_routing::Routable;
 use redis::{Cmd, ErrorKind, PushInfo, PushKind, RedisError, RedisResult, Value};
-use redis::{PubSubSynchronizer, SlotMap, SubscriptionType};
+use redis::{PubSubSubscriptionKind, PubSubSynchronizer, SlotMap};
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock, mpsc};
@@ -29,7 +30,7 @@ pub fn get_mock_broker() -> Arc<MockPubSubBroker> {
 /// Mock implementation of PubSub synchronizer
 pub struct MockPubSubSynchronizer {
     client_id: String,
-    client: once_cell::sync::OnceCell<std::sync::Weak<tokio::sync::RwLock<crate::client::Client>>>,
+    command_applier: once_cell::sync::OnceCell<Weak<dyn PubSubCommandApplier>>,
 
     desired_channels: Arc<RwLock<HashSet<String>>>,
     desired_patterns: Arc<RwLock<HashSet<String>>>,
@@ -51,7 +52,7 @@ impl MockPubSubSynchronizer {
     fn new_internal(client_id: String, broker: Arc<MockPubSubBroker>) -> Arc<Self> {
         Arc::new(Self {
             client_id,
-            client: once_cell::sync::OnceCell::new(),
+            command_applier: once_cell::sync::OnceCell::new(),
             is_cluster: once_cell::sync::OnceCell::new(),
             desired_channels: Arc::new(RwLock::new(HashSet::new())),
             desired_patterns: Arc::new(RwLock::new(HashSet::new())),
@@ -108,21 +109,6 @@ impl MockPubSubSynchronizer {
         }
 
         synchronizer
-    }
-
-    /// Set client reference
-    pub fn set_client(
-        &self,
-        client: std::sync::Weak<tokio::sync::RwLock<crate::client::Client>>,
-        is_cluster: bool,
-    ) -> Result<(), String> {
-        self.is_cluster
-            .set(is_cluster)
-            .map_err(|_| "is_cluster already set")?;
-
-        self.client.set(client).map_err(|_| "Client already set")?;
-
-        Ok(())
     }
 
     pub(crate) async fn set_can_subscribe(&self, can_subscribe: bool) {
@@ -186,6 +172,28 @@ impl MockPubSubSynchronizer {
 
         *self.reconciliation_task_handle.lock().unwrap() = Some(handle);
     }
+
+    /// Set the command applier - NOT a trait method
+    pub fn set_applier(
+        &self,
+        applier: Weak<dyn PubSubCommandApplier>,
+        is_cluster: bool,
+    ) -> Result<(), String> {
+        self.is_cluster
+            .set(is_cluster)
+            .map_err(|_| "is_cluster already set")?;
+
+        self.command_applier
+            .set(applier)
+            .map_err(|_| "Command applier already set")?;
+
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    fn get_applier(&self) -> Option<Arc<dyn PubSubCommandApplier>> {
+        self.command_applier.get()?.upgrade()
+    }
 }
 
 impl Drop for MockPubSubSynchronizer {
@@ -212,12 +220,12 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
     async fn add_desired_subscriptions(
         &self,
         channels: HashSet<String>,
-        subscription_type: SubscriptionType,
+        subscription_type: PubSubSubscriptionKind,
     ) {
         let mut set = match subscription_type {
-            SubscriptionType::Exact => self.desired_channels.write().await,
-            SubscriptionType::Pattern => self.desired_patterns.write().await,
-            SubscriptionType::Sharded => self.desired_sharded.write().await,
+            PubSubSubscriptionKind::Exact => self.desired_channels.write().await,
+            PubSubSubscriptionKind::Pattern => self.desired_patterns.write().await,
+            PubSubSubscriptionKind::Sharded => self.desired_sharded.write().await,
         };
 
         for channel in channels {
@@ -231,12 +239,12 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
     async fn remove_desired_subscriptions(
         &self,
         channels: Option<HashSet<String>>,
-        subscription_type: SubscriptionType,
+        subscription_type: PubSubSubscriptionKind,
     ) {
         let mut set = match subscription_type {
-            SubscriptionType::Exact => self.desired_channels.write().await,
-            SubscriptionType::Pattern => self.desired_patterns.write().await,
-            SubscriptionType::Sharded => self.desired_sharded.write().await,
+            PubSubSubscriptionKind::Exact => self.desired_channels.write().await,
+            PubSubSubscriptionKind::Pattern => self.desired_patterns.write().await,
+            PubSubSubscriptionKind::Sharded => self.desired_sharded.write().await,
         };
 
         if let Some(channels) = channels {
@@ -254,13 +262,13 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
     async fn add_current_subscriptions(
         &self,
         channels: HashSet<String>,
-        subscription_type: SubscriptionType,
+        subscription_type: PubSubSubscriptionKind,
         _address: String,
     ) {
         let mut set = match subscription_type {
-            SubscriptionType::Exact => self.actual_channels.write().await,
-            SubscriptionType::Pattern => self.actual_patterns.write().await,
-            SubscriptionType::Sharded => self.actual_sharded.write().await,
+            PubSubSubscriptionKind::Exact => self.actual_channels.write().await,
+            PubSubSubscriptionKind::Pattern => self.actual_patterns.write().await,
+            PubSubSubscriptionKind::Sharded => self.actual_sharded.write().await,
         };
 
         for channel in channels {
@@ -271,13 +279,13 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
     async fn remove_current_subscriptions(
         &self,
         channels: HashSet<String>,
-        subscription_type: SubscriptionType,
+        subscription_type: PubSubSubscriptionKind,
         _address: String,
     ) {
         let mut set = match subscription_type {
-            SubscriptionType::Exact => self.actual_channels.write().await,
-            SubscriptionType::Pattern => self.actual_patterns.write().await,
-            SubscriptionType::Sharded => self.actual_sharded.write().await,
+            PubSubSubscriptionKind::Exact => self.actual_channels.write().await,
+            PubSubSubscriptionKind::Pattern => self.actual_patterns.write().await,
+            PubSubSubscriptionKind::Sharded => self.actual_sharded.write().await,
         };
 
         for channel in channels {
@@ -542,55 +550,63 @@ impl MockPubSubBroker {
             "SPUBLISH" => self.handle_publish(cmd, true).await,
 
             "SUBSCRIBE_LAZY" => {
-                self.handle_lazy_subscribe(sync.as_ref(), cmd, SubscriptionType::Exact)
+                self.handle_lazy_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Exact)
                     .await
             }
             "PSUBSCRIBE_LAZY" => {
-                self.handle_lazy_subscribe(sync.as_ref(), cmd, SubscriptionType::Pattern)
+                self.handle_lazy_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Pattern)
                     .await
             }
             "SSUBSCRIBE_LAZY" => {
-                self.handle_lazy_subscribe(sync.as_ref(), cmd, SubscriptionType::Sharded)
+                self.handle_lazy_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Sharded)
                     .await
             }
 
             "UNSUBSCRIBE_LAZY" => {
-                self.handle_lazy_unsubscribe(sync.as_ref(), cmd, SubscriptionType::Exact)
+                self.handle_lazy_unsubscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Exact)
                     .await
             }
             "PUNSUBSCRIBE_LAZY" => {
-                self.handle_lazy_unsubscribe(sync.as_ref(), cmd, SubscriptionType::Pattern)
+                self.handle_lazy_unsubscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Pattern)
                     .await
             }
             "SUNSUBSCRIBE_LAZY" => {
-                self.handle_lazy_unsubscribe(sync.as_ref(), cmd, SubscriptionType::Sharded)
+                self.handle_lazy_unsubscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Sharded)
                     .await
             }
 
             "SUBSCRIBE" => {
-                self.handle_blocking_subscribe(sync.as_ref(), cmd, SubscriptionType::Exact)
+                self.handle_blocking_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Exact)
                     .await
             }
             "PSUBSCRIBE" => {
-                self.handle_blocking_subscribe(sync.as_ref(), cmd, SubscriptionType::Pattern)
+                self.handle_blocking_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Pattern)
                     .await
             }
             "SSUBSCRIBE" => {
-                self.handle_blocking_subscribe(sync.as_ref(), cmd, SubscriptionType::Sharded)
+                self.handle_blocking_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Sharded)
                     .await
             }
 
             "UNSUBSCRIBE" => {
-                self.handle_blocking_unsubscribe(sync.as_ref(), cmd, SubscriptionType::Exact)
+                self.handle_blocking_unsubscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Exact)
                     .await
             }
             "PUNSUBSCRIBE" => {
-                self.handle_blocking_unsubscribe(sync.as_ref(), cmd, SubscriptionType::Pattern)
-                    .await
+                self.handle_blocking_unsubscribe(
+                    sync.as_ref(),
+                    cmd,
+                    PubSubSubscriptionKind::Pattern,
+                )
+                .await
             }
             "SUNSUBSCRIBE" => {
-                self.handle_blocking_unsubscribe(sync.as_ref(), cmd, SubscriptionType::Sharded)
-                    .await
+                self.handle_blocking_unsubscribe(
+                    sync.as_ref(),
+                    cmd,
+                    PubSubSubscriptionKind::Sharded,
+                )
+                .await
             }
 
             "GET_SUBSCRIPTIONS" => Ok(self.get_subscriptions_as_value(sync.as_ref()).await),
@@ -694,7 +710,7 @@ impl MockPubSubBroker {
         &self,
         sync: Option<&Arc<MockPubSubSynchronizer>>,
         cmd: &Cmd,
-        sub_type: SubscriptionType,
+        sub_type: PubSubSubscriptionKind,
     ) -> RedisResult<Value> {
         let channels = Self::extract_channels_from_cmd(cmd);
         if channels.is_empty() {
@@ -716,7 +732,7 @@ impl MockPubSubBroker {
         &self,
         sync: Option<&Arc<MockPubSubSynchronizer>>,
         cmd: &Cmd,
-        sub_type: SubscriptionType,
+        sub_type: PubSubSubscriptionKind,
     ) -> RedisResult<Value> {
         let channels = Self::extract_channels_from_cmd(cmd);
         let channels = if channels.is_empty() {
@@ -736,7 +752,7 @@ impl MockPubSubBroker {
         &self,
         sync: Option<&Arc<MockPubSubSynchronizer>>,
         cmd: &Cmd,
-        sub_type: SubscriptionType,
+        sub_type: PubSubSubscriptionKind,
     ) -> RedisResult<Value> {
         let (channels, timeout_ms) = Self::extract_channels_and_timeout(cmd);
         if channels.is_empty() {
@@ -747,18 +763,15 @@ impl MockPubSubBroker {
         }
 
         if let Some(sync) = sync {
-            sync.add_desired_subscriptions(
-                channels.clone().into_iter().collect(),
-                sub_type.clone(),
-            )
-            .await;
+            sync.add_desired_subscriptions(channels.clone().into_iter().collect(), sub_type)
+                .await;
 
             let start = std::time::Instant::now();
             loop {
                 let actual_set = match sub_type {
-                    SubscriptionType::Exact => sync.actual_channels.read().await.clone(),
-                    SubscriptionType::Pattern => sync.actual_patterns.read().await.clone(),
-                    SubscriptionType::Sharded => sync.actual_sharded.read().await.clone(),
+                    PubSubSubscriptionKind::Exact => sync.actual_channels.read().await.clone(),
+                    PubSubSubscriptionKind::Pattern => sync.actual_patterns.read().await.clone(),
+                    PubSubSubscriptionKind::Sharded => sync.actual_sharded.read().await.clone(),
                 };
 
                 if channels.iter().all(|ch| actual_set.contains(ch)) {
@@ -796,7 +809,7 @@ impl MockPubSubBroker {
         &self,
         sync: Option<&Arc<MockPubSubSynchronizer>>,
         cmd: &Cmd,
-        sub_type: SubscriptionType,
+        sub_type: PubSubSubscriptionKind,
     ) -> RedisResult<Value> {
         let (channels, timeout_ms) = Self::extract_channels_and_timeout(cmd);
         let channels_opt = if channels.is_empty() {
@@ -808,16 +821,16 @@ impl MockPubSubBroker {
         if let Some(sync) = sync {
             sync.remove_desired_subscriptions(
                 channels_opt.clone().map(|v| v.into_iter().collect()),
-                sub_type.clone(),
+                sub_type,
             )
             .await;
 
             let start = std::time::Instant::now();
             loop {
                 let actual_set = match sub_type {
-                    SubscriptionType::Exact => sync.actual_channels.read().await.clone(),
-                    SubscriptionType::Pattern => sync.actual_patterns.read().await.clone(),
-                    SubscriptionType::Sharded => sync.actual_sharded.read().await.clone(),
+                    PubSubSubscriptionKind::Exact => sync.actual_channels.read().await.clone(),
+                    PubSubSubscriptionKind::Pattern => sync.actual_patterns.read().await.clone(),
+                    PubSubSubscriptionKind::Sharded => sync.actual_sharded.read().await.clone(),
                 };
 
                 let is_removed = if let Some(ref channels) = channels_opt {

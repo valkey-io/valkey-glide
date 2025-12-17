@@ -1,5 +1,7 @@
+use crate::connection::PubSubSubscriptionKind;
 use crate::{PubSubSynchronizer, PushKind, RedisResult, Value};
 use arc_swap::ArcSwap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -57,9 +59,6 @@ impl PushManager {
         data: &[Value],
         address: Option<String>,
     ) {
-        use crate::pubsub_synchronizer::SubscriptionType;
-        use std::collections::HashSet;
-
         // We need an address to track subscriptions properly
         let Some(address) = address else {
             return;
@@ -67,15 +66,15 @@ impl PushManager {
 
         // Only process subscription-related pushes
         let (subscription_type, is_subscribe) = match kind {
-            PushKind::Subscribe => (SubscriptionType::Exact, true),
-            PushKind::Unsubscribe => (SubscriptionType::Exact, false),
-            PushKind::PSubscribe => (SubscriptionType::Pattern, true),
-            PushKind::PUnsubscribe => (SubscriptionType::Pattern, false),
-            PushKind::SSubscribe => (SubscriptionType::Sharded, true),
-            PushKind::SUnsubscribe => (SubscriptionType::Sharded, false),
-            PushKind::Message => (SubscriptionType::Exact, true),
-            PushKind::PMessage => (SubscriptionType::Pattern, true),
-            PushKind::SMessage => (SubscriptionType::Sharded, true),
+            PushKind::Subscribe => (PubSubSubscriptionKind::Exact, true),
+            PushKind::Unsubscribe => (PubSubSubscriptionKind::Exact, false),
+            PushKind::PSubscribe => (PubSubSubscriptionKind::Pattern, true),
+            PushKind::PUnsubscribe => (PubSubSubscriptionKind::Pattern, false),
+            PushKind::SSubscribe => (PubSubSubscriptionKind::Sharded, true),
+            PushKind::SUnsubscribe => (PubSubSubscriptionKind::Sharded, false),
+            PushKind::Message => (PubSubSubscriptionKind::Exact, true),
+            PushKind::PMessage => (PubSubSubscriptionKind::Pattern, true),
+            PushKind::SMessage => (PubSubSubscriptionKind::Sharded, true),
             _ => return,
         };
 
