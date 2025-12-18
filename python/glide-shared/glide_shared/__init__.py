@@ -117,6 +117,8 @@ from .config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
+    CompressionBackend,
+    CompressionConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     IamAuthConfig,
@@ -183,6 +185,8 @@ __all__ = [
     # Config
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
+    "CompressionBackend",
+    "CompressionConfiguration",
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
