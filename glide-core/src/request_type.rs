@@ -773,6 +773,16 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
 }
 
 impl RequestType {
+    /// Returns the compression behavior for this request type.
+    pub fn compression_behavior(self) -> crate::compression::CommandCompressionBehavior {
+        use crate::compression::CommandCompressionBehavior;
+        match self {
+            RequestType::Set => CommandCompressionBehavior::CompressValues,
+            RequestType::Get => CommandCompressionBehavior::DecompressValues,
+            _ => CommandCompressionBehavior::NoCompression,
+        }
+    }
+
     /// Returns a `Cmd` set with the command name matching the request.
     pub fn get_command(&self) -> Option<Cmd> {
         match self {
