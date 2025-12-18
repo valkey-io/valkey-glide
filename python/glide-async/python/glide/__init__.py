@@ -10,6 +10,7 @@ from glide.glide import (
     OpenTelemetryMetricsConfig,
     OpenTelemetryTracesConfig,
     Script,
+    get_min_compressed_size,
 )
 from glide_shared import (
     OK,
@@ -40,6 +41,8 @@ from glide_shared import (
     ClusterBatch,
     ClusterBatchOptions,
     ClusterTransaction,
+    CompressionBackend,
+    CompressionConfiguration,
     ConditionalChange,
     ConfigurationError,
     ConnectionError,
@@ -220,6 +223,8 @@ __all__ = [
     "TGlideClient",
     "GlideClient",
     "GlideClusterClient",
+    # Internal utilities
+    "get_min_compressed_size",
     "Batch",
     "ClusterBatch",
     "ClusterTransaction",
@@ -235,6 +240,8 @@ __all__ = [
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
+    "CompressionBackend",
+    "CompressionConfiguration",
     "ReadFrom",
     "ServerCredentials",
     "ServiceType",
