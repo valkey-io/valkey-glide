@@ -996,6 +996,48 @@ pub extern "system" fn Java_glide_ffi_resolvers_StatisticsResolver_getStatistics
         &format!("{}", Telemetry::total_clients()),
     );
 
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "total_values_compressed",
+        &format!("{}", Telemetry::total_values_compressed()),
+    );
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "total_values_decompressed",
+        &format!("{}", Telemetry::total_values_decompressed()),
+    );
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "total_original_bytes",
+        &format!("{}", Telemetry::total_original_bytes()),
+    );
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "total_bytes_compressed",
+        &format!("{}", Telemetry::total_bytes_compressed()),
+    );
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "total_bytes_decompressed",
+        &format!("{}", Telemetry::total_bytes_decompressed()),
+    );
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "compression_skipped_count",
+        &format!("{}", Telemetry::compression_skipped_count()),
+    );
+
     map
 }
 

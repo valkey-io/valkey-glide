@@ -29,6 +29,8 @@ from glide_shared import (
     ClusterBatch,
     ClusterBatchOptions,
     ClusterTransaction,
+    CompressionBackend,
+    CompressionConfiguration,
     ConditionalChange,
     ConfigurationError,
     ConnectionError,
@@ -155,12 +157,15 @@ from .logger import Logger
 from .sync_commands import ft, glide_json
 from .sync_commands.cluster_scan_cursor import ClusterScanCursor
 from .sync_commands.script import Script
+from .sync_commands.utils import get_min_compressed_size
 
 __all__ = [
     # Client
     "TGlideClient",
     "GlideClient",
     "GlideClusterClient",
+    # Internal utilities
+    "get_min_compressed_size",
     "Batch",
     "ClusterBatch",
     "TBatch",
@@ -176,6 +181,8 @@ __all__ = [
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
+    "CompressionBackend",
+    "CompressionConfiguration",
     "ReadFrom",
     "ServerCredentials",
     "ServiceType",

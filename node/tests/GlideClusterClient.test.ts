@@ -2457,7 +2457,13 @@ describe("GlideClusterClient", () => {
                 expect(typeof stats).toBe("object");
                 expect(stats).toHaveProperty("total_connections");
                 expect(stats).toHaveProperty("total_clients");
-                expect(Object.keys(stats)).toHaveLength(2);
+                expect(stats).toHaveProperty("total_values_compressed");
+                expect(stats).toHaveProperty("total_values_decompressed");
+                expect(stats).toHaveProperty("total_original_bytes");
+                expect(stats).toHaveProperty("total_bytes_compressed");
+                expect(stats).toHaveProperty("total_bytes_decompressed");
+                expect(stats).toHaveProperty("compression_skipped_count");
+                expect(Object.keys(stats)).toHaveLength(8);
             } finally {
                 // Ensure the client is properly closed
                 glideClientForTesting?.close();

@@ -66,6 +66,8 @@ from glide_shared.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
+    CompressionBackend,
+    CompressionConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     NodeAddress,
@@ -544,12 +546,28 @@ def create_client_config(
     use_tls: Optional[bool] = None,
     tls_insecure: Optional[bool] = None,
     lazy_connect: Optional[bool] = False,
+    enable_compression: Optional[bool] = None,
 ) -> Union[GlideClusterClientConfiguration, GlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
     else:
         use_tls = request.config.getoption("--tls")
     tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
+
+    # Create compression configuration if enabled
+    compression_config = None
+    if enable_compression is not None:
+        use_compression = enable_compression
+    else:
+        use_compression = request.config.getoption("--compression")
+
+    if use_compression:
+        compression_config = CompressionConfiguration(
+            enabled=True,
+            backend=CompressionBackend.ZSTD,
+            compression_level=3,  # Default zstd level
+            min_compression_size=64,  # Only compress values >= 64 bytes
+        )
     if cluster_mode:
         valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
@@ -571,6 +589,7 @@ def create_client_config(
                 connection_timeout, tls_config=tls_adv_conf
             ),
             lazy_connect=lazy_connect,
+            compression=compression_config,
         )
     else:
         valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
@@ -592,6 +611,7 @@ def create_client_config(
             ),
             reconnect_strategy=reconnect_strategy,
             lazy_connect=lazy_connect,
+            compression=compression_config,
         )
 
 
@@ -618,12 +638,29 @@ def create_sync_client_config(
     use_tls: Optional[bool] = None,
     tls_insecure: Optional[bool] = None,
     lazy_connect: Optional[bool] = False,
+    enable_compression: Optional[bool] = None,
 ) -> Union[SyncGlideClusterClientConfiguration, SyncGlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
     else:
         use_tls = request.config.getoption("--tls")
     tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
+
+    # Create compression configuration if enabled
+    compression_config = None
+    if enable_compression is not None:
+        use_compression = enable_compression
+    else:
+        use_compression = request.config.getoption("--compression")
+
+    if use_compression:
+        compression_config = CompressionConfiguration(
+            enabled=True,
+            backend=CompressionBackend.ZSTD,
+            compression_level=3,  # Default zstd level
+            min_compression_size=64,  # Only compress values >= 64 bytes
+        )
+
     if cluster_mode:
         valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
@@ -644,6 +681,7 @@ def create_sync_client_config(
                 connection_timeout, tls_config=tls_adv_conf
             ),
             lazy_connect=lazy_connect,
+            compression=compression_config,
         )
     else:
         valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
@@ -664,6 +702,7 @@ def create_sync_client_config(
             ),
             reconnect_strategy=reconnect_strategy,
             lazy_connect=lazy_connect,
+            compression=compression_config,
         )
 
 

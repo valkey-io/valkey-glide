@@ -43,6 +43,13 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
+        "--compression",
+        default=False,
+        action="store_true",
+        help="Enable compression for all tests, defaults to `%(default)s`",
+    )
+
+    parser.addoption(
         "--load-module",
         action="append",
         help="""Load additional Valkey modules (provide full path for the module's shared library).

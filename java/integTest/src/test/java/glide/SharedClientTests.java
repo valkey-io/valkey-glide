@@ -76,8 +76,8 @@ public class SharedClientTests {
     @MethodSource("getClients")
     public void validate_statistics(BaseClient client) {
         assertFalse(client.getStatistics().isEmpty());
-        // we expect 2 items in the statistics map
-        assertEquals(2, client.getStatistics().size());
+        // we expect 8 items in the statistics map
+        assertEquals(8, client.getStatistics().size());
     }
 
     @AfterAll
