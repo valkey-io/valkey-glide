@@ -142,14 +142,18 @@ async fn create_connection(
         connection_retry_strategy: Some(retry_strategy),
     };
 
+    // Wrap retry loop in timeout so total time respects connection_timeout
     let action = || async {
-        get_multiplexed_connection(&client, &connection_options)
+        client
+            .get_multiplexed_async_connection(connection_options.clone())
             .await
             .map_err(RetryError::transient)
     };
+    let retry_future = Retry::spawn(retry_strategy.get_bounded_backoff_dur_iterator(), action);
+    let result = timeout(connection_timeout, retry_future).await;
 
-    match Retry::spawn(retry_strategy.get_bounded_backoff_dur_iterator(), action).await {
-        Ok(connection) => {
+    match result {
+        Ok(Ok(connection)) => {
             log_debug(
                 "connection creation",
                 format!(
@@ -169,7 +173,11 @@ async fn create_connection(
                 connection_options,
             })
         }
-        Err(err) => {
+        err => {
+            let err: RedisError = match err {
+                Ok(Err(retry_err)) => retry_err,
+                _ => std::io::Error::from(std::io::ErrorKind::TimedOut).into(),
+            };
             log_warn(
                 "connection creation",
                 format!(
