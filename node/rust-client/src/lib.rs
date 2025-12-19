@@ -686,9 +686,22 @@ impl Drop for ClusterScanCursor {
 pub fn get_statistics(env: Env) -> Result<JsObject> {
     let total_connections = Telemetry::total_connections().to_string();
     let total_clients = Telemetry::total_clients().to_string();
+    let total_values_compressed = Telemetry::total_values_compressed().to_string();
+    let total_values_decompressed = Telemetry::total_values_decompressed().to_string();
+    let total_original_bytes = Telemetry::total_original_bytes().to_string();
+    let total_bytes_compressed = Telemetry::total_bytes_compressed().to_string();
+    let total_bytes_decompressed = Telemetry::total_bytes_decompressed().to_string();
+    let compression_skipped_count = Telemetry::compression_skipped_count().to_string();
+
     let mut stats: JsObject = env.create_object()?;
     stats.set_named_property("total_connections", total_connections)?;
     stats.set_named_property("total_clients", total_clients)?;
+    stats.set_named_property("total_values_compressed", total_values_compressed)?;
+    stats.set_named_property("total_values_decompressed", total_values_decompressed)?;
+    stats.set_named_property("total_original_bytes", total_original_bytes)?;
+    stats.set_named_property("total_bytes_compressed", total_bytes_compressed)?;
+    stats.set_named_property("total_bytes_decompressed", total_bytes_decompressed)?;
+    stats.set_named_property("compression_skipped_count", compression_skipped_count)?;
 
     Ok(stats)
 }
