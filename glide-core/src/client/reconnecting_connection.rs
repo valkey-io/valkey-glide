@@ -148,10 +148,15 @@ async fn create_connection(
             .get_multiplexed_async_connection(connection_options.clone())
             .await
             .map_err(|e| {
-                // Don't retry auth errors - credentials won't change
-                if e.kind() == redis::ErrorKind::AuthenticationFailed
-                    || e.to_string().contains("NOAUTH")
-                {
+                // Don't retry errors that won't resolve with retries
+                let is_permanent = matches!(
+                    e.kind(),
+                    redis::ErrorKind::AuthenticationFailed
+                        | redis::ErrorKind::InvalidClientConfig
+                        | redis::ErrorKind::RESP3NotSupported
+                        | redis::ErrorKind::ClientError
+                ) || e.to_string().contains("NOAUTH");
+                if is_permanent {
                     RetryError::permanent(e)
                 } else {
                     RetryError::transient(e)
