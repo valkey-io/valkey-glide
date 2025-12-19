@@ -154,7 +154,6 @@ async fn create_connection(
                     redis::ErrorKind::AuthenticationFailed
                         | redis::ErrorKind::InvalidClientConfig
                         | redis::ErrorKind::RESP3NotSupported
-                        | redis::ErrorKind::ClientError
                 ) || e.to_string().contains("NOAUTH");
                 if is_permanent {
                     RetryError::permanent(e)
