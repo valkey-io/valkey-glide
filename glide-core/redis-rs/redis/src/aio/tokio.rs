@@ -27,6 +27,7 @@ use super::Path;
 #[inline(always)]
 async fn connect_tcp(addr: &SocketAddr) -> io::Result<TcpStreamTokio> {
     let socket = TcpStreamTokio::connect(addr).await?;
+    socket.set_nodelay(true)?;
     #[cfg(feature = "keep-alive")]
     {
         //For now rely on system defaults
