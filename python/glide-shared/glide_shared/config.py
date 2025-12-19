@@ -9,6 +9,12 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.exceptions import ConfigurationError
 from glide_shared.protobuf.connection_request_pb2 import (
+    CompressionBackend as ProtobufCompressionBackend,
+)
+from glide_shared.protobuf.connection_request_pb2 import (
+    CompressionConfig as ProtobufCompressionConfig,
+)
+from glide_shared.protobuf.connection_request_pb2 import (
     ConnectionRequest,
 )
 from glide_shared.protobuf.connection_request_pb2 import (
@@ -73,6 +79,130 @@ class ProtocolVersion(Enum):
     """
     Communicate using RESP3.
     """
+
+
+class CompressionBackend(Enum):
+    """
+    Represents the compression backend to use for automatic compression.
+    """
+
+    ZSTD = ProtobufCompressionBackend.ZSTD
+    """
+    Use zstd compression backend.
+    """
+    LZ4 = ProtobufCompressionBackend.LZ4
+    """
+    Use lz4 compression backend.
+    """
+
+
+def _get_min_compressed_size() -> int:
+    """
+    Get the minimum compressed size from the Rust core.
+    This ensures Python validation stays in sync with Rust implementation.
+    """
+    try:
+        # Try async module first
+        from glide import get_min_compressed_size
+
+        return get_min_compressed_size()
+    except ImportError:
+        pass
+
+    try:
+        # Try sync module
+        from glide_sync import get_min_compressed_size
+
+        return get_min_compressed_size()
+    except ImportError:
+        pass
+
+    # If neither module is available, fail fast
+    raise ImportError(
+        "Cannot import get_min_compressed_size from either 'glide' or 'glide_sync'. "
+        "Ensure the native module is built and available."
+    )
+
+
+# Lazy cache for minimum compression size to avoid circular import issues
+_MIN_COMPRESSED_SIZE_CACHE: Optional[int] = None
+
+
+def _get_min_compressed_size_cached() -> int:
+    """
+    Get the minimum compressed size with caching.
+    Uses lazy initialization to avoid circular import issues.
+    """
+    global _MIN_COMPRESSED_SIZE_CACHE
+    if _MIN_COMPRESSED_SIZE_CACHE is None:
+        _MIN_COMPRESSED_SIZE_CACHE = _get_min_compressed_size()
+    return _MIN_COMPRESSED_SIZE_CACHE
+
+
+@dataclass
+class CompressionConfiguration:
+    """
+    Represents the compression configuration for automatic compression of values.
+
+    Attributes:
+        enabled (bool): Whether compression is enabled. Defaults to False.
+        backend (CompressionBackend): The compression backend to use. Defaults to CompressionBackend.ZSTD.
+        compression_level (Optional[int]): The compression level to use. If not set, the backend's default level will be used.
+            Valid ranges are backend-specific and validated by the Rust core.
+            ZSTD default is 3
+            LZ4 default is 0
+        min_compression_size (int): The minimum size in bytes for values to be compressed. Values smaller than this will not be compressed. Defaults to 64 bytes.
+    """
+
+    enabled: bool = False
+    backend: CompressionBackend = CompressionBackend.ZSTD
+    compression_level: Optional[int] = None
+    min_compression_size: int = 64
+
+    def __post_init__(self) -> None:
+        """Validate compression configuration parameters."""
+        self._validate_configuration()
+
+    def _validate_configuration(self) -> None:
+        """
+        Validates the compression configuration parameters.
+
+        Raises:
+            ConfigurationError: If any configuration parameter is invalid.
+        """
+        min_size = _get_min_compressed_size_cached()
+        if self.min_compression_size < min_size:
+            raise ConfigurationError(
+                f"min_compression_size should be at least {min_size} bytes"
+            )
+
+        # Note: compression_level validation is performed by the Rust core,
+        # which uses the actual compression library's valid ranges.
+        # This ensures the validation stays in sync with library updates.
+
+    def _to_protobuf(self) -> ProtobufCompressionConfig:
+        """
+        Converts the compression configuration to protobuf format.
+
+        Returns:
+            ProtobufCompressionConfig: The protobuf compression configuration.
+
+        Raises:
+            ConfigurationError: If any configuration parameter is invalid.
+        """
+        # Validate configuration before converting to protobuf
+        # This protects against modifications made after __post_init__
+        self._validate_configuration()
+
+        config = ProtobufCompressionConfig()
+        config.enabled = self.enabled
+        config.backend = self.backend.value
+        config.min_compression_size = self.min_compression_size
+
+        if self.compression_level is not None:
+            config.compression_level = self.compression_level
+
+        return config
 
 
 class BackoffStrategy:
@@ -394,6 +524,11 @@ class BaseClientConfiguration:
             attempted and connection fails (e.g., unreachable nodes), errors will surface at that point.
 
             If not set, connections are established immediately during client creation (equivalent to `False`).
+
+        compression (Optional[CompressionConfiguration]): Configuration for automatic compression of values.
+            When enabled, the client will automatically compress values for set-type commands and decompress
+            values for get-type commands. This can reduce bandwidth usage and storage requirements.
+            If not set, compression is disabled.
     """
 
     def __init__(
@@ -411,6 +546,7 @@ class BaseClientConfiguration:
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedBaseClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        compression: Optional[CompressionConfiguration] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -425,6 +561,7 @@ class BaseClientConfiguration:
         self.client_az = client_az
         self.advanced_config = advanced_config
         self.lazy_connect = lazy_connect
+        self.compression = compression
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -543,7 +680,8 @@ class BaseClientConfiguration:
             self.advanced_config._create_a_protobuf_conn_request(request)
         if self.lazy_connect is not None:
             request.lazy_connect = self.lazy_connect
-
+        if self.compression is not None:
+            request.compression_config.CopyFrom(self.compression._to_protobuf())
         return request
 
     def _is_pubsub_configured(self) -> bool:
@@ -615,6 +753,10 @@ class GlideClientConfiguration(BaseClientConfiguration):
             nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedGlideClientConfiguration]): Advanced configuration settings for the client,
             see `AdvancedGlideClientConfiguration`.
+        compression (Optional[CompressionConfiguration]): Configuration for automatic compression of values.
+            When enabled, the client will automatically compress values for set-type commands and decompress
+            values for get-type commands. This can reduce bandwidth usage and storage requirements.
+            If not set, compression is disabled.
     """
 
     class PubSubChannelModes(IntEnum):
@@ -663,6 +805,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        compression: Optional[CompressionConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -678,6 +821,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             client_az=client_az,
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
+            compression=compression,
         )
         self.pubsub_subscriptions = pubsub_subscriptions
 
@@ -808,6 +952,10 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration settings for the client,
             see `AdvancedGlideClusterClientConfiguration`.
+        compression (Optional[CompressionConfiguration]): Configuration for automatic compression of values.
+            When enabled, the client will automatically compress values for set-type commands and decompress
+            values for get-type commands. This can reduce bandwidth usage and storage requirements.
+            If not set, compression is disabled.
 
 
     Note:
@@ -866,6 +1014,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        compression: Optional[CompressionConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -881,6 +1030,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             client_az=client_az,
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
+            compression=compression,
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions

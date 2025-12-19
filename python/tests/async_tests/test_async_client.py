@@ -330,7 +330,13 @@ class TestGlideClients:
         assert isinstance(stats, dict)
         assert "total_connections" in stats
         assert "total_clients" in stats
-        assert len(stats) == 2
+        assert "total_values_compressed" in stats
+        assert "total_values_decompressed" in stats
+        assert "total_original_bytes" in stats
+        assert "total_bytes_compressed" in stats
+        assert "total_bytes_decompressed" in stats
+        assert "compression_skipped_count" in stats
+        assert len(stats) == 8
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
