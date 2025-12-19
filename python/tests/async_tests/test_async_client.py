@@ -461,31 +461,30 @@ class TestGlideClients:
 
         with pytest.raises(ClosingError) as exc_info:
             if cluster_mode:
-                config = GlideClusterClientConfiguration(
+                cluster_config = GlideClusterClientConfiguration(
                     addresses=[unavailable_address],
                     request_timeout=connection_timeout_ms,
                     advanced_config=AdvancedGlideClusterClientConfiguration(
                         connection_timeout=connection_timeout_ms
                     ),
                 )
-                await GlideClusterClient.create(config)
+                await GlideClusterClient.create(cluster_config)
             else:
-                config = GlideClientConfiguration(
+                standalone_config = GlideClientConfiguration(
                     addresses=[unavailable_address],
                     request_timeout=connection_timeout_ms,
                     advanced_config=AdvancedGlideClientConfiguration(
                         connection_timeout=connection_timeout_ms
                     ),
                 )
-                await GlideClient.create(config)
+                await GlideClient.create(standalone_config)
 
         elapsed_time = time.time() - start_time
 
         # Verify the connection failed with a timeout-related error
         error_message = str(exc_info.value).lower()
         assert any(
-            msg in error_message
-            for msg in ["timed out", "timeout", "failed to create"]
+            msg in error_message for msg in ["timed out", "timeout", "failed to create"]
         ), f"Expected timeout error, got: {exc_info.value}"
 
         # The key assertion: elapsed time should be close to connection_timeout
@@ -542,7 +541,7 @@ class TestGlideClients:
             tls_config = TlsAdvancedConfiguration(root_pem_cacerts=invalid_cert)
 
             if cluster_mode:
-                config = GlideClusterClientConfiguration(
+                cluster_config = GlideClusterClientConfiguration(
                     addresses=[NodeAddress("localhost", 6379)],
                     request_timeout=connection_timeout_ms,
                     use_tls=TlsMode.SecureTls,
@@ -551,9 +550,9 @@ class TestGlideClients:
                         tls_config=tls_config,
                     ),
                 )
-                await GlideClusterClient.create(config)
+                await GlideClusterClient.create(cluster_config)
             else:
-                config = GlideClientConfiguration(
+                standalone_config = GlideClientConfiguration(
                     addresses=[NodeAddress("localhost", 6379)],
                     request_timeout=connection_timeout_ms,
                     use_tls=TlsMode.SecureTls,
@@ -562,7 +561,7 @@ class TestGlideClients:
                         tls_config=tls_config,
                     ),
                 )
-                await GlideClient.create(config)
+                await GlideClient.create(standalone_config)
 
         elapsed_time = time.time() - start_time
 
