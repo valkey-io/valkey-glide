@@ -686,11 +686,15 @@ def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
         )
         output, err = p.communicate(timeout=5)
         if err:
-            raise Exception(
-                f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
-            )
+            logging.debug(f"Command had stderr output: {err}")
+            # Don't raise exception for stderr - Redis sometimes outputs to stderr normally
+        if p.returncode != 0:
+            logging.debug(f"Command failed with return code {p.returncode}: {' '.join(cmd_args)}")
+            return None
         return output
     except subprocess.TimeoutExpired:
+        logging.debug(f"Command timed out after 5s: {' '.join(cmd_args)}")
+        p.kill()
         return None
 
 
@@ -720,15 +724,14 @@ def wait_for_all_topology_views(
         logging.debug(f"Executing: {cmd_args}")
         retries = 80
         output = ""
+        null_responses = 0
         while retries >= 0:
             output = redis_cli_run_command(cmd_args)
-            logging.debug(
-                f"Checking server {server.host}:{server.port}, output: {output}"
-            )
+            
             if output is not None:
                 host_count = output.count(f"{server.host}")
                 logging.debug(
-                    f"Found {host_count} occurrences of '{server.host}' in output, need {len(servers)}"
+                    f"Checking server {server.host}:{server.port}, found {host_count}/{len(servers)} hosts in CLUSTER SLOTS, retries left: {retries}"
                 )
                 if host_count == len(servers):
                     # Server is ready, get the node's role
@@ -749,14 +752,55 @@ def wait_for_all_topology_views(
                     logging.debug(f"Server {server} is ready!")
                     break
             else:
-                logging.debug(f"No output received from server {server.host}:{server.port}, retries left: {retries}")
+                null_responses += 1
+                if null_responses % 30 == 0:  # Log every 30 null responses
+                    logging.info(f"Server {server.host}:{server.port} - {null_responses} null responses so far, retries left: {retries}")
+                logging.debug(f"No CLUSTER SLOTS output from {server.host}:{server.port}, retries left: {retries}")
             retries -= 1
             time.sleep(1)
 
         if retries < 0:
+            # Add diagnostic information to understand the failure
+            diagnostic_info = []
+            
+            # Test basic connectivity
+            ping_cmd = [
+                get_cli_command(),
+                "-h", server.host, "-p", str(server.port),
+                *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                "ping"
+            ]
+            ping_result = redis_cli_run_command(ping_cmd)
+            diagnostic_info.append(f"PING result: {ping_result}")
+            
+            # Test cluster info
+            info_cmd = [
+                get_cli_command(),
+                "-h", server.host, "-p", str(server.port),
+                *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                "cluster", "info"
+            ]
+            info_result = redis_cli_run_command(info_cmd)
+            diagnostic_info.append(f"CLUSTER INFO result: {info_result}")
+            
+            # Get final node count for error message
+            final_nodes_cmd = [
+                get_cli_command(),
+                "-h", server.host, "-p", str(server.port),
+                *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+                "cluster", "nodes"
+            ]
+            final_nodes_output = redis_cli_run_command(final_nodes_cmd)
+            final_node_count = 0
+            if final_nodes_output:
+                final_node_count = len([line.strip() for line in final_nodes_output.split('\n') if line.strip()])
+            
             raise Exception(
                 f"Timeout exceeded trying to wait for server {server.host}:{server.port} to know all hosts.\n"
-                f"Current CLUSTER SLOTS output:\n{output if output else 'No output received'}"
+                f"Expected {len(servers)} nodes, found {final_node_count} nodes in cluster.\n"
+                f"Current CLUSTER SLOTS output:\n{output if output else 'No output received'}\n"
+                f"Current CLUSTER NODES output:\n{final_nodes_output if final_nodes_output else 'No output received'}\n"
+                f"Diagnostics:\n" + "\n".join(diagnostic_info)
             )
 
 

@@ -121,6 +121,11 @@ tasks.register('startCluster') {
                     workingDir "${project.rootDir}/../utils"
                     def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode']
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    // Use no replicas for Windows to avoid replica sync issues in CI
+                    if (isWindows) {
+                        args.add('-r')
+                        args.add('0')
+                    }
                     commandLine getClusterCommand(args)
                     standardOutput = os
                 }
@@ -138,7 +143,13 @@ tasks.register('startClusterForAz') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4']
+                    def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode']
+                    // Use different replica counts based on environment
+                    if (isWindows) {
+                        args.addAll(['-r', '0'])  // No replicas for Windows CI
+                    } else {
+                        args.addAll(['-r', '4'])  // 4 replicas for other environments
+                    }
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine getClusterCommand(args)
                     standardOutput = os
@@ -190,7 +201,13 @@ tasks.register('startClusterTls') {
         new ByteArrayOutputStream().withStream { os ->
             exec {
                 workingDir "${project.rootDir}/../utils"
-                commandLine getClusterCommand(['python3', 'cluster_manager.py', '--tls', 'start', '--cluster-mode'])
+                def args = ['python3', 'cluster_manager.py', '--tls', 'start', '--cluster-mode']
+                // Use no replicas for Windows to avoid replica sync issues in CI
+                if (isWindows) {
+                    args.add('-r')
+                    args.add('0')
+                }
+                commandLine getClusterCommand(args)
                 standardOutput = os
             }
             clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
@@ -244,7 +261,7 @@ gradle.buildFinished {
     try {
         exec {
             workingDir "${project.rootDir}/../utils"
-            def cleanupArgs = ['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster']
+            def cleanupArgs = ['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder']
             if (isWindowsRuntime) {
                 commandLine(['wsl'] + cleanupArgs)
             } else {

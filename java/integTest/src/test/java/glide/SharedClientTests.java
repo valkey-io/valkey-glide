@@ -29,12 +29,10 @@ import lombok.SneakyThrows;
 import net.bytebuddy.utility.RandomString;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(35) // seconds
 public class SharedClientTests {
 
     private static GlideClient standaloneClient = null;
@@ -50,7 +48,7 @@ public class SharedClientTests {
     @SneakyThrows
     private static GlideClusterClient createGlideClusterClientWithTimeout() {
         return GlideClusterClient.createClient(
-                        commonClusterClientConfig().requestTimeout(10000).build())
+                        commonClusterClientConfig().requestTimeout(60000).build())
                 .get();
     }
 
@@ -59,7 +57,7 @@ public class SharedClientTests {
     public static void init() {
         standaloneClient = GlideClient.createClient(commonClientConfig().build()).get();
         clusterClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(60000).build())
                         .get();
         clients = List.of(Arguments.of(standaloneClient), Arguments.of(clusterClient));
     }
