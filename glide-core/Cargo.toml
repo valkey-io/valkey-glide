@@ -83,9 +83,47 @@ tokio = { version = "1", features = ["rt-multi-thread"] }
 glide-core = { path = ".", features = [
     "socket-layer",
 ] } # always enable this feature in tests.
+glide-ffi = { path = "../ffi" }
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(standalone_heartbeat)', 'cfg(feature, values("iam_tests"))'] }
+[[example]]
+name = "ffi_benchmark"
+required-features = ["socket-layer"]
+
+[[example]]
+name = "direct_profile"
+required-features = ["socket-layer"]
+
+[[example]]
+name = "ffi_profile"
+required-features = ["socket-layer"]
+
+[[example]]
+name = "detailed_profile"
+required-features = ["socket-layer"]
+
+[[example]]
+name = "detailed_ffi_profile"
+required-features = ["socket-layer"]
+
+[[example]]
+name = "visual_profile"
+required-features = ["socket-layer"]
+
+[[example]]
+name = "comparison_profile"
+required-features = ["socket-layer"]
+
+[profile.release]
+debug = true
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+
+[profile.profiling]
+inherits = "release"
+debug = true
+lto = false
+codegen-units = 16
 
 [build-dependencies]
 protobuf-codegen = "3"
@@ -100,4 +138,16 @@ harness = false
 
 [[bench]]
 name = "memory_benchmark"
+harness = false
+
+[[bench]]
+name = "get_benchmark"
+harness = false
+
+[[bench]]
+name = "get_benchmark_efficient"
+harness = false
+
+[[bench]]
+name = "ffi_protobuf_benchmark"
 harness = false
