@@ -147,7 +147,16 @@ async fn create_connection(
         client
             .get_multiplexed_async_connection(connection_options.clone())
             .await
-            .map_err(RetryError::transient)
+            .map_err(|e| {
+                // Don't retry auth errors - credentials won't change
+                if e.kind() == redis::ErrorKind::AuthenticationFailed
+                    || e.to_string().contains("NOAUTH")
+                {
+                    RetryError::permanent(e)
+                } else {
+                    RetryError::transient(e)
+                }
+            })
     };
     let retry_future = Retry::spawn(retry_strategy.get_bounded_backoff_dur_iterator(), action);
     let result = timeout(connection_timeout, retry_future).await;
@@ -175,7 +184,7 @@ async fn create_connection(
         }
         err => {
             let err: RedisError = match err {
-                Ok(Err(retry_err)) => retry_err,
+                Ok(Err(e)) => e,
                 _ => std::io::Error::from(std::io::ErrorKind::TimedOut).into(),
             };
             log_warn(
