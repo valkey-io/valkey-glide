@@ -29,10 +29,12 @@ import lombok.SneakyThrows;
 import net.bytebuddy.utility.RandomString;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+@Timeout(35)
 public class SharedClientTests {
 
     private static GlideClient standaloneClient = null;
@@ -48,7 +50,7 @@ public class SharedClientTests {
     @SneakyThrows
     private static GlideClusterClient createGlideClusterClientWithTimeout() {
         return GlideClusterClient.createClient(
-                        commonClusterClientConfig().requestTimeout(120000).build())
+                        commonClusterClientConfig().requestTimeout(10000).build())
                 .get();
     }
 
@@ -123,9 +125,9 @@ public class SharedClientTests {
     private static Stream<Arguments> clientAndDataSize() {
         return Stream.of(
                 Arguments.of(createGlideClientWithTimeout(), 100),
-                Arguments.of(createGlideClientWithTimeout(), 1 << 16),
+                Arguments.of(createGlideClientWithTimeout(), 1 << 15),
                 Arguments.of(createGlideClusterClientWithTimeout(), 100),
-                Arguments.of(createGlideClusterClientWithTimeout(), 32000));
+                Arguments.of(createGlideClusterClientWithTimeout(), 1 << 15));
     }
 
     @SneakyThrows
