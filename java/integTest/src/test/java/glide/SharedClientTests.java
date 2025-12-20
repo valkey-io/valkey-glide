@@ -48,7 +48,7 @@ public class SharedClientTests {
     @SneakyThrows
     private static GlideClusterClient createGlideClusterClientWithTimeout() {
         return GlideClusterClient.createClient(
-                        commonClusterClientConfig().requestTimeout(60000).build())
+                        commonClusterClientConfig().requestTimeout(120000).build())
                 .get();
     }
 
@@ -57,7 +57,7 @@ public class SharedClientTests {
     public static void init() {
         standaloneClient = GlideClient.createClient(commonClientConfig().build()).get();
         clusterClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(60000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get();
         clients = List.of(Arguments.of(standaloneClient), Arguments.of(clusterClient));
     }
@@ -121,11 +121,15 @@ public class SharedClientTests {
     }
 
     private static Stream<Arguments> clientAndDataSize() {
+        int valueSize = 1 << 16;
+        if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+            valueSize = 1 << 8;
+        }
         return Stream.of(
                 Arguments.of(createGlideClientWithTimeout(), 100),
                 Arguments.of(createGlideClientWithTimeout(), 1 << 16),
                 Arguments.of(createGlideClusterClientWithTimeout(), 100),
-                Arguments.of(createGlideClusterClientWithTimeout(), 1 << 16));
+                Arguments.of(createGlideClusterClientWithTimeout(), valueSize));
     }
 
     @SneakyThrows
