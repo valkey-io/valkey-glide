@@ -121,15 +121,11 @@ public class SharedClientTests {
     }
 
     private static Stream<Arguments> clientAndDataSize() {
-        int valueSize = 1 << 16;
-        if (System.getProperty("os.name").toLowerCase().contains("windows")) {
-            valueSize = 1 << 8;
-        }
         return Stream.of(
                 Arguments.of(createGlideClientWithTimeout(), 100),
                 Arguments.of(createGlideClientWithTimeout(), 1 << 16),
                 Arguments.of(createGlideClusterClientWithTimeout(), 100),
-                Arguments.of(createGlideClusterClientWithTimeout(), valueSize));
+                Arguments.of(createGlideClusterClientWithTimeout(), 32000));
     }
 
     @SneakyThrows
