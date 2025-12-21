@@ -49,9 +49,6 @@ pub trait PubSubSynchronizer: Send + Sync {
         HashMap<PubSubSubscriptionKind, HashSet<PubSubChannelOrPattern>>,
     );
 
-    /// Reconcile desired and actual subscriptions
-    async fn reconcile(&self) -> Result<(), String>;
-
     /// Trigger the reconciliation task to run immediately (non-blocking)
     async fn trigger_reconciliation(&self);
 
@@ -63,7 +60,10 @@ pub trait PubSubSynchronizer: Send + Sync {
 
     /// Remove all current subscriptions associated with specific addresses
     /// This is called when a node disconnects, so reconciliation can restore them
-    fn remove_current_subscriptions_for_addresses(&self, _addresses: &std::collections::HashSet<String>) {
+    fn remove_current_subscriptions_for_addresses(
+        &self,
+        _addresses: &std::collections::HashSet<String>,
+    ) {
         // Default: no-op
     }
 

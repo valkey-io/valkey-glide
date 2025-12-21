@@ -18,10 +18,10 @@ pub(crate) type NodesMap = DashMap<Arc<String>, Arc<ShardAddrs>>;
 pub struct SlotMapValue {
     /// The starting slot number of this range.
     pub start: u16,
-    
+
     /// The shard addresses responsible for this slot range.
     pub addrs: Arc<ShardAddrs>,
-    
+
     /// Index of the last used replica for round-robin load balancing when reading from replicas.
     pub last_used_replica: Arc<AtomicUsize>,
 }

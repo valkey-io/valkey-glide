@@ -2,7 +2,9 @@
 
 use crate::client::PubSubCommandApplier; // Import from client
 use redis::PushInfo;
-pub use redis::{PubSubChannelOrPattern, PubSubSubscriptionKind, PubSubSynchronizer};
+pub use redis::{
+    PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind, PubSubSynchronizer,
+};
 use std::sync::{Arc, Weak};
 use tokio::sync::mpsc;
 
@@ -36,7 +38,6 @@ pub async fn create_pubsub_synchronizer(
 pub fn set_synchronizer_applier(
     sync: &Arc<dyn PubSubSynchronizer>,
     applier: Weak<dyn PubSubCommandApplier>,
-    // REMOVE is_cluster parameter
 ) -> Result<(), String> {
     let any = sync.as_any();
 

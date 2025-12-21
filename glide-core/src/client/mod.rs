@@ -1439,7 +1439,9 @@ impl std::fmt::Debug for ConnectionError {
             Self::IoError(arg0) => f.debug_tuple("IoError").field(arg0).finish(),
             Self::Timeout => write!(f, "Timeout"),
             Self::Configuration(arg0) => f.debug_tuple("Configuration").field(arg0).finish(),
-            Self::InitializationError(arg0) => f.debug_tuple("InitializationError").field(arg0).finish(),
+            Self::InitializationError(arg0) => {
+                f.debug_tuple("InitializationError").field(arg0).finish()
+            }
         }
     }
 }
@@ -1624,8 +1626,12 @@ impl Client {
 
             let initial_subscriptions = request.pubsub_subscriptions.clone();
 
-            let pubsub_synchronizer =
-                create_pubsub_synchronizer(push_sender.clone(), initial_subscriptions, request.cluster_mode_enabled).await;
+            let pubsub_synchronizer = create_pubsub_synchronizer(
+                push_sender.clone(),
+                initial_subscriptions,
+                request.cluster_mode_enabled,
+            )
+            .await;
 
             // Create the Client first without IAM token manager
             let client = Self {
@@ -1641,14 +1647,13 @@ impl Client {
 
             let applier: Arc<dyn PubSubCommandApplier> = client_arc.clone();
 
-            set_synchronizer_applier(
-                &pubsub_synchronizer,
-                Arc::downgrade(&applier),
-            )
-            .map_err(|e| ConnectionError::InitializationError(
-                format!("Failed to set synchronizer applier: {}", e)
-            ))?;
-            
+            set_synchronizer_applier(&pubsub_synchronizer, Arc::downgrade(&applier)).map_err(
+                |e| {
+                    ConnectionError::InitializationError(format!(
+                        "Failed to set synchronizer applier: {e}"
+                    ))
+                },
+            )?;
 
             // Create IAM token manager if needed, passing a strong Arc to the callback
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
@@ -1990,10 +1995,10 @@ mod tests {
 
     /// Helper function to create a test client for unit tests
     fn create_test_client() -> Client {
+        use crate::pubsub::create_pubsub_synchronizer;
         use std::sync::Arc;
         use std::sync::atomic::AtomicIsize;
         use tokio::sync::RwLock;
-        use crate::pubsub::create_pubsub_synchronizer;
 
         let config = ConnectionRequest {
             database_id: 0,

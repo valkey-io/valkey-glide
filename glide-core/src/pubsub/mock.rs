@@ -6,7 +6,10 @@ use logger_core::{log_debug, log_warn};
 use once_cell::sync::Lazy;
 use redis::cluster_routing::Routable;
 use redis::{Cmd, ErrorKind, PushInfo, PushKind, RedisError, RedisResult, Value};
-use redis::{PubSubChannelOrPattern, PubSubSubscriptionKind, PubSubSynchronizer, SlotMap};
+use redis::{
+    PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind, PubSubSynchronizer,
+    SlotMap,
+};
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -33,8 +36,8 @@ pub struct MockPubSubSynchronizer {
     command_applier: once_cell::sync::OnceCell<Weak<dyn PubSubCommandApplier>>,
     is_cluster: bool,
 
-    desired_subscriptions: Arc<RwLock<HashMap<PubSubSubscriptionKind, HashSet<PubSubChannelOrPattern>>>>,
-    actual_subscriptions: Arc<RwLock<HashMap<PubSubSubscriptionKind, HashSet<PubSubChannelOrPattern>>>>,
+    desired_subscriptions: RwLock<PubSubSubscriptionInfo>,
+    actual_subscriptions: RwLock<PubSubSubscriptionInfo>,
 
     can_subscribe: Arc<RwLock<bool>>,
     broker: Arc<MockPubSubBroker>,
@@ -53,8 +56,8 @@ impl MockPubSubSynchronizer {
             client_id,
             command_applier: once_cell::sync::OnceCell::new(),
             is_cluster,
-            desired_subscriptions: Arc::new(RwLock::new(HashMap::new())),
-            actual_subscriptions: Arc::new(RwLock::new(HashMap::new())),
+            desired_subscriptions: RwLock::new(HashMap::new()),
+            actual_subscriptions: RwLock::new(HashMap::new()),
             can_subscribe: Arc::new(RwLock::new(true)),
             broker,
             reconciliation_notify: Arc::new(Notify::new()),
@@ -163,10 +166,7 @@ impl MockPubSubSynchronizer {
     }
 
     /// Set the command applier - NOT a trait method
-    pub fn set_applier(
-        &self,
-        applier: Weak<dyn PubSubCommandApplier>,
-    ) -> Result<(), String> {
+    pub fn set_applier(&self, applier: Weak<dyn PubSubCommandApplier>) -> Result<(), String> {
         self.command_applier
             .set(applier)
             .map_err(|_| "Command applier already set")?;
@@ -177,6 +177,31 @@ impl MockPubSubSynchronizer {
     #[allow(dead_code)]
     fn get_applier(&self) -> Option<Arc<dyn PubSubCommandApplier>> {
         self.command_applier.get()?.upgrade()
+    }
+
+    pub(crate) async fn reconcile(&self) -> Result<(), String> {
+        let can_subscribe = self.get_can_subscribe().await;
+
+        if !can_subscribe {
+            return Err("Reconciliation blocked: no subscription permission".to_string());
+        }
+
+        let desired = self.desired_subscriptions.read().await.clone();
+        let mut actual = self.actual_subscriptions.write().await;
+
+        // Sync all subscription types
+        for (kind, desired_channels) in &desired {
+            let actual_channels = actual.entry(*kind).or_insert_with(HashSet::new);
+            for channel in desired_channels {
+                actual_channels.insert(channel.clone());
+            }
+            actual_channels.retain(|ch| desired_channels.contains(ch));
+        }
+
+        // Remove subscription types that are no longer desired
+        actual.retain(|kind, _| desired.contains_key(kind));
+
+        Ok(())
     }
 }
 
@@ -261,81 +286,69 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
                 existing.remove(&channel);
             }
         }
-
     }
 
     fn handle_topology_refresh(&self, _new_slot_map: &SlotMap) {
         // No-op, mock doesn't track topology
     }
 
-    async fn get_subscription_state(
-        &self,
-    ) -> (
-        HashMap<PubSubSubscriptionKind, HashSet<PubSubChannelOrPattern>>,
-        HashMap<PubSubSubscriptionKind, HashSet<PubSubChannelOrPattern>>,
-    ) {
+    async fn get_subscription_state(&self) -> (PubSubSubscriptionInfo, PubSubSubscriptionInfo) {
         let desired_lock = self.desired_subscriptions.read().await;
         let actual_lock = self.actual_subscriptions.read().await;
 
-        // Always include all subscription types, even if empty
-        let mut desired = HashMap::new();
+        let mut desired = PubSubSubscriptionInfo::new();
+        let mut actual = PubSubSubscriptionInfo::new();
+
+        // Always include Exact and Pattern
         desired.insert(
             PubSubSubscriptionKind::Exact,
-            desired_lock.get(&PubSubSubscriptionKind::Exact).cloned().unwrap_or_default(),
+            desired_lock
+                .get(&PubSubSubscriptionKind::Exact)
+                .cloned()
+                .unwrap_or_default(),
         );
         desired.insert(
             PubSubSubscriptionKind::Pattern,
-            desired_lock.get(&PubSubSubscriptionKind::Pattern).cloned().unwrap_or_default(),
+            desired_lock
+                .get(&PubSubSubscriptionKind::Pattern)
+                .cloned()
+                .unwrap_or_default(),
         );
 
-        let mut actual = HashMap::new();
         actual.insert(
             PubSubSubscriptionKind::Exact,
-            actual_lock.get(&PubSubSubscriptionKind::Exact).cloned().unwrap_or_default(),
+            actual_lock
+                .get(&PubSubSubscriptionKind::Exact)
+                .cloned()
+                .unwrap_or_default(),
         );
         actual.insert(
             PubSubSubscriptionKind::Pattern,
-            actual_lock.get(&PubSubSubscriptionKind::Pattern).cloned().unwrap_or_default(),
+            actual_lock
+                .get(&PubSubSubscriptionKind::Pattern)
+                .cloned()
+                .unwrap_or_default(),
         );
 
-        // Only include sharded if cluster mode
+        // Only include Sharded if cluster mode
         if self.is_cluster {
             desired.insert(
                 PubSubSubscriptionKind::Sharded,
-                desired_lock.get(&PubSubSubscriptionKind::Sharded).cloned().unwrap_or_default(),
+                desired_lock
+                    .get(&PubSubSubscriptionKind::Sharded)
+                    .cloned()
+                    .unwrap_or_default(),
             );
             actual.insert(
                 PubSubSubscriptionKind::Sharded,
-                actual_lock.get(&PubSubSubscriptionKind::Sharded).cloned().unwrap_or_default(),
+                actual_lock
+                    .get(&PubSubSubscriptionKind::Sharded)
+                    .cloned()
+                    .unwrap_or_default(),
             );
         }
 
         (desired, actual)
-    }
-
-    async fn reconcile(&self) -> Result<(), String> {
-        let can_subscribe = self.get_can_subscribe().await;
-
-        if !can_subscribe {
-            return Err("Reconciliation blocked: no subscription permission".to_string());
-        }
-
-        let desired = self.desired_subscriptions.read().await.clone();
-        let mut actual = self.actual_subscriptions.write().await;
-        
-        // Sync all subscription types
-        for (kind, desired_channels) in &desired {
-            let actual_channels = actual.entry(*kind).or_insert_with(HashSet::new);
-            for channel in desired_channels {
-                actual_channels.insert(channel.clone());
-            }
-            actual_channels.retain(|ch| desired_channels.contains(ch));
-        }
-        
-        // Remove subscription types that are no longer desired
-        actual.retain(|kind, _| desired.contains_key(kind));
-
-        Ok(())
     }
 
     async fn intercept_pubsub_command(&self, cmd: &Cmd) -> Option<RedisResult<Value>> {
@@ -389,7 +402,7 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
 
         self.broker.check_and_record_sync_state(self).await;
     }
-    
+
     fn remove_current_subscriptions_for_addresses(&self, _addresses: &HashSet<String>) {
         // Mock doesn't track by address, no-op
     }
@@ -660,9 +673,7 @@ impl MockPubSubBroker {
         (channels, timeout_ms)
     }
 
-    pub fn convert_sub_map_to_value(
-        map: HashMap<PubSubSubscriptionKind, HashSet<PubSubChannelOrPattern>>
-    ) -> Value {
+    pub fn convert_sub_map_to_value(map: PubSubSubscriptionInfo) -> Value {
         let mut redis_map = Vec::new();
         for (kind, values) in map {
             let key = match kind {
@@ -670,10 +681,7 @@ impl MockPubSubBroker {
                 PubSubSubscriptionKind::Pattern => "Pattern",
                 PubSubSubscriptionKind::Sharded => "Sharded",
             };
-            let values_array: Vec<Value> = values
-                .into_iter()
-                .map(|v| Value::BulkString(v))
-                .collect();
+            let values_array: Vec<Value> = values.into_iter().map(Value::BulkString).collect();
             redis_map.push((
                 Value::BulkString(key.as_bytes().to_vec()),
                 Value::Array(values_array),
@@ -738,17 +746,12 @@ impl MockPubSubBroker {
             )));
         }
 
-        let channels_bytes: Vec<PubSubChannelOrPattern> = channels
-            .iter()
-            .map(|s| s.as_bytes().to_vec())
-            .collect();
+        let channels_bytes: Vec<PubSubChannelOrPattern> =
+            channels.iter().map(|s| s.as_bytes().to_vec()).collect();
 
         if let Some(sync) = sync {
-            sync.add_desired_subscriptions(
-                channels_bytes.clone().into_iter().collect(),
-                sub_type,
-            )
-            .await;
+            sync.add_desired_subscriptions(channels_bytes.clone().into_iter().collect(), sub_type)
+                .await;
 
             let start = std::time::Instant::now();
             loop {
@@ -1096,9 +1099,7 @@ fn extract_channels_from_subscription_info(
     subs: &redis::PubSubSubscriptionInfo,
     kind: PubSubSubscriptionKind,
 ) -> HashSet<PubSubChannelOrPattern> {
-    subs.get(&kind)
-        .cloned()
-        .unwrap_or_default()
+    subs.get(&kind).cloned().unwrap_or_default()
 }
 
 fn glob_match(pattern: &str, text: &str) -> bool {

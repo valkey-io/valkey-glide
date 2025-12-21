@@ -2,7 +2,10 @@
 
 use crate::client::PubSubCommandApplier;
 use async_trait::async_trait;
-use redis::{PubSubChannelOrPattern, PubSubSubscriptionKind, PubSubSynchronizer, SlotMap};
+use redis::{
+    PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind, PubSubSynchronizer,
+    SlotMap,
+};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Weak};
 use tokio::sync::RwLock;
@@ -82,19 +85,9 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
         // TODO: Implement
     }
 
-    async fn get_subscription_state(
-        &self,
-    ) -> (
-        HashMap<PubSubSubscriptionKind, HashSet<PubSubChannelOrPattern>>,
-        HashMap<PubSubSubscriptionKind, HashSet<PubSubChannelOrPattern>>,
-    ) {
+    async fn get_subscription_state(&self) -> (PubSubSubscriptionInfo, PubSubSubscriptionInfo) {
         // TODO: Implement
         (HashMap::new(), HashMap::new())
-    }
-
-    async fn reconcile(&self) -> Result<(), String> {
-        // TODO: Implement for real synchronizer
-        Ok(())
     }
 
     async fn trigger_reconciliation(&self) {
@@ -106,6 +99,6 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
     }
 
     fn remove_current_subscriptions_for_addresses(&self, _addresses: &HashSet<String>) {
-    // TODO: Implement - remove current subscriptions for all given addresses
+        // TODO: Implement - remove current subscriptions for all given addresses
     }
 }

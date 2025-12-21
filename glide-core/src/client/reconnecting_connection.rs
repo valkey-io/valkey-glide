@@ -367,8 +367,11 @@ impl ReconnectingConnection {
                             *guard = ConnectionState::Connected(connection);
                         }
 
-                        if let Some(sync) = &connection_clone.connection_options.pubsub_synchronizer {
-                            sync.remove_current_subscriptions_for_addresses(&HashSet::from([connection_clone.node_address()]));
+                        if let Some(sync) = &connection_clone.connection_options.pubsub_synchronizer
+                        {
+                            sync.remove_current_subscriptions_for_addresses(&HashSet::from([
+                                connection_clone.node_address(),
+                            ]));
                         }
 
                         Telemetry::incr_total_connections(1);

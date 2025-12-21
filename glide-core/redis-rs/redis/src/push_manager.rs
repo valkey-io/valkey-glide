@@ -92,7 +92,7 @@ impl PushManager {
             _ => return,
         };
 
-        // Extract channel/pattern from push data 
+        // Extract channel/pattern from push data
         let channel_or_pattern = match data.first() {
             Some(Value::BulkString(bytes)) => bytes.clone(),
             _ => return,
@@ -190,7 +190,7 @@ mod tests {
     }
     #[test]
     fn test_push_manager_multiple_channels_and_messages() {
-        let push_manager = PushManager::new(None,None, None);
+        let push_manager = PushManager::new(None, None, None);
         let (tx1, mut rx1) = mpsc::unbounded_channel();
         let (tx2, mut rx2) = mpsc::unbounded_channel();
         push_manager.replace_sender(tx1);
