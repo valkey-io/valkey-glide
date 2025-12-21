@@ -19,15 +19,16 @@ mod real;
 pub async fn create_pubsub_synchronizer(
     _push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     initial_subscriptions: Option<redis::PubSubSubscriptionInfo>,
+    is_cluster: bool,
 ) -> Arc<dyn PubSubSynchronizer> {
     #[cfg(feature = "mock-pubsub")]
     {
-        mock::MockPubSubSynchronizer::create(_push_sender, initial_subscriptions).await
+        mock::MockPubSubSynchronizer::create(_push_sender, initial_subscriptions, is_cluster).await
     }
 
     #[cfg(not(feature = "mock-pubsub"))]
     {
-        real::RealPubSubSynchronizer::create(initial_subscriptions).await
+        real::RealPubSubSynchronizer::create(initial_subscriptions, is_cluster).await
     }
 }
 
@@ -35,21 +36,21 @@ pub async fn create_pubsub_synchronizer(
 pub fn set_synchronizer_applier(
     sync: &Arc<dyn PubSubSynchronizer>,
     applier: Weak<dyn PubSubCommandApplier>,
-    is_cluster: bool,
+    // REMOVE is_cluster parameter
 ) -> Result<(), String> {
     let any = sync.as_any();
 
     #[cfg(feature = "mock-pubsub")]
     {
         if let Some(mock_sync) = any.downcast_ref::<mock::MockPubSubSynchronizer>() {
-            return mock_sync.set_applier(applier, is_cluster);
+            return mock_sync.set_applier(applier);
         }
     }
 
     #[cfg(not(feature = "mock-pubsub"))]
     {
         if let Some(real_sync) = any.downcast_ref::<real::RealPubSubSynchronizer>() {
-            return real_sync.set_applier(applier, is_cluster);
+            return real_sync.set_applier(applier);
         }
     }
 

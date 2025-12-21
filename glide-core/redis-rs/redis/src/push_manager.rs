@@ -22,6 +22,18 @@ pub struct PushManager {
     address: Arc<ArcSwap<Option<String>>>,
 }
 impl PushManager {
+    /// Create a new `PushManager`
+    pub fn new(
+        sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        synchronizer: Option<Arc<dyn PubSubSynchronizer>>,
+        address: Option<String>,
+    ) -> Self {
+        PushManager {
+            sender: Arc::new(ArcSwap::new(Arc::new(sender))),
+            pubsub_synchronizer: Arc::new(ArcSwap::new(Arc::new(synchronizer))),
+            address: Arc::new(ArcSwap::new(Arc::new(address))),
+        }
+    }
     /// It checks if value's type is Push
     /// then invokes `try_send_raw` method
     pub(crate) fn try_send(&self, value: &RedisResult<Value>) {
@@ -104,42 +116,21 @@ impl PushManager {
         self.sender.store(Arc::new(Some(sender)));
     }
 
-    /// Set the PubSub synchronizer for this PushManager
-    pub fn set_synchronizer(
-        &self,
-        synchronizer: Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>,
-    ) {
-        self.pubsub_synchronizer.store(Arc::new(Some(synchronizer)));
-    }
-
-    /// Set the address of the connection this PushManager is associated with.
-    /// This address will be passed to the synchronizer when handling subscription pushes.
-    pub fn set_address(&self, address: String) {
-        self.address.store(Arc::new(Some(address)));
-    }
-
     /// Get the address associated with this PushManager
     pub fn get_address(&self) -> Option<String> {
         self.address.load().as_ref().clone()
-    }
-
-    /// Creates new `PushManager`
-    pub fn new() -> Self {
-        PushManager {
-            sender: Arc::from(ArcSwap::from(Arc::new(None))),
-            pubsub_synchronizer: Arc::from(ArcSwap::from(Arc::new(None))),
-            address: Arc::from(ArcSwap::from(Arc::new(None))),
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use rustls::crypto::cipher::NONCE_LEN;
+
     use super::*;
 
     #[test]
     fn test_send_and_receive_push_info() {
-        let push_manager = PushManager::new();
+        let push_manager = PushManager::new(None, None, None);
         let (tx, mut rx) = mpsc::unbounded_channel();
         push_manager.replace_sender(tx);
 
@@ -159,7 +150,7 @@ mod tests {
     }
     #[test]
     fn test_push_manager_receiver_dropped() {
-        let push_manager = PushManager::new();
+        let push_manager = PushManager::new(None, None, None);
         let (tx, rx) = mpsc::unbounded_channel();
         push_manager.replace_sender(tx);
 
@@ -176,7 +167,7 @@ mod tests {
     }
     #[test]
     fn test_push_manager_without_sender() {
-        let push_manager = PushManager::new();
+        let push_manager = PushManager::new(None, None, None);
 
         push_manager.try_send(&Ok(Value::Push {
             kind: PushKind::Message,
@@ -197,7 +188,7 @@ mod tests {
     }
     #[test]
     fn test_push_manager_multiple_channels_and_messages() {
-        let push_manager = PushManager::new();
+        let push_manager = PushManager::new(None,None, None);
         let (tx1, mut rx1) = mpsc::unbounded_channel();
         let (tx2, mut rx2) = mpsc::unbounded_channel();
         push_manager.replace_sender(tx1);
@@ -237,7 +228,7 @@ mod tests {
         // In this test we create 4 channels and send 1000 message, it switchs channels for each message we sent.
         // Then we check if all messages are received and sum of messages are equal to expected sum.
         // We also check if all channels are used.
-        let push_manager = PushManager::new();
+        let push_manager = PushManager::new(None, None, None);
         let (tx1, mut rx1) = mpsc::unbounded_channel();
         let (tx2, mut rx2) = mpsc::unbounded_channel();
         let (tx3, mut rx3) = mpsc::unbounded_channel();

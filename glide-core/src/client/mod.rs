@@ -265,7 +265,7 @@ pub struct Client {
     iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
     // Optional compression manager for automatic compression/decompression
     compression_manager: Option<Arc<CompressionManager>>,
-    pubsub_synchronizer: Option<Arc<dyn PubSubSynchronizer>>,
+    pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
 }
 
 async fn run_with_timeout<T>(
@@ -605,9 +605,7 @@ impl Client {
                 cmd.set_fenced(true);
             }
 
-            if let Some(sync) = &self.pubsub_synchronizer
-                && let Some(result) = sync.intercept_pubsub_command(cmd).await
-            {
+            if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
                 return result;
             }
 
@@ -1264,7 +1262,7 @@ async fn create_cluster_client(
     request: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
-    pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
+    pubsub_synchronizer: Arc<dyn crate::pubsub::PubSubSynchronizer>,
 ) -> RedisResult<redis::cluster_async::ClusterConnection> {
     let tls_mode = request.tls_mode.unwrap_or_default();
 
@@ -1372,7 +1370,7 @@ async fn create_cluster_client(
 
     let client = builder.build()?;
     let mut con = client
-        .get_async_connection(push_sender, pubsub_synchronizer)
+        .get_async_connection(push_sender, Some(pubsub_synchronizer))
         .await?;
 
     // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,
@@ -1430,6 +1428,7 @@ pub enum ConnectionError {
     Timeout,
     IoError(std::io::Error),
     Configuration(String),
+    InitializationError(String),
 }
 
 impl std::fmt::Debug for ConnectionError {
@@ -1440,6 +1439,7 @@ impl std::fmt::Debug for ConnectionError {
             Self::IoError(arg0) => f.debug_tuple("IoError").field(arg0).finish(),
             Self::Timeout => write!(f, "Timeout"),
             Self::Configuration(arg0) => f.debug_tuple("Configuration").field(arg0).finish(),
+            Self::InitializationError(arg0) => f.debug_tuple("InitializationError").field(arg0).finish(),
         }
     }
 }
@@ -1452,6 +1452,7 @@ impl std::fmt::Display for ConnectionError {
             ConnectionError::IoError(err) => write!(f, "{err}"),
             ConnectionError::Timeout => f.write_str("connection attempt timed out"),
             ConnectionError::Configuration(msg) => write!(f, "configuration error: {msg}"),
+            ConnectionError::InitializationError(err) => write!(f, "initialization error: {err}"),
         }
     }
 }
@@ -1624,7 +1625,7 @@ impl Client {
             let initial_subscriptions = request.pubsub_subscriptions.clone();
 
             let pubsub_synchronizer =
-                Some(create_pubsub_synchronizer(push_sender.clone(), initial_subscriptions).await);
+                create_pubsub_synchronizer(push_sender.clone(), initial_subscriptions, request.cluster_mode_enabled).await;
 
             // Create the Client first without IAM token manager
             let client = Self {
@@ -1638,16 +1639,16 @@ impl Client {
 
             let client_arc = Arc::new(RwLock::new(client));
 
-            if let Some(sync) = &pubsub_synchronizer {
-                let applier: Arc<dyn PubSubCommandApplier> = client_arc.clone();
+            let applier: Arc<dyn PubSubCommandApplier> = client_arc.clone();
 
-                set_synchronizer_applier(
-                    sync,
-                    Arc::downgrade(&applier),
-                    request.cluster_mode_enabled,
-                )
-                .expect("Failed to set synchronizer applier during initialization");
-            }
+            set_synchronizer_applier(
+                &pubsub_synchronizer,
+                Arc::downgrade(&applier),
+            )
+            .map_err(|e| ConnectionError::InitializationError(
+                format!("Failed to set synchronizer applier: {}", e)
+            ))?;
+            
 
             // Create IAM token manager if needed, passing a strong Arc to the callback
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
@@ -1992,6 +1993,7 @@ mod tests {
         use std::sync::Arc;
         use std::sync::atomic::AtomicIsize;
         use tokio::sync::RwLock;
+        use crate::pubsub::create_pubsub_synchronizer;
 
         let config = ConnectionRequest {
             database_id: 0,
@@ -2009,13 +2011,18 @@ mod tests {
             push_sender: None,
         };
 
+        // Create runtime to initialize a stub pubsub synchronizer
+        // We do this in order to keep the pubsub_synchronizer in the client struct non-optional.
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let pubsub_synchronizer = rt.block_on(create_pubsub_synchronizer(None, None, false));
+
         Client {
             internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),
             request_timeout: Duration::from_millis(250),
             inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
             iam_token_manager: None,
             compression_manager: None,
-            pubsub_synchronizer: None,
+            pubsub_synchronizer,
         }
     }
 

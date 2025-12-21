@@ -60,9 +60,9 @@ pub trait PubSubSynchronizer: Send + Sync {
         desired == actual
     }
 
-    /// Remove all current subscriptions associated with a specific address
+    /// Remove all current subscriptions associated with specific addresses
     /// This is called when a node disconnects, so reconciliation can restore them
-    async fn remove_current_subscriptions_for_address(&self, _address: &str) {
+    fn remove_current_subscriptions_for_addresses(&self, _addresses: &std::collections::HashSet<String>) {
         // Default: no-op
     }
 

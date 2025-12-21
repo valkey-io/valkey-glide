@@ -69,6 +69,10 @@ on:
                 required: false
                 type: boolean
                 default: false
+            run-dynamic-pubsub-with-mock:
+                description: "Build with mock pubsub and run dynamic pubsub tests"
+                type: boolean
+                default: false
 
     workflow_call:
         inputs:
@@ -270,6 +274,7 @@ jobs:
                   python3 dev.py test --args -k pubsub tests/sync_tests --html=pytest_report.html --self-contained-html
 
             - name: Rebuild Python wrapper with pubsub mock
+              if: ${{ github.event.inputs.run-dynamic-pubsub-mock == 'true' }}
               uses: ./.github/workflows/build-python-wrapper
               with:
                   os: ${{ matrix.host.OS }}
@@ -279,7 +284,7 @@ jobs:
                   features: mock-pubsub
 
             - name: Test dynamic pubsub with mock
-              if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY == 'false' && env.RUN_ASYNC_ONLY == 'false' }}
+              if: ${{ github.event.inputs.run-dynamic-pubsub-mock == 'true' }}
               working-directory: ./python
               run: |
                   python3 dev.py test --args -k TestDynamicPubsub --html=pytest_report.html --self-contained-html

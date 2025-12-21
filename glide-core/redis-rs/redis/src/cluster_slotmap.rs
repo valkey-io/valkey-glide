@@ -16,9 +16,14 @@ pub(crate) type NodesMap = DashMap<Arc<String>, Arc<ShardAddrs>>;
 #[derive(Debug)]
 /// Represents a slot range entry in the [`SlotMap`].
 pub struct SlotMapValue {
-    pub(crate) start: u16,
-    pub(crate) addrs: Arc<ShardAddrs>,
-    pub(crate) last_used_replica: Arc<AtomicUsize>,
+    /// The starting slot number of this range.
+    pub start: u16,
+    
+    /// The shard addresses responsible for this slot range.
+    pub addrs: Arc<ShardAddrs>,
+    
+    /// Index of the last used replica for round-robin load balancing when reading from replicas.
+    pub last_used_replica: Arc<AtomicUsize>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -41,7 +46,7 @@ pub enum ReadFromReplicaStrategy {
 #[derive(Debug, Default)]
 /// Represents the slot-to-node mapping for a Valkey Cluster.
 pub struct SlotMap {
-    pub(crate) slots: BTreeMap<u16, SlotMapValue>,
+    slots: BTreeMap<u16, SlotMapValue>,
     nodes_map: NodesMap,
     read_from_replica: ReadFromReplicaStrategy,
 }

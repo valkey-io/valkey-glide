@@ -1414,8 +1414,6 @@ where
             )
             .await;
 
-            futures::future::join_all(notifiers.iter().map(|notify| notify.notified())).await;
-
             // Trigger reconciliation after connections are refreshed
             if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
                 sync.trigger_reconciliation().await;
@@ -1462,10 +1460,8 @@ where
         debug!("Triggering refresh connections tasks to {:?} ", addresses);
 
         if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
-            for address in &addresses {
-                sync.remove_current_subscriptions_for_address(address).await;
-            }
-        }
+            sync.remove_current_subscriptions_for_addresses(&addresses);
+        };
 
         let mut notifiers = Vec::<Arc<Notify>>::new();
 
@@ -2329,26 +2325,25 @@ where
 
         info!("refresh_slots found nodes:\n{new_connections}");
         // Reset the current slot map and connection vector with the new ones
-        {
-            let mut write_guard = inner.conn_lock.write().expect(MUTEX_WRITE_ERR);
-            // Clear the refresh tasks of the prev instance
-            // TODO - Maybe we can take the running refresh tasks and use them instead of running new connection creation
-            write_guard.refresh_conn_state.clear_refresh_state();
-            let read_from_replicas = inner
-                .get_cluster_param(|params| params.read_from_replicas.clone())
-                .expect(MUTEX_READ_ERR);
-            *write_guard = ConnectionsContainer::new(
-                new_slots,
-                new_connections,
-                read_from_replicas,
-                topology_hash,
-            );
-        }
+        let mut write_guard = inner.conn_lock.write().expect(MUTEX_WRITE_ERR);
+        // Clear the refresh tasks of the prev instance
+        // TODO - Maybe we can take the running refresh tasks and use them instead of running new connection creation
+        write_guard.refresh_conn_state.clear_refresh_state();
+        let read_from_replicas = inner
+            .get_cluster_param(|params| params.read_from_replicas.clone())
+            .expect(MUTEX_READ_ERR);
+        *write_guard = ConnectionsContainer::new(
+            new_slots,
+            new_connections,
+            read_from_replicas,
+            topology_hash,
+        );
 
-        // Notify the PubSub synchronizer about the new topology
+        // Notify the PubSub synchronizer about the new topology (using same lock)
+        // Since handle_topology_refresh is sync, no other task can benefit from us
+        // holding a read lock instead - hence, we continue with the write lock.
         if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
-            let guard = inner.conn_lock.read().expect(MUTEX_READ_ERR);
-            sync.handle_topology_refresh(&guard.slot_map);
+            sync.handle_topology_refresh(&write_guard.slot_map);
         }
 
         Ok(())

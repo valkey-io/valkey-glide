@@ -41,7 +41,7 @@ pub struct MockPubSubSynchronizer {
     actual_sharded: Arc<RwLock<HashSet<String>>>,
 
     can_subscribe: Arc<RwLock<bool>>,
-    is_cluster: once_cell::sync::OnceCell<bool>,
+    is_cluster: bool,
     broker: Arc<MockPubSubBroker>,
     reconciliation_notify: Arc<Notify>,
     reconciliation_complete_notify: Arc<Notify>,
@@ -49,11 +49,11 @@ pub struct MockPubSubSynchronizer {
 }
 
 impl MockPubSubSynchronizer {
-    fn new_internal(client_id: String, broker: Arc<MockPubSubBroker>) -> Arc<Self> {
+    fn new_internal(client_id: String, broker: Arc<MockPubSubBroker>, is_cluster: bool,) -> Arc<Self> {
         Arc::new(Self {
             client_id,
             command_applier: once_cell::sync::OnceCell::new(),
-            is_cluster: once_cell::sync::OnceCell::new(),
+            is_cluster,
             desired_channels: Arc::new(RwLock::new(HashSet::new())),
             desired_patterns: Arc::new(RwLock::new(HashSet::new())),
             desired_sharded: Arc::new(RwLock::new(HashSet::new())),
@@ -71,6 +71,7 @@ impl MockPubSubSynchronizer {
     pub async fn create(
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         initial_subscriptions: Option<redis::PubSubSubscriptionInfo>,
+        is_cluster: bool,
     ) -> Arc<dyn PubSubSynchronizer> {
         let client_id = format!(
             "mock_client_{}",
@@ -78,7 +79,7 @@ impl MockPubSubSynchronizer {
         );
 
         let broker = get_mock_broker();
-        let synchronizer = Self::new_internal(client_id.clone(), Arc::clone(&broker));
+        let synchronizer = Self::new_internal(client_id.clone(), Arc::clone(&broker), is_cluster);
 
         synchronizer.start_reconciliation_task();
 
@@ -177,12 +178,7 @@ impl MockPubSubSynchronizer {
     pub fn set_applier(
         &self,
         applier: Weak<dyn PubSubCommandApplier>,
-        is_cluster: bool,
     ) -> Result<(), String> {
-        self.is_cluster
-            .set(is_cluster)
-            .map_err(|_| "is_cluster already set")?;
-
         self.command_applier
             .set(applier)
             .map_err(|_| "Command applier already set")?;
@@ -314,7 +310,7 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
         );
 
         // Only include sharded if it's cluster mode
-        if self.is_cluster.get().copied().unwrap_or(false) {
+        if self.is_cluster {
             desired.insert(
                 "Sharded".to_string(),
                 self.desired_sharded.read().await.clone(),
@@ -331,7 +327,7 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
             self.actual_patterns.read().await.clone(),
         );
 
-        if self.is_cluster.get().copied().unwrap_or(false) {
+        if self.is_cluster {
             actual.insert(
                 "Sharded".to_string(),
                 self.actual_sharded.read().await.clone(),
@@ -420,8 +416,8 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
 
         self.broker.check_and_record_sync_state(self).await;
     }
-
-    async fn remove_current_subscriptions_for_address(&self, _address: &str) {
+    
+    fn remove_current_subscriptions_for_addresses(&self, _addresses: &HashSet<String>) {
         // Mock doesn't track by address, no-op
     }
 
