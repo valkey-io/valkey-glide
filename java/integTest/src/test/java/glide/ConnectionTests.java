@@ -434,6 +434,109 @@ public class ConnectionTests {
         azTestClient.close();
     }
 
+    @SneakyThrows
+    @Test
+    public void test_az_affinity_replicas_and_primary_prioritizes_replicas_over_primary() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
+
+        String clientAz = "us-east-1b"; // Client is in 1B
+        String otherAz = "us-east-1a"; // Other nodes in 1A
+        int nGetCalls = 4;
+        String getCmdstat = String.format("cmdstat_get:calls=%d", nGetCalls);
+        int slot = 12182; // slot for key "foo"
+
+        // Create client for setting the configs
+        GlideClusterClient configSetClient =
+                GlideClusterClient.createClient(azClusterClientConfig().requestTimeout(2000).build()).get();
+
+        // Reset stats
+        assertEquals(configSetClient.configResetStat().get(), OK);
+
+        // Set ALL nodes to otherAz (us-east-1a)
+        configSetClient.configSet(Map.of("availability-zone", otherAz), ALL_NODES).get();
+
+        // Set REPLICA for slot to clientAz (us-east-1b)
+        configSetClient
+                .configSet(
+                        Map.of("availability-zone", clientAz),
+                        new RequestRoutingConfiguration.SlotIdRoute(slot, REPLICA))
+                .get();
+
+        // Verify setup: Primary should be in otherAz (1A)
+        ClusterValue<Map<String, String>> primaryAzResult =
+                configSetClient
+                        .configGet(
+                                new String[] {"availability-zone"},
+                                new RequestRoutingConfiguration.SlotIdRoute(slot, PRIMARY))
+                        .get();
+        assertEquals(
+                otherAz,
+                primaryAzResult.getSingleValue().get("availability-zone"),
+                "Primary for slot " + slot + " should be in: " + otherAz);
+
+        configSetClient.close();
+
+        // Create test client with AZ_AFFINITY_REPLICAS_AND_PRIMARY configuration
+        // Client is in us-east-1b, same as the replica
+        GlideClusterClient azTestClient =
+                GlideClusterClient.createClient(
+                                azClusterClientConfig()
+                                        .readFrom(ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY)
+                                        .clientAZ(clientAz)
+                                        .requestTimeout(2000)
+                                        .build())
+                        .get();
+
+        // Execute GET commands - these should go to the replica in clientAz (1B)
+        for (int i = 0; i < nGetCalls; i++) {
+            azTestClient.get("foo").get();
+        }
+
+        ClusterValue<String> infoResult =
+                azTestClient.info(new InfoOptions.Section[] {InfoOptions.Section.ALL}, ALL_NODES).get();
+        Map<String, String> infoData = infoResult.getMultiValue();
+
+        // Check that a REPLICA in client's AZ (1B) handled all GET calls
+        long replicaMatchingEntries =
+                infoData.values().stream()
+                        .filter(
+                                value ->
+                                        value.contains(getCmdstat)
+                                                && value.contains(clientAz)
+                                                && value.contains("role:slave"))
+                        .count();
+        assertEquals(
+                1,
+                replicaMatchingEntries,
+                "Exactly one replica in client's AZ (" + clientAz + ") should handle all GET calls");
+
+        // Verify that the PRIMARY did NOT receive any GET calls
+        boolean primaryReceivedGets =
+                infoData.values().stream()
+                        .anyMatch(
+                                value -> value.contains("role:master") && value.contains("cmdstat_get:calls="));
+
+        assertFalse(
+                primaryReceivedGets,
+                "Primary should NOT receive GET calls when a replica is available in client's AZ");
+
+        // Verify total GET calls equals expected
+        long totalGetCalls =
+                infoData.values().stream()
+                        .filter(value -> value.contains("cmdstat_get:calls="))
+                        .mapToInt(
+                                value -> {
+                                    int startIndex =
+                                            value.indexOf("cmdstat_get:calls=") + "cmdstat_get:calls=".length();
+                                    int endIndex = value.indexOf(",", startIndex);
+                                    return Integer.parseInt(value.substring(startIndex, endIndex));
+                                })
+                        .sum();
+        assertEquals(nGetCalls, totalGetCalls, "Total GET calls mismatch");
+
+        azTestClient.close();
+    }
+
     /**
      * Test that the client can connect using both secure and insecure TLS modes, meaning the client
      * bypasses the SSL certificate validation.

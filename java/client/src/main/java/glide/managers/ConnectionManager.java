@@ -253,7 +253,7 @@ public class ConnectionManager {
                             requestBuilder.setReadFrom(ReadFrom.PreferReplica);
                         } else if ("AZ_AFFINITY".equals(readFromName)) {
                             requestBuilder.setReadFrom(ReadFrom.AZAffinity);
-                        } else if ("AZ_AFFINITY_PREFER_PRIMARY".equals(readFromName)) {
+                        } else if ("AZ_AFFINITY_REPLICAS_AND_PRIMARY".equals(readFromName)) {
                             requestBuilder.setReadFrom(ReadFrom.AZAffinityReplicasAndPrimary);
                         }
 
