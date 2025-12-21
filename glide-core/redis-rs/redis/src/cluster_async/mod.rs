@@ -1406,7 +1406,7 @@ where
 
         if !addrs_to_refresh.is_empty() {
             // don't try existing nodes since we know a. it does not exist. b. exist but its connection is closed
-            let notifiers = Self::trigger_refresh_connection_tasks(
+            Self::trigger_refresh_connection_tasks(
                 inner.clone(),
                 addrs_to_refresh,
                 RefreshConnectionType::AllConnections,

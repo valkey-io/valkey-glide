@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use crate::cluster_slotmap::SlotMap;
-use crate::connection::PubSubSubscriptionKind;
+use crate::connection::{PubSubChannelOrPattern, PubSubSubscriptionKind};
 use crate::{Cmd, RedisResult, Value};
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
@@ -12,7 +12,7 @@ pub trait PubSubSynchronizer: Send + Sync {
     /// Add channels to desired subscriptions
     async fn add_desired_subscriptions(
         &self,
-        channels: HashSet<String>,
+        channels: HashSet<PubSubChannelOrPattern>,
         subscription_type: PubSubSubscriptionKind,
     );
 
@@ -20,14 +20,14 @@ pub trait PubSubSynchronizer: Send + Sync {
     /// If channels is None, remove all subscriptions of this type
     async fn remove_desired_subscriptions(
         &self,
-        channels: Option<HashSet<String>>,
+        channels: Option<HashSet<PubSubChannelOrPattern>>,
         subscription_type: PubSubSubscriptionKind,
     );
 
     /// Add channels to current (actual) subscriptions
     async fn add_current_subscriptions(
         &self,
-        channels: HashSet<String>,
+        channels: HashSet<PubSubChannelOrPattern>,
         subscription_type: PubSubSubscriptionKind,
         address: String,
     );
@@ -35,17 +35,18 @@ pub trait PubSubSynchronizer: Send + Sync {
     /// Remove channels from current (actual) subscriptions
     async fn remove_current_subscriptions(
         &self,
-        channels: HashSet<String>,
+        channels: HashSet<PubSubChannelOrPattern>,
         subscription_type: PubSubSubscriptionKind,
         address: String,
     );
 
     /// Get the current state of both desired and actual subscriptions
+    /// Returns (desired, actual) where each is a map of subscription type name to channels
     async fn get_subscription_state(
         &self,
     ) -> (
-        HashMap<String, HashSet<String>>,
-        HashMap<String, HashSet<String>>,
+        HashMap<PubSubSubscriptionKind, HashSet<PubSubChannelOrPattern>>,
+        HashMap<PubSubSubscriptionKind, HashSet<PubSubChannelOrPattern>>,
     );
 
     /// Reconcile desired and actual subscriptions
@@ -84,9 +85,9 @@ pub trait PubSubSynchronizer: Send + Sync {
     /// Set initial subscriptions from client configuration and trigger immediate reconciliation
     async fn set_initial_subscriptions(
         &self,
-        _channels: HashSet<String>,
-        _patterns: HashSet<String>,
-        _sharded: HashSet<String>,
+        _channels: HashSet<PubSubChannelOrPattern>,
+        _patterns: HashSet<PubSubChannelOrPattern>,
+        _sharded: HashSet<PubSubChannelOrPattern>,
     ) {
         // Default: no-op
     }

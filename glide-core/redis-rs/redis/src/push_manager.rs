@@ -21,6 +21,7 @@ pub struct PushManager {
     pubsub_synchronizer: Arc<ArcSwap<Option<Arc<dyn PubSubSynchronizer>>>>,
     address: Arc<ArcSwap<Option<String>>>,
 }
+
 impl PushManager {
     /// Create a new `PushManager`
     pub fn new(
@@ -34,6 +35,7 @@ impl PushManager {
             address: Arc::new(ArcSwap::new(Arc::new(address))),
         }
     }
+
     /// It checks if value's type is Push
     /// then invokes `try_send_raw` method
     pub(crate) fn try_send(&self, value: &RedisResult<Value>) {
@@ -90,9 +92,9 @@ impl PushManager {
             _ => return,
         };
 
-        // Extract channel/pattern from push data
+        // Extract channel/pattern from push data 
         let channel_or_pattern = match data.first() {
-            Some(Value::BulkString(bytes)) => String::from_utf8_lossy(bytes).to_string(),
+            Some(Value::BulkString(bytes)) => bytes.clone(),
             _ => return,
         };
 

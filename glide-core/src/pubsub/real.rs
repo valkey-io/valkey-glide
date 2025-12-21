@@ -2,7 +2,7 @@
 
 use crate::client::PubSubCommandApplier;
 use async_trait::async_trait;
-use redis::{PubSubSubscriptionKind, PubSubSynchronizer, SlotMap};
+use redis::{PubSubChannelOrPattern, PubSubSubscriptionKind, PubSubSynchronizer, SlotMap};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Weak};
 use tokio::sync::RwLock;
@@ -50,45 +50,45 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
 
     async fn add_desired_subscriptions(
         &self,
-        _channels: HashSet<String>,
+        _channels: HashSet<PubSubChannelOrPattern>,
         _subscription_type: PubSubSubscriptionKind,
     ) {
-        // TODO: Implement for real synchronizer
+        // TODO: Implement
     }
 
     async fn remove_desired_subscriptions(
         &self,
-        _channels: Option<HashSet<String>>,
+        _channels: Option<HashSet<PubSubChannelOrPattern>>,
         _subscription_type: PubSubSubscriptionKind,
     ) {
-        // TODO: Implement for real synchronizer
+        // TODO: Implement
     }
 
     async fn add_current_subscriptions(
         &self,
-        _channels: HashSet<String>,
+        _channels: HashSet<PubSubChannelOrPattern>,
         _subscription_type: PubSubSubscriptionKind,
         _address: String,
     ) {
-        // TODO: Implement for real synchronizer
+        // TODO: Implement
     }
 
     async fn remove_current_subscriptions(
         &self,
-        _channels: HashSet<String>,
+        _channels: HashSet<PubSubChannelOrPattern>,
         _subscription_type: PubSubSubscriptionKind,
         _address: String,
     ) {
-        // TODO: Implement for real synchronizer
+        // TODO: Implement
     }
 
     async fn get_subscription_state(
         &self,
     ) -> (
-        HashMap<String, HashSet<String>>,
-        HashMap<String, HashSet<String>>,
+        HashMap<PubSubSubscriptionKind, HashSet<PubSubChannelOrPattern>>,
+        HashMap<PubSubSubscriptionKind, HashSet<PubSubChannelOrPattern>>,
     ) {
-        // TODO: Implement for real synchronizer
+        // TODO: Implement
         (HashMap::new(), HashMap::new())
     }
 
@@ -98,7 +98,7 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
     }
 
     async fn trigger_reconciliation(&self) {
-        // TODO: Implement for real synchronizer
+        // TODO: Implement
     }
 
     fn handle_topology_refresh(&self, _new_slot_map: &SlotMap) {

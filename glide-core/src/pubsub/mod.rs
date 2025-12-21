@@ -2,7 +2,7 @@
 
 use crate::client::PubSubCommandApplier; // Import from client
 use redis::PushInfo;
-pub use redis::{PubSubSubscriptionKind, PubSubSynchronizer};
+pub use redis::{PubSubChannelOrPattern, PubSubSubscriptionKind, PubSubSynchronizer};
 use std::sync::{Arc, Weak};
 use tokio::sync::mpsc;
 
