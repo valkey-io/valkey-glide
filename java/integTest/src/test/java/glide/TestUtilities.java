@@ -185,7 +185,14 @@ public class TestUtilities {
             commonClientConfig() {
         var builder = GlideClientConfiguration.builder();
         for (var host : STANDALONE_HOSTS) {
+            if (host.isEmpty()) {
+                continue;
+            }
             var parts = host.split(":");
+            if (parts.length < 2) {
+                throw new IllegalArgumentException(
+                        "Invalid host format: " + host + ". Expected format: host:port");
+            }
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
@@ -210,7 +217,14 @@ public class TestUtilities {
             commonClusterClientConfig() {
         var builder = GlideClusterClientConfiguration.builder();
         for (var host : CLUSTER_HOSTS) {
+            if (host.isEmpty()) {
+                continue;
+            }
             var parts = host.split(":");
+            if (parts.length < 2) {
+                throw new IllegalArgumentException(
+                        "Invalid host format: " + host + ". Expected format: host:port");
+            }
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
@@ -221,7 +235,14 @@ public class TestUtilities {
             azClusterClientConfig() {
         var builder = GlideClusterClientConfiguration.builder();
         for (var host : AZ_CLUSTER_HOSTS) {
+            if (host.isEmpty()) {
+                continue;
+            }
             var parts = host.split(":");
+            if (parts.length < 2) {
+                throw new IllegalArgumentException(
+                        "Invalid host format: " + host + ". Expected format: host:port");
+            }
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }

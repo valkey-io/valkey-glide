@@ -101,6 +101,10 @@ jobs:
                 java: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
+                exclude:
+                    # Exclude Redis 6.2 on Windows.
+                    - engine: { type: "redis", version: "6.2" }
+                      host: { OS: "windows" }
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
@@ -154,20 +158,13 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
-            - name: Setup Python3 for Windows
-              if: ${{ matrix.host.OS == 'windows' }}
-              shell: bash
-              run: |
-                  # Create python3 symlink for Windows
-                  ln -sf $(which python) /usr/bin/python3
-
             - name: Build java client
               working-directory: java
               shell: bash
               run: |
                   if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
-                      # TODO: Remove -x :integTest:test when Windows integration tests are implemented
-                      ./gradlew.bat --build-cache --continue build test -x javadoc -x :integTest:test
+                      # Enable integration tests on Windows with WSL
+                      ./gradlew.bat --build-cache --continue build test -x javadoc
                   else
                       ./gradlew --build-cache --continue build test -x javadoc
                   fi
@@ -210,10 +207,10 @@ jobs:
                 java: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
-                # TODO: Remove Windows exclusion when Windows integration tests are implemented
                 exclude:
-                    - host:
-                          OS: windows
+                    # Exclude Redis 6.2 on Windows.
+                    - engine: { type: "redis", version: "6.2" }
+                      host: { OS: "windows" }
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:

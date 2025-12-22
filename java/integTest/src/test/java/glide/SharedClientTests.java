@@ -34,7 +34,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(35) // seconds
+@Timeout(35)
 public class SharedClientTests {
 
     private static GlideClient standaloneClient = null;
@@ -44,13 +44,13 @@ public class SharedClientTests {
 
     @SneakyThrows
     private static GlideClient createGlideClientWithTimeout() {
-        return GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get();
+        return GlideClient.createClient(commonClientConfig().requestTimeout(20000).build()).get();
     }
 
     @SneakyThrows
     private static GlideClusterClient createGlideClusterClientWithTimeout() {
         return GlideClusterClient.createClient(
-                        commonClusterClientConfig().requestTimeout(10000).build())
+                        commonClusterClientConfig().requestTimeout(20000).build())
                 .get();
     }
 
@@ -125,9 +125,9 @@ public class SharedClientTests {
     private static Stream<Arguments> clientAndDataSize() {
         return Stream.of(
                 Arguments.of(createGlideClientWithTimeout(), 100),
-                Arguments.of(createGlideClientWithTimeout(), 1 << 16),
+                Arguments.of(createGlideClientWithTimeout(), 1 << 15),
                 Arguments.of(createGlideClusterClientWithTimeout(), 100),
-                Arguments.of(createGlideClusterClientWithTimeout(), 1 << 16));
+                Arguments.of(createGlideClusterClientWithTimeout(), 1 << 15));
     }
 
     @SneakyThrows

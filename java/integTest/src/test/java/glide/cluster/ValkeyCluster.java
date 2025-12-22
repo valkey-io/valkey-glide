@@ -13,12 +13,25 @@ import java.util.concurrent.TimeUnit;
 
 /** ValkeyCluster class for managing test clusters */
 public class ValkeyCluster implements AutoCloseable {
-    private static final Path SCRIPT_FILE =
-            Paths.get(System.getProperty("user.dir"))
-                    .getParent()
-                    .getParent()
-                    .resolve("utils")
-                    .resolve("cluster_manager.py");
+    private static String getScriptPath() {
+        Path scriptPath =
+                Paths.get(System.getProperty("user.dir"))
+                        .getParent()
+                        .getParent()
+                        .resolve("utils")
+                        .resolve("cluster_manager.py");
+
+        // Convert Windows path to WSL format
+        String pathStr = scriptPath.toString();
+        if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+            // Convert C:\path\to\file to /mnt/c/path/to/file
+            pathStr = pathStr.replace("\\", "/");
+            if (pathStr.matches("^[A-Za-z]:/.*")) {
+                pathStr = "/mnt/" + Character.toLowerCase(pathStr.charAt(0)) + pathStr.substring(2);
+            }
+        }
+        return pathStr;
+    }
 
     private boolean tls = false;
     private String clusterFolder;
@@ -48,8 +61,11 @@ public class ValkeyCluster implements AutoCloseable {
         } else {
             this.tls = tls;
             List<String> command = new ArrayList<>();
+            if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+                command.add("wsl");
+            }
             command.add("python3");
-            command.add(SCRIPT_FILE.toString());
+            command.add(getScriptPath());
 
             if (tls) {
                 command.add("--tls");
@@ -173,8 +189,11 @@ public class ValkeyCluster implements AutoCloseable {
     public void close() throws IOException {
         if (clusterFolder != null && !clusterFolder.isEmpty()) {
             List<String> command = new ArrayList<>();
+            if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+                command.add("wsl");
+            }
             command.add("python3");
-            command.add(SCRIPT_FILE.toString());
+            command.add(getScriptPath());
 
             if (tls) {
                 command.add("--tls");
@@ -208,7 +227,7 @@ public class ValkeyCluster implements AutoCloseable {
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                throw new IOException("Interrupted while waiting for cluster shutdown", e);
+                throw new IOException("Interrupted while stopping cluster", e);
             }
         }
     }

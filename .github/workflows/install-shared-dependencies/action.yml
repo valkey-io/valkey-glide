@@ -68,13 +68,54 @@ runs:
           run: |
               yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
-        - name: Install software dependencies for Windows
-          shell: pwsh
-          if: "${{ inputs.os == 'windows' }}"
+        - name: Setup WSL with Valkey (Windows only)
+          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
+          uses: Vampire/setup-wsl@v6
+          with:
+              distribution: Ubuntu-22.04
+              use-cache: true
+              update: true
+              additional-packages: python3 python3-pip build-essential git pkg-config libssl-dev
+
+        - name: Install Valkey directly in WSL (Windows)
+          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
+          shell: bash
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
           run: |
-              # Verify Rust toolchain is available
-              rustc --version
-              cargo --version
+              echo "=== Installing Valkey directly in WSL ==="
+
+              # Install Valkey directly in WSL
+              wsl -- bash -c "
+                # Clone and build Valkey
+                cd /tmp
+                git clone https://github.com/valkey-io/valkey.git
+                cd valkey
+                git checkout \"$ENGINE_VERSION\"
+                make BUILD_TLS=yes -j4
+                sudo make install
+                
+                # Verify installation
+                valkey-server --version
+                valkey-cli --version
+                
+                # Test basic functionality
+                echo 'Testing Valkey server startup...'
+                valkey-server --port 6379 --daemonize yes
+                sleep 2
+                valkey-cli ping || echo 'Valkey server not responding'
+                pkill valkey-server || true
+                
+                # Fix system configuration for cluster mode
+                echo 'Configuring system for cluster mode...'
+                sudo sysctl vm.overcommit_memory=1 || echo 'Cannot set overcommit'
+                sudo bash -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' || echo 'Cannot disable hugepage'
+                
+                # Set file descriptor limits
+                ulimit -n 65536 || echo 'Cannot set file descriptor limit'
+                
+                echo 'Valkey installation complete in WSL'
+              "
 
         - name: Setup Python for Windows
           if: "${{ inputs.os == 'windows' }}"
@@ -90,7 +131,6 @@ runs:
               github-token: ${{ inputs.github-token }}
 
         - name: Install engine
-          # TODO: Remove Windows exclusion when Windows integration tests are implemented
           if: "${{ inputs.engine-version && inputs.os != 'windows' }}"
           uses: ./.github/workflows/install-engine
           with:
