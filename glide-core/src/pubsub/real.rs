@@ -7,8 +7,8 @@ use redis::{
     SlotMap,
 };
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Weak};
-use tokio::sync::RwLock;
+use std::sync::{Arc, RwLock, Weak};
+
 /// Real implementation of PubSub synchronizer (stub for now)
 #[allow(dead_code)]
 pub struct RealPubSubSynchronizer {
@@ -31,16 +31,10 @@ impl RealPubSubSynchronizer {
         })
     }
 
-    /// Set the command applier - NOT a trait method
-    pub fn set_applier(
-        &self,
-        applier: Weak<dyn PubSubCommandApplier>,
-        // REMOVE is_cluster parameter
-    ) -> Result<(), String> {
+    pub fn set_applier(&self, applier: Weak<dyn PubSubCommandApplier>) -> Result<(), String> {
         self.command_applier
             .set(applier)
             .map_err(|_| "Command applier already set")?;
-
         Ok(())
     }
 }
@@ -51,7 +45,7 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
         self
     }
 
-    async fn add_desired_subscriptions(
+    fn add_desired_subscriptions(
         &self,
         _channels: HashSet<PubSubChannelOrPattern>,
         _subscription_type: PubSubSubscriptionKind,
@@ -59,7 +53,7 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
         // TODO: Implement
     }
 
-    async fn remove_desired_subscriptions(
+    fn remove_desired_subscriptions(
         &self,
         _channels: Option<HashSet<PubSubChannelOrPattern>>,
         _subscription_type: PubSubSubscriptionKind,
@@ -67,7 +61,7 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
         // TODO: Implement
     }
 
-    async fn add_current_subscriptions(
+    fn add_current_subscriptions(
         &self,
         _channels: HashSet<PubSubChannelOrPattern>,
         _subscription_type: PubSubSubscriptionKind,
@@ -76,7 +70,7 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
         // TODO: Implement
     }
 
-    async fn remove_current_subscriptions(
+    fn remove_current_subscriptions(
         &self,
         _channels: HashSet<PubSubChannelOrPattern>,
         _subscription_type: PubSubSubscriptionKind,
@@ -85,20 +79,20 @@ impl PubSubSynchronizer for RealPubSubSynchronizer {
         // TODO: Implement
     }
 
-    async fn get_subscription_state(&self) -> (PubSubSubscriptionInfo, PubSubSubscriptionInfo) {
+    fn get_subscription_state(&self) -> (PubSubSubscriptionInfo, PubSubSubscriptionInfo) {
         // TODO: Implement
         (HashMap::new(), HashMap::new())
     }
 
-    async fn trigger_reconciliation(&self) {
+    fn trigger_reconciliation(&self) {
         // TODO: Implement
     }
 
     fn handle_topology_refresh(&self, _new_slot_map: &SlotMap) {
-        // TODO: Implement for real synchronizer
+        // TODO: Implement
     }
 
     fn remove_current_subscriptions_for_addresses(&self, _addresses: &HashSet<String>) {
-        // TODO: Implement - remove current subscriptions for all given addresses
+        // TODO: Implement
     }
 }

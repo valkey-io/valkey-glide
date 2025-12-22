@@ -100,17 +100,11 @@ impl PushManager {
 
         let channels = HashSet::from([channel_or_pattern]);
 
-        // Spawn async task to update synchronizer (we're in a sync context)
-        let sync = Arc::clone(sync);
-        tokio::spawn(async move {
-            if is_subscribe {
-                sync.add_current_subscriptions(channels, subscription_type, address)
-                    .await;
-            } else {
-                sync.remove_current_subscriptions(channels, subscription_type, address)
-                    .await;
-            }
-        });
+        if is_subscribe {
+            sync.add_current_subscriptions(channels, subscription_type, address);
+        } else {
+            sync.remove_current_subscriptions(channels, subscription_type, address);
+        }
     }
 
     /// Replace mpsc channel of `PushManager` with provided sender.

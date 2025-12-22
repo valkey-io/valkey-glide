@@ -273,8 +273,16 @@ jobs:
               run: |
                   python3 dev.py test --args -k pubsub tests/sync_tests --html=pytest_report.html --self-contained-html
 
+            - name: Detect mock pubsub changes
+              id: pubsub_mock_changes
+              uses: dorny/paths-filter@v3
+              with:
+                  filters: |
+                      mock_pubsub:
+                          - glide-core/src/pubsub/mock.rs
+
             - name: Rebuild Python wrapper with pubsub mock
-              if: ${{ github.event.inputs.run-dynamic-pubsub-mock == 'true' }}
+              if: ${{ github.event.inputs.run-dynamic-pubsub-with-mock == 'true' || steps.pubsub_mock_changes.outputs.mock_pubsub == 'true' }}
               uses: ./.github/workflows/build-python-wrapper
               with:
                   os: ${{ matrix.host.OS }}
@@ -284,7 +292,7 @@ jobs:
                   features: mock-pubsub
 
             - name: Test dynamic pubsub with mock
-              if: ${{ github.event.inputs.run-dynamic-pubsub-mock == 'true' }}
+              if: ${{ github.event.inputs.run-dynamic-pubsub-with-mock == 'true' || steps.pubsub_mock_changes.outputs.mock_pubsub == 'true'  }}
               working-directory: ./python
               run: |
                   python3 dev.py test --args -k TestDynamicPubsub --html=pytest_report.html --self-contained-html

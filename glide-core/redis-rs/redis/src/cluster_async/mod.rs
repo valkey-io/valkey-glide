@@ -1416,7 +1416,7 @@ where
 
             // Trigger reconciliation after connections are refreshed
             if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
-                sync.trigger_reconciliation().await;
+                sync.trigger_reconciliation();
             }
         }
     }

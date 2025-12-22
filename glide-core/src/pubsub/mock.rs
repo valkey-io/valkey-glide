@@ -11,12 +11,11 @@ use redis::{
     SlotMap,
 };
 use std::collections::{HashMap, HashSet};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Mutex, RwLock, Weak};
 use std::time::Duration;
 use telemetrylib::GlideOpenTelemetry;
-use tokio::sync::{Notify, RwLock, mpsc};
+use tokio::sync::{Notify, RwLock as TokioRwLock, mpsc};
 use tokio::time::sleep;
 
 /// Global singleton mock PubSub broker
@@ -30,6 +29,8 @@ pub fn get_mock_broker() -> Arc<MockPubSubBroker> {
     Arc::clone(&MOCK_BROKER)
 }
 
+const LOCK_ERR: &str = "Lock poisoned";
+
 /// Mock implementation of PubSub synchronizer
 pub struct MockPubSubSynchronizer {
     client_id: String,
@@ -38,8 +39,8 @@ pub struct MockPubSubSynchronizer {
 
     desired_subscriptions: RwLock<PubSubSubscriptionInfo>,
     actual_subscriptions: RwLock<PubSubSubscriptionInfo>,
+    can_subscribe: RwLock<bool>,
 
-    can_subscribe: Arc<RwLock<bool>>,
     broker: Arc<MockPubSubBroker>,
     reconciliation_notify: Arc<Notify>,
     reconciliation_complete_notify: Arc<Notify>,
@@ -58,7 +59,7 @@ impl MockPubSubSynchronizer {
             is_cluster,
             desired_subscriptions: RwLock::new(HashMap::new()),
             actual_subscriptions: RwLock::new(HashMap::new()),
-            can_subscribe: Arc::new(RwLock::new(true)),
+            can_subscribe: RwLock::new(true),
             broker,
             reconciliation_notify: Arc::new(Notify::new()),
             reconciliation_complete_notify: Arc::new(Notify::new()),
@@ -96,36 +97,29 @@ impl MockPubSubSynchronizer {
                 &subs,
                 redis::PubSubSubscriptionKind::Pattern,
             );
-            // Always extract sharded, we'll filter later based on client type
             let sharded = extract_channels_from_subscription_info(
                 &subs,
                 redis::PubSubSubscriptionKind::Sharded,
             );
 
-            synchronizer
-                .set_initial_subscriptions(channels, patterns, sharded)
-                .await;
+            synchronizer.set_initial_subscriptions(channels, patterns, sharded);
         }
 
         synchronizer
     }
 
-    pub(crate) async fn set_can_subscribe(&self, can_subscribe: bool) {
-        *self.can_subscribe.write().await = can_subscribe;
+    pub(crate) fn set_can_subscribe(&self, can_subscribe: bool) {
+        *self.can_subscribe.write().expect(LOCK_ERR) = can_subscribe;
     }
 
-    async fn get_can_subscribe(&self) -> bool {
-        *self.can_subscribe.read().await
+    fn get_can_subscribe(&self) -> bool {
+        *self.can_subscribe.read().expect(LOCK_ERR)
     }
 
-    pub(crate) async fn is_synchronized(&self) -> bool {
-        let desired = self.desired_subscriptions.read().await;
-        let actual = self.actual_subscriptions.read().await;
+    pub(crate) fn is_synchronized(&self) -> bool {
+        let desired = self.desired_subscriptions.read().expect(LOCK_ERR);
+        let actual = self.actual_subscriptions.read().expect(LOCK_ERR);
         *desired == *actual
-    }
-
-    async fn trigger_reconciliation(&self) {
-        self.reconciliation_notify.notify_one();
     }
 
     fn start_reconciliation_task(self: &Arc<Self>) {
@@ -146,18 +140,18 @@ impl MockPubSubSynchronizer {
                     break;
                 };
 
-                let delay = *broker.max_application_delay_ms.read().await;
+                let delay = broker.get_max_application_delay_ms().await;
                 if delay > 0 {
                     tokio::time::sleep(Duration::from_millis(delay)).await;
                 }
 
-                if let Err(e) = sync.reconcile().await {
+                if let Err(e) = sync.reconcile_internal() {
                     log_warn(
                         "reconciliation_task",
                         format!("Reconciliation failed for client {}: {}", sync.client_id, e),
                     );
                 }
-                broker.check_and_record_sync_state(&sync).await;
+                broker.check_and_record_sync_state(&sync);
                 complete_notify.notify_waiters();
             }
         });
@@ -165,43 +159,39 @@ impl MockPubSubSynchronizer {
         *self.reconciliation_task_handle.lock().unwrap() = Some(handle);
     }
 
-    /// Set the command applier - NOT a trait method
-    pub fn set_applier(&self, applier: Weak<dyn PubSubCommandApplier>) -> Result<(), String> {
-        self.command_applier
-            .set(applier)
-            .map_err(|_| "Command applier already set")?;
-
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    fn get_applier(&self) -> Option<Arc<dyn PubSubCommandApplier>> {
-        self.command_applier.get()?.upgrade()
-    }
-
-    pub(crate) async fn reconcile(&self) -> Result<(), String> {
-        let can_subscribe = self.get_can_subscribe().await;
+    pub(crate) fn reconcile_internal(&self) -> Result<(), String> {
+        let can_subscribe = self.get_can_subscribe();
 
         if !can_subscribe {
             return Err("Reconciliation blocked: no subscription permission".to_string());
         }
 
-        let desired = self.desired_subscriptions.read().await.clone();
-        let mut actual = self.actual_subscriptions.write().await;
+        let desired = self.desired_subscriptions.read().expect(LOCK_ERR).clone();
+        let mut actual = self.actual_subscriptions.write().expect(LOCK_ERR);
 
-        // Sync all subscription types
         for (kind, desired_channels) in &desired {
-            let actual_channels = actual.entry(*kind).or_insert_with(HashSet::new);
+            let actual_channels = actual.entry(*kind).or_default();
             for channel in desired_channels {
                 actual_channels.insert(channel.clone());
             }
             actual_channels.retain(|ch| desired_channels.contains(ch));
         }
 
-        // Remove subscription types that are no longer desired
         actual.retain(|kind, _| desired.contains_key(kind));
 
         Ok(())
+    }
+
+    pub fn set_applier(&self, applier: Weak<dyn PubSubCommandApplier>) -> Result<(), String> {
+        self.command_applier
+            .set(applier)
+            .map_err(|_| "Command applier already set")?;
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    fn get_applier(&self) -> Option<Arc<dyn PubSubCommandApplier>> {
+        self.command_applier.get()?.upgrade()
     }
 }
 
@@ -226,27 +216,27 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
         self
     }
 
-    async fn add_desired_subscriptions(
+    fn add_desired_subscriptions(
         &self,
         channels: HashSet<PubSubChannelOrPattern>,
         subscription_type: PubSubSubscriptionKind,
     ) {
-        let mut desired = self.desired_subscriptions.write().await;
+        let mut desired = self.desired_subscriptions.write().expect(LOCK_ERR);
         desired
             .entry(subscription_type)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .extend(channels);
         drop(desired);
 
-        self.trigger_reconciliation().await;
+        self.trigger_reconciliation();
     }
 
-    async fn remove_desired_subscriptions(
+    fn remove_desired_subscriptions(
         &self,
         channels: Option<HashSet<PubSubChannelOrPattern>>,
         subscription_type: PubSubSubscriptionKind,
     ) {
-        let mut desired = self.desired_subscriptions.write().await;
+        let mut desired = self.desired_subscriptions.write().expect(LOCK_ERR);
         if let Some(channels_to_remove) = channels {
             if let Some(existing) = desired.get_mut(&subscription_type) {
                 for channel in channels_to_remove {
@@ -258,29 +248,29 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
         }
         drop(desired);
 
-        self.trigger_reconciliation().await;
+        self.trigger_reconciliation();
     }
 
-    async fn add_current_subscriptions(
+    fn add_current_subscriptions(
         &self,
         channels: HashSet<PubSubChannelOrPattern>,
         subscription_type: PubSubSubscriptionKind,
         _address: String,
     ) {
-        let mut current = self.actual_subscriptions.write().await;
+        let mut current = self.actual_subscriptions.write().expect(LOCK_ERR);
         current
             .entry(subscription_type)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .extend(channels);
     }
 
-    async fn remove_current_subscriptions(
+    fn remove_current_subscriptions(
         &self,
         channels: HashSet<PubSubChannelOrPattern>,
         subscription_type: PubSubSubscriptionKind,
         _address: String,
     ) {
-        let mut current = self.actual_subscriptions.write().await;
+        let mut current = self.actual_subscriptions.write().expect(LOCK_ERR);
         if let Some(existing) = current.get_mut(&subscription_type) {
             for channel in channels {
                 existing.remove(&channel);
@@ -292,14 +282,13 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
         // No-op, mock doesn't track topology
     }
 
-    async fn get_subscription_state(&self) -> (PubSubSubscriptionInfo, PubSubSubscriptionInfo) {
-        let desired_lock = self.desired_subscriptions.read().await;
-        let actual_lock = self.actual_subscriptions.read().await;
+    fn get_subscription_state(&self) -> (PubSubSubscriptionInfo, PubSubSubscriptionInfo) {
+        let desired_lock = self.desired_subscriptions.read().expect(LOCK_ERR);
+        let actual_lock = self.actual_subscriptions.read().expect(LOCK_ERR);
 
         let mut desired = PubSubSubscriptionInfo::new();
         let mut actual = PubSubSubscriptionInfo::new();
 
-        // Always include Exact and Pattern
         desired.insert(
             PubSubSubscriptionKind::Exact,
             desired_lock
@@ -330,7 +319,6 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
                 .unwrap_or_default(),
         );
 
-        // Only include Sharded if cluster mode
         if self.is_cluster {
             desired.insert(
                 PubSubSubscriptionKind::Sharded,
@@ -363,52 +351,52 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
         }
     }
 
-    async fn set_initial_subscriptions(
+    fn set_initial_subscriptions(
         &self,
         channels: HashSet<PubSubChannelOrPattern>,
         patterns: HashSet<PubSubChannelOrPattern>,
         sharded: HashSet<PubSubChannelOrPattern>,
     ) {
         if !channels.is_empty() {
-            let mut desired = self.desired_subscriptions.write().await;
+            let mut desired = self.desired_subscriptions.write().expect(LOCK_ERR);
             desired
                 .entry(PubSubSubscriptionKind::Exact)
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .extend(channels);
         }
 
         if !patterns.is_empty() {
-            let mut desired = self.desired_subscriptions.write().await;
+            let mut desired = self.desired_subscriptions.write().expect(LOCK_ERR);
             desired
                 .entry(PubSubSubscriptionKind::Pattern)
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .extend(patterns);
         }
 
         if !sharded.is_empty() {
-            let mut desired = self.desired_subscriptions.write().await;
+            let mut desired = self.desired_subscriptions.write().expect(LOCK_ERR);
             desired
                 .entry(PubSubSubscriptionKind::Sharded)
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .extend(sharded);
         }
 
-        if let Err(e) = self.reconcile().await {
+        if let Err(e) = self.reconcile_internal() {
             log_warn(
                 "set_initial_subscriptions",
                 format!("Failed to reconcile initial subscriptions: {e}"),
             );
         }
 
-        self.broker.check_and_record_sync_state(self).await;
+        self.broker.check_and_record_sync_state(self);
     }
 
     fn remove_current_subscriptions_for_addresses(&self, _addresses: &HashSet<String>) {
         // Mock doesn't track by address, no-op
     }
 
-    async fn trigger_reconciliation(&self) {
-        // Mock has its own reconcilliation logic, no-op
+    fn trigger_reconciliation(&self) {
+        self.reconciliation_notify.notify_one();
     }
 }
 
@@ -421,20 +409,24 @@ pub(crate) struct ClientData {
 
 /// Mock PubSub broker that simulates server-side behavior
 pub struct MockPubSubBroker {
-    pub(crate) clients: Arc<RwLock<HashMap<String, ClientData>>>,
-    max_application_delay_ms: Arc<RwLock<u64>>,
-    username_permissions: Arc<RwLock<HashMap<String, bool>>>,
+    pub(crate) clients: Arc<TokioRwLock<HashMap<String, ClientData>>>,
+    max_application_delay_ms: Arc<TokioRwLock<u64>>,
+    username_permissions: Arc<TokioRwLock<HashMap<String, bool>>>,
 }
 
 impl MockPubSubBroker {
     fn new() -> Self {
         let broker = Self {
-            clients: Arc::new(RwLock::new(HashMap::new())),
-            max_application_delay_ms: Arc::new(RwLock::new(50)),
-            username_permissions: Arc::new(RwLock::new(HashMap::new())),
+            clients: Arc::new(TokioRwLock::new(HashMap::new())),
+            max_application_delay_ms: Arc::new(TokioRwLock::new(50)),
+            username_permissions: Arc::new(TokioRwLock::new(HashMap::new())),
         };
         broker.start_reconciliation_loop();
         broker
+    }
+
+    async fn get_max_application_delay_ms(&self) -> u64 {
+        *self.max_application_delay_ms.read().await
     }
 
     fn start_reconciliation_loop(&self) {
@@ -457,7 +449,7 @@ impl MockPubSubBroker {
     }
 
     async fn reconcile_client_static(
-        clients_arc: &Arc<RwLock<HashMap<String, ClientData>>>,
+        clients_arc: &Arc<TokioRwLock<HashMap<String, ClientData>>>,
         client_id: &str,
     ) {
         let synchronizer = {
@@ -466,9 +458,9 @@ impl MockPubSubBroker {
         };
 
         if let Some(sync) = synchronizer {
-            let _ = sync.reconcile().await;
+            let _ = sync.reconcile_internal();
             let broker = get_mock_broker();
-            broker.check_and_record_sync_state(&sync).await;
+            broker.check_and_record_sync_state(&sync);
         }
     }
 
@@ -533,28 +525,22 @@ impl MockPubSubBroker {
 
             "SUBSCRIBE_LAZY" => {
                 self.handle_lazy_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Exact)
-                    .await
             }
             "PSUBSCRIBE_LAZY" => {
                 self.handle_lazy_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Pattern)
-                    .await
             }
             "SSUBSCRIBE_LAZY" => {
                 self.handle_lazy_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Sharded)
-                    .await
             }
 
             "UNSUBSCRIBE_LAZY" => {
                 self.handle_lazy_unsubscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Exact)
-                    .await
             }
             "PUNSUBSCRIBE_LAZY" => {
                 self.handle_lazy_unsubscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Pattern)
-                    .await
             }
             "SUNSUBSCRIBE_LAZY" => {
                 self.handle_lazy_unsubscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Sharded)
-                    .await
             }
 
             "SUBSCRIBE" => {
@@ -591,7 +577,7 @@ impl MockPubSubBroker {
                 .await
             }
 
-            "GET_SUBSCRIPTIONS" => Ok(self.get_subscriptions_as_value(sync.as_ref()).await),
+            "GET_SUBSCRIPTIONS" => Ok(self.get_subscriptions_as_value(sync.as_ref())),
 
             _ => Err(RedisError::from((
                 ErrorKind::ClientError,
@@ -613,7 +599,7 @@ impl MockPubSubBroker {
                 };
 
                 if let Some(sync) = sync {
-                    sync.set_can_subscribe(can_subscribe).await;
+                    sync.set_can_subscribe(can_subscribe);
                 }
 
                 let mut clients = self.clients.write().await;
@@ -690,7 +676,7 @@ impl MockPubSubBroker {
         Value::Map(redis_map)
     }
 
-    async fn handle_lazy_subscribe(
+    fn handle_lazy_subscribe(
         &self,
         sync: Option<&Arc<MockPubSubSynchronizer>>,
         cmd: &Cmd,
@@ -705,14 +691,13 @@ impl MockPubSubBroker {
         }
 
         if let Some(sync) = sync {
-            sync.add_desired_subscriptions(channels.into_iter().collect(), sub_type)
-                .await;
+            sync.add_desired_subscriptions(channels.into_iter().collect(), sub_type);
         }
 
         Ok(Value::Nil)
     }
 
-    async fn handle_lazy_unsubscribe(
+    fn handle_lazy_unsubscribe(
         &self,
         sync: Option<&Arc<MockPubSubSynchronizer>>,
         cmd: &Cmd,
@@ -726,7 +711,7 @@ impl MockPubSubBroker {
         };
 
         if let Some(sync) = sync {
-            sync.remove_desired_subscriptions(channels, sub_type).await;
+            sync.remove_desired_subscriptions(channels, sub_type);
         }
 
         Ok(Value::Nil)
@@ -750,15 +735,14 @@ impl MockPubSubBroker {
             channels.iter().map(|s| s.as_bytes().to_vec()).collect();
 
         if let Some(sync) = sync {
-            sync.add_desired_subscriptions(channels_bytes.clone().into_iter().collect(), sub_type)
-                .await;
+            sync.add_desired_subscriptions(channels_bytes.clone().into_iter().collect(), sub_type);
 
             let start = std::time::Instant::now();
             loop {
                 let actual_set = sync
                     .actual_subscriptions
                     .read()
-                    .await
+                    .expect(LOCK_ERR)
                     .get(&sub_type)
                     .cloned()
                     .unwrap_or_default();
@@ -812,15 +796,14 @@ impl MockPubSubBroker {
             sync.remove_desired_subscriptions(
                 channels_bytes.clone().map(|v| v.into_iter().collect()),
                 sub_type,
-            )
-            .await;
+            );
 
             let start = std::time::Instant::now();
             loop {
                 let actual_set = sync
                     .actual_subscriptions
                     .read()
-                    .await
+                    .expect(LOCK_ERR)
                     .get(&sub_type)
                     .cloned()
                     .unwrap_or_default();
@@ -878,12 +861,9 @@ impl MockPubSubBroker {
         Ok(Value::Int(count))
     }
 
-    async fn get_subscriptions_as_value(
-        &self,
-        sync: Option<&Arc<MockPubSubSynchronizer>>,
-    ) -> Value {
+    fn get_subscriptions_as_value(&self, sync: Option<&Arc<MockPubSubSynchronizer>>) -> Value {
         if let Some(sync) = sync {
-            let (desired, actual) = sync.get_subscription_state().await;
+            let (desired, actual) = sync.get_subscription_state();
 
             let result = vec![
                 Value::BulkString(b"desired".to_vec()),
@@ -912,13 +892,14 @@ impl MockPubSubBroker {
 
         for (client_id, client_data) in clients.iter() {
             let sync = &client_data.synchronizer;
-            let actual = sync.actual_subscriptions.read().await;
+            let actual = sync.actual_subscriptions.read().expect(LOCK_ERR);
 
             if sharded {
                 let actual_sharded = actual
                     .get(&PubSubSubscriptionKind::Sharded)
                     .cloned()
                     .unwrap_or_default();
+                drop(actual); // Release lock before send
                 if actual_sharded.contains(&channel_bytes) {
                     let push_info = create_push_info(channel, message, None, sharded);
                     if let Err(e) = client_data.push_sender.send(push_info) {
@@ -935,6 +916,12 @@ impl MockPubSubBroker {
                     .get(&PubSubSubscriptionKind::Exact)
                     .cloned()
                     .unwrap_or_default();
+                let actual_patterns = actual
+                    .get(&PubSubSubscriptionKind::Pattern)
+                    .cloned()
+                    .unwrap_or_default();
+                drop(actual); // Release lock before send
+
                 if actual_channels.contains(&channel_bytes) {
                     let push_info = create_push_info(channel, message, None, false);
                     if let Err(e) = client_data.push_sender.send(push_info) {
@@ -947,10 +934,6 @@ impl MockPubSubBroker {
                     }
                 }
 
-                let actual_patterns = actual
-                    .get(&PubSubSubscriptionKind::Pattern)
-                    .cloned()
-                    .unwrap_or_default();
                 for pat_bytes in actual_patterns.iter() {
                     let pat = String::from_utf8_lossy(pat_bytes);
                     if glob_match(&pat, channel) {
@@ -971,8 +954,8 @@ impl MockPubSubBroker {
         recipient_count
     }
 
-    pub(crate) async fn check_and_record_sync_state(&self, sync: &MockPubSubSynchronizer) {
-        let is_synced = sync.is_synchronized().await;
+    pub(crate) fn check_and_record_sync_state(&self, sync: &MockPubSubSynchronizer) {
+        let is_synced = sync.is_synchronized();
 
         if is_synced {
             let _ = GlideOpenTelemetry::update_subscription_last_sync_timestamp();
@@ -982,7 +965,7 @@ impl MockPubSubBroker {
             );
         } else {
             let _ = GlideOpenTelemetry::record_subscription_out_of_sync();
-            let (desired, actual) = sync.get_subscription_state().await;
+            let (desired, actual) = sync.get_subscription_state();
             log_debug(
                 "mock_pubsub",
                 format!(
@@ -1072,7 +1055,7 @@ impl MockPubSubBroker {
             let mut clients = self.clients.write().await;
             for (client_id, client) in clients.iter_mut() {
                 if client.username.as_ref() == Some(&username) {
-                    client.synchronizer.set_can_subscribe(can_subscribe).await;
+                    client.synchronizer.set_can_subscribe(can_subscribe);
                     log_debug(
                         "mock_pubsub",
                         format!(
