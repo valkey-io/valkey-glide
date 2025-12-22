@@ -10958,8 +10958,10 @@ export function runBaseTests(config: {
                         // Verify that the cursor is not "0" and values are not included
                         expect(resultCursor).not.toEqual("0");
                         expect(
-                            fieldsArray.every((field) =>
-                                field.startsWith("member"),
+                            fieldsArray.every(
+                                (field) =>
+                                    field.startsWith("member") ||
+                                    charMembers.includes(field),
                             ),
                         ).toBeTruthy();
                     }
