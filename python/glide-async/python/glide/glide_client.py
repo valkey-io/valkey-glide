@@ -653,26 +653,30 @@ class BaseClient(CoreCommands):
 
     async def _process_response(self, response: Response) -> None:
         res_future = self._available_futures.pop(response.callback_idx, None)
-        if res_future is None:
-            # Response for an unknown callback_idx. Log and continue.
-            ClientLogger.log(
-                LogLevel.DEBUG,
-                "orphan response",
-                f"Received response for unknown request: {response.callback_idx}",
-            )
-            return
-        if res_future.done():
+        if res_future is not None and res_future.done():
             # Future is already completed (e.g. request was cancelled while awaiting).
+            # Do not error to keep client in a valid state.
             ClientLogger.log(
                 LogLevel.DEBUG,
-                "orphan response",
+                "completed response",
                 f"Received response for cancelled request: {response.callback_idx}",
             )
             return
-        if response.HasField("closing_error"):
-            err_msg = response.closing_error
+        if not res_future or response.HasField("closing_error"):
+            err_msg = (
+                response.closing_error
+                if response.HasField("closing_error")
+                else f"Client Error - closing due to unknown error. callback index:  {response.callback_idx}"
+            )
             exc = ClosingError(err_msg)
-            res_future.set_exception(exc)
+            if res_future is not None:
+                res_future.set_exception(exc)
+            else:
+                ClientLogger.log(
+                    LogLevel.WARN,
+                    "unhandled response error",
+                    f"Unhandled response error for unknown request: {response.callback_idx}",
+                )
             raise exc
         else:
             self._available_callback_indexes.append(response.callback_idx)
