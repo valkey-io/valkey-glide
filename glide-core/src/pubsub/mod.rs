@@ -1,9 +1,10 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use crate::client::PubSubCommandApplier; // Import from client
+use crate::client::PubSubCommandApplier;
 use redis::PushInfo;
 pub use redis::{
-    PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind, PubSubSynchronizer,
+    ErrorKind, PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind,
+    PubSubSynchronizer, RedisError,
 };
 use std::sync::{Arc, Weak};
 use tokio::sync::mpsc;
@@ -15,7 +16,7 @@ mod mock;
 pub use mock::MockPubSubBroker;
 
 #[cfg(not(feature = "mock-pubsub"))]
-mod real;
+mod synchronizer;
 
 /// Factory function to create a synchronizer
 pub async fn create_pubsub_synchronizer(
@@ -30,7 +31,7 @@ pub async fn create_pubsub_synchronizer(
 
     #[cfg(not(feature = "mock-pubsub"))]
     {
-        real::RealPubSubSynchronizer::create(initial_subscriptions, is_cluster).await
+        synchronizer::GlidePubSubSynchronizer::create(initial_subscriptions, is_cluster).await
     }
 }
 
@@ -38,7 +39,7 @@ pub async fn create_pubsub_synchronizer(
 pub fn set_synchronizer_applier(
     sync: &Arc<dyn PubSubSynchronizer>,
     applier: Weak<dyn PubSubCommandApplier>,
-) -> Result<(), String> {
+) -> Result<(), RedisError> {
     let any = sync.as_any();
 
     #[cfg(feature = "mock-pubsub")]
@@ -50,10 +51,13 @@ pub fn set_synchronizer_applier(
 
     #[cfg(not(feature = "mock-pubsub"))]
     {
-        if let Some(real_sync) = any.downcast_ref::<real::RealPubSubSynchronizer>() {
+        if let Some(real_sync) = any.downcast_ref::<synchronizer::GlidePubSubSynchronizer>() {
             return real_sync.set_applier(applier);
         }
     }
 
-    Err("Unknown synchronizer type".to_string())
+    Err(RedisError::from((
+        ErrorKind::ClientError,
+        "Command applier already set",
+    )))
 }

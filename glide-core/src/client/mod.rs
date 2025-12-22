@@ -570,7 +570,7 @@ impl Client {
                     config,
                     push_sender,
                     iam_manager_ref,
-                    self.pubsub_synchronizer.clone(),
+                    Some(self.pubsub_synchronizer.clone()),
                 )
                 .await
                 .map_err(|e| {
@@ -1428,7 +1428,6 @@ pub enum ConnectionError {
     Timeout,
     IoError(std::io::Error),
     Configuration(String),
-    InitializationError(String),
 }
 
 impl std::fmt::Debug for ConnectionError {
@@ -1439,9 +1438,6 @@ impl std::fmt::Debug for ConnectionError {
             Self::IoError(arg0) => f.debug_tuple("IoError").field(arg0).finish(),
             Self::Timeout => write!(f, "Timeout"),
             Self::Configuration(arg0) => f.debug_tuple("Configuration").field(arg0).finish(),
-            Self::InitializationError(arg0) => {
-                f.debug_tuple("InitializationError").field(arg0).finish()
-            }
         }
     }
 }
@@ -1454,7 +1450,6 @@ impl std::fmt::Display for ConnectionError {
             ConnectionError::IoError(err) => write!(f, "{err}"),
             ConnectionError::Timeout => f.write_str("connection attempt timed out"),
             ConnectionError::Configuration(msg) => write!(f, "configuration error: {msg}"),
-            ConnectionError::InitializationError(err) => write!(f, "initialization error: {err}"),
         }
     }
 }
@@ -1649,9 +1644,15 @@ impl Client {
 
             set_synchronizer_applier(&pubsub_synchronizer, Arc::downgrade(&applier)).map_err(
                 |e| {
-                    ConnectionError::InitializationError(format!(
-                        "Failed to set synchronizer applier: {e}"
-                    ))
+                    if request.cluster_mode_enabled {
+                        ConnectionError::Cluster(e)
+                    } else {
+                        ConnectionError::Standalone(
+                            standalone_client::StandaloneClientConnectionError::FailedConnection(
+                                vec![(None, e)],
+                            ),
+                        )
+                    }
                 },
             )?;
 
@@ -1689,7 +1690,7 @@ impl Client {
                         request,
                         push_sender,
                         iam_token_manager.as_ref(),
-                        pubsub_synchronizer.clone(),
+                        Some(pubsub_synchronizer.clone()),
                     )
                     .await
                     .map_err(ConnectionError::Standalone)?,

@@ -182,11 +182,10 @@ impl MockPubSubSynchronizer {
         Ok(())
     }
 
-    pub fn set_applier(&self, applier: Weak<dyn PubSubCommandApplier>) -> Result<(), String> {
+    pub fn set_applier(&self, applier: Weak<dyn PubSubCommandApplier>) -> Result<(), RedisError> {
         self.command_applier
             .set(applier)
-            .map_err(|_| "Command applier already set")?;
-        Ok(())
+            .map_err(|_| RedisError::from((ErrorKind::ClientError, "Command applier already set")))
     }
 
     #[allow(dead_code)]
