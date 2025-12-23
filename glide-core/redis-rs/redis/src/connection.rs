@@ -958,7 +958,7 @@ fn setup_connection(
         db: connection_info.db,
         pubsub: false,
         protocol: connection_info.protocol,
-        push_manager: PushManager::new(),
+        push_manager: PushManager::new(None, None, None),
     };
 
     if connection_info.protocol != ProtocolVersion::RESP2 {

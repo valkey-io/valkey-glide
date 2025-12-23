@@ -46,8 +46,8 @@ from glide_shared.constants import (
 )
 from glide_shared.exceptions import (
     ClosingError,
-    ConfigurationError,
     ConnectionError,
+    RequestError,
     get_request_error_class,
 )
 from glide_shared.protobuf.command_request_pb2 import (
@@ -532,16 +532,6 @@ class BaseClient(CoreCommands):
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
 
-        if not self.config._is_pubsub_configured():
-            raise ConfigurationError(
-                "The operation will never complete since there was no pubsub subscriptions applied to the client."
-            )
-
-        if self.config._get_pubsub_callback_and_context()[0] is not None:
-            raise ConfigurationError(
-                "The operation will never complete since messages will be passed to the configured callback."
-            )
-
         # locking might not be required
         response_future: "TFuture" = _get_new_future_instance()
         try:
@@ -557,16 +547,6 @@ class BaseClient(CoreCommands):
         if self._is_closed:
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
-            )
-
-        if not self.config._is_pubsub_configured():
-            raise ConfigurationError(
-                "The operation will never succeed since there was no pubsbub subscriptions applied to the client."
-            )
-
-        if self.config._get_pubsub_callback_and_context()[0] is not None:
-            raise ConfigurationError(
-                "The operation will never succeed since messages will be passed to the configured callback."
             )
 
         # locking might not be required
@@ -788,6 +768,56 @@ class BaseClient(CoreCommands):
         response = await self._write_request_await_response(request)
         return response
 
+    def _parse_pubsub_state(self, result: TResult, is_cluster: bool) -> Union[
+        GlideClientConfiguration.PubSubState,
+        GlideClusterClientConfiguration.PubSubState,
+    ]:
+        """Parse subscription state from Rust response"""
+        if not isinstance(result, list) or len(result) != 4:
+            raise RequestError("Invalid response format from GetSubscriptions")
+
+        # Result format: ["desired", {dict}, "actual", {dict}]
+        desired_dict = cast(Dict[bytes, List[bytes]], result[1])
+        actual_dict = cast(Dict[bytes, List[bytes]], result[3])
+
+        if is_cluster:
+            PubSubChannelModes: Any = GlideClusterClientConfiguration.PubSubChannelModes
+            StateClass: Any = GlideClusterClientConfiguration.PubSubState
+        else:
+            PubSubChannelModes = GlideClientConfiguration.PubSubChannelModes
+            StateClass = GlideClientConfiguration.PubSubState
+
+        # Convert bytes keys/values to strings and map to enums
+        desired_subscriptions = {}
+        actual_subscriptions = {}
+
+        for key_bytes, value_list in desired_dict.items():
+            key = key_bytes.decode()
+            values = {v.decode() for v in value_list}
+
+            if key == "Exact":
+                desired_subscriptions[PubSubChannelModes.Exact] = values
+            elif key == "Pattern":
+                desired_subscriptions[PubSubChannelModes.Pattern] = values
+            elif key == "Sharded" and is_cluster:
+                desired_subscriptions[PubSubChannelModes.Sharded] = values
+
+        for key_bytes, value_list in actual_dict.items():
+            key = key_bytes.decode()
+            values = {v.decode() for v in value_list}
+
+            if key == "Exact":
+                actual_subscriptions[PubSubChannelModes.Exact] = values
+            elif key == "Pattern":
+                actual_subscriptions[PubSubChannelModes.Pattern] = values
+            elif key == "Sharded" and is_cluster:
+                actual_subscriptions[PubSubChannelModes.Sharded] = values
+
+        return StateClass(
+            desired_subscriptions=desired_subscriptions,
+            actual_subscriptions=actual_subscriptions,
+        )
+
 
 class GlideClusterClient(BaseClient, ClusterCommands):
     """
@@ -869,8 +899,10 @@ class GlideClusterClient(BaseClient, ClusterCommands):
             >>> if missing:
             >>>     print(f"Not yet subscribed to: {missing}")
         """
-        raise NotImplementedError(
-            "get_active_subscriptions will be implemented in a future PR"
+        result = await self._execute_command(RequestType.GetSubscriptions, [])
+        return cast(
+            GlideClusterClientConfiguration.PubSubState,
+            self._parse_pubsub_state(result, is_cluster=True),
         )
 
 
@@ -922,8 +954,10 @@ class GlideClient(BaseClient, StandaloneCommands):
             >>> if missing:
             >>>     print(f"Not yet subscribed to: {missing}")
         """
-        raise NotImplementedError(
-            "get_active_subscriptions will be implemented in a future PR"
+        result = await self._execute_command(RequestType.GetSubscriptions, [])
+        return cast(
+            GlideClientConfiguration.PubSubState,
+            self._parse_pubsub_state(result, is_cluster=False),
         )
 
 

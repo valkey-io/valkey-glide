@@ -611,10 +611,11 @@ impl MultiplexedConnection {
         let (mut pipeline, driver) =
             Pipeline::new(codec, glide_connection_options.disconnect_notifier);
         let driver = Box::pin(driver);
-        let pm = PushManager::default();
-        if let Some(sender) = glide_connection_options.push_sender {
-            pm.replace_sender(sender);
-        }
+        let pm = PushManager::new(
+            glide_connection_options.push_sender,
+            glide_connection_options.pubsub_synchronizer,
+            Some(connection_info.addr.to_string()),
+        );
 
         pipeline.set_push_manager(pm.clone()).await;
 

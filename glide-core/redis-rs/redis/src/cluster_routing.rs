@@ -1247,7 +1247,7 @@ const WRITE_LK_ERR_SHARDADDRS: &str = "Failed to acquire write lock for ShardAdd
 /// to avoid the need to choose a replica each time
 /// a command is executed
 #[derive(Debug)]
-pub(crate) struct ShardAddrs {
+pub struct ShardAddrs {
     primary: RwLock<Arc<String>>,
     replicas: RwLock<Vec<Arc<String>>>,
 }
