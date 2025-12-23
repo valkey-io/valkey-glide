@@ -846,7 +846,7 @@ mod cluster_async {
             .read_from(strategy)
             .build()
             .unwrap()
-            .get_async_connection(None)
+            .get_async_connection(None, None)
             .await
             .unwrap();
 
@@ -949,7 +949,7 @@ mod cluster_async {
             .read_from(strategy)
             .build()
             .unwrap()
-            .get_async_connection(None)
+            .get_async_connection(None, None)
             .await
             .unwrap();
 
@@ -1054,7 +1054,7 @@ mod cluster_async {
             )
             .build()
             .unwrap()
-            .get_async_connection(None)
+            .get_async_connection(None, None)
             .await
             .unwrap();
 
@@ -1232,7 +1232,7 @@ mod cluster_async {
             let client = ClusterClient::builder(cluster_addresses.clone())
                 .read_from_replicas()
                 .build()?;
-            let mut connection = client.get_async_connection(None).await?;
+            let mut connection = client.get_async_connection(None, None).await?;
 
             let route_to_all_nodes = redis::cluster_routing::MultipleNodeRoutingInfo::AllNodes;
             let routing = RoutingInfo::MultiNode((route_to_all_nodes, None));
@@ -2269,7 +2269,7 @@ mod cluster_async {
                         .build()
                         .unwrap();
 
-                let mut conn = client.get_async_connection(None).await.unwrap();
+                let mut conn = client.get_async_connection(None, None).await.unwrap();
 
                 // Disable full coverage requirement
                 let _ = conn
@@ -6825,7 +6825,10 @@ mod cluster_async {
                 .build()
                 .unwrap();
 
-            let mut connection = test_user_client.get_async_connection(None).await.unwrap();
+            let mut connection = test_user_client
+                .get_async_connection(None, None)
+                .await
+                .unwrap();
 
             // Now revoke PING permission
             let _: () = redis::cmd("ACL")
@@ -6887,7 +6890,7 @@ mod cluster_async {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
                 let client = create_cluster_client_from_cluster(&cluster, true).unwrap();
-                let mut connection = client.get_async_connection(None).await.unwrap();
+                let mut connection = client.get_async_connection(None, None).await.unwrap();
                 cmd("SET")
                     .arg("test")
                     .arg("test_data")
@@ -6910,7 +6913,7 @@ mod cluster_async {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
             let client = create_cluster_client_from_cluster(&cluster, false).unwrap();
-            let connection = client.get_async_connection(None).await;
+            let connection = client.get_async_connection(None, None).await;
             match cluster.cluster.servers.first().unwrap().connection_info() {
                 ConnectionInfo {
                     addr: redis::ConnectionAddr::TcpTls { .. },

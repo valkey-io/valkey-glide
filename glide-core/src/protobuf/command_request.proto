@@ -238,6 +238,15 @@ enum RequestType {
     SUnsubscribe                   = 912;
     Unsubscribe                    = 913;
 
+    // Dynamic Pub/Sub commands (Lazy variants)
+    SubscribeLazy                  = 914;
+    UnsubscribeLazy                = 915;
+    PSubscribeLazy                 = 916;
+    PUnsubscribeLazy               = 917;
+    SSubscribeLazy                 = 918;
+    SUnsubscribeLazy               = 919;
+    GetSubscriptions               = 920;
+
     //// Scripting and Functions commands
 
     Eval                           = 1001;

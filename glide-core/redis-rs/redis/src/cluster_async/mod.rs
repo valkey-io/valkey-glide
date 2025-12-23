@@ -15,7 +15,7 @@
 //! async fn fetch_an_integer() -> String {
 //!     let nodes = vec!["redis://127.0.0.1/"];
 //!     let client = ClusterClient::new(nodes).unwrap();
-//!     let mut connection = client.get_async_connection(None).await.unwrap();
+//!     let mut connection = client.get_async_connection(None, None).await.unwrap();
 //!     let _: () = connection.set("test", "test_data").await.unwrap();
 //!     let rv: String = connection.get("test").await.unwrap();
 //!     return rv;
@@ -137,21 +137,27 @@ where
         initial_nodes: &[ConnectionInfo],
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
     ) -> RedisResult<ClusterConnection<C>> {
-        ClusterConnInner::new(initial_nodes, cluster_params, push_sender)
-            .await
-            .map(|inner| {
-                let (tx, mut rx) = mpsc::channel::<Message<_>>(100);
-                let stream = async move {
-                    let _ = stream::poll_fn(move |cx| rx.poll_recv(cx))
-                        .map(Ok)
-                        .forward(inner)
-                        .await;
-                };
-                #[cfg(feature = "tokio-comp")]
-                tokio::spawn(stream);
-                ClusterConnection(tx)
-            })
+        ClusterConnInner::new(
+            initial_nodes,
+            cluster_params,
+            push_sender,
+            pubsub_synchronizer,
+        )
+        .await
+        .map(|inner| {
+            let (tx, mut rx) = mpsc::channel::<Message<_>>(100);
+            let stream = async move {
+                let _ = stream::poll_fn(move |cx| rx.poll_recv(cx))
+                    .map(Ok)
+                    .forward(inner)
+                    .await;
+            };
+            #[cfg(feature = "tokio-comp")]
+            tokio::spawn(stream);
+            ClusterConnection(tx)
+        })
     }
 
     /// Special handling for `SCAN` command, using `cluster_scan_with_pattern`.
@@ -183,7 +189,7 @@ where
     /// async fn scan_all_cluster() -> Vec<String> {
     ///     let nodes = vec!["redis://127.0.0.1/"];
     ///     let client = ClusterClient::new(nodes).unwrap();
-    ///     let mut connection = client.get_async_connection(None).await.unwrap();
+    ///     let mut connection = client.get_async_connection(None, None).await.unwrap();
     ///     let mut scan_state_rc = ScanStateRC::new();
     ///     let mut keys: Vec<String> = vec![];
     ///     let cluster_scan_args = ClusterScanArgs::builder().with_count(1000).with_object_type(ObjectType::String).build();
@@ -1108,6 +1114,7 @@ where
         initial_nodes: &[ConnectionInfo],
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
     ) -> RedisResult<Disposable<Self>> {
         let disconnect_notifier = {
             #[cfg(feature = "tokio-comp")]
@@ -1133,6 +1140,7 @@ where
             connection_timeout: Some(cluster_params.connection_timeout),
             connection_retry_strategy: Some(connection_retry_strategy),
             tcp_nodelay: cluster_params.tcp_nodelay,
+            pubsub_synchronizer,
         };
 
         let connections = Self::create_initial_connections(
@@ -1406,6 +1414,11 @@ where
                 false,
             )
             .await;
+
+            // Trigger reconciliation after connections are refreshed
+            if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
+                sync.trigger_reconciliation();
+            }
         }
     }
 
@@ -1446,6 +1459,10 @@ where
         check_existing_conn: bool,
     ) -> Vec<Arc<Notify>> {
         debug!("Triggering refresh connections tasks to {:?} ", addresses);
+
+        if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
+            sync.remove_current_subscriptions_for_addresses(&addresses);
+        };
 
         let mut notifiers = Vec::<Arc<Notify>>::new();
 
@@ -2322,6 +2339,14 @@ where
             read_from_replicas,
             topology_hash,
         );
+
+        // Notify the PubSub synchronizer about the new topology (using same lock)
+        // Since handle_topology_refresh is sync, no other task can benefit from us
+        // holding a read lock instead - hence, we continue with the write lock.
+        if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
+            sync.handle_topology_refresh(&write_guard.slot_map);
+        }
+
         Ok(())
     }
 

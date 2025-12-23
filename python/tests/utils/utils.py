@@ -16,6 +16,7 @@ from typing import (
     cast,
 )
 
+import anyio
 import pytest
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
@@ -106,6 +107,8 @@ INITIAL_PASSWORD = "initial_password"
 NEW_PASSWORD = "new_secure_password"
 WRONG_PASSWORD = "wrong_password"
 
+ClusterPubSubChannelModes = GlideClusterClientConfiguration.PubSubChannelModes
+StandalonePubSubChannelModes = GlideClientConfiguration.PubSubChannelModes
 
 version_str = ""
 
@@ -1805,3 +1808,85 @@ async def create_client_with_retry(config, max_retries: int = 3):
             base_delay = 2**i
             jitter = base_delay * random.uniform(-0.25, 0.25)
             time.sleep(base_delay + jitter)
+            
+async def wait_for_subscription_state(
+    client: TGlideClient,
+    expected_channels: Optional[Set[str]] = None,
+    expected_patterns: Optional[Set[str]] = None,
+    expected_sharded: Optional[Set[str]] = None,
+    timeout_ms: int = 5000,
+    poll_interval: float = 0.1,
+) -> Dict[str, Set[str]]:
+    """
+    Helper function that polls get_subscriptions until expected actual state is reached.
+
+    Returns:
+        A dictionary with:
+            - "channels": Set of exact channel names
+            - "patterns": Set of channel patterns
+            - "sharded_channels": Set of sharded channel names
+
+    Raises:
+        TimeoutError: If the expected state is not reached within timeout_ms
+    """
+
+    timeout_seconds = timeout_ms / 1000.0
+    start_time = anyio.current_time()
+    last_actual_state = None
+
+    while True:
+        elapsed = anyio.current_time() - start_time
+        if elapsed > timeout_seconds:
+            error_msg = (
+                f"Subscription state not reached within {timeout_ms}ms.\n"
+                f"Expected - channels: {expected_channels}, patterns: {expected_patterns}, "
+                f"sharded: {expected_sharded}\n"
+            )
+            if last_actual_state:
+                error_msg += (
+                    f"Actual - channels: {last_actual_state.get('channels', set())}, "
+                    f"patterns: {last_actual_state.get('patterns', set())}, "
+                    f"sharded: {last_actual_state.get('sharded_channels', set())}\n"
+                )
+            raise TimeoutError(error_msg)
+
+        try:
+            state = await client.get_subscriptions()
+            actual_subscriptions = state.actual_subscriptions
+
+            modes: Union[
+                type[GlideClusterClientConfiguration.PubSubChannelModes],
+                type[GlideClientConfiguration.PubSubChannelModes],
+            ]
+
+            if isinstance(client, GlideClusterClient):
+                modes = GlideClusterClientConfiguration.PubSubChannelModes
+            else:
+                modes = GlideClientConfiguration.PubSubChannelModes
+
+            channels_actual = actual_subscriptions.get(modes.Exact, set())  # type: ignore
+            patterns_actual = actual_subscriptions.get(modes.Pattern, set())  # type: ignore
+            sharded_actual = (
+                actual_subscriptions.get(modes.Sharded, set())  # type: ignore
+                if isinstance(client, GlideClusterClient)
+                else set()
+            )
+
+            last_actual_state = {
+                "channels": channels_actual,
+                "patterns": patterns_actual,
+                "sharded_channels": sharded_actual,
+            }
+
+            if (
+                (expected_channels is None or channels_actual == expected_channels)
+                and (expected_patterns is None or patterns_actual == expected_patterns)
+                and (expected_sharded is None or sharded_actual == expected_sharded)
+            ):
+                return last_actual_state
+
+        except Exception as e:
+            if not isinstance(e, (ConnectionError, TimeoutError)):
+                raise
+
+        await anyio.sleep(poll_interval)
