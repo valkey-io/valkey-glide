@@ -103,6 +103,8 @@ message ConnectionRequest {
     string lib_name = 19;
     repeated bytes root_certs = 20;
     optional CompressionConfig compression_config = 21;
+    bytes client_cert = 22;
+    bytes client_key = 23;
 }
 
 message ConnectionRetryStrategy {
