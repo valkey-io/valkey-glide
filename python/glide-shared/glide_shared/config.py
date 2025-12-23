@@ -767,6 +767,7 @@ class BaseClientConfiguration:
             request.compression_config.CopyFrom(self.compression._to_protobuf())
         return request
 
+    # TODO: remove this function once dynamic pubsub is implemented for the python wrappers
     def _is_pubsub_configured(self) -> bool:
         return False
 
@@ -948,6 +949,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
 
         return request
 
+    # TODO: remove this function once dynamic pubsub is implemented for the python wrappers
     def _is_pubsub_configured(self) -> bool:
         return self.pubsub_subscriptions is not None
 
@@ -1176,6 +1178,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             request.lazy_connect = self.lazy_connect
         return request
 
+    # TODO: remove this function once dynamic pubsub is implemented for the python wrappers
     def _is_pubsub_configured(self) -> bool:
         return self.pubsub_subscriptions is not None
 

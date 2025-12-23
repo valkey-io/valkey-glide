@@ -413,7 +413,10 @@ impl TestClusterContext {
         &self,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> redis::cluster_async::ClusterConnection {
-        self.client.get_async_connection(push_sender).await.unwrap()
+        self.client
+            .get_async_connection(push_sender, None)
+            .await
+            .unwrap()
     }
 
     #[cfg(feature = "cluster-async")]
