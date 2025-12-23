@@ -18,8 +18,8 @@ pub struct PushInfo {
 #[derive(Clone, Default)]
 pub struct PushManager {
     sender: Arc<ArcSwap<Option<mpsc::UnboundedSender<PushInfo>>>>,
-    pubsub_synchronizer: Arc<ArcSwap<Option<Arc<dyn PubSubSynchronizer>>>>,
-    address: Arc<ArcSwap<Option<String>>>,
+    pubsub_synchronizer: Option<Arc<dyn PubSubSynchronizer>>,
+    address: Option<String>,
 }
 
 impl PushManager {
@@ -31,8 +31,8 @@ impl PushManager {
     ) -> Self {
         PushManager {
             sender: Arc::new(ArcSwap::new(Arc::new(sender))),
-            pubsub_synchronizer: Arc::new(ArcSwap::new(Arc::new(synchronizer))),
-            address: Arc::new(ArcSwap::new(Arc::new(address))),
+            pubsub_synchronizer: synchronizer,
+            address,
         }
     }
 
@@ -59,10 +59,8 @@ impl PushManager {
                 }
             }
 
-            let sync_guard = self.pubsub_synchronizer.load();
-            if let Some(sync) = sync_guard.as_ref() {
-                let address = self.address.load().as_ref().clone();
-                Self::handle_pubsub_push(sync, kind, data, address);
+            if let Some(sync) = &self.pubsub_synchronizer {
+                Self::handle_pubsub_push(sync, kind, data, self.address.clone());
             }
         }
     }
@@ -114,7 +112,7 @@ impl PushManager {
 
     /// Get the address associated with this PushManager
     pub fn get_address(&self) -> Option<String> {
-        self.address.load().as_ref().clone()
+        self.address.clone()
     }
 }
 
