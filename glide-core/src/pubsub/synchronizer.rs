@@ -3,8 +3,8 @@
 use crate::client::PubSubCommandApplier;
 use async_trait::async_trait;
 use redis::{
-    ErrorKind, PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind,
-    PubSubSynchronizer, RedisError, SlotMap,
+    PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind, PubSubSynchronizer,
+    SlotMap,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock, Weak};
@@ -12,7 +12,7 @@ use std::sync::{Arc, RwLock, Weak};
 /// Real implementation of PubSub synchronizer (stub for now)
 #[allow(dead_code)]
 pub struct GlidePubSubSynchronizer {
-    command_applier: once_cell::sync::OnceCell<Weak<dyn PubSubCommandApplier>>,
+    command_applier: RwLock<Option<Weak<dyn PubSubCommandApplier>>>,
     is_cluster: bool,
     desired_subscriptions: RwLock<redis::PubSubSubscriptionInfo>,
     current_subscriptions: RwLock<redis::PubSubSubscriptionInfo>,
@@ -24,17 +24,16 @@ impl GlidePubSubSynchronizer {
         is_cluster: bool,
     ) -> Arc<dyn PubSubSynchronizer> {
         Arc::new(Self {
-            command_applier: once_cell::sync::OnceCell::new(),
+            command_applier: RwLock::new(None),
             is_cluster,
             desired_subscriptions: RwLock::new(initial_subscriptions.unwrap_or_default()),
             current_subscriptions: RwLock::new(Default::default()),
         })
     }
 
-    pub fn set_applier(&self, applier: Weak<dyn PubSubCommandApplier>) -> Result<(), RedisError> {
-        self.command_applier
-            .set(applier)
-            .map_err(|_| RedisError::from((ErrorKind::ClientError, "Command applier already set")))
+    pub fn set_applier(&self, applier: Weak<dyn PubSubCommandApplier>) {
+        let mut guard = self.command_applier.write().expect("Lock poisoned");
+        *guard = Some(applier);
     }
 }
 

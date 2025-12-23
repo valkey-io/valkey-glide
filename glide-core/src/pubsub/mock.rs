@@ -34,7 +34,7 @@ const LOCK_ERR: &str = "Lock poisoned";
 /// Mock implementation of PubSub synchronizer
 pub struct MockPubSubSynchronizer {
     client_id: String,
-    command_applier: once_cell::sync::OnceCell<Weak<dyn PubSubCommandApplier>>,
+    command_applier: RwLock<Option<Weak<dyn PubSubCommandApplier>>>,
     is_cluster: bool,
 
     desired_subscriptions: RwLock<PubSubSubscriptionInfo>,
@@ -55,7 +55,7 @@ impl MockPubSubSynchronizer {
     ) -> Arc<Self> {
         Arc::new(Self {
             client_id,
-            command_applier: once_cell::sync::OnceCell::new(),
+            command_applier: RwLock::new(None),
             is_cluster,
             desired_subscriptions: RwLock::new(HashMap::new()),
             actual_subscriptions: RwLock::new(HashMap::new()),
@@ -151,7 +151,7 @@ impl MockPubSubSynchronizer {
                         format!("Reconciliation failed for client {}: {}", sync.client_id, e),
                     );
                 }
-                broker.check_and_record_sync_state(&sync);
+                sync.check_and_record_sync_state();
                 complete_notify.notify_waiters();
             }
         });
@@ -182,15 +182,40 @@ impl MockPubSubSynchronizer {
         Ok(())
     }
 
-    pub fn set_applier(&self, applier: Weak<dyn PubSubCommandApplier>) -> Result<(), RedisError> {
-        self.command_applier
-            .set(applier)
-            .map_err(|_| RedisError::from((ErrorKind::ClientError, "Command applier already set")))
+    pub fn set_applier(&self, applier: Weak<dyn PubSubCommandApplier>) {
+        let mut guard = self.command_applier.write().expect("Lock poisoned");
+        *guard = Some(applier);
     }
 
     #[allow(dead_code)]
     fn get_applier(&self) -> Option<Arc<dyn PubSubCommandApplier>> {
-        self.command_applier.get()?.upgrade()
+        self.command_applier
+            .read()
+            .expect("Lock poisoned")
+            .as_ref()
+            .and_then(|weak| weak.upgrade())
+    }
+
+    /// Check sync state and update metrics accordingly
+    pub(crate) fn check_and_record_sync_state(&self) {
+        let is_synced = self.is_synchronized();
+        if is_synced {
+            let _ = GlideOpenTelemetry::update_subscription_last_sync_timestamp();
+            log_debug(
+                "mock_pubsub",
+                format!("Client {} subscriptions in sync", self.client_id),
+            );
+        } else {
+            let _ = GlideOpenTelemetry::record_subscription_out_of_sync();
+            let (desired, actual) = self.get_subscription_state();
+            log_debug(
+                "mock_pubsub",
+                format!(
+                    "Client {} subscriptions out of sync - desired: {:?}, actual: {:?}",
+                    self.client_id, desired, actual
+                ),
+            );
+        }
     }
 }
 
@@ -387,7 +412,7 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
             );
         }
 
-        self.broker.check_and_record_sync_state(self);
+        self.check_and_record_sync_state();
     }
 
     fn remove_current_subscriptions_for_addresses(&self, _addresses: &HashSet<String>) {
@@ -458,8 +483,7 @@ impl MockPubSubBroker {
 
         if let Some(sync) = synchronizer {
             let _ = sync.reconcile_internal();
-            let broker = get_mock_broker();
-            broker.check_and_record_sync_state(&sync);
+            sync.check_and_record_sync_state();
         }
     }
 
@@ -951,28 +975,6 @@ impl MockPubSubBroker {
         }
 
         recipient_count
-    }
-
-    pub(crate) fn check_and_record_sync_state(&self, sync: &MockPubSubSynchronizer) {
-        let is_synced = sync.is_synchronized();
-
-        if is_synced {
-            let _ = GlideOpenTelemetry::update_subscription_last_sync_timestamp();
-            log_debug(
-                "mock_pubsub",
-                format!("Client {} subscriptions in sync", sync.client_id),
-            );
-        } else {
-            let _ = GlideOpenTelemetry::record_subscription_out_of_sync();
-            let (desired, actual) = sync.get_subscription_state();
-            log_debug(
-                "mock_pubsub",
-                format!(
-                    "Client {} subscriptions out of sync - desired: {:?}, actual: {:?}",
-                    sync.client_id, desired, actual
-                ),
-            );
-        }
     }
 
     pub fn is_acl_pubsub_permission_command(cmd: &Cmd) -> bool {

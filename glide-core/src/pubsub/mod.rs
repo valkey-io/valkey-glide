@@ -39,25 +39,22 @@ pub async fn create_pubsub_synchronizer(
 pub fn set_synchronizer_applier(
     sync: &Arc<dyn PubSubSynchronizer>,
     applier: Weak<dyn PubSubCommandApplier>,
-) -> Result<(), RedisError> {
+) {
     let any = sync.as_any();
 
     #[cfg(feature = "mock-pubsub")]
     {
-        if let Some(mock_sync) = any.downcast_ref::<mock::MockPubSubSynchronizer>() {
-            return mock_sync.set_applier(applier);
-        }
+        let mock_sync = any
+            .downcast_ref::<mock::MockPubSubSynchronizer>()
+            .expect("Expected MockPubSubSynchronizer");
+        mock_sync.set_applier(applier);
     }
 
     #[cfg(not(feature = "mock-pubsub"))]
     {
-        if let Some(real_sync) = any.downcast_ref::<synchronizer::GlidePubSubSynchronizer>() {
-            return real_sync.set_applier(applier);
-        }
+        let real_sync = any
+            .downcast_ref::<synchronizer::GlidePubSubSynchronizer>()
+            .expect("Expected GlidePubSubSynchronizer");
+        real_sync.set_applier(applier);
     }
-
-    Err(RedisError::from((
-        ErrorKind::ClientError,
-        "Command applier already set",
-    )))
 }

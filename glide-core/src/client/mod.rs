@@ -35,9 +35,9 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
-use crate::request_type::RequestType;
 use crate::pubsub::set_synchronizer_applier;
 use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
+use crate::request_type::RequestType;
 use redis::InfoDict;
 use std::future::Future;
 use std::pin::Pin;
@@ -1640,21 +1640,10 @@ impl Client {
 
             let client_arc = Arc::new(RwLock::new(client));
 
+            //  Set the client as the command applier in the synchronizer
+            //  so the synchronizer can send pubsub commands through the client
             let applier: Arc<dyn PubSubCommandApplier> = client_arc.clone();
-
-            set_synchronizer_applier(&pubsub_synchronizer, Arc::downgrade(&applier)).map_err(
-                |e| {
-                    if request.cluster_mode_enabled {
-                        ConnectionError::Cluster(e)
-                    } else {
-                        ConnectionError::Standalone(
-                            standalone_client::StandaloneClientConnectionError::FailedConnection(
-                                vec![(None, e)],
-                            ),
-                        )
-                    }
-                },
-            )?;
+            set_synchronizer_applier(&pubsub_synchronizer, Arc::downgrade(&applier));
 
             // Create IAM token manager if needed, passing a strong Arc to the callback
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
