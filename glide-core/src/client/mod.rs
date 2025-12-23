@@ -1216,32 +1216,59 @@ async fn create_cluster_client(
     let tls_mode = request.tls_mode.unwrap_or_default();
 
     let valkey_connection_info = get_valkey_connection_info(&request, iam_token_manager).await;
-    let (tls_params, tls_certificates) = if !request.root_certs.is_empty() {
-        if tls_mode == TlsMode::NoTls {
-            return Err(RedisError::from((
-                ErrorKind::InvalidClientConfig,
-                "Custom root certificates provided but TLS is disabled",
-            )));
-        }
-        let mut combined_certs = Vec::new();
-        for cert in &request.root_certs {
-            if cert.is_empty() {
+
+    let has_client_cert = !request.client_cert.is_empty();
+    let has_client_key = !request.client_key.is_empty();
+    if has_client_cert != has_client_key {
+        return Err(RedisError::from((
+            ErrorKind::InvalidClientConfig,
+            "client_cert and client_key must both be provided or both be empty",
+        )));
+    }
+
+    let (tls_params, tls_certificates) =
+        if !request.root_certs.is_empty() || has_client_cert || has_client_key {
+            if tls_mode == TlsMode::NoTls {
                 return Err(RedisError::from((
                     ErrorKind::InvalidClientConfig,
-                    "Root certificate cannot be empty byte string",
+                    "TLS certificates provided but TLS is disabled",
                 )));
             }
-            combined_certs.extend_from_slice(cert);
-        }
-        let tls_certs = TlsCertificates {
-            client_tls: None,
-            root_cert: Some(combined_certs),
+
+            let root_cert = if !request.root_certs.is_empty() {
+                let mut combined_certs = Vec::new();
+                for cert in &request.root_certs {
+                    if cert.is_empty() {
+                        return Err(RedisError::from((
+                            ErrorKind::InvalidClientConfig,
+                            "TLS certificates provided but TLS is disabled",
+                        )));
+                    }
+                    combined_certs.extend_from_slice(cert);
+                }
+                Some(combined_certs)
+            } else {
+                None
+            };
+
+            let client_tls = if has_client_cert && has_client_key {
+                Some(redis::ClientTlsConfig {
+                    client_cert: request.client_cert.clone(),
+                    client_key: request.client_key.clone(),
+                })
+            } else {
+                None
+            };
+
+            let tls_certs = TlsCertificates {
+                client_tls,
+                root_cert,
+            };
+            let params = retrieve_tls_certificates(tls_certs.clone())?;
+            (Some(params), Some(tls_certs))
+        } else {
+            (None, None)
         };
-        let params = retrieve_tls_certificates(tls_certs.clone())?;
-        (Some(params), Some(tls_certs))
-    } else {
-        (None, None)
-    };
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
