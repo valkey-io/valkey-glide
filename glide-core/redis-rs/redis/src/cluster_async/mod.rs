@@ -1132,6 +1132,7 @@ where
             discover_az,
             connection_timeout: Some(cluster_params.connection_timeout),
             connection_retry_strategy: Some(connection_retry_strategy),
+            tcp_nodelay: None,
         };
 
         let connections = Self::create_initial_connections(

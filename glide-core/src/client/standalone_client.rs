@@ -152,6 +152,8 @@ impl StandaloneClient {
             DEFAULT_CONNECTION_TIMEOUT,
         );
 
+        let tcp_nodelay = connection_request.tcp_nodelay;
+
         let has_root_certs = !connection_request.root_certs.is_empty();
         let has_client_cert = !connection_request.client_cert.is_empty();
         let has_client_key = !connection_request.client_key.is_empty();
@@ -221,9 +223,10 @@ impl StandaloneClient {
                 let discover = discover_az;
                 let timeout = connection_timeout;
                 let params = tls_params.clone();
+                let nodelay = tcp_nodelay;
                 async move {
                     get_connection_and_replication_info(
-                        &address, &retry, &info, tls, &sender, discover, timeout, params,
+                        &address, &retry, &info, tls, &sender, discover, timeout, params, nodelay,
                     )
                     .await
                     .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -721,6 +724,7 @@ async fn get_connection_and_replication_info(
     discover_az: bool,
     connection_timeout: Duration,
     tls_params: Option<redis::TlsConnParams>,
+    tcp_nodelay: Option<bool>,
 ) -> Result<(ReconnectingConnection, Value), (ReconnectingConnection, RedisError)> {
     let reconnecting_connection = ReconnectingConnection::new(
         address,
@@ -731,6 +735,7 @@ async fn get_connection_and_replication_info(
         discover_az,
         connection_timeout,
         tls_params,
+        tcp_nodelay,
     )
     .await?;
 
