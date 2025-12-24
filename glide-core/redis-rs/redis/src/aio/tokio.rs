@@ -113,7 +113,9 @@ impl AsyncRead for Tokio {
 #[async_trait]
 impl RedisRuntime for Tokio {
     async fn connect_tcp(socket_addr: SocketAddr, tcp_nodelay: bool) -> RedisResult<Self> {
-        Ok(connect_tcp(&socket_addr, tcp_nodelay).await.map(Tokio::Tcp)?)
+        Ok(connect_tcp(&socket_addr, tcp_nodelay)
+            .await
+            .map(Tokio::Tcp)?)
     }
 
     async fn connect_tcp_tls(

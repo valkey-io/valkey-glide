@@ -431,7 +431,9 @@ impl Client {
         T: crate::aio::RedisRuntime,
     {
         let tcp_nodelay = glide_connection_options.tcp_nodelay.unwrap_or(true);
-        let (con, ip) = self.get_simple_async_connection::<T>(socket_addr, tcp_nodelay).await?;
+        let (con, ip) = self
+            .get_simple_async_connection::<T>(socket_addr, tcp_nodelay)
+            .await?;
         crate::aio::MultiplexedConnection::new_with_response_timeout(
             &self.connection_info,
             con,
@@ -454,7 +456,8 @@ impl Client {
         T: crate::aio::RedisRuntime,
     {
         let (conn, ip) =
-            crate::aio::connect_simple::<T>(&self.connection_info, socket_addr, tcp_nodelay).await?;
+            crate::aio::connect_simple::<T>(&self.connection_info, socket_addr, tcp_nodelay)
+                .await?;
         Ok((conn.boxed(), ip))
     }
 
