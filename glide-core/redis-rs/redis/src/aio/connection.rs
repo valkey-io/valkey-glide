@@ -451,7 +451,8 @@ pub(crate) async fn connect_simple<T: RedisRuntime>(
         } => {
             if let Some(socket_addr) = _socket_addr {
                 return Ok::<_, RedisError>((
-                    <T>::connect_tcp_tls(host, socket_addr, insecure, tls_params, tcp_nodelay).await?,
+                    <T>::connect_tcp_tls(host, socket_addr, insecure, tls_params, tcp_nodelay)
+                        .await?,
                     Some(socket_addr.ip()),
                 ));
             }
@@ -464,7 +465,8 @@ pub(crate) async fn connect_simple<T: RedisRuntime>(
                 );
                 Box::pin(async move {
                     Ok::<_, RedisError>((
-                        <T>::connect_tcp_tls(host, socket_addr, insecure, tls_params, tcp_nodelay).await?,
+                        <T>::connect_tcp_tls(host, socket_addr, insecure, tls_params, tcp_nodelay)
+                            .await?,
                         Some(socket_addr.ip()),
                     ))
                 })
