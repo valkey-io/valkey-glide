@@ -12036,33 +12036,36 @@ class TestSyncScripts:
     ):
         """Test TCP_NODELAY configuration option for sync client."""
         valkey_cluster = (
-            pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster
+            pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
         )
 
-        client: Union[GlideClient, GlideClusterClient]
         if cluster_mode:
-            advanced_config = AdvancedGlideClusterClientConfiguration(
-                tcp_nodelay=tcp_nodelay
-            )
-            config = GlideClusterClientConfiguration(
+            cluster_config = GlideClusterClientConfiguration(
                 addresses=valkey_cluster.nodes_addr,
-                advanced_config=advanced_config,
+                advanced_config=AdvancedGlideClusterClientConfiguration(
+                    tcp_nodelay=tcp_nodelay
+                ),
             )
-            client = GlideClusterClient.create(config)
+            cluster_client = GlideClusterClient.create(cluster_config)
+            try:
+                # Verify client can connect and execute commands
+                assert cluster_client.ping() == b"PONG"
+                assert cluster_client.set("key", "value") == "OK"
+                assert cluster_client.get("key") == b"value"
+            finally:
+                cluster_client.close()
         else:
-            advanced_config = AdvancedGlideClientConfiguration(tcp_nodelay=tcp_nodelay)
-            config = GlideClientConfiguration(
+            standalone_config = GlideClientConfiguration(
                 addresses=valkey_cluster.nodes_addr,
-                advanced_config=advanced_config,
+                advanced_config=AdvancedGlideClientConfiguration(
+                    tcp_nodelay=tcp_nodelay
+                ),
             )
-            client = GlideClient.create(config)
-
-        try:
-            # Verify client can connect and execute commands
-            assert client.ping() == b"PONG"
-            assert client.set("key", "value") == "OK"
-            assert client.get("key") == b"value"
-        finally:
-            client.close()
-
-        client.close()
+            standalone_client = GlideClient.create(standalone_config)
+            try:
+                # Verify client can connect and execute commands
+                assert standalone_client.ping() == b"PONG"
+                assert standalone_client.set("key", "value") == "OK"
+                assert standalone_client.get("key") == b"value"
+            finally:
+                standalone_client.close()
