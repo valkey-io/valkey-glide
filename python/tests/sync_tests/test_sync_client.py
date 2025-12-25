@@ -90,6 +90,12 @@ from glide_shared.routes import (
     SlotKeyRoute,
     SlotType,
 )
+from glide_sync import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+)
 from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide_sync.sync_commands.script import Script
 
@@ -12019,3 +12025,44 @@ class TestSyncScripts:
         # Verify all fields are now persistent
         ttl_results = glide_sync_client.httl(multi_key, field_names)
         assert ttl_results == [-1] * len(field_names)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("tcp_nodelay", [None, True, False])
+    def test_tcp_nodelay_configuration(
+        self,
+        request,
+        cluster_mode: bool,
+        tcp_nodelay: Optional[bool],
+    ):
+        """Test TCP_NODELAY configuration option for sync client."""
+        valkey_cluster = (
+            pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster
+        )
+
+        client: Union[GlideClient, GlideClusterClient]
+        if cluster_mode:
+            advanced_config = AdvancedGlideClusterClientConfiguration(
+                tcp_nodelay=tcp_nodelay
+            )
+            config = GlideClusterClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                advanced_config=advanced_config,
+            )
+            client = GlideClusterClient.create(config)
+        else:
+            advanced_config = AdvancedGlideClientConfiguration(tcp_nodelay=tcp_nodelay)
+            config = GlideClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                advanced_config=advanced_config,
+            )
+            client = GlideClient.create(config)
+
+        try:
+            # Verify client can connect and execute commands
+            assert client.ping() == b"PONG"
+            assert client.set("key", "value") == "OK"
+            assert client.get("key") == b"value"
+        finally:
+            client.close()
+
+        client.close()

@@ -12223,3 +12223,42 @@ class TestScripts:
         # Verify all fields are now persistent
         ttl_results = await glide_client.httl(multi_key, field_names)
         assert ttl_results == [-1] * len(field_names)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("tcp_nodelay", [None, True, False])
+    async def test_tcp_nodelay_configuration(
+        self,
+        request,
+        cluster_mode: bool,
+        tcp_nodelay: Optional[bool],
+    ):
+        """Test TCP_NODELAY configuration option."""
+        valkey_cluster = (
+            pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster
+        )
+
+        client: Union[GlideClient, GlideClusterClient]
+        if cluster_mode:
+            advanced_config = AdvancedGlideClusterClientConfiguration(
+                tcp_nodelay=tcp_nodelay
+            )
+            config = GlideClusterClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                advanced_config=advanced_config,
+            )
+            client = await GlideClusterClient.create(config)
+        else:
+            advanced_config = AdvancedGlideClientConfiguration(tcp_nodelay=tcp_nodelay)
+            config = GlideClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                advanced_config=advanced_config,
+            )
+            client = await GlideClient.create(config)
+
+        try:
+            # Verify client can connect and execute commands
+            assert await client.ping() == b"PONG"
+            assert await client.set("key", "value") == "OK"
+            assert await client.get("key") == b"value"
+        finally:
+            await client.close()
