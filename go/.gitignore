@@ -15,4 +15,8 @@ benchmarks/gobenchmarks.json
 benchmarks/benchmarks
 
 # directory where compiled static library files are copied to
+# This entire directory is generated during releases and force-added via 'git add -f go'
 rustbin/
+
+# tools.go is auto-generated during releases for vendoring support
+tools.go
