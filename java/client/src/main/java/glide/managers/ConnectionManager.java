@@ -343,6 +343,12 @@ public class ConnectionManager {
                             requestBuilder.setPubsubSubscriptions(subBuilder.build());
                         }
 
+                        // Set TCP_NODELAY option (only if explicitly configured)
+                        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+                        if (advanced != null && advanced.getTcpNoDelay() != null) {
+                            requestBuilder.setTcpNodelay(advanced.getTcpNoDelay());
+                        }
+
                         // Build and serialize to bytes
                         ConnectionRequest request = requestBuilder.build();
                         byte[] requestBytes = request.toByteArray();

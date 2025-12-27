@@ -37,6 +37,7 @@ pub struct ConnectionRequest {
     pub refresh_topology_from_initial_nodes: bool,
     pub root_certs: Vec<Vec<u8>>,
     pub compression_config: Option<CompressionConfig>,
+    pub tcp_nodelay: Option<bool>,
 }
 
 /// Authentication information for connecting to Redis/Valkey servers
@@ -315,6 +316,8 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             }
         });
 
+        let tcp_nodelay = value.tcp_nodelay;
+
         ConnectionRequest {
             read_from,
             client_name,
@@ -335,6 +338,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             refresh_topology_from_initial_nodes,
             root_certs,
             compression_config,
+            tcp_nodelay,
         }
     }
 }
