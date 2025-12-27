@@ -653,6 +653,15 @@ class BaseClient(CoreCommands):
 
     async def _process_response(self, response: Response) -> None:
         res_future = self._available_futures.pop(response.callback_idx, None)
+        if res_future is not None and res_future.done():
+            # Future is already completed (e.g. request was cancelled while awaiting).
+            # Do not error to keep client in a valid state.
+            ClientLogger.log(
+                LogLevel.DEBUG,
+                "completed response",
+                f"Received response for cancelled request: {response.callback_idx}",
+            )
+            return
         if not res_future or response.HasField("closing_error"):
             err_msg = (
                 response.closing_error
