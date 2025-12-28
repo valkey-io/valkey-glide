@@ -3781,4 +3781,133 @@ public class CommandTests {
             clientDb1.close();
         }
     }
+
+    @SneakyThrows
+    @Test
+    public void keys_cluster_mode_all_nodes() {
+        GlideClusterClient client =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+
+        try {
+            // Create keys on different hash slots to ensure they're on different nodes
+            String key1 = "{slot1}:test:" + UUID.randomUUID();
+            String key2 = "{slot2}:test:" + UUID.randomUUID();
+            String key3 = "{slot3}:test:" + UUID.randomUUID();
+            String value = UUID.randomUUID().toString();
+
+            // Set keys
+            assertEquals(OK, client.set(key1, value).get());
+            assertEquals(OK, client.set(key2, value).get());
+            assertEquals(OK, client.set(key3, value).get());
+
+            // KEYS command in cluster mode should search all primary nodes
+            String[] keys = client.keys("*:test:*").get();
+            assertTrue(keys.length >= 3, "Should find at least 3 keys across all nodes");
+
+            // Verify our keys are in the result
+            List<String> keyList = Arrays.asList(keys);
+            assertTrue(keyList.contains(key1));
+            assertTrue(keyList.contains(key2));
+            assertTrue(keyList.contains(key3));
+
+            // Clean up
+            client.del(new String[] {key1, key2, key3}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void keys_cluster_mode_binary() {
+        GlideClusterClient client =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+
+        try {
+            // Create keys on different hash slots
+            GlideString key1 = gs("{slot1}:test:" + UUID.randomUUID());
+            GlideString key2 = gs("{slot2}:test:" + UUID.randomUUID());
+            GlideString value = gs(UUID.randomUUID().toString());
+
+            // Set keys
+            assertEquals(OK, client.set(key1, value).get());
+            assertEquals(OK, client.set(key2, value).get());
+
+            // KEYS command should search all nodes
+            GlideString[] keys = client.keys(gs("*:test:*")).get();
+            assertTrue(keys.length >= 2);
+
+            // Clean up
+            client.del(new GlideString[] {key1, key2}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void waitaof_cluster_mode() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"),
+                "WAITAOF requires Valkey 7.2.0 or higher");
+
+        GlideClusterClient client =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+
+        try {
+            String key = "{key}:" + UUID.randomUUID();
+            String value = UUID.randomUUID().toString();
+
+            // Set a key
+            assertEquals(OK, client.set(key, value).get());
+
+            // WAITAOF in cluster mode routes to a random node
+            Long[] result = client.waitaof(0, 0, 1000).get();
+            assertNotNull(result);
+            assertEquals(2, result.length);
+            assertTrue(result[0] >= 0); // local acks
+            assertTrue(result[1] >= 0); // replica acks
+
+            // Clean up
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void migrate_cluster_mode_basic() {
+        // Note: This test verifies the command works in cluster mode
+        // Full MIGRATE testing requires a second cluster which is complex to set up
+        GlideClusterClient client =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+
+        try {
+            String key = "{key}:" + UUID.randomUUID();
+            String value = UUID.randomUUID().toString();
+
+            // Set a key
+            assertEquals(OK, client.set(key, value).get());
+
+            // Attempt to migrate to a non-existent destination
+            // This will fail but verifies the command is properly routed in cluster mode
+            ExecutionException exception =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.migrate("nonexistent.host", 6379, key, 0, 5000).get());
+
+            // The error should be about connection, not about the command being unsupported
+            assertTrue(
+                    exception.getCause().getMessage().contains("Connection refused")
+                            || exception.getCause().getMessage().contains("Name or service not known")
+                            || exception.getCause().getMessage().contains("nodename nor servname provided")
+                            || exception.getCause().getMessage().contains("Temporary failure"));
+
+            // Clean up
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
 }

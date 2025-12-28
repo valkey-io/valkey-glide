@@ -37,6 +37,9 @@ import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static command_request.CommandRequestOuterClass.RequestType.Wait;
+import static command_request.CommandRequestOuterClass.RequestType.WaitAof;
+import static command_request.CommandRequestOuterClass.RequestType.Keys;
+import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
@@ -61,6 +64,7 @@ import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.ScriptArgOptions;
 import glide.api.models.commands.ScriptArgOptionsGlideString;
 import glide.api.models.commands.batch.ClusterBatchOptions;
@@ -1309,6 +1313,99 @@ public class GlideClusterClient extends BaseClient
         String[] arguments = new String[] {Long.toString(numreplicas), Long.toString(timeout)};
         return commandManager.submitNewCommand(
                 Wait, arguments, SimpleSingleNodeRoute.RANDOM, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long[]> waitaof(long numlocal, long numreplicas, long timeout) {
+        String[] arguments =
+                new String[] {Long.toString(numlocal), Long.toString(numreplicas), Long.toString(timeout)};
+        return commandManager.submitNewCommand(
+                WaitAof,
+                arguments,
+                SimpleSingleNodeRoute.RANDOM,
+                response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> keys(String pattern) {
+        return commandManager.submitNewCommand(
+                Keys, new String[] {pattern}, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> keys(GlideString pattern) {
+        return commandManager.submitNewCommand(
+                Keys,
+                new GlideString[] {pattern},
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String host, long port, String key, long destinationDB, long timeout) {
+        return commandManager.submitNewCommand(
+                Migrate,
+                new String[] {
+                    host, Long.toString(port), key, Long.toString(destinationDB), Long.toString(timeout)
+                },
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String host, long port, GlideString key, long destinationDB, long timeout) {
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(host)
+                        .add(port)
+                        .add(key)
+                        .add(destinationDB)
+                        .add(timeout)
+                        .toArray(),
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String host,
+            long port,
+            String key,
+            long destinationDB,
+            long timeout,
+            MigrateOptions migrateOptions) {
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(host)
+                        .add(Long.toString(port))
+                        .add(key)
+                        .add(Long.toString(destinationDB))
+                        .add(Long.toString(timeout))
+                        .add(migrateOptions.toArgs())
+                        .toArray(),
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String host,
+            long port,
+            GlideString key,
+            long destinationDB,
+            long timeout,
+            MigrateOptions migrateOptions) {
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(host)
+                        .add(port)
+                        .add(key)
+                        .add(destinationDB)
+                        .add(timeout)
+                        .add(migrateOptions.toArgs())
+                        .toArray(),
+                this::handleStringResponse);
     }
 
     /**
