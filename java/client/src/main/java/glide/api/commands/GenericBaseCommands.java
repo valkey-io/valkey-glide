@@ -3,6 +3,7 @@ package glide.api.commands;
 
 import glide.api.models.GlideString;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
