@@ -1,13 +1,13 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use crate::client::PubSubCommandApplier;
+use crate::client::{ClientWrapper};
 use redis::PushInfo;
 pub use redis::{
     ErrorKind, PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind,
     PubSubSynchronizer, RedisError,
 };
 use std::sync::{Arc, Weak};
-use tokio::sync::mpsc;
+use tokio::sync::{RwLock, mpsc};
 
 #[cfg(feature = "mock-pubsub")]
 mod mock;
@@ -35,10 +35,12 @@ pub async fn create_pubsub_synchronizer(
     }
 }
 
-/// Helper function to set command applier on synchronizer
-pub fn set_synchronizer_applier(
+/// Helper function to set internal client reference on synchronizer.
+/// Uses a strong Arc because ClientWrapper doesn't reference back to Client or Synchronizer,
+/// so there's no reference cycle.
+pub fn set_synchronizer_internal_client(
     sync: &Arc<dyn PubSubSynchronizer>,
-    applier: Weak<dyn PubSubCommandApplier>,
+    internal_client: Weak<RwLock<ClientWrapper>>,
 ) {
     let any = sync.as_any();
 
@@ -47,7 +49,7 @@ pub fn set_synchronizer_applier(
         let mock_sync = any
             .downcast_ref::<mock::MockPubSubSynchronizer>()
             .expect("Expected MockPubSubSynchronizer");
-        mock_sync.set_applier(applier);
+        mock_sync.set_internal_client(internal_client);
     }
 
     #[cfg(not(feature = "mock-pubsub"))]
@@ -55,6 +57,6 @@ pub fn set_synchronizer_applier(
         let real_sync = any
             .downcast_ref::<synchronizer::GlidePubSubSynchronizer>()
             .expect("Expected GlidePubSubSynchronizer");
-        real_sync.set_applier(applier);
+        real_sync.set_internal_client(internal_client);
     }
 }

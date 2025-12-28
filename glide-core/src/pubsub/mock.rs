@@ -1,9 +1,10 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use crate::client::PubSubCommandApplier;
+use crate::client::ClientWrapper;
 use async_trait::async_trait;
 use logger_core::{log_debug, log_warn};
 use once_cell::sync::Lazy;
+use once_cell::sync::OnceCell;
 use redis::cluster_routing::Routable;
 use redis::{Cmd, ErrorKind, PushInfo, PushKind, RedisError, RedisResult, Value};
 use redis::{
@@ -34,7 +35,7 @@ const LOCK_ERR: &str = "Lock poisoned";
 /// Mock implementation of PubSub synchronizer
 pub struct MockPubSubSynchronizer {
     client_id: String,
-    command_applier: RwLock<Option<Weak<dyn PubSubCommandApplier>>>,
+    internal_client: OnceCell<Weak<TokioRwLock<ClientWrapper>>>,
     is_cluster: bool,
 
     desired_subscriptions: RwLock<PubSubSubscriptionInfo>,
@@ -55,7 +56,7 @@ impl MockPubSubSynchronizer {
     ) -> Arc<Self> {
         Arc::new(Self {
             client_id,
-            command_applier: RwLock::new(None),
+            internal_client: OnceCell::new(),
             is_cluster,
             desired_subscriptions: RwLock::new(HashMap::new()),
             actual_subscriptions: RwLock::new(HashMap::new()),
@@ -182,18 +183,8 @@ impl MockPubSubSynchronizer {
         Ok(())
     }
 
-    pub fn set_applier(&self, applier: Weak<dyn PubSubCommandApplier>) {
-        let mut guard = self.command_applier.write().expect("Lock poisoned");
-        *guard = Some(applier);
-    }
-
-    #[allow(dead_code)]
-    fn get_applier(&self) -> Option<Arc<dyn PubSubCommandApplier>> {
-        self.command_applier
-            .read()
-            .expect("Lock poisoned")
-            .as_ref()
-            .and_then(|weak| weak.upgrade())
+    pub fn set_internal_client(&self, client: Weak<TokioRwLock<ClientWrapper>>) {
+        let _ = self.internal_client.set(client);
     }
 
     /// Check sync state and update metrics accordingly

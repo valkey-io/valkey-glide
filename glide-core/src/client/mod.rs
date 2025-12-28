@@ -35,7 +35,7 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
-use crate::pubsub::set_synchronizer_applier;
+use crate::pubsub::set_synchronizer_internal_client;
 use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
 use crate::request_type::RequestType;
 use redis::InfoDict;
@@ -1212,24 +1212,35 @@ impl Client {
         Ok(())
     }
 }
-/// Trait for executing PubSub commands.
-/// Defined in glide-core so we can implement it for `RwLock<Client>`.
+/// Trait for executing PubSub commands on the internal client wrapper
 pub trait PubSubCommandApplier: Send + Sync {
     /// Send a subscription command (SUBSCRIBE, UNSUBSCRIBE, etc.)
     fn apply_pubsub_command<'a>(
-        &'a self,
+        &'a mut self,
         cmd: &'a mut Cmd,
     ) -> Pin<Box<dyn Future<Output = RedisResult<Value>> + Send + 'a>>;
 }
 
-impl PubSubCommandApplier for RwLock<Client> {
+/// Implement the trait for ClientWrapper
+impl PubSubCommandApplier for ClientWrapper {
     fn apply_pubsub_command<'a>(
-        &'a self,
+        &'a mut self,
         cmd: &'a mut Cmd,
     ) -> Pin<Box<dyn Future<Output = RedisResult<Value>> + Send + 'a>> {
         Box::pin(async move {
-            let mut guard = self.write().await;
-            guard.send_command(cmd, None).await
+            match self {
+                ClientWrapper::Standalone(client) => client.send_command(cmd).await,
+                ClientWrapper::Cluster { client } => {
+                    // Route based on command or use random
+                    let routing = RoutingInfo::for_routable(cmd)
+                        .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random));
+                    client.route_command(cmd, routing).await
+                }
+                ClientWrapper::Lazy(_) => Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Client not initialized",
+                ))),
+            }
         })
     }
 }
@@ -1641,7 +1652,6 @@ impl Client {
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
-            // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
             let internal_client_arc =
                 Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request.clone(),
@@ -1657,6 +1667,12 @@ impl Client {
             )
             .await;
 
+            // Give synchronizer a weak Arc to internal_client
+            set_synchronizer_internal_client(
+                &pubsub_synchronizer,
+                Arc::downgrade(&internal_client_arc), // downgrade to Weak!
+            );
+
             // Create the Client first without IAM token manager
             let client = Self {
                 internal_client: internal_client_arc.clone(),
@@ -1668,11 +1684,6 @@ impl Client {
             };
 
             let client_arc = Arc::new(RwLock::new(client));
-
-            //  Set the client as the command applier in the synchronizer
-            //  so the synchronizer can send pubsub commands through the client
-            let applier: Arc<dyn PubSubCommandApplier> = client_arc.clone();
-            set_synchronizer_applier(&pubsub_synchronizer, Arc::downgrade(&applier));
 
             // Create IAM token manager if needed, passing a strong Arc to the callback
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
