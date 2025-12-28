@@ -17741,7 +17741,6 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getCause().getMessage().contains("WRONGTYPE"));
     }
-}
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
