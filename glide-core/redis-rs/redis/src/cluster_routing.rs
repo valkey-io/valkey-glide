@@ -663,6 +663,7 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
 
         b"BITOP"
         | b"MEMORY USAGE"
+        | b"MIGRATE"
         | b"PFDEBUG"
         | b"XGROUP CREATE"
         | b"XGROUP CREATECONSUMER"
