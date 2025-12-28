@@ -1,8 +1,35 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static command_request.CommandRequestOuterClass.RequestType.Asking;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlots;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlotsRange;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterBumpEpoch;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterCountFailureReports;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterCountKeysInSlot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterDelSlots;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterDelSlotsRange;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterFailover;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterFlushSlots;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterForget;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterGetKeysInSlot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterInfo;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterKeySlot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterLinks;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMeet;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMyId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMyShardId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterNodes;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterReplicas;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterReplicate;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterReset;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSaveConfig;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSetConfigEpoch;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSetslot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterShards;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSlots;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -29,6 +56,8 @@ import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
+import static command_request.CommandRequestOuterClass.RequestType.ReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.ReadWrite;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
@@ -38,6 +67,14 @@ import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static command_request.CommandRequestOuterClass.RequestType.Wait;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
+import static glide.api.models.ClusterCommandValidation.validateEpoch;
+import static glide.api.models.ClusterCommandValidation.validateHost;
+import static glide.api.models.ClusterCommandValidation.validateNodeId;
+import static glide.api.models.ClusterCommandValidation.validatePort;
+import static glide.api.models.ClusterCommandValidation.validatePositiveCount;
+import static glide.api.models.ClusterCommandValidation.validateSlot;
+import static glide.api.models.ClusterCommandValidation.validateSlotRanges;
+import static glide.api.models.ClusterCommandValidation.validateSlots;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
@@ -47,6 +84,7 @@ import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 
+import glide.api.commands.ClusterCommands;
 import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.PubSubClusterCommands;
@@ -98,7 +136,8 @@ import response.ResponseOuterClass.Response;
  *     Wiki</a>.
  */
 public class GlideClusterClient extends BaseClient
-        implements ConnectionManagementClusterCommands,
+        implements ClusterCommands,
+                ConnectionManagementClusterCommands,
                 GenericClusterCommands,
                 ServerManagementClusterCommands,
                 ScriptingAndFunctionsClusterCommands,
@@ -1309,6 +1348,461 @@ public class GlideClusterClient extends BaseClient
         String[] arguments = new String[] {Long.toString(numreplicas), Long.toString(timeout)};
         return commandManager.submitNewCommand(
                 Wait, arguments, SimpleSingleNodeRoute.RANDOM, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clusterInfo() {
+        return commandManager.submitNewCommand(ClusterInfo, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterInfo(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterInfo,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Long> clusterKeySlot(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ClusterKeySlot, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> clusterKeySlot(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ClusterKeySlot, new GlideString[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clusterMyId() {
+        return commandManager.submitNewCommand(ClusterMyId, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterMyId(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterMyId,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterNodes() {
+        return commandManager.submitNewCommand(ClusterNodes, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterNodes(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterNodes,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> clusterSlots() {
+        return commandManager.submitNewCommand(ClusterSlots, new String[0], this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object[]>> clusterSlots(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterSlots,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleArrayResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> clusterShards() {
+        return commandManager.submitNewCommand(ClusterShards, new String[0], this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object[]>> clusterShards(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterShards,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleArrayResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterAddSlots(@NonNull long[] slots) {
+        validateSlots(slots);
+        String[] arguments = Arrays.stream(slots).mapToObj(String::valueOf).toArray(String[]::new);
+        return commandManager.submitNewCommand(ClusterAddSlots, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterAddSlots(
+            @NonNull long[] slots, @NonNull Route route) {
+        validateSlots(slots);
+        String[] arguments = Arrays.stream(slots).mapToObj(String::valueOf).toArray(String[]::new);
+        return commandManager.submitNewCommand(
+                ClusterAddSlots,
+                arguments,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterAddSlotsRange(@NonNull long[][] slotRanges) {
+        validateSlotRanges(slotRanges);
+        String[] arguments =
+                Arrays.stream(slotRanges)
+                        .flatMap(range -> Arrays.stream(range).mapToObj(String::valueOf))
+                        .toArray(String[]::new);
+        return commandManager.submitNewCommand(
+                ClusterAddSlotsRange, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterAddSlotsRange(
+            @NonNull long[][] slotRanges, @NonNull Route route) {
+        validateSlotRanges(slotRanges);
+        String[] arguments =
+                Arrays.stream(slotRanges)
+                        .flatMap(range -> Arrays.stream(range).mapToObj(String::valueOf))
+                        .toArray(String[]::new);
+        return commandManager.submitNewCommand(
+                ClusterAddSlotsRange,
+                arguments,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterDelSlots(@NonNull long[] slots) {
+        validateSlots(slots);
+        String[] arguments = Arrays.stream(slots).mapToObj(String::valueOf).toArray(String[]::new);
+        return commandManager.submitNewCommand(ClusterDelSlots, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterDelSlots(
+            @NonNull long[] slots, @NonNull Route route) {
+        validateSlots(slots);
+        String[] arguments = Arrays.stream(slots).mapToObj(String::valueOf).toArray(String[]::new);
+        return commandManager.submitNewCommand(
+                ClusterDelSlots,
+                arguments,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterDelSlotsRange(@NonNull long[][] slotRanges) {
+        validateSlotRanges(slotRanges);
+        String[] arguments =
+                Arrays.stream(slotRanges)
+                        .flatMap(range -> Arrays.stream(range).mapToObj(String::valueOf))
+                        .toArray(String[]::new);
+        return commandManager.submitNewCommand(
+                ClusterDelSlotsRange, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterDelSlotsRange(
+            @NonNull long[][] slotRanges, @NonNull Route route) {
+        validateSlotRanges(slotRanges);
+        String[] arguments =
+                Arrays.stream(slotRanges)
+                        .flatMap(range -> Arrays.stream(range).mapToObj(String::valueOf))
+                        .toArray(String[]::new);
+        return commandManager.submitNewCommand(
+                ClusterDelSlotsRange,
+                arguments,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterFailover() {
+        return commandManager.submitNewCommand(
+                ClusterFailover, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterFailover(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterFailover,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterForget(@NonNull String nodeId) {
+        validateNodeId(nodeId);
+        return commandManager.submitNewCommand(
+                ClusterForget, new String[] {nodeId}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterForget(
+            @NonNull String nodeId, @NonNull Route route) {
+        validateNodeId(nodeId);
+        return commandManager.submitNewCommand(
+                ClusterForget,
+                new String[] {nodeId},
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterMeet(@NonNull String host, long port) {
+        validateHost(host);
+        validatePort(port);
+        String[] arguments = new String[] {host, Long.toString(port)};
+        return commandManager.submitNewCommand(ClusterMeet, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterMeet(
+            @NonNull String host, long port, @NonNull Route route) {
+        validateHost(host);
+        validatePort(port);
+        String[] arguments = new String[] {host, Long.toString(port)};
+        return commandManager.submitNewCommand(
+                ClusterMeet,
+                arguments,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterReplicate(@NonNull String nodeId) {
+        validateNodeId(nodeId);
+        return commandManager.submitNewCommand(
+                ClusterReplicate, new String[] {nodeId}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterReplicate(
+            @NonNull String nodeId, @NonNull Route route) {
+        validateNodeId(nodeId);
+        return commandManager.submitNewCommand(
+                ClusterReplicate,
+                new String[] {nodeId},
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterReset() {
+        return commandManager.submitNewCommand(ClusterReset, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clusterReset(@NonNull ClusterCommands.ClusterResetMode mode) {
+        String[] arguments = new String[] {mode.name()};
+        return commandManager.submitNewCommand(ClusterReset, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterReset(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterReset,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterReset(
+            @NonNull ClusterCommands.ClusterResetMode mode, @NonNull Route route) {
+        String[] arguments = new String[] {mode.name()};
+        return commandManager.submitNewCommand(
+                ClusterReset,
+                arguments,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterSaveConfig() {
+        return commandManager.submitNewCommand(
+                ClusterSaveConfig, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterSaveConfig(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterSaveConfig,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Long> clusterCountKeysInSlot(long slot) {
+        validateSlot(slot);
+        String[] arguments = new String[] {Long.toString(slot)};
+        return commandManager.submitNewCommand(
+                ClusterCountKeysInSlot, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Long>> clusterCountKeysInSlot(
+            long slot, @NonNull Route route) {
+        validateSlot(slot);
+        String[] arguments = new String[] {Long.toString(slot)};
+        return commandManager.submitNewCommand(
+                ClusterCountKeysInSlot,
+                arguments,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleLongResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String[]> clusterGetKeysInSlot(long slot, long count) {
+        validateSlot(slot);
+        validatePositiveCount(count, "count");
+        String[] arguments = new String[] {Long.toString(slot), Long.toString(count)};
+        return commandManager.submitNewCommand(
+                ClusterGetKeysInSlot, arguments, this::handleStringArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String[]>> clusterGetKeysInSlot(
+            long slot, long count, @NonNull Route route) {
+        validateSlot(slot);
+        validatePositiveCount(count, "count");
+        String[] arguments = new String[] {Long.toString(slot), Long.toString(count)};
+        return commandManager.submitNewCommand(
+                ClusterGetKeysInSlot,
+                arguments,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringArrayResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterMyShardId() {
+        return commandManager.submitNewCommand(
+                ClusterMyShardId, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clusterReplicas(@NonNull String nodeId) {
+        validateNodeId(nodeId);
+        return commandManager.submitNewCommand(
+                ClusterReplicas, new String[] {nodeId}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> clusterLinks() {
+        return commandManager.submitNewCommand(ClusterLinks, new String[0], this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clusterBumpEpoch() {
+        return commandManager.submitNewCommand(
+                ClusterBumpEpoch, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clusterSetSlot(
+            long slot, @NonNull String subcommand, @NonNull String nodeId) {
+        validateSlot(slot);
+        validateNodeId(nodeId);
+        String[] arguments = new String[] {Long.toString(slot), subcommand, nodeId};
+        return commandManager.submitNewCommand(ClusterSetslot, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clusterSetConfigEpoch(long epoch) {
+        validateEpoch(epoch);
+        String[] arguments = new String[] {Long.toString(epoch)};
+        return commandManager.submitNewCommand(
+                ClusterSetConfigEpoch, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> clusterCountFailureReports(@NonNull String nodeId) {
+        validateNodeId(nodeId);
+        return commandManager.submitNewCommand(
+                ClusterCountFailureReports, new String[] {nodeId}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clusterFlushSlots() {
+        return commandManager.submitNewCommand(
+                ClusterFlushSlots, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> readOnly() {
+        return commandManager.submitNewCommand(ReadOnly, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> readWrite() {
+        return commandManager.submitNewCommand(ReadWrite, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> asking() {
+        return commandManager.submitNewCommand(Asking, new String[0], this::handleStringResponse);
     }
 
     /**

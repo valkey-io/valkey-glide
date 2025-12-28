@@ -1,8 +1,37 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static command_request.CommandRequestOuterClass.RequestType.Asking;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlots;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlotsRange;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterBumpEpoch;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterCountFailureReports;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterCountKeysInSlot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterDelSlots;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterDelSlotsRange;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterFailover;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterFlushSlots;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterForget;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterGetKeysInSlot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterInfo;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterKeySlot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterLinks;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMeet;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMyId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMyShardId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterNodes;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterReplicas;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterReplicate;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterReset;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSaveConfig;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSetConfigEpoch;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSetslot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterShards;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSlots;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
+import static command_request.CommandRequestOuterClass.RequestType.ReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.ReadWrite;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static glide.utils.ArgsBuilder.checkTypeOrThrow;
 import static glide.utils.ArgsBuilder.newArgsBuilder;
@@ -136,6 +165,379 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     public <ArgType> ClusterBatch pubsubShardChannels(@NonNull ArgType pattern) {
         checkTypeOrThrow(pattern);
         protobufBatch.addCommands(buildCommand(PubSubShardChannels, newArgsBuilder().add(pattern)));
+        return getThis();
+    }
+
+    // ==================== CLUSTER COMMANDS ====================
+
+    /**
+     * Returns information about the cluster. See {@link
+     * glide.api.commands.ClusterCommands#clusterInfo()} for details.
+     *
+     * @return Command response - A {@link String} containing cluster state information.
+     */
+    public ClusterBatch clusterInfo() {
+        protobufBatch.addCommands(buildCommand(ClusterInfo));
+        return getThis();
+    }
+
+    /**
+     * Returns the hash slot for a key. See {@link
+     * glide.api.commands.ClusterCommands#clusterKeySlot(String)} for details.
+     *
+     * @param key The key to determine the hash slot for.
+     * @return Command response - The hash slot number.
+     */
+    public <ArgType> ClusterBatch clusterKeySlot(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(buildCommand(ClusterKeySlot, newArgsBuilder().add(key)));
+        return getThis();
+    }
+
+    /**
+     * Returns the node ID. See {@link glide.api.commands.ClusterCommands#clusterMyId()} for details.
+     *
+     * @return Command response - The node ID.
+     */
+    public ClusterBatch clusterMyId() {
+        protobufBatch.addCommands(buildCommand(ClusterMyId));
+        return getThis();
+    }
+
+    /**
+     * Returns cluster nodes information. See {@link
+     * glide.api.commands.ClusterCommands#clusterNodes()} for details.
+     *
+     * @return Command response - Node information.
+     */
+    public ClusterBatch clusterNodes() {
+        protobufBatch.addCommands(buildCommand(ClusterNodes));
+        return getThis();
+    }
+
+    /**
+     * Returns slot mapping information. See {@link glide.api.commands.ClusterCommands#clusterSlots()}
+     * for details.
+     *
+     * @return Command response - Slot mapping information.
+     */
+    public ClusterBatch clusterSlots() {
+        protobufBatch.addCommands(buildCommand(ClusterSlots));
+        return getThis();
+    }
+
+    /**
+     * Returns shard information. See {@link glide.api.commands.ClusterCommands#clusterShards()} for
+     * details.
+     *
+     * @return Command response - Shard information.
+     */
+    public ClusterBatch clusterShards() {
+        protobufBatch.addCommands(buildCommand(ClusterShards));
+        return getThis();
+    }
+
+    /**
+     * Assigns slots to the node. See {@link
+     * glide.api.commands.ClusterCommands#clusterAddSlots(long[])} for details.
+     *
+     * @param slots The slot numbers to assign.
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch clusterAddSlots(@NonNull long[] slots) {
+        var args = newArgsBuilder();
+        for (long slot : slots) {
+            args.add(slot);
+        }
+        protobufBatch.addCommands(buildCommand(ClusterAddSlots, args));
+        return getThis();
+    }
+
+    /**
+     * Assigns slot ranges to the node. See {@link
+     * glide.api.commands.ClusterCommands#clusterAddSlotsRange(long[][])} for details.
+     *
+     * @param slotRanges The slot range pairs [start, end] to assign.
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch clusterAddSlotsRange(@NonNull long[][] slotRanges) {
+        var args = newArgsBuilder();
+        for (long[] range : slotRanges) {
+            for (long slot : range) {
+                args.add(slot);
+            }
+        }
+        protobufBatch.addCommands(buildCommand(ClusterAddSlotsRange, args));
+        return getThis();
+    }
+
+    /**
+     * Removes slots from the node. See {@link
+     * glide.api.commands.ClusterCommands#clusterDelSlots(long[])} for details.
+     *
+     * @param slots The slot numbers to remove.
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch clusterDelSlots(@NonNull long[] slots) {
+        var args = newArgsBuilder();
+        for (long slot : slots) {
+            args.add(slot);
+        }
+        protobufBatch.addCommands(buildCommand(ClusterDelSlots, args));
+        return getThis();
+    }
+
+    /**
+     * Removes slot ranges from the node. See {@link
+     * glide.api.commands.ClusterCommands#clusterDelSlotsRange(long[][])} for details.
+     *
+     * @param slotRanges The slot range pairs [start, end] to remove.
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch clusterDelSlotsRange(@NonNull long[][] slotRanges) {
+        var args = newArgsBuilder();
+        for (long[] range : slotRanges) {
+            for (long slot : range) {
+                args.add(slot);
+            }
+        }
+        protobufBatch.addCommands(buildCommand(ClusterDelSlotsRange, args));
+        return getThis();
+    }
+
+    /**
+     * Forces a failover. See {@link glide.api.commands.ClusterCommands#clusterFailover()} for
+     * details.
+     *
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch clusterFailover() {
+        protobufBatch.addCommands(buildCommand(ClusterFailover));
+        return getThis();
+    }
+
+    /**
+     * Removes a node from the cluster. See {@link
+     * glide.api.commands.ClusterCommands#clusterForget(String)} for details.
+     *
+     * @param nodeId The ID of the node to remove.
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch clusterForget(@NonNull String nodeId) {
+        protobufBatch.addCommands(buildCommand(ClusterForget, newArgsBuilder().add(nodeId)));
+        return getThis();
+    }
+
+    /**
+     * Adds a node to the cluster. See {@link glide.api.commands.ClusterCommands#clusterMeet(String,
+     * long)} for details.
+     *
+     * @param host The hostname of the node.
+     * @param port The port of the node.
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch clusterMeet(@NonNull String host, long port) {
+        protobufBatch.addCommands(buildCommand(ClusterMeet, newArgsBuilder().add(host).add(port)));
+        return getThis();
+    }
+
+    /**
+     * Changes replication source. See {@link
+     * glide.api.commands.ClusterCommands#clusterReplicate(String)} for details.
+     *
+     * @param nodeId The ID of the primary node.
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch clusterReplicate(@NonNull String nodeId) {
+        protobufBatch.addCommands(buildCommand(ClusterReplicate, newArgsBuilder().add(nodeId)));
+        return getThis();
+    }
+
+    /**
+     * Resets the node. See {@link glide.api.commands.ClusterCommands#clusterReset()} for details.
+     *
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch clusterReset() {
+        protobufBatch.addCommands(buildCommand(ClusterReset));
+        return getThis();
+    }
+
+    /**
+     * Resets the node with mode. See {@link
+     * glide.api.commands.ClusterCommands#clusterReset(glide.api.commands.ClusterCommands.ClusterResetMode)}
+     * for details.
+     *
+     * @param mode The reset mode.
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch clusterReset(
+            @NonNull glide.api.commands.ClusterCommands.ClusterResetMode mode) {
+        protobufBatch.addCommands(buildCommand(ClusterReset, newArgsBuilder().add(mode.name())));
+        return getThis();
+    }
+
+    /**
+     * Saves the cluster config. See {@link glide.api.commands.ClusterCommands#clusterSaveConfig()}
+     * for details.
+     *
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch clusterSaveConfig() {
+        protobufBatch.addCommands(buildCommand(ClusterSaveConfig));
+        return getThis();
+    }
+
+    /**
+     * Counts keys in a slot. See {@link
+     * glide.api.commands.ClusterCommands#clusterCountKeysInSlot(long)} for details.
+     *
+     * @param slot The slot number.
+     * @return Command response - The number of keys.
+     */
+    public ClusterBatch clusterCountKeysInSlot(long slot) {
+        protobufBatch.addCommands(buildCommand(ClusterCountKeysInSlot, newArgsBuilder().add(slot)));
+        return getThis();
+    }
+
+    /**
+     * Gets keys from a slot. See {@link glide.api.commands.ClusterCommands#clusterGetKeysInSlot(long,
+     * long)} for details.
+     *
+     * @param slot The slot number.
+     * @param count The maximum number of keys to return.
+     * @return Command response - An array of keys.
+     */
+    public ClusterBatch clusterGetKeysInSlot(long slot, long count) {
+        protobufBatch.addCommands(
+                buildCommand(ClusterGetKeysInSlot, newArgsBuilder().add(slot).add(count)));
+        return getThis();
+    }
+
+    /**
+     * Returns the shard ID. See {@link glide.api.commands.ClusterCommands#clusterMyShardId()} for
+     * details.
+     *
+     * @return Command response - The shard ID.
+     */
+    public ClusterBatch clusterMyShardId() {
+        protobufBatch.addCommands(buildCommand(ClusterMyShardId));
+        return getThis();
+    }
+
+    /**
+     * Returns replica information. See {@link
+     * glide.api.commands.ClusterCommands#clusterReplicas(String)} for details.
+     *
+     * @param nodeId The primary node ID.
+     * @return Command response - Replica information.
+     */
+    public ClusterBatch clusterReplicas(@NonNull String nodeId) {
+        protobufBatch.addCommands(buildCommand(ClusterReplicas, newArgsBuilder().add(nodeId)));
+        return getThis();
+    }
+
+    /**
+     * Returns cluster link information. See {@link glide.api.commands.ClusterCommands#clusterLinks()}
+     * for details.
+     *
+     * @return Command response - Link information.
+     */
+    public ClusterBatch clusterLinks() {
+        protobufBatch.addCommands(buildCommand(ClusterLinks));
+        return getThis();
+    }
+
+    /**
+     * Advances the cluster epoch. See {@link glide.api.commands.ClusterCommands#clusterBumpEpoch()}
+     * for details.
+     *
+     * @return Command response - Result message.
+     */
+    public ClusterBatch clusterBumpEpoch() {
+        protobufBatch.addCommands(buildCommand(ClusterBumpEpoch));
+        return getThis();
+    }
+
+    /**
+     * Binds a slot to a node. See {@link glide.api.commands.ClusterCommands#clusterSetSlot(long,
+     * String, String)} for details.
+     *
+     * @param slot The slot number.
+     * @param subcommand The subcommand (e.g., "IMPORTING", "MIGRATING", "STABLE", "NODE").
+     * @param nodeId The node ID.
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch clusterSetSlot(
+            long slot, @NonNull String subcommand, @NonNull String nodeId) {
+        protobufBatch.addCommands(
+                buildCommand(ClusterSetslot, newArgsBuilder().add(slot).add(subcommand).add(nodeId)));
+        return getThis();
+    }
+
+    /**
+     * Sets the config epoch. See {@link
+     * glide.api.commands.ClusterCommands#clusterSetConfigEpoch(long)} for details.
+     *
+     * @param epoch The configuration epoch.
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch clusterSetConfigEpoch(long epoch) {
+        protobufBatch.addCommands(buildCommand(ClusterSetConfigEpoch, newArgsBuilder().add(epoch)));
+        return getThis();
+    }
+
+    /**
+     * Counts failure reports. See {@link
+     * glide.api.commands.ClusterCommands#clusterCountFailureReports(String)} for details.
+     *
+     * @param nodeId The node ID.
+     * @return Command response - The failure report count.
+     */
+    public ClusterBatch clusterCountFailureReports(@NonNull String nodeId) {
+        protobufBatch.addCommands(
+                buildCommand(ClusterCountFailureReports, newArgsBuilder().add(nodeId)));
+        return getThis();
+    }
+
+    /**
+     * Flushes all slots. See {@link glide.api.commands.ClusterCommands#clusterFlushSlots()} for
+     * details.
+     *
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch clusterFlushSlots() {
+        protobufBatch.addCommands(buildCommand(ClusterFlushSlots));
+        return getThis();
+    }
+
+    /**
+     * Enables read queries. See {@link glide.api.commands.ClusterCommands#readOnly()} for details.
+     *
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch readOnly() {
+        protobufBatch.addCommands(buildCommand(ReadOnly));
+        return getThis();
+    }
+
+    /**
+     * Disables read queries. See {@link glide.api.commands.ClusterCommands#readWrite()} for details.
+     *
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch readWrite() {
+        protobufBatch.addCommands(buildCommand(ReadWrite));
+        return getThis();
+    }
+
+    /**
+     * Enables redirection mode. See {@link glide.api.commands.ClusterCommands#asking()} for details.
+     *
+     * @return Command response - <code>OK</code>.
+     */
+    public ClusterBatch asking() {
+        protobufBatch.addCommands(buildCommand(Asking));
         return getThis();
     }
 }

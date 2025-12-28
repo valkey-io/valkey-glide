@@ -710,6 +710,10 @@ public abstract class BaseClient
         return handleValkeyResponse(Object[].class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
+    protected String[] handleStringArrayResponse(Response response) throws GlideException {
+        return castArray(handleArrayResponse(response), String.class);
+    }
+
     protected Object[] handleArrayResponseBinary(Response response) throws GlideException {
         return handleValkeyResponse(Object[].class, EnumSet.noneOf(ResponseFlags.class), response);
     }

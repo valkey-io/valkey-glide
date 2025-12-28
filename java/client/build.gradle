@@ -24,12 +24,7 @@ tasks.withType(Javadoc) {
 }
 
 dependencies {
-    implementation('com.google.protobuf:protobuf-java') {
-        version {
-            require '[4.29.1,5.0)'
-            prefer '4.29.1'
-        }
-    }
+    implementation 'com.google.protobuf:protobuf-java:4.29.3'
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
 
     compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.6'
@@ -48,10 +43,11 @@ dependencies {
 
 ext {
     checkProtocVersion = { String output ->
-        // Line in format like: libprotoc 29.1
+        // Line in format like: libprotoc 29.1 or libprotoc 33.1
         def parts = output.split(" ")[1].split("\\.")
         int majorVersion = Integer.parseInt(parts[0].trim())
         int minorVersion = parts.length > 1 ? Integer.parseInt(parts[1].trim()) : 0
+        // Accept protoc 4.29+ or 5.x (version 33.x)
         if (majorVersion < 4 || (majorVersion == 4 && minorVersion < 29)) {
             throw new GradleException(
                     "Protobuf compiler (protoc) version 4.29 or newer is required. Current version: $output")
@@ -64,11 +60,15 @@ ext {
 }
 
 tasks.register('protobuf', Exec) {
+    // Use custom protoc if available in /tmp, otherwise use system protoc
+    def customProtoc = '/tmp/protoc-29.3/bin/protoc'
+    def protocCommand = new File(customProtoc).exists() ? customProtoc : 'protoc'
+    
     doFirst {
         try {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
-                    commandLine 'protoc', '--version'
+                    commandLine protocCommand, '--version'
                     workingDir Paths.get(project.rootDir.path, '..').toFile()
                     standardOutput = os
                 }
@@ -83,7 +83,7 @@ tasks.register('protobuf', Exec) {
 
         project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/glide/models/protobuf').toString())
     }
-    commandLine 'protoc',
+    commandLine protocCommand,
         '-Iprotobuf=glide-core/src/protobuf/',
         '--java_out=java/client/src/main/java/glide/models/protobuf',
         'glide-core/src/protobuf/connection_request.proto',
