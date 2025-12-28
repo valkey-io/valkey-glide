@@ -3,7 +3,7 @@
 #### Changes
 
 * Added in documentation to how to use Lua scripts with Glide 
-* JAVA: Implement all 30 cluster management commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SLOTS, CLUSTER SHARDS, CLUSTER KEYSLOT, CLUSTER MYID, CLUSTER ADDSLOTS, CLUSTER DELSLOTS, CLUSTER ADDSLOTSRANGE, CLUSTER DELSLOTSRANGE, CLUSTER FAILOVER, CLUSTER FORGET, CLUSTER MEET, CLUSTER REPLICATE, CLUSTER RESET, CLUSTER SAVECONFIG, CLUSTER COUNTKEYSINSLOT, CLUSTER GETKEYSINSLOT, CLUSTER MYSHARDID, CLUSTER REPLICAS, CLUSTER LINKS, CLUSTER BUMPEPOCH, CLUSTER SETSLOT, CLUSTER SETCONFIGEPOCH, CLUSTER COUNT-FAILURE-REPORTS, CLUSTER FLUSHSLOTS, READONLY, READWRITE, ASKING)
+* JAVA: Implement all CLUSTER management commands support ([#5106](https://github.com/valkey-io/valkey-glide/pull/5105))
 * JAVA: Add refreshTopologyFromInitialNodes Configuration Option ([#4870](https://github.com/valkey-io/valkey-glide/pull/4870))
 * GO: add RefreshTopologyFromInitialNodes configuration option ([#4871](https://github.com/valkey-io/valkey-glide/pull/4871))
 * Node: add refreshTopologyFromInitialNodes configuration option ([#4872](https://github.com/valkey-io/valkey-glide/pull/4872))
