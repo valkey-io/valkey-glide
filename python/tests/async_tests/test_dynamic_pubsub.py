@@ -24,6 +24,7 @@ from tests.utils.utils import (
     decode_pubsub_msg,
     new_message,
     wait_for_subscription_state,
+    kill_connections,
 )
 
 
@@ -2359,6 +2360,502 @@ class TestDynamicPubSub:
             await anyio.sleep(1)
             msg2 = decode_pubsub_msg(await listening_client.get_pubsub_message())
             assert msg2.message == message
+
+        finally:
+            await client_cleanup(listening_client)
+            await client_cleanup(publishing_client)
+            
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
+    )
+    @pytest.mark.parametrize(
+        "subscription_method", [SubscriptionMethod.Lazy, SubscriptionMethod.Blocking]
+    )
+    async def test_resubscribe_after_connection_kill_exact_channels(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test that exact channel subscriptions are automatically restored after connection kill.
+        
+        This test verifies that:
+        1. Messages are received before connection kill
+        2. After kill_connections, the client reconnects
+        3. The reconciliation task re-establishes subscriptions
+        4. Messages are received again after reconnection
+        """
+        listening_client, publishing_client = None, None
+        try:
+            channel = "channel_reconnect_test"
+            message_before = "message_before_kill"
+            message_after = "message_after_kill"
+
+            callback, context = None, None
+            callback_messages: List[PubSubMsg] = []
+            if method == MethodTesting.Callback:
+                callback = new_message
+                context = callback_messages
+
+            listening_client = await create_client(
+                request,
+                cluster_mode,
+                cluster_mode_pubsub=(
+                    GlideClusterClientConfiguration.PubSubSubscriptions(
+                        channels_and_patterns={},
+                        callback=callback,
+                        context=context,
+                    )
+                    if cluster_mode and callback
+                    else None
+                ),
+                standalone_mode_pubsub=(
+                    GlideClientConfiguration.PubSubSubscriptions(
+                        channels_and_patterns={},
+                        callback=callback,
+                        context=context,
+                    )
+                    if not cluster_mode and callback
+                    else None
+                ),
+            )
+            publishing_client = await create_client(request, cluster_mode)
+
+            # Subscribe to channel
+            await subscribe_by_method(listening_client, subscription_method, {channel})
+            await wait_for_subscription_if_needed(
+                listening_client, subscription_method, expected_channels={channel}
+            )
+
+            # Verify subscription works before kill
+            await publishing_client.publish(message_before, channel)
+            await anyio.sleep(1)
+
+            msg_before = await get_message_by_method(
+                method, listening_client, callback_messages, 0
+            )
+            assert msg_before.message == message_before
+            assert msg_before.channel == channel
+
+            # Kill connections - this should trigger reconnection
+            await kill_connections(publishing_client, None)
+
+            # Wait for reconnection and resubscription
+            # The reconciliation task should automatically re-establish subscriptions
+            await anyio.sleep(2)  # Allow time for reconnection
+
+            # Wait for subscriptions to be re-established
+            await wait_for_subscription_state(
+                listening_client,
+                expected_channels={channel},
+                timeout_ms=10000,  # Give more time for reconnection
+            )
+
+            # Verify subscription still works after reconnection
+            await publishing_client.publish(message_after, channel)
+            await anyio.sleep(1)
+
+            msg_after = await get_message_by_method(
+                method, listening_client, callback_messages, 1
+            )
+            assert msg_after.message == message_after
+            assert msg_after.channel == channel
+
+            await check_no_messages_left(method, listening_client, callback_messages, 2)
+
+        finally:
+            await client_cleanup(listening_client)
+            await client_cleanup(publishing_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
+    )
+    @pytest.mark.parametrize(
+        "subscription_method", [SubscriptionMethod.Lazy, SubscriptionMethod.Blocking]
+    )
+    async def test_resubscribe_after_connection_kill_patterns(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test that pattern subscriptions are automatically restored after connection kill.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            pattern = "news.*"
+            channel = "news.sports"
+            message_before = "message_before_kill"
+            message_after = "message_after_kill"
+
+            callback, context = None, None
+            callback_messages: List[PubSubMsg] = []
+            if method == MethodTesting.Callback:
+                callback = new_message
+                context = callback_messages
+
+            listening_client = await create_client(
+                request,
+                cluster_mode,
+                cluster_mode_pubsub=(
+                    GlideClusterClientConfiguration.PubSubSubscriptions(
+                        channels_and_patterns={},
+                        callback=callback,
+                        context=context,
+                    )
+                    if cluster_mode and callback
+                    else None
+                ),
+                standalone_mode_pubsub=(
+                    GlideClientConfiguration.PubSubSubscriptions(
+                        channels_and_patterns={},
+                        callback=callback,
+                        context=context,
+                    )
+                    if not cluster_mode and callback
+                    else None
+                ),
+            )
+            publishing_client = await create_client(request, cluster_mode)
+
+            # Subscribe to pattern
+            await psubscribe_by_method(listening_client, subscription_method, {pattern})
+            await wait_for_subscription_if_needed(
+                listening_client, subscription_method, expected_patterns={pattern}
+            )
+
+            # Verify subscription works before kill
+            await publishing_client.publish(message_before, channel)
+            await anyio.sleep(1)
+
+            msg_before = await get_message_by_method(
+                method, listening_client, callback_messages, 0
+            )
+            assert msg_before.message == message_before
+            assert msg_before.channel == channel
+            assert msg_before.pattern == pattern
+
+            # Kill connections
+            await kill_connections(publishing_client, None)
+
+            # Wait for reconnection and resubscription
+            await anyio.sleep(2)
+
+            await wait_for_subscription_state(
+                listening_client,
+                expected_patterns={pattern},
+                timeout_ms=10000,
+            )
+
+            # Verify subscription still works after reconnection
+            await publishing_client.publish(message_after, channel)
+            await anyio.sleep(1)
+
+            msg_after = await get_message_by_method(
+                method, listening_client, callback_messages, 1
+            )
+            assert msg_after.message == message_after
+            assert msg_after.channel == channel
+            assert msg_after.pattern == pattern
+
+            await check_no_messages_left(method, listening_client, callback_messages, 2)
+
+        finally:
+            await client_cleanup(listening_client)
+            await client_cleanup(publishing_client)
+
+    @pytest.mark.skip_if_version_below("7.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize(
+        "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
+    )
+    @pytest.mark.parametrize(
+        "subscription_method", [SubscriptionMethod.Lazy, SubscriptionMethod.Blocking]
+    )
+    async def test_resubscribe_after_connection_kill_sharded(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test that sharded subscriptions are automatically restored after connection kill.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            channel = "sharded_reconnect_test"
+            message_before = "message_before_kill"
+            message_after = "message_after_kill"
+
+            callback, context = None, None
+            callback_messages: List[PubSubMsg] = []
+            if method == MethodTesting.Callback:
+                callback = new_message
+                context = callback_messages
+
+            listening_client = await create_client(
+                request,
+                cluster_mode,
+                cluster_mode_pubsub=(
+                    GlideClusterClientConfiguration.PubSubSubscriptions(
+                        channels_and_patterns={},
+                        callback=callback,
+                        context=context,
+                    )
+                    if callback
+                    else None
+                ),
+            )
+            publishing_client = await create_client(request, cluster_mode)
+
+            # Subscribe to sharded channel
+            await ssubscribe_by_method(
+                cast(GlideClusterClient, listening_client),
+                subscription_method,
+                {channel},
+            )
+            await wait_for_subscription_if_needed(
+                listening_client, subscription_method, expected_sharded={channel}
+            )
+
+            # Verify subscription works before kill
+            await cast(GlideClusterClient, publishing_client).publish(
+                message_before, channel, sharded=True
+            )
+            await anyio.sleep(1)
+
+            msg_before = await get_message_by_method(
+                method, listening_client, callback_messages, 0
+            )
+            assert msg_before.message == message_before
+            assert msg_before.channel == channel
+
+            # Kill connections
+            await kill_connections(publishing_client, None)
+
+            # Wait for reconnection and resubscription
+            await anyio.sleep(2)
+
+            await wait_for_subscription_state(
+                listening_client,
+                expected_sharded={channel},
+                timeout_ms=10000,
+            )
+
+            # Verify subscription still works after reconnection
+            await cast(GlideClusterClient, publishing_client).publish(
+                message_after, channel, sharded=True
+            )
+            await anyio.sleep(1)
+
+            msg_after = await get_message_by_method(
+                method, listening_client, callback_messages, 1
+            )
+            assert msg_after.message == message_after
+            assert msg_after.channel == channel
+
+            await check_no_messages_left(method, listening_client, callback_messages, 2)
+
+        finally:
+            await client_cleanup(listening_client)
+            await client_cleanup(publishing_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "subscription_method", [SubscriptionMethod.Lazy, SubscriptionMethod.Blocking]
+    )
+    async def test_resubscribe_after_connection_kill_mixed_subscriptions(
+        self,
+        request,
+        cluster_mode: bool,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test that mixed subscriptions (exact + pattern + sharded) are all restored after connection kill.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            exact_channel = "exact_channel"
+            pattern = "pattern_*"
+            pattern_channel = "pattern_test"
+            sharded_channel = "sharded_channel" if cluster_mode else None
+            
+            message_exact = "msg_exact"
+            message_pattern = "msg_pattern"
+            message_sharded = "msg_sharded"
+
+            listening_client = await create_client(request, cluster_mode)
+            publishing_client = await create_client(request, cluster_mode)
+
+            # Subscribe to all types
+            await subscribe_by_method(listening_client, subscription_method, {exact_channel})
+            await psubscribe_by_method(listening_client, subscription_method, {pattern})
+            
+            expected_sharded = None
+            if cluster_mode and sharded_channel:
+                await ssubscribe_by_method(
+                    cast(GlideClusterClient, listening_client),
+                    subscription_method,
+                    {sharded_channel},
+                )
+                expected_sharded = {sharded_channel}
+
+            # Wait for all subscriptions
+            await wait_for_subscription_if_needed(
+                listening_client,
+                subscription_method,
+                expected_channels={exact_channel},
+                expected_patterns={pattern},
+                expected_sharded=expected_sharded,
+            )
+
+            # Verify all subscriptions work before kill
+            await publishing_client.publish(message_exact, exact_channel)
+            await publishing_client.publish(message_pattern, pattern_channel)
+            if cluster_mode and sharded_channel:
+                await cast(GlideClusterClient, publishing_client).publish(
+                    message_sharded, sharded_channel, sharded=True
+                )
+            await anyio.sleep(1)
+
+            # Collect messages before kill
+            expected_count = 3 if cluster_mode else 2
+            messages_before: Dict[str, PubSubMsg] = {}
+            for _ in range(expected_count):
+                msg = decode_pubsub_msg(await listening_client.get_pubsub_message())
+                messages_before[msg.channel] = msg
+
+            assert exact_channel in messages_before
+            assert pattern_channel in messages_before
+            if cluster_mode:
+                assert sharded_channel in messages_before
+
+            # Kill connections
+            await kill_connections(publishing_client, None)
+
+            # Wait for reconnection
+            await anyio.sleep(2)
+
+            # Wait for all subscriptions to be re-established
+            await wait_for_subscription_state(
+                listening_client,
+                expected_channels={exact_channel},
+                expected_patterns={pattern},
+                expected_sharded=expected_sharded,
+                timeout_ms=10000,
+            )
+
+            # Verify all subscriptions work after reconnection
+            await publishing_client.publish(message_exact + "_after", exact_channel)
+            await publishing_client.publish(message_pattern + "_after", pattern_channel)
+            if cluster_mode and sharded_channel:
+                await cast(GlideClusterClient, publishing_client).publish(
+                    message_sharded + "_after", sharded_channel, sharded=True
+                )
+            await anyio.sleep(1)
+
+            # Collect messages after kill
+            messages_after: Dict[str, PubSubMsg] = {}
+            for _ in range(expected_count):
+                msg = decode_pubsub_msg(await listening_client.get_pubsub_message())
+                messages_after[msg.channel] = msg
+
+            assert messages_after[exact_channel].message == message_exact + "_after"
+            assert messages_after[pattern_channel].message == message_pattern + "_after"
+            if cluster_mode:
+                assert messages_after[sharded_channel].message == message_sharded + "_after"
+
+        finally:
+            await client_cleanup(listening_client)
+            await client_cleanup(publishing_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "subscription_method", [SubscriptionMethod.Lazy, SubscriptionMethod.Blocking]
+    )
+    async def test_resubscribe_after_connection_kill_with_initial_config(
+        self,
+        request,
+        cluster_mode: bool,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test that both initial config subscriptions and dynamic subscriptions 
+        are restored after connection kill.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            initial_channel = "initial_channel"
+            dynamic_channel = "dynamic_channel"
+            message_initial = "msg_initial"
+            message_dynamic = "msg_dynamic"
+
+            # Create client with initial subscription
+            pub_sub = create_pubsub_subscription(
+                cluster_mode,
+                {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {initial_channel}},
+                {GlideClientConfiguration.PubSubChannelModes.Exact: {initial_channel}},
+            )
+            listening_client, publishing_client = await create_two_clients_with_pubsub(
+                request, cluster_mode, [pub_sub]
+            )
+
+            # Wait for initial subscription
+            await wait_for_subscription_if_needed(
+                listening_client, subscription_method, expected_channels={initial_channel}
+            )
+
+            # Add dynamic subscription
+            await subscribe_by_method(listening_client, subscription_method, {dynamic_channel})
+            await wait_for_subscription_if_needed(
+                listening_client,
+                subscription_method,
+                expected_channels={initial_channel, dynamic_channel},
+            )
+
+            # Verify both work before kill
+            await publishing_client.publish(message_initial, initial_channel)
+            await publishing_client.publish(message_dynamic, dynamic_channel)
+            await anyio.sleep(1)
+
+            messages_before: Set[str] = set()
+            for _ in range(2):
+                msg = decode_pubsub_msg(await listening_client.get_pubsub_message())
+                messages_before.add(msg.channel)
+            
+            assert messages_before == {initial_channel, dynamic_channel}
+
+            # Kill connections
+            await kill_connections(publishing_client, None)
+
+            # Wait for reconnection and resubscription
+            await anyio.sleep(2)
+
+            await wait_for_subscription_state(
+                listening_client,
+                expected_channels={initial_channel, dynamic_channel},
+                timeout_ms=10000,
+            )
+
+            # Verify BOTH subscriptions work after reconnection
+            await publishing_client.publish(message_initial + "_after", initial_channel)
+            await publishing_client.publish(message_dynamic + "_after", dynamic_channel)
+            await anyio.sleep(1)
+
+            messages_after: Dict[str, str] = {}
+            for _ in range(2):
+                msg = decode_pubsub_msg(await listening_client.get_pubsub_message())
+                messages_after[msg.channel] = msg.message
+
+            assert messages_after[initial_channel] == message_initial + "_after"
+            assert messages_after[dynamic_channel] == message_dynamic + "_after"
 
         finally:
             await client_cleanup(listening_client)

@@ -760,18 +760,27 @@ def config_set_new_password(client: TAnyGlideClient, password):
         return client.config_set({"requirepass": password}, route=AllNodes())
 
 
-def kill_connections(client: TAnyGlideClient):
+def kill_connections(
+    client: TAnyGlideClient,
+    kill_type: str | None = "normal",
+    skip_me: str = "yes",
+):
     """
-    Kills all connections to the given TGlideClient server connected.
-        When passing a sync client, this returns the reuslt of the CLIENT KILL command.
-        When passing an async client, this returns a coroutine that should be awaited.
+    Kills connections to the given Glide server.
+
+    - If kill_type is "normal" (default), filters by TYPE normal.
+    - If kill_type is None, TYPE is omitted and all client types are targeted.
+    - skip_me controls whether the calling client is excluded.
     """
+    cmd = ["CLIENT", "KILL"]
+    if kill_type is not None:
+        cmd.extend(["TYPE", kill_type])
+    cmd.extend(["SKIPME", skip_me])
+
     if isinstance(client, (GlideClient, SyncGlideClient)):
-        return client.custom_command(["CLIENT", "KILL", "TYPE", "normal"])
+        return client.custom_command(cmd)
     elif isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
-        return client.custom_command(
-            ["CLIENT", "KILL", "TYPE", "normal"], route=AllNodes()
-        )
+        return client.custom_command(cmd, route=AllNodes())
 
 
 def generate_key(keyslot: Optional[str], is_atomic: bool) -> str:

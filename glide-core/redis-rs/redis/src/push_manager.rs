@@ -71,6 +71,21 @@ impl PushManager {
         data: &[Value],
         address: Option<String>,
     ) {
+        logger_core::log_debug(
+            "handle_pubsub_push",
+            format!(
+                "Received push notification: kind={:?}, address={:?}, data={:?}",
+                kind,
+                address.as_deref().unwrap_or("unknown"),
+                data.iter()
+                    .map(|v| match v {
+                        Value::BulkString(b) => String::from_utf8_lossy(b).to_string(),
+                        other => format!("{:?}", other),
+                    })
+                    .collect::<Vec<_>>()
+            ),
+        );
+        
         // We need an address to track subscriptions properly
         let Some(address) = address else {
             return;

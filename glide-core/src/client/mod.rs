@@ -405,13 +405,6 @@ impl Client {
         cmd.command().is_some_and(|bytes| bytes == b"SELECT")
     }
 
-    /// Checks if the given command is an SUNSUBSCRIBE command.
-    /// Returns true if the command is "SUNSUBSCRIBE", false otherwise.
-    /// Note: The underlying redis-rs library normalizes commands to uppercase.
-    fn is_sunsubscribe_command(&self, cmd: &Cmd) -> bool {
-        cmd.command().is_some_and(|bytes| bytes == b"SUNSUBSCRIBE")
-    }
-
     /// Extracts the database ID from a SELECT command.
     /// Parses the first argument of the SELECT command as an i64 database ID.
     /// Returns appropriate errors for invalid formats or missing arguments.
@@ -599,11 +592,6 @@ impl Client {
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             let client = self.get_or_initialize_client().await?;
-
-            // SUNSUBSCRIBE requires setting the fenced flag, so we must create a mutable copy
-            if self.is_sunsubscribe_command(cmd) {
-                cmd.set_fenced(true);
-            }
 
             if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
                 return result;
@@ -1215,9 +1203,11 @@ impl Client {
 /// Trait for executing PubSub commands on the internal client wrapper
 pub trait PubSubCommandApplier: Send + Sync {
     /// Send a subscription command (SUBSCRIBE, UNSUBSCRIBE, etc.)
+    /// If routing is provided, use it; otherwise use default routing logic
     fn apply_pubsub_command<'a>(
         &'a mut self,
         cmd: &'a mut Cmd,
+        routing: Option<SingleNodeRoutingInfo>,
     ) -> Pin<Box<dyn Future<Output = RedisResult<Value>> + Send + 'a>>;
 }
 
@@ -1226,15 +1216,17 @@ impl PubSubCommandApplier for ClientWrapper {
     fn apply_pubsub_command<'a>(
         &'a mut self,
         cmd: &'a mut Cmd,
+        routing: Option<SingleNodeRoutingInfo>,
     ) -> Pin<Box<dyn Future<Output = RedisResult<Value>> + Send + 'a>> {
         Box::pin(async move {
             match self {
                 ClientWrapper::Standalone(client) => client.send_command(cmd).await,
                 ClientWrapper::Cluster { client } => {
-                    // Route based on command or use random
-                    let routing = RoutingInfo::for_routable(cmd)
+                    let final_routing = routing
+                        .map(RoutingInfo::SingleNode)
+                        .or_else(|| RoutingInfo::for_routable(cmd))
                         .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random));
-                    client.route_command(cmd, routing).await
+                    client.route_command(cmd, final_routing).await
                 }
                 ClientWrapper::Lazy(_) => Err(RedisError::from((
                     ErrorKind::ClientError,
@@ -1670,7 +1662,7 @@ impl Client {
             // Give synchronizer a weak Arc to internal_client
             set_synchronizer_internal_client(
                 &pubsub_synchronizer,
-                Arc::downgrade(&internal_client_arc), // downgrade to Weak!
+                Arc::downgrade(&internal_client_arc),
             );
 
             // Create the Client first without IAM token manager
@@ -1731,6 +1723,8 @@ impl Client {
                 let mut guard = internal_client_arc.write().await;
                 *guard = internal_client;
             }
+
+            pubsub_synchronizer.trigger_reconciliation();
 
             // Return the client from the Arc
             let client = {

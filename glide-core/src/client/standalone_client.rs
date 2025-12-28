@@ -8,7 +8,6 @@ use crate::client::types::ReadFrom as ClientReadFrom;
 use futures::{StreamExt, future, stream};
 use logger_core::log_debug;
 use logger_core::log_warn;
-use rand::Rng;
 use redis::aio::ConnectionLike;
 use redis::cluster_routing::{self, ResponsePolicy, Routable, RoutingInfo, is_readonly_cmd};
 use redis::{PushInfo, RedisError, RedisResult, RetryStrategy, Value};
@@ -125,7 +124,6 @@ impl StandaloneClient {
 
         let mut valkey_connection_info =
             get_valkey_connection_info(&connection_request, iam_token_manager).await;
-        let pubsub_connection_info = valkey_connection_info.clone();
         valkey_connection_info.pubsub_subscriptions = None;
         let retry_strategy = match connection_request.connection_retry_strategy {
             Some(strategy) => RetryStrategy::new(
@@ -139,9 +137,6 @@ impl StandaloneClient {
 
         let tls_mode = connection_request.tls_mode;
         let node_count = connection_request.addresses.len();
-        // randomize pubsub nodes, maybe a batter option is to always use the primary
-        let pubsub_node_index = rand::thread_rng().gen_range(0..node_count);
-        let pubsub_addr = connection_request.addresses[pubsub_node_index].clone();
         let discover_az = matches!(
             connection_request.read_from,
             Some(ClientReadFrom::AZAffinity(_))
@@ -213,11 +208,7 @@ impl StandaloneClient {
 
         let mut stream = stream::iter(connection_request.addresses.into_iter())
             .map(move |address| {
-                let info = if address.host != pubsub_addr.host || address.port != pubsub_addr.port {
-                    valkey_connection_info.clone()
-                } else {
-                    pubsub_connection_info.clone()
-                };
+                let info = valkey_connection_info.clone();
                 let retry = retry_strategy;
                 let sender = push_sender.clone();
                 let tls = tls_mode.unwrap_or(TlsMode::NoTls);

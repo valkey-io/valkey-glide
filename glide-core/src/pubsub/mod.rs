@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use crate::client::{ClientWrapper};
+use crate::client::ClientWrapper;
 use redis::PushInfo;
 pub use redis::{
     ErrorKind, PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind,

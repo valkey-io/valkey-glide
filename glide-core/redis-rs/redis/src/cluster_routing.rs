@@ -648,9 +648,8 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"RANDOMKEY"
         | b"WAITAOF" => RouteBy::AllPrimaries,
 
-        b"MGET" | b"DEL" | b"EXISTS" | b"UNLINK" | b"TOUCH" | b"WATCH" => {
-            RouteBy::MultiShard(MultiSlotArgPattern::KeysOnly)
-        }
+        b"MGET" | b"DEL" | b"EXISTS" | b"UNLINK" | b"TOUCH" | b"WATCH" | b"SUBSCRIBE"
+        | b"PSUBSCRIBE" | b"SSUBSCRIBE" => RouteBy::MultiShard(MultiSlotArgPattern::KeysOnly),
 
         b"MSET" => RouteBy::MultiShard(MultiSlotArgPattern::KeyValuePairs),
         b"JSON.MGET" => RouteBy::MultiShard(MultiSlotArgPattern::KeysAndLastArg),
