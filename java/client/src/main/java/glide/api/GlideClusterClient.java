@@ -23,8 +23,10 @@ import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
 import static command_request.CommandRequestOuterClass.RequestType.Info;
+import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
+import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
@@ -38,8 +40,6 @@ import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static command_request.CommandRequestOuterClass.RequestType.Wait;
 import static command_request.CommandRequestOuterClass.RequestType.WaitAof;
-import static command_request.CommandRequestOuterClass.RequestType.Keys;
-import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
@@ -1329,7 +1329,9 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<String[]> keys(String pattern) {
         return commandManager.submitNewCommand(
-                Keys, new String[] {pattern}, response -> castArray(handleArrayResponse(response), String.class));
+                Keys,
+                new String[] {pattern},
+                response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
@@ -1356,13 +1358,7 @@ public class GlideClusterClient extends BaseClient
             String host, long port, GlideString key, long destinationDB, long timeout) {
         return commandManager.submitNewCommand(
                 Migrate,
-                new ArgsBuilder()
-                        .add(host)
-                        .add(port)
-                        .add(key)
-                        .add(destinationDB)
-                        .add(timeout)
-                        .toArray(),
+                new ArgsBuilder().add(host).add(port).add(key).add(destinationDB).add(timeout).toArray(),
                 this::handleStringResponse);
     }
 

@@ -23,8 +23,6 @@ import static command_request.CommandRequestOuterClass.RequestType.Exists;
 import static command_request.CommandRequestOuterClass.RequestType.Expire;
 import static command_request.CommandRequestOuterClass.RequestType.ExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.ExpireTime;
-import static command_request.CommandRequestOuterClass.RequestType.Keys;
-import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.FCall;
 import static command_request.CommandRequestOuterClass.RequestType.FCallReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.GeoAdd;
@@ -67,6 +65,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HVals;
 import static command_request.CommandRequestOuterClass.RequestType.Incr;
 import static command_request.CommandRequestOuterClass.RequestType.IncrBy;
 import static command_request.CommandRequestOuterClass.RequestType.IncrByFloat;
+import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LCS;
 import static command_request.CommandRequestOuterClass.RequestType.LIndex;
 import static command_request.CommandRequestOuterClass.RequestType.LInsert;
@@ -84,6 +83,7 @@ import static command_request.CommandRequestOuterClass.RequestType.LTrim;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
@@ -5978,7 +5978,9 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String[]> keys(String pattern) {
         return commandManager.submitNewCommand(
-                Keys, new String[] {pattern}, response -> castArray(handleArrayResponse(response), String.class));
+                Keys,
+                new String[] {pattern},
+                response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
@@ -6005,13 +6007,7 @@ public abstract class BaseClient
             String host, long port, GlideString key, long destinationDB, long timeout) {
         return commandManager.submitNewCommand(
                 Migrate,
-                new ArgsBuilder()
-                        .add(host)
-                        .add(port)
-                        .add(key)
-                        .add(destinationDB)
-                        .add(timeout)
-                        .toArray(),
+                new ArgsBuilder().add(host).add(port).add(key).add(destinationDB).add(timeout).toArray(),
                 this::handleStringResponse);
     }
 

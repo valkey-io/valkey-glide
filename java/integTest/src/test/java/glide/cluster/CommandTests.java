@@ -3848,8 +3848,7 @@ public class CommandTests {
     @Test
     public void waitaof_cluster_mode() {
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"),
-                "WAITAOF requires Valkey 7.2.0 or higher");
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"), "WAITAOF requires Valkey 7.2.0 or higher");
 
         GlideClusterClient client =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();

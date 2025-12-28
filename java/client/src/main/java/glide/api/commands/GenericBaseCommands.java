@@ -1685,9 +1685,9 @@ public interface GenericBaseCommands {
     CompletableFuture<GlideString[]> keys(GlideString pattern);
 
     /**
-     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
-     * Once the key is successfully transferred, it is deleted from the source instance and is
-     * guaranteed to exist in the destination instance.
+     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance. Once
+     * the key is successfully transferred, it is deleted from the source instance and is guaranteed
+     * to exist in the destination instance.
      *
      * @see <a href="https://valkey.io/commands/migrate/">valkey.io</a> for details.
      * @param host The destination host.
@@ -1708,9 +1708,9 @@ public interface GenericBaseCommands {
             String host, long port, String key, long destinationDB, long timeout);
 
     /**
-     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
-     * Once the key is successfully transferred, it is deleted from the source instance and is
-     * guaranteed to exist in the destination instance.
+     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance. Once
+     * the key is successfully transferred, it is deleted from the source instance and is guaranteed
+     * to exist in the destination instance.
      *
      * @see <a href="https://valkey.io/commands/migrate/">valkey.io</a> for details.
      * @param host The destination host.
@@ -1731,9 +1731,9 @@ public interface GenericBaseCommands {
             String host, long port, GlideString key, long destinationDB, long timeout);
 
     /**
-     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
-     * Once the key is successfully transferred, it is deleted from the source instance (unless COPY
-     * is specified) and is guaranteed to exist in the destination instance.
+     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance. Once
+     * the key is successfully transferred, it is deleted from the source instance (unless COPY is
+     * specified) and is guaranteed to exist in the destination instance.
      *
      * @see <a href="https://valkey.io/commands/migrate/">valkey.io</a> for details.
      * @param host The destination host.
@@ -1761,9 +1761,9 @@ public interface GenericBaseCommands {
             MigrateOptions migrateOptions);
 
     /**
-     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
-     * Once the key is successfully transferred, it is deleted from the source instance (unless COPY
-     * is specified) and is guaranteed to exist in the destination instance.
+     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance. Once
+     * the key is successfully transferred, it is deleted from the source instance (unless COPY is
+     * specified) and is guaranteed to exist in the destination instance.
      *
      * @see <a href="https://valkey.io/commands/migrate/">valkey.io</a> for details.
      * @param host The destination host.
