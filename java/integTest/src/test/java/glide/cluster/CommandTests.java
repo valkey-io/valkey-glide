@@ -3900,23 +3900,23 @@ public class CommandTests {
             assertNotNull(exception.getCause(), "Exception should have a cause");
             String errorMessage = exception.getCause().getMessage();
             assertNotNull(errorMessage, "Error message should not be null");
-            
+
             // Check for various connection-related error messages
-            boolean isConnectionError = errorMessage.contains("Connection refused")
-                    || errorMessage.contains("Name or service not known")
-                    || errorMessage.contains("nodename nor servname provided")
-                    || errorMessage.contains("Temporary failure")
-                    || errorMessage.contains("IOERR")
-                    || errorMessage.toLowerCase().contains("error");
-            
+            boolean isConnectionError =
+                    errorMessage.contains("Connection refused")
+                            || errorMessage.contains("Name or service not known")
+                            || errorMessage.contains("nodename nor servname provided")
+                            || errorMessage.contains("Temporary failure")
+                            || errorMessage.contains("IOERR")
+                            || errorMessage.toLowerCase().contains("error");
+
             // If not a connection error, print the actual message for debugging
             if (!isConnectionError) {
                 System.err.println("Unexpected error message: " + errorMessage);
                 System.err.println("Exception type: " + exception.getCause().getClass().getName());
             }
-            
-            assertTrue(isConnectionError, 
-                    "Expected connection error but got: " + errorMessage);
+
+            assertTrue(isConnectionError, "Expected connection error but got: " + errorMessage);
 
             // Clean up
             client.del(new String[] {key}).get();
