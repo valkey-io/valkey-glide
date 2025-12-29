@@ -35,7 +35,6 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
-use crate::pubsub::set_synchronizer_internal_client;
 use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
 use crate::request_type::RequestType;
 use redis::InfoDict;
@@ -1656,14 +1655,9 @@ impl Client {
                 push_sender.clone(),
                 initial_subscriptions,
                 request.cluster_mode_enabled,
+                Arc::downgrade(&internal_client_arc),
             )
             .await;
-
-            // Give synchronizer a weak Arc to internal_client
-            set_synchronizer_internal_client(
-                &pubsub_synchronizer,
-                Arc::downgrade(&internal_client_arc),
-            );
 
             // Create the Client first without IAM token manager
             let client = Self {
@@ -1800,6 +1794,7 @@ mod tests {
     };
 
     use super::{Client, ClientWrapper, LazyClient, get_timeout_from_cmd_arg};
+    use std::sync::Weak;
 
     #[test]
     fn test_get_timeout_from_cmd_returns_correct_duration_int() {
@@ -2043,7 +2038,8 @@ mod tests {
         // Create runtime to initialize a stub pubsub synchronizer
         // We do this in order to keep the pubsub_synchronizer in the client struct non-optional.
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let pubsub_synchronizer = rt.block_on(create_pubsub_synchronizer(None, None, false));
+        let pubsub_synchronizer =
+            rt.block_on(create_pubsub_synchronizer(None, None, false, Weak::new()));
 
         Client {
             internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),

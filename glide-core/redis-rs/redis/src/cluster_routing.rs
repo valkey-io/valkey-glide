@@ -1298,7 +1298,8 @@ impl ShardAddrs {
         Self::new(primary, Vec::default())
     }
 
-    pub(crate) fn primary(&self) -> Arc<String> {
+    /// Returns the address of the primary node for this shard.
+    pub fn primary(&self) -> Arc<String> {
         self.primary.read().expect(READ_LK_ERR_SHARDADDRS).clone()
     }
 

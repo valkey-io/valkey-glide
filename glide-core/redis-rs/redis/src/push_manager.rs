@@ -85,7 +85,7 @@ impl PushManager {
                     .collect::<Vec<_>>()
             ),
         );
-        
+
         // We need an address to track subscriptions properly
         let Some(address) = address else {
             return;

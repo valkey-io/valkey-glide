@@ -46,6 +46,16 @@ pub struct GlidePubSubSynchronizer {
 
     /// Handle to the reconciliation task
     reconciliation_task_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
+
+    /// Pending unsubscribes due to topology change that need to be sent to specific addresses
+    /// Format: (address, kind, channels)
+    pending_unsubscribes: RwLock<
+        Vec<(
+            String,
+            PubSubSubscriptionKind,
+            HashSet<PubSubChannelOrPattern>,
+        )>,
+    >,
 }
 
 impl GlidePubSubSynchronizer {
@@ -61,6 +71,7 @@ impl GlidePubSubSynchronizer {
             reconciliation_notify: Arc::new(Notify::new()),
             reconciliation_complete_notify: Arc::new(Notify::new()),
             reconciliation_task_handle: Mutex::new(None),
+            pending_unsubscribes: RwLock::new(Vec::new()),
         });
 
         sync.start_reconciliation_task();
@@ -216,6 +227,9 @@ impl GlidePubSubSynchronizer {
 
     /// Perform reconciliation - align current subscriptions with desired
     async fn reconcile(&self) -> RedisResult<()> {
+        // First, process any pending unsubscribes from topology changes
+        self.process_pending_unsubscribes().await;
+
         let desired = self.desired_subscriptions.read().expect(LOCK_ERR).clone();
         let current_by_addr = self
             .current_subscriptions_by_address
@@ -250,6 +264,62 @@ impl GlidePubSubSynchronizer {
         }
 
         Ok(())
+    }
+
+    async fn process_pending_unsubscribes(&self) {
+        let pending = {
+            let mut guard = self.pending_unsubscribes.write().expect(LOCK_ERR);
+            std::mem::take(&mut *guard)
+        };
+
+        if pending.is_empty() {
+            return;
+        }
+
+        log_debug(
+            "process_pending_unsubscribes",
+            format!("Processing {} pending unsubscribe batches", pending.len()),
+        );
+
+        for (address, kind, channels) in pending {
+            if channels.is_empty() {
+                continue;
+            }
+
+            let routing = match Self::parse_address_to_routing(&address) {
+                Ok(r) => Some(r),
+                Err(e) => {
+                    log_warn(
+                        "process_pending_unsubscribes",
+                        format!("Failed to parse address '{}': {:?}", address, e),
+                    );
+                    continue;
+                }
+            };
+
+            log_debug(
+                "process_pending_unsubscribes",
+                format!(
+                    "Sending {:?} unsubscribe to {} for {} channels: {:?}",
+                    kind,
+                    address,
+                    channels.len(),
+                    channels
+                        .iter()
+                        .map(|c| String::from_utf8_lossy(c).to_string())
+                        .collect::<Vec<_>>()
+                ),
+            );
+
+            if kind == PubSubSubscriptionKind::Sharded {
+                // For sharded channels, group by slot to avoid CrossSlot errors
+                self.execute_sharded_unsubscribe_by_slot(channels, routing)
+                    .await;
+            } else {
+                self.execute_subscription_change(channels, kind, false, routing)
+                    .await;
+            }
+        }
     }
 
     /// Execute a subscription change (subscribe or unsubscribe)
@@ -288,11 +358,27 @@ impl GlidePubSubSynchronizer {
         } else {
             "unsubscribe"
         };
-        if let Err(e) = self.send_command(&mut cmd, routing).await {
-            log_error(
-                "execute_subscription_change",
-                format!("Failed to {} {:?} channels: {:?}", action, kind, e),
-            );
+        match self.send_command(&mut cmd, routing).await {
+            Ok(_) => {
+                log_debug(
+                    "execute_subscription_change",
+                    format!(
+                        "Sent {} for {:?} channels: {:?}",
+                        action,
+                        kind,
+                        channels
+                            .iter()
+                            .map(|c| String::from_utf8_lossy(c).to_string())
+                            .collect::<Vec<_>>()
+                    ),
+                );
+            }
+            Err(e) => {
+                log_error(
+                    "execute_subscription_change",
+                    format!("Failed to {} {:?} channels: {:?}", action, kind, e),
+                );
+            }
         }
     }
 
@@ -457,9 +543,16 @@ impl GlidePubSubSynchronizer {
         timeout_ms: u64,
         wait_for_presence: bool,
     ) -> RedisResult<()> {
-        let start = Instant::now();
+        let deadline = if timeout_ms > 0 {
+            Some(Instant::now() + Duration::from_millis(timeout_ms))
+        } else {
+            None
+        };
 
         loop {
+            // This ensures we don't miss notifications that happen during the check
+            let notified = self.reconciliation_complete_notify.notified();
+
             let current = self.get_aggregated_current_subscriptions();
             let current_set = current.get(&kind).cloned().unwrap_or_default();
 
@@ -474,24 +567,22 @@ impl GlidePubSubSynchronizer {
                 return Ok(());
             }
 
-            let elapsed_ms = start.elapsed().as_millis() as u64;
-            if timeout_ms > 0 && elapsed_ms >= timeout_ms {
-                return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
-            }
+            // Wait for reconciliation notification or timeout
+            if let Some(deadline) = deadline {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
+                }
 
-            let remaining_ms = if timeout_ms > 0 {
-                timeout_ms.saturating_sub(elapsed_ms)
-            } else {
-                u64::MAX
-            };
-
-            tokio::select! {
-                _ = self.reconciliation_complete_notify.notified() => continue,
-                _ = tokio::time::sleep(Duration::from_millis(remaining_ms.min(100))) => {
-                    if timeout_ms > 0 && start.elapsed().as_millis() as u64 >= timeout_ms {
+                tokio::select! {
+                    _ = notified => {
+                    }
+                    _ = tokio::time::sleep(remaining) => {
                         return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
                     }
                 }
+            } else {
+                notified.await;
             }
         }
     }
@@ -642,6 +733,15 @@ impl GlidePubSubSynchronizer {
             })
             .collect();
         Value::Map(redis_map)
+    }
+
+    /// Get current subscriptions organized by address.
+    /// Used for testing to verify subscriptions moved to different addresses after slot migration.
+    pub fn get_current_subscriptions_by_address(&self) -> HashMap<String, PubSubSubscriptionInfo> {
+        self.current_subscriptions_by_address
+            .read()
+            .expect(LOCK_ERR)
+            .clone()
     }
 }
 
@@ -850,37 +950,115 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
     }
 
     fn handle_topology_refresh(&self, new_slot_map: &SlotMap) {
-        if !self.is_cluster {
-            return;
-        }
-
+        log_debug("handle_topology_refresh", format!("in handle topology"));
         let new_addresses: HashSet<String> = new_slot_map
             .all_node_addresses()
             .iter()
             .map(|arc| arc.to_string())
             .collect();
 
+        let mut modified = false;
+        let mut unsubscribes_to_queue: Vec<(
+            String,
+            PubSubSubscriptionKind,
+            HashSet<PubSubChannelOrPattern>,
+        )> = Vec::new();
+
         {
             let mut current_by_addr = self
                 .current_subscriptions_by_address
                 .write()
                 .expect(LOCK_ERR);
-            let before_count = current_by_addr.len();
-            current_by_addr.retain(|addr, _| new_addresses.contains(addr));
-            let after_count = current_by_addr.len();
 
-            if before_count != after_count {
-                log_debug(
-                    "topology_refresh",
-                    format!(
-                        "Removed subscriptions for {} addresses no longer in topology",
-                        before_count - after_count
-                    ),
-                );
+            // Collect addresses to remove entirely (node no longer exists)
+            let addresses_to_remove: Vec<String> = current_by_addr
+                .keys()
+                .filter(|addr| !new_addresses.contains(*addr))
+                .cloned()
+                .collect();
+
+            // Queue unsubscribes for removed addresses
+            for addr in &addresses_to_remove {
+                if let Some(addr_subs) = current_by_addr.remove(addr) {
+                    for (kind, channels) in addr_subs {
+                        if !channels.is_empty() {
+                            log_debug(
+                                "topology_refresh",
+                                format!(
+                                    "Queueing unsubscribe for {} {:?} channels from removed address {}",
+                                    channels.len(),
+                                    kind,
+                                    addr
+                                ),
+                            );
+                            unsubscribes_to_queue.push((addr.clone(), kind, channels));
+                            modified = true;
+                        }
+                    }
+                }
             }
+
+            // Check for slot migrations on remaining addresses
+            for (addr, addr_subs) in current_by_addr.iter_mut() {
+                for (kind, channels) in addr_subs.iter_mut() {
+                    let mut migrated_channels: HashSet<PubSubChannelOrPattern> = HashSet::new();
+
+                    channels.retain(|channel| {
+                        let slot = redis::cluster_topology::get_slot(channel);
+
+                        match new_slot_map.shard_addrs_for_slot(slot) {
+                            Some(shard_addrs) => {
+                                let new_primary = shard_addrs.primary();
+                                if new_primary.as_str() != addr {
+                                    // Slot migrated to a different node
+                                    migrated_channels.insert(channel.clone());
+                                    modified = true;
+                                    false
+                                } else {
+                                    true
+                                }
+                            }
+                            None => {
+                                // Slot has no owner - queue unsubscribe
+                                migrated_channels.insert(channel.clone());
+                                modified = true;
+                                false
+                            }
+                        }
+                    });
+
+                    // Queue unsubscribes for migrated channels from this address
+                    if !migrated_channels.is_empty() {
+                        log_debug(
+                            "topology_refresh",
+                            format!(
+                                "Queueing unsubscribe for {} migrated {:?} channels from {}",
+                                migrated_channels.len(),
+                                kind,
+                                addr
+                            ),
+                        );
+                        unsubscribes_to_queue.push((addr.clone(), *kind, migrated_channels));
+                    }
+                }
+
+                // Clean up empty entries
+                addr_subs.retain(|_, channels| !channels.is_empty());
+            }
+
+            // Clean up addresses with no subscriptions
+            current_by_addr.retain(|_, addr_subs| !addr_subs.is_empty());
         }
 
-        self.trigger_reconciliation();
+        // Add queued unsubscribes to pending list
+        if !unsubscribes_to_queue.is_empty() {
+            let mut pending = self.pending_unsubscribes.write().expect(LOCK_ERR);
+            pending.extend(unsubscribes_to_queue);
+        }
+
+        if modified {
+            self.trigger_reconciliation();
+        }
     }
 
     fn get_subscription_state(&self) -> (PubSubSubscriptionInfo, PubSubSubscriptionInfo) {
