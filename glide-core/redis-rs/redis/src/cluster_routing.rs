@@ -590,6 +590,7 @@ enum RouteBy {
     SecondArgAfterKeyCount,
     SecondArgSlot,
     StreamsIndex,
+    ThirdArg,
     ThirdArgAfterKeyCount,
     Undefined,
 }
@@ -663,7 +664,6 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
 
         b"BITOP"
         | b"MEMORY USAGE"
-        | b"MIGRATE"
         | b"PFDEBUG"
         | b"XGROUP CREATE"
         | b"XGROUP CREATECONSUMER"
@@ -678,6 +678,8 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"OBJECT IDLETIME"
         | b"OBJECT REFCOUNT"
         | b"JSON.DEBUG" => RouteBy::SecondArg,
+
+        b"MIGRATE" => RouteBy::ThirdArg,
 
         b"LMPOP" | b"SINTERCARD" | b"ZDIFF" | b"ZINTER" | b"ZINTERCARD" | b"ZMPOP" | b"ZUNION" => {
             RouteBy::SecondArgAfterKeyCount
@@ -766,6 +768,7 @@ impl RoutingInfo {
         match base_routing(cmd) {
             RouteBy::FirstKey
             | RouteBy::SecondArg
+            | RouteBy::ThirdArg
             | RouteBy::SecondArgAfterKeyCount
             | RouteBy::ThirdArgAfterKeyCount
             | RouteBy::SecondArgSlot
@@ -822,6 +825,8 @@ impl RoutingInfo {
             }
 
             RouteBy::SecondArg => r.arg_idx(2).map(|key| RoutingInfo::for_key(cmd, key)),
+
+            RouteBy::ThirdArg => r.arg_idx(3).map(|key| RoutingInfo::for_key(cmd, key)),
 
             RouteBy::SecondArgAfterKeyCount => {
                 let key_count = r
