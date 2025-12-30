@@ -193,7 +193,7 @@ where
             discover_az,
             connection_timeout: Some(params.connection_timeout),
             connection_retry_strategy: None,
-            tcp_nodelay: None,
+            tcp_nodelay: params.tcp_nodelay,
         },
     )
     .await

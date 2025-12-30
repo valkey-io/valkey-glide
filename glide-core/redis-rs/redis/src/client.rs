@@ -96,9 +96,9 @@ pub struct GlideConnectionOptions {
     pub connection_timeout: Option<Duration>,
     /// Retry strategy configuration for reconnect attempts.
     pub connection_retry_strategy: Option<RetryStrategy>,
-    /// TCP_NODELAY socket option. When Some(true), disables Nagle's algorithm.
-    /// When Some(false), enables Nagle's algorithm. When None, defaults to true.
-    pub tcp_nodelay: Option<bool>,
+    /// TCP_NODELAY socket option. When true, disables Nagle's algorithm for lower latency.
+    /// When false, enables Nagle's algorithm to reduce network overhead.
+    pub tcp_nodelay: bool,
 }
 
 /// To enable async support you need to enable the feature: `tokio-comp`
@@ -118,6 +118,9 @@ impl Client {
         let (con, _ip) = match Runtime::locate() {
             #[cfg(feature = "tokio-comp")]
             Runtime::Tokio => {
+                // Note: tcp_nodelay is hardcoded to true (default) since this deprecated API
+                // doesn't accept GlideConnectionOptions. Modern code should use
+                // get_multiplexed_async_connection which allows configuring tcp_nodelay.
                 self.get_simple_async_connection::<crate::aio::tokio::Tokio>(None, true)
                     .await?
             }
@@ -430,9 +433,8 @@ impl Client {
     where
         T: crate::aio::RedisRuntime,
     {
-        let tcp_nodelay = glide_connection_options.tcp_nodelay.unwrap_or(true);
         let (con, ip) = self
-            .get_simple_async_connection::<T>(socket_addr, tcp_nodelay)
+            .get_simple_async_connection::<T>(socket_addr, glide_connection_options.tcp_nodelay)
             .await?;
         crate::aio::MultiplexedConnection::new_with_response_timeout(
             &self.connection_info,

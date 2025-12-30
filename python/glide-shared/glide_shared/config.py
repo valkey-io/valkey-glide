@@ -422,7 +422,7 @@ class AdvancedBaseClientConfiguration:
         tcp_nodelay (Optional[bool]): Controls TCP_NODELAY socket option (Nagle's algorithm).
             When True, disables Nagle's algorithm for lower latency by sending packets immediately without buffering.
             When False, enables Nagle's algorithm to reduce network overhead by buffering small packets.
-            If not explicitly set, a default value of True will be used by the Rust core.
+            If not explicitly set, defaults to True.
     """
 
     def __init__(

@@ -39,7 +39,7 @@ pub struct ConnectionRequest {
     pub client_cert: Vec<u8>,
     pub client_key: Vec<u8>,
     pub compression_config: Option<CompressionConfig>,
-    pub tcp_nodelay: Option<bool>,
+    pub tcp_nodelay: bool,
 }
 
 /// Authentication information for connecting to Redis/Valkey servers
@@ -321,7 +321,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             }
         });
 
-        let tcp_nodelay = value.tcp_nodelay;
+        let tcp_nodelay = value.tcp_nodelay.unwrap_or(true);
 
         ConnectionRequest {
             read_from,
