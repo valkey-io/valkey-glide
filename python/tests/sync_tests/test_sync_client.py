@@ -12052,6 +12052,8 @@ class TestSyncScripts:
                 assert cluster_client.ping() == b"PONG"
                 assert cluster_client.set("key", "value") == "OK"
                 assert cluster_client.get("key") == b"value"
+                # Clean up test key
+                cluster_client.delete(["key"])
             finally:
                 cluster_client.close()
         else:
@@ -12067,5 +12069,7 @@ class TestSyncScripts:
                 assert standalone_client.ping() == b"PONG"
                 assert standalone_client.set("key", "value") == "OK"
                 assert standalone_client.get("key") == b"value"
+                # Clean up test key
+                standalone_client.delete(["key"])
             finally:
                 standalone_client.close()

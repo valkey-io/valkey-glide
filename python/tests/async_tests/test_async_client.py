@@ -12250,6 +12250,8 @@ class TestScripts:
                 assert await cluster_client.ping() == b"PONG"
                 assert await cluster_client.set("key", "value") == "OK"
                 assert await cluster_client.get("key") == b"value"
+                # Clean up test key
+                await cluster_client.delete(["key"])
             finally:
                 await cluster_client.close()
         else:
@@ -12265,5 +12267,7 @@ class TestScripts:
                 assert await standalone_client.ping() == b"PONG"
                 assert await standalone_client.set("key", "value") == "OK"
                 assert await standalone_client.get("key") == b"value"
+                # Clean up test key
+                await standalone_client.delete(["key"])
             finally:
                 await standalone_client.close()
