@@ -74,14 +74,11 @@ pub trait PubSubSynchronizer: Send + Sync {
         None
     }
 
-    /// Set initial subscriptions from client configuration and trigger immediate reconciliation
-    fn set_initial_subscriptions(
-        &self,
-        _channels: HashSet<PubSubChannelOrPattern>,
-        _patterns: HashSet<PubSubChannelOrPattern>,
-        _sharded: HashSet<PubSubChannelOrPattern>,
-    ) {
-        // Default: no-op
+    /// Wait for initial subscriptions (set via config) to be synchronized.
+    /// Returns Ok(()) when all desired subscriptions are established, or error on timeout.
+    /// Default implementation returns immediately (no-op for clients without initial subscriptions).
+    async fn wait_for_initial_sync(&self, _timeout_ms: u64) -> RedisResult<()> {
+        Ok(())
     }
 
     /// Allows downcasting to concrete types

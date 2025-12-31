@@ -577,6 +577,16 @@ impl Client {
 
             // Replace the lazy client with the real client
             *guard = real_client;
+
+            if let Err(e) = self.pubsub_synchronizer.wait_for_initial_sync(2000).await {
+                log_warn(
+                    "Client::new",
+                    format!(
+                        "Failed to establish initial subscriptions within timeout: {:?}",
+                        e
+                    ),
+                );
+            }
         }
 
         Ok(guard.clone()) // ✅ Return clone of the now-initialized wrapper
@@ -1684,7 +1694,8 @@ impl Client {
                 client_guard.iam_token_manager = iam_token_manager.clone();
             }
 
-            let internal_client = if request.lazy_connect {
+            let is_lazy = request.lazy_connect;
+            let internal_client = if is_lazy {
                 ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request,
                     push_sender,
@@ -1718,7 +1729,18 @@ impl Client {
                 *guard = internal_client;
             }
 
-            pubsub_synchronizer.trigger_reconciliation();
+            if !is_lazy {
+                pubsub_synchronizer.trigger_reconciliation();
+                if let Err(e) = pubsub_synchronizer.wait_for_initial_sync(2000).await {
+                    log_error(
+                        "Client::new",
+                        format!(
+                            "Failed to establish initial subscriptions within timeout: {:?}",
+                            e
+                        ),
+                    );
+                }
+            }
 
             // Return the client from the Arc
             let client = {

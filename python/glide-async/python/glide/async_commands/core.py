@@ -7840,7 +7840,7 @@ class CoreCommands(Protocol):
             >>> # Multiple channels
             >>> await client.subscribe_lazy({"channel1", "channel2"})
         """
-        await self._execute_command(RequestType.SubscribeLazy, list(channels))
+        await self._execute_command(RequestType.Subscribe, list(channels))
 
     async def subscribe(self, channels: Set[str], timeout_ms: int = 0) -> None:
         """
@@ -7868,7 +7868,7 @@ class CoreCommands(Protocol):
             >>> print("Subscribed successfully within 5 seconds")
         """
         args = list(channels) + [str(timeout_ms)]
-        await self._execute_command(RequestType.Subscribe, list(args))
+        await self._execute_command(RequestType.SubscribeBlocking, list(args))
 
     async def psubscribe_lazy(self, patterns: Set[str]) -> None:
         """
@@ -7893,7 +7893,7 @@ class CoreCommands(Protocol):
             >>> # Multiple patterns
             >>> await client.psubscribe_lazy({"news.*", "updates.*"})
         """
-        await self._execute_command(RequestType.PSubscribeLazy, list(patterns))
+        await self._execute_command(RequestType.PSubscribe, list(patterns))
 
     async def psubscribe(self, patterns: Set[str], timeout_ms: int = 0) -> None:
         """
@@ -7921,7 +7921,7 @@ class CoreCommands(Protocol):
             >>> print("Subscribed to patterns successfully within 10 seconds")
         """
         args = list(patterns) + [str(timeout_ms)]
-        await self._execute_command(RequestType.PSubscribe, list(args))
+        await self._execute_command(RequestType.PSubscribeBlocking, list(args))
 
     async def unsubscribe_lazy(self, channels: Optional[Set[str]] = None) -> None:
         """
@@ -7948,7 +7948,7 @@ class CoreCommands(Protocol):
             >>> await client.unsubscribe_lazy()
         """
         await self._execute_command(
-            RequestType.UnsubscribeLazy, list(channels) if channels else []
+            RequestType.Unsubscribe, list(channels) if channels else []
         )
 
     async def unsubscribe(
@@ -7983,7 +7983,7 @@ class CoreCommands(Protocol):
             >>> await client.unsubscribe(timeout=10.0)
         """
         args = (list(channels) if channels else []) + [str(timeout_ms)]
-        await self._execute_command(RequestType.Unsubscribe, list(args))
+        await self._execute_command(RequestType.UnsubscribeBlocking, list(args))
 
     async def punsubscribe_lazy(self, patterns: Optional[Set[str]] = None) -> None:
         """
@@ -8009,7 +8009,7 @@ class CoreCommands(Protocol):
             >>> await client.punsubscribe_lazy()
         """
         await self._execute_command(
-            RequestType.PUnsubscribeLazy, list(patterns) if patterns else []
+            RequestType.PUnsubscribe, list(patterns) if patterns else []
         )
 
     async def punsubscribe(
@@ -8044,4 +8044,4 @@ class CoreCommands(Protocol):
             >>> await client.punsubscribe(timeout=10.0)
         """
         args = (list(patterns) if patterns else []) + [str(timeout_ms)]
-        await self._execute_command(RequestType.PUnsubscribe, list(args))
+        await self._execute_command(RequestType.PUnsubscribeBlocking, list(args))

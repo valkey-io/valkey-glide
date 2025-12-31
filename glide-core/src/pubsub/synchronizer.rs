@@ -39,10 +39,10 @@ pub struct GlidePubSubSynchronizer {
     current_subscriptions_by_address: RwLock<HashMap<String, PubSubSubscriptionInfo>>,
 
     /// Notifier to trigger reconciliation task
-    reconciliation_notify: Arc<Notify>,
+    reconciliation_notify: Notify,
 
     /// Notifier for when reconciliation completes a cycle
-    reconciliation_complete_notify: Arc<Notify>,
+    reconciliation_complete_notify: Notify,
 
     /// Handle to the reconciliation task
     reconciliation_task_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -68,8 +68,8 @@ impl GlidePubSubSynchronizer {
             is_cluster,
             desired_subscriptions: RwLock::new(initial_subscriptions.unwrap_or_default()),
             current_subscriptions_by_address: RwLock::new(HashMap::new()),
-            reconciliation_notify: Arc::new(Notify::new()),
-            reconciliation_complete_notify: Arc::new(Notify::new()),
+            reconciliation_notify: Notify::new(),
+            reconciliation_complete_notify: Notify::new(),
             reconciliation_task_handle: Mutex::new(None),
             pending_unsubscribes: RwLock::new(Vec::new()),
         });
@@ -195,20 +195,17 @@ impl GlidePubSubSynchronizer {
     /// Start the background reconciliation task
     fn start_reconciliation_task(self: &Arc<Self>) {
         let sync_weak = Arc::downgrade(self);
-        let notify = Arc::clone(&self.reconciliation_notify);
-        let complete_notify = Arc::clone(&self.reconciliation_complete_notify);
 
         let handle = tokio::spawn(async move {
             loop {
-                tokio::select! {
-                    _ = notify.notified() => {},
-                    _ = tokio::time::sleep(RECONCILIATION_INTERVAL) => {},
-                }
-
                 let Some(sync) = sync_weak.upgrade() else {
-                    log_debug("reconciliation_task", "Synchronizer dropped, exiting task");
+                    log_warn("reconciliation_task", "Synchronizer dropped, exiting task");
                     break;
                 };
+                tokio::select! {
+                    _ = sync.reconciliation_notify.notified() => {},
+                    _ = tokio::time::sleep(RECONCILIATION_INTERVAL) => {},
+                }
 
                 if let Err(e) = sync.reconcile().await {
                     log_error(
@@ -218,7 +215,7 @@ impl GlidePubSubSynchronizer {
                 }
 
                 sync.check_and_record_sync_state();
-                complete_notify.notify_waiters();
+                sync.reconciliation_complete_notify.notify_waiters();
             }
         });
 
@@ -492,7 +489,6 @@ impl GlidePubSubSynchronizer {
             log_debug("sync_state", "Subscriptions are synchronized");
             return;
         }
-
         let _ = GlideOpenTelemetry::record_subscription_out_of_sync();
         let (desired, actual) = self.get_subscription_state();
         log_warn(
@@ -1085,52 +1081,52 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         let command_str = std::str::from_utf8(&command_name).unwrap_or("");
 
         match command_str {
-            // Lazy subscribe commands
-            "SUBSCRIBE_LAZY" => {
+            // Non-blocking subscribe commands
+            "SUBSCRIBE" => {
                 Some(self.handle_lazy_subscription(cmd, PubSubSubscriptionKind::Exact, true))
             }
-            "PSUBSCRIBE_LAZY" => {
+            "PSUBSCRIBE" => {
                 Some(self.handle_lazy_subscription(cmd, PubSubSubscriptionKind::Pattern, true))
             }
-            "SSUBSCRIBE_LAZY" => {
+            "SSUBSCRIBE" => {
                 Some(self.handle_lazy_subscription(cmd, PubSubSubscriptionKind::Sharded, true))
             }
 
-            // Lazy unsubscribe commands
-            "UNSUBSCRIBE_LAZY" => {
+            // Non-blocking unsubscribe commands
+            "UNSUBSCRIBE" => {
                 Some(self.handle_lazy_subscription(cmd, PubSubSubscriptionKind::Exact, false))
             }
-            "PUNSUBSCRIBE_LAZY" => {
+            "PUNSUBSCRIBE" => {
                 Some(self.handle_lazy_subscription(cmd, PubSubSubscriptionKind::Pattern, false))
             }
-            "SUNSUBSCRIBE_LAZY" => {
+            "SUNSUBSCRIBE" => {
                 Some(self.handle_lazy_subscription(cmd, PubSubSubscriptionKind::Sharded, false))
             }
 
             // Blocking subscribe commands
-            "SUBSCRIBE" => Some(
+            "SUBSCRIBE_BLOCKING" => Some(
                 self.handle_blocking_subscription(cmd, PubSubSubscriptionKind::Exact, true)
                     .await,
             ),
-            "PSUBSCRIBE" => Some(
+            "PSUBSCRIBE_BLOCKING" => Some(
                 self.handle_blocking_subscription(cmd, PubSubSubscriptionKind::Pattern, true)
                     .await,
             ),
-            "SSUBSCRIBE" => Some(
+            "SSUBSCRIBE_BLOCKING" => Some(
                 self.handle_blocking_subscription(cmd, PubSubSubscriptionKind::Sharded, true)
                     .await,
             ),
 
             // Blocking unsubscribe commands
-            "UNSUBSCRIBE" => Some(
+            "UNSUBSCRIBE_BLOCKING" => Some(
                 self.handle_blocking_subscription(cmd, PubSubSubscriptionKind::Exact, false)
                     .await,
             ),
-            "PUNSUBSCRIBE" => Some(
+            "PUNSUBSCRIBE_BLOCKING" => Some(
                 self.handle_blocking_subscription(cmd, PubSubSubscriptionKind::Pattern, false)
                     .await,
             ),
-            "SUNSUBSCRIBE" => Some(
+            "SUNSUBSCRIBE_BLOCKING" => Some(
                 self.handle_blocking_subscription(cmd, PubSubSubscriptionKind::Sharded, false)
                     .await,
             ),
@@ -1143,37 +1139,56 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         }
     }
 
-    fn set_initial_subscriptions(
-        &self,
-        channels: HashSet<PubSubChannelOrPattern>,
-        patterns: HashSet<PubSubChannelOrPattern>,
-        sharded: HashSet<PubSubChannelOrPattern>,
-    ) {
-        {
-            let mut desired = self.desired_subscriptions.write().expect(LOCK_ERR);
+    async fn wait_for_initial_sync(&self, timeout_ms: u64) -> RedisResult<()> {
+        self.trigger_reconciliation();
+        let desired = self.desired_subscriptions.read().expect(LOCK_ERR).clone();
 
-            if !channels.is_empty() {
-                desired
-                    .entry(PubSubSubscriptionKind::Exact)
-                    .or_default()
-                    .extend(channels);
-            }
+        // If no desired subscriptions, nothing to wait for
+        let has_any_desired = self
+            .subscription_kinds()
+            .any(|kind| desired.get(&kind).map(|s| !s.is_empty()).unwrap_or(false));
 
-            if !patterns.is_empty() {
-                desired
-                    .entry(PubSubSubscriptionKind::Pattern)
-                    .or_default()
-                    .extend(patterns);
-            }
+        if !has_any_desired {
+            log_debug(
+                "wait_for_initial_sync",
+                "No initial subscriptions to wait for",
+            );
+            return Ok(());
+        }
 
-            if !sharded.is_empty() && self.is_cluster {
-                desired
-                    .entry(PubSubSubscriptionKind::Sharded)
-                    .or_default()
-                    .extend(sharded);
+        log_debug(
+            "wait_for_initial_sync",
+            format!(
+                "Waiting for initial subscriptions to sync (timeout: {}ms)",
+                timeout_ms
+            ),
+        );
+
+        // Wait for each subscription type that has desired subscriptions
+        for kind in self.subscription_kinds() {
+            let desired_set = desired.get(&kind).cloned().unwrap_or_default();
+            if !desired_set.is_empty() {
+                log_debug(
+                    "wait_for_initial_sync",
+                    format!(
+                        "Waiting for {:?} subscriptions: {:?}",
+                        kind,
+                        desired_set
+                            .iter()
+                            .map(|c| String::from_utf8_lossy(c).to_string())
+                            .collect::<Vec<_>>()
+                    ),
+                );
+
+                self.wait_for_subscription_state(Some(&desired_set), kind, timeout_ms, true)
+                    .await?;
             }
         }
 
-        self.trigger_reconciliation();
+        log_debug(
+            "wait_for_initial_sync",
+            "All initial subscriptions synchronized",
+        );
+        Ok(())
     }
 }

@@ -81,6 +81,30 @@ impl MockPubSubSynchronizer {
         let broker = get_mock_broker();
         let synchronizer = Self::new_internal(client_id.clone(), Arc::clone(&broker), is_cluster);
 
+        // Apply initial subscriptions before starting reconciliation task
+        if let Some(subs) = initial_subscriptions {
+            let mut desired = synchronizer.desired_subscriptions.write().expect(LOCK_ERR);
+
+            if let Some(channels) = subs.get(&PubSubSubscriptionKind::Exact) {
+                desired
+                    .entry(PubSubSubscriptionKind::Exact)
+                    .or_default()
+                    .extend(channels.clone());
+            }
+            if let Some(patterns) = subs.get(&PubSubSubscriptionKind::Pattern) {
+                desired
+                    .entry(PubSubSubscriptionKind::Pattern)
+                    .or_default()
+                    .extend(patterns.clone());
+            }
+            if let Some(sharded) = subs.get(&PubSubSubscriptionKind::Sharded) {
+                desired
+                    .entry(PubSubSubscriptionKind::Sharded)
+                    .or_default()
+                    .extend(sharded.clone());
+            }
+        }
+
         synchronizer.start_reconciliation_task();
 
         if let Some(sender) = push_sender {
@@ -89,22 +113,8 @@ impl MockPubSubSynchronizer {
                 .await;
         }
 
-        if let Some(subs) = initial_subscriptions {
-            let channels = extract_channels_from_subscription_info(
-                &subs,
-                redis::PubSubSubscriptionKind::Exact,
-            );
-            let patterns = extract_channels_from_subscription_info(
-                &subs,
-                redis::PubSubSubscriptionKind::Pattern,
-            );
-            let sharded = extract_channels_from_subscription_info(
-                &subs,
-                redis::PubSubSubscriptionKind::Sharded,
-            );
-
-            synchronizer.set_initial_subscriptions(channels, patterns, sharded);
-        }
+        // Trigger initial reconciliation
+        synchronizer.trigger_reconciliation();
 
         synchronizer
     }
@@ -366,46 +376,6 @@ impl PubSubSynchronizer for MockPubSubSynchronizer {
         }
     }
 
-    fn set_initial_subscriptions(
-        &self,
-        channels: HashSet<PubSubChannelOrPattern>,
-        patterns: HashSet<PubSubChannelOrPattern>,
-        sharded: HashSet<PubSubChannelOrPattern>,
-    ) {
-        if !channels.is_empty() {
-            let mut desired = self.desired_subscriptions.write().expect(LOCK_ERR);
-            desired
-                .entry(PubSubSubscriptionKind::Exact)
-                .or_default()
-                .extend(channels);
-        }
-
-        if !patterns.is_empty() {
-            let mut desired = self.desired_subscriptions.write().expect(LOCK_ERR);
-            desired
-                .entry(PubSubSubscriptionKind::Pattern)
-                .or_default()
-                .extend(patterns);
-        }
-
-        if !sharded.is_empty() {
-            let mut desired = self.desired_subscriptions.write().expect(LOCK_ERR);
-            desired
-                .entry(PubSubSubscriptionKind::Sharded)
-                .or_default()
-                .extend(sharded);
-        }
-
-        if let Err(e) = self.reconcile_internal() {
-            log_warn(
-                "set_initial_subscriptions",
-                format!("Failed to reconcile initial subscriptions: {e}"),
-            );
-        }
-
-        self.check_and_record_sync_state();
-    }
-
     fn remove_current_subscriptions_for_addresses(&self, _addresses: &HashSet<String>) {
         // Mock doesn't track by address, no-op
     }
@@ -502,21 +472,29 @@ impl MockPubSubBroker {
 
         let is_regular_pubsub = matches!(
             command_str,
+            // Non-blocking (lazy) - base names
             "SUBSCRIBE"
                 | "UNSUBSCRIBE"
                 | "PSUBSCRIBE"
                 | "PUNSUBSCRIBE"
                 | "SSUBSCRIBE"
                 | "SUNSUBSCRIBE"
-                | "SUBSCRIBE_LAZY"
-                | "UNSUBSCRIBE_LAZY"
-                | "PSUBSCRIBE_LAZY"
-                | "PUNSUBSCRIBE_LAZY"
-                | "SSUBSCRIBE_LAZY"
-                | "SUNSUBSCRIBE_LAZY"
+                // Blocking - with _BLOCKING suffix
+                | "SUBSCRIBE_BLOCKING"
+                | "UNSUBSCRIBE_BLOCKING"
+                | "PSUBSCRIBE_BLOCKING"
+                | "PUNSUBSCRIBE_BLOCKING"
+                | "SSUBSCRIBE_BLOCKING"
+                | "SUNSUBSCRIBE_BLOCKING"
                 | "PUBLISH"
                 | "SPUBLISH"
                 | "GET_SUBSCRIPTIONS"
+                // PUBSUB info commands
+                | "PUBSUB CHANNELS"
+                | "PUBSUB NUMPAT"
+                | "PUBSUB NUMSUB"
+                | "PUBSUB SHARDCHANNELS"
+                | "PUBSUB SHARDNUMSUB"
         );
 
         is_regular_pubsub
@@ -537,44 +515,48 @@ impl MockPubSubBroker {
             "PUBLISH" => self.handle_publish(cmd, false).await,
             "SPUBLISH" => self.handle_publish(cmd, true).await,
 
-            "SUBSCRIBE_LAZY" => {
+            // Non-blocking (lazy) subscribe - base names
+            "SUBSCRIBE" => {
                 self.handle_lazy_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Exact)
             }
-            "PSUBSCRIBE_LAZY" => {
+            "PSUBSCRIBE" => {
                 self.handle_lazy_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Pattern)
             }
-            "SSUBSCRIBE_LAZY" => {
+            "SSUBSCRIBE" => {
                 self.handle_lazy_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Sharded)
             }
 
-            "UNSUBSCRIBE_LAZY" => {
+            // Non-blocking (lazy) unsubscribe - base names
+            "UNSUBSCRIBE" => {
                 self.handle_lazy_unsubscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Exact)
             }
-            "PUNSUBSCRIBE_LAZY" => {
+            "PUNSUBSCRIBE" => {
                 self.handle_lazy_unsubscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Pattern)
             }
-            "SUNSUBSCRIBE_LAZY" => {
+            "SUNSUBSCRIBE" => {
                 self.handle_lazy_unsubscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Sharded)
             }
 
-            "SUBSCRIBE" => {
+            // Blocking subscribe - with _BLOCKING suffix
+            "SUBSCRIBE_BLOCKING" => {
                 self.handle_blocking_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Exact)
                     .await
             }
-            "PSUBSCRIBE" => {
+            "PSUBSCRIBE_BLOCKING" => {
                 self.handle_blocking_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Pattern)
                     .await
             }
-            "SSUBSCRIBE" => {
+            "SSUBSCRIBE_BLOCKING" => {
                 self.handle_blocking_subscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Sharded)
                     .await
             }
 
-            "UNSUBSCRIBE" => {
+            // Blocking unsubscribe - with _BLOCKING suffix
+            "UNSUBSCRIBE_BLOCKING" => {
                 self.handle_blocking_unsubscribe(sync.as_ref(), cmd, PubSubSubscriptionKind::Exact)
                     .await
             }
-            "PUNSUBSCRIBE" => {
+            "PUNSUBSCRIBE_BLOCKING" => {
                 self.handle_blocking_unsubscribe(
                     sync.as_ref(),
                     cmd,
@@ -582,7 +564,7 @@ impl MockPubSubBroker {
                 )
                 .await
             }
-            "SUNSUBSCRIBE" => {
+            "SUNSUBSCRIBE_BLOCKING" => {
                 self.handle_blocking_unsubscribe(
                     sync.as_ref(),
                     cmd,
@@ -592,6 +574,11 @@ impl MockPubSubBroker {
             }
 
             "GET_SUBSCRIPTIONS" => Ok(self.get_subscriptions_as_value(sync.as_ref())),
+            "PUBSUB CHANNELS" => self.handle_pubsub_channels(cmd).await,
+            "PUBSUB NUMPAT" => self.handle_pubsub_numpat().await,
+            "PUBSUB NUMSUB" => self.handle_pubsub_numsub(cmd).await,
+            "PUBSUB SHARDCHANNELS" => self.handle_pubsub_shardchannels(cmd).await,
+            "PUBSUB SHARDNUMSUB" => self.handle_pubsub_shardnumsub(cmd).await,
 
             _ => Err(RedisError::from((
                 ErrorKind::ClientError,
@@ -631,6 +618,186 @@ impl MockPubSubBroker {
 
         result
     }
+
+    /// Handle PUBSUB CHANNELS
+    /// Returns all active exact channels, optionally filtered by pattern
+    async fn handle_pubsub_channels(&self, cmd: &Cmd) -> RedisResult<Value> {
+        // Pattern is at arg_idx(2) - after "PUBSUB" and "CHANNELS"
+        let pattern = cmd
+            .arg_idx(2)
+            .map(|p| String::from_utf8_lossy(p).to_string());
+
+        let clients = self.clients.read().await;
+        let mut channels: HashSet<Vec<u8>> = HashSet::new();
+
+        for (_, client_data) in clients.iter() {
+            let actual = client_data
+                .synchronizer
+                .actual_subscriptions
+                .read()
+                .expect(LOCK_ERR);
+            if let Some(exact_channels) = actual.get(&PubSubSubscriptionKind::Exact) {
+                for channel in exact_channels {
+                    if let Some(ref pat) = pattern {
+                        let channel_str = String::from_utf8_lossy(channel);
+                        if glob_match(pat, &channel_str) {
+                            channels.insert(channel.clone());
+                        }
+                    } else {
+                        channels.insert(channel.clone());
+                    }
+                }
+            }
+        }
+
+        let result: Vec<Value> = channels.into_iter().map(Value::BulkString).collect();
+        Ok(Value::Array(result))
+    }
+
+    /// Handle PUBSUB NUMPAT
+    /// Returns the number of unique patterns that are subscribed to
+    async fn handle_pubsub_numpat(&self) -> RedisResult<Value> {
+        let clients = self.clients.read().await;
+        let mut patterns: HashSet<Vec<u8>> = HashSet::new();
+
+        for (_, client_data) in clients.iter() {
+            let actual = client_data
+                .synchronizer
+                .actual_subscriptions
+                .read()
+                .expect(LOCK_ERR);
+            if let Some(pattern_channels) = actual.get(&PubSubSubscriptionKind::Pattern) {
+                patterns.extend(pattern_channels.clone());
+            }
+        }
+
+        Ok(Value::Int(patterns.len() as i64))
+    }
+
+    /// Handle PUBSUB NUMSUB
+    /// Returns the number of subscribers for each specified channel
+    async fn handle_pubsub_numsub(&self, cmd: &Cmd) -> RedisResult<Value> {
+        // Channels start at arg_idx(2) - after "PUBSUB" and "NUMSUB"
+        let channels: Vec<Vec<u8>> = cmd
+            .args_iter()
+            .skip(2) // Skip "PUBSUB" and "NUMSUB"
+            .filter_map(|arg| match arg {
+                redis::Arg::Simple(bytes) => Some(bytes.to_vec()),
+                redis::Arg::Cursor => None,
+            })
+            .collect();
+
+        // If no channels specified, return empty map
+        if channels.is_empty() {
+            return Ok(Value::Map(vec![]));
+        }
+
+        let clients = self.clients.read().await;
+
+        // Count subscribers for each channel
+        let mut result: Vec<(Value, Value)> = Vec::new();
+
+        for channel in &channels {
+            let mut count = 0i64;
+            for (_, client_data) in clients.iter() {
+                let actual = client_data
+                    .synchronizer
+                    .actual_subscriptions
+                    .read()
+                    .expect(LOCK_ERR);
+                if let Some(exact_channels) = actual.get(&PubSubSubscriptionKind::Exact) {
+                    if exact_channels.contains(channel) {
+                        count += 1;
+                    }
+                }
+            }
+            result.push((Value::BulkString(channel.clone()), Value::Int(count)));
+        }
+
+        Ok(Value::Map(result))
+    }
+
+    /// Handle PUBSUB SHARDCHANNELS
+    /// Returns all active sharded channels, optionally filtered by pattern
+    async fn handle_pubsub_shardchannels(&self, cmd: &Cmd) -> RedisResult<Value> {
+        // Pattern is at arg_idx(2) - after "PUBSUB" and "SHARDCHANNELS"
+        let pattern = cmd
+            .arg_idx(2)
+            .map(|p| String::from_utf8_lossy(p).to_string());
+
+        let clients = self.clients.read().await;
+        let mut channels: HashSet<Vec<u8>> = HashSet::new();
+
+        for (_, client_data) in clients.iter() {
+            let actual = client_data
+                .synchronizer
+                .actual_subscriptions
+                .read()
+                .expect(LOCK_ERR);
+            if let Some(sharded_channels) = actual.get(&PubSubSubscriptionKind::Sharded) {
+                for channel in sharded_channels {
+                    if let Some(ref pat) = pattern {
+                        let channel_str = String::from_utf8_lossy(channel);
+                        if glob_match(pat, &channel_str) {
+                            channels.insert(channel.clone());
+                        }
+                    } else {
+                        channels.insert(channel.clone());
+                    }
+                }
+            }
+        }
+
+        let result: Vec<Value> = channels.into_iter().map(Value::BulkString).collect();
+        Ok(Value::Array(result))
+    }
+
+    /// Handle PUBSUB SHARDNUMSUB
+    /// Returns the number of subscribers for each specified sharded channel
+    async fn handle_pubsub_shardnumsub(&self, cmd: &Cmd) -> RedisResult<Value> {
+        // Channels start at arg_idx(2) - after "PUBSUB" and "SHARDNUMSUB"
+        let channels: Vec<Vec<u8>> = cmd
+            .args_iter()
+            .skip(2) // Skip "PUBSUB" and "SHARDNUMSUB"
+            .filter_map(|arg| match arg {
+                redis::Arg::Simple(bytes) => Some(bytes.to_vec()),
+                redis::Arg::Cursor => None,
+            })
+            .collect();
+
+        // If no channels specified, return empty map
+        if channels.is_empty() {
+            return Ok(Value::Map(vec![]));
+        }
+
+        let clients = self.clients.read().await;
+
+        // Count subscribers for each channel
+        let mut result: Vec<(Value, Value)> = Vec::new();
+
+        for channel in &channels {
+            let mut count = 0i64;
+            for (_, client_data) in clients.iter() {
+                let actual = client_data
+                    .synchronizer
+                    .actual_subscriptions
+                    .read()
+                    .expect(LOCK_ERR);
+                if let Some(sharded_channels) = actual.get(&PubSubSubscriptionKind::Sharded) {
+                    if sharded_channels.contains(channel) {
+                        count += 1;
+                    }
+                }
+            }
+            result.push((Value::BulkString(channel.clone()), Value::Int(count)));
+        }
+
+        Ok(Value::Map(result))
+    }
+
+    // ========================================================================
+    // Existing Methods
+    // ========================================================================
 
     pub fn extract_channels_from_cmd(cmd: &Cmd) -> Vec<PubSubChannelOrPattern> {
         cmd.args_iter()
@@ -708,7 +875,7 @@ impl MockPubSubBroker {
             sync.add_desired_subscriptions(channels.into_iter().collect(), sub_type);
         }
 
-        Ok(Value::Nil)
+        Ok(Value::Okay)
     }
 
     fn handle_lazy_unsubscribe(
@@ -728,7 +895,7 @@ impl MockPubSubBroker {
             sync.remove_desired_subscriptions(channels, sub_type);
         }
 
-        Ok(Value::Nil)
+        Ok(Value::Okay)
     }
 
     async fn handle_blocking_subscribe(
@@ -762,7 +929,7 @@ impl MockPubSubBroker {
                     .unwrap_or_default();
 
                 if channels_bytes.iter().all(|ch| actual_set.contains(ch)) {
-                    return Ok(Value::Nil);
+                    return Ok(Value::Okay);
                 }
 
                 let elapsed_ms = start.elapsed().as_millis() as u64;
@@ -789,7 +956,7 @@ impl MockPubSubBroker {
             }
         }
 
-        Ok(Value::Nil)
+        Ok(Value::Okay)
     }
 
     async fn handle_blocking_unsubscribe(
@@ -829,7 +996,7 @@ impl MockPubSubBroker {
                 };
 
                 if is_removed {
-                    return Ok(Value::Nil);
+                    return Ok(Value::Okay);
                 }
 
                 let elapsed_ms = start.elapsed().as_millis() as u64;
@@ -856,7 +1023,7 @@ impl MockPubSubBroker {
             }
         }
 
-        Ok(Value::Nil)
+        Ok(Value::Okay)
     }
 
     async fn handle_publish(&self, cmd: &Cmd, is_sharded: bool) -> RedisResult<Value> {
@@ -1113,7 +1280,7 @@ fn create_push_info(
     sharded: bool,
 ) -> PushInfo {
     let kind = if sharded {
-        PushKind::Message
+        PushKind::SMessage
     } else if pattern.is_some() {
         PushKind::PMessage
     } else {

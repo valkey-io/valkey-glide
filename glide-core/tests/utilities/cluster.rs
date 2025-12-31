@@ -591,10 +591,6 @@ impl ClusterTopology {
     }
 }
 
-// ============================================================================
-// SLOT MIGRATION HELPERS
-// ============================================================================
-
 /// Migrate a slot from one node to another using CLUSTER SETSLOT commands.
 pub async fn migrate_slot(
     connection: &mut ClusterConnection,
@@ -715,10 +711,6 @@ pub async fn migrate_channels_to_different_nodes(
     migrated_count
 }
 
-// ============================================================================
-// FAILOVER HELPERS
-// ============================================================================
-
 /// Trigger a failover on a replica node.
 /// Returns true if failover was initiated successfully.
 pub async fn trigger_failover(
@@ -778,10 +770,6 @@ pub async fn wait_for_node_to_become_primary(
 
     false
 }
-
-// ============================================================================
-// SUBSCRIPTION STATE HELPERS
-// ============================================================================
 
 /// Wait for subscription state to match expected channels.
 pub async fn wait_for_pubsub_state(
@@ -858,29 +846,9 @@ pub async fn subscribe_and_wait(
     kind: PubSubSubscriptionKind,
     timeout: Duration,
 ) -> bool {
-    for channel in channels {
-        synchronizer.add_desired_subscriptions(HashSet::from([channel.clone()]), kind);
-    }
-    synchronizer.trigger_reconciliation();
-
-    let expected: HashSet<Vec<u8>> = channels.iter().cloned().collect();
-    wait_for_pubsub_state(synchronizer, kind, &expected, true, timeout).await
-}
-
-/// Verify that desired subscriptions persist for given channels.
-pub fn verify_desired_subscriptions_persist(
-    synchronizer: &Arc<dyn PubSubSynchronizer>,
-    channels: &[Vec<u8>],
-    kind: PubSubSubscriptionKind,
-) -> bool {
-    let (desired, _) = synchronizer.get_subscription_state();
-
-    channels.iter().all(|channel| {
-        desired
-            .get(&kind)
-            .map(|s| s.contains(channel))
-            .unwrap_or(false)
-    })
+    let channels_set: HashSet<Vec<u8>> = channels.iter().cloned().collect();
+    synchronizer.add_desired_subscriptions(channels_set.clone(), kind);
+    wait_for_pubsub_state(synchronizer, kind, &channels_set, true, timeout).await
 }
 
 /// Find which address a channel is subscribed on.

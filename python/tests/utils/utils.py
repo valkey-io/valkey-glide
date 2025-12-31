@@ -3,6 +3,7 @@ import random
 import string
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from enum import IntEnum
 from typing import (
     Any,
     Callable,
@@ -11,6 +12,8 @@ from typing import (
     Mapping,
     Optional,
     Set,
+    Tuple,
+    Type,
     TypeVar,
     Union,
     cast,
@@ -1692,45 +1695,6 @@ def helper1(
     args.append(False)
 
 
-def decode_pubsub_msg(msg: Optional[PubSubMsg]) -> PubSubMsg:
-    if not msg:
-        return PubSubMsg("", "", None)
-    string_msg = cast(bytes, msg.message).decode()
-    string_channel = cast(bytes, msg.channel).decode()
-    string_pattern = cast(bytes, msg.pattern).decode() if msg.pattern else None
-    decoded_msg = PubSubMsg(string_msg, string_channel, string_pattern)
-    return decoded_msg
-
-
-def create_pubsub_subscription(
-    cluster_mode,
-    cluster_channels_and_patterns: Dict[
-        GlideClusterClientConfiguration.PubSubChannelModes, Set[str]
-    ],
-    standalone_channels_and_patterns: Dict[
-        GlideClientConfiguration.PubSubChannelModes, Set[str]
-    ],
-    callback=None,
-    context=None,
-):
-    if cluster_mode:
-        return GlideClusterClientConfiguration.PubSubSubscriptions(
-            channels_and_patterns=cluster_channels_and_patterns,
-            callback=callback,
-            context=context,
-        )
-    return GlideClientConfiguration.PubSubSubscriptions(
-        channels_and_patterns=standalone_channels_and_patterns,
-        callback=callback,
-        context=context,
-    )
-
-
-def new_message(msg: PubSubMsg, context: Any):
-    received_messages: List[PubSubMsg] = context
-    received_messages.append(msg)
-
-
 def get_ca_certificate() -> bytes:
     """
     Load the CA certificate for TLS tests.
@@ -1786,6 +1750,251 @@ def get_client_key() -> bytes:
     )
     ca_cert_path = os.path.join(glide_home, "utils", "tls_crts", "server.key")
     return load_client_certificate_from_file(ca_cert_path)
+class SubscriptionMethod(IntEnum):
+    """
+    Enumeration for specifying how subscriptions are established.
+    """
+
+    Config = 0
+    "Subscriptions set in client configuration at creation time."
+    Lazy = 1
+    "Non-blocking subscription using *_lazy methods."
+    Blocking = 2
+    "Blocking subscription with timeout."
+
+
+class MessageReadMethod(IntEnum):
+    """
+    Enumeration for specifying the method of reading PUBSUB messages.
+    """
+
+    Async = 0
+    "Uses asynchronous get_pubsub_message() method."
+    Sync = 1
+    "Uses synchronous try_get_pubsub_message() method."
+    Callback = 2
+    "Uses callback-based subscription method."
+
+
+# Type alias for PubSubChannelModes
+ClusterPubSubModes = GlideClusterClientConfiguration.PubSubChannelModes
+StandalonePubSubModes = GlideClientConfiguration.PubSubChannelModes
+
+
+def get_pubsub_modes(
+    client: TGlideClient,
+) -> Union[Type[ClusterPubSubModes], Type[StandalonePubSubModes]]:
+    """Get the appropriate PubSubChannelModes enum for the client type."""
+    if isinstance(client, GlideClusterClient):
+        return GlideClusterClientConfiguration.PubSubChannelModes
+    return GlideClientConfiguration.PubSubChannelModes
+
+
+def create_pubsub_subscription(
+    cluster_mode: bool,
+    cluster_channels_and_patterns: Dict[ClusterPubSubModes, Set[str]],
+    standalone_channels_and_patterns: Dict[StandalonePubSubModes, Set[str]],
+    callback: Optional[Callable[[PubSubMsg, Any], None]] = None,
+    context: Optional[Any] = None,
+) -> Union[
+    GlideClusterClientConfiguration.PubSubSubscriptions,
+    GlideClientConfiguration.PubSubSubscriptions,
+]:
+    """Create a PubSubSubscriptions object for the given mode."""
+    if cluster_mode:
+        return GlideClusterClientConfiguration.PubSubSubscriptions(
+            channels_and_patterns=cluster_channels_and_patterns,
+            callback=callback,
+            context=context,
+        )
+    return GlideClientConfiguration.PubSubSubscriptions(
+        channels_and_patterns=standalone_channels_and_patterns,
+        callback=callback,
+        context=context,
+    )
+
+
+async def create_pubsub_client(
+    request,
+    cluster_mode: bool,
+    channels: Optional[Set[str]] = None,
+    patterns: Optional[Set[str]] = None,
+    sharded_channels: Optional[Set[str]] = None,
+    callback: Optional[Callable[[PubSubMsg, Any], None]] = None,
+    context: Optional[Any] = None,
+    protocol: ProtocolVersion = ProtocolVersion.RESP3,
+    timeout: Optional[int] = None,
+    lazy_connect: bool = False,
+) -> TGlideClient:
+    from tests.async_tests.conftest import create_client
+
+    has_subscriptions = channels or patterns or sharded_channels
+    has_callback = callback is not None
+
+    if has_subscriptions or has_callback:
+        # Build channels_and_patterns dict
+        if cluster_mode:
+            PubSubModes = GlideClusterClientConfiguration.PubSubChannelModes
+        else:
+            PubSubModes = GlideClientConfiguration.PubSubChannelModes
+
+        channels_and_patterns: Dict[Any, Set[str]] = {}
+        if channels:
+            channels_and_patterns[PubSubModes.Exact] = channels
+        if patterns:
+            channels_and_patterns[PubSubModes.Pattern] = patterns
+        if sharded_channels and cluster_mode:
+            channels_and_patterns[PubSubModes.Sharded] = sharded_channels
+
+        # Create subscription config
+        if cluster_mode:
+            pub_sub = GlideClusterClientConfiguration.PubSubSubscriptions(
+                channels_and_patterns=cast(
+                    Dict[ClusterPubSubModes, Set[str]], channels_and_patterns
+                ),
+                callback=callback,
+                context=context,
+            )
+        else:
+            pub_sub = GlideClientConfiguration.PubSubSubscriptions(
+                channels_and_patterns=cast(
+                    Dict[StandalonePubSubModes, Set[str]], channels_and_patterns
+                ),
+                callback=callback,
+                context=context,
+            )
+
+        client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            cluster_mode_pubsub=pub_sub if cluster_mode else None,
+            standalone_mode_pubsub=pub_sub if not cluster_mode else None,
+            protocol=protocol,
+            request_timeout=timeout,
+            lazy_connect=lazy_connect,
+        )
+    else:
+        client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            request_timeout=timeout,
+            lazy_connect=lazy_connect,
+        )
+
+    return client
+
+
+async def subscribe_by_method(
+    client: TGlideClient,
+    channels: Set[str],
+    subscription_method: SubscriptionMethod,
+    timeout_ms: int = 5000,
+) -> None:
+    """
+    Subscribe to exact channels using the specified method.
+    For Config method, does nothing (subscriptions already set at creation).
+    Does NOT wait for subscription to be established - use wait_for_subscription_state_if_needed after.
+    """
+
+    if subscription_method == SubscriptionMethod.Lazy:
+        await client.subscribe_lazy(channels)
+    else:  # Blocking and Config
+        await client.subscribe(channels, timeout_ms=timeout_ms)
+
+
+async def psubscribe_by_method(
+    client: TGlideClient,
+    patterns: Set[str],
+    subscription_method: SubscriptionMethod,
+    timeout_ms: int = 5000,
+) -> None:
+    """
+    Subscribe to patterns using the specified method.
+    For Config method, does nothing (subscriptions already set at creation).
+    Does NOT wait for subscription to be established - use wait_for_subscription_state_if_needed after.
+    """
+    if subscription_method == SubscriptionMethod.Lazy:
+        await client.psubscribe_lazy(patterns)
+    else:  # Blocking and Config
+        await client.psubscribe(patterns, timeout_ms=timeout_ms)
+
+
+async def ssubscribe_by_method(
+    client: GlideClusterClient,
+    channels: Set[str],
+    subscription_method: SubscriptionMethod,
+    timeout_ms: int = 5000,
+) -> None:
+    """
+    Subscribe to sharded channels using the specified method.
+    For Config method, does nothing (subscriptions already set at creation).
+    Does NOT wait for subscription to be established - use wait_for_subscription_state_if_needed after.
+    """
+    if subscription_method == SubscriptionMethod.Lazy:
+        await client.ssubscribe_lazy(channels)
+    else:  # Blocking and Config
+        await client.ssubscribe(channels, timeout_ms=timeout_ms)
+
+
+async def unsubscribe_by_method(
+    client: TGlideClient,
+    channels: Optional[Set[str]],
+    subscription_method: SubscriptionMethod,
+    timeout_ms: int = 5000,
+) -> None:
+    """
+    Unsubscribe from exact channels using the specified method.
+    For Config method, does nothing (cannot dynamically unsubscribe).
+    Does NOT wait for unsubscription to complete - use wait_for_subscription_state_if_needed after.
+    """
+    if subscription_method == SubscriptionMethod.Config:
+        return
+
+    if subscription_method == SubscriptionMethod.Lazy:
+        await client.unsubscribe_lazy(channels)
+    else:  # Blocking
+        await client.unsubscribe(channels, timeout_ms=timeout_ms)
+
+
+async def punsubscribe_by_method(
+    client: TGlideClient,
+    patterns: Optional[Set[str]],
+    subscription_method: SubscriptionMethod,
+    timeout_ms: int = 5000,
+) -> None:
+    """
+    Unsubscribe from patterns using the specified method.
+    For Config method, does nothing (cannot dynamically unsubscribe).
+    Does NOT wait for unsubscription to complete - use wait_for_subscription_state_if_needed after.
+    """
+    if subscription_method == SubscriptionMethod.Config:
+        return
+
+    if subscription_method == SubscriptionMethod.Lazy:
+        await client.punsubscribe_lazy(patterns)
+    else:  # Blocking
+        await client.punsubscribe(patterns, timeout_ms=timeout_ms)
+
+
+async def sunsubscribe_by_method(
+    client: GlideClusterClient,
+    channels: Optional[Set[str]],
+    subscription_method: SubscriptionMethod,
+    timeout_ms: int = 5000,
+) -> None:
+    """
+    Unsubscribe from sharded channels using the specified method.
+    For Config method, does nothing (cannot dynamically unsubscribe).
+    Does NOT wait for unsubscription to complete - use wait_for_subscription_state_if_needed after.
+    """
+    if subscription_method == SubscriptionMethod.Config:
+        return
+
+    if subscription_method == SubscriptionMethod.Lazy:
+        await client.sunsubscribe_lazy(channels)
+    else:  # Blocking
+        await client.sunsubscribe(channels, timeout_ms=timeout_ms)
 
 
 async def wait_for_subscription_state(
@@ -1797,21 +2006,27 @@ async def wait_for_subscription_state(
     poll_interval: float = 0.1,
 ) -> Dict[str, Set[str]]:
     """
-    Helper function that polls get_subscriptions until expected actual state is reached.
+    Wait for subscription state to match expected values by polling.
+
+    Args:
+        client: The Glide client
+        expected_channels: Expected exact channel subscriptions (None = don't check)
+        expected_patterns: Expected pattern subscriptions (None = don't check)
+        expected_sharded: Expected sharded channel subscriptions (None = don't check)
+        timeout_ms: Timeout in milliseconds
+        poll_interval: How often to poll state in seconds
 
     Returns:
-        A dictionary with:
-            - "channels": Set of exact channel names
-            - "patterns": Set of channel patterns
-            - "sharded_channels": Set of sharded channel names
+        Dictionary with current actual subscription state
 
     Raises:
-        TimeoutError: If the expected state is not reached within timeout_ms
+        TimeoutError: If expected state not reached within timeout
     """
-
     timeout_seconds = timeout_ms / 1000.0
     start_time = anyio.current_time()
-    last_actual_state = None
+    last_actual_state: Optional[Dict[str, Set[str]]] = None
+
+    PubSubModes = get_pubsub_modes(client)
 
     while True:
         elapsed = anyio.current_time() - start_time
@@ -1825,28 +2040,18 @@ async def wait_for_subscription_state(
                 error_msg += (
                     f"Actual - channels: {last_actual_state.get('channels', set())}, "
                     f"patterns: {last_actual_state.get('patterns', set())}, "
-                    f"sharded: {last_actual_state.get('sharded_channels', set())}\n"
+                    f"sharded: {last_actual_state.get('sharded', set())}\n"
                 )
             raise TimeoutError(error_msg)
 
         try:
             state = await client.get_subscriptions()
-            actual_subscriptions = state.actual_subscriptions
+            actual_subs = state.actual_subscriptions
 
-            modes: Union[
-                type[GlideClusterClientConfiguration.PubSubChannelModes],
-                type[GlideClientConfiguration.PubSubChannelModes],
-            ]
-
-            if isinstance(client, GlideClusterClient):
-                modes = GlideClusterClientConfiguration.PubSubChannelModes
-            else:
-                modes = GlideClientConfiguration.PubSubChannelModes
-
-            channels_actual = actual_subscriptions.get(modes.Exact, set())  # type: ignore
-            patterns_actual = actual_subscriptions.get(modes.Pattern, set())  # type: ignore
+            channels_actual = actual_subs.get(PubSubModes.Exact, set())  # type: ignore
+            patterns_actual = actual_subs.get(PubSubModes.Pattern, set())  # type: ignore
             sharded_actual = (
-                actual_subscriptions.get(modes.Sharded, set())  # type: ignore
+                actual_subs.get(PubSubModes.Sharded, set())  # type: ignore
                 if isinstance(client, GlideClusterClient)
                 else set()
             )
@@ -1854,18 +2059,225 @@ async def wait_for_subscription_state(
             last_actual_state = {
                 "channels": channels_actual,
                 "patterns": patterns_actual,
-                "sharded_channels": sharded_actual,
+                "sharded": sharded_actual,
             }
 
-            if (
-                (expected_channels is None or channels_actual == expected_channels)
-                and (expected_patterns is None or patterns_actual == expected_patterns)
-                and (expected_sharded is None or sharded_actual == expected_sharded)
-            ):
+            # Check if all expected states match
+            channels_match = (
+                expected_channels is None or channels_actual == expected_channels
+            )
+            patterns_match = (
+                expected_patterns is None or patterns_actual == expected_patterns
+            )
+            sharded_match = (
+                expected_sharded is None or sharded_actual == expected_sharded
+            )
+
+            if channels_match and patterns_match and sharded_match:
                 return last_actual_state
 
         except Exception as e:
+            # Ignore connection errors during polling
             if not isinstance(e, (ConnectionError, TimeoutError)):
                 raise
 
         await anyio.sleep(poll_interval)
+
+
+async def wait_for_subscription_state_if_needed(
+    client: TGlideClient,
+    subscription_method: SubscriptionMethod,
+    expected_channels: Optional[Set[str]] = None,
+    expected_patterns: Optional[Set[str]] = None,
+    expected_sharded: Optional[Set[str]] = None,
+    timeout_ms: int = 5000,
+) -> None:
+    """
+    - Lazy: wait/poll until state matches (with timeout)
+    - Blocking and Config: verify immediately
+    """
+
+    # Lazy subscriptions may need time to reconcile
+    if subscription_method == SubscriptionMethod.Lazy:
+        await wait_for_subscription_state(
+            client,
+            expected_channels=expected_channels,
+            expected_patterns=expected_patterns,
+            expected_sharded=expected_sharded,
+            timeout_ms=timeout_ms,
+        )
+        return
+
+    # Blocking and Config should already be established
+    state = await client.get_subscriptions()
+    PubSubModes = get_pubsub_modes(client)
+
+    if expected_channels is not None:
+        actual_channels = state.actual_subscriptions.get(
+            PubSubModes.Exact, set()
+        )  # type: ignore
+        assert (
+            actual_channels == expected_channels
+        ), f"Expected channels {expected_channels}, got {actual_channels}"
+
+    if expected_patterns is not None:
+        actual_patterns = state.actual_subscriptions.get(
+            PubSubModes.Pattern, set()
+        )  # type: ignore
+        assert (
+            actual_patterns == expected_patterns
+        ), f"Expected patterns {expected_patterns}, got {actual_patterns}"
+
+    if expected_sharded is not None and isinstance(client, GlideClusterClient):
+        actual_sharded = state.actual_subscriptions.get(
+            PubSubModes.Sharded, set()
+        )  # type: ignore
+        assert (
+            actual_sharded == expected_sharded
+        ), f"Expected sharded {expected_sharded}, got {actual_sharded}"
+
+
+def decode_pubsub_msg(msg: Optional[PubSubMsg]) -> PubSubMsg:
+    """Decode a PubSubMsg with bytes to one with strings."""
+    if not msg:
+        return PubSubMsg("", "", None)
+
+    string_msg = (
+        cast(bytes, msg.message).decode()
+        if isinstance(msg.message, bytes)
+        else msg.message
+    )
+    string_channel = (
+        cast(bytes, msg.channel).decode()
+        if isinstance(msg.channel, bytes)
+        else msg.channel
+    )
+    string_pattern = (
+        cast(bytes, msg.pattern).decode()
+        if msg.pattern and isinstance(msg.pattern, bytes)
+        else msg.pattern
+    )
+
+    return PubSubMsg(string_msg, string_channel, string_pattern)
+
+
+async def get_message_by_method(
+    method: MessageReadMethod,
+    client: TGlideClient,
+    callback_messages: Optional[List[PubSubMsg]] = None,
+    index: Optional[int] = None,
+) -> PubSubMsg:
+    """
+    Get a pubsub message using the specified read method.
+
+    Args:
+        method: How to read the message (Async, Sync, or Callback)
+        client: The client to read from
+        callback_messages: List of messages from callback (required for Callback method)
+        index: Index in callback_messages list (required for Callback method)
+
+    Returns:
+        Decoded PubSubMsg
+    """
+    if method == MessageReadMethod.Async:
+        return decode_pubsub_msg(await client.get_pubsub_message())
+    elif method == MessageReadMethod.Sync:
+        return decode_pubsub_msg(client.try_get_pubsub_message())
+    else:  # Callback
+        assert callback_messages is not None and index is not None
+        return decode_pubsub_msg(callback_messages[index])
+
+
+async def check_no_messages_left(
+    method: MessageReadMethod,
+    client: TGlideClient,
+    callback_messages: Optional[List[PubSubMsg]] = None,
+    expected_callback_count: int = 0,
+    async_timeout: float = 3.0,
+) -> None:
+    """
+    Verify there are no more messages to read.
+
+    Args:
+        method: The read method being used
+        client: The client to check
+        callback_messages: Callback message list (for Callback method)
+        expected_callback_count: Expected number of messages in callback list
+        async_timeout: Timeout for async method check
+
+    Raises:
+        AssertionError if there are unexpected messages
+    """
+    if method == MessageReadMethod.Async:
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(async_timeout):
+                await client.get_pubsub_message()
+    elif method == MessageReadMethod.Sync:
+        assert client.try_get_pubsub_message() is None
+    else:  # Callback
+        assert callback_messages is not None
+        assert len(callback_messages) == expected_callback_count
+
+
+def new_message(msg: PubSubMsg, context: Any) -> None:
+    """Standard callback function that appends messages to a context list."""
+    received_messages: List[PubSubMsg] = context
+    received_messages.append(msg)
+
+
+async def pubsub_client_cleanup(
+    client: Optional[TGlideClient],
+) -> None:
+    """
+    Clean up a pubsub client by unsubscribing and closing.
+
+    For Config method: just close (server will clean up on disconnect)
+    For Lazy/Blocking: unsubscribe from all before closing
+    """
+    if client is None:
+        return
+
+    cleanup_error = None
+
+    try:
+        # Get current subscriptions and unsubscribe
+        PubSubModes = get_pubsub_modes(client)
+        state = await client.get_subscriptions()
+        actual = state.actual_subscriptions
+
+        has_channels = bool(actual.get(PubSubModes.Exact))  # type: ignore
+        has_patterns = bool(actual.get(PubSubModes.Pattern))  # type: ignore
+        has_sharded = isinstance(client, GlideClusterClient) and bool(
+            actual.get(PubSubModes.Sharded)
+        )  # type: ignore
+
+        # Unsubscribe from all using lazy (faster cleanup)
+        if has_channels:
+            await client.unsubscribe_lazy()
+        if has_patterns:
+            await client.punsubscribe_lazy()
+        if has_sharded:
+            await cast(GlideClusterClient, client).sunsubscribe_lazy()
+
+        # Wait briefly for unsubscriptions
+        if has_channels or has_patterns or has_sharded:
+            await wait_for_subscription_state(
+                client,
+                expected_channels=set(),
+                expected_patterns=set(),
+                expected_sharded=(
+                    set() if isinstance(client, GlideClusterClient) else None
+                ),
+                timeout_ms=3000,
+            )
+
+    except Exception as e:
+        cleanup_error = e
+    finally:
+        await client.close()
+        del client
+        # The closure is not completed in the glide-core instantly
+        await anyio.sleep(1)
+
+        if cleanup_error:
+            raise cleanup_error

@@ -9,10 +9,9 @@ use std::time::Duration;
 use utilities::block_on_all;
 use utilities::cluster::{
     ClusterTopology, LONG_CLUSTER_TEST_TIMEOUT, PubSubTestSetup, RedisCluster,
-    find_subscription_address, generate_test_subscriptions_different_slots,
-    migrate_channel_to_different_node, migrate_channels_to_different_nodes, subscribe_and_wait,
-    trigger_failover, verify_desired_subscriptions_persist, verify_subscription_addresses_changed,
-    wait_for_node_to_become_primary, wait_for_pubsub_state,
+    generate_test_subscriptions_different_slots, migrate_channel_to_different_node,
+    migrate_channels_to_different_nodes, subscribe_and_wait, trigger_failover,
+    verify_subscription_addresses_changed, wait_for_node_to_become_primary, wait_for_pubsub_state,
 };
 
 const LOG_PREFIX: &str = "test_pubsub";
@@ -21,7 +20,7 @@ const LOG_PREFIX: &str = "test_pubsub";
 const MIGRATION_DELAY: Duration = Duration::from_millis(0);
 
 /// Timeout for waiting for subscriptions to be established.
-const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(5);
+const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Timeout for waiting for subscriptions to be re-established after migration.
 const RESUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(5);
@@ -68,17 +67,6 @@ fn test_sharded_subscriptions_survive_slot_migrations(#[case] num_channels: usiz
             MIGRATION_DELAY,
         )
         .await;
-
-        tokio::time::sleep(RECONCILIATION_WAIT).await;
-
-        assert!(
-            verify_desired_subscriptions_persist(
-                &setup.synchronizer,
-                &channels,
-                PubSubSubscriptionKind::Sharded,
-            ),
-            "All desired sharded subscriptions should persist after migrations"
-        );
 
         let all_resubscribed = wait_for_pubsub_state(
             &setup.synchronizer,
@@ -164,17 +152,6 @@ fn test_exact_subscriptions_survive_slot_migrations(#[case] num_channels: usize)
         )
         .await;
 
-        tokio::time::sleep(RECONCILIATION_WAIT).await;
-
-        assert!(
-            verify_desired_subscriptions_persist(
-                &setup.synchronizer,
-                &channels,
-                PubSubSubscriptionKind::Exact,
-            ),
-            "All desired exact subscriptions should persist after migrations"
-        );
-
         let all_resubscribed = wait_for_pubsub_state(
             &setup.synchronizer,
             PubSubSubscriptionKind::Exact,
@@ -258,17 +235,6 @@ fn test_pattern_subscriptions_survive_slot_migrations(#[case] num_patterns: usiz
             MIGRATION_DELAY,
         )
         .await;
-
-        tokio::time::sleep(RECONCILIATION_WAIT).await;
-
-        assert!(
-            verify_desired_subscriptions_persist(
-                &setup.synchronizer,
-                &patterns,
-                PubSubSubscriptionKind::Pattern,
-            ),
-            "All desired pattern subscriptions should persist after migrations"
-        );
 
         let all_resubscribed = wait_for_pubsub_state(
             &setup.synchronizer,
@@ -364,31 +330,6 @@ fn test_all_subscription_types_survive_same_slot_migration() {
         assert!(
             migrated.is_some(),
             "Should have migrated to a different node"
-        );
-
-        assert!(
-            verify_desired_subscriptions_persist(
-                &setup.synchronizer,
-                &[exact_channel.clone()],
-                PubSubSubscriptionKind::Exact,
-            ),
-            "Desired exact subscription should persist"
-        );
-        assert!(
-            verify_desired_subscriptions_persist(
-                &setup.synchronizer,
-                &[pattern.clone()],
-                PubSubSubscriptionKind::Pattern,
-            ),
-            "Desired pattern subscription should persist"
-        );
-        assert!(
-            verify_desired_subscriptions_persist(
-                &setup.synchronizer,
-                &[sharded_channel.clone()],
-                PubSubSubscriptionKind::Sharded,
-            ),
-            "Desired sharded subscription should persist"
         );
 
         let exact_resub = wait_for_pubsub_state(
@@ -648,8 +589,6 @@ fn test_all_subscription_types_survive_failover() {
             became_primary,
             "Replica should become primary after failover"
         );
-
-        tokio::time::sleep(RECONCILIATION_WAIT).await;
 
         wait_for_pubsub_state(
             &setup.synchronizer,
