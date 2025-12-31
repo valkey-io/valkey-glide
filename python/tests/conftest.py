@@ -1,6 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-import os
 import sys
 from typing import List
 

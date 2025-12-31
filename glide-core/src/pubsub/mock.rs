@@ -1237,13 +1237,6 @@ impl MockPubSubBroker {
     }
 }
 
-fn extract_channels_from_subscription_info(
-    subs: &redis::PubSubSubscriptionInfo,
-    kind: PubSubSubscriptionKind,
-) -> HashSet<PubSubChannelOrPattern> {
-    subs.get(&kind).cloned().unwrap_or_default()
-}
-
 fn glob_match(pattern: &str, text: &str) -> bool {
     let pattern_parts: Vec<&str> = pattern.split('*').collect();
 

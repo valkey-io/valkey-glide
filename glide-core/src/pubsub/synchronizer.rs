@@ -82,10 +82,6 @@ impl GlidePubSubSynchronizer {
         let _ = self.internal_client.set(client);
     }
 
-    // ========================================================================
-    // Command Execution
-    // ========================================================================
-
     /// Send a command through the internal client with optional routing
     async fn send_command(
         &self,
@@ -135,10 +131,6 @@ impl GlidePubSubSynchronizer {
         })
     }
 
-    // ========================================================================
-    // State Management
-    // ========================================================================
-
     /// Get aggregated current subscriptions across all addresses
     fn get_aggregated_current_subscriptions(&self) -> PubSubSubscriptionInfo {
         let current_by_addr = self
@@ -187,10 +179,6 @@ impl GlidePubSubSynchronizer {
         };
         kinds.into_iter()
     }
-
-    // ========================================================================
-    // Reconciliation
-    // ========================================================================
 
     /// Start the background reconciliation task
     fn start_reconciliation_task(self: &Arc<Self>) {
@@ -478,15 +466,10 @@ impl GlidePubSubSynchronizer {
         }
     }
 
-    // ========================================================================
-    // Metrics & Sync State
-    // ========================================================================
-
     /// Check sync state and update metrics accordingly
     fn check_and_record_sync_state(&self) {
         if self.check_synchronized() {
             let _ = GlideOpenTelemetry::update_subscription_last_sync_timestamp();
-            log_debug("sync_state", "Subscriptions are synchronized");
             return;
         }
         let _ = GlideOpenTelemetry::record_subscription_out_of_sync();
@@ -519,10 +502,6 @@ impl GlidePubSubSynchronizer {
             .collect();
         format!("{{{}}}", formatted.join(", "))
     }
-
-    // ========================================================================
-    // Blocking Wait (Unified)
-    // ========================================================================
 
     /// Wait for subscription state to match expected condition
     ///
@@ -582,10 +561,6 @@ impl GlidePubSubSynchronizer {
             }
         }
     }
-
-    // ========================================================================
-    // Command Handlers (Unified)
-    // ========================================================================
 
     fn extract_channels_from_cmd(cmd: &Cmd) -> Vec<PubSubChannelOrPattern> {
         cmd.args_iter()
@@ -748,10 +723,6 @@ impl Drop for GlidePubSubSynchronizer {
         }
     }
 }
-
-// ============================================================================
-// PubSubSynchronizer Trait Implementation
-// ============================================================================
 
 #[async_trait]
 impl PubSubSynchronizer for GlidePubSubSynchronizer {

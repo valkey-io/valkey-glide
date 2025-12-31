@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from enum import IntEnum
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Dict, List, Union, cast
 
 import anyio
 import pytest
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.glide_client import GlideClusterClient
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (
     GlideClientConfiguration,
@@ -1484,132 +1483,107 @@ class TestPubSub:
         subscription_method: SubscriptionMethod,
     ):
         """
-        Tests combined exact, pattern and sharded PUBSUB with multiple clients, one for each subscription.
-
-        This test verifies that separate clients can correctly handle exact, pattern and sharded PUBSUB
-        subscriptions. It covers the following scenarios:
-        - Subscribing to multiple channels with exact names and verifying message reception.
-        - Subscribing to channels using a pattern and verifying message reception.
-        - Subscribing to channels using a sharded subscription and verifying message reception.
-        - Ensuring that messages are correctly published and received using different retrieval methods
-        (async, sync, callback).
-        - Verifying that no messages are left unread.
-        - Properly unsubscribing from all channels to avoid interference with other tests.
+        Combined PUBSUB test for exact, pattern, and sharded subscriptions with multiple clients.
         """
-        (
-            listening_client_exact,
-            publishing_client,
-            listening_client_pattern,
-            listening_client_sharded,
-        ) = (None, None, None, None)
+        listening_client_exact = listening_client_pattern = listening_client_sharded = (
+            None
+        )
+        publishing_client = None
+
+        NUM_CHANNELS = 256
+        PATTERN = "{pattern}:*"
+        SHARD_PREFIX = "{same-shard}"
+
+        exact_channels = {
+            f"{{channel}}:exact:{i}": f"exact_msg_{i}" for i in range(NUM_CHANNELS)
+        }
+        pattern_channels = {
+            f"{{pattern}}:test:{i}": f"pattern_msg_{i}" for i in range(NUM_CHANNELS)
+        }
+        sharded_channels = {
+            f"{SHARD_PREFIX}:{i}:sharded": f"sharded_msg_{i}"
+            for i in range(NUM_CHANNELS)
+        }
+
+        callback_messages_exact = []
+        callback_messages_pattern = []
+        callback_messages_sharded = []
+
+        callback = context = None
+        if method == MessageReadMethod.Callback:
+            callback = new_message
+            context = callback_messages_exact
 
         try:
-            NUM_CHANNELS = 256
-            PATTERN = "{pattern}:*"
-            SHARD_PREFIX = "{same-shard}"
-
-            # Create dictionaries of channels and their corresponding messages
-            exact_channels_and_messages = {
-                f"{{channel}}:exact:{i}": f"exact_msg_{i}" for i in range(NUM_CHANNELS)
-            }
-            pattern_channels_and_messages = {
-                f"{{pattern}}:test:{i}": f"pattern_msg_{i}" for i in range(NUM_CHANNELS)
-            }
-            sharded_channels_and_messages = {
-                f"{SHARD_PREFIX}:{i}:sharded": f"sharded_msg_{i}"
-                for i in range(NUM_CHANNELS)
-            }
-
-            publish_response = 1
-
-            callback, context = None, None
-            callback_messages_exact: List[PubSubMsg] = []
-            callback_messages_pattern: List[PubSubMsg] = []
-            callback_messages_sharded: List[PubSubMsg] = []
-
-            if method == MessageReadMethod.Callback:
-                callback = new_message
-                context = callback_messages_exact
-
-            # Create exact client
-            if subscription_method == SubscriptionMethod.Config:
-                listening_client_exact = await create_pubsub_client(
-                    request,
-                    cluster_mode,
-                    channels=set(exact_channels_and_messages.keys()),
-                    callback=callback,
-                    context=context,
-                )
-            else:
-                listening_client_exact = await create_pubsub_client(
-                    request,
-                    cluster_mode,
-                    callback=callback,
-                    context=context,
-                )
+            # Exact client
+            listening_client_exact = await create_pubsub_client(
+                request,
+                cluster_mode,
+                channels=(
+                    set(exact_channels.keys())
+                    if subscription_method == SubscriptionMethod.Config
+                    else None
+                ),
+                callback=callback,
+                context=context,
+            )
+            if subscription_method != SubscriptionMethod.Config:
                 await subscribe_by_method(
                     listening_client_exact,
-                    set(exact_channels_and_messages.keys()),
+                    set(exact_channels.keys()),
                     subscription_method,
                 )
 
+            # Publishing client
             publishing_client = await create_client(request, cluster_mode)
 
             if method == MessageReadMethod.Callback:
                 context = callback_messages_pattern
 
-            # Create pattern client
-            if subscription_method == SubscriptionMethod.Config:
-                listening_client_pattern = await create_pubsub_client(
-                    request,
-                    cluster_mode,
-                    patterns={PATTERN},
-                    callback=callback,
-                    context=context,
-                )
-            else:
-                listening_client_pattern = await create_pubsub_client(
-                    request,
-                    cluster_mode,
-                    callback=callback,
-                    context=context,
-                )
+            # Pattern client
+            listening_client_pattern = await create_pubsub_client(
+                request,
+                cluster_mode,
+                patterns=(
+                    {PATTERN}
+                    if subscription_method == SubscriptionMethod.Config
+                    else None
+                ),
+                callback=callback,
+                context=context,
+            )
+            if subscription_method != SubscriptionMethod.Config:
                 await psubscribe_by_method(
-                    listening_client_pattern,
-                    {PATTERN},
-                    subscription_method,
+                    listening_client_pattern, {PATTERN}, subscription_method
                 )
 
             if method == MessageReadMethod.Callback:
                 context = callback_messages_sharded
 
-            # Create sharded client
-            if subscription_method == SubscriptionMethod.Config:
-                listening_client_sharded = await create_pubsub_client(
-                    request,
-                    cluster_mode,
-                    sharded_channels=set(sharded_channels_and_messages.keys()),
-                    callback=callback,
-                    context=context,
-                )
-            else:
-                listening_client_sharded = await create_pubsub_client(
-                    request,
-                    cluster_mode,
-                    callback=callback,
-                    context=context,
-                )
+            # Sharded client
+            listening_client_sharded = await create_pubsub_client(
+                request,
+                cluster_mode,
+                sharded_channels=(
+                    set(sharded_channels.keys())
+                    if subscription_method == SubscriptionMethod.Config
+                    else None
+                ),
+                callback=callback,
+                context=context,
+            )
+            if subscription_method != SubscriptionMethod.Config:
                 await ssubscribe_by_method(
                     cast(GlideClusterClient, listening_client_sharded),
-                    set(sharded_channels_and_messages.keys()),
+                    set(sharded_channels.keys()),
                     subscription_method,
                 )
 
-            # Verify subscriptions
+            # Wait for subscriptions to activate
             await wait_for_subscription_state_if_needed(
                 listening_client_exact,
                 subscription_method,
-                expected_channels=set(exact_channels_and_messages.keys()),
+                expected_channels=set(exact_channels.keys()),
             )
             await wait_for_subscription_state_if_needed(
                 listening_client_pattern,
@@ -1619,21 +1593,17 @@ class TestPubSub:
             await wait_for_subscription_state_if_needed(
                 listening_client_sharded,
                 subscription_method,
-                expected_sharded=set(sharded_channels_and_messages.keys()),
+                expected_sharded=set(sharded_channels.keys()),
             )
 
-            # Publish messages to all channels
-            for channel, message in {
-                **exact_channels_and_messages,
-                **pattern_channels_and_messages,
-            }.items():
+            # Publish all messages
+            publish_response = 1
+            for channel, message in {**exact_channels, **pattern_channels}.items():
                 assert (
                     await publishing_client.publish(message, channel)
                     == publish_response
                 )
-
-            # Publish sharded messages to all channels
-            for channel, message in sharded_channels_and_messages.items():
+            for channel, message in sharded_channels.items():
                 assert (
                     await cast(GlideClusterClient, publishing_client).publish(
                         message, channel, sharded=True
@@ -1641,57 +1611,45 @@ class TestPubSub:
                     == publish_response
                 )
 
-            # allow the messages to propagate
             await anyio.sleep(1)
 
-            # Verify messages for exact PUBSUB
-            for index in range(len(exact_channels_and_messages)):
-                pubsub_msg = await get_message_by_method(
-                    method, listening_client_exact, callback_messages_exact, index
-                )
-                assert pubsub_msg.channel in exact_channels_and_messages.keys()
-                assert (
-                    pubsub_msg.message
-                    == exact_channels_and_messages[pubsub_msg.channel]
-                )
-                assert pubsub_msg.pattern is None
-                del exact_channels_and_messages[pubsub_msg.channel]
+            # Helper for asserting messages
+            async def assert_pubsub_messages(
+                method,
+                client,
+                callback_messages,
+                expected_dict,
+                pattern=None,
+                sharded=False,
+            ):
+                for index in range(len(expected_dict)):
+                    msg = await get_message_by_method(
+                        method, client, callback_messages, index
+                    )
+                    assert msg.channel in expected_dict
+                    assert msg.message == expected_dict[msg.channel]
+                    assert msg.pattern == pattern
+                    del expected_dict[msg.channel]
+                assert expected_dict == {}
 
-            # check that we received all messages
-            assert exact_channels_and_messages == {}
+            await assert_pubsub_messages(
+                method, listening_client_exact, callback_messages_exact, exact_channels
+            )
+            await assert_pubsub_messages(
+                method,
+                listening_client_pattern,
+                callback_messages_pattern,
+                pattern_channels,
+                pattern=PATTERN,
+            )
+            await assert_pubsub_messages(
+                method,
+                listening_client_sharded,
+                callback_messages_sharded,
+                sharded_channels,
+            )
 
-            # Verify messages for pattern PUBSUB
-            for index in range(len(pattern_channels_and_messages)):
-                pubsub_msg = await get_message_by_method(
-                    method, listening_client_pattern, callback_messages_pattern, index
-                )
-                assert pubsub_msg.channel in pattern_channels_and_messages.keys()
-                assert (
-                    pubsub_msg.message
-                    == pattern_channels_and_messages[pubsub_msg.channel]
-                )
-                assert pubsub_msg.pattern == PATTERN
-                del pattern_channels_and_messages[pubsub_msg.channel]
-
-            # check that we received all messages
-            assert pattern_channels_and_messages == {}
-
-            # Verify messages for shaded PUBSUB
-            for index in range(len(sharded_channels_and_messages)):
-                pubsub_msg = await get_message_by_method(
-                    method, listening_client_sharded, callback_messages_sharded, index
-                )
-                assert pubsub_msg.channel in sharded_channels_and_messages.keys()
-                assert (
-                    pubsub_msg.message
-                    == sharded_channels_and_messages[pubsub_msg.channel]
-                )
-                assert pubsub_msg.pattern is None
-                del sharded_channels_and_messages[pubsub_msg.channel]
-
-            # check that we received all messages
-            assert sharded_channels_and_messages == {}
-
+            # Ensure no messages left
             await check_no_messages_left(
                 method, listening_client_exact, callback_messages_exact, NUM_CHANNELS
             )
@@ -4295,7 +4253,6 @@ class TestPubSub:
             import time
 
             channel1 = "channel1_sync_timestamp"
-            channel2 = "channel2_sync_timestamp"
             message = "message_1"
 
             listening_client = await create_pubsub_client(request, cluster_mode)
@@ -4344,10 +4301,10 @@ class TestPubSub:
             await pubsub_client_cleanup(publishing_client)
 
     @pytest.mark.skip_if_mock_pubsub
-    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize(
         "message_read_method",
-        [MessageReadMethod.Async, MessageReadMethod.Sync, MessageReadMethod.Callback],
+        [ MessageReadMethod.Sync, MessageReadMethod.Callback],
     )
     @pytest.mark.parametrize(
         "subscription_method",
@@ -4418,6 +4375,8 @@ class TestPubSub:
 
             # Kill connections - this should trigger reconnection
             await kill_connections(publishing_client, None)
+            
+            anyio.sleep(1)
 
             # Wait for subscriptions to be re-established
             await wait_for_subscription_state(

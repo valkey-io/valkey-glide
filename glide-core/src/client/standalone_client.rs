@@ -122,9 +122,8 @@ impl StandaloneClient {
             return Err(StandaloneClientConnectionError::NoAddressesProvided);
         }
 
-        let mut valkey_connection_info =
+        let valkey_connection_info =
             get_valkey_connection_info(&connection_request, iam_token_manager).await;
-        valkey_connection_info.pubsub_subscriptions = None;
         let retry_strategy = match connection_request.connection_retry_strategy {
             Some(strategy) => RetryStrategy::new(
                 strategy.exponent_base,

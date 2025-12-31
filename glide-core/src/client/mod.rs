@@ -168,7 +168,6 @@ pub async fn get_valkey_connection_info(
     let db = connection_request.database_id;
     let client_name = connection_request.client_name.clone();
     let lib_name = connection_request.lib_name.clone();
-    let pubsub_subscriptions = connection_request.pubsub_subscriptions.clone();
 
     match &connection_request.authentication_info {
         Some(info) => {
@@ -188,7 +187,6 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
-                    pubsub_subscriptions,
                 }
             } else {
                 // Regular password-based authentication
@@ -199,7 +197,6 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
-                    pubsub_subscriptions,
                 }
             }
         }
@@ -208,7 +205,6 @@ pub async fn get_valkey_connection_info(
             protocol,
             client_name,
             lib_name,
-            pubsub_subscriptions,
             ..Default::default()
         },
     }
@@ -577,18 +573,21 @@ impl Client {
 
             // Replace the lazy client with the real client
             *guard = real_client;
-
-            if let Err(e) = self.pubsub_synchronizer.wait_for_initial_sync(2000).await {
-                log_warn(
-                    "Client::new",
-                    format!(
-                        "Failed to establish initial subscriptions within timeout: {:?}",
-                        e
-                    ),
-                );
-            }
         }
 
+        // We must remove the guard so the pubsub synchronizer can acquire it when subscribing
+        // to channels provided via config. Keeping the guard would cause a deadlock. We wait
+        // for the subscription here to ensure the lazy client is subscribed immediately upon creation.
+        drop(guard);
+        if let Err(e) = self.pubsub_synchronizer.wait_for_initial_sync(1000).await {
+            log_warn(
+                "Client::new",
+                format!("Failed to establish initial subscriptions within timeout: {e:?}"),
+            );
+        }
+
+        // Re-acquire for the return
+        let guard = self.internal_client.read().await;
         Ok(guard.clone()) // ✅ Return clone of the now-initialized wrapper
     }
 
@@ -1386,9 +1385,6 @@ async fn create_cluster_client(
             builder = builder.certs(certs);
         }
     }
-    if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions.clone() {
-        builder = builder.pubsub_subscriptions(pubsub_subscriptions);
-    }
 
     let retry_strategy = match request.connection_retry_strategy {
         Some(strategy) => RetryStrategy::new(
@@ -1424,7 +1420,7 @@ async fn create_cluster_client(
     // However, this approach would leave the application unaware that the subscriptions were not applied, requiring the user to analyze logs to identify the issue.
     // Instead, we explicitly check the engine version here and fail the connection creation if it is incompatible with sharded subscriptions.
 
-    if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions
+    if let Some(pubsub_subscriptions) = &request.pubsub_subscriptions
         && pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded)
     {
         let info_res = con

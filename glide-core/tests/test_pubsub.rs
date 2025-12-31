@@ -25,9 +25,6 @@ const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(2);
 /// Timeout for waiting for subscriptions to be re-established after migration.
 const RESUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Time to wait for reconciliation after slot migration.
-const RECONCILIATION_WAIT: Duration = Duration::from_secs(5);
-
 #[rstest]
 #[case::one_channel(1)]
 #[case::hundred_channels(100)]
@@ -152,6 +149,10 @@ fn test_exact_subscriptions_survive_slot_migrations(#[case] num_channels: usize)
         )
         .await;
 
+        // small sleep to allow for the synchronizer handle_topology to start and unsubscribe
+        // Otherwise we will pass the wait_for_pubsub_state immediately on the same address
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
         let all_resubscribed = wait_for_pubsub_state(
             &setup.synchronizer,
             PubSubSubscriptionKind::Exact,
@@ -235,6 +236,10 @@ fn test_pattern_subscriptions_survive_slot_migrations(#[case] num_patterns: usiz
             MIGRATION_DELAY,
         )
         .await;
+
+        // small sleep to allow for the synchronizer handle_topology to start and unsubscribe
+        // Otherwise we will pass the wait_for_pubsub_state immediately on the same address
+        tokio::time::sleep(Duration::from_millis(500)).await;
 
         let all_resubscribed = wait_for_pubsub_state(
             &setup.synchronizer,
@@ -331,6 +336,10 @@ fn test_all_subscription_types_survive_same_slot_migration() {
             migrated.is_some(),
             "Should have migrated to a different node"
         );
+
+        // small sleep to allow for the synchronizer handle_topology to start and unsubscribe
+        // Otherwise we will pass the wait_for_pubsub_state immediately on the same address
+        tokio::time::sleep(Duration::from_millis(500)).await;
 
         let exact_resub = wait_for_pubsub_state(
             &setup.synchronizer,
@@ -453,6 +462,10 @@ fn test_all_subscription_types_survive_different_slot_migrations() {
             let _ = migrate_channel_to_different_node(&mut setup.connection, &topology, slot).await;
             tokio::time::sleep(MIGRATION_DELAY).await;
         }
+
+        // small sleep to allow for the synchronizer handle_topology to start and unsubscribe
+        // Otherwise we will pass the wait_for_pubsub_state immediately on the same address
+        tokio::time::sleep(Duration::from_millis(500)).await;
 
         wait_for_pubsub_state(
             &setup.synchronizer,

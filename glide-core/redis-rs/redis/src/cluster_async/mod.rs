@@ -82,7 +82,6 @@ use crate::{
     cluster_routing::{
         self, MultipleNodeRoutingInfo, Redirect, ResponsePolicy, Route, SingleNodeRoutingInfo,
     },
-    connection::PubSubSubscriptionInfo,
     push_manager::PushInfo,
     Cmd, ConnectionInfo, ErrorKind, IntoConnectionInfo, RedisError, RedisFuture, RedisResult,
     Value,
@@ -110,7 +109,6 @@ use std::sync::RwLock as StdRwLock;
 use tokio::sync::{
     mpsc,
     oneshot::{self, Receiver},
-    RwLock as TokioRwLock,
 };
 use tracing::{debug, info, trace, warn};
 
@@ -434,7 +432,6 @@ pub(crate) struct InnerCore<C> {
     pending_requests: Mutex<Vec<PendingRequest<C>>>,
     slot_refresh_state: SlotRefreshState,
     initial_nodes: Vec<ConnectionInfo>,
-    subscriptions_by_address: TokioRwLock<HashMap<String, PubSubSubscriptionInfo>>,
     glide_connection_options: GlideConnectionOptions,
 }
 
@@ -1161,7 +1158,6 @@ where
             pending_requests: Mutex::new(Vec::new()),
             slot_refresh_state: SlotRefreshState::new(slots_refresh_rate_limiter),
             initial_nodes: initial_nodes.to_vec(),
-            subscriptions_by_address: TokioRwLock::new(Default::default()),
             glide_connection_options,
         });
         let mut connection = ClusterConnInner {
@@ -1253,10 +1249,9 @@ where
             Self::try_to_expand_initial_nodes(initial_nodes).await;
         let connections = stream::iter(initial_nodes.iter().cloned())
             .map(|(node_addr, socket_addr)| {
-                let mut params: ClusterParams = params.clone();
+                let params: ClusterParams = params.clone();
                 let glide_connection_options = glide_connection_options.clone();
                 // set subscriptions to none, they will be applied upon the topology discovery
-                params.pubsub_subscriptions = None;
 
                 async move {
                     let result = connect_and_check(
@@ -1506,15 +1501,11 @@ where
                 )));
                 let mut first_attempt = true;
                 for backoff_duration in infinite_backoff_iter {
-                    let mut cluster_params = inner_clone
+                    let cluster_params = inner_clone
                         .cluster_params
                         .read()
                         .expect(MUTEX_READ_ERR)
                         .clone();
-                    let subs_guard = inner_clone.subscriptions_by_address.read().await;
-                    cluster_params.pubsub_subscriptions =
-                        subs_guard.get(&address_clone_for_task).cloned();
-                    drop(subs_guard);
 
                     node_result = get_or_create_conn(
                         &address_clone_for_task,
@@ -2195,12 +2186,9 @@ where
             .fold(
                 ConnectionsMap(DashMap::with_capacity(nodes_len)),
                 |connections, (addr, node)| async {
-                    let mut cluster_params = inner
+                    let cluster_params = inner
                         .get_cluster_param(|params| params.clone())
                         .expect(MUTEX_READ_ERR);
-                    let subs_guard = inner.subscriptions_by_address.read().await;
-                    cluster_params.pubsub_subscriptions = subs_guard.get(&addr).cloned();
-                    drop(subs_guard);
                     let node = get_or_create_conn(
                         &addr,
                         node,

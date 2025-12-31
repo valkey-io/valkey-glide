@@ -384,7 +384,7 @@ where
 
 async fn create_connection<C>(
     node: &str,
-    mut params: ClusterParams,
+    params: ClusterParams,
     socket_addr: Option<SocketAddr>,
     is_management: bool,
     mut glide_connection_options: GlideConnectionOptions,
@@ -394,10 +394,6 @@ where
 {
     let connection_timeout = params.connection_timeout;
     let response_timeout = params.response_timeout;
-    // ignore pubsub subscriptions and push notifications for management connections
-    if is_management {
-        params.pubsub_subscriptions = None;
-    }
     let info = get_connection_info(node, params)?;
     // management connection does not require notifications or disconnect notifications
     if is_management {
