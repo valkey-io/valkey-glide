@@ -2,7 +2,7 @@
 
 use crate::client::{ClientWrapper, PubSubCommandApplier};
 use async_trait::async_trait;
-use logger_core::{log_debug, log_error, log_warn};
+use logger_core::{log_debug, log_error, log_info, log_warn};
 use once_cell::sync::OnceCell;
 use redis::{
     Cmd, ErrorKind, PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind,
@@ -182,12 +182,14 @@ impl GlidePubSubSynchronizer {
 
     /// Start the background reconciliation task
     fn start_reconciliation_task(self: &Arc<Self>) {
+        // We use a weak ref to self here as an indication that the client has dropped and thus there
+        // is no longer a strong ref of the synchornizer and we should break from the loop
         let sync_weak = Arc::downgrade(self);
 
         let handle = tokio::spawn(async move {
             loop {
                 let Some(sync) = sync_weak.upgrade() else {
-                    log_warn("reconciliation_task", "Synchronizer dropped, exiting task");
+                    log_debug("pubsub_synchronizer", "Synchronizer dropped, exiting task");
                     break;
                 };
                 tokio::select! {
@@ -197,7 +199,7 @@ impl GlidePubSubSynchronizer {
 
                 if let Err(e) = sync.reconcile().await {
                     log_error(
-                        "reconciliation_task",
+                        "pubsub_synchronizer",
                         format!("Reconciliation failed: {:?}", e),
                     );
                 }
@@ -261,11 +263,6 @@ impl GlidePubSubSynchronizer {
             return;
         }
 
-        log_debug(
-            "process_pending_unsubscribes",
-            format!("Processing {} pending unsubscribe batches", pending.len()),
-        );
-
         for (address, kind, channels) in pending {
             if channels.is_empty() {
                 continue;
@@ -275,7 +272,7 @@ impl GlidePubSubSynchronizer {
                 Ok(r) => Some(r),
                 Err(e) => {
                     log_warn(
-                        "process_pending_unsubscribes",
+                        "pubsub_synchronizer",
                         format!("Failed to parse address '{}': {:?}", address, e),
                     );
                     continue;
@@ -283,9 +280,9 @@ impl GlidePubSubSynchronizer {
             };
 
             log_debug(
-                "process_pending_unsubscribes",
+                "pubsub_synchronizer",
                 format!(
-                    "Sending {:?} unsubscribe to {} for {} channels: {:?}",
+                    "Sending {:?} preemtive unsubscribe to {} for {} channels: {:?} due to topology change",
                     kind,
                     address,
                     channels.len(),
@@ -346,7 +343,7 @@ impl GlidePubSubSynchronizer {
         match self.send_command(&mut cmd, routing).await {
             Ok(_) => {
                 log_debug(
-                    "execute_subscription_change",
+                    "pubsub_synchronizer",
                     format!(
                         "Sent {} for {:?} channels: {:?}",
                         action,
@@ -360,7 +357,7 @@ impl GlidePubSubSynchronizer {
             }
             Err(e) => {
                 log_error(
-                    "execute_subscription_change",
+                    "pubsub_synchronizer",
                     format!("Failed to {} {:?} channels: {:?}", action, kind, e),
                 );
             }
@@ -389,7 +386,7 @@ impl GlidePubSubSynchronizer {
                 Ok(r) => Some(r),
                 Err(e) => {
                     log_warn(
-                        "execute_unsubscribe_by_address",
+                        "pubsub_synchronizer",
                         format!("Failed to parse address '{}': {:?}", addr, e),
                     );
                     continue;
@@ -402,7 +399,7 @@ impl GlidePubSubSynchronizer {
                     .await;
             } else {
                 log_debug(
-                    "unsubscribe",
+                    "pubsub_synchronizer",
                     format!(
                         "Sending {:?} unsubscribe to {} for {} channels",
                         kind,
@@ -425,7 +422,7 @@ impl GlidePubSubSynchronizer {
         channels.into_iter().fold(HashMap::new(), |mut acc, chan| {
             if let Some((addr, _)) = current_by_addr
                 .iter()
-                .find(|(_, subs)| subs.get(&kind).map_or(false, |c| c.contains(&chan)))
+                .find(|(_, subs)| subs.get(&kind).is_some_and(|c| c.contains(&chan)))
             {
                 acc.entry(addr.clone()).or_default().insert(chan);
             }
@@ -449,7 +446,7 @@ impl GlidePubSubSynchronizer {
 
         for (slot, slot_channels) in channels_by_slot {
             log_debug(
-                "unsubscribe",
+                "pubsub_synchronizer",
                 format!(
                     "Sending SUNSUBSCRIBE for slot {} with {} channels",
                     slot,
@@ -474,8 +471,8 @@ impl GlidePubSubSynchronizer {
         }
         let _ = GlideOpenTelemetry::record_subscription_out_of_sync();
         let (desired, actual) = self.get_subscription_state();
-        log_warn(
-            "sync_state",
+        log_info(
+            "pubsub_synchronizer",
             format!(
                 "Subscriptions out of sync - desired: {}, actual: {}",
                 Self::format_subscription_info(&desired),
@@ -510,7 +507,7 @@ impl GlidePubSubSynchronizer {
     /// * `kind` - The subscription kind to check
     /// * `timeout_ms` - Timeout in milliseconds. 0 means no timeout.
     /// * `wait_for_presence` - If true, waits until channels ARE subscribed.
-    ///                         If false, waits until channels are NOT subscribed.
+    ///   If false, waits until channels are NOT subscribed.
     async fn wait_for_subscription_state(
         &self,
         channels: Option<&HashSet<PubSubChannelOrPattern>>,
@@ -539,8 +536,12 @@ impl GlidePubSubSynchronizer {
             };
 
             if condition_met {
+                self.check_and_record_sync_state();
                 return Ok(());
             }
+
+            // Trigger reconciliation since condition isn't met yet
+            self.trigger_reconciliation();
 
             // Wait for reconciliation notification or timeout
             if let Some(deadline) = deadline {
@@ -736,7 +737,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         subscription_type: PubSubSubscriptionKind,
     ) {
         log_debug(
-            "add_desired_subscriptions",
+            "pubsub_synchronizer",
             format!(
                 "Adding {:?} to desired: {:?}",
                 subscription_type,
@@ -764,7 +765,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         subscription_type: PubSubSubscriptionKind,
     ) {
         log_debug(
-            "remove_desired_subscriptions",
+            "pubsub_synchronizer",
             format!(
                 "Removing {:?} from desired: {:?}",
                 subscription_type,
@@ -804,7 +805,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         address: String,
     ) {
         log_debug(
-            "add_current_subscriptions",
+            "pubsub_synchronizer",
             format!(
                 "Adding {:?} to address '{}': {:?}",
                 subscription_type,
@@ -835,7 +836,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         address: String,
     ) {
         log_debug(
-            "remove_current_subscriptions",
+            "pubsub_synchronizer",
             format!(
                 "Removing {:?} channels {:?} (notification from '{}')",
                 subscription_type,
@@ -859,7 +860,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
                 for channel in &channels {
                     if existing.remove(channel) {
                         log_debug(
-                            "remove_current_subscriptions",
+                            "pubsub_synchronizer",
                             format!(
                                 "Removed '{}' from address '{}'",
                                 String::from_utf8_lossy(channel),
@@ -884,7 +885,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         }
 
         log_debug(
-            "remove_current_subscriptions_for_addresses",
+            "pubsub_synchronizer",
             format!(
                 "Clearing subscriptions for disconnected addresses: {:?}",
                 addresses
@@ -900,7 +901,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
             if let Some(removed_subs) = current_by_addr.remove(address) {
                 let channels_count: usize = removed_subs.values().map(|s| s.len()).sum();
                 log_debug(
-                    "remove_current_subscriptions_for_addresses",
+                    "pubsub_synchronizer",
                     format!(
                         "Removed {} subscription(s) for address '{}': {:?}",
                         channels_count,
@@ -917,7 +918,10 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
     }
 
     fn handle_topology_refresh(&self, new_slot_map: &SlotMap) {
-        log_debug("handle_topology_refresh", format!("in handle topology"));
+        log_debug(
+            "pubsub_synchronizer",
+            "pubsub synchronizer notified of topology change",
+        );
         let new_addresses: HashSet<String> = new_slot_map
             .all_node_addresses()
             .iter()
@@ -950,7 +954,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
                     for (kind, channels) in addr_subs {
                         if !channels.is_empty() {
                             log_debug(
-                                "topology_refresh",
+                                "pubsub_synchronizer",
                                 format!(
                                     "Queueing unsubscribe for {} {:?} channels from removed address {}",
                                     channels.len(),
@@ -997,7 +1001,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
                     // Queue unsubscribes for migrated channels from this address
                     if !migrated_channels.is_empty() {
                         log_debug(
-                            "topology_refresh",
+                            "pubsub_synchronizer",
                             format!(
                                 "Queueing unsubscribe for {} migrated {:?} channels from {}",
                                 migrated_channels.len(),
@@ -1111,7 +1115,6 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
     }
 
     async fn wait_for_initial_sync(&self, timeout_ms: u64) -> RedisResult<()> {
-        self.trigger_reconciliation();
         let desired = self.desired_subscriptions.read().expect(LOCK_ERR).clone();
 
         // If no desired subscriptions, nothing to wait for
@@ -1121,26 +1124,20 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
 
         if !has_any_desired {
             log_debug(
-                "wait_for_initial_sync",
+                "pubsub_synchronizer",
                 "No initial subscriptions to wait for",
             );
             return Ok(());
         }
 
-        log_debug(
-            "wait_for_initial_sync",
-            format!(
-                "Waiting for initial subscriptions to sync (timeout: {}ms)",
-                timeout_ms
-            ),
-        );
+        self.trigger_reconciliation();
 
         // Wait for each subscription type that has desired subscriptions
         for kind in self.subscription_kinds() {
             let desired_set = desired.get(&kind).cloned().unwrap_or_default();
             if !desired_set.is_empty() {
                 log_debug(
-                    "wait_for_initial_sync",
+                    "pubsub_synchronizer",
                     format!(
                         "Waiting for {:?} subscriptions: {:?}",
                         kind,

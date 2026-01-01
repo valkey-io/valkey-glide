@@ -1800,6 +1800,20 @@ impl GlideClientForTests for StandaloneClient {
     }
 }
 
+// This is used for pubsub tests
+impl GlideClientForTests for ClusterConnection {
+    fn send_command<'a>(
+        &'a mut self,
+        cmd: &'a mut redis::Cmd,
+        routing: Option<RoutingInfo>,
+    ) -> redis::RedisFuture<'a, Value> {
+        let final_routing =
+            routing.unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random));
+
+        async move { self.route_command(cmd, final_routing).await }.boxed()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;

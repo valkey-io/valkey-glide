@@ -82,11 +82,17 @@ impl MockPubSubSynchronizer {
         let synchronizer = Self::new_internal(client_id.clone(), Arc::clone(&broker), is_cluster);
 
         // Apply initial subscriptions before starting reconciliation task
+        // For config-based subscriptions, immediately sync desired and actual
         if let Some(subs) = initial_subscriptions {
             let mut desired = synchronizer.desired_subscriptions.write().expect(LOCK_ERR);
+            let mut actual = synchronizer.actual_subscriptions.write().expect(LOCK_ERR);
 
             if let Some(channels) = subs.get(&PubSubSubscriptionKind::Exact) {
                 desired
+                    .entry(PubSubSubscriptionKind::Exact)
+                    .or_default()
+                    .extend(channels.clone());
+                actual
                     .entry(PubSubSubscriptionKind::Exact)
                     .or_default()
                     .extend(channels.clone());
@@ -96,9 +102,17 @@ impl MockPubSubSynchronizer {
                     .entry(PubSubSubscriptionKind::Pattern)
                     .or_default()
                     .extend(patterns.clone());
+                actual
+                    .entry(PubSubSubscriptionKind::Pattern)
+                    .or_default()
+                    .extend(patterns.clone());
             }
             if let Some(sharded) = subs.get(&PubSubSubscriptionKind::Sharded) {
                 desired
+                    .entry(PubSubSubscriptionKind::Sharded)
+                    .or_default()
+                    .extend(sharded.clone());
+                actual
                     .entry(PubSubSubscriptionKind::Sharded)
                     .or_default()
                     .extend(sharded.clone());
@@ -118,7 +132,6 @@ impl MockPubSubSynchronizer {
 
         synchronizer
     }
-
     pub(crate) fn set_can_subscribe(&self, can_subscribe: bool) {
         *self.can_subscribe.write().expect(LOCK_ERR) = can_subscribe;
     }
@@ -705,10 +718,10 @@ impl MockPubSubBroker {
                     .actual_subscriptions
                     .read()
                     .expect(LOCK_ERR);
-                if let Some(exact_channels) = actual.get(&PubSubSubscriptionKind::Exact) {
-                    if exact_channels.contains(channel) {
-                        count += 1;
-                    }
+                if let Some(exact_channels) = actual.get(&PubSubSubscriptionKind::Exact)
+                    && exact_channels.contains(channel)
+                {
+                    count += 1;
                 }
             }
             result.push((Value::BulkString(channel.clone()), Value::Int(count)));
@@ -783,10 +796,10 @@ impl MockPubSubBroker {
                     .actual_subscriptions
                     .read()
                     .expect(LOCK_ERR);
-                if let Some(sharded_channels) = actual.get(&PubSubSubscriptionKind::Sharded) {
-                    if sharded_channels.contains(channel) {
-                        count += 1;
-                    }
+                if let Some(sharded_channels) = actual.get(&PubSubSubscriptionKind::Sharded)
+                    && sharded_channels.contains(channel)
+                {
+                    count += 1;
                 }
             }
             result.push((Value::BulkString(channel.clone()), Value::Int(count)));

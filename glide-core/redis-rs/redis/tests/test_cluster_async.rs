@@ -6110,7 +6110,6 @@ mod cluster_async {
                 builder
                     .retries(3)
                     .use_protocol(ProtocolVersion::RESP3)
-                    .pubsub_subscriptions(pubsub_subs_clone)
                     .slots_refresh_rate_limit(Duration::from_secs(0), 0)
             },
             false,

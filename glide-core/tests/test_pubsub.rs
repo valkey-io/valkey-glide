@@ -1,5 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+// These tests require the real synchronizer implementation, not the mock
+#![cfg(not(feature = "mock-pubsub"))]
+
 mod utilities;
 
 use redis::PubSubSubscriptionKind;
@@ -35,6 +38,8 @@ fn test_sharded_subscriptions_survive_slot_migrations(#[case] num_channels: usiz
         let cluster = RedisCluster::new(false, &None, Some(3), Some(0));
         let addresses = cluster.get_server_addresses();
         let mut setup = PubSubTestSetup::new(&addresses).await;
+
+        skip_if_version_below!(setup, "7.0.0");
 
         let topology = ClusterTopology::from_connection(&mut setup.connection).await;
 
@@ -295,6 +300,8 @@ fn test_all_subscription_types_survive_same_slot_migration() {
         let addresses = cluster.get_server_addresses();
         let mut setup = PubSubTestSetup::new(&addresses).await;
 
+        skip_if_version_below!(setup, "7.0.0");
+
         let topology = ClusterTopology::from_connection(&mut setup.connection).await;
         let exact_channel = b"{mixed-test}exact-channel".to_vec();
         let pattern = b"{mixed-test}pattern-*".to_vec();
@@ -304,21 +311,21 @@ fn test_all_subscription_types_survive_same_slot_migration() {
 
         let exact_sub = subscribe_and_wait(
             &setup.synchronizer,
-            &[exact_channel.clone()],
+            std::slice::from_ref(&exact_channel),
             PubSubSubscriptionKind::Exact,
             SUBSCRIPTION_TIMEOUT,
         )
         .await;
         let pattern_sub = subscribe_and_wait(
             &setup.synchronizer,
-            &[pattern.clone()],
+            std::slice::from_ref(&pattern),
             PubSubSubscriptionKind::Pattern,
             SUBSCRIPTION_TIMEOUT,
         )
         .await;
         let sharded_sub = subscribe_and_wait(
             &setup.synchronizer,
-            &[sharded_channel.clone()],
+            std::slice::from_ref(&sharded_channel),
             PubSubSubscriptionKind::Sharded,
             SUBSCRIPTION_TIMEOUT,
         )
@@ -381,19 +388,19 @@ fn test_all_subscription_types_survive_same_slot_migration() {
         let (exact_changed, _, exact_not_found) = verify_subscription_addresses_changed(
             &subs_before,
             &subs_after,
-            &[exact_channel.clone()],
+            std::slice::from_ref(&exact_channel),
             PubSubSubscriptionKind::Exact,
         );
         let (pattern_changed, _, pattern_not_found) = verify_subscription_addresses_changed(
             &subs_before,
             &subs_after,
-            &[pattern.clone()],
+            std::slice::from_ref(&pattern),
             PubSubSubscriptionKind::Pattern,
         );
         let (sharded_changed, _, sharded_not_found) = verify_subscription_addresses_changed(
             &subs_before,
             &subs_after,
-            &[sharded_channel.clone()],
+            std::slice::from_ref(&sharded_channel),
             PubSubSubscriptionKind::Sharded,
         );
 
@@ -425,6 +432,8 @@ fn test_all_subscription_types_survive_different_slot_migrations() {
         let addresses = cluster.get_server_addresses();
         let mut setup = PubSubTestSetup::new(&addresses).await;
 
+        skip_if_version_below!(setup, "7.0.0");
+
         let topology = ClusterTopology::from_connection(&mut setup.connection).await;
         let exact_channel = b"{exact-diff-500}channel".to_vec();
         let pattern = b"{pattern-diff-8000}*".to_vec();
@@ -436,21 +445,21 @@ fn test_all_subscription_types_survive_different_slot_migrations() {
 
         subscribe_and_wait(
             &setup.synchronizer,
-            &[exact_channel.clone()],
+            std::slice::from_ref(&exact_channel),
             PubSubSubscriptionKind::Exact,
             SUBSCRIPTION_TIMEOUT,
         )
         .await;
         subscribe_and_wait(
             &setup.synchronizer,
-            &[pattern.clone()],
+            std::slice::from_ref(&pattern),
             PubSubSubscriptionKind::Pattern,
             SUBSCRIPTION_TIMEOUT,
         )
         .await;
         subscribe_and_wait(
             &setup.synchronizer,
-            &[sharded_channel.clone()],
+            std::slice::from_ref(&sharded_channel),
             PubSubSubscriptionKind::Sharded,
             SUBSCRIPTION_TIMEOUT,
         )
@@ -497,19 +506,19 @@ fn test_all_subscription_types_survive_different_slot_migrations() {
         let (exact_changed, _, _) = verify_subscription_addresses_changed(
             &subs_before,
             &subs_after,
-            &[exact_channel.clone()],
+            std::slice::from_ref(&exact_channel),
             PubSubSubscriptionKind::Exact,
         );
         let (pattern_changed, _, _) = verify_subscription_addresses_changed(
             &subs_before,
             &subs_after,
-            &[pattern.clone()],
+            std::slice::from_ref(&pattern),
             PubSubSubscriptionKind::Pattern,
         );
         let (sharded_changed, _, _) = verify_subscription_addresses_changed(
             &subs_before,
             &subs_after,
-            &[sharded_channel.clone()],
+            std::slice::from_ref(&sharded_channel),
             PubSubSubscriptionKind::Sharded,
         );
 
@@ -536,6 +545,8 @@ fn test_all_subscription_types_survive_failover() {
         let cluster = RedisCluster::new(false, &None, Some(3), Some(1));
         let addresses = cluster.get_server_addresses();
         let mut setup = PubSubTestSetup::new(&addresses).await;
+
+        skip_if_version_below!(setup, "7.0.0");
 
         let topology = ClusterTopology::from_connection(&mut setup.connection).await;
 
@@ -567,21 +578,21 @@ fn test_all_subscription_types_survive_failover() {
 
         subscribe_and_wait(
             &setup.synchronizer,
-            &[exact_channel.clone()],
+            std::slice::from_ref(&exact_channel),
             PubSubSubscriptionKind::Exact,
             SUBSCRIPTION_TIMEOUT,
         )
         .await;
         subscribe_and_wait(
             &setup.synchronizer,
-            &[pattern.clone()],
+            std::slice::from_ref(&pattern),
             PubSubSubscriptionKind::Pattern,
             SUBSCRIPTION_TIMEOUT,
         )
         .await;
         subscribe_and_wait(
             &setup.synchronizer,
-            &[sharded_channel.clone()],
+            std::slice::from_ref(&sharded_channel),
             PubSubSubscriptionKind::Sharded,
             SUBSCRIPTION_TIMEOUT,
         )

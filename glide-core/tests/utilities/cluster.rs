@@ -4,25 +4,35 @@ use super::{ClusterMode, TestConfiguration, create_connection_request};
 use futures::FutureExt;
 use futures::future::{BoxFuture, join_all};
 use glide_core::client::Client;
+#[cfg(not(feature = "mock-pubsub"))]
 use glide_core::client::ClientWrapper;
+#[cfg(not(feature = "mock-pubsub"))]
 use glide_core::pubsub::synchronizer::GlidePubSubSynchronizer;
+#[cfg(not(feature = "mock-pubsub"))]
 use glide_core::pubsub::{PubSubSubscriptionInfo, PubSubSynchronizer, create_pubsub_synchronizer};
 use once_cell::sync::Lazy;
+#[cfg(not(feature = "mock-pubsub"))]
+use redis::PubSubSubscriptionKind;
 use redis::{ConnectionAddr, RedisConnectionInfo};
 use redis::{
-    PubSubSubscriptionKind, Value,
+    Value,
     cluster_async::ClusterConnection,
     cluster_routing::{RoutingInfo, SingleNodeRoutingInfo},
 };
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+#[cfg(not(feature = "mock-pubsub"))]
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::process::Command;
+#[cfg(not(feature = "mock-pubsub"))]
 use std::sync::Arc;
-use std::sync::{Mutex, Weak};
+use std::sync::Mutex;
+#[cfg(not(feature = "mock-pubsub"))]
+use std::sync::Weak;
 use std::time::Duration;
+#[cfg(not(feature = "mock-pubsub"))]
 use tokio::sync::{RwLock as TokioRwLock, mpsc};
 use which::which;
-
 // Code copied from redis-rs
 
 pub(crate) const SHORT_CLUSTER_TEST_TIMEOUT: Duration = Duration::from_millis(50_000);
@@ -391,12 +401,14 @@ pub async fn setup_test_basics(use_tls: bool) -> ClusterTestBasics {
 
 /// Holds all components needed for pubsub topology test setup.
 /// The `_client_holder` keeps the Arc alive so the weak reference in the synchronizer remains valid.
+#[cfg(not(feature = "mock-pubsub"))]
 pub struct PubSubTestSetup {
     pub connection: ClusterConnection,
     pub synchronizer: Arc<dyn PubSubSynchronizer>,
     pub _client_holder: Arc<TokioRwLock<ClientWrapper>>,
 }
 
+#[cfg(not(feature = "mock-pubsub"))]
 impl PubSubTestSetup {
     /// Creates a test setup with a ClusterConnection configured for fast slot refresh
     /// and a properly initialized synchronizer.
@@ -456,6 +468,26 @@ impl PubSubTestSetup {
             .expect("Expected GlidePubSubSynchronizer")
             .get_current_subscriptions_by_address()
     }
+
+    /// Check if server version is >= specified version
+    pub async fn version_gte(&mut self, version: &str) -> bool {
+        super::version_greater_or_equal(&mut self.connection, version).await
+    }
+}
+
+/// Macro to skip test if server version is below minimum.
+/// Returns early from the async block if version requirement not met.
+#[macro_export]
+macro_rules! skip_if_version_below {
+    ($setup:expr, $version:expr) => {
+        if !$setup.version_gte($version).await {
+            logger_core::log_info(
+                "test_pubsub",
+                format!("Skipping test: requires server version >= {}", $version),
+            );
+            return;
+        }
+    };
 }
 
 /// Holds cluster topology information for tests.
@@ -481,7 +513,7 @@ impl ClusterTopology {
     pub async fn from_connection(connection: &mut ClusterConnection) -> Self {
         let nodes_output = connection
             .route_command(
-                &redis::cmd("CLUSTER").arg("NODES"),
+                redis::cmd("CLUSTER").arg("NODES"),
                 RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
             )
             .await
@@ -759,10 +791,10 @@ pub async fn wait_for_node_to_become_primary(
     while start.elapsed() < timeout {
         let topology = ClusterTopology::from_connection(connection).await;
 
-        if let Some(node) = topology.nodes.iter().find(|n| n.node_id == node_id) {
-            if node.is_primary {
-                return true;
-            }
+        if let Some(node) = topology.nodes.iter().find(|n| n.node_id == node_id)
+            && node.is_primary
+        {
+            return true;
         }
 
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -772,6 +804,7 @@ pub async fn wait_for_node_to_become_primary(
 }
 
 /// Wait for subscription state to match expected channels.
+#[cfg(not(feature = "mock-pubsub"))]
 pub async fn wait_for_pubsub_state(
     synchronizer: &Arc<dyn PubSubSynchronizer>,
     kind: PubSubSubscriptionKind,
@@ -840,6 +873,7 @@ pub fn generate_test_subscriptions_different_slots(
 }
 
 /// Subscribe to multiple channels and wait for subscriptions to be established.
+#[cfg(not(feature = "mock-pubsub"))]
 pub async fn subscribe_and_wait(
     synchronizer: &Arc<dyn PubSubSynchronizer>,
     channels: &[Vec<u8>],
@@ -854,6 +888,7 @@ pub async fn subscribe_and_wait(
 /// Find which address a channel is subscribed on.
 /// Returns None if channel is not found in current subscriptions.
 /// Panics if channel is found on multiple addresses (indicates a bug).
+#[cfg(not(feature = "mock-pubsub"))]
 pub fn find_subscription_address(
     subs_by_address: &HashMap<String, PubSubSubscriptionInfo>,
     channel: &[u8],
@@ -862,26 +897,26 @@ pub fn find_subscription_address(
     let mut found_address: Option<String> = None;
 
     for (address, subs) in subs_by_address {
-        if let Some(channels) = subs.get(&kind) {
-            if channels.contains(channel) {
-                if let Some(ref existing) = found_address {
-                    panic!(
-                        "Channel {:?} found on multiple addresses: {} and {}",
-                        String::from_utf8_lossy(channel),
-                        existing,
-                        address
-                    );
-                }
-                found_address = Some(address.clone());
+        if let Some(channels) = subs.get(&kind)
+            && channels.contains(channel)
+        {
+            if let Some(ref existing) = found_address {
+                panic!(
+                    "Channel {:?} found on multiple addresses: {} and {}",
+                    String::from_utf8_lossy(channel),
+                    existing,
+                    address
+                );
             }
+            found_address = Some(address.clone());
         }
     }
-
     found_address
 }
 
 /// Verify that subscriptions moved to different addresses after migration.
 /// Returns (changed_count, unchanged_count, not_found_count).
+#[cfg(not(feature = "mock-pubsub"))]
 pub fn verify_subscription_addresses_changed(
     subs_before: &HashMap<String, PubSubSubscriptionInfo>,
     subs_after: &HashMap<String, PubSubSubscriptionInfo>,

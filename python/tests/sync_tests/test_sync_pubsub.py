@@ -129,9 +129,12 @@ def check_no_messages_left(
 def client_cleanup(
     client: Optional[Union[GlideClient, GlideClusterClient]],
     cluster_mode_subs: Optional[
-        GlideClusterClientConfiguration.PubSubSubscriptions
+        Union[
+            GlideClusterClientConfiguration.PubSubSubscriptions,
+            GlideClientConfiguration.PubSubSubscriptions,
+        ]
     ] = None,
-):
+) -> None:
     """
     This function tries its best to clear state assosiated with client
     Its explicitly calls client.close() and deletes the object

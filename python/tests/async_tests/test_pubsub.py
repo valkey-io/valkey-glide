@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Union, cast
+from typing import Dict, List, Optional, Set, Tuple, Union, cast
 
 import anyio
 import pytest
@@ -256,7 +256,7 @@ class TestPubSub:
             shard_prefix = "{same-shard}"
 
             # Create a map of channels to messages with shard prefix
-            channels_and_messages = {
+            channels_and_messages: Dict[str, str] = {
                 f"{shard_prefix}channel_{i}": f"message_{i}"
                 for i in range(NUM_CHANNELS)
             }
@@ -313,10 +313,11 @@ class TestPubSub:
                 pubsub_msg = await get_message_by_method(
                     message_read_method, listening_client, callback_messages, index
                 )
-                assert pubsub_msg.channel in channels_and_messages.keys()
-                assert pubsub_msg.message == channels_and_messages[pubsub_msg.channel]
+                channel_str = cast(str, pubsub_msg.channel)
+                assert channel_str in channels_and_messages.keys()
+                assert pubsub_msg.message == channels_and_messages[channel_str]
                 assert pubsub_msg.pattern is None
-                del channels_and_messages[pubsub_msg.channel]
+                del channels_and_messages[channel_str]
 
             # check that we received all messages
             assert channels_and_messages == {}
@@ -358,7 +359,7 @@ class TestPubSub:
             NUM_CHANNELS = 256
             shard_prefix = "{same-shard}"
 
-            channels_and_messages = {
+            channels_and_messages: Dict[str, str] = {
                 f"{shard_prefix}coexist_channel_{i}": f"coexist_message_{i}"
                 for i in range(NUM_CHANNELS)
             }
@@ -403,10 +404,11 @@ class TestPubSub:
                 )
                 pubsub_msg = await get_message_by_method(method, listening_client)
 
-                assert pubsub_msg.channel in channels_and_messages.keys()
-                assert pubsub_msg.message == channels_and_messages[pubsub_msg.channel]
+                channel_str = cast(str, pubsub_msg.channel)
+                assert channel_str in channels_and_messages.keys()
+                assert pubsub_msg.message == channels_and_messages[channel_str]
                 assert pubsub_msg.pattern is None
-                del channels_and_messages[pubsub_msg.channel]
+                del channels_and_messages[channel_str]
 
             # check that we received all messages
             assert channels_and_messages == {}
@@ -648,7 +650,7 @@ class TestPubSub:
             shard_prefix = "{same-shard}"
             publish_response = 1
 
-            channels_and_messages = {
+            channels_and_messages: Dict[str, str] = {
                 f"{shard_prefix}sharded_channel_{i}": f"sharded_message_{i}"
                 for i in range(NUM_CHANNELS)
             }
@@ -706,10 +708,11 @@ class TestPubSub:
                 pubsub_msg = await get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
-                assert pubsub_msg.channel in channels_and_messages.keys()
-                assert pubsub_msg.message == channels_and_messages[pubsub_msg.channel]
+                channel_str = cast(str, pubsub_msg.channel)
+                assert channel_str in channels_and_messages.keys()
+                assert pubsub_msg.message == channels_and_messages[channel_str]
                 assert pubsub_msg.pattern is None
-                del channels_and_messages[pubsub_msg.channel]
+                del channels_and_messages[channel_str]
 
             # check that we received all messages
             assert channels_and_messages == {}
@@ -752,7 +755,7 @@ class TestPubSub:
         listening_client, publishing_client = None, None
         try:
             PATTERN = "{channel}:*"
-            channels = {
+            channels: Dict[str, str] = {
                 "{channel}:news:0": "pattern_message_0",
                 "{channel}:news:1": "pattern_message_1",
             }
@@ -803,10 +806,11 @@ class TestPubSub:
                 pubsub_msg = await get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
-                assert pubsub_msg.channel in channels.keys()
-                assert pubsub_msg.message == channels[pubsub_msg.channel]
+                channel_str = cast(str, pubsub_msg.channel)
+                assert channel_str in channels.keys()
+                assert pubsub_msg.message == channels[channel_str]
                 assert pubsub_msg.pattern == PATTERN
-                del channels[pubsub_msg.channel]
+                del channels[channel_str]
 
             # check that we received all messages
             assert channels == {}
@@ -842,7 +846,7 @@ class TestPubSub:
         listening_client, publishing_client = None, None
         try:
             PATTERN = "{channel}:*"
-            channels = {
+            channels: Dict[str, str] = {
                 "{channel}:coexist_0": "pattern_coexist_message_0",
                 "{channel}:coexist_1": "pattern_coexist_message_1",
             }
@@ -885,10 +889,11 @@ class TestPubSub:
                 )
                 pubsub_msg = await get_message_by_method(method, listening_client)
 
-                assert pubsub_msg.channel in channels.keys()
-                assert pubsub_msg.message == channels[pubsub_msg.channel]
+                channel_str = cast(str, pubsub_msg.channel)
+                assert channel_str in channels.keys()
+                assert pubsub_msg.message == channels[channel_str]
                 assert pubsub_msg.pattern == PATTERN
-                del channels[pubsub_msg.channel]
+                del channels[channel_str]
 
             # check that we received all messages
             assert channels == {}
@@ -935,7 +940,7 @@ class TestPubSub:
         try:
             NUM_CHANNELS = 256
             PATTERN = "{channel}:*"
-            channels = {
+            channels: Dict[str, str] = {
                 f"{{channel}}:pattern_{i}": f"pattern_message_{i}"
                 for i in range(NUM_CHANNELS)
             }
@@ -986,10 +991,11 @@ class TestPubSub:
                 pubsub_msg = await get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
-                assert pubsub_msg.channel in channels.keys()
-                assert pubsub_msg.message == channels[pubsub_msg.channel]
+                channel_str = cast(str, pubsub_msg.channel)
+                assert channel_str in channels.keys()
+                assert pubsub_msg.message == channels[channel_str]
                 assert pubsub_msg.pattern == PATTERN
-                del channels[pubsub_msg.channel]
+                del channels[channel_str]
 
             # check that we received all messages
             assert channels == {}
@@ -1037,16 +1043,16 @@ class TestPubSub:
             NUM_CHANNELS = 256
             PATTERN = "{pattern}:*"
 
-            exact_channels_and_messages = {
+            exact_channels_and_messages: Dict[str, str] = {
                 f"{{channel}}:exact_{i}": f"exact_message_{i}"
                 for i in range(NUM_CHANNELS)
             }
-            pattern_channels_and_messages = {
+            pattern_channels_and_messages: Dict[str, str] = {
                 f"{{pattern}}:match_{i}": f"pattern_message_{i}"
                 for i in range(NUM_CHANNELS)
             }
 
-            all_channels_and_messages = {
+            all_channels_and_messages: Dict[str, str] = {
                 **exact_channels_and_messages,
                 **pattern_channels_and_messages,
             }
@@ -1105,17 +1111,16 @@ class TestPubSub:
                 pubsub_msg = await get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
+                channel_str = cast(str, pubsub_msg.channel)
                 pattern = (
                     PATTERN
-                    if pubsub_msg.channel in pattern_channels_and_messages.keys()
+                    if channel_str in pattern_channels_and_messages.keys()
                     else None
                 )
-                assert pubsub_msg.channel in all_channels_and_messages.keys()
-                assert (
-                    pubsub_msg.message == all_channels_and_messages[pubsub_msg.channel]
-                )
+                assert channel_str in all_channels_and_messages.keys()
+                assert pubsub_msg.message == all_channels_and_messages[channel_str]
                 assert pubsub_msg.pattern == pattern
-                del all_channels_and_messages[pubsub_msg.channel]
+                del all_channels_and_messages[channel_str]
 
             # check that we received all messages
             assert all_channels_and_messages == {}
@@ -1169,11 +1174,11 @@ class TestPubSub:
             NUM_CHANNELS = 256
             PATTERN = "{pattern}:*"
 
-            exact_channels_and_messages = {
+            exact_channels_and_messages: Dict[str, str] = {
                 f"{{channel}}:exact_{i}": f"exact_message_{i}"
                 for i in range(NUM_CHANNELS)
             }
-            pattern_channels_and_messages = {
+            pattern_channels_and_messages: Dict[str, str] = {
                 f"{{pattern}}:match_{i}": f"pattern_message_{i}"
                 for i in range(NUM_CHANNELS)
             }
@@ -1262,13 +1267,11 @@ class TestPubSub:
                 pubsub_msg = await get_message_by_method(
                     method, listening_client_exact, callback_messages, index
                 )
-                assert pubsub_msg.channel in exact_channels_and_messages.keys()
-                assert (
-                    pubsub_msg.message
-                    == exact_channels_and_messages[pubsub_msg.channel]
-                )
+                channel_str = cast(str, pubsub_msg.channel)
+                assert channel_str in exact_channels_and_messages.keys()
+                assert pubsub_msg.message == exact_channels_and_messages[channel_str]
                 assert pubsub_msg.pattern is None
-                del exact_channels_and_messages[pubsub_msg.channel]
+                del exact_channels_and_messages[channel_str]
             # check that we received all messages
 
             # Verify messages for pattern PUBSUB
@@ -1278,13 +1281,11 @@ class TestPubSub:
                 pubsub_msg = await get_message_by_method(
                     method, listening_client_pattern, callback_messages_pattern, index
                 )
-                assert pubsub_msg.channel in pattern_channels_and_messages.keys()
-                assert (
-                    pubsub_msg.message
-                    == pattern_channels_and_messages[pubsub_msg.channel]
-                )
+                channel_str = cast(str, pubsub_msg.channel)
+                assert channel_str in pattern_channels_and_messages.keys()
+                assert pubsub_msg.message == pattern_channels_and_messages[channel_str]
                 assert pubsub_msg.pattern == PATTERN
-                del pattern_channels_and_messages[pubsub_msg.channel]
+                del pattern_channels_and_messages[channel_str]
 
             # check that we received all messages
             assert pattern_channels_and_messages == {}
@@ -1343,15 +1344,15 @@ class TestPubSub:
             PATTERN = "{pattern}:*"
             SHARD_PREFIX = "{same-shard}"
 
-            exact_channels_and_messages = {
+            exact_channels_and_messages: Dict[str, str] = {
                 f"{{channel}}:exact_{i}": f"exact_message_{i}"
                 for i in range(NUM_CHANNELS)
             }
-            pattern_channels_and_messages = {
+            pattern_channels_and_messages: Dict[str, str] = {
                 f"{{pattern}}:match_{i}": f"pattern_message_{i}"
                 for i in range(NUM_CHANNELS)
             }
-            sharded_channels_and_messages = {
+            sharded_channels_and_messages: Dict[str, str] = {
                 f"{SHARD_PREFIX}:sharded_{i}": f"sharded_message_{i}"
                 for i in range(NUM_CHANNELS)
             }
@@ -1428,7 +1429,7 @@ class TestPubSub:
             # allow the messages to propagate
             await anyio.sleep(1)
 
-            all_channels_and_messages = {
+            all_channels_and_messages: Dict[str, str] = {
                 **exact_channels_and_messages,
                 **pattern_channels_and_messages,
                 **sharded_channels_and_messages,
@@ -1438,17 +1439,16 @@ class TestPubSub:
                 pubsub_msg = await get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
+                channel_str = cast(str, pubsub_msg.channel)
                 pattern = (
                     PATTERN
-                    if pubsub_msg.channel in pattern_channels_and_messages.keys()
+                    if channel_str in pattern_channels_and_messages.keys()
                     else None
                 )
-                assert pubsub_msg.channel in all_channels_and_messages.keys()
-                assert (
-                    pubsub_msg.message == all_channels_and_messages[pubsub_msg.channel]
-                )
+                assert channel_str in all_channels_and_messages.keys()
+                assert pubsub_msg.message == all_channels_and_messages[channel_str]
                 assert pubsub_msg.pattern == pattern
-                del all_channels_and_messages[pubsub_msg.channel]
+                del all_channels_and_messages[channel_str]
 
             # check that we received all messages
             assert all_channels_and_messages == {}
@@ -1494,20 +1494,20 @@ class TestPubSub:
         PATTERN = "{pattern}:*"
         SHARD_PREFIX = "{same-shard}"
 
-        exact_channels = {
+        exact_channels: Dict[str, str] = {
             f"{{channel}}:exact:{i}": f"exact_msg_{i}" for i in range(NUM_CHANNELS)
         }
-        pattern_channels = {
+        pattern_channels: Dict[str, str] = {
             f"{{pattern}}:test:{i}": f"pattern_msg_{i}" for i in range(NUM_CHANNELS)
         }
-        sharded_channels = {
+        sharded_channels: Dict[str, str] = {
             f"{SHARD_PREFIX}:{i}:sharded": f"sharded_msg_{i}"
             for i in range(NUM_CHANNELS)
         }
 
-        callback_messages_exact = []
-        callback_messages_pattern = []
-        callback_messages_sharded = []
+        callback_messages_exact: List[PubSubMsg] = []
+        callback_messages_pattern: List[PubSubMsg] = []
+        callback_messages_sharded: List[PubSubMsg] = []
 
         callback = context = None
         if method == MessageReadMethod.Callback:
@@ -1615,21 +1615,21 @@ class TestPubSub:
 
             # Helper for asserting messages
             async def assert_pubsub_messages(
-                method,
+                method: MessageReadMethod,
                 client,
-                callback_messages,
-                expected_dict,
-                pattern=None,
-                sharded=False,
+                callback_messages: List[PubSubMsg],
+                expected_dict: Dict[str, str],
+                pattern: Optional[str] = None,
             ):
                 for index in range(len(expected_dict)):
                     msg = await get_message_by_method(
                         method, client, callback_messages, index
                     )
-                    assert msg.channel in expected_dict
-                    assert msg.message == expected_dict[msg.channel]
+                    channel_str = cast(str, msg.channel)
+                    assert channel_str in expected_dict
+                    assert msg.message == expected_dict[channel_str]
                     assert msg.pattern == pattern
-                    del expected_dict[msg.channel]
+                    del expected_dict[channel_str]
                 assert expected_dict == {}
 
             await assert_pubsub_messages(
@@ -1834,13 +1834,17 @@ class TestPubSub:
             await anyio.sleep(1)
 
             # Verify message for exact and pattern PUBSUB
-            for client, callback, pattern in [  # type: ignore
+            for client, callback_list, pattern in [
                 (listening_client_exact, callback_messages_exact, None),
                 (listening_client_pattern, callback_messages_pattern, CHANNEL_NAME),
             ]:
-                pubsub_msg = await get_message_by_method(method, client, callback, 0)  # type: ignore
+                pubsub_msg = await get_message_by_method(
+                    method, client, callback_list, 0
+                )
 
-                pubsub_msg2 = await get_message_by_method(method, client, callback, 1)  # type: ignore
+                pubsub_msg2 = await get_message_by_method(
+                    method, client, callback_list, 1
+                )
                 assert not pubsub_msg.message == pubsub_msg2.message
                 assert pubsub_msg2.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
                 assert pubsub_msg.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
@@ -1985,13 +1989,17 @@ class TestPubSub:
             await anyio.sleep(1)
 
             # Verify message for exact and pattern PUBSUB
-            for client, callback, pattern in [  # type: ignore
+            for client, callback_list, pattern in [
                 (client_exact, callback_messages_exact, None),
                 (client_pattern, callback_messages_pattern, CHANNEL_NAME),
             ]:
-                pubsub_msg = await get_message_by_method(method, client, callback, 0)  # type: ignore
+                pubsub_msg = await get_message_by_method(
+                    method, client, callback_list, 0
+                )
 
-                pubsub_msg2 = await get_message_by_method(method, client, callback, 1)  # type: ignore
+                pubsub_msg2 = await get_message_by_method(
+                    method, client, callback_list, 1
+                )
                 assert not pubsub_msg.message == pubsub_msg2.message
                 assert pubsub_msg2.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
                 assert pubsub_msg.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
@@ -2177,13 +2185,17 @@ class TestPubSub:
             await anyio.sleep(1)
 
             # Verify message for exact and pattern PUBSUB
-            for client, callback, pattern in [  # type: ignore
+            for client, callback_list, pattern in [
                 (client_exact, callback_messages_exact, None),
                 (client_pattern, callback_messages_pattern, CHANNEL_NAME),
             ]:
-                pubsub_msg = await get_message_by_method(method, client, callback, 0)  # type: ignore
+                pubsub_msg = await get_message_by_method(
+                    method, client, callback_list, 0
+                )
 
-                pubsub_msg2 = await get_message_by_method(method, client, callback, 1)  # type: ignore
+                pubsub_msg2 = await get_message_by_method(
+                    method, client, callback_list, 1
+                )
                 assert not pubsub_msg.message == pubsub_msg2.message
                 assert pubsub_msg2.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
                 assert pubsub_msg.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
@@ -2596,8 +2608,19 @@ class TestPubSub:
             await create_client(
                 request,
                 cluster_mode=cluster_mode,
-                cluster_mode_pubsub=pub_sub_exact if cluster_mode else None,
-                standalone_mode_pubsub=pub_sub_exact if not cluster_mode else None,
+                cluster_mode_pubsub=(
+                    cast(
+                        GlideClusterClientConfiguration.PubSubSubscriptions,
+                        pub_sub_exact,
+                    )
+                    if cluster_mode
+                    else None
+                ),
+                standalone_mode_pubsub=(
+                    cast(GlideClientConfiguration.PubSubSubscriptions, pub_sub_exact)
+                    if not cluster_mode
+                    else None
+                ),
                 protocol=ProtocolVersion.RESP2,
             )
 
@@ -2619,8 +2642,19 @@ class TestPubSub:
             await create_client(
                 request,
                 cluster_mode=cluster_mode,
-                cluster_mode_pubsub=pub_sub_exact if cluster_mode else None,
-                standalone_mode_pubsub=pub_sub_exact if not cluster_mode else None,
+                cluster_mode_pubsub=(
+                    cast(
+                        GlideClusterClientConfiguration.PubSubSubscriptions,
+                        pub_sub_exact,
+                    )
+                    if cluster_mode
+                    else None
+                ),
+                standalone_mode_pubsub=(
+                    cast(GlideClientConfiguration.PubSubSubscriptions, pub_sub_exact)
+                    if not cluster_mode
+                    else None
+                ),
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -3087,7 +3121,7 @@ class TestPubSub:
                 "{slot1}channel_d",
                 "{slot4}channel_e",
             }
-            messages = {ch: f"msg_{ch}" for ch in channels}
+            messages: Dict[str, str] = {ch: f"msg_{ch}" for ch in channels}
 
             if subscription_method == SubscriptionMethod.Config:
                 listening_client = await create_pubsub_client(
@@ -3116,14 +3150,16 @@ class TestPubSub:
 
             # Publish and verify
             for channel, message in messages.items():
-                await publishing_client.publish(message, channel, sharded=True)
+                await cast(GlideClusterClient, publishing_client).publish(
+                    message, channel, sharded=True
+                )
 
             await anyio.sleep(1)
 
             received_messages: Dict[str, str] = {}
             for _ in range(len(channels)):
                 msg = decode_pubsub_msg(await listening_client.get_pubsub_message())
-                received_messages[msg.channel] = msg.message
+                received_messages[cast(str, msg.channel)] = cast(str, msg.message)
 
             assert received_messages == messages
 
@@ -3617,6 +3653,7 @@ class TestPubSub:
         finally:
             await pubsub_client_cleanup(client)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_mixed_subscription_methods_all_types(
         self,
@@ -3661,7 +3698,9 @@ class TestPubSub:
                 cluster_mode,
                 channels={exact_config},
                 patterns={pattern_config},
-                sharded_channels={sharded_config} if cluster_mode else None,
+                sharded_channels=(
+                    {sharded_config} if cluster_mode and sharded_config else None
+                ),
             )
             publishing_client = await create_client(request, cluster_mode)
 
@@ -3670,7 +3709,9 @@ class TestPubSub:
                 listening_client,
                 expected_channels={exact_config},
                 expected_patterns={pattern_config},
-                expected_sharded={sharded_config} if cluster_mode else None,
+                expected_sharded=(
+                    {sharded_config} if cluster_mode and sharded_config else None
+                ),
             )
 
             # Add Lazy subscriptions
@@ -3680,7 +3721,7 @@ class TestPubSub:
             await psubscribe_by_method(
                 listening_client, {pattern_lazy}, SubscriptionMethod.Lazy
             )
-            if cluster_mode:
+            if cluster_mode and sharded_lazy:
                 await ssubscribe_by_method(
                     cast(GlideClusterClient, listening_client),
                     {sharded_lazy},
@@ -3694,7 +3735,7 @@ class TestPubSub:
             await psubscribe_by_method(
                 listening_client, {pattern_blocking}, SubscriptionMethod.Blocking
             )
-            if cluster_mode:
+            if cluster_mode and sharded_blocking:
                 await ssubscribe_by_method(
                     cast(GlideClusterClient, listening_client),
                     {sharded_blocking},
@@ -3704,11 +3745,9 @@ class TestPubSub:
             # Wait for all subscriptions
             all_exact = {exact_config, exact_lazy, exact_blocking}
             all_patterns = {pattern_config, pattern_lazy, pattern_blocking}
-            all_sharded = (
-                {sharded_config, sharded_lazy, sharded_blocking}
-                if cluster_mode
-                else None
-            )
+            all_sharded: Optional[Set[str]] = None
+            if cluster_mode and sharded_config and sharded_lazy and sharded_blocking:
+                all_sharded = {sharded_config, sharded_lazy, sharded_blocking}
 
             await wait_for_subscription_state(
                 listening_client,
@@ -3718,7 +3757,7 @@ class TestPubSub:
             )
 
             # Publish messages
-            messages_to_publish = [
+            messages_to_publish: List[Tuple[str, str, bool]] = [
                 # (channel, message, is_sharded)
                 (exact_config, "msg_exact_config", False),
                 (exact_lazy, "msg_exact_lazy", False),
@@ -3728,7 +3767,7 @@ class TestPubSub:
                 (pattern_blocking_channel, "msg_pattern_blocking", False),
             ]
 
-            if cluster_mode:
+            if cluster_mode and sharded_config and sharded_lazy and sharded_blocking:
                 messages_to_publish.extend(
                     [
                         (sharded_config, "msg_sharded_config", True),
@@ -3754,7 +3793,9 @@ class TestPubSub:
             for _ in range(expected_count):
                 msg = await listening_client.get_pubsub_message()
                 decoded = decode_pubsub_msg(msg)
-                received_messages[decoded.channel] = decoded.message
+                received_messages[cast(str, decoded.channel)] = cast(
+                    str, decoded.message
+                )
 
             # Verify exact channel messages
             assert received_messages[exact_config] == "msg_exact_config"
@@ -3767,7 +3808,7 @@ class TestPubSub:
             assert received_messages[pattern_blocking_channel] == "msg_pattern_blocking"
 
             # Verify sharded channel messages (cluster mode only)
-            if cluster_mode:
+            if cluster_mode and sharded_config and sharded_lazy and sharded_blocking:
                 assert received_messages[sharded_config] == "msg_sharded_config"
                 assert received_messages[sharded_lazy] == "msg_sharded_lazy"
                 assert received_messages[sharded_blocking] == "msg_sharded_blocking"
@@ -3779,6 +3820,7 @@ class TestPubSub:
             await pubsub_client_cleanup(listening_client)
             await pubsub_client_cleanup(publishing_client)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "message_read_method",
@@ -3896,7 +3938,8 @@ class TestPubSub:
                 msg = await get_message_by_method(
                     message_read_method, listening_client, callback_messages, index
                 )
-                received[msg.channel] = msg
+                channel_key = cast(str, msg.channel)
+                received[channel_key] = msg
 
             # Verify exact channel message
             assert exact_channel in received
@@ -4061,10 +4104,10 @@ class TestPubSub:
             PubSubChannelModes = get_pubsub_modes(listening_client)
 
             desired_channels = state.desired_subscriptions.get(
-                PubSubChannelModes.Exact, set()
+                PubSubChannelModes.Exact, set()  # type: ignore[arg-type]
             )
             actual_channels = state.actual_subscriptions.get(
-                PubSubChannelModes.Exact, set()
+                PubSubChannelModes.Exact, set()  # type: ignore[arg-type]
             )
 
             assert channel in desired_channels, "Channel should be in desired"
@@ -4253,6 +4296,7 @@ class TestPubSub:
             import time
 
             channel1 = "channel1_sync_timestamp"
+            channel2 = "channel2_sync_timestamp"
             message = "message_1"
 
             listening_client = await create_pubsub_client(request, cluster_mode)
@@ -4272,6 +4316,16 @@ class TestPubSub:
                 listening_client,
                 subscription_method,
                 expected_channels={channel1},
+            )
+
+            # Subscribe to another channel - this ensures we will have at least 1 full reconcilliation cycle
+            # and 1 successful timestamp update before checking it
+            await subscribe_by_method(listening_client, {channel2}, subscription_method)
+
+            await wait_for_subscription_state_if_needed(
+                listening_client,
+                subscription_method,
+                expected_channels={channel1, channel2},
             )
 
             # Check that timestamp was updated
@@ -4301,10 +4355,10 @@ class TestPubSub:
             await pubsub_client_cleanup(publishing_client)
 
     @pytest.mark.skip_if_mock_pubsub
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "message_read_method",
-        [ MessageReadMethod.Sync, MessageReadMethod.Callback],
+        [MessageReadMethod.Async, MessageReadMethod.Sync, MessageReadMethod.Callback],
     )
     @pytest.mark.parametrize(
         "subscription_method",
@@ -4375,8 +4429,9 @@ class TestPubSub:
 
             # Kill connections - this should trigger reconnection
             await kill_connections(publishing_client, None)
-            
-            anyio.sleep(1)
+
+            # give some time for connection to reconnect
+            await anyio.sleep(2)
 
             # Wait for subscriptions to be re-established
             await wait_for_subscription_state(
@@ -4479,6 +4534,9 @@ class TestPubSub:
 
             # Kill connections
             await kill_connections(publishing_client, None)
+
+            # give some time for connection to reconnect
+            await anyio.sleep(2)
 
             await wait_for_subscription_state(
                 listening_client,
@@ -4585,6 +4643,9 @@ class TestPubSub:
             # Kill connections
             await kill_connections(publishing_client, None)
 
+            # give some time for connection to reconnect
+            await anyio.sleep(2)
+
             await wait_for_subscription_state(
                 listening_client,
                 expected_sharded={channel},
@@ -4604,6 +4665,107 @@ class TestPubSub:
 
             await check_no_messages_left(
                 message_read_method, listening_client, callback_messages, 2
+            )
+
+        finally:
+            await pubsub_client_cleanup(listening_client)
+            await pubsub_client_cleanup(publishing_client)
+
+    @pytest.mark.skip_if_mock_pubsub
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "message_read_method",
+        [MessageReadMethod.Async, MessageReadMethod.Sync, MessageReadMethod.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    async def test_resubscribe_after_connection_kill_many_exact_channels(
+        self,
+        request,
+        cluster_mode: bool,
+        message_read_method: MessageReadMethod,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test that 256 exact channel subscriptions are automatically restored after connection kill.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            NUM_CHANNELS = 256
+            channels = {f"{{reconnect_exact_{i}}}channel" for i in range(NUM_CHANNELS)}
+            message_after = "message_after_kill"
+
+            callback, context = None, None
+            callback_messages: List[PubSubMsg] = []
+            if message_read_method == MessageReadMethod.Callback:
+                callback = new_message
+                context = callback_messages
+
+            if subscription_method == SubscriptionMethod.Config:
+                listening_client = await create_pubsub_client(
+                    request,
+                    cluster_mode,
+                    channels=channels,
+                    callback=callback,
+                    context=context,
+                )
+            else:
+                listening_client = await create_pubsub_client(
+                    request,
+                    cluster_mode,
+                    callback=callback,
+                    context=context,
+                )
+                await subscribe_by_method(
+                    listening_client, channels, subscription_method
+                )
+
+            publishing_client = await create_client(request, cluster_mode)
+
+            await wait_for_subscription_state_if_needed(
+                listening_client,
+                subscription_method,
+                expected_channels=channels,
+            )
+
+            # Kill connections
+            await kill_connections(publishing_client, None)
+            #  give time for reconnect
+            await anyio.sleep(2)
+
+            # Wait for resubscription
+            await wait_for_subscription_state(
+                listening_client,
+                expected_channels=channels,
+                timeout_ms=5000,
+            )
+
+            # Publish to all channels after reconnection
+            for channel in channels:
+                await publishing_client.publish(message_after, channel)
+
+            await anyio.sleep(2)
+
+            # Verify all messages received
+            received_channels: Set[str] = set()
+            for index in range(NUM_CHANNELS):
+                msg = await get_message_by_method(
+                    message_read_method, listening_client, callback_messages, index
+                )
+                assert msg.message == message_after
+                assert msg.pattern is None
+                received_channels.add(cast(str, msg.channel))
+
+            assert received_channels == channels, "Not all channels received messages"
+
+            await check_no_messages_left(
+                message_read_method, listening_client, callback_messages, NUM_CHANNELS
             )
 
         finally:

@@ -112,11 +112,11 @@ EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
         "test_opentelemetry.py",
         "test_deprecation_warnings.py",
-        # TODO: Remove when implementing dynamic pubsub for the sync client 
-        "test_pubsub.py"
+        # TODO: Remove when implementing dynamic pubsub for the sync client
+        "test_pubsub.py",
     ],
     "sync_only": [
-        # TODO: Remove when implementing dynamic pubsub for the sync client 
+        # TODO: Remove when implementing dynamic pubsub for the sync client
         "test_sync_pubsub.py"
     ],
 }

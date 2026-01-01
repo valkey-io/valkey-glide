@@ -12,7 +12,6 @@ from typing import (
     Mapping,
     Optional,
     Set,
-    Type,
     TypeVar,
     Union,
     cast,
@@ -1782,7 +1781,7 @@ StandalonePubSubModes = GlideClientConfiguration.PubSubChannelModes
 
 def get_pubsub_modes(
     client: TGlideClient,
-) -> Union[Type[ClusterPubSubModes], Type[StandalonePubSubModes]]:
+) -> Any:
     """Get the appropriate PubSubChannelModes enum for the client type."""
     if isinstance(client, GlideClusterClient):
         return GlideClusterClientConfiguration.PubSubChannelModes
@@ -2121,45 +2120,48 @@ async def wait_for_subscription_state_if_needed(
     # Blocking and Config should already be established
     state = await client.get_subscriptions()
 
+    # Define empty set with proper type
+    empty_set: Set[str] = set()
+
     if isinstance(client, GlideClusterClient):
-        PubSubModes = GlideClusterClientConfiguration.PubSubChannelModes
-        actual_subs = cast(
+        ClusterModes = GlideClusterClientConfiguration.PubSubChannelModes
+        cluster_subs = cast(
             Dict[GlideClusterClientConfiguration.PubSubChannelModes, Set[str]],
             state.actual_subscriptions,
         )
 
         if expected_channels is not None:
-            actual_channels = actual_subs.get(PubSubModes.Exact, set())
+            actual_channels = cluster_subs.get(ClusterModes.Exact, empty_set)
             assert (
                 actual_channels == expected_channels
             ), f"Expected channels {expected_channels}, got {actual_channels}"
 
         if expected_patterns is not None:
-            actual_patterns = actual_subs.get(PubSubModes.Pattern, set())
+            actual_patterns = cluster_subs.get(ClusterModes.Pattern, empty_set)
             assert (
                 actual_patterns == expected_patterns
             ), f"Expected patterns {expected_patterns}, got {actual_patterns}"
 
         if expected_sharded is not None:
-            actual_sharded = actual_subs.get(PubSubModes.Sharded, set())
+            actual_sharded = cluster_subs.get(ClusterModes.Sharded, empty_set)
             assert (
                 actual_sharded == expected_sharded
             ), f"Expected sharded {expected_sharded}, got {actual_sharded}"
     else:
-        PubSubModes = GlideClientConfiguration.PubSubChannelModes
-        actual_subs = cast(
+        StandaloneModes = GlideClientConfiguration.PubSubChannelModes
+        standalone_subs = cast(
             Dict[GlideClientConfiguration.PubSubChannelModes, Set[str]],
             state.actual_subscriptions,
         )
 
         if expected_channels is not None:
-            actual_channels = actual_subs.get(PubSubModes.Exact, set())
+            actual_channels = standalone_subs.get(StandaloneModes.Exact, empty_set)
             assert (
                 actual_channels == expected_channels
             ), f"Expected channels {expected_channels}, got {actual_channels}"
 
         if expected_patterns is not None:
-            actual_patterns = actual_subs.get(PubSubModes.Pattern, set())
+            actual_patterns = standalone_subs.get(StandaloneModes.Pattern, empty_set)
             assert (
                 actual_patterns == expected_patterns
             ), f"Expected patterns {expected_patterns}, got {actual_patterns}"
@@ -2169,23 +2171,9 @@ def decode_pubsub_msg(msg: Optional[PubSubMsg]) -> PubSubMsg:
     """Decode a PubSubMsg with bytes to one with strings."""
     if not msg:
         return PubSubMsg("", "", None)
-
-    string_msg = (
-        cast(bytes, msg.message).decode()
-        if isinstance(msg.message, bytes)
-        else msg.message
-    )
-    string_channel = (
-        cast(bytes, msg.channel).decode()
-        if isinstance(msg.channel, bytes)
-        else msg.channel
-    )
-    string_pattern = (
-        cast(bytes, msg.pattern).decode()
-        if msg.pattern and isinstance(msg.pattern, bytes)
-        else msg.pattern
-    )
-
+    string_msg = cast(bytes, msg.message).decode()
+    string_channel = cast(bytes, msg.channel).decode()
+    string_pattern = cast(bytes, msg.pattern).decode() if msg.pattern else None
     return PubSubMsg(string_msg, string_channel, string_pattern)
 
 
@@ -2269,15 +2257,31 @@ async def pubsub_client_cleanup(
 
     try:
         # Get current subscriptions and unsubscribe
-        PubSubModes = get_pubsub_modes(client)
         state = await client.get_subscriptions()
         actual = state.actual_subscriptions
 
-        has_channels = bool(actual.get(PubSubModes.Exact))  # type: ignore
-        has_patterns = bool(actual.get(PubSubModes.Pattern))  # type: ignore
-        has_sharded = isinstance(client, GlideClusterClient) and bool(
-            actual.get(PubSubModes.Sharded)
-        )  # type: ignore
+        has_channels: bool
+        has_patterns: bool
+        has_sharded: bool
+
+        if isinstance(client, GlideClusterClient):
+            ClusterModes = GlideClusterClientConfiguration.PubSubChannelModes
+            cluster_subs = cast(
+                Dict[GlideClusterClientConfiguration.PubSubChannelModes, Set[str]],
+                actual,
+            )
+            has_channels = bool(cluster_subs.get(ClusterModes.Exact))
+            has_patterns = bool(cluster_subs.get(ClusterModes.Pattern))
+            has_sharded = bool(cluster_subs.get(ClusterModes.Sharded))
+        else:
+            StandaloneModes = GlideClientConfiguration.PubSubChannelModes
+            standalone_subs = cast(
+                Dict[GlideClientConfiguration.PubSubChannelModes, Set[str]],
+                actual,
+            )
+            has_channels = bool(standalone_subs.get(StandaloneModes.Exact))
+            has_patterns = bool(standalone_subs.get(StandaloneModes.Pattern))
+            has_sharded = False
 
         # Unsubscribe from all using lazy (faster cleanup)
         if has_channels:
