@@ -399,6 +399,37 @@ pub async fn setup_test_basics(use_tls: bool) -> ClusterTestBasics {
     .await
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_start_script_output() {
+        let script_output = r#"
+INFO:root:## Executing cluster_manager.py with the following args:
+  Namespace(host='127.0.0.1', tls=False, auth=None, log='info', logfile=None, action='start', cluster_mode=True, folder_path='/Users/user/glide-for-redis/utils/clusters', ports=None, shard_count=3, replica_count=2, prefix='redis-cluster', load_module=None)
+INFO:root:2024-11-05 16:05:44.024796+00:00 Starting script for cluster /Users/user/glide-for-redis/utils/clusters/redis-cluster-2024-11-05T16-05-44Z-2bz4YS
+LOG_FILE=/Users/user/glide-for-redis/utils/cluspters/redis-cluster-2024-11-05T16-05-44Z-2bz4YS/cluster_manager.log
+SERVERS_JSON=[{"host": "127.0.0.1", "port": 39163, "pid": 59428, "is_primary": true}, {"host": "127.0.0.1", "port": 23178, "pid": 59436, "is_primary": true}, {"host": "127.0.0.1", "port": 25186, "pid": 59453, "is_primary": true}, {"host": "127.0.0.1", "port": 52500, "pid": 59432, "is_primary": false}, {"host": "127.0.0.1", "port": 48252, "pid": 59461, "is_primary": false}, {"host": "127.0.0.1", "port": 19544, "pid": 59444, "is_primary": false}, {"host": "127.0.0.1", "port": 37455, "pid": 59440, "is_primary": false}, {"host": "127.0.0.1", "port": 9282, "pid": 59449, "is_primary": false}, {"host": "127.0.0.1", "port": 19843, "pid": 59457, "is_primary": false}]
+INFO:root:Created Cluster Redis in 24.8926 seconds
+CLUSTER_FOLDER=/Users/user/glide-for-redis/utils/clusters/redis-cluster-2024-11-05T16-05-44Z-2bz4YS
+CLUSTER_NODES=127.0.0.1:39163,127.0.0.1:23178,127.0.0.1:25186,127.0.0.1:52500,127.0.0.1:48252,127.0.0.1:19544,127.0.0.1:37455,127.0.0.1:9282,127.0.0.1:19843
+        "#;
+        let (folder, servers) = RedisCluster::parse_start_script_output(script_output, "");
+        assert_eq!(servers.len(), 9);
+        assert_eq!(
+            folder,
+            "/Users/user/glide-for-redis/utils/clusters/redis-cluster-2024-11-05T16-05-44Z-2bz4YS"
+        );
+
+        let server_0 = servers.first().unwrap();
+        assert_eq!(server_0.pid, 59428);
+        assert_eq!(server_0.port, 39163);
+        assert_eq!(server_0.host, "127.0.0.1");
+        assert!(server_0.is_primary);
+    }
+}
+
 /// Holds all components needed for pubsub topology test setup.
 /// The `_client_holder` keeps the Arc alive so the weak reference in the synchronizer remains valid.
 #[cfg(not(feature = "mock-pubsub"))]

@@ -72,7 +72,7 @@ impl PushManager {
         address: Option<String>,
     ) {
         logger_core::log_debug(
-            "handle_pubsub_push",
+            "push manager",
             format!(
                 "Received push notification: kind={:?}, address={:?}, data={:?}",
                 kind,

@@ -575,7 +575,7 @@ impl Client {
             *guard = real_client;
         }
 
-        // We must remove the guard so the pubsub synchronizer can acquire it when subscribing
+        // We must drop the guard so the pubsub synchronizer can acquire it when subscribing
         // to channels provided via config. Keeping the guard would cause a deadlock. We wait
         // for the subscription here to ensure the lazy client is subscribed immediately upon creation.
         drop(guard);
@@ -1649,6 +1649,7 @@ impl Client {
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
+            // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
             let internal_client_arc =
                 Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request.clone(),

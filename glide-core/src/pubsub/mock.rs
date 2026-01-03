@@ -808,10 +808,6 @@ impl MockPubSubBroker {
         Ok(Value::Map(result))
     }
 
-    // ========================================================================
-    // Existing Methods
-    // ========================================================================
-
     pub fn extract_channels_from_cmd(cmd: &Cmd) -> Vec<PubSubChannelOrPattern> {
         cmd.args_iter()
             .skip(1)

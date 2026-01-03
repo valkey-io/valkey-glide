@@ -5,7 +5,7 @@ mod support;
 #[cfg(test)]
 mod cluster_async {
     use std::{
-        collections::{HashMap, HashSet},
+        collections::HashMap,
         net::{IpAddr, SocketAddr},
         str::from_utf8,
         sync::{
@@ -34,69 +34,16 @@ mod cluster_async {
         cluster_topology::{get_slot, DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES},
         cmd, fenced_cmd, from_owned_redis_value, parse_redis_value, AsyncCommands, Cmd,
         ConnectionAddr, ErrorKind, FromRedisValue, GlideConnectionOptions, InfoDict,
-        IntoConnectionInfo, PipelineRetryStrategy, ProtocolVersion, PubSubChannelOrPattern,
-        PubSubSubscriptionInfo, PubSubSubscriptionKind, PushInfo, PushKind, RedisError,
-        RedisFuture, RedisResult, Value,
+        IntoConnectionInfo, PipelineRetryStrategy, ProtocolVersion, RedisError, RedisFuture,
+        RedisResult, Value,
     };
 
     use crate::support::*;
-    use tokio::sync::mpsc;
     fn broken_pipe_error() -> RedisError {
         RedisError::from(std::io::Error::new(
             std::io::ErrorKind::BrokenPipe,
             "mock-io-error",
         ))
-    }
-
-    #[derive(Debug, Clone, Copy)]
-    enum PublishCommand {
-        Publish,
-        SPublish,
-    }
-
-    async fn retry_publish_until_expected_subscribers(
-        command: PublishCommand,
-        connection: &mut redis::cluster_async::ClusterConnection,
-        channel: &str,
-        message: &str,
-        expected_count: i64,
-        max_retries: u32,
-    ) -> redis::RedisResult<redis::Value> {
-        use futures_time::time::Duration;
-        let mut delay_ms = 100u64;
-
-        for attempt in 0..max_retries {
-            let cmd_name = match command {
-                PublishCommand::Publish => "PUBLISH",
-                PublishCommand::SPublish => "SPUBLISH",
-            };
-
-            let result = redis::cmd(cmd_name)
-                .arg(channel)
-                .arg(message)
-                .query_async(connection)
-                .await;
-
-            match result {
-                Ok(redis::Value::Int(count)) if count == expected_count => {
-                    return Ok(redis::Value::Int(count));
-                }
-                Ok(redis::Value::Int(count)) => {
-                    // Got a different count than expected, retry after delay
-                    if attempt < max_retries - 1 {
-                        tokio::time::sleep(Duration::from_millis(delay_ms).into()).await;
-                        delay_ms *= 2; // exponential backoff
-                    } else {
-                        return Ok(redis::Value::Int(count)); // return the last result
-                    }
-                }
-                Ok(other) => return Ok(other),
-                Err(e) => return Err(e),
-            }
-        }
-
-        // This should not be reached due to the loop logic above
-        unreachable!()
     }
 
     const SPANS_JSON: &str = "/tmp/spans.json";
@@ -6096,12 +6043,6 @@ mod cluster_async {
         // SUNSUBSCRIBE push notification, it does not interfere with response ordering
 
         let channel = "migration_test_channel";
-        let mut pubsub_subs = PubSubSubscriptionInfo::new();
-        pubsub_subs.insert(
-            PubSubSubscriptionKind::Sharded,
-            HashSet::from([PubSubChannelOrPattern::from(channel.as_bytes())]),
-        );
-        let pubsub_subs_clone = pubsub_subs.clone();
 
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -6116,8 +6057,14 @@ mod cluster_async {
         );
 
         block_on_all(async move {
-            let connection = cluster.async_connection(None).await;
+            let mut connection = cluster.async_connection(None).await;
             let mut push_connection = cluster.async_connection(None).await;
+
+            let _: () = cmd("SSUBSCRIBE")
+                .arg(channel)
+                .query_async(&mut connection)
+                .await
+                .unwrap();
 
             let channel_slot = get_slot(channel.as_bytes());
 

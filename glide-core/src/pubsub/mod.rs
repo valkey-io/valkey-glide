@@ -45,6 +45,9 @@ pub async fn create_pubsub_synchronizer(
         let sync =
             synchronizer::GlidePubSubSynchronizer::create(initial_subscriptions, is_cluster).await;
         // Only set if the weak pointer can be upgraded (is not empty)
+        // This is because OnceCell::set only works once - if we set an empty Weak::new(),
+        // tests that create the synchronizer before the client won't be able to set
+        // the real client later.
         if internal_client.upgrade().is_some() {
             sync.as_any()
                 .downcast_ref::<synchronizer::GlidePubSubSynchronizer>()
