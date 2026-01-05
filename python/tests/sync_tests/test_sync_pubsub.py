@@ -208,9 +208,19 @@ class TestSyncPubSub:
                 context=context,
             )
 
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
-            )
+            for i in range(3):
+                try:
+                    listening_client, publishing_client = (
+                        create_two_clients_with_pubsub(request, cluster_mode, pub_sub)
+                    )
+                    break
+                except Exception:
+                    if i == 2:
+                        raise
+                    time.sleep(2**i)
+
+            assert listening_client
+            assert publishing_client
 
             result = publishing_client.publish(message, channel)
             if cluster_mode:
