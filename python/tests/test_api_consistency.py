@@ -28,7 +28,6 @@ EXCLUDED_API_FUNCTIONS = {
         "get_traces",
         "init_opentelemetry",
         "set_traces",
-        "get_statistics",
         # Logger
         "is_lower",
         "py_init",
@@ -55,6 +54,7 @@ EXCLUDED_TESTS = {
         "test_inflight_request_limit",
         "test_statistics",
         "test_UDS_socket_connection_failure",
+        "test_cancelled_request_handled_gracefully",
     ],
     "sync_only": ["test_sync_fork"],
 }

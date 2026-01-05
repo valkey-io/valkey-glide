@@ -330,7 +330,13 @@ class TestGlideClients:
         assert isinstance(stats, dict)
         assert "total_connections" in stats
         assert "total_clients" in stats
-        assert len(stats) == 2
+        assert "total_values_compressed" in stats
+        assert "total_values_decompressed" in stats
+        assert "total_original_bytes" in stats
+        assert "total_bytes_compressed" in stats
+        assert "total_bytes_decompressed" in stats
+        assert "compression_skipped_count" in stats
+        assert len(stats) == 8
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -441,6 +447,19 @@ class TestGlideClients:
             match="Unable to execute requests; the client is closed. Please create a new client.",
         ):
             await glide_client.get("test_key")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cancelled_request_handled_gracefully(
+        self, glide_client: TGlideClient
+    ):
+        """Assert that a cancelled request does not close the client."""
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(0.1):
+                await glide_client.blpop(["random_key"], timeout=2)
+
+        # Ensure client can still perform a simple operation
+        assert await glide_client.set(get_random_string(10), "value") == OK
 
 
 @pytest.mark.anyio
