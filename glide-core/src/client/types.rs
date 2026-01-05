@@ -36,6 +36,8 @@ pub struct ConnectionRequest {
     pub lazy_connect: bool,
     pub refresh_topology_from_initial_nodes: bool,
     pub root_certs: Vec<Vec<u8>>,
+    pub client_cert: Vec<u8>,
+    pub client_key: Vec<u8>,
     pub compression_config: Option<CompressionConfig>,
 }
 
@@ -290,6 +292,9 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             .map(|cert| cert.to_vec())
             .collect();
 
+        let client_cert = value.client_cert.to_vec();
+        let client_key = value.client_key.to_vec();
+
         // Convert protobuf compression config to internal compression config
         let compression_config = value.compression_config.as_ref().map(|proto_config| {
             let backend = match proto_config.backend.enum_value() {
@@ -334,6 +339,8 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             lazy_connect,
             refresh_topology_from_initial_nodes,
             root_certs,
+            client_cert,
+            client_key,
             compression_config,
         }
     }
