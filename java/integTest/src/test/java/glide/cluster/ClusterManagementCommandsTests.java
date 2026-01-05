@@ -126,9 +126,20 @@ public class ClusterManagementCommandsTests {
     @Test
     @SneakyThrows
     public void clusterShards_returnsShardInfo() {
-        Object[] shards = clusterClient.clusterShards().get();
-        assertNotNull(shards);
-        assertTrue(shards.length > 0);
+        // CLUSTER SHARDS was added in Redis 7.0.0 / Valkey 7.2.0
+        try {
+            Object[] shards = clusterClient.clusterShards().get();
+            assertNotNull(shards);
+            assertTrue(shards.length > 0);
+        } catch (ExecutionException e) {
+            // Skip test if server doesn't support CLUSTER SHARDS
+            if (e.getCause() instanceof RequestException
+                    && e.getMessage().contains("Unknown subcommand")) {
+                System.out.println("Skipping clusterShards test - command not supported on this server version");
+                return;
+            }
+            throw e;
+        }
     }
 
     @Test
@@ -261,9 +272,20 @@ public class ClusterManagementCommandsTests {
     @Test
     @SneakyThrows
     public void clusterLinks_returnsLinkInfo() {
-        Object[] links = clusterClient.clusterLinks().get();
-        assertNotNull(links);
-        // Links array can be empty or populated depending on cluster connections
+        // CLUSTER LINKS was added in Redis 7.0.0 / Valkey 7.2.0
+        try {
+            Object[] links = clusterClient.clusterLinks().get();
+            assertNotNull(links);
+            // Links array can be empty or populated depending on cluster connections
+        } catch (ExecutionException e) {
+            // Skip test if server doesn't support CLUSTER LINKS
+            if (e.getCause() instanceof RequestException
+                    && e.getMessage().contains("Unknown subcommand")) {
+                System.out.println("Skipping clusterLinks test - command not supported on this server version");
+                return;
+            }
+            throw e;
+        }
     }
 
     @Test
