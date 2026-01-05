@@ -1,17 +1,12 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
-<<<<<<< Updated upstream
-=======
 import static command_request.CommandRequestOuterClass.RequestType.Asking;
 import static command_request.CommandRequestOuterClass.RequestType.Auth;
 import static command_request.CommandRequestOuterClass.RequestType.ClientCaching;
->>>>>>> Stashed changes
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetRedir;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
-<<<<<<< Updated upstream
-=======
 import static command_request.CommandRequestOuterClass.RequestType.ClientInfo;
 import static command_request.CommandRequestOuterClass.RequestType.ClientKillSimple;
 import static command_request.CommandRequestOuterClass.RequestType.ClientList;
@@ -50,7 +45,6 @@ import static command_request.CommandRequestOuterClass.RequestType.ClusterSetCon
 import static command_request.CommandRequestOuterClass.RequestType.ClusterSetslot;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterShards;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterSlots;
->>>>>>> Stashed changes
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -79,12 +73,9 @@ import static command_request.CommandRequestOuterClass.RequestType.PubSubShardCh
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.Quit;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
-<<<<<<< Updated upstream
-=======
 import static command_request.CommandRequestOuterClass.RequestType.ReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.ReadWrite;
 import static command_request.CommandRequestOuterClass.RequestType.Reset;
->>>>>>> Stashed changes
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
