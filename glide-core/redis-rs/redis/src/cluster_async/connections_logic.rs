@@ -488,7 +488,7 @@ where
 /// - IPv4/hostname: "<host>:<port>" (e.g., "127.0.0.1:6379")
 /// - IPv6 bracketed: "[<ipv6>]:<port>" (e.g., "[2001:db8::1]:6379")
 /// - IPv6 unbracketed with port: "<ipv6>:<port>" - last segment treated as port (e.g., "2001:db8::1:6379" → host "2001:db8::1", port 6379)
-pub(crate) fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
+pub fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
     if let Some(addr_without_bracket) = addr.strip_prefix('[') {
         let (host, port_str) = addr_without_bracket.rsplit_once("]:")?;
         let port = port_str.parse::<u16>().ok()?;
@@ -497,77 +497,5 @@ pub(crate) fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
         let (host, port_str) = addr.rsplit_once(':')?;
         let port = port_str.parse::<u16>().ok()?;
         Some((host, port))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_host_and_port_from_addr_ipv4() {
-        assert_eq!(
-            get_host_and_port_from_addr("127.0.0.1:6379"),
-            Some(("127.0.0.1", 6379))
-        );
-        assert_eq!(
-            get_host_and_port_from_addr("192.168.1.1:8080"),
-            Some(("192.168.1.1", 8080))
-        );
-    }
-
-    #[test]
-    fn test_get_host_and_port_from_addr_hostname() {
-        assert_eq!(
-            get_host_and_port_from_addr("localhost:6379"),
-            Some(("localhost", 6379))
-        );
-        assert_eq!(
-            get_host_and_port_from_addr("redis.example.com:6379"),
-            Some(("redis.example.com", 6379))
-        );
-    }
-
-    #[test]
-    fn test_get_host_and_port_from_addr_ipv6_bracketed() {
-        assert_eq!(
-            get_host_and_port_from_addr("[::1]:6379"),
-            Some(("::1", 6379))
-        );
-        assert_eq!(
-            get_host_and_port_from_addr("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:8080"),
-            Some(("2001:db8:85a3:8d3:1319:8a2e:370:7348", 8080))
-        );
-        assert_eq!(
-            get_host_and_port_from_addr("[fe80::1%eth0]:6379"),
-            Some(("fe80::1%eth0", 6379))
-        );
-    }
-
-    #[test]
-    fn test_get_host_and_port_from_addr_ipv6_unbracketed() {
-        // IPv6 without brackets - last segment treated as port
-        assert_eq!(
-            get_host_and_port_from_addr("2001:db8:85a3:8d3:1319:8a2e:370:7348"),
-            Some(("2001:db8:85a3:8d3:1319:8a2e:370", 7348))
-        );
-        assert_eq!(
-            get_host_and_port_from_addr("::1:6379"),
-            Some(("::1", 6379))
-        );
-    }
-
-    #[test]
-    fn test_get_host_and_port_from_addr_invalid() {
-        // Missing port
-        assert_eq!(get_host_and_port_from_addr("127.0.0.1"), None);
-        // Invalid port
-        assert_eq!(get_host_and_port_from_addr("127.0.0.1:invalid"), None);
-        // Empty string
-        assert_eq!(get_host_and_port_from_addr(""), None);
-        // Port out of range
-        assert_eq!(get_host_and_port_from_addr("127.0.0.1:99999"), None);
-        // Malformed IPv6 bracket
-        assert_eq!(get_host_and_port_from_addr("[::1:6379"), None);
     }
 }
