@@ -1,8 +1,56 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+<<<<<<< Updated upstream
+=======
+import static command_request.CommandRequestOuterClass.RequestType.Asking;
+import static command_request.CommandRequestOuterClass.RequestType.Auth;
+import static command_request.CommandRequestOuterClass.RequestType.ClientCaching;
+>>>>>>> Stashed changes
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
+import static command_request.CommandRequestOuterClass.RequestType.ClientGetRedir;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+<<<<<<< Updated upstream
+=======
+import static command_request.CommandRequestOuterClass.RequestType.ClientInfo;
+import static command_request.CommandRequestOuterClass.RequestType.ClientKillSimple;
+import static command_request.CommandRequestOuterClass.RequestType.ClientList;
+import static command_request.CommandRequestOuterClass.RequestType.ClientNoEvict;
+import static command_request.CommandRequestOuterClass.RequestType.ClientNoTouch;
+import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientReply;
+import static command_request.CommandRequestOuterClass.RequestType.ClientSetInfo;
+import static command_request.CommandRequestOuterClass.RequestType.ClientSetName;
+import static command_request.CommandRequestOuterClass.RequestType.ClientTrackingInfo;
+import static command_request.CommandRequestOuterClass.RequestType.ClientUnblock;
+import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlots;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlotsRange;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterBumpEpoch;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterCountFailureReports;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterCountKeysInSlot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterDelSlots;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterDelSlotsRange;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterFailover;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterFlushSlots;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterForget;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterGetKeysInSlot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterInfo;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterKeySlot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterLinks;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMeet;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMyId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMyShardId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterNodes;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterReplicas;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterReplicate;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterReset;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSaveConfig;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSetConfigEpoch;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSetslot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterShards;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSlots;
+>>>>>>> Stashed changes
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -22,13 +70,21 @@ import static command_request.CommandRequestOuterClass.RequestType.FunctionList;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
+import static command_request.CommandRequestOuterClass.RequestType.Hello;
 import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
+import static command_request.CommandRequestOuterClass.RequestType.Quit;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
+<<<<<<< Updated upstream
+=======
+import static command_request.CommandRequestOuterClass.RequestType.ReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.ReadWrite;
+import static command_request.CommandRequestOuterClass.RequestType.Reset;
+>>>>>>> Stashed changes
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
@@ -383,6 +439,329 @@ public class GlideClusterClient extends BaseClient
                         route instanceof SingleNodeRoute
                                 ? ClusterValue.of(handleStringOrNullResponse(response))
                                 : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> auth(@NonNull String password) {
+        return commandManager.submitNewCommand(
+                Auth, new String[] {password}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> auth(@NonNull String username, @NonNull String password) {
+        return commandManager.submitNewCommand(
+                Auth, new String[] {username, password}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> auth(@NonNull GlideString password) {
+        return commandManager.submitNewCommand(
+                Auth, new GlideString[] {password}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> auth(
+            @NonNull GlideString username, @NonNull GlideString password) {
+        return commandManager.submitNewCommand(
+                Auth, new GlideString[] {username, password}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientInfo() {
+        return commandManager.submitNewCommand(ClientInfo, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clientInfo(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientInfo,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clientKillSimple(@NonNull String ipPort) {
+        return commandManager.submitNewCommand(
+                ClientKillSimple, new String[] {ipPort}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientKillSimple(@NonNull GlideString ipPort) {
+        return commandManager.submitNewCommand(
+                ClientKillSimple, new GlideString[] {ipPort}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientList() {
+        return commandManager.submitNewCommand(ClientList, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clientList(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientList,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clientNoEvict(boolean enabled) {
+        return commandManager.submitNewCommand(
+                ClientNoEvict, new String[] {enabled ? "ON" : "OFF"}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientNoEvict(boolean enabled, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientNoEvict, new String[] {enabled ? "ON" : "OFF"}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientNoTouch(boolean enabled) {
+        return commandManager.submitNewCommand(
+                ClientNoTouch, new String[] {enabled ? "ON" : "OFF"}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientNoTouch(boolean enabled, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientNoTouch, new String[] {enabled ? "ON" : "OFF"}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientPause(long timeout) {
+        return commandManager.submitNewCommand(
+                ClientPause, new String[] {Long.toString(timeout)}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientPause(long timeout, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientPause, new String[] {Long.toString(timeout)}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientUnpause() {
+        return commandManager.submitNewCommand(
+                ClientUnpause, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientUnpause(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientUnpause, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientSetName(@NonNull String connectionName) {
+        return commandManager.submitNewCommand(
+                ClientSetName, new String[] {connectionName}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientSetName(@NonNull GlideString connectionName) {
+        return commandManager.submitNewCommand(
+                ClientSetName, new GlideString[] {connectionName}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> clientUnblock(long clientId) {
+        return commandManager.submitNewCommand(
+                ClientUnblock, new String[] {Long.toString(clientId)}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> clientUnblock(long clientId, boolean withError) {
+        return commandManager.submitNewCommand(
+                ClientUnblock,
+                withError
+                        ? new String[] {Long.toString(clientId), "ERROR"}
+                        : new String[] {Long.toString(clientId)},
+                this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Long>> clientUnblock(long clientId, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientUnblock,
+                new String[] {Long.toString(clientId)},
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleLongResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Long>> clientUnblock(
+            long clientId, boolean withError, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientUnblock,
+                withError
+                        ? new String[] {Long.toString(clientId), "ERROR"}
+                        : new String[] {Long.toString(clientId)},
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleLongResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Long> clientGetRedir() {
+        return commandManager.submitNewCommand(ClientGetRedir, new String[0], this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Long>> clientGetRedir(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientGetRedir,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleLongResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> clientTrackingInfo() {
+        return commandManager.submitNewCommand(
+                ClientTrackingInfo, new String[0], this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object[]>> clientTrackingInfo(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientTrackingInfo,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleArrayResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clientCaching(boolean enabled) {
+        return commandManager.submitNewCommand(
+                ClientCaching, new String[] {enabled ? "YES" : "NO"}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientCaching(boolean enabled, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientCaching, new String[] {enabled ? "YES" : "NO"}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientSetInfo(@NonNull String attribute, @NonNull String value) {
+        return commandManager.submitNewCommand(
+                ClientSetInfo, new String[] {attribute, value}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientSetInfo(
+            @NonNull GlideString attribute, @NonNull GlideString value) {
+        return commandManager.submitNewCommand(
+                ClientSetInfo, new GlideString[] {attribute, value}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientReply(@NonNull String mode) {
+        return commandManager.submitNewCommand(
+                ClientReply, new String[] {mode}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientReply(@NonNull String mode, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientReply, new String[] {mode}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> quit() {
+        return commandManager.submitNewCommand(Quit, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> quit(@NonNull Route route) {
+        return commandManager.submitNewCommand(Quit, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> reset() {
+        return commandManager.submitNewCommand(Reset, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> reset(@NonNull Route route) {
+        return commandManager.submitNewCommand(Reset, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> hello(long protocolVersion) {
+        return commandManager.submitNewCommand(
+                Hello, new String[] {Long.toString(protocolVersion)}, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> hello(
+            long protocolVersion, @NonNull String username, @NonNull String password) {
+        return commandManager.submitNewCommand(
+                Hello,
+                new String[] {Long.toString(protocolVersion), "AUTH", username, password},
+                this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> hello(
+            long protocolVersion, @NonNull GlideString username, @NonNull GlideString password) {
+        return commandManager.submitNewCommand(
+                Hello,
+                new GlideString[] {gs(Long.toString(protocolVersion)), gs("AUTH"), username, password},
+                this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> hello(
+            long protocolVersion,
+            @NonNull String username,
+            @NonNull String password,
+            @NonNull String clientName) {
+        return commandManager.submitNewCommand(
+                Hello,
+                new String[] {
+                    Long.toString(protocolVersion), "AUTH", username, password, "SETNAME", clientName
+                },
+                this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> hello(
+            long protocolVersion,
+            @NonNull GlideString username,
+            @NonNull GlideString password,
+            @NonNull GlideString clientName) {
+        return commandManager.submitNewCommand(
+                Hello,
+                new GlideString[] {
+                    gs(Long.toString(protocolVersion)),
+                    gs("AUTH"),
+                    username,
+                    password,
+                    gs("SETNAME"),
+                    clientName
+                },
+                this::handleMapResponse);
     }
 
     @Override
