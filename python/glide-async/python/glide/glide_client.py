@@ -653,6 +653,15 @@ class BaseClient(CoreCommands):
 
     async def _process_response(self, response: Response) -> None:
         res_future = self._available_futures.pop(response.callback_idx, None)
+        if res_future is not None and res_future.done():
+            # Future is already completed (e.g. request was cancelled while awaiting).
+            # Do not error to keep client in a valid state.
+            ClientLogger.log(
+                LogLevel.DEBUG,
+                "completed response",
+                f"Received response for cancelled request: {response.callback_idx}",
+            )
+            return
         if not res_future or response.HasField("closing_error"):
             err_msg = (
                 response.closing_error
@@ -740,7 +749,23 @@ class BaseClient(CoreCommands):
             await self.close(str(e))
 
     async def get_statistics(self) -> dict:
-        return get_statistics()
+        """
+        Get compression and connection statistics for this client.
+
+        Returns:
+            dict: A dictionary containing statistics with integer values:
+                - total_connections: Total number of connections
+                - total_clients: Total number of clients
+                - total_values_compressed: Number of values successfully compressed
+                - total_values_decompressed: Number of values successfully decompressed
+                - total_original_bytes: Total bytes of original data before compression
+                - total_bytes_compressed: Total bytes after compression
+                - total_bytes_decompressed: Total bytes after decompression
+                - compression_skipped_count: Number of times compression was skipped
+        """
+        stats = get_statistics()
+        # Convert string values to integers for easier arithmetic operations
+        return {key: int(value) for key, value in stats.items()}
 
     async def _update_connection_password(
         self, password: Optional[str], immediate_auth: bool
