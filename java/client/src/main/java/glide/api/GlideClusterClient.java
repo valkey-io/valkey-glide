@@ -1,7 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
-import static command_request.CommandRequestOuterClass.RequestType.Asking;
 import static command_request.CommandRequestOuterClass.RequestType.Auth;
 import static command_request.CommandRequestOuterClass.RequestType.ClientCaching;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
@@ -19,32 +18,6 @@ import static command_request.CommandRequestOuterClass.RequestType.ClientSetName
 import static command_request.CommandRequestOuterClass.RequestType.ClientTrackingInfo;
 import static command_request.CommandRequestOuterClass.RequestType.ClientUnblock;
 import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlots;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlotsRange;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterBumpEpoch;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterCountFailureReports;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterCountKeysInSlot;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterDelSlots;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterDelSlotsRange;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterFailover;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterFlushSlots;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterForget;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterGetKeysInSlot;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterInfo;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterKeySlot;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterLinks;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterMeet;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterMyId;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterMyShardId;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterNodes;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterReplicas;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterReplicate;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterReset;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterSaveConfig;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterSetConfigEpoch;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterSetslot;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterShards;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterSlots;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -73,8 +46,6 @@ import static command_request.CommandRequestOuterClass.RequestType.PubSubShardCh
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.Quit;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
-import static command_request.CommandRequestOuterClass.RequestType.ReadOnly;
-import static command_request.CommandRequestOuterClass.RequestType.ReadWrite;
 import static command_request.CommandRequestOuterClass.RequestType.Reset;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
