@@ -281,13 +281,7 @@ import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArrayBinary;
 import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueGlideStringArray;
 import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueStringArray;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -1075,6 +1069,109 @@ public class GlideClientTest {
                 .thenReturn(fetchValueResponse);
 
         CompletableFuture<String> finalValue = service.get(key);
+        assertEquals(value, finalValue.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void set_with_SetOptions_and_binary_condition_OnlyIfEqual_success() {
+        // setup
+        GlideString key = gs("key");
+        GlideString value = gs(new byte[] {(byte) 0xFF});
+        GlideString newValue = gs("new value");
+
+        assertFalse(value.canConvertToString());
+
+        // Set `key` to `value` initially
+        CompletableFuture<String> initialSetResponse = new CompletableFuture<>();
+        initialSetResponse.complete("OK");
+        GlideString[] initialArguments = new GlideString[] {key, value};
+        when(commandManager.<String>submitNewCommand(eq(pSet), eq(initialArguments), any()))
+                .thenReturn(initialSetResponse);
+
+        CompletableFuture<String> initialResponse = service.set(key, value);
+        assertNotNull(initialResponse);
+        assertEquals("OK", initialResponse.get());
+
+        // Set `key` to `newValue` with the correct condition
+        SetOptions setOptions =
+                SetOptions.builder()
+                        .conditionalSetOnlyIfEqualTo(value) // Key must currently have `value`
+                        .expiry(Expiry.UnixSeconds(60L))
+                        .build();
+        GlideString[] correctConditionArguments =
+                new GlideString[] {
+                    key, newValue, gs(ONLY_IF_EQUAL.getValkeyApi()), value, gs("EXAT"), gs("60")
+                };
+        CompletableFuture<String> correctSetResponse = new CompletableFuture<>();
+        correctSetResponse.complete("OK");
+        when(commandManager.<String>submitNewCommand(eq(pSet), eq(correctConditionArguments), any()))
+                .thenReturn(correctSetResponse);
+
+        CompletableFuture<String> correctResponse = service.set(key, newValue, setOptions);
+        assertNotNull(correctResponse);
+        assertEquals("OK", correctResponse.get());
+
+        // Verify that the key is now set to `newValue`
+        CompletableFuture<GlideString> fetchValueResponse = new CompletableFuture<>();
+        fetchValueResponse.complete(newValue);
+        when(commandManager.<GlideString>submitNewCommand(eq(Get), eq(new GlideString[] {key}), any()))
+                .thenReturn(fetchValueResponse);
+
+        CompletableFuture<GlideString> finalValue = service.get(key);
+        assertEquals(newValue, finalValue.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void set_with_SetOptions_and_binary_condition_OnlyIfEqual_fails() {
+        // Key-Value setup
+        GlideString key = gs("key");
+        GlideString value = gs(new byte[] {(byte) 0xFF});
+        GlideString newValue = gs(new byte[] {(byte) 0xC0, (byte) 0xAF});
+
+        assertFalse(value.canConvertToString());
+        assertFalse(newValue.canConvertToString());
+
+        // Set `key` to `value` initially
+        CompletableFuture<String> initialSetResponse = new CompletableFuture<>();
+        initialSetResponse.complete("OK");
+        GlideString[] initialArguments = new GlideString[] {key, value};
+        when(commandManager.<String>submitNewCommand(eq(pSet), eq(initialArguments), any()))
+                .thenReturn(initialSetResponse);
+
+        CompletableFuture<String> initialResponse = service.set(key, value);
+        assertNotNull(initialResponse);
+        assertEquals("OK", initialResponse.get());
+
+        // Attempt to set `key` to `newValue` with the wrong condition
+        SetOptions wrongConditionOptions =
+                SetOptions.builder()
+                        .conditionalSetOnlyIfEqualTo(newValue) // Incorrect: current value of key is `value`
+                        .expiry(Expiry.UnixSeconds(60L))
+                        .build();
+
+        GlideString[] wrongConditionArguments =
+                new GlideString[] {
+                    key, newValue, gs(ONLY_IF_EQUAL.getValkeyApi()), newValue, gs("EXAT"), gs("60")
+                };
+
+        CompletableFuture<String> failedSetResponse = new CompletableFuture<>();
+        failedSetResponse.complete(null);
+        when(commandManager.<String>submitNewCommand(eq(pSet), eq(wrongConditionArguments), any()))
+                .thenReturn(failedSetResponse);
+
+        CompletableFuture<String> failedResponse = service.set(key, newValue, wrongConditionOptions);
+        assertNotNull(failedResponse);
+        assertNull(failedResponse.get()); // Ensure the set operation failed
+
+        // Verify that the key remains set to `value`
+        CompletableFuture<GlideString> fetchValueResponse = new CompletableFuture<>();
+        fetchValueResponse.complete(value);
+        when(commandManager.<GlideString>submitNewCommand(eq(Get), eq(new GlideString[] {key}), any()))
+                .thenReturn(fetchValueResponse);
+
+        CompletableFuture<GlideString> finalValue = service.get(key);
         assertEquals(value, finalValue.get());
     }
 

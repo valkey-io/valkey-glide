@@ -572,7 +572,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             @NonNull ArgType key, @NonNull ArgType value, @NonNull SetOptions options) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
-                buildCommand(Set, newArgsBuilder().add(key).add(value).add(options.toArgs())));
+                buildCommand(Set, newArgsBuilder().add(key).add(value).add(options.toArgsBinary())));
         return getThis();
     }
 

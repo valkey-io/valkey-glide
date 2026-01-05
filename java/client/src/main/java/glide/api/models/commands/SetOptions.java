@@ -1,16 +1,13 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
-import static glide.api.models.commands.SetOptions.ExpiryType.KEEP_EXISTING;
-import static glide.api.models.commands.SetOptions.ExpiryType.MILLISECONDS;
-import static glide.api.models.commands.SetOptions.ExpiryType.SECONDS;
-import static glide.api.models.commands.SetOptions.ExpiryType.UNIX_MILLISECONDS;
-import static glide.api.models.commands.SetOptions.ExpiryType.UNIX_SECONDS;
+import static glide.api.models.commands.SetOptions.ExpiryType.*;
 
 import command_request.CommandRequestOuterClass.Command;
 import glide.api.commands.StringBaseCommands;
-import java.util.ArrayList;
-import java.util.List;
+import glide.api.models.GlideString;
+import glide.utils.ArgsBuilder;
+import java.util.Arrays;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
@@ -31,7 +28,7 @@ public final class SetOptions {
     private final ConditionalSet conditionalSet;
 
     /** Value to compare when {@link ConditionalSet#ONLY_IF_EQUAL} is set. */
-    private final String comparisonValue;
+    private final GlideString comparisonValue;
 
     /**
      * Set command to return the old string stored at <code>key</code>, or <code>null</code> if <code>
@@ -107,11 +104,26 @@ public final class SetOptions {
          * <p>This method overrides any previously set {@code conditionalSet} and {@code
          * comparisonValue}.
          *
-         * @since Valkey 8.1 and above.
          * @param value the value to compare
          * @return this builder instance
+         * @since Valkey 8.1 and above.
          */
         public SetOptionsBuilder conditionalSetOnlyIfEqualTo(@NonNull String value) {
+            return conditionalSetOnlyIfEqualTo(GlideString.gs(value));
+        }
+
+        /**
+         * Sets the condition to {@link ConditionalSet#ONLY_IF_EQUAL} for setting the value. The key
+         * will be set if the provided comparison value matches the existing value.
+         *
+         * <p>This method overrides any previously set {@code conditionalSet} and {@code
+         * comparisonValue}.
+         *
+         * @param value the value to compare
+         * @return this builder instance
+         * @since Valkey 8.1 and above.
+         */
+        public SetOptionsBuilder conditionalSetOnlyIfEqualTo(@NonNull GlideString value) {
             this.conditionalSet = ConditionalSet.ONLY_IF_EQUAL;
             this.comparisonValue = value;
             return this;
@@ -212,27 +224,36 @@ public final class SetOptions {
      * @return String[]
      */
     public String[] toArgs() {
-        List<String> optionArgs = new ArrayList<>();
+        return Arrays.stream(toArgsBinary()).map(GlideString::getString).toArray(String[]::new);
+    }
+
+    /**
+     * Converts SetOptions into a GlideString[].
+     *
+     * @return GlideString[]
+     */
+    public GlideString[] toArgsBinary() {
+        final var argsBuilder = new ArgsBuilder();
         if (conditionalSet != null) {
-            optionArgs.add(conditionalSet.valkeyApi);
+            argsBuilder.add(conditionalSet.valkeyApi);
             if (conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {
-                optionArgs.add(comparisonValue);
+                argsBuilder.add(comparisonValue);
             }
         }
 
         if (returnOldValue) {
-            optionArgs.add(RETURN_OLD_VALUE);
+            argsBuilder.add(RETURN_OLD_VALUE);
         }
 
         if (expiry != null) {
-            optionArgs.add(expiry.type.valkeyApi);
+            argsBuilder.add(expiry.type.valkeyApi);
             if (expiry.type != KEEP_EXISTING) {
                 assert expiry.count != null
                         : "Set command received expiry type " + expiry.type + ", but count was not set.";
-                optionArgs.add(expiry.count.toString());
+                argsBuilder.add(expiry.count.toString());
             }
         }
 
-        return optionArgs.toArray(new String[0]);
+        return argsBuilder.toArray();
     }
 }
