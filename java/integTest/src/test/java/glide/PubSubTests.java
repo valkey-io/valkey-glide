@@ -1617,8 +1617,12 @@ public class PubSubTests {
         // Subscribe at runtime - verify command executes without error
         if (standalone) {
             ((GlideClient) listener).subscribe(new GlideString[] {channel1, channel2}).get();
+            // Clean up - unsubscribe to avoid affecting other tests
+            ((GlideClient) listener).unsubscribe(new GlideString[] {channel1, channel2}).get();
         } else {
             ((GlideClusterClient) listener).subscribe(new GlideString[] {channel1, channel2}).get();
+            // Clean up - unsubscribe to avoid affecting other tests
+            ((GlideClusterClient) listener).unsubscribe(new GlideString[] {channel1, channel2}).get();
         }
 
         // Command executed successfully
@@ -1720,8 +1724,12 @@ public class PubSubTests {
         // Subscribe to pattern at runtime - verify command executes without error
         if (standalone) {
             ((GlideClient) listener).psubscribe(new GlideString[] {pattern}).get();
+            // Clean up - unsubscribe to avoid affecting other tests
+            ((GlideClient) listener).punsubscribe(new GlideString[] {pattern}).get();
         } else {
             ((GlideClusterClient) listener).psubscribe(new GlideString[] {pattern}).get();
+            // Clean up - unsubscribe to avoid affecting other tests
+            ((GlideClusterClient) listener).punsubscribe(new GlideString[] {pattern}).get();
         }
 
         // Command executed successfully
@@ -1833,6 +1841,9 @@ public class PubSubTests {
 
         // Subscribe to shard channels at runtime - verify command executes without error
         listener.ssubscribe(new GlideString[] {channel1, channel2}).get();
+
+        // Cleanup: unsubscribe from the channels
+        listener.sunsubscribe(new GlideString[] {channel1, channel2}).get();
 
         // Command executed successfully
     }
