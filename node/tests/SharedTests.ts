@@ -9294,12 +9294,12 @@ export function runBaseTests(config: {
 
         // set with multiple options:
         // * only apply SET if the key already exists
-        // * expires after 1 second
+        // * expires after 10 seconds
         // * returns the old value
         const setResWithAllOptions = await client.set(key, value, {
             expiry: {
                 type: TimeUnit.UnixSeconds,
-                count: Math.floor(Date.now() / 1000) + 1,
+                count: Math.floor(Date.now() / 1000) + 10,
             },
             conditionalSet: "onlyIfExists",
             returnOldValue: true,
@@ -9318,12 +9318,12 @@ export function runBaseTests(config: {
         await client.set(key, initialValue);
         // set with multiple options:
         // * only apply SET if the provided value equals oldValue
-        // * expires after 1 second
+        // * expires after 10 seconds
         // * returns the old value
         const setResWithAllOptions = await client.set(key, newValue, {
             expiry: {
                 type: TimeUnit.UnixSeconds,
-                count: Math.floor(Date.now() / 1000) + 1,
+                count: Math.floor(Date.now() / 1000) + 10,
             },
             conditionalSet: "onlyIfEqual",
             comparisonValue: initialValue,
@@ -9339,7 +9339,7 @@ export function runBaseTests(config: {
         const setResFailedWithAllOptions = await client.set(key, wrongValue, {
             expiry: {
                 type: TimeUnit.UnixSeconds,
-                count: Math.floor(Date.now() / 1000) + 1,
+                count: Math.floor(Date.now() / 1000) + 10,
             },
             conditionalSet: "onlyIfEqual",
             comparisonValue: wrongValue,
