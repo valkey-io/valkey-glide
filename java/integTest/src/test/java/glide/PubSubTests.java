@@ -9,7 +9,6 @@ import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1621,7 +1620,7 @@ public class PubSubTests {
         } else {
             ((GlideClusterClient) listener).subscribe(new GlideString[] {channel1, channel2}).get();
         }
-        
+
         // Command executed successfully
     }
 
@@ -1701,7 +1700,7 @@ public class PubSubTests {
         while ((staleMsg = listener.tryGetPubSubMessage()) != null) {
             // Drain any messages that arrived before unsubscribe completed
         }
-        
+
         // Now verify no new messages arrive
         Thread.sleep(MESSAGE_DELIVERY_DELAY);
         assertNull(listener.tryGetPubSubMessage());
@@ -1724,7 +1723,7 @@ public class PubSubTests {
         } else {
             ((GlideClusterClient) listener).psubscribe(new GlideString[] {pattern}).get();
         }
-        
+
         // Command executed successfully
     }
 
@@ -1813,7 +1812,7 @@ public class PubSubTests {
         while ((staleMsg = listener.tryGetPubSubMessage()) != null) {
             // Drain any messages that arrived before punsubscribe completed
         }
-        
+
         // Now verify no new messages arrive
         Thread.sleep(MESSAGE_DELIVERY_DELAY);
         assertNull(listener.tryGetPubSubMessage());
@@ -1829,11 +1828,12 @@ public class PubSubTests {
         GlideString channel2 = gs("{shard}channel2_" + UUID.randomUUID());
 
         // Create cluster client with empty subscriptions (PubSub enabled but no initial channels)
-        GlideClusterClient listener = (GlideClusterClient) createClientWithSubscriptions(false, Map.of());
+        GlideClusterClient listener =
+                (GlideClusterClient) createClientWithSubscriptions(false, Map.of());
 
         // Subscribe to shard channels at runtime - verify command executes without error
         listener.ssubscribe(new GlideString[] {channel1, channel2}).get();
-        
+
         // Command executed successfully
     }
 
