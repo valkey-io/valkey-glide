@@ -101,3 +101,30 @@ impl fmt::Display for GlideOTELError {
         write!(f, "error")
     }
 }
+
+/// Mock Telemetry struct for Miri tests
+pub struct Telemetry;
+
+impl Telemetry {
+    pub fn incr_total_connections(_incr_by: usize) -> usize { 0 }
+    pub fn decr_total_connections(_decr_by: usize) -> usize { 0 }
+    pub fn incr_total_clients(_incr_by: usize) -> usize { 0 }
+    pub fn decr_total_clients(_decr_by: usize) -> usize { 0 }
+    pub fn total_connections() -> usize { 0 }
+    pub fn total_clients() -> usize { 0 }
+    pub fn incr_total_values_compressed(_incr_by: usize) -> usize { 0 }
+    pub fn total_values_compressed() -> usize { 0 }
+    pub fn incr_total_values_decompressed(_incr_by: usize) -> usize { 0 }
+    pub fn total_values_decompressed() -> usize { 0 }
+    pub fn incr_total_original_bytes(_incr_by: usize) -> usize { 0 }
+    pub fn total_original_bytes() -> usize { 0 }
+    pub fn incr_total_bytes_compressed(_incr_by: usize) -> usize { 0 }
+    pub fn total_bytes_compressed() -> usize { 0 }
+    pub fn incr_total_bytes_decompressed(_incr_by: usize) -> usize { 0 }
+    pub fn total_bytes_decompressed() -> usize { 0 }
+    pub fn incr_compression_skipped_count(_incr_by: usize) -> usize { 0 }
+    pub fn compression_skipped_count() -> usize { 0 }
+    pub fn reset() {}
+}
+
+pub const DEFAULT_FLUSH_SIGNAL_INTERVAL_MS: u32 = 0;

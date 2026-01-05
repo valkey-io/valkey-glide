@@ -1,0 +1,10 @@
+::: glide_sync.config.GlideClientConfiguration
+::: glide_sync.config.GlideClusterClientConfiguration
+::: glide_shared.config.NodeAddress
+::: glide_shared.config.ReadFrom
+::: glide_shared.config.ProtocolVersion
+::: glide_shared.config.BackoffStrategy
+::: glide_shared.config.ServerCredentials
+::: glide_shared.config.PeriodicChecksManualInterval
+::: glide_shared.config.PeriodicChecksStatus
+::: glide_shared.config.BaseClientConfiguration
