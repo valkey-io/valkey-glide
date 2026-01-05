@@ -1,3 +1,12 @@
+## 2.3
+
+#### Changes
+
+#### Fixes
+* CORE: Enforce connection_timeout for initial standalone connection failures  ([#4991](https://github.com/valkey-io/valkey-glide/issues/4991))
+
+#### Operational Enhancements
+
 ## 2.2
 
 #### Changes
