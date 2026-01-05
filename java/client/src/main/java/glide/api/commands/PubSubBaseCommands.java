@@ -161,4 +161,132 @@ public interface PubSubBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<GlideString, Long>> pubsubNumSub(GlideString[] channels);
+
+    /**
+     * Subscribes the client to the specified channels.
+     *
+     * @see <a href="https://valkey.io/commands/subscribe/">valkey.io</a> for details.
+     * @param channels The channels to subscribe to.
+     * @return A <code>CompletableFuture</code> that completes when the subscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.subscribe(new String[] {"channel1", "channel2"}).get();
+     * }</pre>
+     */
+    CompletableFuture<Void> subscribe(String[] channels);
+
+    /**
+     * Subscribes the client to the specified channels.
+     *
+     * @see <a href="https://valkey.io/commands/subscribe/">valkey.io</a> for details.
+     * @param channels The channels to subscribe to.
+     * @return A <code>CompletableFuture</code> that completes when the subscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.subscribe(new GlideString[] {gs("channel1"), gs("channel2")}).get();
+     * }</pre>
+     */
+    CompletableFuture<Void> subscribe(GlideString[] channels);
+
+    /**
+     * Unsubscribes the client from all channels.
+     *
+     * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details.
+     * @return A <code>CompletableFuture</code> that completes when the unsubscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.unsubscribe().get();
+     * }</pre>
+     */
+    CompletableFuture<Void> unsubscribe();
+
+    /**
+     * Unsubscribes the client from the specified channels.
+     *
+     * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details.
+     * @param channels The channels to unsubscribe from.
+     * @return A <code>CompletableFuture</code> that completes when the unsubscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.unsubscribe(new String[] {"channel1", "channel2"}).get();
+     * }</pre>
+     */
+    CompletableFuture<Void> unsubscribe(String[] channels);
+
+    /**
+     * Unsubscribes the client from the specified channels.
+     *
+     * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details.
+     * @param channels The channels to unsubscribe from.
+     * @return A <code>CompletableFuture</code> that completes when the unsubscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.unsubscribe(new GlideString[] {gs("channel1"), gs("channel2")}).get();
+     * }</pre>
+     */
+    CompletableFuture<Void> unsubscribe(GlideString[] channels);
+
+    /**
+     * Subscribes the client to the specified patterns.
+     *
+     * @see <a href="https://valkey.io/commands/psubscribe/">valkey.io</a> for details.
+     * @param patterns The patterns to subscribe to.
+     * @return A <code>CompletableFuture</code> that completes when the subscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.psubscribe(new String[] {"news.*", "weather.*"}).get();
+     * }</pre>
+     */
+    CompletableFuture<Void> psubscribe(String[] patterns);
+
+    /**
+     * Subscribes the client to the specified patterns.
+     *
+     * @see <a href="https://valkey.io/commands/psubscribe/">valkey.io</a> for details.
+     * @param patterns The patterns to subscribe to.
+     * @return A <code>CompletableFuture</code> that completes when the subscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.psubscribe(new GlideString[] {gs("news.*"), gs("weather.*")}).get();
+     * }</pre>
+     */
+    CompletableFuture<Void> psubscribe(GlideString[] patterns);
+
+    /**
+     * Unsubscribes the client from all patterns.
+     *
+     * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details.
+     * @return A <code>CompletableFuture</code> that completes when the unsubscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.punsubscribe().get();
+     * }</pre>
+     */
+    CompletableFuture<Void> punsubscribe();
+
+    /**
+     * Unsubscribes the client from the specified patterns.
+     *
+     * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details.
+     * @param patterns The patterns to unsubscribe from.
+     * @return A <code>CompletableFuture</code> that completes when the unsubscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.punsubscribe(new String[] {"news.*", "weather.*"}).get();
+     * }</pre>
+     */
+    CompletableFuture<Void> punsubscribe(String[] patterns);
+
+    /**
+     * Unsubscribes the client from the specified patterns.
+     *
+     * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details.
+     * @param patterns The patterns to unsubscribe from.
+     * @return A <code>CompletableFuture</code> that completes when the unsubscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.punsubscribe(new GlideString[] {gs("news.*"), gs("weather.*")}).get();
+     * }</pre>
+     */
+    CompletableFuture<Void> punsubscribe(GlideString[] patterns);
 }

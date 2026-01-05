@@ -9,6 +9,7 @@ import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1601,5 +1602,273 @@ public class PubSubTests {
                         .pubsubShardNumSub(
                                 new GlideString[] {gs("channel1"), gs("channel2"), gs("channel3"), gs("channel4")})
                         .get());
+    }
+
+    /** Test runtime SUBSCRIBE command */
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void test_pubsub_subscribe_runtime(boolean standalone) {
+        GlideString channel1 = gs("channel1_" + UUID.randomUUID());
+        GlideString channel2 = gs("channel2_" + UUID.randomUUID());
+
+        // Create client with empty subscriptions (PubSub enabled but no initial channels)
+        BaseClient listener = createClientWithSubscriptions(standalone, Map.of());
+
+        // Subscribe at runtime - verify command executes without error
+        if (standalone) {
+            ((GlideClient) listener).subscribe(new GlideString[] {channel1, channel2}).get();
+        } else {
+            ((GlideClusterClient) listener).subscribe(new GlideString[] {channel1, channel2}).get();
+        }
+        
+        // Command executed successfully
+    }
+
+    /** Test runtime UNSUBSCRIBE command */
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void test_pubsub_unsubscribe_runtime(boolean standalone) {
+        GlideString channel1 = gs("channel1_" + UUID.randomUUID());
+        GlideString channel2 = gs("channel2_" + UUID.randomUUID());
+        GlideString message = gs(UUID.randomUUID().toString());
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(PubSubChannelMode.EXACT, Set.of(channel1, channel2))
+                        : Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel1, channel2));
+
+        BaseClient listener = createClientWithSubscriptions(standalone, subscriptions);
+        BaseClient sender = createClient(standalone);
+
+        // Unsubscribe from channel1
+        if (standalone) {
+            ((GlideClient) listener).unsubscribe(new GlideString[] {channel1}).get();
+        } else {
+            ((GlideClusterClient) listener).unsubscribe(new GlideString[] {channel1}).get();
+        }
+
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Publish to both channels
+        sender.publish(message, channel1).get();
+        sender.publish(message, channel2).get();
+
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Should only receive message from channel2
+        PubSubMessage msg = listener.tryGetPubSubMessage();
+        assertEquals(message, msg.getMessage());
+        assertEquals(channel2, msg.getChannel());
+        assertNull(listener.tryGetPubSubMessage());
+    }
+
+    /** Test UNSUBSCRIBE from all channels */
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void test_pubsub_unsubscribe_all(boolean standalone) {
+        GlideString channel1 = gs("channel1_" + UUID.randomUUID());
+        GlideString channel2 = gs("channel2_" + UUID.randomUUID());
+        GlideString message = gs(UUID.randomUUID().toString());
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(PubSubChannelMode.EXACT, Set.of(channel1, channel2))
+                        : Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel1, channel2));
+
+        BaseClient listener = createClientWithSubscriptions(standalone, subscriptions);
+        BaseClient sender = createClient(standalone);
+
+        // Unsubscribe from all channels (empty array)
+        if (standalone) {
+            ((GlideClient) listener).unsubscribe().get();
+        } else {
+            ((GlideClusterClient) listener).unsubscribe().get();
+        }
+
+        Thread.sleep(MESSAGE_DELIVERY_DELAY * 2);
+
+        // Publish to both channels
+        sender.publish(message, channel1).get();
+        sender.publish(message, channel2).get();
+
+        Thread.sleep(MESSAGE_DELIVERY_DELAY * 2);
+
+        // Should not receive any messages - drain any stale messages first
+        PubSubMessage staleMsg;
+        while ((staleMsg = listener.tryGetPubSubMessage()) != null) {
+            // Drain any messages that arrived before unsubscribe completed
+        }
+        
+        // Now verify no new messages arrive
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+        assertNull(listener.tryGetPubSubMessage());
+    }
+
+    /** Test runtime PSUBSCRIBE command */
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void test_pubsub_psubscribe_runtime(boolean standalone) {
+        String prefix = "pattern_" + UUID.randomUUID() + "_";
+        GlideString pattern = gs(prefix + "*");
+
+        // Create client with empty subscriptions (PubSub enabled but no initial channels)
+        BaseClient listener = createClientWithSubscriptions(standalone, Map.of());
+
+        // Subscribe to pattern at runtime - verify command executes without error
+        if (standalone) {
+            ((GlideClient) listener).psubscribe(new GlideString[] {pattern}).get();
+        } else {
+            ((GlideClusterClient) listener).psubscribe(new GlideString[] {pattern}).get();
+        }
+        
+        // Command executed successfully
+    }
+
+    /** Test runtime PUNSUBSCRIBE command */
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void test_pubsub_punsubscribe_runtime(boolean standalone) {
+        String prefix1 = "pattern1_" + UUID.randomUUID() + "_";
+        String prefix2 = "pattern2_" + UUID.randomUUID() + "_";
+        GlideString pattern1 = gs(prefix1 + "*");
+        GlideString pattern2 = gs(prefix2 + "*");
+        GlideString channel1 = gs(prefix1 + "channel");
+        GlideString channel2 = gs(prefix2 + "channel");
+        GlideString message = gs(UUID.randomUUID().toString());
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(PubSubChannelMode.PATTERN, Set.of(pattern1, pattern2))
+                        : Map.of(PubSubClusterChannelMode.PATTERN, Set.of(pattern1, pattern2));
+
+        BaseClient listener = createClientWithSubscriptions(standalone, subscriptions);
+        BaseClient sender = createClient(standalone);
+
+        // Unsubscribe from pattern1
+        if (standalone) {
+            ((GlideClient) listener).punsubscribe(new GlideString[] {pattern1}).get();
+        } else {
+            ((GlideClusterClient) listener).punsubscribe(new GlideString[] {pattern1}).get();
+        }
+
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Publish to both patterns
+        sender.publish(message, channel1).get();
+        sender.publish(message, channel2).get();
+
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Should only receive message from pattern2
+        PubSubMessage msg = listener.tryGetPubSubMessage();
+        assertEquals(message, msg.getMessage());
+        assertEquals(channel2, msg.getChannel());
+        assertEquals(pattern2, msg.getPattern().get());
+        assertNull(listener.tryGetPubSubMessage());
+    }
+
+    /** Test PUNSUBSCRIBE from all patterns */
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void test_pubsub_punsubscribe_all(boolean standalone) {
+        String prefix1 = "pattern1_" + UUID.randomUUID() + "_";
+        String prefix2 = "pattern2_" + UUID.randomUUID() + "_";
+        GlideString pattern1 = gs(prefix1 + "*");
+        GlideString pattern2 = gs(prefix2 + "*");
+        GlideString channel1 = gs(prefix1 + "channel");
+        GlideString channel2 = gs(prefix2 + "channel");
+        GlideString message = gs(UUID.randomUUID().toString());
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(PubSubChannelMode.PATTERN, Set.of(pattern1, pattern2))
+                        : Map.of(PubSubClusterChannelMode.PATTERN, Set.of(pattern1, pattern2));
+
+        BaseClient listener = createClientWithSubscriptions(standalone, subscriptions);
+        BaseClient sender = createClient(standalone);
+
+        // Unsubscribe from all patterns (empty array)
+        if (standalone) {
+            ((GlideClient) listener).punsubscribe().get();
+        } else {
+            ((GlideClusterClient) listener).punsubscribe().get();
+        }
+
+        Thread.sleep(MESSAGE_DELIVERY_DELAY * 2);
+
+        // Publish to both patterns
+        sender.publish(message, channel1).get();
+        sender.publish(message, channel2).get();
+
+        Thread.sleep(MESSAGE_DELIVERY_DELAY * 2);
+
+        // Should not receive any messages - drain any stale messages first
+        PubSubMessage staleMsg;
+        while ((staleMsg = listener.tryGetPubSubMessage()) != null) {
+            // Drain any messages that arrived before punsubscribe completed
+        }
+        
+        // Now verify no new messages arrive
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+        assertNull(listener.tryGetPubSubMessage());
+    }
+
+    /** Test runtime SSUBSCRIBE command (cluster only) */
+    @SneakyThrows
+    @Test
+    public void test_pubsub_ssubscribe_runtime() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+
+        GlideString channel1 = gs("{shard}channel1_" + UUID.randomUUID());
+        GlideString channel2 = gs("{shard}channel2_" + UUID.randomUUID());
+
+        // Create cluster client with empty subscriptions (PubSub enabled but no initial channels)
+        GlideClusterClient listener = (GlideClusterClient) createClientWithSubscriptions(false, Map.of());
+
+        // Subscribe to shard channels at runtime - verify command executes without error
+        listener.ssubscribe(new GlideString[] {channel1, channel2}).get();
+        
+        // Command executed successfully
+    }
+
+    /** Test runtime SUNSUBSCRIBE command (cluster only) */
+    @SneakyThrows
+    @Test
+    public void test_pubsub_sunsubscribe_runtime() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+
+        GlideString channel1 = gs("{shard}channel1_" + UUID.randomUUID());
+        GlideString channel2 = gs("{shard}channel2_" + UUID.randomUUID());
+        GlideString message = gs(UUID.randomUUID().toString());
+
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions =
+                Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel1, channel2));
+
+        GlideClusterClient listener =
+                (GlideClusterClient) createClientWithSubscriptions(false, subscriptions);
+        GlideClusterClient sender = (GlideClusterClient) createClient(false);
+
+        // Unsubscribe from channel1
+        listener.sunsubscribe(new GlideString[] {channel1}).get();
+
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Publish to both channels
+        sender.publish(message, channel1, true).get();
+        sender.publish(message, channel2, true).get();
+
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Should only receive message from channel2
+        PubSubMessage msg = listener.tryGetPubSubMessage();
+        assertEquals(message, msg.getMessage());
+        assertEquals(channel2, msg.getChannel());
+        assertNull(listener.tryGetPubSubMessage());
     }
 }

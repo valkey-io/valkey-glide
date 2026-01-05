@@ -36,6 +36,12 @@ import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
+import static command_request.CommandRequestOuterClass.RequestType.PSubscribe;
+import static command_request.CommandRequestOuterClass.RequestType.PUnsubscribe;
+import static command_request.CommandRequestOuterClass.RequestType.SSubscribe;
+import static command_request.CommandRequestOuterClass.RequestType.SUnsubscribe;
+import static command_request.CommandRequestOuterClass.RequestType.Subscribe;
+import static command_request.CommandRequestOuterClass.RequestType.Unsubscribe;
 import static command_request.CommandRequestOuterClass.RequestType.Wait;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
 import static glide.api.models.GlideString.gs;
@@ -1412,5 +1418,80 @@ public class GlideClusterClient extends BaseClient
                 }
             }
         }
+    }
+
+    @Override
+    public CompletableFuture<Void> subscribe(@NonNull String[] channels) {
+        return commandManager.submitNewCommand(Subscribe, channels, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> subscribe(@NonNull GlideString[] channels) {
+        return commandManager.submitNewCommand(Subscribe, channels, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> unsubscribe() {
+        return commandManager.submitNewCommand(Unsubscribe, new String[0], response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> unsubscribe(@NonNull String[] channels) {
+        return commandManager.submitNewCommand(Unsubscribe, channels, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> unsubscribe(@NonNull GlideString[] channels) {
+        return commandManager.submitNewCommand(Unsubscribe, channels, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> psubscribe(@NonNull String[] patterns) {
+        return commandManager.submitNewCommand(PSubscribe, patterns, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> psubscribe(@NonNull GlideString[] patterns) {
+        return commandManager.submitNewCommand(PSubscribe, patterns, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> punsubscribe() {
+        return commandManager.submitNewCommand(PUnsubscribe, new String[0], response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> punsubscribe(@NonNull String[] patterns) {
+        return commandManager.submitNewCommand(PUnsubscribe, patterns, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> punsubscribe(@NonNull GlideString[] patterns) {
+        return commandManager.submitNewCommand(PUnsubscribe, patterns, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> ssubscribe(@NonNull String[] channels) {
+        return commandManager.submitNewCommand(SSubscribe, channels, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> ssubscribe(@NonNull GlideString[] channels) {
+        return commandManager.submitNewCommand(SSubscribe, channels, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> sunsubscribe() {
+        return commandManager.submitNewCommand(SUnsubscribe, new String[0], response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> sunsubscribe(@NonNull String[] channels) {
+        return commandManager.submitNewCommand(SUnsubscribe, channels, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> sunsubscribe(@NonNull GlideString[] channels) {
+        return commandManager.submitNewCommand(SUnsubscribe, channels, response -> null);
     }
 }

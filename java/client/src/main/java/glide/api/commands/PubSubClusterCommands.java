@@ -135,4 +135,73 @@ public interface PubSubClusterCommands {
      * }</pre>
      */
     CompletableFuture<Map<GlideString, Long>> pubsubShardNumSub(GlideString[] channels);
+
+    /**
+     * Subscribes the client to the specified shard channels.
+     *
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/ssubscribe/">valkey.io</a> for details.
+     * @param channels The shard channels to subscribe to.
+     * @return A <code>CompletableFuture</code> that completes when the subscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.ssubscribe(new String[] {"channel1", "channel2"}).get();
+     * }</pre>
+     */
+    CompletableFuture<Void> ssubscribe(String[] channels);
+
+    /**
+     * Subscribes the client to the specified shard channels.
+     *
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/ssubscribe/">valkey.io</a> for details.
+     * @param channels The shard channels to subscribe to.
+     * @return A <code>CompletableFuture</code> that completes when the subscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.ssubscribe(new GlideString[] {gs("channel1"), gs("channel2")}).get();
+     * }</pre>
+     */
+    CompletableFuture<Void> ssubscribe(GlideString[] channels);
+
+    /**
+     * Unsubscribes the client from all shard channels.
+     *
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details.
+     * @return A <code>CompletableFuture</code> that completes when the unsubscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.sunsubscribe().get();
+     * }</pre>
+     */
+    CompletableFuture<Void> sunsubscribe();
+
+    /**
+     * Unsubscribes the client from the specified shard channels.
+     *
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details.
+     * @param channels The shard channels to unsubscribe from.
+     * @return A <code>CompletableFuture</code> that completes when the unsubscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.sunsubscribe(new String[] {"channel1", "channel2"}).get();
+     * }</pre>
+     */
+    CompletableFuture<Void> sunsubscribe(String[] channels);
+
+    /**
+     * Unsubscribes the client from the specified shard channels.
+     *
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details.
+     * @param channels The shard channels to unsubscribe from.
+     * @return A <code>CompletableFuture</code> that completes when the unsubscription is successful.
+     * @example
+     *     <pre>{@code
+     * client.sunsubscribe(new GlideString[] {gs("channel1"), gs("channel2")}).get();
+     * }</pre>
+     */
+    CompletableFuture<Void> sunsubscribe(GlideString[] channels);
 }

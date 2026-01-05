@@ -29,6 +29,10 @@ import static command_request.CommandRequestOuterClass.RequestType.Scan;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
+import static command_request.CommandRequestOuterClass.RequestType.PSubscribe;
+import static command_request.CommandRequestOuterClass.RequestType.PUnsubscribe;
+import static command_request.CommandRequestOuterClass.RequestType.Subscribe;
+import static command_request.CommandRequestOuterClass.RequestType.Unsubscribe;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
@@ -39,6 +43,7 @@ import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 
 import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.GenericCommands;
+import glide.api.commands.PubSubBaseCommands;
 import glide.api.commands.ScriptingAndFunctionsCommands;
 import glide.api.commands.ServerManagementCommands;
 import glide.api.commands.TransactionsCommands;
@@ -77,7 +82,8 @@ public class GlideClient extends BaseClient
                 ServerManagementCommands,
                 ConnectionManagementCommands,
                 ScriptingAndFunctionsCommands,
-                TransactionsCommands {
+                TransactionsCommands,
+                PubSubBaseCommands {
 
     /** Constructor using ClientParams from BaseClient. */
     protected GlideClient(ClientBuilder builder) {
@@ -514,5 +520,55 @@ public class GlideClient extends BaseClient
             @NonNull GlideString cursor, @NonNull ScanOptions options) {
         GlideString[] arguments = new ArgsBuilder().add(cursor).add(options.toArgs()).toArray();
         return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponseBinary);
+    }
+
+    @Override
+    public CompletableFuture<Void> subscribe(@NonNull String[] channels) {
+        return commandManager.submitNewCommand(Subscribe, channels, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> subscribe(@NonNull GlideString[] channels) {
+        return commandManager.submitNewCommand(Subscribe, channels, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> unsubscribe() {
+        return commandManager.submitNewCommand(Unsubscribe, new String[0], response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> unsubscribe(@NonNull String[] channels) {
+        return commandManager.submitNewCommand(Unsubscribe, channels, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> unsubscribe(@NonNull GlideString[] channels) {
+        return commandManager.submitNewCommand(Unsubscribe, channels, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> psubscribe(@NonNull String[] patterns) {
+        return commandManager.submitNewCommand(PSubscribe, patterns, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> psubscribe(@NonNull GlideString[] patterns) {
+        return commandManager.submitNewCommand(PSubscribe, patterns, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> punsubscribe() {
+        return commandManager.submitNewCommand(PUnsubscribe, new String[0], response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> punsubscribe(@NonNull String[] patterns) {
+        return commandManager.submitNewCommand(PUnsubscribe, patterns, response -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> punsubscribe(@NonNull GlideString[] patterns) {
+        return commandManager.submitNewCommand(PUnsubscribe, patterns, response -> null);
     }
 }

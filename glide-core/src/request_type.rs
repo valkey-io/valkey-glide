@@ -804,6 +804,12 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SlowLogReset => RequestType::SlowLogReset,
             ProtobufRequestType::SwapDb => RequestType::SwapDb,
             ProtobufRequestType::Sync => RequestType::Sync,
+            ProtobufRequestType::PSubscribe => RequestType::PSubscribe,
+            ProtobufRequestType::PUnsubscribe => RequestType::PUnsubscribe,
+            ProtobufRequestType::SSubscribe => RequestType::SSubscribe,
+            ProtobufRequestType::SUnsubscribe => RequestType::SUnsubscribe,
+            ProtobufRequestType::Subscribe => RequestType::Subscribe,
+            ProtobufRequestType::Unsubscribe => RequestType::Unsubscribe,
 
             _ => todo!(),
         }
@@ -1081,6 +1087,12 @@ impl RequestType {
                 Some(get_two_word_command("PUBSUB", "SHARDCHANNELS"))
             }
             RequestType::PubSubShardNumSub => Some(get_two_word_command("PUBSUB", "SHARDNUMSUB")),
+            RequestType::Subscribe => Some(cmd("SUBSCRIBE")),
+            RequestType::Unsubscribe => Some(cmd("UNSUBSCRIBE")),
+            RequestType::PSubscribe => Some(cmd("PSUBSCRIBE")),
+            RequestType::PUnsubscribe => Some(cmd("PUNSUBSCRIBE")),
+            RequestType::SSubscribe => Some(cmd("SSUBSCRIBE")),
+            RequestType::SUnsubscribe => Some(cmd("SUNSUBSCRIBE")),
             RequestType::ScriptShow => Some(get_two_word_command("SCRIPT", "SHOW")),
             RequestType::ScriptExists => Some(get_two_word_command("SCRIPT", "EXISTS")),
             RequestType::ScriptFlush => Some(get_two_word_command("SCRIPT", "FLUSH")),
