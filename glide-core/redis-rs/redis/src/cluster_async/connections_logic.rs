@@ -489,13 +489,11 @@ where
 /// - IPv6 bracketed: "[<ipv6>]:<port>" (e.g., "[2001:db8::1]:6379")
 /// - IPv6 unbracketed with port: "<ipv6>:<port>" - last segment treated as port (e.g., "2001:db8::1:6379" → host "2001:db8::1", port 6379)
 pub fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
-    if let Some(addr_without_bracket) = addr.strip_prefix('[') {
-        let (host, port_str) = addr_without_bracket.rsplit_once("]:")?;
-        let port = port_str.parse::<u16>().ok()?;
-        Some((host, port))
-    } else {
-        let (host, port_str) = addr.rsplit_once(':')?;
-        let port = port_str.parse::<u16>().ok()?;
-        Some((host, port))
-    }
+    let (host, port_str) = addr.rsplit_once(':')?;
+    let port = port_str.parse::<u16>().ok()?;
+    let host = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
+    Some((host, port))
 }

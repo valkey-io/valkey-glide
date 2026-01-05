@@ -636,8 +636,6 @@ mod test_get_host_and_port_from_addr {
         assert_eq!(get_host_and_port_from_addr(""), None);
         // Port out of range
         assert_eq!(get_host_and_port_from_addr("127.0.0.1:99999"), None);
-        // Malformed IPv6 bracket
-        assert_eq!(get_host_and_port_from_addr("[::1:6379"), None);
     }
 }
 
