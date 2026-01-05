@@ -578,6 +578,18 @@ class TestGlideClients:
             "Configuration errors should fail immediately without retrying."
         )
 
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cancelled_request_handled_gracefully(
+        self, glide_client: TGlideClient
+    ):
+        """Assert that a cancelled request does not close the client."""
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(0.1):
+                await glide_client.blpop(["random_key"], timeout=2)
+
+        # Ensure client can still perform a simple operation
+        assert await glide_client.set(get_random_string(10), "value") == OK
+
 
 @pytest.mark.anyio
 class TestCommands:

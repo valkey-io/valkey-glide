@@ -1134,7 +1134,8 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> set(
             @NonNull GlideString key, @NonNull GlideString value, @NonNull SetOptions options) {
-        GlideString[] arguments = new ArgsBuilder().add(key).add(value).add(options.toArgs()).toArray();
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add(value).add(options.toArgsBinary()).toArray();
         return commandManager.submitNewCommand(Set, arguments, this::handleStringOrNullResponse);
     }
 
