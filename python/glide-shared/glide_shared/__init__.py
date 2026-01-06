@@ -175,6 +175,7 @@ from .routes import (
     SlotKeyRoute,
     SlotType,
 )
+from .cache import ClientSideCache, EvictionPolicy
 
 __all__ = [
     # Client
@@ -340,4 +341,7 @@ __all__ = [
     "OpenTelemetryConfig",
     "OpenTelemetryMetricsConfig",
     "OpenTelemetryTracesConfig",
+    # Cache
+    "ClientSideCache",
+    "EvictionPolicy",
 ]

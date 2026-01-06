@@ -43,7 +43,7 @@ mod standalone_client_tests {
     fn test_detect_disconnect_and_reconnect_using_heartbeat(#[values(false, true)] use_tls: bool) {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         block_on_all(async move {
-            let mut test_basics = setup_test_basics(use_tls).await;
+            let mut test_basics = setup_test_basics_tls(use_tls).await;
             let server = test_basics.server.expect("Server shouldn't be None");
             let address = server.get_client_addr();
             drop(server);
