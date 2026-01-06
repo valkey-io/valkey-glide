@@ -118,6 +118,7 @@ Valkey GLIDE has a growing ecosystem of integrations and extensions that enhance
 - **[aiocache](https://pypi.org/project/aiocache/)** - Python async caching framework with Valkey GLIDE backend support for high-performance distributed caching
 - **[aws-lambda-powertools-typescript](https://github.com/aws-powertools/powertools-lambda-typescript)** - AWS Lambda Powertools for TypeScript with Valkey GLIDE integration in the idempotency feature (more integrations planned)
 - **[aws-lambda-powertools-python](https://github.com/aws-powertools/powertools-lambda-python)** - AWS Lambda Powertools for Python with Valkey GLIDE support in the idempotency feature (more integrations planned)
+- **[redlock-universal](https://www.npmjs.com/package/redlock-universal)** - Distributed lock library for Node.js with native GLIDE adapter, featuring auto-extension and atomic batch acquisition
 
 ## Getting Help
 
