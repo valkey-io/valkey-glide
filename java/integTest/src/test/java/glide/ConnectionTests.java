@@ -699,4 +699,77 @@ public class ConnectionTests {
                         .build();
         assertFalse(config.isRefreshTopologyFromInitialNodes());
     }
+
+    @Test
+    public void test_tcp_nodelay_default_value() {
+        // Verify default is null (not set)
+        var standaloneConfig = AdvancedGlideClientConfiguration.builder().build();
+        assertEquals(null, standaloneConfig.getTcpNoDelay());
+
+        var clusterConfig = AdvancedGlideClusterClientConfiguration.builder().build();
+        assertEquals(null, clusterConfig.getTcpNoDelay());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @SneakyThrows
+    public void test_tcp_nodelay_configuration(boolean clusterMode) {
+        // Test default (null - not set)
+        BaseClient defaultClient =
+                clusterMode
+                        ? GlideClusterClient.createClient(commonClusterClientConfig().build()).get()
+                        : GlideClient.createClient(commonClientConfig().build()).get();
+        if (clusterMode) {
+            assertEquals("PONG", ((GlideClusterClient) defaultClient).ping().get());
+        } else {
+            assertEquals("PONG", ((GlideClient) defaultClient).ping().get());
+        }
+        assertEquals("OK", defaultClient.set("key", "value").get());
+        assertEquals("value", defaultClient.get("key").get());
+        defaultClient.close();
+
+        // Test explicit true
+        BaseClient clientTrue;
+        if (clusterMode) {
+            var advancedConfig =
+                    AdvancedGlideClusterClientConfiguration.builder().tcpNoDelay(true).build();
+            clientTrue =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig().advancedConfiguration(advancedConfig).build())
+                            .get();
+            assertEquals("PONG", ((GlideClusterClient) clientTrue).ping().get());
+        } else {
+            var advancedConfig = AdvancedGlideClientConfiguration.builder().tcpNoDelay(true).build();
+            clientTrue =
+                    GlideClient.createClient(
+                                    commonClientConfig().advancedConfiguration(advancedConfig).build())
+                            .get();
+            assertEquals("PONG", ((GlideClient) clientTrue).ping().get());
+        }
+        assertEquals("OK", clientTrue.set("key2", "value2").get());
+        assertEquals("value2", clientTrue.get("key2").get());
+        clientTrue.close();
+
+        // Test explicit false
+        BaseClient clientFalse;
+        if (clusterMode) {
+            var advancedConfig =
+                    AdvancedGlideClusterClientConfiguration.builder().tcpNoDelay(false).build();
+            clientFalse =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig().advancedConfiguration(advancedConfig).build())
+                            .get();
+            assertEquals("PONG", ((GlideClusterClient) clientFalse).ping().get());
+        } else {
+            var advancedConfig = AdvancedGlideClientConfiguration.builder().tcpNoDelay(false).build();
+            clientFalse =
+                    GlideClient.createClient(
+                                    commonClientConfig().advancedConfiguration(advancedConfig).build())
+                            .get();
+            assertEquals("PONG", ((GlideClient) clientFalse).ping().get());
+        }
+        assertEquals("OK", clientFalse.set("key3", "value3").get());
+        assertEquals("value3", clientFalse.get("key3").get());
+        clientFalse.close();
+    }
 }
