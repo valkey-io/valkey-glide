@@ -90,6 +90,7 @@ message ConnectionRequest {
     bool refresh_topology_from_initial_nodes = 18;
     string lib_name = 19;
     repeated bytes root_certs = 20;
+    optional bool tcp_nodelay = 21;
 }
 
 message ConnectionRetryStrategy {

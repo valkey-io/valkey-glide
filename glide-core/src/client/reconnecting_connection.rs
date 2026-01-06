@@ -123,6 +123,7 @@ async fn create_connection(
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     discover_az: bool,
     connection_timeout: Duration,
+    tcp_nodelay: bool,
 ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
     let client = {
         let guard = connection_backend
@@ -140,6 +141,7 @@ async fn create_connection(
         discover_az,
         connection_timeout: Some(connection_timeout),
         connection_retry_strategy: Some(retry_strategy),
+        tcp_nodelay,
     };
 
     let action = || async {
@@ -224,6 +226,7 @@ impl ReconnectingConnection {
         discover_az: bool,
         connection_timeout: Duration,
         tls_params: Option<redis::TlsConnParams>,
+        tcp_nodelay: bool,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
@@ -242,6 +245,7 @@ impl ReconnectingConnection {
             push_sender,
             discover_az,
             connection_timeout,
+            tcp_nodelay,
         )
         .await
     }

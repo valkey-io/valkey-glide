@@ -30,6 +30,7 @@ pub struct ConnectionRequest {
     pub lazy_connect: bool,
     pub refresh_topology_from_initial_nodes: bool,
     pub root_certs: Vec<Vec<u8>>,
+    pub tcp_nodelay: bool,
 }
 
 /// Authentication information for connecting to Redis/Valkey servers
@@ -283,6 +284,8 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             .map(|cert| cert.to_vec())
             .collect();
 
+        let tcp_nodelay = value.tcp_nodelay.unwrap_or(true);
+
         ConnectionRequest {
             read_from,
             client_name,
@@ -302,6 +305,110 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             lazy_connect,
             refresh_topology_from_initial_nodes,
             root_certs,
+            tcp_nodelay,
+        }
+    }
+}
+#[cfg(test)]
+mod tests {
+    #[cfg(feature = "proto")]
+    mod protobuf_conversion_tests {
+        use crate::ConnectionRequest;
+        use crate::compression::CompressionBackendType;
+        use crate::connection_request as protobuf;
+        use ::protobuf::EnumOrUnknown;
+
+        #[test]
+        fn test_compression_config_conversion_none() {
+            let mut proto_request = protobuf::ConnectionRequest::new();
+            proto_request.addresses.push(protobuf::NodeAddress {
+                host: "localhost".into(),
+                port: 6379,
+                ..Default::default()
+            });
+            // compression_config is not set (None)
+
+            let request: ConnectionRequest = proto_request.into();
+            assert!(request.compression_config.is_none());
+        }
+
+        #[test]
+        fn test_compression_config_conversion_zstd() {
+            let mut proto_request = protobuf::ConnectionRequest::new();
+            proto_request.addresses.push(protobuf::NodeAddress {
+                host: "localhost".into(),
+                port: 6379,
+                ..Default::default()
+            });
+
+            let mut compression_config = protobuf::CompressionConfig::new();
+            compression_config.enabled = true;
+            compression_config.backend = protobuf::CompressionBackend::ZSTD.into();
+            compression_config.compression_level = Some(5);
+            compression_config.min_compression_size = 128;
+
+            proto_request.compression_config = ::protobuf::MessageField::some(compression_config);
+
+            let request: ConnectionRequest = proto_request.into();
+            assert!(request.compression_config.is_some());
+
+            let config = request.compression_config.unwrap();
+            assert!(config.enabled);
+            assert_eq!(config.backend, CompressionBackendType::Zstd);
+            assert_eq!(config.compression_level, Some(5));
+            assert_eq!(config.min_compression_size, 128);
+        }
+
+        #[test]
+        fn test_compression_config_conversion_lz4() {
+            let mut proto_request = protobuf::ConnectionRequest::new();
+            proto_request.addresses.push(protobuf::NodeAddress {
+                host: "localhost".into(),
+                port: 6379,
+                ..Default::default()
+            });
+
+            let mut compression_config = protobuf::CompressionConfig::new();
+            compression_config.enabled = false;
+            compression_config.backend = protobuf::CompressionBackend::LZ4.into();
+            compression_config.compression_level = None;
+            compression_config.min_compression_size = 64;
+
+            proto_request.compression_config = ::protobuf::MessageField::some(compression_config);
+
+            let request: ConnectionRequest = proto_request.into();
+            assert!(request.compression_config.is_some());
+
+            let config = request.compression_config.unwrap();
+            assert!(!config.enabled);
+            assert_eq!(config.backend, CompressionBackendType::Lz4);
+            assert_eq!(config.compression_level, None);
+            assert_eq!(config.min_compression_size, 64);
+        }
+
+        #[test]
+        fn test_compression_config_conversion_unknown_backend() {
+            let mut proto_request = protobuf::ConnectionRequest::new();
+            proto_request.addresses.push(protobuf::NodeAddress {
+                host: "localhost".into(),
+                port: 6379,
+                ..Default::default()
+            });
+
+            let mut compression_config = protobuf::CompressionConfig::new();
+            compression_config.enabled = true;
+            // Set an invalid backend value that will cause enum_value() to fail
+            compression_config.backend = EnumOrUnknown::from_i32(999);
+            compression_config.min_compression_size = 64;
+
+            proto_request.compression_config = ::protobuf::MessageField::some(compression_config);
+
+            let request: ConnectionRequest = proto_request.into();
+            assert!(request.compression_config.is_some());
+
+            let config = request.compression_config.unwrap();
+            // Should fall back to Zstd for unknown backends
+            assert_eq!(config.backend, CompressionBackendType::Zstd);
         }
     }
 }
