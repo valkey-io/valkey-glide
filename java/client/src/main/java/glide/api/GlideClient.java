@@ -10,6 +10,8 @@ import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
 import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
 import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
+import static command_request.CommandRequestOuterClass.RequestType.EvalReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.EvalShaReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
 import static command_request.CommandRequestOuterClass.RequestType.FlushDB;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionDelete;
@@ -26,6 +28,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptDebug;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
@@ -47,6 +50,7 @@ import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.ScriptDebugMode;
 import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ScanOptions;
@@ -451,6 +455,68 @@ public class GlideClient extends BaseClient
     public CompletableFuture<Object> fcallReadOnly(@NonNull GlideString function) {
         return fcallReadOnly(
                 function, BaseClient.EMPTY_GLIDE_STRING_ARRAY, BaseClient.EMPTY_GLIDE_STRING_ARRAY);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalReadOnly(@NonNull String script) {
+        return evalReadOnly(script, new String[0], new String[0]);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalReadOnly(
+            @NonNull String script, @NonNull String[] keys, @NonNull String[] args) {
+        String[] arguments = concatenateArrays(new String[] {script, String.valueOf(keys.length)}, keys, args);
+        return commandManager.submitNewCommand(
+                EvalReadOnly, arguments, this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalReadOnly(@NonNull GlideString script) {
+        return evalReadOnly(script, EMPTY_GLIDE_STRING_ARRAY, EMPTY_GLIDE_STRING_ARRAY);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalReadOnly(
+            @NonNull GlideString script, @NonNull GlideString[] keys, @NonNull GlideString[] args) {
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {script, gs(String.valueOf(keys.length))}, keys, args);
+        return commandManager.submitNewCommand(
+                EvalReadOnly, arguments, this::handleBinaryObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalshaReadOnly(@NonNull String sha1) {
+        return evalshaReadOnly(sha1, new String[0], new String[0]);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalshaReadOnly(
+            @NonNull String sha1, @NonNull String[] keys, @NonNull String[] args) {
+        String[] arguments = concatenateArrays(new String[] {sha1, String.valueOf(keys.length)}, keys, args);
+        return commandManager.submitNewCommand(
+                EvalShaReadOnly, arguments, this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalshaReadOnly(@NonNull GlideString sha1) {
+        return evalshaReadOnly(sha1, EMPTY_GLIDE_STRING_ARRAY, EMPTY_GLIDE_STRING_ARRAY);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalshaReadOnly(
+            @NonNull GlideString sha1, @NonNull GlideString[] keys, @NonNull GlideString[] args) {
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {sha1, gs(String.valueOf(keys.length))}, keys, args);
+        return commandManager.submitNewCommand(
+                EvalShaReadOnly, arguments, this::handleBinaryObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> scriptDebug(@NonNull ScriptDebugMode mode) {
+        return commandManager.submitNewCommand(
+                ScriptDebug, new String[] {mode.getValkeyApi()}, this::handleStringResponse);
     }
 
     @Override
