@@ -3,6 +3,10 @@
 mod types;
 
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
+use crate::compression::CompressionBackendType;
+use crate::compression::lz4_backend::Lz4Backend;
+use crate::compression::zstd_backend::ZstdBackend;
+use crate::compression::{CompressionConfig, CompressionManager};
 use crate::scripts_container::get_script;
 use futures::FutureExt;
 use logger_core::{log_debug, log_error, log_info, log_warn};
@@ -31,6 +35,7 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
+use crate::request_type::RequestType;
 use redis::InfoDict;
 use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock, mpsc, oneshot};
@@ -61,6 +66,20 @@ pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 /// A 3-second interval provides a reasonable balance between connection validation
 /// and performance overhead.
 pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
+
+/// Extract RequestType from a Redis command for decompression processing
+/// SIMPLIFIED VERSION: Only supports basic GET commands for decompression.
+fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
+    // Get the command name (first argument)
+    let command_name = cmd.command()?;
+    let command_str = String::from_utf8_lossy(&command_name).to_uppercase();
+
+    // Map command names to RequestType - only basic GET supported for decompression
+    match command_str.as_str() {
+        "GET" => Some(RequestType::Get),
+        _ => None, // Unknown command, no compression/decompression needed
+    }
+}
 
 /// A static Glide runtime instance
 static RUNTIME: OnceCell<GlideRt> = OnceCell::new();
@@ -240,6 +259,8 @@ pub struct Client {
     inflight_requests_allowed: Arc<AtomicIsize>,
     // IAM token manager for automatic credential refresh
     iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
+    // Optional compression manager for automatic compression/decompression
+    compression_manager: Option<Arc<CompressionManager>>,
 }
 
 async fn run_with_timeout<T>(
@@ -562,6 +583,13 @@ impl Client {
                 Err(err) => return Err(err),
             };
 
+            // Clone compression_manager reference before moving into async block
+            let compression_manager = self.compression_manager.clone();
+
+            // Check if we need to intercept commands before sending
+            let is_client_setname = self.is_client_set_name_command(cmd);
+            let is_select = self.is_select_command(cmd);
+
             let result = run_with_timeout(request_timeout, async move {
                 match client {
                     ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
@@ -595,19 +623,45 @@ impl Client {
                     },
                     ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
                 }
-                .and_then(|value| convert_to_expected_type(value, expected_type))
+                .and_then(|value| {
+                    // Apply decompression if compression manager is available
+                    let processed_value = if let Some(ref compression_manager) = compression_manager {
+                        // Extract request type from command for decompression
+                        if let Some(request_type) = extract_request_type_from_cmd(cmd) {
+                            match crate::compression::process_response_for_decompression(
+                                value.clone(),
+                                request_type,
+                                Some(compression_manager.as_ref())
+                            ) {
+                                Ok(decompressed_value) => decompressed_value,
+                                Err(e) => {
+                                    log_warn(
+                                        "send_command_decompression",
+                                        format!("Failed to decompress response: {}", e),
+                                    );
+                                    value // Return original value on decompression failure
+                                }
+                            }
+                        } else {
+                            value // No request type found, return original value
+                        }
+                    } else {
+                        value // No compression manager, return original value
+                    };
+                    convert_to_expected_type(processed_value, expected_type)
+                })
             })
             .await?;
 
             // Intercept CLIENT SETNAME commands after regular processing
             // Only handle CLIENT SETNAME commands if they executed successfully (no error)
-            if self.is_client_set_name_command(cmd) {
+            if is_client_setname {
                 self.handle_client_set_name_command(cmd).await?;
             }
 
             // Intercept SELECT commands after regular processing
             // Only handle SELECT commands if they executed successfully (no error)
-            if self.is_select_command(cmd) {
+            if is_select {
                 self.handle_select_command(cmd).await?;
             }
 
@@ -1162,26 +1216,53 @@ async fn create_cluster_client(
     let tls_mode = request.tls_mode.unwrap_or_default();
 
     let valkey_connection_info = get_valkey_connection_info(&request, iam_token_manager).await;
-    let (tls_params, tls_certificates) = if !request.root_certs.is_empty() {
+
+    let has_root_certs = !request.root_certs.is_empty();
+    let has_client_cert = !request.client_cert.is_empty();
+    let has_client_key = !request.client_key.is_empty();
+    if has_client_cert != has_client_key {
+        return Err(RedisError::from((
+            ErrorKind::InvalidClientConfig,
+            "client_cert and client_key must both be provided or both be empty",
+        )));
+    }
+
+    let (tls_params, tls_certificates) = if has_root_certs || has_client_cert || has_client_key {
         if tls_mode == TlsMode::NoTls {
             return Err(RedisError::from((
                 ErrorKind::InvalidClientConfig,
-                "Custom root certificates provided but TLS is disabled",
+                "TLS certificates provided but TLS is disabled",
             )));
         }
-        let mut combined_certs = Vec::new();
-        for cert in &request.root_certs {
-            if cert.is_empty() {
-                return Err(RedisError::from((
-                    ErrorKind::InvalidClientConfig,
-                    "Root certificate cannot be empty byte string",
-                )));
+
+        let root_cert = if has_root_certs {
+            let mut combined_certs = Vec::new();
+            for cert in &request.root_certs {
+                if cert.is_empty() {
+                    return Err(RedisError::from((
+                        ErrorKind::InvalidClientConfig,
+                        "Root certificate cannot be empty byte string",
+                    )));
+                }
+                combined_certs.extend_from_slice(cert);
             }
-            combined_certs.extend_from_slice(cert);
-        }
+            Some(combined_certs)
+        } else {
+            None
+        };
+
+        let client_tls = if has_client_cert && has_client_key {
+            Some(redis::ClientTlsConfig {
+                client_cert: request.client_cert.clone(),
+                client_key: request.client_key.clone(),
+            })
+        } else {
+            None
+        };
+
         let tls_certs = TlsCertificates {
-            client_tls: None,
-            root_cert: Some(combined_certs),
+            client_tls,
+            root_cert,
         };
         let params = retrieve_tls_certificates(tls_certs.clone())?;
         (Some(params), Some(tls_certs))
@@ -1260,6 +1341,8 @@ async fn create_cluster_client(
     builder =
         builder.refresh_topology_from_initial_nodes(request.refresh_topology_from_initial_nodes);
 
+    builder = builder.tcp_nodelay(request.tcp_nodelay);
+
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
@@ -1320,6 +1403,7 @@ pub enum ConnectionError {
     Cluster(redis::RedisError),
     Timeout,
     IoError(std::io::Error),
+    Configuration(String),
 }
 
 impl std::fmt::Debug for ConnectionError {
@@ -1329,6 +1413,7 @@ impl std::fmt::Debug for ConnectionError {
             Self::Cluster(arg0) => f.debug_tuple("Cluster").field(arg0).finish(),
             Self::IoError(arg0) => f.debug_tuple("IoError").field(arg0).finish(),
             Self::Timeout => write!(f, "Timeout"),
+            Self::Configuration(arg0) => f.debug_tuple("Configuration").field(arg0).finish(),
         }
     }
 }
@@ -1340,6 +1425,7 @@ impl std::fmt::Display for ConnectionError {
             ConnectionError::Cluster(err) => write!(f, "{err}"),
             ConnectionError::IoError(err) => write!(f, "{err}"),
             ConnectionError::Timeout => f.write_str("connection attempt timed out"),
+            ConnectionError::Configuration(msg) => write!(f, "configuration error: {msg}"),
         }
     }
 }
@@ -1453,6 +1539,31 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     )
 }
 
+/// Create a compression manager from the given configuration
+/// Returns None if compression is disabled or not configured
+fn create_compression_manager(
+    compression_config: Option<CompressionConfig>,
+) -> Result<Option<Arc<CompressionManager>>, ConnectionError> {
+    let Some(config) = compression_config else {
+        return Ok(None);
+    };
+
+    if !config.enabled {
+        return Ok(None);
+    }
+
+    let backend: Box<dyn crate::compression::CompressionBackend> = match config.backend {
+        CompressionBackendType::Zstd => Box::new(ZstdBackend::new()),
+        CompressionBackendType::Lz4 => Box::new(Lz4Backend::new()),
+    };
+
+    let manager = CompressionManager::new(backend, config).map_err(|e| {
+        ConnectionError::Configuration(format!("Failed to create compression manager: {}", e))
+    })?;
+
+    Ok(Some(Arc::new(manager)))
+}
+
 impl Client {
     pub async fn new(
         request: ConnectionRequest,
@@ -1472,6 +1583,9 @@ impl Client {
             inflight_requests_limit.try_into().unwrap(),
         ));
 
+        // Create compression manager from configuration
+        let compression_manager = create_compression_manager(request.compression_config.clone())?;
+
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
@@ -1486,6 +1600,7 @@ impl Client {
                 internal_client: internal_client_arc.clone(),
                 request_timeout,
                 inflight_requests_allowed,
+                compression_manager: compression_manager.clone(),
                 iam_token_manager: None,
             };
 
@@ -1543,6 +1658,27 @@ impl Client {
         })
         .await
         .map_err(|_| ConnectionError::Timeout)?
+    }
+
+    /// Get the compression manager if compression is enabled
+    ///
+    /// # Returns
+    /// * `Some(Arc<CompressionManager>)` - If compression is enabled and configured
+    /// * `None` - If compression is disabled or not configured
+    pub fn compression_manager(&self) -> Option<Arc<CompressionManager>> {
+        self.compression_manager.clone()
+    }
+
+    /// Check if compression is enabled for this client
+    ///
+    /// # Returns
+    /// * `true` if compression is enabled and configured
+    /// * `false` if compression is disabled or not configured
+    pub fn is_compression_enabled(&self) -> bool {
+        self.compression_manager
+            .as_ref()
+            .map(|manager| manager.is_enabled())
+            .unwrap_or(false)
     }
 }
 
@@ -1830,6 +1966,7 @@ mod tests {
             request_timeout: Duration::from_millis(250),
             inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
             iam_token_manager: None,
+            compression_manager: None,
         }
     }
 

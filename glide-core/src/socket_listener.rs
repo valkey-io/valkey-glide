@@ -3,6 +3,8 @@
 use super::rotating_buffer::RotatingBuffer;
 use crate::client::Client;
 use crate::client::get_or_init_runtime;
+use crate::compression::process_command_args_for_compression;
+
 use crate::cluster_scan_container::get_cluster_scan_cursor;
 use crate::command_request::{
     Batch, ClusterScan, Command, CommandRequest, Routes, SlotTypes, command, command_request,
@@ -36,6 +38,7 @@ use std::str;
 use std::sync::{Arc, RwLock};
 use telemetrylib::{GlideSpan, GlideSpanStatus};
 use thiserror::Error;
+
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
@@ -322,11 +325,23 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClientUsageError> {
 }
 
 async fn send_command(
-    cmd: Cmd,
+    mut cmd: Cmd,
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
     let child_span = create_child_span(cmd.span().as_ref(), "send_command");
+
+    // Process command arguments for compression if compression is enabled
+    if let Err(compression_error) = process_command_for_compression(&mut cmd, &client) {
+        log_warn(
+            "send_command",
+            format!(
+                "Compression processing failed: {}, continuing with original command",
+                compression_error
+            ),
+        );
+    }
+
     let res = client
         .send_command(&cmd, routing)
         .await
@@ -336,6 +351,109 @@ async fn send_command(
         c.end()
     };
     res
+}
+
+/// Process a command for compression by extracting arguments and applying compression
+/// Process batch response for decompression
+///
+/// This function processes the response from a batch operation (pipeline or transaction)
+/// and decompresses individual response values using magic header detection.
+///
+/// # Arguments
+/// * `response` - The batch response value (typically an array)
+/// * `client` - The client instance containing the compression manager
+///
+/// # Returns
+/// * `Ok(Value)` - The processed response with decompressed values
+/// * `Err(CompressionError)` - If critical decompression errors occur
+fn process_batch_response_for_decompression(
+    response: redis::Value,
+    client: &Client,
+) -> Result<redis::Value, crate::compression::CompressionError> {
+    use redis::Value;
+
+    // Get compression manager from client
+    let compression_manager = client.compression_manager();
+    let compression_manager_ref = compression_manager.as_deref();
+
+    // If no compression manager, return response as-is
+    let Some(manager) = compression_manager_ref else {
+        return Ok(response);
+    };
+
+    if !manager.is_enabled() {
+        return Ok(response);
+    }
+
+    // Process based on response type
+    match response {
+        Value::Array(responses) => {
+            // Process each response using the existing decompression function
+            let mut processed_responses = Vec::with_capacity(responses.len());
+            for response in responses {
+                let processed_response = match crate::compression::decompress_single_value_response(
+                    response.clone(),
+                    manager,
+                ) {
+                    Ok(decompressed) => decompressed,
+                    Err(_) => response, // Return original on error
+                };
+                processed_responses.push(processed_response);
+            }
+
+            Ok(Value::Array(processed_responses))
+        }
+
+        // For non-array responses, try to decompress directly
+        other => crate::compression::decompress_single_value_response(other, manager),
+    }
+}
+
+fn process_command_for_compression(
+    cmd: &mut Cmd,
+    client: &Client,
+) -> Result<(), crate::compression::CompressionError> {
+    // Get the compression manager from the client
+    let compression_manager = client.compression_manager();
+    let compression_manager_ref = compression_manager.as_deref();
+
+    // Collect all arguments first to avoid borrowing issues
+    let all_args: Vec<Vec<u8>> = cmd
+        .args_iter()
+        .filter_map(|arg| {
+            match arg {
+                redis::Arg::Simple(bytes) => Some(bytes.to_vec()),
+                redis::Arg::Cursor => None, // Skip cursor arguments
+            }
+        })
+        .collect();
+
+    if all_args.is_empty() {
+        return Ok(()); // No arguments, nothing to process
+    }
+
+    // Extract command name to determine request type
+    let command_name = &all_args[0];
+    let command_str = String::from_utf8_lossy(command_name).to_uppercase();
+    let request_type = match command_str.as_str() {
+        "SET" => crate::request_type::RequestType::Set,
+        _ => return Ok(()), // Unknown command, no compression needed
+    };
+
+    // Get arguments excluding the command name
+    let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
+
+    // Process arguments for compression
+    process_command_args_for_compression(&mut args, request_type, compression_manager_ref)?;
+
+    // Rebuild the command with potentially compressed arguments
+    *cmd = redis::Cmd::new();
+    cmd.arg(command_name); // Add the command name back
+    for arg in args {
+        cmd.arg(arg);
+    }
+
+    Ok(())
 }
 
 // Parse the cluster scan command parameters from protobuf and send the command to redis-rs.
@@ -425,8 +543,20 @@ async fn send_batch(
     if request.is_atomic {
         pipeline.atomic();
     }
+
     for command in request.commands {
-        pipeline.add_command(get_redis_command(&command)?);
+        let mut redis_cmd = get_redis_command(&command)?;
+
+        // Apply compression to command arguments if needed
+        if let Err(e) = process_command_for_compression(&mut redis_cmd, client) {
+            // Log compression error but continue with uncompressed command
+            log_warn(
+                "batch_command_compression",
+                format!("Failed to compress batch command arguments: {}", e),
+            );
+        }
+
+        pipeline.add_command(redis_cmd);
     }
 
     let res = match request.is_atomic {
@@ -454,10 +584,28 @@ async fn send_batch(
             .map_err(|err| err.into()),
     };
 
+    // Process response for decompression if needed
+    let processed_res = match res {
+        Ok(value) => {
+            match process_batch_response_for_decompression(value.clone(), client) {
+                Ok(processed_value) => Ok(processed_value),
+                Err(e) => {
+                    // Log decompression error but return original response
+                    log_warn(
+                        "batch_response_decompression",
+                        format!("Failed to decompress batch response: {}", e),
+                    );
+                    Ok(value)
+                }
+            }
+        }
+        Err(e) => Err(e),
+    };
+
     if let Some(c) = child_span {
         c.end()
     };
-    res
+    processed_res
 }
 
 fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageResult<SlotAddr> {

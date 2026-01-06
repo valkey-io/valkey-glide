@@ -253,7 +253,7 @@ public class ConnectionManager {
                             requestBuilder.setReadFrom(ReadFrom.PreferReplica);
                         } else if ("AZ_AFFINITY".equals(readFromName)) {
                             requestBuilder.setReadFrom(ReadFrom.AZAffinity);
-                        } else if ("AZ_AFFINITY_PREFER_PRIMARY".equals(readFromName)) {
+                        } else if ("AZ_AFFINITY_REPLICAS_AND_PRIMARY".equals(readFromName)) {
                             requestBuilder.setReadFrom(ReadFrom.AZAffinityReplicasAndPrimary);
                         }
 
@@ -341,6 +341,12 @@ public class ConnectionManager {
                             }
 
                             requestBuilder.setPubsubSubscriptions(subBuilder.build());
+                        }
+
+                        // Set TCP_NODELAY option (only if explicitly configured)
+                        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+                        if (advanced != null && advanced.getTcpNoDelay() != null) {
+                            requestBuilder.setTcpNodelay(advanced.getTcpNoDelay());
                         }
 
                         // Build and serialize to bytes
