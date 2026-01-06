@@ -396,15 +396,60 @@ class TlsAdvancedConfiguration:
                 # Or provide directly
                 cert_data = b"-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----"
                 tls_config = TlsAdvancedConfiguration(root_pem_cacerts=cert_data)
+
+        client_cert_pem (Optional[bytes]): Client certificate data for mutual TLS authentication in PEM format.
+
+            - When provided along with client_key_pem, enables mutual TLS (mTLS) authentication
+              so that the client presents its certificate to the server.
+
+            - This is to be used when the server requires client certificate authentication.
+
+            - If set to an empty bytes object (non-None but length 0), a `ConfigurationError` will be raised.
+
+            - If None (default), no client certificate will be presented.
+
+            - The certificate data should be in PEM format as a bytes object.
+
+            - Must be used together with client_key_pem.
+
+            Example usage::
+
+                # Load from file
+                with open('/path/to/client-cert.pem', 'rb') as f:
+                    client_cert = f.read()
+                with open('/path/to/client-key.pem', 'rb') as f:
+                    client_key = f.read()
+                tls_config = TlsAdvancedConfiguration(
+                    client_cert_pem=client_cert,
+                    client_key_pem=client_key
+                )
+
+        client_key_pem (Optional[bytes]): Client private key data for mutual TLS authentication in PEM format.
+
+            - When provided along with client_cert_pem, enables mutual TLS (mTLS) authentication.
+
+            - This private key corresponds to the certificate provided in client_cert_pem.
+
+            - If set to an empty bytes object (non-None but length 0), a `ConfigurationError` will be raised.
+
+            - If None (default), no client key will be used.
+
+            - The key data should be in PEM format as a bytes object.
+
+            - Must be used together with client_cert_pem.
     """
 
     def __init__(
         self,
         use_insecure_tls: Optional[bool] = None,
         root_pem_cacerts: Optional[bytes] = None,
+        client_cert_pem: Optional[bytes] = None,
+        client_key_pem: Optional[bytes] = None,
     ):
         self.use_insecure_tls = use_insecure_tls
         self.root_pem_cacerts = root_pem_cacerts
+        self.client_cert_pem = client_cert_pem
+        self.client_key_pem = client_key_pem
 
 
 class AdvancedBaseClientConfiguration:
@@ -462,6 +507,22 @@ class AdvancedBaseClientConfiguration:
                         "root_pem_cacerts cannot be an empty bytes object; use None to use platform verifier"
                     )
                 request.root_certs.append(self.tls_config.root_pem_cacerts)
+
+            # Handle client certificate for mutual TLS
+            if self.tls_config.client_cert_pem is not None:
+                if len(self.tls_config.client_cert_pem) == 0:
+                    raise ConfigurationError(
+                        "client_cert_pem cannot be an empty bytes object; use None if not providing client certificate"
+                    )
+                request.client_cert = self.tls_config.client_cert_pem
+
+            # Handle client key for mutual TLS
+            if self.tls_config.client_key_pem is not None:
+                if len(self.tls_config.client_key_pem) == 0:
+                    raise ConfigurationError(
+                        "client_key_pem cannot be an empty bytes object; use None if not providing client key"
+                    )
+                request.client_key = self.tls_config.client_key_pem
 
         return request
 
@@ -1132,5 +1193,103 @@ def load_root_certificates_from_file(path: str) -> bytes:
 
     if len(data) == 0:
         raise ConfigurationError(f"Certificate file is empty: {path}")
+
+    return data
+
+
+def load_client_certificate_from_file(path: str) -> bytes:
+    """
+    Load PEM-encoded client certificate from a file for mTLS authentication.
+
+    This is a convenience function for loading client certificates from disk
+    to be used with TlsAdvancedConfiguration for mutual TLS (mTLS).
+
+    Args:
+        path (str): The file path to the PEM-encoded client certificate file.
+
+    Returns:
+        bytes: The client certificate data in PEM format.
+
+    Raises:
+        FileNotFoundError: If the certificate file does not exist.
+        ConfigurationError: If the certificate file is empty.
+
+    Example usage::
+
+        from glide_shared.config import (
+            load_client_certificate_from_file,
+            load_client_key_from_file,
+            TlsAdvancedConfiguration
+        )
+
+        # Load client certificate and key from files
+        client_cert = load_client_certificate_from_file('/path/to/client-cert.pem')
+        client_key = load_client_key_from_file('/path/to/client-key.pem')
+
+        # Use in TLS configuration
+        tls_config = TlsAdvancedConfiguration(
+            client_cert_pem=client_cert,
+            client_key_pem=client_key
+        )
+    """
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Client certificate file not found: {path}")
+    except Exception as e:
+        raise ConfigurationError(f"Failed to read client certificate file: {e}")
+
+    if len(data) == 0:
+        raise ConfigurationError(f"Client certificate file is empty: {path}")
+
+    return data
+
+
+def load_client_key_from_file(path: str) -> bytes:
+    """
+    Load PEM-encoded client private key from a file for mutual TLS authentication.
+
+    This is a convenience function for loading client private keys from disk
+    to be used with TlsAdvancedConfiguration for mutual TLS (mTLS).
+
+    Args:
+        path (str): The file path to the PEM-encoded client private key file.
+
+    Returns:
+        bytes: The client private key data in PEM format.
+
+    Raises:
+        FileNotFoundError: If the key file does not exist.
+        ConfigurationError: If the key file is empty.
+
+    Example usage::
+
+        from glide_shared.config import (
+            load_client_certificate_from_file,
+            load_client_key_from_file,
+            TlsAdvancedConfiguration
+        )
+
+        # Load client certificate and key from files
+        client_cert = load_client_certificate_from_file('/path/to/client-cert.pem')
+        client_key = load_client_key_from_file('/path/to/client-key.pem')
+
+        # Use in TLS configuration
+        tls_config = TlsAdvancedConfiguration(
+            client_cert_pem=client_cert,
+            client_key_pem=client_key
+        )
+    """
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Client key file not found: {path}")
+    except Exception as e:
+        raise ConfigurationError(f"Failed to read client key file: {e}")
+
+    if len(data) == 0:
+        raise ConfigurationError(f"Client key file is empty: {path}")
 
     return data
