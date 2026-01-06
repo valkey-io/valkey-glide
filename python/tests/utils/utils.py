@@ -1904,14 +1904,16 @@ async def subscribe_by_method(
 ) -> None:
     """
     Subscribe to exact channels using the specified method.
-    For Config method, does nothing (subscriptions already set at creation).
+    This helper is intended for Lazy and Blocking methods only.
+    For Config method, subscriptions are set at client creation time.
     Does NOT wait for subscription to be established - use wait_for_subscription_state_if_needed after.
     """
-
     if subscription_method == SubscriptionMethod.Lazy:
-        await client.subscribe_lazy(channels)
-    else:  # Blocking and Config
-        await client.subscribe(channels, timeout_ms=timeout_ms)
+        result = await client.subscribe_lazy(channels)
+    else:  # Blocking
+        result = await client.subscribe(channels, timeout_ms=timeout_ms)
+
+    assert result is None, f"Expected subscribe to return None, got {result}"
 
 
 async def psubscribe_by_method(
@@ -1922,13 +1924,16 @@ async def psubscribe_by_method(
 ) -> None:
     """
     Subscribe to patterns using the specified method.
-    For Config method, does nothing (subscriptions already set at creation).
+    This helper is intended for Lazy and Blocking methods only.
+    For Config method, subscriptions are set at client creation time.
     Does NOT wait for subscription to be established - use wait_for_subscription_state_if_needed after.
     """
     if subscription_method == SubscriptionMethod.Lazy:
-        await client.psubscribe_lazy(patterns)
-    else:  # Blocking and Config
-        await client.psubscribe(patterns, timeout_ms=timeout_ms)
+        result = await client.psubscribe_lazy(patterns)
+    else:  # Blocking
+        result = await client.psubscribe(patterns, timeout_ms=timeout_ms)
+
+    assert result is None, f"Expected psubscribe to return None, got {result}"
 
 
 async def ssubscribe_by_method(
@@ -1939,13 +1944,16 @@ async def ssubscribe_by_method(
 ) -> None:
     """
     Subscribe to sharded channels using the specified method.
-    For Config method, does nothing (subscriptions already set at creation).
+    This helper is intended for Lazy and Blocking methods only.
+    For Config method, subscriptions are set at client creation time.
     Does NOT wait for subscription to be established - use wait_for_subscription_state_if_needed after.
     """
     if subscription_method == SubscriptionMethod.Lazy:
-        await client.ssubscribe_lazy(channels)
-    else:  # Blocking and Config
-        await client.ssubscribe(channels, timeout_ms=timeout_ms)
+        result = await client.ssubscribe_lazy(channels)
+    else:  # Blocking
+        result = await client.ssubscribe(channels, timeout_ms=timeout_ms)
+
+    assert result is None, f"Expected ssubscribe to return None, got {result}"
 
 
 async def unsubscribe_by_method(
@@ -1956,16 +1964,19 @@ async def unsubscribe_by_method(
 ) -> None:
     """
     Unsubscribe from exact channels using the specified method.
-    For Config method, does nothing (cannot dynamically unsubscribe).
+    This helper is intended for Lazy and Blocking methods only.
+    For Config method, cannot dynamically unsubscribe.
     Does NOT wait for unsubscription to complete - use wait_for_subscription_state_if_needed after.
     """
     if subscription_method == SubscriptionMethod.Config:
         return
 
     if subscription_method == SubscriptionMethod.Lazy:
-        await client.unsubscribe_lazy(channels)
+        result = await client.unsubscribe_lazy(channels)
     else:  # Blocking
-        await client.unsubscribe(channels, timeout_ms=timeout_ms)
+        result = await client.unsubscribe(channels, timeout_ms=timeout_ms)
+
+    assert result is None, f"Expected unsubscribe to return None, got {result}"
 
 
 async def punsubscribe_by_method(
@@ -1976,16 +1987,19 @@ async def punsubscribe_by_method(
 ) -> None:
     """
     Unsubscribe from patterns using the specified method.
-    For Config method, does nothing (cannot dynamically unsubscribe).
+    This helper is intended for Lazy and Blocking methods only.
+    For Config method, cannot dynamically unsubscribe.
     Does NOT wait for unsubscription to complete - use wait_for_subscription_state_if_needed after.
     """
     if subscription_method == SubscriptionMethod.Config:
         return
 
     if subscription_method == SubscriptionMethod.Lazy:
-        await client.punsubscribe_lazy(patterns)
+        result = await client.punsubscribe_lazy(patterns)
     else:  # Blocking
-        await client.punsubscribe(patterns, timeout_ms=timeout_ms)
+        result = await client.punsubscribe(patterns, timeout_ms=timeout_ms)
+
+    assert result is None, f"Expected punsubscribe to return None, got {result}"
 
 
 async def sunsubscribe_by_method(
@@ -1996,16 +2010,19 @@ async def sunsubscribe_by_method(
 ) -> None:
     """
     Unsubscribe from sharded channels using the specified method.
-    For Config method, does nothing (cannot dynamically unsubscribe).
+    This helper is intended for Lazy and Blocking methods only.
+    For Config method, cannot dynamically unsubscribe.
     Does NOT wait for unsubscription to complete - use wait_for_subscription_state_if_needed after.
     """
     if subscription_method == SubscriptionMethod.Config:
         return
 
     if subscription_method == SubscriptionMethod.Lazy:
-        await client.sunsubscribe_lazy(channels)
+        result = await client.sunsubscribe_lazy(channels)
     else:  # Blocking
-        await client.sunsubscribe(channels, timeout_ms=timeout_ms)
+        result = await client.sunsubscribe(channels, timeout_ms=timeout_ms)
+
+    assert result is None, f"Expected sunsubscribe to return None, got {result}"
 
 
 async def wait_for_subscription_state(

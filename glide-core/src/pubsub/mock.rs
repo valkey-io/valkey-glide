@@ -884,7 +884,7 @@ impl MockPubSubBroker {
             sync.add_desired_subscriptions(channels.into_iter().collect(), sub_type);
         }
 
-        Ok(Value::Okay)
+        Ok(Value::Nil)
     }
 
     fn handle_lazy_unsubscribe(
@@ -904,7 +904,7 @@ impl MockPubSubBroker {
             sync.remove_desired_subscriptions(channels, sub_type);
         }
 
-        Ok(Value::Okay)
+        Ok(Value::Nil)
     }
 
     async fn handle_blocking_subscribe(
@@ -938,7 +938,7 @@ impl MockPubSubBroker {
                     .unwrap_or_default();
 
                 if channels_bytes.iter().all(|ch| actual_set.contains(ch)) {
-                    return Ok(Value::Okay);
+                    return Ok(Value::Nil);
                 }
 
                 let elapsed_ms = start.elapsed().as_millis() as u64;
@@ -965,7 +965,7 @@ impl MockPubSubBroker {
             }
         }
 
-        Ok(Value::Okay)
+        Ok(Value::Nil)
     }
 
     async fn handle_blocking_unsubscribe(
@@ -1005,7 +1005,7 @@ impl MockPubSubBroker {
                 };
 
                 if is_removed {
-                    return Ok(Value::Okay);
+                    return Ok(Value::Nil);
                 }
 
                 let elapsed_ms = start.elapsed().as_millis() as u64;
@@ -1032,7 +1032,7 @@ impl MockPubSubBroker {
             }
         }
 
-        Ok(Value::Okay)
+        Ok(Value::Nil)
     }
 
     async fn handle_publish(&self, cmd: &Cmd, is_sharded: bool) -> RedisResult<Value> {

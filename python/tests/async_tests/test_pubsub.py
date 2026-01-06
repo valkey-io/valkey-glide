@@ -4354,6 +4354,125 @@ class TestPubSub:
             await pubsub_client_cleanup(listening_client)
             await pubsub_client_cleanup(publishing_client)
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "message_read_method",
+        [MessageReadMethod.Async, MessageReadMethod.Sync, MessageReadMethod.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    async def test_pubsub_exact_happy_path_custom_command(
+        self,
+        request,
+        cluster_mode: bool,
+        message_read_method: MessageReadMethod,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Tests the basic happy path for exact PUBSUB functionality using custom commands.
+
+        This test mirrors test_pubsub_exact_happy_path but uses custom_command to send
+        SUBSCRIBE (lazy) or SUBSCRIBE_BLOCKING (blocking) commands directly.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            channel = "test_exact_channel_custom"
+            message = "test_exact_message_custom"
+
+            callback, context = None, None
+            callback_messages: List[PubSubMsg] = []
+            if message_read_method == MessageReadMethod.Callback:
+                callback = new_message
+                context = callback_messages
+
+            # Create client with callback only (no config-based subscriptions)
+            listening_client = await create_pubsub_client(
+                request,
+                cluster_mode,
+                callback=callback,
+                context=context,
+            )
+
+            publishing_client = await create_client(request, cluster_mode)
+
+            # Subscribe using custom_command
+            if subscription_method == SubscriptionMethod.Lazy:
+                # SUBSCRIBE is the lazy (non-blocking) command
+                cmd: List[Union[str, bytes]] = ["SUBSCRIBE", channel]
+            else:  # Blocking
+                # SUBSCRIBE_BLOCKING takes channels followed by timeout_ms
+                timeout_ms = 500
+                cmd = ["SUBSCRIBE_BLOCKING", channel, str(timeout_ms)]
+
+            if cluster_mode:
+                result = await cast(
+                    GlideClusterClient, listening_client
+                ).custom_command(cmd)
+            else:
+                result = await listening_client.custom_command(cmd)
+
+            assert result is None
+
+            # Verify subscription is established
+            await wait_for_subscription_state_if_needed(
+                listening_client,
+                subscription_method,
+                expected_channels={channel},
+            )
+
+            result = await publishing_client.publish(message, channel)
+            if cluster_mode:
+                assert result == 1
+
+            # Allow the message to propagate
+            await anyio.sleep(1)
+
+            pubsub_msg = await get_message_by_method(
+                message_read_method, listening_client, callback_messages, 0
+            )
+
+            assert pubsub_msg.message == message
+            assert pubsub_msg.channel == channel
+            assert pubsub_msg.pattern is None
+
+            await check_no_messages_left(
+                message_read_method, listening_client, callback_messages, 1
+            )
+
+            # Unsubscribe using custom_command
+            if subscription_method == SubscriptionMethod.Lazy:
+                # UNSUBSCRIBE is the lazy (non-blocking) command
+                unsub_cmd: List[Union[str, bytes]] = ["UNSUBSCRIBE", channel]
+            else:  # Blocking
+                # UNSUBSCRIBE_BLOCKING takes channels followed by timeout_ms
+                timeout_ms = 5000
+                unsub_cmd = ["UNSUBSCRIBE_BLOCKING", channel, str(timeout_ms)]
+
+            if cluster_mode:
+                result = await cast(
+                    GlideClusterClient, listening_client
+                ).custom_command(unsub_cmd)
+            else:
+                result = await listening_client.custom_command(unsub_cmd)
+
+            assert result is None
+
+            # Verify unsubscription
+            await wait_for_subscription_state_if_needed(
+                listening_client,
+                subscription_method,
+                expected_channels=set(),
+            )
+
+        finally:
+            await pubsub_client_cleanup(listening_client)
+            await pubsub_client_cleanup(publishing_client)
+
     @pytest.mark.skip_if_mock_pubsub
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(

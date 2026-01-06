@@ -601,7 +601,7 @@ impl GlidePubSubSynchronizer {
             self.remove_desired_subscriptions(channels_set, kind);
         }
 
-        Ok(Value::Okay)
+        Ok(Value::Nil)
     }
 
     /// Handle blocking subscription change (subscribe or unsubscribe)
@@ -637,7 +637,7 @@ impl GlidePubSubSynchronizer {
                 .await?;
         }
 
-        Ok(Value::Okay)
+        Ok(Value::Nil)
     }
 
     /// Convert subscription state to Value for GET_SUBSCRIPTIONS response
