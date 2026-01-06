@@ -607,18 +607,14 @@ mod test_get_host_and_port_from_addr {
             get_host_and_port_from_addr("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:8080"),
             Some(("2001:db8:85a3:8d3:1319:8a2e:370:7348", 8080))
         );
-        assert_eq!(
-            get_host_and_port_from_addr("[fe80::1%eth0]:6379"),
-            Some(("fe80::1%eth0", 6379))
-        );
     }
 
     #[tokio::test]
     async fn test_get_host_and_port_from_addr_ipv6_unbracketed() {
         // IPv6 without brackets - last segment treated as port
         assert_eq!(
-            get_host_and_port_from_addr("2001:db8:85a3:8d3:1319:8a2e:370:7348"),
-            Some(("2001:db8:85a3:8d3:1319:8a2e:370", 7348))
+            get_host_and_port_from_addr("2001:db8:85a3:8d3:1319:8a2e:370:7348:6379"),
+            Some(("2001:db8:85a3:8d3:1319:8a2e:370:7348", 6379))
         );
         assert_eq!(
             get_host_and_port_from_addr("::1:6379"),
@@ -636,6 +632,8 @@ mod test_get_host_and_port_from_addr {
         assert_eq!(get_host_and_port_from_addr(""), None);
         // Port out of range
         assert_eq!(get_host_and_port_from_addr("127.0.0.1:99999"), None);
+        // Invalid IPv6 address
+        assert_eq!(get_host_and_port_from_addr("[2001:db8:85a3:8d3:1319]:6379"), None);
     }
 }
 

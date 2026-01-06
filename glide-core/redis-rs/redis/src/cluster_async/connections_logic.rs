@@ -10,7 +10,7 @@ use crate::{
     cluster_client::ClusterParams,
     ErrorKind, RedisError, RedisResult,
 };
-use std::net::SocketAddr;
+use std::net::{Ipv6Addr, SocketAddr};
 
 use futures::prelude::*;
 use futures_util::{future::BoxFuture, join};
@@ -494,6 +494,8 @@ pub fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
     let host = host
         .strip_prefix('[')
         .and_then(|h| h.strip_suffix(']'))
-        .unwrap_or(host);
+        .map(|inner| inner.parse::<Ipv6Addr>().ok().map(|_| inner))
+        .unwrap_or(Some(host))?;
+
     Some((host, port))
 }
