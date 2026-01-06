@@ -1341,6 +1341,8 @@ async fn create_cluster_client(
     builder =
         builder.refresh_topology_from_initial_nodes(request.refresh_topology_from_initial_nodes);
 
+    builder = builder.tcp_nodelay(request.tcp_nodelay);
+
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
