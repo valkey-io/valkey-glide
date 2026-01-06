@@ -901,6 +901,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
                 );
             }
         }
+        self.trigger_reconciliation();
     }
 
     fn handle_topology_refresh(&self, new_slot_map: &SlotMap) {

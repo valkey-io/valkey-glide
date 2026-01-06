@@ -129,6 +129,11 @@ impl PushManager {
     pub fn get_address(&self) -> Option<String> {
         self.address.clone()
     }
+
+    /// Get the PubSub synchronizer if one is configured
+    pub fn get_synchronizer(&self) -> Option<Arc<dyn PubSubSynchronizer>> {
+        self.pubsub_synchronizer.clone()
+    }
 }
 
 #[cfg(test)]

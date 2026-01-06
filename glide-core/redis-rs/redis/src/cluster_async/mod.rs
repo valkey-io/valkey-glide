@@ -1400,11 +1400,6 @@ where
                 false,
             )
             .await;
-
-            // Trigger reconciliation after connections are refreshed
-            if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
-                sync.trigger_reconciliation();
-            }
         }
     }
 
@@ -1445,10 +1440,6 @@ where
         check_existing_conn: bool,
     ) -> Vec<Arc<Notify>> {
         debug!("Triggering refresh connections tasks to {:?} ", addresses);
-
-        if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
-            sync.remove_current_subscriptions_for_addresses(&addresses);
-        };
 
         let mut notifiers = Vec::<Arc<Notify>>::new();
 

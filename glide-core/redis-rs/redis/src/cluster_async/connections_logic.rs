@@ -396,8 +396,10 @@ where
     let response_timeout = params.response_timeout;
     let info = get_connection_info(node, params)?;
     // management connection does not require notifications or disconnect notifications
+    // or pubsub synchronizer (subscriptions only exist on user connections)
     if is_management {
         glide_connection_options.disconnect_notifier = None;
+        glide_connection_options.pubsub_synchronizer = None;
     }
     C::connect(
         info,

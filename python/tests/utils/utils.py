@@ -1909,9 +1909,9 @@ async def subscribe_by_method(
     Does NOT wait for subscription to be established - use wait_for_subscription_state_if_needed after.
     """
     if subscription_method == SubscriptionMethod.Lazy:
-        result = await client.subscribe_lazy(channels)
+        result = await client.subscribe_lazy(channels)  # type: ignore[func-returns-value]
     else:  # Blocking
-        result = await client.subscribe(channels, timeout_ms=timeout_ms)
+        result = await client.subscribe(channels, timeout_ms=timeout_ms)  # type: ignore[func-returns-value]
 
     assert result is None, f"Expected subscribe to return None, got {result}"
 
@@ -1929,9 +1929,9 @@ async def psubscribe_by_method(
     Does NOT wait for subscription to be established - use wait_for_subscription_state_if_needed after.
     """
     if subscription_method == SubscriptionMethod.Lazy:
-        result = await client.psubscribe_lazy(patterns)
+        result = await client.psubscribe_lazy(patterns)  # type: ignore[func-returns-value]
     else:  # Blocking
-        result = await client.psubscribe(patterns, timeout_ms=timeout_ms)
+        result = await client.psubscribe(patterns, timeout_ms=timeout_ms)  # type: ignore[func-returns-value]
 
     assert result is None, f"Expected psubscribe to return None, got {result}"
 
@@ -1949,9 +1949,9 @@ async def ssubscribe_by_method(
     Does NOT wait for subscription to be established - use wait_for_subscription_state_if_needed after.
     """
     if subscription_method == SubscriptionMethod.Lazy:
-        result = await client.ssubscribe_lazy(channels)
+        result = await client.ssubscribe_lazy(channels)  # type: ignore[func-returns-value]
     else:  # Blocking
-        result = await client.ssubscribe(channels, timeout_ms=timeout_ms)
+        result = await client.ssubscribe(channels, timeout_ms=timeout_ms)  # type: ignore[func-returns-value]
 
     assert result is None, f"Expected ssubscribe to return None, got {result}"
 
@@ -1972,9 +1972,9 @@ async def unsubscribe_by_method(
         return
 
     if subscription_method == SubscriptionMethod.Lazy:
-        result = await client.unsubscribe_lazy(channels)
+        result = await client.unsubscribe_lazy(channels)  # type: ignore[func-returns-value]
     else:  # Blocking
-        result = await client.unsubscribe(channels, timeout_ms=timeout_ms)
+        result = await client.unsubscribe(channels, timeout_ms=timeout_ms)  # type: ignore[func-returns-value]
 
     assert result is None, f"Expected unsubscribe to return None, got {result}"
 
@@ -1995,9 +1995,9 @@ async def punsubscribe_by_method(
         return
 
     if subscription_method == SubscriptionMethod.Lazy:
-        result = await client.punsubscribe_lazy(patterns)
+        result = await client.punsubscribe_lazy(patterns)  # type: ignore[func-returns-value]
     else:  # Blocking
-        result = await client.punsubscribe(patterns, timeout_ms=timeout_ms)
+        result = await client.punsubscribe(patterns, timeout_ms=timeout_ms)  # type: ignore[func-returns-value]
 
     assert result is None, f"Expected punsubscribe to return None, got {result}"
 
@@ -2018,9 +2018,9 @@ async def sunsubscribe_by_method(
         return
 
     if subscription_method == SubscriptionMethod.Lazy:
-        result = await client.sunsubscribe_lazy(channels)
+        result = await client.sunsubscribe_lazy(channels)  # type: ignore[func-returns-value]
     else:  # Blocking
-        result = await client.sunsubscribe(channels, timeout_ms=timeout_ms)
+        result = await client.sunsubscribe(channels, timeout_ms=timeout_ms)  # type: ignore[func-returns-value]
 
     assert result is None, f"Expected sunsubscribe to return None, got {result}"
 

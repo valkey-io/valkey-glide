@@ -113,6 +113,21 @@ pin_project! {
         is_stream_closed: Arc<AtomicBool>,
         response_sync_lost: bool,
     }
+
+        impl<T> PinnedDrop for PipelineSink<T> {
+        fn drop(this: Pin<&mut Self>) {
+            let this = this.project();
+            let push_manager = this.push_manager.load();
+            let address = push_manager.get_address();
+
+            if let Some(address) = address {
+                if let Some(sync) = push_manager.get_synchronizer() {
+                    let addresses = std::collections::HashSet::from([address.clone()]);
+                    sync.remove_current_subscriptions_for_addresses(&addresses);
+                }
+            }
+        }
+    }
 }
 
 impl<T> PipelineSink<T>
