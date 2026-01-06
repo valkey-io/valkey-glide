@@ -5407,9 +5407,9 @@ public class SharedCommandTests {
         assertEquals("OK", client.scriptDebug(ScriptDebugMode.NO).get());
 
         // Verify we can still execute scripts after changing debug mode
-        // Use regular eval instead of evalReadOnly for Redis 6.2 compatibility
-        String simpleScript = "return 'Debug test'";
-        assertEquals("Debug test", client.eval(simpleScript).get());
+        // Use invokeScript
+        Script script = new Script("return 'Debug test'", false);
+        assertEquals("Debug test", client.invokeScript(script).get());
     }
 
     @SneakyThrows
