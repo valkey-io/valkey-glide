@@ -8,9 +8,9 @@ use futures_util::{
 use std::pin::Pin;
 use std::{borrow::Borrow, fmt, io};
 
-use crate::connection::ConnectionLike;
 use crate::pipeline::Pipeline;
 use crate::types::{from_owned_redis_value, FromRedisValue, RedisResult, RedisWrite, ToRedisArgs};
+use crate::{cache::glide_cache::CachedKeyType, connection::ConnectionLike};
 use telemetrylib::GlideSpan;
 
 /// An argument to a redis command
@@ -220,6 +220,17 @@ where
 pub(crate) fn cmd_len(cmd: &impl Borrow<Cmd>) -> usize {
     let cmd_ref: &Cmd = cmd.borrow();
     args_len(cmd_ref.args_iter(), cmd_ref.cursor.unwrap_or(0))
+}
+
+/// Returns the key type if the command is a cacheable full-key-retrieval command.
+/// Returns None if the command is not cacheable.
+pub fn cacheable_cmd_type(cmd: &[u8]) -> Option<CachedKeyType> {
+    match cmd.to_ascii_uppercase().as_slice() {
+        b"GET" => Some(CachedKeyType::String),
+        b"HGETALL" => Some(CachedKeyType::Hash),
+        b"SMEMBERS" => Some(CachedKeyType::Set),
+        _ => None,
+    }
 }
 
 fn encode_command<'a, I>(args: I, cursor: u64) -> Vec<u8>

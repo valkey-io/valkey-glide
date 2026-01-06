@@ -1,6 +1,7 @@
 use super::{ConnectionLike, Runtime};
 use crate::aio::setup_connection;
 use crate::aio::DisconnectNotifier;
+use crate::cache::glide_cache::GlideCache;
 use crate::client::GlideConnectionOptions;
 use crate::cmd::Cmd;
 #[cfg(feature = "tokio-comp")]
@@ -436,6 +437,7 @@ pub struct MultiplexedConnection {
     push_manager: PushManager,
     availability_zone: Option<String>,
     password: Option<String>,
+    cache: Option<Arc<dyn GlideCache>>,
 }
 
 impl Debug for MultiplexedConnection {
@@ -498,6 +500,7 @@ impl MultiplexedConnection {
             .with_protocol(connection_info.redis.protocol)
             .with_password(connection_info.redis.password.clone())
             .with_availability_zone(None)
+            .with_cache(connection_info.redis.cache.clone())
             .build()
             .await?;
 
@@ -535,6 +538,12 @@ impl MultiplexedConnection {
     /// Sends an already encoded (packed) command into the TCP socket and
     /// reads the single response from it.
     pub async fn send_packed_command(&mut self, cmd: &Cmd) -> RedisResult<Value> {
+        // First try to get from cache
+        if let Some(cache) = &self.cache {
+            if let Some(value) = cache.get_cached_cmd(cmd) {
+                return Ok(value);
+            }
+        }
         let result = self
             .pipeline
             .send_single(cmd.get_packed_command(), self.response_timeout)
@@ -547,6 +556,15 @@ impl MultiplexedConnection {
                         kind: PushKind::Disconnection,
                         data: vec![],
                     });
+                }
+            }
+        }
+
+        // Store in cache if applicable
+        if let Some(cache) = &self.cache {
+            if let Ok(value) = &result {
+                if *value != Value::Nil {
+                    cache.set_cached_cmd(cmd, value.clone());
                 }
             }
         }
@@ -630,6 +648,8 @@ pub struct MultiplexedConnectionBuilder {
     password: Option<String>,
     /// Represents the node's availability zone
     availability_zone: Option<String>,
+    /// Client-side cache
+    cache: Option<Arc<dyn GlideCache>>,
 }
 
 impl MultiplexedConnectionBuilder {
@@ -643,6 +663,7 @@ impl MultiplexedConnectionBuilder {
             protocol: None,
             password: None,
             availability_zone: None,
+            cache: None,
         }
     }
 
@@ -682,6 +703,12 @@ impl MultiplexedConnectionBuilder {
         self
     }
 
+    /// Sets the cache for the `MultiplexedConnectionBuilder`.
+    pub fn with_cache(mut self, cache: Option<Arc<dyn GlideCache>>) -> Self {
+        self.cache = cache;
+        self
+    }
+
     /// Builds and returns a new `MultiplexedConnection` instance using the configured settings.
     pub async fn build(self) -> RedisResult<MultiplexedConnection> {
         let db = self.db.unwrap_or_default();
@@ -700,6 +727,7 @@ impl MultiplexedConnectionBuilder {
             protocol,
             password,
             availability_zone: self.availability_zone,
+            cache: self.cache,
         };
 
         Ok(con)

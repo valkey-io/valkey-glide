@@ -37,6 +37,7 @@ from glide_shared import (
     BitOverflowControl,
     BitwiseOperation,
     ByAddressRoute,
+    ClientSideCache,
     ClosingError,
     ClusterBatch,
     ClusterBatchOptions,
@@ -48,6 +49,7 @@ from glide_shared import (
     ConnectionError,
     DataType,
     DistanceMetricType,
+    EvictionPolicy,
     ExclusiveIdBound,
     ExecAbortError,
     ExpireOptions,
@@ -392,4 +394,7 @@ __all__ = [
     "FtAggregateSortProperty",
     "FtProfileOptions",
     "QueryType",
+    # Cache,
+    "ClientSideCache",
+    "EvictionPolicy",
 ]

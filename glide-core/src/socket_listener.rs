@@ -759,12 +759,35 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                         )
                         .await
                         .map_err(|err| err.into()),
-
                     command_request::Command::RefreshIamToken(_refresh) => client
                         .refresh_iam_token()
                         .await
                         .map(|_| Value::SimpleString("OK".into()))
                         .map_err(|err| err.into()),
+                    command_request::Command::GetCacheMetrics(get_cache_metrics) => {
+                        let metrics_type =
+                            get_cache_metrics.metrics_types.enum_value().map_err(|_| {
+                                ClientUsageError::Internal("Invalid cache metrics type".to_string())
+                            });
+                        match metrics_type {
+                            Ok(crate::command_request::CacheMetricsType::HitRate) => {
+                                client.cache_hit_rate().map_err(|err| err.into())
+                            }
+                            Ok(crate::command_request::CacheMetricsType::MissRate) => {
+                                client.cache_miss_rate().map_err(|err| err.into())
+                            }
+                            Ok(crate::command_request::CacheMetricsType::EntryCount) => {
+                                client.cache_entry_count().map_err(|err| err.into())
+                            }
+                            Ok(crate::command_request::CacheMetricsType::Evictions) => {
+                                client.cache_evictions().map_err(|err| err.into())
+                            }
+                            Ok(crate::command_request::CacheMetricsType::Expirations) => {
+                                client.cache_expirations().map_err(|err| err.into())
+                            }
+                            Err(e) => Err(e),
+                        }
+                    }
                 },
                 None => {
                     log_debug(

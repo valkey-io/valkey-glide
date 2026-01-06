@@ -7,6 +7,7 @@ import pytest
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.logger import Logger
+from glide_shared.cache import ClientSideCache
 from glide_shared.config import (
     BackoffStrategy,
     GlideClientConfiguration,
@@ -167,6 +168,7 @@ async def create_client(
     tls_insecure: Optional[bool] = None,
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
+    cache: Optional[ClientSideCache] = None,
 ) -> Union[GlideClient, GlideClusterClient]:
     config = create_client_config(
         request,
@@ -189,6 +191,7 @@ async def create_client(
         tls_insecure,
         lazy_connect,
         enable_compression,
+        cache,
     )
     if cluster_mode:
         return await GlideClusterClient.create(config)

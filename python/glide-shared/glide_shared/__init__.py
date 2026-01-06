@@ -170,6 +170,7 @@ from .routes import (
     SlotKeyRoute,
     SlotType,
 )
+from .cache import ClientSideCache, EvictionPolicy
 
 __all__ = [
     # Client
@@ -331,4 +332,7 @@ __all__ = [
     "FtAggregateSortProperty",
     "FtProfileOptions",
     "QueryType",
+    # Cache
+    "ClientSideCache",
+    "EvictionPolicy",
 ]

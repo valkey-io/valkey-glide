@@ -12,6 +12,7 @@ use futures::FutureExt;
 use logger_core::{log_debug, log_error, log_info, log_warn};
 use once_cell::sync::OnceCell;
 use redis::aio::ConnectionLike;
+use redis::cache::{get_or_create_cache, glide_cache::GlideCache};
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo,
@@ -166,6 +167,18 @@ pub async fn get_valkey_connection_info(
     let client_name = connection_request.client_name.clone();
     let lib_name = connection_request.lib_name.clone();
     let pubsub_subscriptions = connection_request.pubsub_subscriptions.clone();
+    let cache = connection_request
+        .client_side_cache
+        .clone()
+        .map(|client_side_cache| {
+            get_or_create_cache(
+                &client_side_cache.cache_id,
+                client_side_cache.max_cache_kb,
+                client_side_cache.entry_ttl_seconds,
+                client_side_cache.eviction_policy,
+                client_side_cache.enable_metrics,
+            )
+        });
 
     match &connection_request.authentication_info {
         Some(info) => {
@@ -186,6 +199,7 @@ pub async fn get_valkey_connection_info(
                     client_name,
                     lib_name,
                     pubsub_subscriptions,
+                    cache,
                 }
             } else {
                 // Regular password-based authentication
@@ -197,6 +211,7 @@ pub async fn get_valkey_connection_info(
                     client_name,
                     lib_name,
                     pubsub_subscriptions,
+                    cache,
                 }
             }
         }
@@ -206,6 +221,7 @@ pub async fn get_valkey_connection_info(
             client_name,
             lib_name,
             pubsub_subscriptions,
+            cache,
             ..Default::default()
         },
     }
@@ -261,6 +277,8 @@ pub struct Client {
     iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
     // Optional compression manager for automatic compression/decompression
     compression_manager: Option<Arc<CompressionManager>>,
+    // Optional client-side cache
+    client_side_cache: Option<Arc<dyn GlideCache>>,
 }
 
 async fn run_with_timeout<T>(
@@ -667,6 +685,76 @@ impl Client {
 
             Ok(result)
         })
+    }
+
+    /// Returns the cache hit rate (hits / total requests).
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_hit_rate(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+
+        Ok(Value::Double(metrics.hit_rate()))
+    }
+
+    /// Returns the cache miss rate (misses / total requests).
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_miss_rate(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+
+        Ok(Value::Double(metrics.miss_rate()))
+    }
+
+    /// Returns the total number of cache entries.
+    /// Returns an error if caching is not enabled.
+    pub fn cache_entry_count(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+        Ok(Value::Int(cache.entry_count() as i64))
+    }
+
+    /// returns the total number of evictions that occurred in the cache.
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_evictions(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+        Ok(Value::Int(metrics.evictions as i64))
+    }
+
+    /// Returns the total number of expired entries that were removed from the cache.
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_expirations(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+        Ok(Value::Int(metrics.expirations as i64))
     }
 
     // Cluster scan is not passed to redis-rs as a regular command, so we need to handle it separately.
@@ -1306,6 +1394,7 @@ async fn create_cluster_client(
     }
     builder = builder.use_protocol(request.protocol.unwrap_or_default());
     builder = builder.database_id(valkey_connection_info.db);
+    builder = builder.cache(valkey_connection_info.cache);
     if let Some(client_name) = valkey_connection_info.client_name {
         builder = builder.client_name(client_name);
     }
@@ -1584,6 +1673,16 @@ impl Client {
         // Create compression manager from configuration
         let compression_manager = create_compression_manager(request.compression_config.clone())?;
 
+        let client_side_cache = request.client_side_cache.as_ref().map(|config| {
+            get_or_create_cache(
+                &config.cache_id,
+                config.max_cache_kb,
+                config.entry_ttl_seconds,
+                config.eviction_policy,
+                config.enable_metrics,
+            )
+        });
+
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
@@ -1600,6 +1699,7 @@ impl Client {
                 inflight_requests_allowed,
                 compression_manager: compression_manager.clone(),
                 iam_token_manager: None,
+                client_side_cache,
             };
 
             let client_arc = Arc::new(RwLock::new(client));
@@ -1965,6 +2065,7 @@ mod tests {
             inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
             iam_token_manager: None,
             compression_manager: None,
+            client_side_cache: None,
         }
     }
 

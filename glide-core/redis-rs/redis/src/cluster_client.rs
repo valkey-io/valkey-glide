@@ -1,3 +1,4 @@
+use crate::cache::glide_cache::GlideCache;
 use crate::cluster_slotmap::ReadFromReplicaStrategy;
 #[cfg(feature = "cluster-async")]
 use crate::cluster_topology::{
@@ -10,6 +11,7 @@ use crate::{PubSubSubscriptionInfo, PushInfo, RetryStrategy};
 use rand::Rng;
 #[cfg(feature = "cluster-async")]
 use std::ops::Add;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::tls::TlsConnParams;
@@ -47,6 +49,7 @@ struct BuilderParams {
     reconnect_retry_strategy: Option<RetryStrategy>,
     refresh_topology_from_initial_nodes: bool,
     database_id: i64,
+    cache: Option<Arc<dyn GlideCache>>,
 }
 
 #[derive(Clone)]
@@ -150,6 +153,7 @@ pub struct ClusterParams {
     pub(crate) reconnect_retry_strategy: Option<RetryStrategy>,
     pub(crate) refresh_topology_from_initial_nodes: bool,
     pub(crate) database_id: i64,
+    pub(crate) cache: Option<Arc<dyn GlideCache>>,
 }
 
 impl ClusterParams {
@@ -182,6 +186,7 @@ impl ClusterParams {
             reconnect_retry_strategy: value.reconnect_retry_strategy,
             refresh_topology_from_initial_nodes: value.refresh_topology_from_initial_nodes,
             database_id: value.database_id,
+            cache: value.cache,
         })
     }
 }
@@ -523,6 +528,12 @@ impl ClusterClientBuilder {
     /// Most cluster configurations only support database 0.
     pub fn database_id(mut self, database_id: i64) -> ClusterClientBuilder {
         self.builder_params.database_id = database_id;
+        self
+    }
+
+    /// Sets the cache for the new ClusterClient.
+    pub fn cache(mut self, cache: Option<Arc<dyn GlideCache>>) -> ClusterClientBuilder {
+        self.builder_params.cache = cache;
         self
     }
 

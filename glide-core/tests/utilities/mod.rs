@@ -14,12 +14,20 @@ use redis::{
 };
 use socket2::{Domain, Socket, Type};
 use std::{
-    env, fs, io, net::SocketAddr, net::TcpListener, ops::Deref, path::PathBuf, process,
-    sync::Mutex, time::Duration,
+    collections::HashMap,
+    env, fs, io,
+    net::{SocketAddr, TcpListener},
+    ops::Deref,
+    path::PathBuf,
+    process,
+    sync::Mutex,
+    time::Duration,
 };
 use tempfile::TempDir;
 use tokio::sync::mpsc;
 use versions::Versioning;
+
+use crate::utilities::{self, cluster::create_cluster_client};
 
 pub mod cluster;
 pub mod mocks;
@@ -682,6 +690,10 @@ pub fn create_connection_request(
     }
     connection_request.lazy_connect = configuration.lazy_connect;
     connection_request.protocol = configuration.protocol.into();
+
+    connection_request.client_side_cache =
+        protobuf::MessageField::from_option(configuration.client_side_cache.clone());
+
     connection_request
 }
 
@@ -699,6 +711,7 @@ pub struct TestConfiguration {
     pub client_az: Option<String>,
     pub protocol: ProtocolVersion,
     pub lazy_connect: bool,
+    pub client_side_cache: Option<connection_request::ClientSideCache>,
 }
 
 pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
@@ -737,12 +750,63 @@ pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration
     }
 }
 
-pub async fn setup_test_basics(use_tls: bool) -> TestBasics {
+pub async fn setup_test_basics_tls(use_tls: bool) -> TestBasics {
     setup_test_basics_internal(&TestConfiguration {
         use_tls,
         ..Default::default()
     })
     .await
+}
+pub(crate) struct TestClientBasics {
+    pub(crate) server: BackingServer,
+    pub(crate) client: Client,
+}
+async fn create_client(server: &BackingServer, configuration: TestConfiguration) -> Client {
+    match server {
+        BackingServer::Standalone(server) => {
+            let connection_addr = server
+                .as_ref()
+                .map(|server| server.get_client_addr())
+                .unwrap_or(get_shared_server_address(configuration.use_tls));
+
+            // TODO - this is a patch, handling the situation where the new server
+            // still isn't available to connection. This should be fixed in [RedisServer].
+            repeat_try_create(|| async {
+                Client::new(
+                    create_connection_request(
+                        std::slice::from_ref(&connection_addr),
+                        &configuration,
+                    )
+                    .into(),
+                    None,
+                )
+                .await
+                .ok()
+            })
+            .await
+        }
+        BackingServer::Cluster(cluster) => {
+            create_cluster_client(cluster.as_ref(), configuration).await
+        }
+    }
+}
+
+pub(crate) async fn setup_test_basics(
+    use_cluster: bool,
+    configuration: TestConfiguration,
+) -> TestClientBasics {
+    if use_cluster {
+        let cluster_basics = cluster::setup_test_basics_internal(configuration).await;
+        TestClientBasics {
+            server: BackingServer::Cluster(cluster_basics.cluster),
+            client: cluster_basics.client,
+        }
+    } else {
+        let test_basics: TestBasics = utilities::setup_test_basics_internal(&configuration).await;
+        let server = BackingServer::Standalone(test_basics.server);
+        let client = create_client(&server, configuration).await;
+        TestClientBasics { server, client }
+    }
 }
 
 #[cfg(test)]
@@ -869,4 +933,81 @@ pub fn extract_client_id(client_info: &str) -> Option<String> {
         .find(|part| part.starts_with("id="))
         .and_then(|id_part| id_part.strip_prefix("id="))
         .map(|id| id.to_string())
+}
+
+/// Helper function to assert that a specific command was called a certain number of times
+pub async fn assert_command_count(
+    client: &mut Client,
+    command: &str,
+    expected_count: usize,
+    use_cluster: bool,
+) {
+    let mut info_cmd = redis::Cmd::new();
+    info_cmd.arg("INFO").arg("commandstats");
+
+    // Execute INFO commandstats
+    let routing = if use_cluster {
+        Some(RoutingInfo::MultiNode((
+            MultipleNodeRoutingInfo::AllNodes,
+            None,
+        )))
+    } else {
+        None
+    };
+
+    let res = client
+        .send_command(&info_cmd, routing)
+        .await
+        .expect("INFO commandstats command failed");
+
+    // Parse the INFO output based on mode
+    let info_strings: Vec<String> = if use_cluster {
+        // Cluster mode: returns HashMap<String, String>
+        let info_result: HashMap<String, String> =
+            redis::from_owned_redis_value(res).expect("Failed to parse INFO command result");
+        info_result.into_values().collect()
+    } else {
+        // Standalone mode: returns a single string
+        let info_str: String =
+            redis::from_owned_redis_value(res).expect("Failed to parse INFO command result");
+        vec![info_str]
+    };
+
+    // Search for the specified command across all info outputs
+    let mut command_count: usize = 0;
+    let command_prefix = format!("cmdstat_{}:calls=", command.to_lowercase());
+
+    for info in info_strings {
+        for line in info.lines() {
+            if line.starts_with(&command_prefix)
+                && let Some(count_str) = line.strip_prefix(&command_prefix)
+            {
+                let count_val = count_str
+                    .split(',')
+                    .next()
+                    .unwrap_or("0")
+                    .parse::<usize>()
+                    .unwrap_or(0);
+                command_count += count_val;
+                break;
+            }
+        }
+    }
+
+    // Assert that the found count matches the expected count
+    assert_eq!(
+        command_count, expected_count,
+        "Expected {} count {} but found {}",
+        command, expected_count, command_count
+    );
+}
+
+/// Helper to check if a key is in cache
+pub fn is_key_cached(
+    cache_id: &str,
+    key: &[u8],
+    cache_key_type: redis::cache::glide_cache::CachedKeyType,
+) -> bool {
+    let cache = redis::cache::get_or_create_cache(cache_id, 1000, None, None, true);
+    cache.get(key, cache_key_type).is_some()
 }

@@ -860,6 +860,57 @@ impl RoutingInfo {
         }
     }
 
+    /// Returns the first key from a routable command, if one exists.
+    pub fn key_for_routable<'a, R>(r: &'a R) -> Option<&'a [u8]>
+    where
+        R: Routable + ?Sized,
+    {
+        let cmd = &r.command()?[..];
+        match base_routing(cmd) {
+            // These don't have specific keys
+            RouteBy::AllNodes
+            | RouteBy::AllPrimaries
+            | RouteBy::Random
+            | RouteBy::SecondArgSlot
+            | RouteBy::Undefined => None,
+
+            RouteBy::MultiShard(_) => None, //TODO: handle multi-shard commands
+
+            RouteBy::ThirdArgAfterKeyCount => {
+                let key_count = r
+                    .arg_idx(2)
+                    .and_then(|x| std::str::from_utf8(x).ok())
+                    .and_then(|x| x.parse::<u64>().ok())?;
+                if key_count == 0 {
+                    None
+                } else {
+                    r.arg_idx(3)
+                }
+            }
+
+            RouteBy::SecondArg => r.arg_idx(2),
+
+            RouteBy::SecondArgAfterKeyCount => {
+                let key_count = r
+                    .arg_idx(1)
+                    .and_then(|x| std::str::from_utf8(x).ok())
+                    .and_then(|x| x.parse::<u64>().ok())?;
+                if key_count == 0 {
+                    None
+                } else {
+                    r.arg_idx(2)
+                }
+            }
+
+            RouteBy::StreamsIndex => {
+                let streams_position = r.position(b"STREAMS")?;
+                r.arg_idx(streams_position + 1)
+            }
+
+            RouteBy::FirstKey => r.arg_idx(1),
+        }
+    }
+
     fn for_key(cmd: &[u8], key: &[u8]) -> RoutingInfo {
         RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(get_route(
             is_readonly_cmd(cmd),

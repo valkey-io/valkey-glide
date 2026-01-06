@@ -2,6 +2,7 @@
 
 #[allow(unused_imports)]
 use logger_core::log_warn;
+use redis::cache::EvictionPolicy;
 #[allow(unused_imports)]
 use std::collections::HashSet;
 use std::time::Duration;
@@ -39,6 +40,16 @@ pub struct ConnectionRequest {
     pub client_cert: Vec<u8>,
     pub client_key: Vec<u8>,
     pub compression_config: Option<CompressionConfig>,
+    pub client_side_cache: Option<ClientSideCache>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClientSideCache {
+    pub cache_id: String,
+    pub max_cache_kb: u64,
+    pub entry_ttl_seconds: Option<u64>,
+    pub eviction_policy: Option<EvictionPolicy>,
+    pub enable_metrics: bool,
 }
 
 /// Authentication information for connecting to Redis/Valkey servers
@@ -295,6 +306,24 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         let client_cert = value.client_cert.to_vec();
         let client_key = value.client_key.to_vec();
 
+        // Convert protobuf client-side cache config to internal client-side cache config
+        let client_side_cache = value
+            .client_side_cache
+            .0
+            .map(|proto_cache| ClientSideCache {
+                cache_id: chars_to_string_option(&proto_cache.cache_id).unwrap_or_default(),
+                max_cache_kb: proto_cache.max_cache_kb,
+                entry_ttl_seconds: proto_cache.entry_ttl_seconds,
+                eviction_policy: proto_cache
+                    .eviction_policy
+                    .and_then(|enum_or_unknown| enum_or_unknown.enum_value().ok())
+                    .map(|val| match val {
+                        protobuf::EvictionPolicy::LRU => EvictionPolicy::Lru,
+                        protobuf::EvictionPolicy::LFU => EvictionPolicy::Lfu,
+                    }),
+                enable_metrics: proto_cache.enable_metrics,
+            });
+
         // Convert protobuf compression config to internal compression config
         let compression_config = value.compression_config.as_ref().map(|proto_config| {
             let backend = match proto_config.backend.enum_value() {
@@ -339,6 +368,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             lazy_connect,
             refresh_topology_from_initial_nodes,
             root_certs,
+            client_side_cache,
             client_cert,
             client_key,
             compression_config,
