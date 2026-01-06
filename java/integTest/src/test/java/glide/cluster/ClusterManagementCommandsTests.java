@@ -135,7 +135,8 @@ public class ClusterManagementCommandsTests {
             // Skip test if server doesn't support CLUSTER SHARDS
             if (e.getCause() instanceof RequestException
                     && e.getMessage().contains("Unknown subcommand")) {
-                System.out.println("Skipping clusterShards test - command not supported on this server version");
+                System.out.println(
+                        "Skipping clusterShards test - command not supported on this server version");
                 return;
             }
             throw e;
@@ -281,7 +282,8 @@ public class ClusterManagementCommandsTests {
             // Skip test if server doesn't support CLUSTER LINKS
             if (e.getCause() instanceof RequestException
                     && e.getMessage().contains("Unknown subcommand")) {
-                System.out.println("Skipping clusterLinks test - command not supported on this server version");
+                System.out.println(
+                        "Skipping clusterLinks test - command not supported on this server version");
                 return;
             }
             throw e;
