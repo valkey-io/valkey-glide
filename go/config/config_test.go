@@ -826,3 +826,67 @@ func TestTlsConfiguration_InsecureTLSDefaultValue(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, protobuf.TlsMode_SecureTls, request.TlsMode)
 }
+
+func TestStandaloneConfig_TcpNoDelay(t *testing.T) {
+	// Test TCP_NODELAY enabled
+	tcpNoDelayTrue := true
+	config := NewClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClientConfiguration().WithTcpNoDelay(tcpNoDelayTrue),
+		)
+
+	request, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, request.TcpNodelay)
+	assert.True(t, *request.TcpNodelay)
+
+	// Test TCP_NODELAY disabled
+	tcpNoDelayFalse := false
+	config = NewClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClientConfiguration().WithTcpNoDelay(tcpNoDelayFalse),
+		)
+
+	request, err = config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, request.TcpNodelay)
+	assert.False(t, *request.TcpNodelay)
+
+	// Test TCP_NODELAY not set (default)
+	config = NewClientConfiguration()
+	request, err = config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, request.TcpNodelay)
+}
+
+func TestClusterConfig_TcpNoDelay(t *testing.T) {
+	// Test TCP_NODELAY enabled
+	tcpNoDelayTrue := true
+	config := NewClusterClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClusterClientConfiguration().WithTcpNoDelay(tcpNoDelayTrue),
+		)
+
+	request, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, request.TcpNodelay)
+	assert.True(t, *request.TcpNodelay)
+
+	// Test TCP_NODELAY disabled
+	tcpNoDelayFalse := false
+	config = NewClusterClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClusterClientConfiguration().WithTcpNoDelay(tcpNoDelayFalse),
+		)
+
+	request, err = config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, request.TcpNodelay)
+	assert.False(t, *request.TcpNodelay)
+
+	// Test TCP_NODELAY not set (default)
+	config = NewClusterClientConfiguration()
+	request, err = config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, request.TcpNodelay)
+}

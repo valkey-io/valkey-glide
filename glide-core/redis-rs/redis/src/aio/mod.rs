@@ -29,7 +29,7 @@ pub mod tokio;
 #[async_trait]
 pub(crate) trait RedisRuntime: AsyncStream + Send + Sync + Sized + 'static {
     /// Performs a TCP connection
-    async fn connect_tcp(socket_addr: SocketAddr) -> RedisResult<Self>;
+    async fn connect_tcp(socket_addr: SocketAddr, tcp_nodelay: bool) -> RedisResult<Self>;
 
     // Performs a TCP TLS connection
     async fn connect_tcp_tls(
@@ -37,6 +37,7 @@ pub(crate) trait RedisRuntime: AsyncStream + Send + Sync + Sized + 'static {
         socket_addr: SocketAddr,
         insecure: bool,
         tls_params: &Option<TlsConnParams>,
+        tcp_nodelay: bool,
     ) -> RedisResult<Self>;
 
     /// Performs a UNIX connection

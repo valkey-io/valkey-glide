@@ -341,6 +341,11 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 		request.ConnectionTimeout = connectionTimeout
 	}
 
+	// Handle TCP_NODELAY configuration
+	if config.AdvancedClientConfiguration.tcpNoDelay != nil {
+		request.TcpNodelay = config.AdvancedClientConfiguration.tcpNoDelay
+	}
+
 	// Handle TLS configuration
 	if config.AdvancedClientConfiguration.tlsConfig != nil {
 		tlsConfig := config.AdvancedClientConfiguration.tlsConfig
@@ -513,6 +518,11 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
 	}
 	request.RefreshTopologyFromInitialNodes = config.AdvancedClusterClientConfiguration.refreshTopologyFromInitialNodes
+
+	// Handle TCP_NODELAY configuration
+	if config.AdvancedClusterClientConfiguration.tcpNoDelay != nil {
+		request.TcpNodelay = config.AdvancedClusterClientConfiguration.tcpNoDelay
+	}
 
 	// Handle TLS configuration
 	if config.AdvancedClusterClientConfiguration.tlsConfig != nil {
@@ -744,6 +754,7 @@ func LoadRootCertificatesFromFile(path string) ([]byte, error) {
 type AdvancedClientConfiguration struct {
 	connectionTimeout time.Duration
 	tlsConfig         *TlsConfiguration
+	tcpNoDelay        *bool
 }
 
 // NewAdvancedClientConfiguration returns a new [AdvancedClientConfiguration] with default settings.
@@ -775,12 +786,26 @@ func (config *AdvancedClientConfiguration) WithTlsConfiguration(
 	return config
 }
 
+// WithTcpNoDelay sets the TCP_NODELAY socket option for the client connections.
+// When enabled (true), TCP_NODELAY disables Nagle's algorithm, which can reduce latency
+// for small messages by sending them immediately rather than buffering.
+// When disabled (false), Nagle's algorithm is enabled, which may improve throughput for
+// bulk operations by buffering small packets.
+// If not set, the default behavior (enabled) will be used.
+func (config *AdvancedClientConfiguration) WithTcpNoDelay(
+	tcpNoDelay bool,
+) *AdvancedClientConfiguration {
+	config.tcpNoDelay = &tcpNoDelay
+	return config
+}
+
 // Represents advanced configuration settings for a Cluster client used in
 // [ClusterClientConfiguration].
 type AdvancedClusterClientConfiguration struct {
 	connectionTimeout               time.Duration
 	refreshTopologyFromInitialNodes bool
 	tlsConfig                       *TlsConfiguration
+	tcpNoDelay                      *bool
 }
 
 // NewAdvancedClusterClientConfiguration returns a new [AdvancedClusterClientConfiguration] with default settings.
@@ -819,5 +844,18 @@ func (config *AdvancedClusterClientConfiguration) WithTlsConfiguration(
 	tlsConfig *TlsConfiguration,
 ) *AdvancedClusterClientConfiguration {
 	config.tlsConfig = tlsConfig
+	return config
+}
+
+// WithTcpNoDelay sets the TCP_NODELAY socket option for the cluster client connections.
+// When enabled (true), TCP_NODELAY disables Nagle's algorithm, which can reduce latency
+// for small messages by sending them immediately rather than buffering.
+// When disabled (false), Nagle's algorithm is enabled, which may improve throughput for
+// bulk operations by buffering small packets.
+// If not set, the default behavior (enabled) will be used.
+func (config *AdvancedClusterClientConfiguration) WithTcpNoDelay(
+	tcpNoDelay bool,
+) *AdvancedClusterClientConfiguration {
+	config.tcpNoDelay = &tcpNoDelay
 	return config
 }

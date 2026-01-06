@@ -522,3 +522,39 @@ def test_load_root_certificates_integration(tmp_path):
     assert cluster_request.tls_mode == TlsMode.SecureTls
     assert len(cluster_request.root_certs) == 1
     assert cluster_request.root_certs[0] == TEST_CERT_DATA_1
+
+
+def test_tcp_nodelay_default_value():
+    """Test that tcp_nodelay defaults to None (not set)."""
+    standalone_config = AdvancedGlideClientConfiguration()
+    assert standalone_config.tcp_nodelay is None
+
+    cluster_config = AdvancedGlideClusterClientConfiguration()
+    assert cluster_config.tcp_nodelay is None
+
+
+def test_tcp_nodelay_in_protobuf_request():
+    """Test that tcp_nodelay is correctly set in protobuf request."""
+    # Test with True
+    config_true = GlideClientConfiguration(
+        addresses=[NodeAddress("localhost", 6379)],
+        advanced_config=AdvancedGlideClientConfiguration(tcp_nodelay=True),
+    )
+    request_true = config_true._create_a_protobuf_conn_request()
+    assert request_true.tcp_nodelay is True
+
+    # Test with False
+    config_false = GlideClientConfiguration(
+        addresses=[NodeAddress("localhost", 6379)],
+        advanced_config=AdvancedGlideClientConfiguration(tcp_nodelay=False),
+    )
+    request_false = config_false._create_a_protobuf_conn_request()
+    assert request_false.tcp_nodelay is False
+
+    # Test default (None - not set in protobuf)
+    config_default = GlideClientConfiguration(
+        addresses=[NodeAddress("localhost", 6379)],
+        advanced_config=AdvancedGlideClientConfiguration(),
+    )
+    request_default = config_default._create_a_protobuf_conn_request()
+    assert not request_default.HasField("tcp_nodelay")

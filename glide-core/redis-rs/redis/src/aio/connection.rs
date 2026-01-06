@@ -419,12 +419,13 @@ where
 pub(crate) async fn connect_simple<T: RedisRuntime>(
     connection_info: &ConnectionInfo,
     _socket_addr: Option<SocketAddr>,
+    tcp_nodelay: bool,
 ) -> RedisResult<(T, Option<IpAddr>)> {
     Ok(match connection_info.addr {
         ConnectionAddr::Tcp(ref host, port) => {
             if let Some(socket_addr) = _socket_addr {
                 return Ok::<_, RedisError>((
-                    <T>::connect_tcp(socket_addr).await?,
+                    <T>::connect_tcp(socket_addr, tcp_nodelay).await?,
                     Some(socket_addr.ip()),
                 ));
             }
@@ -433,7 +434,7 @@ pub(crate) async fn connect_simple<T: RedisRuntime>(
                 log_conn_creation("TCP", format!("{host}:{port}"), Some(socket_addr.ip()));
                 Box::pin(async move {
                     Ok::<_, RedisError>((
-                        <T>::connect_tcp(socket_addr).await?,
+                        <T>::connect_tcp(socket_addr, tcp_nodelay).await?,
                         Some(socket_addr.ip()),
                     ))
                 })
@@ -450,7 +451,8 @@ pub(crate) async fn connect_simple<T: RedisRuntime>(
         } => {
             if let Some(socket_addr) = _socket_addr {
                 return Ok::<_, RedisError>((
-                    <T>::connect_tcp_tls(host, socket_addr, insecure, tls_params).await?,
+                    <T>::connect_tcp_tls(host, socket_addr, insecure, tls_params, tcp_nodelay)
+                        .await?,
                     Some(socket_addr.ip()),
                 ));
             }
@@ -463,7 +465,8 @@ pub(crate) async fn connect_simple<T: RedisRuntime>(
                 );
                 Box::pin(async move {
                     Ok::<_, RedisError>((
-                        <T>::connect_tcp_tls(host, socket_addr, insecure, tls_params).await?,
+                        <T>::connect_tcp_tls(host, socket_addr, insecure, tls_params, tcp_nodelay)
+                            .await?,
                         Some(socket_addr.ip()),
                     ))
                 })
