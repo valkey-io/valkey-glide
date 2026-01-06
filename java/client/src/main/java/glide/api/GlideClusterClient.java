@@ -65,8 +65,8 @@ import glide.api.models.Script;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ScriptArgOptions;
-import glide.api.models.commands.ScriptDebugMode;
 import glide.api.models.commands.ScriptArgOptionsGlideString;
+import glide.api.models.commands.ScriptDebugMode;
 import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
@@ -1055,7 +1055,8 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Object> evalReadOnly(
             @NonNull String script, @NonNull String[] keys, @NonNull String[] args) {
-        String[] arguments = concatenateArrays(new String[] {script, String.valueOf(keys.length)}, keys, args);
+        String[] arguments =
+                concatenateArrays(new String[] {script, String.valueOf(keys.length)}, keys, args);
         return commandManager.submitNewCommand(
                 EvalReadOnly, arguments, this::handleObjectOrNullResponse);
     }
@@ -1069,8 +1070,7 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<Object> evalReadOnly(
             @NonNull GlideString script, @NonNull GlideString[] keys, @NonNull GlideString[] args) {
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {script, gs(String.valueOf(keys.length))}, keys, args);
+                concatenateArrays(new GlideString[] {script, gs(String.valueOf(keys.length))}, keys, args);
         return commandManager.submitNewCommand(
                 EvalReadOnly, arguments, this::handleBinaryObjectOrNullResponse);
     }
@@ -1083,7 +1083,8 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Object> evalshaReadOnly(
             @NonNull String sha1, @NonNull String[] keys, @NonNull String[] args) {
-        String[] arguments = concatenateArrays(new String[] {sha1, String.valueOf(keys.length)}, keys, args);
+        String[] arguments =
+                concatenateArrays(new String[] {sha1, String.valueOf(keys.length)}, keys, args);
         return commandManager.submitNewCommand(
                 EvalShaReadOnly, arguments, this::handleObjectOrNullResponse);
     }
@@ -1097,8 +1098,7 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<Object> evalshaReadOnly(
             @NonNull GlideString sha1, @NonNull GlideString[] keys, @NonNull GlideString[] args) {
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {sha1, gs(String.valueOf(keys.length))}, keys, args);
+                concatenateArrays(new GlideString[] {sha1, gs(String.valueOf(keys.length))}, keys, args);
         return commandManager.submitNewCommand(
                 EvalShaReadOnly, arguments, this::handleBinaryObjectOrNullResponse);
     }

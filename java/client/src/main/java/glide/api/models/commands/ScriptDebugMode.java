@@ -10,8 +10,8 @@ import glide.api.commands.ScriptingAndFunctionsBaseCommands;
  */
 public enum ScriptDebugMode {
     /**
-     * Enable non-blocking asynchronous debugging mode. The server will fork a debugging session
-     * that won't block the server.
+     * Enable non-blocking asynchronous debugging mode. The server will fork a debugging session that
+     * won't block the server.
      */
     YES("YES"),
 

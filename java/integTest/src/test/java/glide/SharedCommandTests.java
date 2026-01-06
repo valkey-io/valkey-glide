@@ -5309,7 +5309,8 @@ public class SharedCommandTests {
         String key = UUID.randomUUID().toString();
         String arg = UUID.randomUUID().toString();
         Object[] result =
-                (Object[]) client.evalReadOnly(scriptWithKeysArgs, new String[] {key}, new String[] {arg}).get();
+                (Object[])
+                        client.evalReadOnly(scriptWithKeysArgs, new String[] {key}, new String[] {arg}).get();
         assertEquals(key, result[0]);
         assertEquals(arg, result[1]);
 
@@ -5324,7 +5325,9 @@ public class SharedCommandTests {
                 (Object[])
                         client
                                 .evalReadOnly(
-                                        gs(scriptWithKeysArgs), new GlideString[] {binaryKey}, new GlideString[] {binaryArg})
+                                        gs(scriptWithKeysArgs),
+                                        new GlideString[] {binaryKey},
+                                        new GlideString[] {binaryArg})
                                 .get();
         assertEquals(binaryKey, binaryResult[0]);
         assertEquals(binaryArg, binaryResult[1]);
@@ -5333,7 +5336,8 @@ public class SharedCommandTests {
         String readKey = UUID.randomUUID().toString();
         client.set(readKey, "test_value").get();
         String readScript = "return redis.call('GET', KEYS[1])";
-        assertEquals("test_value", client.evalReadOnly(readScript, new String[] {readKey}, new String[0]).get());
+        assertEquals(
+                "test_value", client.evalReadOnly(readScript, new String[] {readKey}, new String[0]).get());
     }
 
     @SneakyThrows
