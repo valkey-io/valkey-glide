@@ -137,7 +137,7 @@ impl RedisServer {
         addr: redis::ConnectionAddr,
         modules: &[Module],
     ) -> RedisServer {
-        RedisServer::new_with_addr_tls_modules_and_spawner(addr, None, modules, |cmd| {
+        RedisServer::new_with_addr_tls_modules_and_spawner(addr, None, modules, false, |cmd| {
             cmd.spawn()
                 .unwrap_or_else(|err| panic!("Failed to run {cmd:?}: {err}"))
         })
@@ -149,6 +149,7 @@ impl RedisServer {
         addr: redis::ConnectionAddr,
         tls_paths: Option<TlsFilePaths>,
         modules: &[Module],
+        tls_auth_clients: bool,
         spawner: F,
     ) -> RedisServer {
         let mut redis_cmd = process::Command::new("redis-server");
@@ -188,6 +189,10 @@ impl RedisServer {
             }
             redis::ConnectionAddr::TcpTls { ref host, port, .. } => {
                 let tls_paths = tls_paths.unwrap_or_else(|| build_keys_and_certs_for_tls(&tempdir));
+                let tls_auth_clients_arg_value = match tls_auth_clients {
+                    true => "yes",
+                    _ => "no",
+                };
 
                 // prepare redis with TLS
                 redis_cmd
@@ -202,7 +207,7 @@ impl RedisServer {
                     .arg("--tls-ca-cert-file")
                     .arg(&tls_paths.ca_crt)
                     .arg("--tls-auth-clients") // Make it so client doesn't have to send cert
-                    .arg("no")
+                    .arg(tls_auth_clients_arg_value)
                     .arg("--bind")
                     .arg(host);
 
@@ -451,6 +456,12 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
 impl TlsFilePaths {
     pub fn read_ca_cert_as_bytes(&self) -> Vec<u8> {
         fs::read(&self.ca_crt).expect("Failed to read CA certificate file")
+    }
+    pub fn read_redis_cert_as_bytes(&self) -> Vec<u8> {
+        fs::read(&self.redis_crt).expect("Failed to read redis certificate file")
+    }
+    pub fn read_redis_key_as_bytes(&self) -> Vec<u8> {
+        fs::read(&self.redis_key).expect("Failed to read redis private key file")
     }
 }
 
