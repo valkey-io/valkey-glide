@@ -494,8 +494,8 @@ pub fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
     let host = host
         .strip_prefix('[')
         .and_then(|h| h.strip_suffix(']'))
-        .map(|inner| inner.parse::<Ipv6Addr>().ok().map(|_| inner))
-        .unwrap_or(Some(host))?;
+        .filter(|inner| inner.parse::<Ipv6Addr>().is_ok())
+        .unwrap_or(host);
 
     Some((host, port))
 }

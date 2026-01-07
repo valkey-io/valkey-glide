@@ -573,8 +573,8 @@ mod test_check_node_connections {
 mod test_get_host_and_port_from_addr {
     use redis::cluster_async::testing::get_host_and_port_from_addr;
 
-    #[tokio::test]
-    async fn test_get_host_and_port_from_addr_ipv4() {
+    #[test]
+    fn test_get_host_and_port_from_addr_ipv4() {
         assert_eq!(
             get_host_and_port_from_addr("127.0.0.1:6379"),
             Some(("127.0.0.1", 6379))
@@ -597,8 +597,8 @@ mod test_get_host_and_port_from_addr {
         );
     }
 
-    #[tokio::test]
-    async fn test_get_host_and_port_from_addr_ipv6_bracketed() {
+    #[test]
+    fn test_get_host_and_port_from_addr_ipv6_bracketed() {
         assert_eq!(
             get_host_and_port_from_addr("[::1]:6379"),
             Some(("::1", 6379))
@@ -609,8 +609,8 @@ mod test_get_host_and_port_from_addr {
         );
     }
 
-    #[tokio::test]
-    async fn test_get_host_and_port_from_addr_ipv6_unbracketed() {
+    #[test]
+    fn test_get_host_and_port_from_addr_ipv6_unbracketed() {
         // IPv6 without brackets - last segment treated as port
         assert_eq!(
             get_host_and_port_from_addr("2001:db8:85a3:8d3:1319:8a2e:370:7348:6379"),
@@ -622,8 +622,8 @@ mod test_get_host_and_port_from_addr {
         );
     }
 
-    #[tokio::test]
-    async fn test_get_host_and_port_from_addr_invalid() {
+    #[test]
+    fn test_get_host_and_port_from_addr_invalid() {
         // Missing port
         assert_eq!(get_host_and_port_from_addr("127.0.0.1"), None);
         // Invalid port
