@@ -491,11 +491,13 @@ where
 pub fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
     let (host, port_str) = addr.rsplit_once(':')?;
     let port = port_str.parse::<u16>().ok()?;
-    let host = host
-        .strip_prefix('[')
-        .and_then(|h| h.strip_suffix(']'))
-        .filter(|inner| inner.parse::<Ipv6Addr>().is_ok())
-        .unwrap_or(host);
+    let host = if host.starts_with('[') && host.ends_with(']') {
+        let inner = host.strip_prefix('[').unwrap().strip_suffix(']').unwrap();
+        inner.parse::<Ipv6Addr>().ok()?;
+        inner
+    } else {
+        host
+    };
 
     Some((host, port))
 }
