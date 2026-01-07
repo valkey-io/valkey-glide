@@ -1201,7 +1201,12 @@ export class BaseClient {
 
             if (typeof message.respPointer === "number") {
                 // Response from type number
-                pointer = new PointerResponse(message.respPointer);
+                const long = Long.fromNumber(message.respPointer);
+                pointer = new PointerResponse(
+                    message.respPointer,
+                    long.high,
+                    long.low,
+                );
             } else {
                 // Response from type long
                 pointer = new PointerResponse(
