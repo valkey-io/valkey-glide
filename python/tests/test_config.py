@@ -2,6 +2,7 @@
 
 import pytest
 from glide_shared.config import (
+    AdvancedBaseClientConfiguration,
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
@@ -652,6 +653,31 @@ def test_load_client_key_from_file_empty(tmp_path):
     with pytest.raises(ConfigurationError) as exc_info:
         load_client_key_from_file(str(cert_path))
     assert "Client key file is empty" in str(exc_info.value)
+
+
+def test_tls_configuration_client_cert_key_consistency():
+    config = AdvancedBaseClientConfiguration(
+        tls_config=TlsAdvancedConfiguration(),
+    )
+    request = ConnectionRequest()
+    # Do not raise if both client_cert_pem and client_key_pem are not provided.
+    config._create_a_protobuf_conn_request(request)
+
+    config.tls_config.client_cert_pem = b"nonempty"
+    config.tls_config.client_key_pem = None
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request(request)
+    assert "client_cert_pem is provided but client_key_pem not provided" in str(
+        exc_info.value
+    )
+
+    config.tls_config.client_cert_pem = None
+    config.tls_config.client_key_pem = b"nonempty"
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request(request)
+    assert "client_key_pem is provided but client_cert_pem not provided" in str(
+        exc_info.value
+    )
 
 
 def test_tcp_nodelay_default_value():

@@ -6,6 +6,7 @@ import pytest
 from glide_sync import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
+    ConfigurationError,
     GlideClient,
     GlideClientConfiguration,
     GlideClusterClient,
@@ -257,7 +258,7 @@ class TestClientCertificates:
                     ),
                 ),
             )
-            with pytest.raises(Exception):
+            with pytest.raises(ConfigurationError):
                 GlideClusterClient.create(cluster_config)
         else:
             standalone_config = GlideClientConfiguration(
@@ -272,7 +273,7 @@ class TestClientCertificates:
                     ),
                 ),
             )
-            with pytest.raises(Exception):
+            with pytest.raises(ConfigurationError):
                 GlideClient.create(standalone_config)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -298,7 +299,7 @@ class TestClientCertificates:
                     ),
                 ),
             )
-            with pytest.raises(Exception):
+            with pytest.raises(ConfigurationError):
                 GlideClusterClient.create(cluster_config)
         else:
             standalone_config = GlideClientConfiguration(
@@ -313,7 +314,7 @@ class TestClientCertificates:
                     ),
                 ),
             )
-            with pytest.raises(Exception):
+            with pytest.raises(ConfigurationError):
                 GlideClient.create(standalone_config)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])

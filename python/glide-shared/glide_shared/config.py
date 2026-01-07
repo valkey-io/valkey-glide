@@ -524,7 +524,20 @@ class AdvancedBaseClientConfiguration:
                     )
                 request.client_key = self.tls_config.client_key_pem
 
+            # Ensure client cert and client key are both provided or not provided
+            self._validate_client_auth_tls()
+
         return request
+
+    def _validate_client_auth_tls(self):
+        if self.tls_config.client_cert_pem and not self.tls_config.client_key_pem:
+            raise ConfigurationError(
+                "client_cert_pem is provided but client_key_pem not provided. mTLS requires both",
+            )
+        if self.tls_config.client_key_pem and not self.tls_config.client_cert_pem:
+            raise ConfigurationError(
+                "client_key_pem is provided but client_cert_pem not provided. mTLS requires both",
+            )
 
 
 class BaseClientConfiguration:

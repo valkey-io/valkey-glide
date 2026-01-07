@@ -7,6 +7,7 @@ from glide.glide_client import GlideClient, GlideClusterClient
 from glide_shared.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
+    ConfigurationError,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     ProtocolVersion,
@@ -258,7 +259,7 @@ class TestClientCertificates:
                     ),
                 ),
             )
-            with pytest.raises(Exception):
+            with pytest.raises(ConfigurationError):
                 await GlideClusterClient.create(cluster_config)
         else:
             standalone_config = GlideClientConfiguration(
@@ -273,7 +274,7 @@ class TestClientCertificates:
                     ),
                 ),
             )
-            with pytest.raises(Exception):
+            with pytest.raises(ConfigurationError):
                 await GlideClient.create(standalone_config)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -299,7 +300,7 @@ class TestClientCertificates:
                     ),
                 ),
             )
-            with pytest.raises(Exception):
+            with pytest.raises(ConfigurationError):
                 await GlideClusterClient.create(cluster_config)
         else:
             standalone_config = GlideClientConfiguration(
@@ -314,7 +315,7 @@ class TestClientCertificates:
                     ),
                 ),
             )
-            with pytest.raises(Exception):
+            with pytest.raises(ConfigurationError):
                 await GlideClient.create(standalone_config)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
