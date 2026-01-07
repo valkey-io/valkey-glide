@@ -472,7 +472,7 @@ impl StandaloneClient {
         }
     }
 
-    async fn send_request_to_all_nodes(
+    pub(crate) async fn send_request_to_all_nodes(
         &mut self,
         cmd: &redis::Cmd,
         response_policy: Option<ResponsePolicy>,

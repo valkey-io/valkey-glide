@@ -1228,7 +1228,25 @@ impl PubSubCommandApplier for ClientWrapper {
     ) -> Pin<Box<dyn Future<Output = RedisResult<Value>> + Send + 'a>> {
         Box::pin(async move {
             match self {
-                ClientWrapper::Standalone(client) => client.send_command(cmd).await,
+                ClientWrapper::Standalone(client) => {
+                    // For standalone mode, send unsubscribe commands to all nodes.
+                    // This handles ElastiCache scenarios where DNS address could change
+                    // So we can't know which node we subscribed to
+                    if let Some(command) = cmd.command() {
+                        let cmd_upper = command.to_ascii_uppercase();
+                        if cmd_upper == b"UNSUBSCRIBE"
+                            || cmd_upper == b"PUNSUBSCRIBE"
+                        {
+                            return client
+                                .send_request_to_all_nodes(
+                                    cmd,
+                                    Some(ResponsePolicy::AllSucceeded),
+                                )
+                                .await;
+                        }
+                    }
+                    client.send_command(cmd).await
+                }
                 ClientWrapper::Cluster { client } => {
                     let final_routing = routing
                         .map(RoutingInfo::SingleNode)
