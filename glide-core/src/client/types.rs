@@ -41,6 +41,7 @@ pub struct ConnectionRequest {
     pub client_key: Vec<u8>,
     pub compression_config: Option<CompressionConfig>,
     pub client_side_cache: Option<ClientSideCache>,
+    pub tcp_nodelay: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -349,6 +350,8 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             }
         });
 
+        let tcp_nodelay = value.tcp_nodelay.unwrap_or(true);
+
         ConnectionRequest {
             read_from,
             client_name,
@@ -372,6 +375,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             client_cert,
             client_key,
             compression_config,
+            tcp_nodelay,
         }
     }
 }

@@ -119,6 +119,7 @@ message ConnectionRequest {
     bytes client_cert = 22;
     bytes client_key = 23;
     optional ClientSideCache client_side_cache = 24;
+    optional bool tcp_nodelay = 25;
 }
 
 message ConnectionRetryStrategy {

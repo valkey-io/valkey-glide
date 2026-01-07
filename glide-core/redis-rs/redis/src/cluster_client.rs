@@ -50,6 +50,7 @@ struct BuilderParams {
     refresh_topology_from_initial_nodes: bool,
     database_id: i64,
     cache: Option<Arc<dyn GlideCache>>,
+    tcp_nodelay: bool,
 }
 
 #[derive(Clone)]
@@ -154,6 +155,7 @@ pub struct ClusterParams {
     pub(crate) refresh_topology_from_initial_nodes: bool,
     pub(crate) database_id: i64,
     pub(crate) cache: Option<Arc<dyn GlideCache>>,
+    pub(crate) tcp_nodelay: bool,
 }
 
 impl ClusterParams {
@@ -187,6 +189,7 @@ impl ClusterParams {
             refresh_topology_from_initial_nodes: value.refresh_topology_from_initial_nodes,
             database_id: value.database_id,
             cache: value.cache,
+            tcp_nodelay: value.tcp_nodelay,
         })
     }
 }
@@ -497,6 +500,16 @@ impl ClusterClientBuilder {
     ) -> ClusterClientBuilder {
         self.builder_params.refresh_topology_from_initial_nodes =
             refresh_topology_from_initial_nodes;
+        self
+    }
+
+    /// Sets the TCP_NODELAY socket option.
+    ///
+    /// When true, disables Nagle's algorithm for lower latency.
+    /// When false, enables Nagle's algorithm to reduce network overhead.
+    /// Defaults to true if not set.
+    pub fn tcp_nodelay(mut self, tcp_nodelay: bool) -> ClusterClientBuilder {
+        self.builder_params.tcp_nodelay = tcp_nodelay;
         self
     }
 
