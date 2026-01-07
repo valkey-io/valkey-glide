@@ -90,6 +90,12 @@ pub trait ConnectionLike {
 
     /// Set the connection availibility zone
     fn set_az(&mut self, _az: Option<String>) {}
+
+    /// Update the node address used for PubSub tracking.
+    /// Default implementation does nothing - only MultiplexedConnection implements this.
+    fn update_node_address(&mut self, _address: String) {
+        // Default: no-op
+    }
 }
 
 /// Implements ability to notify about disconnection events

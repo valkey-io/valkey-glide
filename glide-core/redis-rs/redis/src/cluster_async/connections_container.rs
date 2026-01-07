@@ -1,3 +1,4 @@
+use crate::aio::ConnectionLike;
 use crate::cluster_async::ConnectionFuture;
 use crate::cluster_routing::{Route, ShardAddrs, SlotAddr};
 use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap, SlotMapValue};
@@ -708,6 +709,44 @@ where
     /// Returns true if the connections container contains no connections.
     pub(crate) fn is_empty(&self) -> bool {
         self.connection_map.is_empty()
+    }
+}
+
+/// Wraps a connection future to update the node address when the connection resolves.
+fn wrap_future_with_address_update<C>(
+    conn_future: ConnectionFuture<C>,
+    new_address: String,
+) -> ConnectionFuture<C>
+where
+    C: ConnectionLike + Clone + Send + Sync + 'static,
+{
+    async move {
+        let mut conn = conn_future.await;
+        conn.update_node_address(new_address);
+        conn
+    }
+    .boxed()
+    .shared()
+}
+
+impl<C> ClusterNode<ConnectionFuture<C>>
+where
+    C: ConnectionLike + Clone + Send + Sync + 'static,
+{
+    /// Creates a new ClusterNode with connection futures that will update
+    /// the node address in the PushManager when resolved.
+    pub fn with_updated_address(self, new_address: String) -> Self {
+        let user_conn =
+            wrap_future_with_address_update(self.user_connection.conn, new_address.clone());
+
+        ClusterNode {
+            user_connection: ConnectionDetails {
+                conn: user_conn,
+                ip: self.user_connection.ip,
+                az: self.user_connection.az,
+            },
+            management_connection: self.management_connection,
+        }
     }
 }
 

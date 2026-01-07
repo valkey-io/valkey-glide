@@ -1234,14 +1234,9 @@ impl PubSubCommandApplier for ClientWrapper {
                     // So we can't know which node we subscribed to
                     if let Some(command) = cmd.command() {
                         let cmd_upper = command.to_ascii_uppercase();
-                        if cmd_upper == b"UNSUBSCRIBE"
-                            || cmd_upper == b"PUNSUBSCRIBE"
-                        {
+                        if cmd_upper == b"UNSUBSCRIBE" || cmd_upper == b"PUNSUBSCRIBE" {
                             return client
-                                .send_request_to_all_nodes(
-                                    cmd,
-                                    Some(ResponsePolicy::AllSucceeded),
-                                )
+                                .send_request_to_all_nodes(cmd, Some(ResponsePolicy::AllSucceeded))
                                 .await;
                         }
                     }
