@@ -35,6 +35,8 @@ struct SyncCheckResult {
     is_synchronized: bool,
     desired: PubSubSubscriptionInfo,
     actual: PubSubSubscriptionInfo,
+    to_subscribe: PubSubSubscriptionInfo,
+    to_unsubscribe_by_address: HashMap<String, PubSubSubscriptionInfo>,
 }
 
 /// Glide PubSub Synchronizer
@@ -104,41 +106,86 @@ impl GlidePubSubSynchronizer {
         }
     }
 
-    /// Single pass: aggregate current subscriptions, compare with desired, return both + sync status
+    /// Compute full sync state
     fn compute_sync_state(&self) -> SyncCheckResult {
+        // O(desired_subscriptions) clone - we need owned data and must release lock
         let desired = self.desired_subscriptions.read().expect(LOCK_ERR).clone();
         let current_by_addr = self
             .current_subscriptions_by_address
             .read()
             .expect(LOCK_ERR);
 
-        // Aggregate current subscriptions across all addresses (single pass)
-        let mut actual = PubSubSubscriptionInfo::new();
-        for subs in current_by_addr.values() {
+        let mut actual: PubSubSubscriptionInfo = self
+            .subscription_kinds()
+            .iter()
+            .map(|k| (*k, HashSet::new()))
+            .collect();
+
+        let mut to_unsubscribe_by_address: HashMap<String, PubSubSubscriptionInfo> = HashMap::new();
+
+        // Pass 1: O(current_subscriptions)
+        // Iterate over current subcriptions and add to to_unsub each subscription not in desired
+        for (addr, subs) in current_by_addr.iter() {
             for (kind, channels) in subs.iter() {
-                actual.entry(*kind).or_default().extend(channels.clone());
+                actual
+                    .get_mut(kind)
+                    .unwrap()
+                    .extend(channels.iter().cloned());
+
+                let desired_for_kind = desired.get(kind);
+
+                let to_unsub: HashSet<_> = channels
+                    .iter()
+                    .filter(|ch| desired_for_kind.map_or(true, |d| !d.contains(*ch)))
+                    .cloned()
+                    .collect();
+
+                if !to_unsub.is_empty() {
+                    to_unsubscribe_by_address
+                        .entry(addr.clone())
+                        .or_default()
+                        .entry(*kind)
+                        .or_default()
+                        .extend(to_unsub);
+                }
             }
         }
 
-        // Check synchronization while we have both
-        let is_synchronized = self.subscription_kinds().iter().all(|kind| {
-            let desired_set = desired.get(kind).cloned().unwrap_or_default();
-            let actual_set = actual.get(kind).cloned().unwrap_or_default();
-            desired_set == actual_set
-        });
+        let mut to_subscribe = PubSubSubscriptionInfo::new();
 
-        // Build result with all kinds populated
-        let mut desired_result = PubSubSubscriptionInfo::new();
-        let mut actual_result = PubSubSubscriptionInfo::new();
+        // Pass 2: O(desired_subscriptions)
+        // Iterate over desired subcriptions and add to to_sub each subscription not in current
         for kind in self.subscription_kinds() {
-            desired_result.insert(*kind, desired.get(kind).cloned().unwrap_or_default());
-            actual_result.insert(*kind, actual.get(kind).cloned().unwrap_or_default());
+            if let Some(desired_channels) = desired.get(kind) {
+                let actual_channels = actual.get(kind);
+
+                let to_sub: HashSet<_> = desired_channels
+                    .iter()
+                    .filter(|ch| actual_channels.map_or(true, |a| !a.contains(*ch)))
+                    .cloned()
+                    .collect();
+
+                if !to_sub.is_empty() {
+                    to_subscribe.insert(*kind, to_sub);
+                }
+            }
         }
+
+        let is_synchronized = to_subscribe.is_empty() && to_unsubscribe_by_address.is_empty();
+
+        // O(desired_subscriptions) - clone desired for reporting
+        let desired_result: PubSubSubscriptionInfo = self
+            .subscription_kinds()
+            .iter()
+            .map(|k| (*k, desired.get(k).cloned().unwrap_or_default()))
+            .collect();
 
         SyncCheckResult {
             is_synchronized,
             desired: desired_result,
-            actual: actual_result,
+            actual,
+            to_subscribe,
+            to_unsubscribe_by_address,
         }
     }
 
@@ -244,50 +291,27 @@ impl GlidePubSubSynchronizer {
     async fn reconcile(&self) -> RedisResult<()> {
         self.process_pending_unsubscribes().await;
 
-        let desired = self.desired_subscriptions.read().expect(LOCK_ERR).clone();
-        let current_by_addr = self
-            .current_subscriptions_by_address
-            .read()
-            .expect(LOCK_ERR)
-            .clone();
+        let state = self.compute_sync_state();
 
-        for kind in self.subscription_kinds() {
-            let desired_set = desired.get(kind).cloned().unwrap_or_default();
+        if state.is_synchronized {
+            return Ok(());
+        }
 
-            // Aggregate current subscriptions for this kind
-            let current_set: HashSet<_> = current_by_addr
-                .values()
-                .filter_map(|subs| subs.get(kind))
-                .flat_map(|channels| channels.iter().cloned())
-                .collect();
+        for (kind, channels) in state.to_subscribe {
+            self.execute_subscription_change(channels, kind, true, None)
+                .await;
+        }
 
-            // Subscribe to channels in desired but not in current
-            let to_subscribe: HashSet<_> = desired_set.difference(&current_set).cloned().collect();
-            if !to_subscribe.is_empty() {
-                self.execute_subscription_change(to_subscribe, *kind, true, None)
-                    .await;
-            }
+        for (addr, subs_by_kind) in state.to_unsubscribe_by_address {
+            let routing = Self::parse_address_to_routing(&addr).ok();
 
-            // Unsubscribe to channels in current but not in desired
-            for (addr, subs) in &current_by_addr {
-                if let Some(channels) = subs.get(kind) {
-                    let to_unsubscribe: HashSet<_> = channels
-                        .iter()
-                        .filter(|ch| !desired_set.contains(*ch))
-                        .cloned()
-                        .collect();
-
-                    if !to_unsubscribe.is_empty() {
-                        let routing = Self::parse_address_to_routing(addr).ok();
-
-                        if *kind == PubSubSubscriptionKind::Sharded {
-                            self.execute_sharded_unsubscribe_by_slot(to_unsubscribe, routing)
-                                .await;
-                        } else {
-                            self.execute_subscription_change(to_unsubscribe, *kind, false, routing)
-                                .await;
-                        }
-                    }
+            for (kind, channels) in subs_by_kind {
+                if kind == PubSubSubscriptionKind::Sharded {
+                    self.execute_sharded_unsubscribe_by_slot(channels, routing.clone())
+                        .await;
+                } else {
+                    self.execute_subscription_change(channels, kind, false, routing.clone())
+                        .await;
                 }
             }
         }
