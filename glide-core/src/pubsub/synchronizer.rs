@@ -136,7 +136,7 @@ impl GlidePubSubSynchronizer {
 
                 let to_unsub: HashSet<_> = channels
                     .iter()
-                    .filter(|ch| desired_for_kind.map_or(true, |d| !d.contains(*ch)))
+                    .filter(|ch| desired_for_kind.is_none_or(|d| !d.contains(*ch)))
                     .cloned()
                     .collect();
 
@@ -161,7 +161,7 @@ impl GlidePubSubSynchronizer {
 
                 let to_sub: HashSet<_> = desired_channels
                     .iter()
-                    .filter(|ch| actual_channels.map_or(true, |a| !a.contains(*ch)))
+                    .filter(|ch| actual_channels.is_none_or(|a| !a.contains(*ch)))
                     .cloned()
                     .collect();
 
@@ -478,79 +478,6 @@ impl GlidePubSubSynchronizer {
         format!("{{{}}}", formatted.join(", "))
     }
 
-    /// Wait for subscription state to match expected condition
-    ///
-    /// # Arguments
-    /// * `channels` - Channels to check. If None, checks if the kind's subscriptions are empty.
-    /// * `kind` - The subscription kind to check
-    /// * `timeout_ms` - Timeout in milliseconds. 0 means no timeout.
-    /// * `wait_for_presence` - If true, waits until channels ARE subscribed.
-    ///   If false, waits until channels are NOT subscribed.
-    async fn wait_for_subscription_state(
-        &self,
-        channels: Option<&HashSet<PubSubChannelOrPattern>>,
-        kind: PubSubSubscriptionKind,
-        timeout_ms: u64,
-        wait_for_presence: bool,
-    ) -> RedisResult<()> {
-        let deadline = if timeout_ms > 0 {
-            Some(Instant::now() + Duration::from_millis(timeout_ms))
-        } else {
-            None
-        };
-
-        loop {
-            let notified = self.reconciliation_complete_notify.notified();
-
-            // Only read locks we need, compute minimal state
-            let condition_met = {
-                let current_by_addr = self
-                    .current_subscriptions_by_address
-                    .read()
-                    .expect(LOCK_ERR);
-
-                // Aggregate only the kind we care about
-                let current_set: HashSet<_> = current_by_addr
-                    .values()
-                    .filter_map(|subs| subs.get(&kind))
-                    .flat_map(|channels| channels.iter().cloned())
-                    .collect();
-
-                match (channels, wait_for_presence) {
-                    (Some(chs), true) => chs.iter().all(|ch| current_set.contains(ch)),
-                    (Some(chs), false) => chs.iter().all(|ch| !current_set.contains(ch)),
-                    (None, true) => false, // Can't wait for "all" to be present without specifying channels
-                    (None, false) => current_set.is_empty(),
-                }
-            };
-
-            if condition_met {
-                self.check_and_record_sync_state();
-                return Ok(());
-            }
-
-            // Trigger reconciliation since condition isn't met yet
-            self.trigger_reconciliation();
-
-            // Wait for reconciliation notification or timeout
-            if let Some(deadline) = deadline {
-                let remaining = deadline.saturating_duration_since(Instant::now());
-                if remaining.is_zero() {
-                    return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
-                }
-
-                tokio::select! {
-                    _ = notified => {}
-                    _ = tokio::time::sleep(remaining) => {
-                        return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
-                    }
-                }
-            } else {
-                notified.await;
-            }
-        }
-    }
-
     fn extract_channels_from_cmd(cmd: &Cmd) -> Vec<PubSubChannelOrPattern> {
         cmd.args_iter()
             .skip(1)
@@ -644,22 +571,28 @@ impl GlidePubSubSynchronizer {
             )));
         }
 
-        let channels_set: Option<HashSet<_>> = if channels.is_empty() {
-            None
-        } else {
-            Some(channels.into_iter().collect())
-        };
+        let channels_set: HashSet<PubSubChannelOrPattern> = channels.into_iter().collect();
 
         if is_subscribe {
-            let chs = channels_set.clone().unwrap();
-            self.add_desired_subscriptions(chs.clone(), kind);
-            self.wait_for_subscription_state(Some(&chs), kind, timeout_ms, true)
-                .await?;
+            self.add_desired_subscriptions(channels_set.clone(), kind);
         } else {
-            self.remove_desired_subscriptions(channels_set.clone(), kind);
-            self.wait_for_subscription_state(channels_set.as_ref(), kind, timeout_ms, false)
-                .await?;
+            let to_remove = if channels_set.is_empty() {
+                None
+            } else {
+                Some(channels_set.clone())
+            };
+            self.remove_desired_subscriptions(to_remove, kind);
         }
+
+        // Build expected args based on subscription kind
+        let (expected_channels, expected_patterns, expected_sharded) = match kind {
+            PubSubSubscriptionKind::Exact => (Some(channels_set), None, None),
+            PubSubSubscriptionKind::Pattern => (None, Some(channels_set), None),
+            PubSubSubscriptionKind::Sharded => (None, None, Some(channels_set)),
+        };
+
+        self.wait_for_sync(timeout_ms, expected_channels, expected_patterns, expected_sharded)
+            .await?;
 
         Ok(Value::Nil)
     }
@@ -1113,50 +1046,87 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         }
     }
 
-    async fn wait_for_initial_sync(&self, timeout_ms: u64) -> RedisResult<()> {
-        let desired = self.desired_subscriptions.read().expect(LOCK_ERR).clone();
 
-        // If no desired subscriptions, nothing to wait for
-        let has_any_desired = self
-            .subscription_kinds()
-            .iter()
-            .any(|kind| desired.get(kind).map(|s| !s.is_empty()).unwrap_or(false));
+    async fn wait_for_sync(
+        &self,
+        timeout_ms: u64,
+        expected_channels: Option<HashSet<PubSubChannelOrPattern>>,
+        expected_patterns: Option<HashSet<PubSubChannelOrPattern>>,
+        expected_sharded: Option<HashSet<PubSubChannelOrPattern>>,
+    ) -> RedisResult<()> {
+        let deadline = if timeout_ms > 0 {
+            Some(Instant::now() + Duration::from_millis(timeout_ms))
+        } else {
+            None
+        };
 
-        if !has_any_desired {
-            log_debug(
-                "pubsub_synchronizer",
-                "No initial subscriptions to wait for",
-            );
-            return Ok(());
-        }
+        loop {
+            let notified = self.reconciliation_complete_notify.notified();
 
-        self.trigger_reconciliation();
+            let condition_met = {
+                let state = self.compute_sync_state();
 
-        // Wait for each subscription type that has desired subscriptions
-        for kind in self.subscription_kinds() {
-            let desired_set = desired.get(kind).cloned().unwrap_or_default();
-            if !desired_set.is_empty() {
-                log_debug(
-                    "pubsub_synchronizer",
-                    format!(
-                        "Waiting for {:?} subscriptions: {:?}",
-                        kind,
-                        desired_set
-                            .iter()
-                            .map(|c| String::from_utf8_lossy(c).to_string())
-                            .collect::<Vec<_>>()
-                    ),
-                );
+                // If no specific expectations, check full synchronization
+                if expected_channels.is_none()
+                    && expected_patterns.is_none()
+                    && expected_sharded.is_none()
+                {
+                    state.is_synchronized
+                } else {
+                    // Check that specified channels are synced (desired == actual for those channels)
+                    let is_synced_for_channels = |channels: &Option<HashSet<PubSubChannelOrPattern>>,
+                                                kind: PubSubSubscriptionKind|
+                    -> bool {
+                        channels.as_ref().map_or(true, |chs| {
+                            let desired_set = state.desired.get(&kind);
+                            let actual_set = state.actual.get(&kind);
 
-                self.wait_for_subscription_state(Some(&desired_set), *kind, timeout_ms, true)
-                    .await?;
+                            if chs.is_empty() {
+                                // When expecting empty set (unsubscribe-all), verify both
+                                // desired and actual are empty for this subscription type
+                                let desired_empty = desired_set.map_or(true, |d| d.is_empty());
+                                let actual_empty = actual_set.map_or(true, |a| a.is_empty());
+                                desired_empty && actual_empty
+                            } else {
+                                // Check each specified channel has matching state in desired and actual
+                                chs.iter().all(|ch| {
+                                    let in_desired = desired_set.map_or(false, |d| d.contains(ch));
+                                    let in_actual = actual_set.map_or(false, |a| a.contains(ch));
+                                    in_desired == in_actual
+                                })
+                            }
+                        })
+                    };
+
+                    is_synced_for_channels(&expected_channels, PubSubSubscriptionKind::Exact)
+                        && is_synced_for_channels(&expected_patterns, PubSubSubscriptionKind::Pattern)
+                        && is_synced_for_channels(&expected_sharded, PubSubSubscriptionKind::Sharded)
+                }
+            };
+
+            if condition_met {
+                self.check_and_record_sync_state();
+                return Ok(());
+            }
+
+            self.trigger_reconciliation();
+
+            if let Some(deadline) = deadline {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
+                }
+
+                tokio::select! {
+                    _ = notified => {}
+                    _ = tokio::time::sleep(remaining) => {
+                        return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
+                    }
+                }
+            } else {
+                notified.await;
             }
         }
-
-        log_debug(
-            "wait_for_initial_sync",
-            "All initial subscriptions synchronized",
-        );
-        Ok(())
     }
 }
+

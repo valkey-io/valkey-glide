@@ -579,7 +579,7 @@ impl Client {
         // to channels provided via config. Keeping the guard would cause a deadlock. We wait
         // for the subscription here to ensure the lazy client is subscribed immediately upon creation.
         drop(guard);
-        if let Err(e) = self.pubsub_synchronizer.wait_for_initial_sync(1000).await {
+        if let Err(e) = self.pubsub_synchronizer.wait_for_sync(0, None, None, None).await {
             log_warn(
                 "Client::new",
                 format!("Failed to establish initial subscriptions within timeout: {e:?}"),
@@ -1741,7 +1741,7 @@ impl Client {
 
             if !is_lazy {
                 pubsub_synchronizer.trigger_reconciliation();
-                if let Err(e) = pubsub_synchronizer.wait_for_initial_sync(2000).await {
+                if let Err(e) = pubsub_synchronizer.wait_for_sync(0, None, None, None).await {
                     log_error(
                         "Client::new",
                         format!(
