@@ -9656,6 +9656,149 @@ class TestCommands:
     def test_sync_unwatch_with_route(self, glide_sync_client: GlideClusterClient):
         assert glide_sync_client.unwatch(RandomNode()) == OK
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_multi_exec_discard(self, glide_sync_client: TGlideClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        
+        # Test basic MULTI/EXEC transaction
+        assert glide_sync_client.multi() == OK
+        assert glide_sync_client.set(key1, "value1") == b"QUEUED"
+        assert glide_sync_client.set(key2, "value2") == b"QUEUED"
+        assert glide_sync_client.get(key1) == b"QUEUED"
+        assert glide_sync_client.get(key2) == b"QUEUED"
+        
+        result = glide_sync_client.exec()
+        assert result is not None
+        assert len(result) == 4
+        assert result[0] == OK
+        assert result[1] == OK
+        assert result[2] == b"value1"
+        assert result[3] == b"value2"
+        
+        # Verify keys were actually set
+        assert glide_sync_client.get(key1) == b"value1"
+        assert glide_sync_client.get(key2) == b"value2"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_discard_transaction(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        
+        # Set initial value
+        assert glide_sync_client.set(key, "initial") == OK
+        
+        # Start transaction and queue commands
+        assert glide_sync_client.multi() == OK
+        assert glide_sync_client.set(key, "discarded_value") == b"QUEUED"
+        assert glide_sync_client.incr(key) == b"QUEUED"  # This would fail, but we'll discard
+        
+        # Discard the transaction
+        assert glide_sync_client.discard() == OK
+        
+        # Verify the key still has the initial value
+        assert glide_sync_client.get(key) == b"initial"
+        
+        # Verify we can execute commands normally after discard
+        assert glide_sync_client.set(key, "after_discard") == OK
+        assert glide_sync_client.get(key) == b"after_discard"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_watch_multi_exec_success(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        
+        # Set initial value and watch the key
+        assert glide_sync_client.set(key, "initial") == OK
+        assert glide_sync_client.watch([key]) == OK
+        
+        # Start transaction
+        assert glide_sync_client.multi() == OK
+        assert glide_sync_client.set(key, "modified") == b"QUEUED"
+        assert glide_sync_client.get(key) == b"QUEUED"
+        
+        # Execute transaction (should succeed since key wasn't modified)
+        result = glide_sync_client.exec()
+        assert result is not None
+        assert len(result) == 2
+        assert result[0] == OK
+        assert result[1] == b"modified"
+        
+        # Verify the key was modified
+        assert glide_sync_client.get(key) == b"modified"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_watch_multi_exec_abort(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        
+        # Set initial value and watch the key
+        assert glide_sync_client.set(key, "initial") == OK
+        assert glide_sync_client.watch([key]) == OK
+        
+        # Start transaction
+        assert glide_sync_client.multi() == OK
+        assert glide_sync_client.set(key, "should_not_be_set") == b"QUEUED"
+        
+        # Modify the watched key from outside the transaction
+        assert glide_sync_client.set(key, "external_modification") == OK
+        
+        # Execute transaction (should return None due to watched key modification)
+        result = glide_sync_client.exec()
+        assert result is None
+        
+        # Verify the key has the external modification, not the transaction value
+        assert glide_sync_client.get(key) == b"external_modification"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_transaction_error_handling(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        
+        # Set a string value
+        assert glide_sync_client.set(key, "not_a_number") == OK
+        
+        # Start transaction with a command that will fail
+        assert glide_sync_client.multi() == OK
+        assert glide_sync_client.set(key, "value1") == b"QUEUED"
+        assert glide_sync_client.incr(key) == b"QUEUED"  # This will fail since key is not a number
+        assert glide_sync_client.get(key) == b"QUEUED"
+        
+        # Execute transaction - should return results with error
+        result = glide_sync_client.exec()
+        assert result is not None
+        assert len(result) == 3
+        assert result[0] == OK  # SET succeeded
+        assert isinstance(result[1], RequestError)  # INCR failed
+        assert result[2] == b"value1"  # GET succeeded
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_nested_multi_error(self, glide_sync_client: TGlideClient):
+        # Test that calling MULTI inside a transaction returns an error
+        assert glide_sync_client.multi() == OK
+        
+        with pytest.raises(RequestError, match="MULTI calls can not be nested"):
+            glide_sync_client.multi()
+        
+        # Clean up by discarding the transaction
+        assert glide_sync_client.discard() == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_exec_without_multi_error(self, glide_sync_client: TGlideClient):
+        # Test that calling EXEC without MULTI returns an error
+        with pytest.raises(RequestError, match="EXEC without MULTI"):
+            glide_sync_client.exec()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_discard_without_multi_error(self, glide_sync_client: TGlideClient):
+        # Test that calling DISCARD without MULTI returns an error
+        with pytest.raises(RequestError, match="DISCARD without MULTI"):
+            glide_sync_client.discard()
+
     @pytest.mark.skip_if_version_below("6.0.6")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

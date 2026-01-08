@@ -7230,6 +7230,90 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.Watch, keys),
         )
 
+    async def multi(self) -> TOK:
+        """
+        Marks the start of a transaction block. Subsequent commands will be queued for atomic execution using `EXEC`.
+
+        See [valkey.io](https://valkey.io/commands/multi) for more details.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.multi()
+                'OK'
+            >>> await client.set("key", "value")
+                'QUEUED'
+            >>> await client.get("key")
+                'QUEUED'
+            >>> await client.exec()
+                ['OK', b'value']
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.Multi, []),
+        )
+
+    async def exec(self) -> Optional[List[TResult]]:
+        """
+        Executes all previously queued commands in a transaction and restores the connection state to normal.
+        When using `WATCH`, `EXEC` will execute commands only if the watched keys were not modified,
+        otherwise returns `None`.
+
+        See [valkey.io](https://valkey.io/commands/exec) for more details.
+
+        Returns:
+            Optional[List[TResult]]: An array of results from the executed commands, or `None` if the transaction was aborted due to a `WATCH` condition.
+
+        Examples:
+            >>> await client.multi()
+                'OK'
+            >>> await client.set("key", "value")
+                'QUEUED'
+            >>> await client.get("key")
+                'QUEUED'
+            >>> await client.exec()
+                ['OK', b'value']
+
+            >>> await client.watch("watched_key")
+                'OK'
+            >>> await client.multi()
+                'OK'
+            >>> await client.set("key", "value")
+                'QUEUED'
+            >>> # If watched_key is modified by another client here, exec returns None
+            >>> await client.exec()
+                None
+        """
+        return cast(
+            Optional[List[TResult]],
+            await self._execute_command(RequestType.Exec, []),
+        )
+
+    async def discard(self) -> TOK:
+        """
+        Flushes all previously queued commands in a transaction and restores the connection state to normal.
+
+        See [valkey.io](https://valkey.io/commands/discard) for more details.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.multi()
+                'OK'
+            >>> await client.set("key", "value")
+                'QUEUED'
+            >>> await client.discard()
+                'OK'
+            >>> await client.get("key")
+                None  # The SET command was discarded
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.Discard, []),
+        )
+
     async def get_pubsub_message(self) -> PubSubMsg:
         """
         Returns the next pubsub message.
