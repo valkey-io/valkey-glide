@@ -30,6 +30,7 @@ from tests.utils.utils import (
     get_pubsub_modes,
     kill_connections,
     new_message,
+    parse_info_response,
     psubscribe_by_method,
     pubsub_client_cleanup,
     punsubscribe_by_method,
@@ -4890,3 +4891,56 @@ class TestPubSub:
         finally:
             await pubsub_client_cleanup(listening_client)
             await pubsub_client_cleanup(publishing_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_pubsub_reconciliation_interval_config(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that a short pubsub_reconciliation_interval causes faster reconciliation.
+
+        Uses sync timestamp metrics to verify reconciliation happens at approximately
+        the configured interval.
+        """
+        listening_client = None
+        try:
+            # Use a short interval (500ms) for faster testing
+            short_interval_ms = 500
+
+            # Create client with short reconciliation interval
+            listening_client = await create_pubsub_client(
+                request,
+                cluster_mode,
+                reconciliation_interval_ms=short_interval_ms,
+            )
+
+            # Get initial timestamp
+            initial_stats = await listening_client.get_statistics()
+            previous_timestamp = int(
+                initial_stats.get("subscription_last_sync_timestamp", "0")
+            )
+
+            # Iterate 5 times and verify timestamp increases by approximately the interval each time
+            for i in range(5):
+                await anyio.sleep(
+                    0.6
+                )  # Sleep slightly longer than interval to ensure reconciliation runs
+
+                stats = await listening_client.get_statistics()
+                current_timestamp = int(
+                    stats.get("subscription_last_sync_timestamp", "0")
+                )
+
+                time_diff_ms = current_timestamp - previous_timestamp
+
+                assert time_diff_ms >= short_interval_ms, (
+                    f"Iteration {i + 1}: Timestamp difference ({time_diff_ms}ms) should be >= {short_interval_ms}ms "
+                    f"Previous: {previous_timestamp}, Current: {current_timestamp}"
+                )
+
+                previous_timestamp = current_timestamp
+
+        finally:
+            await pubsub_client_cleanup(listening_client)

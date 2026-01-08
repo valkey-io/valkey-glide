@@ -452,6 +452,10 @@ class TlsAdvancedConfiguration:
         self.client_key_pem = client_key_pem
 
 
+# Default reconciliation interval in milliseconds (3 seconds)
+DEFAULT_PUBSUB_RECONCILIATION_INTERVAL_MS = 3000
+
+
 class AdvancedBaseClientConfiguration:
     """
     Represents the advanced configuration settings for a base Glide client.
@@ -468,6 +472,15 @@ class AdvancedBaseClientConfiguration:
             When True, disables Nagle's algorithm for lower latency by sending packets immediately without buffering.
             When False, enables Nagle's algorithm to reduce network overhead by buffering small packets.
             If not explicitly set, defaults to True.
+        pubsub_reconciliation_interval (Optional[int]): The interval in milliseconds between PubSub subscription
+            reconciliation attempts. The reconciliation process ensures that the client's desired subscriptions
+            match the actual subscriptions on the server.
+            - When subscriptions become out of sync (e.g., due to network issues or topology changes),
+              the reconciliation task will attempt to restore them at this interval.
+            - A shorter interval means faster recovery but higher overhead.
+            - A longer interval reduces overhead but may delay subscription recovery.
+            - Must be at least 100 milliseconds.
+            - If not explicitly set, a default value of 3000 milliseconds (3 seconds) will be used.
     """
 
     def __init__(
@@ -475,10 +488,12 @@ class AdvancedBaseClientConfiguration:
         connection_timeout: Optional[int] = None,
         tls_config: Optional[TlsAdvancedConfiguration] = None,
         tcp_nodelay: Optional[bool] = None,
+        pubsub_reconciliation_interval: Optional[int] = None,
     ):
         self.connection_timeout = connection_timeout
         self.tls_config = tls_config
         self.tcp_nodelay = tcp_nodelay
+        self.pubsub_reconciliation_interval = pubsub_reconciliation_interval
 
     def _create_a_protobuf_conn_request(
         self, request: ConnectionRequest
@@ -488,6 +503,11 @@ class AdvancedBaseClientConfiguration:
 
         if self.tcp_nodelay is not None:
             request.tcp_nodelay = self.tcp_nodelay
+            
+        if self.pubsub_reconciliation_interval is not None:
+            request.pubsub_reconciliation_interval_ms = (
+                self.pubsub_reconciliation_interval
+            )
 
         if self.tls_config:
             if self.tls_config.use_insecure_tls:
@@ -787,9 +807,10 @@ class AdvancedGlideClientConfiguration(AdvancedBaseClientConfiguration):
         connection_timeout: Optional[int] = None,
         tls_config: Optional[TlsAdvancedConfiguration] = None,
         tcp_nodelay: Optional[bool] = None,
+        pubsub_reconciliation_interval: Optional[int] = None,
     ):
 
-        super().__init__(connection_timeout, tls_config, tcp_nodelay)
+        super().__init__(connection_timeout, tls_config, tcp_nodelay, pubsub_reconciliation_interval)
 
 
 class GlideClientConfiguration(BaseClientConfiguration):
@@ -976,6 +997,16 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
         refresh_topology_from_initial_nodes (bool): Enables refreshing the cluster topology using only the initial nodes.
             When this option is enabled, all topology updates (both the periodic checks and on-demand refreshes
             triggered by topology changes) will query only the initial nodes provided when creating the client, rather than using the internal cluster view.
+        pubsub_reconciliation_interval (Optional[int]): The interval in milliseconds between PubSub subscription
+            reconciliation attempts. The reconciliation process ensures that the client's desired subscriptions
+            match the actual subscriptions on the server.
+
+            - When subscriptions become out of sync (e.g., due to network issues or topology changes),
+              the reconciliation task will attempt to restore them at this interval.
+            - A shorter interval means faster recovery but higher overhead.
+            - A longer interval reduces overhead but may delay subscription recovery.
+            - Must be at least 100 milliseconds.
+            - If not explicitly set, a default value of 3000 milliseconds (3 seconds) will be used.
     """
 
     def __init__(
@@ -984,8 +1015,9 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
         tls_config: Optional[TlsAdvancedConfiguration] = None,
         refresh_topology_from_initial_nodes: bool = False,
         tcp_nodelay: Optional[bool] = None,
+        pubsub_reconciliation_interval: Optional[int] = None,
     ):
-        super().__init__(connection_timeout, tls_config, tcp_nodelay)
+        super().__init__(connection_timeout, tls_config, tcp_nodelay, pubsub_reconciliation_interval)
         self.refresh_topology_from_initial_nodes = refresh_topology_from_initial_nodes
 
     def _create_a_protobuf_conn_request(

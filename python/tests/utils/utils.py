@@ -551,6 +551,7 @@ def create_client_config(
     tls_insecure: Optional[bool] = None,
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
+    reconciliation_interval_ms: Optional[int] = None,
 ) -> Union[GlideClusterClientConfiguration, GlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
@@ -590,7 +591,9 @@ def create_client_config(
             read_from=read_from,
             client_az=client_az,
             advanced_config=AdvancedGlideClusterClientConfiguration(
-                connection_timeout, tls_config=tls_adv_conf
+                connection_timeout,
+                tls_config=tls_adv_conf,
+                pubsub_reconciliation_interval=reconciliation_interval_ms,
             ),
             lazy_connect=lazy_connect,
             compression=compression_config,
@@ -611,7 +614,9 @@ def create_client_config(
             read_from=read_from,
             client_az=client_az,
             advanced_config=AdvancedGlideClientConfiguration(
-                connection_timeout, tls_config=tls_adv_conf
+                connection_timeout,
+                tls_config=tls_adv_conf,
+                pubsub_reconciliation_interval=reconciliation_interval_ms,
             ),
             reconnect_strategy=reconnect_strategy,
             lazy_connect=lazy_connect,
@@ -1823,6 +1828,7 @@ async def create_pubsub_client(
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
     timeout: Optional[int] = None,
     lazy_connect: bool = False,
+    reconciliation_interval_ms: Optional[int] = None,
 ) -> TGlideClient:
     from tests.async_tests.conftest import create_client
 
@@ -1859,6 +1865,7 @@ async def create_pubsub_client(
                 protocol=protocol,
                 request_timeout=timeout,
                 lazy_connect=lazy_connect,
+                reconciliation_interval_ms=reconciliation_interval_ms,
             )
         else:
             PubSubModes = GlideClientConfiguration.PubSubChannelModes  # type: ignore[assignment]
@@ -1883,6 +1890,7 @@ async def create_pubsub_client(
                 protocol=protocol,
                 request_timeout=timeout,
                 lazy_connect=lazy_connect,
+                reconciliation_interval_ms=reconciliation_interval_ms,
             )
     else:
         client = await create_client(
@@ -1891,6 +1899,7 @@ async def create_pubsub_client(
             protocol=protocol,
             request_timeout=timeout,
             lazy_connect=lazy_connect,
+            reconciliation_interval_ms=reconciliation_interval_ms,
         )
 
     return client

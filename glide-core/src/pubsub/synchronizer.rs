@@ -16,7 +16,7 @@ use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock as TokioRwLock};
 
 const LOCK_ERR: &str = "Lock poisoned";
-const RECONCILIATION_INTERVAL: Duration = Duration::from_secs(5);
+const DEFAULT_RECONCILIATION_INTERVAL: Duration = Duration::from_secs(3);
 
 /// Static slices for subscription kinds - no allocation
 const CLUSTER_SUBSCRIPTION_KINDS: &[PubSubSubscriptionKind] = &[
@@ -70,13 +70,19 @@ pub struct GlidePubSubSynchronizer {
 
     /// Pending unsubscribes due to topology change that need to be sent to specific addresses
     pending_unsubscribes: RwLock<HashMap<String, PubSubSubscriptionInfo>>,
+
+    /// Configurable reconciliation interval
+    reconciliation_interval: Duration,
 }
 
 impl GlidePubSubSynchronizer {
     pub async fn create(
         initial_subscriptions: Option<PubSubSubscriptionInfo>,
         is_cluster: bool,
-    ) -> Arc<dyn PubSubSynchronizer> {
+        reconciliation_interval: Option<Duration>,
+    ) -> Arc<Self> {
+        let interval = reconciliation_interval.unwrap_or(DEFAULT_RECONCILIATION_INTERVAL);
+
         let sync = Arc::new(Self {
             internal_client: OnceCell::new(),
             is_cluster,
@@ -86,6 +92,7 @@ impl GlidePubSubSynchronizer {
             reconciliation_complete_notify: Notify::new(),
             reconciliation_task_handle: Mutex::new(None),
             pending_unsubscribes: RwLock::new(HashMap::new()),
+            reconciliation_interval: interval,
         });
 
         sync.start_reconciliation_task();
@@ -261,6 +268,7 @@ impl GlidePubSubSynchronizer {
         // We use a weak ref to self here as an indication that the client has dropped and thus there
         // is no longer a strong ref of the synchornizer and we should break from the loop
         let sync_weak = Arc::downgrade(self);
+        let interval = self.reconciliation_interval;
 
         let handle = tokio::spawn(async move {
             loop {
@@ -270,7 +278,7 @@ impl GlidePubSubSynchronizer {
                 };
                 tokio::select! {
                     _ = sync.reconciliation_notify.notified() => {},
-                    _ = tokio::time::sleep(RECONCILIATION_INTERVAL) => {},
+                    _ = tokio::time::sleep(interval) => {},
                 }
 
                 if let Err(e) = sync.reconcile().await {
@@ -591,8 +599,13 @@ impl GlidePubSubSynchronizer {
             PubSubSubscriptionKind::Sharded => (None, None, Some(channels_set)),
         };
 
-        self.wait_for_sync(timeout_ms, expected_channels, expected_patterns, expected_sharded)
-            .await?;
+        self.wait_for_sync(
+            timeout_ms,
+            expected_channels,
+            expected_patterns,
+            expected_sharded,
+        )
+        .await?;
 
         Ok(Value::Nil)
     }
@@ -1046,7 +1059,6 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         }
     }
 
-
     async fn wait_for_sync(
         &self,
         timeout_ms: u64,
@@ -1074,24 +1086,26 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
                     state.is_synchronized
                 } else {
                     // Check that specified channels are synced (desired == actual for those channels)
-                    let is_synced_for_channels = |channels: &Option<HashSet<PubSubChannelOrPattern>>,
-                                                kind: PubSubSubscriptionKind|
-                    -> bool {
-                        channels.as_ref().map_or(true, |chs| {
+                    let is_synced_for_channels = |channels: &Option<
+                        HashSet<PubSubChannelOrPattern>,
+                    >,
+                                                  kind: PubSubSubscriptionKind|
+                     -> bool {
+                        channels.as_ref().is_none_or(|chs| {
                             let desired_set = state.desired.get(&kind);
                             let actual_set = state.actual.get(&kind);
 
                             if chs.is_empty() {
                                 // When expecting empty set (unsubscribe-all), verify both
                                 // desired and actual are empty for this subscription type
-                                let desired_empty = desired_set.map_or(true, |d| d.is_empty());
-                                let actual_empty = actual_set.map_or(true, |a| a.is_empty());
+                                let desired_empty = desired_set.is_none_or(|d| d.is_empty());
+                                let actual_empty = actual_set.is_none_or(|a| a.is_empty());
                                 desired_empty && actual_empty
                             } else {
                                 // Check each specified channel has matching state in desired and actual
                                 chs.iter().all(|ch| {
-                                    let in_desired = desired_set.map_or(false, |d| d.contains(ch));
-                                    let in_actual = actual_set.map_or(false, |a| a.contains(ch));
+                                    let in_desired = desired_set.is_some_and(|d| d.contains(ch));
+                                    let in_actual = actual_set.is_some_and(|a| a.contains(ch));
                                     in_desired == in_actual
                                 })
                             }
@@ -1099,8 +1113,14 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
                     };
 
                     is_synced_for_channels(&expected_channels, PubSubSubscriptionKind::Exact)
-                        && is_synced_for_channels(&expected_patterns, PubSubSubscriptionKind::Pattern)
-                        && is_synced_for_channels(&expected_sharded, PubSubSubscriptionKind::Sharded)
+                        && is_synced_for_channels(
+                            &expected_patterns,
+                            PubSubSubscriptionKind::Pattern,
+                        )
+                        && is_synced_for_channels(
+                            &expected_sharded,
+                            PubSubSubscriptionKind::Sharded,
+                        )
                 }
             };
 
@@ -1129,4 +1149,3 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         }
     }
 }
-

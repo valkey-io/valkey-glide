@@ -579,7 +579,11 @@ impl Client {
         // to channels provided via config. Keeping the guard would cause a deadlock. We wait
         // for the subscription here to ensure the lazy client is subscribed immediately upon creation.
         drop(guard);
-        if let Err(e) = self.pubsub_synchronizer.wait_for_sync(0, None, None, None).await {
+        if let Err(e) = self
+            .pubsub_synchronizer
+            .wait_for_sync(0, None, None, None)
+            .await
+        {
             log_warn(
                 "Client::new",
                 format!("Failed to establish initial subscriptions within timeout: {e:?}"),
@@ -1660,6 +1664,11 @@ impl Client {
         // Create compression manager from configuration
         let compression_manager = create_compression_manager(request.compression_config.clone())?;
 
+        let reconciliation_interval = match request.pubsub_reconciliation_interval_ms {
+            Some(ms) if ms > 0 => Some(Duration::from_millis(ms as u64)),
+            _ => None,
+        };
+
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
@@ -1676,6 +1685,7 @@ impl Client {
                 initial_subscriptions,
                 request.cluster_mode_enabled,
                 Arc::downgrade(&internal_client_arc),
+                reconciliation_interval,
             )
             .await;
 
@@ -2084,8 +2094,13 @@ mod tests {
         // Create runtime to initialize a stub pubsub synchronizer
         // We do this in order to keep the pubsub_synchronizer in the client struct non-optional.
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let pubsub_synchronizer =
-            rt.block_on(create_pubsub_synchronizer(None, None, false, Weak::new()));
+        let pubsub_synchronizer = rt.block_on(create_pubsub_synchronizer(
+            None,
+            None,
+            false,
+            Weak::new(),
+            None,
+        ));
 
         Client {
             internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),

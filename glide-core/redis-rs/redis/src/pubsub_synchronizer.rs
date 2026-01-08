@@ -5,8 +5,6 @@ use crate::connection::{PubSubChannelOrPattern, PubSubSubscriptionKind};
 use crate::{Cmd, RedisResult, Value};
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
-use std::time::Duration;
-use crate::RedisError;
 
 /// Trait for managing PubSub subscription synchronization between desired and actual state.
 #[async_trait]
@@ -76,21 +74,20 @@ pub trait PubSubSynchronizer: Send + Sync {
         None
     }
 
-
-/// Wait for subscriptions to synchronize.
-///
-/// # Arguments
-/// * `timeout_ms` - Timeout in milliseconds. If 0, waits indefinitely until sync completes.
-/// * `expected_channels` - If provided, waits until these exact channels are synced (desired == actual).
-/// * `expected_patterns` - If provided, waits until these patterns are synced (desired == actual).
-/// * `expected_sharded` - If provided, waits until these sharded channels are synced (desired == actual).
-///
-/// - If all optional parameters are `None`, waits until desired == actual for all subscription types.
-/// - If specific parameters are provided, waits only for those channels/patterns to be synced,
-///
-/// # Returns
-/// * `Ok(())` - Sync completed successfully.
-/// * `Err` - Timeout occurred before sync completed (when `timeout_ms > 0`).
+    /// Wait for subscriptions to synchronize.
+    ///
+    /// # Arguments
+    /// * `timeout_ms` - Timeout in milliseconds. If 0, waits indefinitely until sync completes.
+    /// * `expected_channels` - If provided, waits until these exact channels are synced (desired == actual).
+    /// * `expected_patterns` - If provided, waits until these patterns are synced (desired == actual).
+    /// * `expected_sharded` - If provided, waits until these sharded channels are synced (desired == actual).
+    ///
+    /// - If all optional parameters are `None`, waits until desired == actual for all subscription types.
+    /// - If specific parameters are provided, waits only for those channels/patterns to be synced,
+    ///
+    /// # Returns
+    /// * `Ok(())` - Sync completed successfully.
+    /// * `Err` - Timeout occurred before sync completed (when `timeout_ms > 0`).
     async fn wait_for_sync(
         &self,
         _timeout_ms: u64,

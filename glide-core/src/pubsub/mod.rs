@@ -7,6 +7,7 @@ pub use redis::{
     PubSubSynchronizer, RedisError,
 };
 use std::sync::{Arc, Weak};
+use std::time::Duration;
 use tokio::sync::{RwLock, mpsc};
 
 #[cfg(feature = "mock-pubsub")]
@@ -24,12 +25,17 @@ pub async fn create_pubsub_synchronizer(
     initial_subscriptions: Option<redis::PubSubSubscriptionInfo>,
     is_cluster: bool,
     internal_client: Weak<RwLock<ClientWrapper>>,
+    reconciliation_interval: Option<Duration>,
 ) -> Arc<dyn PubSubSynchronizer> {
     #[cfg(feature = "mock-pubsub")]
     {
-        let sync =
-            mock::MockPubSubSynchronizer::create(_push_sender, initial_subscriptions, is_cluster)
-                .await;
+        let sync = mock::MockPubSubSynchronizer::create(
+            _push_sender,
+            initial_subscriptions,
+            is_cluster,
+            reconciliation_interval,
+        )
+        .await;
         // Only set if the weak pointer can be upgraded (is not empty)
         if internal_client.upgrade().is_some() {
             sync.as_any()
@@ -42,8 +48,12 @@ pub async fn create_pubsub_synchronizer(
 
     #[cfg(not(feature = "mock-pubsub"))]
     {
-        let sync =
-            synchronizer::GlidePubSubSynchronizer::create(initial_subscriptions, is_cluster).await;
+        let sync = synchronizer::GlidePubSubSynchronizer::create(
+            initial_subscriptions,
+            is_cluster,
+            reconciliation_interval,
+        )
+        .await;
         // Only set if the weak pointer can be upgraded (is not empty)
         // This is because OnceCell::set only works once - if we set an empty Weak::new(),
         // tests that create the synchronizer before the client won't be able to set

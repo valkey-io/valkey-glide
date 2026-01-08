@@ -19,6 +19,9 @@ use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock as TokioRwLock, mpsc};
 use tokio::time::sleep;
 
+/// Default reconciliation interval for mock (3 seconds)
+pub const DEFAULT_MOCK_RECONCILIATION_INTERVAL: Duration = Duration::from_secs(3);
+
 /// Global singleton mock PubSub broker
 static MOCK_BROKER: Lazy<Arc<MockPubSubBroker>> = Lazy::new(|| Arc::new(MockPubSubBroker::new()));
 
@@ -46,6 +49,7 @@ pub struct MockPubSubSynchronizer {
     reconciliation_notify: Arc<Notify>,
     reconciliation_complete_notify: Arc<Notify>,
     reconciliation_task_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    reconciliation_interval: Duration,
 }
 
 impl MockPubSubSynchronizer {
@@ -53,6 +57,7 @@ impl MockPubSubSynchronizer {
         client_id: String,
         broker: Arc<MockPubSubBroker>,
         is_cluster: bool,
+        reconciliation_interval: Duration,
     ) -> Arc<Self> {
         Arc::new(Self {
             client_id,
@@ -65,6 +70,7 @@ impl MockPubSubSynchronizer {
             reconciliation_notify: Arc::new(Notify::new()),
             reconciliation_complete_notify: Arc::new(Notify::new()),
             reconciliation_task_handle: Arc::new(Mutex::new(None)),
+            reconciliation_interval,
         })
     }
 
@@ -72,14 +78,19 @@ impl MockPubSubSynchronizer {
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         initial_subscriptions: Option<redis::PubSubSubscriptionInfo>,
         is_cluster: bool,
+        reconciliation_interval: Option<Duration>,
     ) -> Arc<dyn PubSubSynchronizer> {
         let client_id = format!(
             "mock_client_{}",
             MOCK_CLIENT_COUNTER.fetch_add(1, Ordering::SeqCst)
         );
 
+        // Apply default for reconciliation interval
+        let interval = reconciliation_interval.unwrap_or(DEFAULT_MOCK_RECONCILIATION_INTERVAL);
+
         let broker = get_mock_broker();
-        let synchronizer = Self::new_internal(client_id.clone(), Arc::clone(&broker), is_cluster);
+        let synchronizer =
+            Self::new_internal(client_id.clone(), Arc::clone(&broker), is_cluster, interval);
 
         // Apply initial subscriptions before starting reconciliation task
         // For config-based subscriptions, immediately sync desired and actual
@@ -132,6 +143,7 @@ impl MockPubSubSynchronizer {
 
         synchronizer
     }
+
     pub(crate) fn set_can_subscribe(&self, can_subscribe: bool) {
         *self.can_subscribe.write().expect(LOCK_ERR) = can_subscribe;
     }
@@ -151,12 +163,13 @@ impl MockPubSubSynchronizer {
         let notify = Arc::clone(&self.reconciliation_notify);
         let complete_notify = Arc::clone(&self.reconciliation_complete_notify);
         let broker = Arc::clone(&self.broker);
+        let interval = self.reconciliation_interval;
 
         let handle = tokio::spawn(async move {
             loop {
                 tokio::select! {
                     _ = notify.notified() => {},
-                    _ = tokio::time::sleep(Duration::from_secs(5)) => {},
+                    _ = tokio::time::sleep(interval) => {},
                 }
 
                 let Some(sync) = sync_weak.upgrade() else {

@@ -444,10 +444,25 @@ impl PubSubTestSetup {
     /// Creates a test setup with a ClusterConnection configured for fast slot refresh
     /// and a properly initialized synchronizer.
     pub async fn new(addresses: &[ConnectionAddr]) -> Self {
+        Self::new_with_interval(addresses, None).await
+    }
+
+    /// Creates a test setup with a custom reconciliation interval.
+    pub async fn new_with_interval(
+        addresses: &[ConnectionAddr],
+        reconciliation_interval: Option<Duration>,
+    ) -> Self {
         let (push_tx, _push_rx) = mpsc::unbounded_channel();
 
         // Create synchronizer with empty weak pointer initially
-        let synchronizer = create_pubsub_synchronizer(Some(push_tx), None, true, Weak::new()).await;
+        let synchronizer = create_pubsub_synchronizer(
+            Some(push_tx),
+            None,
+            true,
+            Weak::new(),
+            reconciliation_interval,
+        )
+        .await;
 
         let initial_nodes: Vec<redis::ConnectionInfo> = addresses
             .iter()
