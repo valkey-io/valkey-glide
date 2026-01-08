@@ -2,6 +2,10 @@
 
 * JAVA: Unshadow Apache Commons Lang3 to avoid failures due to dependency conflicts
 
+#### Fixes
+
+* CORE: Rust Lint is failing due to unmaintained advisory detected (RUSTSEC-2025-0141)  ([#5136](https://github.com/valkey-io/valkey-glide/issues/5136))
+
 ## 2.2.2
 
 #### Security Fixes
