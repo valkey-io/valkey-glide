@@ -10946,8 +10946,10 @@ export function runBaseTests(config: {
                         result[resultCollectionIndex].length,
                     ).toBeGreaterThan(0);
 
+                    // Test noScores with match only returns a list of members without scores
                     if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
                         const result = await client.zscan(key1, initialCursor, {
+                            match: "member*",
                             noScores: true,
                         });
                         const resultCursor = result[resultCursorIndex];
@@ -10958,10 +10960,8 @@ export function runBaseTests(config: {
                         // Verify that the cursor is not "0" and values are not included
                         expect(resultCursor).not.toEqual("0");
                         expect(
-                            fieldsArray.every(
-                                (field) =>
-                                    field.startsWith("member") ||
-                                    charMembers.includes(field),
+                            fieldsArray.every((field) =>
+                                field.startsWith("member"),
                             ),
                         ).toBeTruthy();
                     }
