@@ -23,6 +23,19 @@ enum TlsMode {
 message AuthenticationInfo {
     string password = 1;
     string username = 2;
+    optional IamCredentials iam_credentials = 3;
+}
+
+enum ServiceType {
+  ELASTICACHE = 0;
+  MEMORYDB    = 1;
+}
+
+message IamCredentials {
+    string cluster_name = 1;
+    string region = 2;
+    ServiceType service_type = 3;
+    optional uint32 refresh_interval_seconds = 4;
 }
 
 enum ProtocolVersion {
@@ -41,6 +54,18 @@ enum PubSubChannelType {
     Exact = 0;
     Pattern = 1;
     Sharded = 2;
+}
+
+enum CompressionBackend {
+    ZSTD = 0;
+    LZ4 = 1;
+}
+
+message CompressionConfig {
+    bool enabled = 1;
+    CompressionBackend backend = 2;
+    optional int32 compression_level = 3;
+    uint32 min_compression_size = 4;
 }
 
 message PubSubChannelsOrPatterns
@@ -74,6 +99,13 @@ message ConnectionRequest {
     string client_az = 15;
     uint32 connection_timeout = 16;
     bool lazy_connect = 17;
+    bool refresh_topology_from_initial_nodes = 18;
+    string lib_name = 19;
+    repeated bytes root_certs = 20;
+    optional CompressionConfig compression_config = 21;
+    bytes client_cert = 22;
+    bytes client_key = 23;
+    optional bool tcp_nodelay = 24;
 }
 
 message ConnectionRetryStrategy {

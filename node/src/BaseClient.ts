@@ -1,6 +1,12 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
+
+/**
+ * Note: 'eslint-disable-line @typescript-eslint/no-unused-vars' is used intentionally
+ * to suppress unused import errors for types referenced only in JSDoc.
+ */
+
 import Long from "long";
 import * as net from "net";
 import {
@@ -94,6 +100,7 @@ import {
     createBitField,
     createBitOp,
     createBitPos,
+    createCopy,
     createDecr,
     createDecrBy,
     createDel,
@@ -162,6 +169,7 @@ import {
     createMGet,
     createMSet,
     createMSetNX,
+    createMove,
     createObjectEncoding,
     createObjectFreq,
     createObjectIdletime,
@@ -201,6 +209,7 @@ import {
     createSUnion,
     createSUnionStore,
     createScriptShow,
+    createSelect,
     createSet,
     createSetBit,
     createSetRange,
@@ -523,18 +532,50 @@ class PointerResponse {
     }
 }
 
-/** Represents the credentials for connecting to a server. */
-export interface ServerCredentials {
-    /**
-     * The username that will be used for authenticating connections to the Valkey servers.
-     * If not supplied, "default" will be used.
-     */
-    username?: string;
-    /**
-     * The password that will be used for authenticating connections to the Valkey servers.
-     */
-    password: string;
+/** Represents the types of services that can be used for IAM authentication. */
+export enum ServiceType {
+    Elasticache = "Elasticache",
+    MemoryDB = "MemoryDB",
 }
+
+/** Configuration settings for IAM authentication. */
+export interface IamAuthConfig {
+    /** The name of the ElastiCache/MemoryDB cluster. */
+    clusterName: string;
+    /** The type of service being used (ElastiCache or MemoryDB). */
+    service: ServiceType;
+    /** The AWS region where the ElastiCache/MemoryDB cluster is located. */
+    region: string;
+    /**
+     * Optional refresh interval in seconds for renewing IAM authentication tokens.
+     * If not provided, defaults to 300 seconds (5 min).
+     */
+    refreshIntervalSeconds?: number;
+}
+
+/** Represents the credentials for connecting to a server. */
+export type ServerCredentials =
+    | {
+          /**
+           * The username that will be used for authenticating connections to the Valkey servers.
+           * If not supplied, "default" will be used.
+           */
+          username?: string;
+          /**
+           * The password that will be used for authenticating connections to the Valkey servers.
+           * (mutually exclusive with iamConfig).
+           */
+          password: string;
+      }
+    | {
+          /** Username is REQUIRED for IAM (Valkey AUTH <username> <token>). */
+          username: string;
+          /**
+           * IAM config (mutually exclusive with password).
+           * The client will automatically generate and refresh the authentication token based on the provided configuration.
+           */
+          iamConfig: IamAuthConfig;
+      };
 
 /** Represents the client's read from strategy. */
 export type ReadFrom =
@@ -869,7 +910,32 @@ export interface AdvancedBaseClientConfiguration {
          * - Default: false (verification is enforced).
          */
         insecure?: boolean;
+
+        /**
+         * Custom root certificate data for TLS connections.
+         *
+         * - When provided, these certificates will be used instead of the system's default trust store.
+         *   If not provided, the system's default certificate trust store will be used.
+         *
+         * - The certificate data should be in PEM format as a string or Buffer.
+         *
+         * - This is useful when connecting to servers with self-signed certificates or custom certificate authorities.
+         */
+        rootCertificates?: string | Buffer;
     };
+
+    /**
+     * Controls TCP_NODELAY socket option (Nagle's algorithm).
+     *
+     * - When `true`, disables Nagle's algorithm for lower latency by sending packets immediately without buffering.
+     *   This is optimal for Redis/Valkey workloads with many small requests.
+     *
+     * - When `false`, enables Nagle's algorithm to reduce network overhead by buffering small packets.
+     *   This may increase latency by up to 200ms but reduces the number of packets sent.
+     *
+     * - If not explicitly set, a default value of `true` will be used by the Rust core.
+     */
+    tcpNoDelay?: boolean;
 }
 
 /**
@@ -1135,7 +1201,12 @@ export class BaseClient {
 
             if (typeof message.respPointer === "number") {
                 // Response from type number
-                pointer = new PointerResponse(message.respPointer);
+                const long = Long.fromNumber(message.respPointer);
+                pointer = new PointerResponse(
+                    message.respPointer,
+                    long.high,
+                    long.low,
+                );
             } else {
                 // Response from type long
                 pointer = new PointerResponse(
@@ -1342,6 +1413,30 @@ export class BaseClient {
                 new command_request.CommandRequest({
                     callbackIdx,
                     updateConnectionPassword: command,
+                }),
+                (message: command_request.CommandRequest, writer: Writer) => {
+                    command_request.CommandRequest.encodeDelimited(
+                        message,
+                        writer,
+                    );
+                },
+            );
+        });
+    }
+
+    protected createRefreshIamTokenPromise(
+        command: command_request.RefreshIamToken,
+    ) {
+        this.ensureClientIsOpen();
+
+        return new Promise<GlideString>((resolve, reject) => {
+            const callbackIdx = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIdx] = [resolve, reject];
+
+            this.writeOrBufferRequest(
+                new command_request.CommandRequest({
+                    callbackIdx,
+                    refreshIamToken: command,
                 }),
                 (message: command_request.CommandRequest, writer: Writer) => {
                     command_request.CommandRequest.encodeDelimited(
@@ -2065,6 +2160,28 @@ export class BaseClient {
         );
     }
 
+    /**
+     * Move `key` from the currently selected database to the database specified by `dbIndex`.
+     *
+     * @remarks Move is available for cluster mode since Valkey 9.0.0 and above.
+     *
+     * @see {@link https://valkey.io/commands/move/|valkey.io} for more details.
+     *
+     * @param key - The key to move.
+     * @param dbIndex - The index of the database to move `key` to.
+     * @returns `true` if `key` was moved, or `false` if the `key` already exists in the destination
+     *     database or does not exist in the source database.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.move("key", 1);
+     * console.log(result); // Output: true
+     * ```
+     */
+    public async move(key: GlideString, dbIndex: number): Promise<boolean> {
+        return this.createWritePromise(createMove(key, dbIndex));
+    }
+
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
      *
      * @see {@link https://valkey.io/commands/incr/|valkey.io} for details.
@@ -2127,6 +2244,48 @@ export class BaseClient {
         amount: number,
     ): Promise<number> {
         return this.createWritePromise(createIncrByFloat(key, amount));
+    }
+
+    /**
+     * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
+     * the value will be copied to the database specified, otherwise the current database will be used.
+     * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
+     * no action.
+     *
+     * @see {@link https://valkey.io/commands/copy/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0. destinationDB parameter for cluster mode is supported since Valkey 9.0.0 and above
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `destinationDB`: the alternative logical database index for the destination key.
+     *     If not provided, the current database will be used.
+     * - (Optional) `replace`: if `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     * @returns `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.copy("set1", "set2");
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     * ```typescript
+     * const result = await client.copy("set1", "set2", { replace: true });
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     * ```typescript
+     * const result = await client.copy("set1", "set2", { destinationDB: 1, replace: false });
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     */
+    public async copy(
+        source: GlideString,
+        destination: GlideString,
+        options?: { destinationDB?: number; replace?: boolean },
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createCopy(source, destination, options),
+        );
     }
 
     /** Decrements the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -3993,6 +4152,28 @@ export class BaseClient {
         members: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(createSAdd(key, members));
+    }
+
+    /**
+     * Changes the currently selected database.
+     *
+     * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
+     *
+     * @param index - The index of the database to select.
+     * @returns A simple `"OK"` response.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of select method (NOT RECOMMENDED)
+     * const result = await client.select(2);
+     * console.log(result); // Output: 'OK'
+     * // Note: Database selection will be lost on reconnection!
+     * ```
+     */
+    public async select(index: number): Promise<"OK"> {
+        return this.createWritePromise(createSelect(index), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Removes the specified members from the set stored at `key`. Specified members that are not a member of this set are ignored.
@@ -8951,14 +9132,54 @@ export class BaseClient {
         const readFrom = options.readFrom
             ? this.MAP_READ_FROM_STRATEGY[options.readFrom]
             : connection_request.ReadFrom.Primary;
-        const authenticationInfo =
-            options.credentials !== undefined &&
-            "password" in options.credentials
-                ? {
-                      password: options.credentials.password,
-                      username: options.credentials.username,
-                  }
-                : undefined;
+
+        const creds = options.credentials;
+
+        // Build a protobuf AuthenticationInfo
+        let authenticationInfo:
+            | connection_request.IAuthenticationInfo
+            | undefined;
+
+        if (creds) {
+            if ("iamConfig" in creds) {
+                if (!creds.username) {
+                    throw new ConfigurationError(
+                        "IAM authentication requires a username.",
+                    );
+                }
+
+                const iamCredentials = connection_request.IamCredentials.create(
+                    {
+                        clusterName: creds.iamConfig.clusterName,
+                        region: creds.iamConfig.region,
+                        serviceType:
+                            creds.iamConfig.service === ServiceType.Elasticache
+                                ? connection_request.ServiceType.ELASTICACHE
+                                : connection_request.ServiceType.MEMORYDB,
+                        // leave undefined if not provided (optional field)
+                        refreshIntervalSeconds:
+                            creds.iamConfig.refreshIntervalSeconds,
+                    },
+                );
+
+                authenticationInfo =
+                    connection_request.AuthenticationInfo.create({
+                        username: creds.username, // REQUIRED for IAM
+                        iamCredentials,
+                        // do NOT set password in IAM mode
+                    });
+            } else if ("password" in creds) {
+                // Password branch
+                authenticationInfo =
+                    connection_request.AuthenticationInfo.create({
+                        username: creds.username ?? "", // optional
+                        password: creds.password ?? "", // empty means “no password”
+                    });
+            } else {
+                authenticationInfo = undefined;
+            }
+        }
+
         const protocol = options.protocol as
             | connection_request.ProtocolVersion
             | undefined;
@@ -9004,14 +9225,35 @@ export class BaseClient {
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
 
+        // Set TCP_NODELAY if explicitly configured
+        if (options.tcpNoDelay !== undefined) {
+            request.tcpNodelay = options.tcpNoDelay;
+        }
+
         // Apply TLS configuration if present
-        if (options.tlsAdvancedConfiguration?.insecure) {
-            if (request.tlsMode === connection_request.TlsMode.SecureTls) {
-                request.tlsMode = connection_request.TlsMode.InsecureTls;
-            } else if (request.tlsMode === connection_request.TlsMode.NoTls) {
+        if (options.tlsAdvancedConfiguration) {
+            // request.tlsMode is either SecureTls or InsecureTls here
+            if (request.tlsMode === connection_request.TlsMode.NoTls) {
                 throw new ConfigurationError(
-                    "InsecureTls cannot be enabled when useTLS is disabled.",
+                    "TLS advanced configuration cannot be set when useTLS is disabled.",
                 );
+            }
+
+            // If options.tlsAdvancedConfiguration.insecure is true then use InsecureTls mode
+            if (options.tlsAdvancedConfiguration.insecure) {
+                request.tlsMode = connection_request.TlsMode.InsecureTls;
+            }
+
+            if (options.tlsAdvancedConfiguration.rootCertificates) {
+                const certData =
+                    typeof options.tlsAdvancedConfiguration.rootCertificates ===
+                    "string"
+                        ? Buffer.from(
+                              options.tlsAdvancedConfiguration.rootCertificates,
+                              "utf-8",
+                          )
+                        : options.tlsAdvancedConfiguration.rootCertificates;
+                request.rootCerts = [new Uint8Array(certData)];
             }
         }
     }
@@ -9079,8 +9321,14 @@ export class BaseClient {
         ) => TConnection,
     ): Promise<TConnection> {
         const connection = constructor(connectedSocket, options);
+        const connectStart = Date.now();
         await connection.connectToServer(options);
-        Logger.log("info", "Client lifetime", "connected to server");
+        const connectTime = Date.now() - connectStart;
+        Logger.log(
+            "info",
+            "Client lifetime",
+            `connected to server in ${connectTime}ms`,
+        );
         return connection;
     }
 
@@ -9107,15 +9355,30 @@ export class BaseClient {
             options?: BaseClientConfiguration,
         ) => TConnection,
     ): Promise<TConnection> {
+        const overallStart = Date.now();
         const path = await StartSocketConnection();
+        const socketStart = Date.now();
         const socket = await this.GetSocket(path);
+        const socketTime = Date.now() - socketStart;
+        Logger.log(
+            "info",
+            "Client lifetime",
+            `socket connection established in ${socketTime}ms`,
+        );
 
         try {
-            return await this.__createClientInternal<TConnection>(
+            const client = await this.__createClientInternal<TConnection>(
                 options,
                 socket,
                 constructor,
             );
+            const totalTime = Date.now() - overallStart;
+            Logger.log(
+                "info",
+                "Client lifetime",
+                `total client creation time: ${totalTime}ms`,
+            );
+            return client;
         } catch (err) {
             // Ensure socket is closed
             socket.end();
@@ -9147,6 +9410,16 @@ export class BaseClient {
         password: string | null,
         immediateAuth = false,
     ) {
+        // If we’re on IAM, forbid password updates to avoid confusion.
+        const creds = this.config?.credentials;
+        const usingIam = !!creds && "iamConfig" in creds;
+
+        if (usingIam) {
+            throw new ConfigurationError(
+                "updateConnectionPassword is not supported when IAM authentication is enabled.",
+            );
+        }
+
         const updateConnectionPassword =
             command_request.UpdateConnectionPassword.create({
                 password,
@@ -9169,6 +9442,34 @@ export class BaseClient {
 
         return response;
     }
+
+    /**
+     * Manually refresh the IAM token for the current connection.
+     *
+     * This method is only available if the client was created with IAM authentication.
+     * It triggers an immediate refresh of the IAM token and updates the connection.
+     *
+     * @throws ConfigurationError if the client is not using IAM authentication.
+     * @example
+     * ```typescript
+     * await client.refreshToken();
+     * ```
+     */
+    public async refreshIamToken(): Promise<GlideString> {
+        if (
+            !this.config?.credentials ||
+            !("iamConfig" in this.config.credentials)
+        ) {
+            throw new ConfigurationError(
+                "refreshIamToken is only available when IAM authentication is enabled.",
+            );
+        }
+
+        const refresh = command_request.RefreshIamToken.create({});
+        const response = await this.createRefreshIamTokenPromise(refresh);
+        return response; // "OK"
+    }
+
     /**
      * Return a statistics
      *

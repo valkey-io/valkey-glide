@@ -103,6 +103,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -882,6 +883,24 @@ public class CommandTests {
                 clusterResponse.getSingleValue().contains("ver")
                         && clusterResponse.getSingleValue().contains(SERVER_VERSION.toString()),
                 "Expected LOLWUT output to contain version string");
+
+        // Test LOLWUT version 9 (available in Valkey 9.0.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            // Test with version 9 and 2 parameters on all nodes
+            clusterResponse = clusterClient.lolwut(9, new int[] {30, 4}, ALL_NODES).get();
+            for (var nodeResponse : clusterResponse.getMultiValue().values()) {
+                assertTrue(
+                        nodeResponse.contains("ver") && nodeResponse.contains(SERVER_VERSION.toString()),
+                        "Expected LOLWUT output to contain version string");
+            }
+
+            // Test with version 9 and 4 parameters on random node
+            clusterResponse = clusterClient.lolwut(9, new int[] {40, 20, 1, 2}, RANDOM).get();
+            assertTrue(
+                    clusterResponse.getSingleValue().contains("ver")
+                            && clusterResponse.getSingleValue().contains(SERVER_VERSION.toString()),
+                    "Expected LOLWUT output to contain version string");
+        }
     }
 
     @ParameterizedTest
@@ -2797,7 +2816,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.mset(expectedData).get());
 
         Set<String> result = new LinkedHashSet<>();
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         while (!cursor.isFinished()) {
             final Object[] response = clusterClient.scan(cursor).get();
             cursor.releaseCursorHandle();
@@ -2829,7 +2848,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.mset(expectedData).get());
 
         Set<String> result = new LinkedHashSet<>();
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         while (!cursor.isFinished()) {
             final Object[] response = clusterClient.scanBinary(cursor).get();
             cursor.releaseCursorHandle();
@@ -2876,7 +2895,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.mset(unexpectedPatterns).get());
 
         Set<String> result = new LinkedHashSet<>();
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         while (!cursor.isFinished()) {
             final Object[] response =
                     clusterClient
@@ -2918,7 +2937,7 @@ public class CommandTests {
 
         assertEquals(OK, clusterClient.mset(expectedData).get());
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> keys = new LinkedHashSet<>();
         int successfulComparedScans = 0;
         while (!cursor.isFinished()) {
@@ -2973,7 +2992,7 @@ public class CommandTests {
         }
         assertEquals(OK, clusterClient.mset(unexpectedPatterns).get());
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> keys = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] result =
@@ -3005,7 +3024,7 @@ public class CommandTests {
         }
         assertEquals(OK, clusterClient.mset(expectedData).get());
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         final Object[] response = clusterClient.scan(cursor).get();
         cursor = (ClusterScanCursor) (response[0]);
         cursor.releaseCursorHandle();
@@ -3030,7 +3049,7 @@ public class CommandTests {
         }
         assertEquals(OK, clusterClient.mset(stringData).get());
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] response =
@@ -3062,7 +3081,7 @@ public class CommandTests {
             assertEquals(1L, clusterClient.sadd(k, new String[] {"value" + k}).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] response =
@@ -3094,7 +3113,7 @@ public class CommandTests {
             assertEquals(1L, clusterClient.hset(k, Map.of("field" + k, "value" + k)).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] response =
@@ -3126,7 +3145,7 @@ public class CommandTests {
             assertEquals(1L, clusterClient.lpush(k, new String[] {"value" + k}).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] response =
@@ -3158,7 +3177,7 @@ public class CommandTests {
             assertEquals(1L, clusterClient.zadd(k, Map.of(k, 1.0)).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
 
         while (!cursor.isFinished()) {
@@ -3191,7 +3210,7 @@ public class CommandTests {
             assertNotNull(clusterClient.xadd(k, Map.of(k, "value " + k)).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
 
         while (!cursor.isFinished()) {
@@ -3637,5 +3656,129 @@ public class CommandTests {
         assertTrue(
                 exception.getMessage().toUpperCase().contains("NOSCRIPT"),
                 "Expected NOSCRIPT error after script is fully released and flushed");
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void simple_select_test(GlideClusterClient clusterClient) {
+        // Skip test if Valkey version is less than 9.0.0
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "SELECT command in cluster mode requires Valkey 9.0.0 or higher");
+
+        assertEquals(OK, clusterClient.select(0).get());
+
+        String key = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        assertEquals(OK, clusterClient.set(key, value).get());
+
+        assertEquals(OK, clusterClient.select(1).get());
+        assertNull(clusterClient.get(key).get());
+
+        assertEquals(OK, clusterClient.select(0).get());
+        assertEquals(value, clusterClient.get(key).get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void move_cluster_mode() {
+        // Skip test if Valkey version is less than 9.0.0
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "MOVE command in cluster mode requires Valkey 9.0.0 or higher");
+
+        // Create two cluster clients with different database IDs
+        GlideClusterClient clientDb0 =
+                GlideClusterClient.createClient(commonClusterClientConfig().databaseId(0).build()).get();
+        GlideClusterClient clientDb1 =
+                GlideClusterClient.createClient(commonClusterClientConfig().databaseId(1).build()).get();
+
+        try {
+            String key = UUID.randomUUID().toString();
+            String value = UUID.randomUUID().toString();
+            String nonExistingKey = UUID.randomUUID().toString();
+
+            // Test moving non-existing key returns false
+            assertEquals(false, clientDb0.move(nonExistingKey, 1L).get());
+
+            // Set a key in database 0
+            assertEquals(OK, clientDb0.set(key, value).get());
+
+            // Move key from database 0 to database 1
+            assertEquals(true, clientDb0.move(key, 1L).get());
+
+            // Verify key no longer exists in database 0
+            assertNull(clientDb0.get(key).get());
+
+            // Verify key exists in database 1
+            assertEquals(value, clientDb1.get(key).get());
+
+            // Test moving key that already exists in destination database returns false
+            String key2 = UUID.randomUUID().toString();
+            String value2 = UUID.randomUUID().toString();
+            assertEquals(OK, clientDb0.set(key2, value2).get());
+            assertEquals(OK, clientDb1.set(key2, "different_value").get());
+            assertEquals(false, clientDb0.move(key2, 1L).get());
+
+            // Verify original values are preserved
+            assertEquals(value2, clientDb0.get(key2).get());
+            assertEquals("different_value", clientDb1.get(key2).get());
+
+        } finally {
+            clientDb0.close();
+            clientDb1.close();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void move_binary_cluster_mode() {
+        // Skip test if Valkey version is less than 9.0.0
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "MOVE command in cluster mode requires Valkey 9.0.0 or higher");
+
+        // Create two cluster clients with different database IDs
+        GlideClusterClient clientDb0 =
+                GlideClusterClient.createClient(commonClusterClientConfig().databaseId(0).build()).get();
+        GlideClusterClient clientDb1 =
+                GlideClusterClient.createClient(commonClusterClientConfig().databaseId(1).build()).get();
+
+        try {
+            GlideString key = gs(UUID.randomUUID().toString());
+            GlideString value = gs(UUID.randomUUID().toString());
+            GlideString nonExistingKey = gs(UUID.randomUUID().toString());
+
+            // Test moving non-existing key returns false
+            assertEquals(false, clientDb0.move(nonExistingKey, 1L).get());
+
+            // Set a key in database 0
+            assertEquals(OK, clientDb0.set(key, value).get());
+
+            // Move key from database 0 to database 1
+            assertEquals(true, clientDb0.move(key, 1L).get());
+
+            // Verify key no longer exists in database 0
+            assertNull(clientDb0.get(key).get());
+
+            // Verify key exists in database 1
+            assertEquals(value, clientDb1.get(key).get());
+
+            // Test moving key that already exists in destination database returns false
+            GlideString key2 = gs(UUID.randomUUID().toString());
+            GlideString value2 = gs(UUID.randomUUID().toString());
+            assertEquals(OK, clientDb0.set(key2, value2).get());
+            assertEquals(OK, clientDb1.set(key2, gs("different_value")).get());
+            assertEquals(false, clientDb0.move(key2, 1L).get());
+
+            // Verify original values are preserved
+            assertEquals(value2, clientDb0.get(key2).get());
+            assertEquals(gs("different_value"), clientDb1.get(key2).get());
+
+        } finally {
+            clientDb0.close();
+            clientDb1.close();
+        }
     }
 }

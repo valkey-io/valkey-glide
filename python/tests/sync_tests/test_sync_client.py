@@ -90,6 +90,12 @@ from glide_shared.routes import (
     SlotKeyRoute,
     SlotType,
 )
+from glide_sync import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+)
 from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide_sync.sync_commands.script import Script
 
@@ -288,7 +294,7 @@ class TestGlideClients:
         assert b"db=4" in client_info
         glide_sync_client.close()
 
-    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_sync_select_database_id_custom_command(self, request, cluster_mode):
         if cluster_mode:
             # Check version using a temporary standalone client
@@ -305,6 +311,25 @@ class TestGlideClients:
         client_info = glide_sync_client.custom_command(["CLIENT", "INFO"])
         assert b"db=4" in client_info
         glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_select(self, glide_sync_client: GlideClient, cluster_mode):
+        if cluster_mode:
+            if sync_check_if_server_version_lt(glide_sync_client, "9.0.0"):
+                return pytest.mark.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+
+        assert glide_sync_client.select(0) == OK
+        key = get_random_string(10)
+        value = get_random_string(10)
+        assert glide_sync_client.set(key, value) == OK
+        assert glide_sync_client.get(key) == value.encode()
+        assert glide_sync_client.select(1) == OK
+        assert glide_sync_client.get(key) is None
+        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.get(key) == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -613,26 +638,19 @@ class TestCommands:
         info_result = get_first_result(info_result)
         assert b"# Memory" in info_result
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_select(self, glide_sync_client: GlideClient):
-        assert glide_sync_client.select(0) == OK
-        key = get_random_string(10)
-        value = get_random_string(10)
-        assert glide_sync_client.set(key, value) == OK
-        assert glide_sync_client.get(key) == value.encode()
-        assert glide_sync_client.select(1) == OK
-        assert glide_sync_client.get(key) is None
-        assert glide_sync_client.select(0) == OK
-        assert glide_sync_client.get(key) == value.encode()
+    def test_sync_move(self, glide_sync_client: TGlideClient, cluster_mode):
+        if cluster_mode:
+            if sync_check_if_server_version_lt(glide_sync_client, "9.0.0"):
+                pytest.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
 
-    @pytest.mark.parametrize("cluster_mode", [False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_move(self, glide_sync_client: GlideClient):
         key = get_random_string(10)
         value = get_random_string(10)
 
-        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
         assert glide_sync_client.move(key, 1) is False
 
         assert glide_sync_client.set(key, value) == OK
@@ -640,7 +658,7 @@ class TestCommands:
 
         assert glide_sync_client.move(key, 1) is True
         assert glide_sync_client.get(key) is None
-        assert glide_sync_client.select(1) == OK
+        assert glide_sync_client.custom_command(["SELECT", "1"]) == OK
         assert glide_sync_client.get(key) == value.encode()
 
         with pytest.raises(RequestError):
@@ -652,7 +670,7 @@ class TestCommands:
         key = get_random_string(10)
         value = get_random_string(10)
 
-        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
 
         assert glide_sync_client.set(key, value) == OK
         assert glide_sync_client.get(key.encode()) == value.encode()
@@ -660,7 +678,7 @@ class TestCommands:
         assert glide_sync_client.move(key.encode(), 1) is True
         assert glide_sync_client.get(key) is None
         assert glide_sync_client.get(key.encode()) is None
-        assert glide_sync_client.select(1) == OK
+        assert glide_sync_client.custom_command(["SELECT", "1"]) == OK
         assert glide_sync_client.get(key) == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -5210,7 +5228,7 @@ class TestCommands:
             assert glide_sync_client.set(key, value) == OK
             assert glide_sync_client.dbsize(SlotKeyRoute(SlotType.PRIMARY, key)) == 1
         else:
-            assert glide_sync_client.select(1) == OK
+            assert glide_sync_client.custom_command(["SELECT", "1"]) == OK
             assert glide_sync_client.dbsize() == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -8996,12 +9014,12 @@ class TestCommands:
         value = get_random_string(5)
 
         # fill DB 0 and check size non-empty
-        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
         glide_sync_client.set(key1, value)
         assert glide_sync_client.dbsize() > 0
 
         # fill DB 1 and check size non-empty
-        assert glide_sync_client.select(1) == OK
+        assert glide_sync_client.custom_command(["SELECT", "1"]) == OK
         glide_sync_client.set(key2, value)
         assert glide_sync_client.dbsize() > 0
 
@@ -9010,7 +9028,7 @@ class TestCommands:
         assert glide_sync_client.dbsize() == 0
 
         # swith to DB 0, flush, and check
-        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
         assert glide_sync_client.dbsize() > 0
         assert glide_sync_client.flushdb(FlushMode.ASYNC) == OK
         assert glide_sync_client.dbsize() == 0
@@ -9096,12 +9114,12 @@ class TestCommands:
         value2 = get_random_string(5)
         value1_encoded = value1.encode()
         value2_encoded = value2.encode()
-        index0 = 0
-        index1 = 1
-        index2 = 2
+        index0 = "0"
+        index1 = "1"
+        index2 = "2"
 
         try:
-            assert glide_sync_client.select(index0) == OK
+            assert glide_sync_client.custom_command(["SELECT", index0]) == OK
 
             # neither key exists
             assert (
@@ -9115,11 +9133,11 @@ class TestCommands:
                 glide_sync_client.copy(source, destination, index1, replace=False)
                 is True
             )
-            assert glide_sync_client.select(index1) == OK
+            assert glide_sync_client.custom_command(["SELECT", index1]) == OK
             assert glide_sync_client.get(destination) == value1_encoded
 
             # new value for source key
-            assert glide_sync_client.select(index0) == OK
+            assert glide_sync_client.custom_command(["SELECT", index0]) == OK
             glide_sync_client.set(source, value2)
 
             # no REPLACE, copying to existing key on DB 0 & 1, non-existing key on DB 2
@@ -9133,25 +9151,104 @@ class TestCommands:
             )
 
             # new value only gets copied to DB 2
-            assert glide_sync_client.select(index1) == OK
+            assert glide_sync_client.custom_command(["SELECT", index1]) == OK
             assert glide_sync_client.get(destination) == value1_encoded
-            assert glide_sync_client.select(index2) == OK
+            assert glide_sync_client.custom_command(["SELECT", index2]) == OK
             assert glide_sync_client.get(destination) == value2_encoded
 
             # both exists, with REPLACE, when value isn't the same, source always get copied to destination
-            assert glide_sync_client.select(index0) == OK
+            assert glide_sync_client.custom_command(["SELECT", index0]) == OK
             assert (
                 glide_sync_client.copy(source, destination, index1, replace=True)
                 is True
             )
-            assert glide_sync_client.select(index1) == OK
+            assert glide_sync_client.custom_command(["SELECT", index1]) == OK
             assert glide_sync_client.get(destination) == value2_encoded
 
             # invalid DB index
             with pytest.raises(RequestError):
                 glide_sync_client.copy(source, destination, -1, replace=True)
         finally:
-            assert glide_sync_client.select(0) == OK
+            assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_cluster_copy_database(self, glide_sync_client: GlideClusterClient):
+        source = f"{{testKey}}-{get_random_string(10)}"
+        destination = f"{{testKey}}-{get_random_string(10)}"
+        value1 = get_random_string(5)
+        value2 = get_random_string(5)
+        value1_encoded = value1.encode()
+        value2_encoded = value2.encode()
+        index0 = "0"
+        index1 = "1"
+        index2 = "2"
+
+        try:
+            assert glide_sync_client.custom_command(["SELECT", index0]) == OK
+
+            # neither key exists
+            assert (
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
+                is False
+            )
+
+            # source exists, destination does not
+            glide_sync_client.set(source, value1)
+            assert (
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
+                is True
+            )
+            assert glide_sync_client.custom_command(["SELECT", index1]) == OK
+            assert glide_sync_client.get(destination) == value1_encoded
+
+            # new value for source key
+            assert glide_sync_client.custom_command(["SELECT", index0]) == OK
+            glide_sync_client.set(source, value2)
+
+            # no REPLACE, copying to existing key on DB 0 & 1, non-existing key on DB 2
+            assert (
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
+                is False
+            )
+            assert (
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index2, replace=False
+                )
+                is True
+            )
+
+            # new value only gets copied to DB 2
+            assert glide_sync_client.custom_command(["SELECT", index1]) == OK
+            assert glide_sync_client.get(destination) == value1_encoded
+            assert glide_sync_client.custom_command(["SELECT", index2]) == OK
+            assert glide_sync_client.get(destination) == value2_encoded
+
+            # both exists, with REPLACE, when value isn't the same, source always get copied to destination
+            assert glide_sync_client.custom_command(["SELECT", index0]) == OK
+            assert (
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index1, replace=True
+                )
+                is True
+            )
+            assert glide_sync_client.custom_command(["SELECT", index1]) == OK
+            assert glide_sync_client.get(destination) == value2_encoded
+
+            # invalid DB index
+            with pytest.raises(RequestError):
+                glide_sync_client.copy(
+                    source, destination, destinationDB=-1, replace=True
+                )
+        finally:
+            assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -9191,6 +9288,17 @@ class TestCommands:
         result = glide_sync_client.lolwut(5, [30, 4, 4])
         assert b"ver" in result and server_version_bytes in result
 
+        # Test LOLWUT version 9 (available in Valkey 9.0.0+)
+        min_version = "9.0.0"
+        if sync_check_if_server_version_lt(glide_sync_client, min_version) is False:
+            # Test with version 9 and 2 parameters (columns, rows)
+            result = glide_sync_client.lolwut(9, [30, 4])
+            assert b"ver" in result and server_version_bytes in result
+
+            # Test with version 9 and 4 parameters (columns, rows, real, imaginary)
+            result = glide_sync_client.lolwut(9, [40, 20, 1, 2])
+            assert b"ver" in result and server_version_bytes in result
+
         if isinstance(glide_sync_client, GlideClusterClient):
             # test with multi-node route
             result = glide_sync_client.lolwut(route=AllNodes())
@@ -9216,6 +9324,21 @@ class TestCommands:
             assert isinstance(result, bytes)
             assert b"ver" in result and server_version_bytes in result
 
+            # Test LOLWUT version 9 with cluster routes (available in Valkey 9.0.0+)
+            if sync_check_if_server_version_lt(glide_sync_client, min_version) is False:
+                # Test with version 9 and 2 parameters on all nodes
+                result = glide_sync_client.lolwut(9, [30, 4], AllNodes())
+                assert isinstance(result, dict)
+                result_decoded = cast(dict, convert_bytes_to_string_object(result))
+                assert result_decoded is not None
+                for node_result in result_decoded.values():
+                    assert "ver" in node_result and server_version in node_result
+
+                # Test with version 9 and 4 parameters on random node
+                result = glide_sync_client.lolwut(9, [40, 20, 1, 2], RandomNode())
+                assert isinstance(result, bytes)
+                assert b"ver" in result and server_version_bytes in result
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_cluster_client_random_key(
@@ -9240,9 +9363,9 @@ class TestCommands:
         key = get_random_string(10)
 
         # setup: delete all keys in DB 0 and DB 1
-        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
         assert glide_sync_client.flushdb(FlushMode.SYNC) == OK
-        assert glide_sync_client.select(1) == OK
+        assert glide_sync_client.custom_command(["SELECT", "1"]) == OK
         assert glide_sync_client.flushdb(FlushMode.SYNC) == OK
 
         # no keys exist so random_key returns None
@@ -9253,7 +9376,7 @@ class TestCommands:
         assert glide_sync_client.random_key() == key.encode()
 
         # switch back to DB 0
-        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
         # DB 0 should still have no keys, so random_key should still return None
         assert glide_sync_client.random_key() is None
 
@@ -11902,3 +12025,51 @@ class TestSyncScripts:
         # Verify all fields are now persistent
         ttl_results = glide_sync_client.httl(multi_key, field_names)
         assert ttl_results == [-1] * len(field_names)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("tcp_nodelay", [None, True, False])
+    def test_tcp_nodelay_configuration(
+        self,
+        request,
+        cluster_mode: bool,
+        tcp_nodelay: Optional[bool],
+    ):
+        """Test TCP_NODELAY configuration option for sync client."""
+        valkey_cluster = (
+            pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
+        )
+
+        if cluster_mode:
+            cluster_config = GlideClusterClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                advanced_config=AdvancedGlideClusterClientConfiguration(
+                    tcp_nodelay=tcp_nodelay
+                ),
+            )
+            cluster_client = GlideClusterClient.create(cluster_config)
+            try:
+                # Verify client can connect and execute commands
+                assert cluster_client.ping() == b"PONG"
+                assert cluster_client.set("key", "value") == "OK"
+                assert cluster_client.get("key") == b"value"
+                # Clean up test key
+                cluster_client.delete(["key"])
+            finally:
+                cluster_client.close()
+        else:
+            standalone_config = GlideClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                advanced_config=AdvancedGlideClientConfiguration(
+                    tcp_nodelay=tcp_nodelay
+                ),
+            )
+            standalone_client = GlideClient.create(standalone_config)
+            try:
+                # Verify client can connect and execute commands
+                assert standalone_client.ping() == b"PONG"
+                assert standalone_client.set("key", "value") == "OK"
+                assert standalone_client.get("key") == b"value"
+                # Clean up test key
+                standalone_client.delete(["key"])
+            finally:
+                standalone_client.close()

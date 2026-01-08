@@ -15,6 +15,7 @@ from glide_shared.exceptions import ClosingError
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
 from glide_sync import TGlideClient as TSyncGlideClient
+from glide_sync.config import GlideClientConfiguration, GlideClusterClientConfiguration
 from glide_sync.logger import Level as LogLevel
 from glide_sync.logger import Logger
 
@@ -120,6 +121,12 @@ def create_sync_client(
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
     request_timeout: Optional[int] = 1000,
     connection_timeout: Optional[int] = 1000,
+    cluster_mode_pubsub: Optional[
+        GlideClusterClientConfiguration.PubSubSubscriptions
+    ] = None,
+    standalone_mode_pubsub: Optional[
+        GlideClientConfiguration.PubSubSubscriptions
+    ] = None,
     read_from: ReadFrom = ReadFrom.PRIMARY,
     client_az: Optional[str] = None,
     reconnect_strategy: Optional[BackoffStrategy] = None,
@@ -127,6 +134,7 @@ def create_sync_client(
     use_tls: Optional[bool] = None,
     tls_insecure: Optional[bool] = None,
     lazy_connect: Optional[bool] = False,
+    enable_compression: Optional[bool] = None,
 ) -> TSyncGlideClient:
     # Create sync client
     config = create_sync_client_config(
@@ -139,6 +147,8 @@ def create_sync_client(
         protocol,
         request_timeout,
         connection_timeout,
+        cluster_mode_pubsub,
+        standalone_mode_pubsub,
         read_from,
         client_az,
         reconnect_strategy,
@@ -146,6 +156,7 @@ def create_sync_client(
         use_tls=use_tls,
         tls_insecure=tls_insecure,
         lazy_connect=lazy_connect,
+        enable_compression=enable_compression,
     )
     if cluster_mode:
         return SyncGlideClusterClient.create(config)

@@ -9,6 +9,12 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.exceptions import ConfigurationError
 from glide_shared.protobuf.connection_request_pb2 import (
+    CompressionBackend as ProtobufCompressionBackend,
+)
+from glide_shared.protobuf.connection_request_pb2 import (
+    CompressionConfig as ProtobufCompressionConfig,
+)
+from glide_shared.protobuf.connection_request_pb2 import (
     ConnectionRequest,
 )
 from glide_shared.protobuf.connection_request_pb2 import (
@@ -75,6 +81,130 @@ class ProtocolVersion(Enum):
     """
 
 
+class CompressionBackend(Enum):
+    """
+    Represents the compression backend to use for automatic compression.
+    """
+
+    ZSTD = ProtobufCompressionBackend.ZSTD
+    """
+    Use zstd compression backend.
+    """
+    LZ4 = ProtobufCompressionBackend.LZ4
+    """
+    Use lz4 compression backend.
+    """
+
+
+def _get_min_compressed_size() -> int:
+    """
+    Get the minimum compressed size from the Rust core.
+    This ensures Python validation stays in sync with Rust implementation.
+    """
+    try:
+        # Try async module first
+        from glide import get_min_compressed_size
+
+        return get_min_compressed_size()
+    except ImportError:
+        pass
+
+    try:
+        # Try sync module
+        from glide_sync import get_min_compressed_size
+
+        return get_min_compressed_size()
+    except ImportError:
+        pass
+
+    # If neither module is available, fail fast
+    raise ImportError(
+        "Cannot import get_min_compressed_size from either 'glide' or 'glide_sync'. "
+        "Ensure the native module is built and available."
+    )
+
+
+# Lazy cache for minimum compression size to avoid circular import issues
+_MIN_COMPRESSED_SIZE_CACHE: Optional[int] = None
+
+
+def _get_min_compressed_size_cached() -> int:
+    """
+    Get the minimum compressed size with caching.
+    Uses lazy initialization to avoid circular import issues.
+    """
+    global _MIN_COMPRESSED_SIZE_CACHE
+    if _MIN_COMPRESSED_SIZE_CACHE is None:
+        _MIN_COMPRESSED_SIZE_CACHE = _get_min_compressed_size()
+    return _MIN_COMPRESSED_SIZE_CACHE
+
+
+@dataclass
+class CompressionConfiguration:
+    """
+    Represents the compression configuration for automatic compression of values.
+
+    Attributes:
+        enabled (bool): Whether compression is enabled. Defaults to False.
+        backend (CompressionBackend): The compression backend to use. Defaults to CompressionBackend.ZSTD.
+        compression_level (Optional[int]): The compression level to use. If not set, the backend's default level will be used.
+            Valid ranges are backend-specific and validated by the Rust core.
+            ZSTD default is 3
+            LZ4 default is 0
+        min_compression_size (int): The minimum size in bytes for values to be compressed. Values smaller than this will not be compressed. Defaults to 64 bytes.
+    """
+
+    enabled: bool = False
+    backend: CompressionBackend = CompressionBackend.ZSTD
+    compression_level: Optional[int] = None
+    min_compression_size: int = 64
+
+    def __post_init__(self) -> None:
+        """Validate compression configuration parameters."""
+        self._validate_configuration()
+
+    def _validate_configuration(self) -> None:
+        """
+        Validates the compression configuration parameters.
+
+        Raises:
+            ConfigurationError: If any configuration parameter is invalid.
+        """
+        min_size = _get_min_compressed_size_cached()
+        if self.min_compression_size < min_size:
+            raise ConfigurationError(
+                f"min_compression_size should be at least {min_size} bytes"
+            )
+
+        # Note: compression_level validation is performed by the Rust core,
+        # which uses the actual compression library's valid ranges.
+        # This ensures the validation stays in sync with library updates.
+
+    def _to_protobuf(self) -> ProtobufCompressionConfig:
+        """
+        Converts the compression configuration to protobuf format.
+
+        Returns:
+            ProtobufCompressionConfig: The protobuf compression configuration.
+
+        Raises:
+            ConfigurationError: If any configuration parameter is invalid.
+        """
+        # Validate configuration before converting to protobuf
+        # This protects against modifications made after __post_init__
+        self._validate_configuration()
+
+        config = ProtobufCompressionConfig()
+        config.enabled = self.enabled
+        config.backend = self.backend.value
+        config.min_compression_size = self.min_compression_size
+
+        if self.compression_level is not None:
+            config.compression_level = self.compression_level
+
+        return config
+
+
 class BackoffStrategy:
     """
     Represents the strategy used to determine how and when to reconnect, in case of connection failures.
@@ -107,23 +237,92 @@ class BackoffStrategy:
         self.jitter_percent = jitter_percent
 
 
-class ServerCredentials:
+class ServiceType(Enum):
     """
-    Represents the credentials for connecting to a server.
+    Represents the types of AWS services that can be used for IAM authentication.
+    """
+
+    ELASTICACHE = 0
+    """Amazon ElastiCache service."""
+    MEMORYDB = 1
+    """Amazon MemoryDB service."""
+
+
+class IamAuthConfig:
+    """
+    Configuration settings for IAM authentication.
 
     Attributes:
-        password (str): The password that will be used for authenticating connections to the servers.
-        username (Optional[str]): The username that will be used for authenticating connections to the servers.
-            If not supplied, "default" will be used.
+        cluster_name (str): The name of the ElastiCache/MemoryDB cluster.
+        service (ServiceType): The type of service being used (ElastiCache or MemoryDB).
+        region (str): The AWS region where the ElastiCache/MemoryDB cluster is located.
+        refresh_interval_seconds (Optional[int]): Optional refresh interval in seconds for renewing IAM authentication tokens.
+            If not provided, the core will use a default value of 300 seconds (5 min).
     """
 
     def __init__(
         self,
-        password: str,
-        username: Optional[str] = None,
+        cluster_name: str,
+        service: ServiceType,
+        region: str,
+        refresh_interval_seconds: Optional[int] = None,
     ):
+        self.cluster_name = cluster_name
+        self.service = service
+        self.region = region
+        self.refresh_interval_seconds = refresh_interval_seconds
+
+
+class ServerCredentials:
+    """
+    Represents the credentials for connecting to a server.
+
+    Exactly one of the following authentication modes must be provided:
+        - Password-based authentication: Use password (and optionally username)
+        - IAM authentication: Use username (required) and iam_config
+
+    These modes are mutually exclusive - you cannot use both simultaneously.
+
+    Attributes:
+        password (Optional[str]): The password that will be used for authenticating connections to the servers.
+            Mutually exclusive with iam_config. Either password or iam_config must be provided.
+        username (Optional[str]): The username that will be used for authenticating connections to the servers.
+            If not supplied for password-based authentication, "default" will be used.
+            Required for IAM authentication.
+        iam_config (Optional[IamAuthConfig]): IAM authentication configuration. Mutually exclusive with password.
+            Either password or iam_config must be provided.
+            The client will automatically generate and refresh the authentication token based on the provided configuration.
+    """
+
+    def __init__(
+        self,
+        password: Optional[str] = None,
+        username: Optional[str] = None,
+        iam_config: Optional[IamAuthConfig] = None,
+    ):
+        # Validate mutual exclusivity
+        if password is not None and iam_config is not None:
+            raise ConfigurationError(
+                "password and iam_config are mutually exclusive. Use either password-based or IAM authentication, not both."
+            )
+
+        # Validate IAM requires username
+        if iam_config is not None and not username:
+            raise ConfigurationError("username is required for IAM authentication.")
+
+        # At least one authentication method must be provided
+        if password is None and iam_config is None:
+            raise ConfigurationError(
+                "Either password or iam_config must be provided for authentication."
+            )
+
         self.password = password
         self.username = username
+        self.iam_config = iam_config
+
+    def is_iam_auth(self) -> bool:
+        """Returns True if this credential is configured for IAM authentication."""
+        return self.iam_config is not None
 
 
 class PeriodicChecksManualInterval:
@@ -172,10 +371,85 @@ class TlsAdvancedConfiguration:
               Enabling it without TLS will result in a `ConfigurationError`.
 
             - Default: False (verification is enforced).
+
+        root_pem_cacerts (Optional[bytes]): Custom root certificate data for TLS connections in PEM format.
+
+            - When provided, these certificates will be used instead of the system's default trust store.
+              This is useful for connecting to servers with self-signed certificates or corporate
+              certificate authorities.
+
+            - If set to an empty bytes object (non-None but length 0), a `ConfigurationError` will be raised.
+
+            - If None (default), the system's default certificate trust store will be used (platform verifier).
+
+            - The certificate data should be in PEM format as a bytes object.
+
+            - Multiple certificates can be provided by concatenating them in PEM format.
+
+            Example usage::
+
+                # Load from file
+                with open('/path/to/ca-cert.pem', 'rb') as f:
+                    cert_data = f.read()
+                tls_config = TlsAdvancedConfiguration(root_pem_cacerts=cert_data)
+
+                # Or provide directly
+                cert_data = b"-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----"
+                tls_config = TlsAdvancedConfiguration(root_pem_cacerts=cert_data)
+
+        client_cert_pem (Optional[bytes]): Client certificate data for mutual TLS authentication in PEM format.
+
+            - When provided along with client_key_pem, enables mutual TLS (mTLS) authentication
+              so that the client presents its certificate to the server.
+
+            - This is to be used when the server requires client certificate authentication.
+
+            - If set to an empty bytes object (non-None but length 0), a `ConfigurationError` will be raised.
+
+            - If None (default), no client certificate will be presented.
+
+            - The certificate data should be in PEM format as a bytes object.
+
+            - Must be used together with client_key_pem.
+
+            Example usage::
+
+                # Load from file
+                with open('/path/to/client-cert.pem', 'rb') as f:
+                    client_cert = f.read()
+                with open('/path/to/client-key.pem', 'rb') as f:
+                    client_key = f.read()
+                tls_config = TlsAdvancedConfiguration(
+                    client_cert_pem=client_cert,
+                    client_key_pem=client_key
+                )
+
+        client_key_pem (Optional[bytes]): Client private key data for mutual TLS authentication in PEM format.
+
+            - When provided along with client_cert_pem, enables mutual TLS (mTLS) authentication.
+
+            - This private key corresponds to the certificate provided in client_cert_pem.
+
+            - If set to an empty bytes object (non-None but length 0), a `ConfigurationError` will be raised.
+
+            - If None (default), no client key will be used.
+
+            - The key data should be in PEM format as a bytes object.
+
+            - Must be used together with client_cert_pem.
     """
 
-    def __init__(self, use_insecure_tls: Optional[bool] = None):
+    def __init__(
+        self,
+        use_insecure_tls: Optional[bool] = None,
+        root_pem_cacerts: Optional[bytes] = None,
+        client_cert_pem: Optional[bytes] = None,
+        client_key_pem: Optional[bytes] = None,
+    ):
         self.use_insecure_tls = use_insecure_tls
+        self.root_pem_cacerts = root_pem_cacerts
+        self.client_cert_pem = client_cert_pem
+        self.client_key_pem = client_key_pem
 
 
 class AdvancedBaseClientConfiguration:
@@ -190,15 +464,21 @@ class AdvancedBaseClientConfiguration:
         tls_config (Optional[TlsAdvancedConfiguration]): The advanced TLS configuration settings.
             This allows for more granular control of TLS behavior, such as enabling an insecure mode
             that bypasses certificate validation.
+        tcp_nodelay (Optional[bool]): Controls TCP_NODELAY socket option (Nagle's algorithm).
+            When True, disables Nagle's algorithm for lower latency by sending packets immediately without buffering.
+            When False, enables Nagle's algorithm to reduce network overhead by buffering small packets.
+            If not explicitly set, defaults to True.
     """
 
     def __init__(
         self,
         connection_timeout: Optional[int] = None,
         tls_config: Optional[TlsAdvancedConfiguration] = None,
+        tcp_nodelay: Optional[bool] = None,
     ):
         self.connection_timeout = connection_timeout
         self.tls_config = tls_config
+        self.tcp_nodelay = tcp_nodelay
 
     def _create_a_protobuf_conn_request(
         self, request: ConnectionRequest
@@ -206,15 +486,58 @@ class AdvancedBaseClientConfiguration:
         if self.connection_timeout:
             request.connection_timeout = self.connection_timeout
 
-        if self.tls_config and self.tls_config.use_insecure_tls:
-            if request.tls_mode == TlsMode.SecureTls:
+        if self.tcp_nodelay is not None:
+            request.tcp_nodelay = self.tcp_nodelay
+
+        if self.tls_config:
+            if self.tls_config.use_insecure_tls:
+                # Validate that TLS is enabled before allowing insecure mode
+                if request.tls_mode == TlsMode.NoTls:
+                    raise ConfigurationError(
+                        "use_insecure_tls cannot be enabled when use_tls is disabled."
+                    )
+
+                # Override the default SecureTls mode to InsecureTls when user explicitly requests it
                 request.tls_mode = TlsMode.InsecureTls
-            elif request.tls_mode == TlsMode.NoTls:
-                raise ConfigurationError(
-                    "use_insecure_tls cannot be enabled when use_tls is disabled."
-                )
+
+            # Handle root certificates
+            if self.tls_config.root_pem_cacerts is not None:
+                if len(self.tls_config.root_pem_cacerts) == 0:
+                    raise ConfigurationError(
+                        "root_pem_cacerts cannot be an empty bytes object; use None to use platform verifier"
+                    )
+                request.root_certs.append(self.tls_config.root_pem_cacerts)
+
+            # Handle client certificate for mutual TLS
+            if self.tls_config.client_cert_pem is not None:
+                if len(self.tls_config.client_cert_pem) == 0:
+                    raise ConfigurationError(
+                        "client_cert_pem cannot be an empty bytes object; use None if not providing client certificate"
+                    )
+                request.client_cert = self.tls_config.client_cert_pem
+
+            # Handle client key for mutual TLS
+            if self.tls_config.client_key_pem is not None:
+                if len(self.tls_config.client_key_pem) == 0:
+                    raise ConfigurationError(
+                        "client_key_pem cannot be an empty bytes object; use None if not providing client key"
+                    )
+                request.client_key = self.tls_config.client_key_pem
+
+            # Ensure client cert and client key are both provided or not provided
+            self._validate_client_auth_tls()
 
         return request
+
+    def _validate_client_auth_tls(self):
+        if self.tls_config.client_cert_pem and not self.tls_config.client_key_pem:
+            raise ConfigurationError(
+                "client_cert_pem is provided but client_key_pem not provided. mTLS requires both",
+            )
+        if self.tls_config.client_key_pem and not self.tls_config.client_cert_pem:
+            raise ConfigurationError(
+                "client_key_pem is provided but client_cert_pem not provided. mTLS requires both",
+            )
 
 
 class BaseClientConfiguration:
@@ -284,6 +607,11 @@ class BaseClientConfiguration:
             attempted and connection fails (e.g., unreachable nodes), errors will surface at that point.
 
             If not set, connections are established immediately during client creation (equivalent to `False`).
+
+        compression (Optional[CompressionConfiguration]): Configuration for automatic compression of values.
+            When enabled, the client will automatically compress values for set-type commands and decompress
+            values for get-type commands. This can reduce bandwidth usage and storage requirements.
+            If not set, compression is disabled.
     """
 
     def __init__(
@@ -301,6 +629,7 @@ class BaseClientConfiguration:
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedBaseClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        compression: Optional[CompressionConfiguration] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -315,6 +644,7 @@ class BaseClientConfiguration:
         self.client_az = client_az
         self.advanced_config = advanced_config
         self.lazy_connect = lazy_connect
+        self.compression = compression
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -357,7 +687,41 @@ class BaseClientConfiguration:
 
         if self.credentials.username:
             request.authentication_info.username = self.credentials.username
-        request.authentication_info.password = self.credentials.password
+
+        if self.credentials.password:
+            request.authentication_info.password = self.credentials.password
+
+        # Set IAM credentials if present
+        if self.credentials.iam_config:
+            iam_config = self.credentials.iam_config
+            request.authentication_info.iam_credentials.cluster_name = (
+                iam_config.cluster_name
+            )
+            request.authentication_info.iam_credentials.region = iam_config.region
+
+            # Map ServiceType enum to protobuf ServiceType
+            if iam_config.service == ServiceType.ELASTICACHE:
+                from glide_shared.protobuf.connection_request_pb2 import (
+                    ServiceType as ProtobufServiceType,
+                )
+
+                request.authentication_info.iam_credentials.service_type = (
+                    ProtobufServiceType.ELASTICACHE
+                )
+            elif iam_config.service == ServiceType.MEMORYDB:
+                from glide_shared.protobuf.connection_request_pb2 import (
+                    ServiceType as ProtobufServiceType,
+                )
+
+                request.authentication_info.iam_credentials.service_type = (
+                    ProtobufServiceType.MEMORYDB
+                )
+
+            # Set optional refresh interval
+            if iam_config.refresh_interval_seconds is not None:
+                request.authentication_info.iam_credentials.refresh_interval_seconds = (
+                    iam_config.refresh_interval_seconds
+                )
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -399,7 +763,8 @@ class BaseClientConfiguration:
             self.advanced_config._create_a_protobuf_conn_request(request)
         if self.lazy_connect is not None:
             request.lazy_connect = self.lazy_connect
-
+        if self.compression is not None:
+            request.compression_config.CopyFrom(self.compression._to_protobuf())
         return request
 
     def _is_pubsub_configured(self) -> bool:
@@ -420,9 +785,10 @@ class AdvancedGlideClientConfiguration(AdvancedBaseClientConfiguration):
         self,
         connection_timeout: Optional[int] = None,
         tls_config: Optional[TlsAdvancedConfiguration] = None,
+        tcp_nodelay: Optional[bool] = None,
     ):
 
-        super().__init__(connection_timeout, tls_config)
+        super().__init__(connection_timeout, tls_config, tcp_nodelay)
 
 
 class GlideClientConfiguration(BaseClientConfiguration):
@@ -471,6 +837,10 @@ class GlideClientConfiguration(BaseClientConfiguration):
             nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedGlideClientConfiguration]): Advanced configuration settings for the client,
             see `AdvancedGlideClientConfiguration`.
+        compression (Optional[CompressionConfiguration]): Configuration for automatic compression of values.
+            When enabled, the client will automatically compress values for set-type commands and decompress
+            values for get-type commands. This can reduce bandwidth usage and storage requirements.
+            If not set, compression is disabled.
     """
 
     class PubSubChannelModes(IntEnum):
@@ -519,6 +889,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        compression: Optional[CompressionConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -534,6 +905,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             client_az=client_az,
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
+            compression=compression,
         )
         self.pubsub_subscriptions = pubsub_subscriptions
 
@@ -581,14 +953,39 @@ class GlideClientConfiguration(BaseClientConfiguration):
 class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
     """
     Represents the advanced configuration settings for a Glide Cluster client.
+
+    Attributes:
+        connection_timeout (Optional[int]): The duration in milliseconds to wait for a TCP/TLS connection to complete.
+            This applies both during initial client creation and any reconnection that may occur during request processing.
+            **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
+            If not explicitly set, a default value of 2000 milliseconds will be used.
+        tls_config (Optional[TlsAdvancedConfiguration]): The advanced TLS configuration settings.
+            This allows for more granular control of TLS behavior, such as enabling an insecure mode
+            that bypasses certificate validation.
+        refresh_topology_from_initial_nodes (bool): Enables refreshing the cluster topology using only the initial nodes.
+            When this option is enabled, all topology updates (both the periodic checks and on-demand refreshes
+            triggered by topology changes) will query only the initial nodes provided when creating the client, rather than using the internal cluster view.
     """
 
     def __init__(
         self,
         connection_timeout: Optional[int] = None,
         tls_config: Optional[TlsAdvancedConfiguration] = None,
+        refresh_topology_from_initial_nodes: bool = False,
+        tcp_nodelay: Optional[bool] = None,
     ):
-        super().__init__(connection_timeout, tls_config)
+        super().__init__(connection_timeout, tls_config, tcp_nodelay)
+        self.refresh_topology_from_initial_nodes = refresh_topology_from_initial_nodes
+
+    def _create_a_protobuf_conn_request(
+        self, request: ConnectionRequest
+    ) -> ConnectionRequest:
+        super()._create_a_protobuf_conn_request(request)
+
+        request.refresh_topology_from_initial_nodes = (
+            self.refresh_topology_from_initial_nodes
+        )
+        return request
 
 
 class GlideClusterClientConfiguration(BaseClientConfiguration):
@@ -640,6 +1037,10 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration settings for the client,
             see `AdvancedGlideClusterClientConfiguration`.
+        compression (Optional[CompressionConfiguration]): Configuration for automatic compression of values.
+            When enabled, the client will automatically compress values for set-type commands and decompress
+            values for get-type commands. This can reduce bandwidth usage and storage requirements.
+            If not set, compression is disabled.
 
 
     Note:
@@ -698,6 +1099,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        compression: Optional[CompressionConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -713,6 +1115,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             client_az=client_az,
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
+            compression=compression,
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions
@@ -764,3 +1167,142 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         if self.pubsub_subscriptions:
             return self.pubsub_subscriptions.callback, self.pubsub_subscriptions.context
         return None, None
+
+
+def load_root_certificates_from_file(path: str) -> bytes:
+    """
+    Load PEM-encoded root certificates from a file.
+
+    This is a convenience function for loading custom root certificates from disk
+    to be used with TlsAdvancedConfiguration.
+
+    Args:
+        path (str): The file path to the PEM-encoded certificate file.
+
+    Returns:
+        bytes: The certificate data in PEM format.
+
+    Raises:
+        FileNotFoundError: If the certificate file does not exist.
+        ConfigurationError: If the certificate file is empty.
+
+    Example usage::
+
+        from glide_shared.config import load_root_certificates_from_file, TlsAdvancedConfiguration
+
+        # Load certificates from file
+        certs = load_root_certificates_from_file('/path/to/ca-cert.pem')
+
+        # Use in TLS configuration
+        tls_config = TlsAdvancedConfiguration(root_pem_cacerts=certs)
+    """
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Certificate file not found: {path}")
+    except Exception as e:
+        raise ConfigurationError(f"Failed to read certificate file: {e}")
+
+    if len(data) == 0:
+        raise ConfigurationError(f"Certificate file is empty: {path}")
+
+    return data
+
+
+def load_client_certificate_from_file(path: str) -> bytes:
+    """
+    Load PEM-encoded client certificate from a file for mTLS authentication.
+
+    This is a convenience function for loading client certificates from disk
+    to be used with TlsAdvancedConfiguration for mutual TLS (mTLS).
+
+    Args:
+        path (str): The file path to the PEM-encoded client certificate file.
+
+    Returns:
+        bytes: The client certificate data in PEM format.
+
+    Raises:
+        FileNotFoundError: If the certificate file does not exist.
+        ConfigurationError: If the certificate file is empty.
+
+    Example usage::
+
+        from glide_shared.config import (
+            load_client_certificate_from_file,
+            load_client_key_from_file,
+            TlsAdvancedConfiguration
+        )
+
+        # Load client certificate and key from files
+        client_cert = load_client_certificate_from_file('/path/to/client-cert.pem')
+        client_key = load_client_key_from_file('/path/to/client-key.pem')
+
+        # Use in TLS configuration
+        tls_config = TlsAdvancedConfiguration(
+            client_cert_pem=client_cert,
+            client_key_pem=client_key
+        )
+    """
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Client certificate file not found: {path}")
+    except Exception as e:
+        raise ConfigurationError(f"Failed to read client certificate file: {e}")
+
+    if len(data) == 0:
+        raise ConfigurationError(f"Client certificate file is empty: {path}")
+
+    return data
+
+
+def load_client_key_from_file(path: str) -> bytes:
+    """
+    Load PEM-encoded client private key from a file for mutual TLS authentication.
+
+    This is a convenience function for loading client private keys from disk
+    to be used with TlsAdvancedConfiguration for mutual TLS (mTLS).
+
+    Args:
+        path (str): The file path to the PEM-encoded client private key file.
+
+    Returns:
+        bytes: The client private key data in PEM format.
+
+    Raises:
+        FileNotFoundError: If the key file does not exist.
+        ConfigurationError: If the key file is empty.
+
+    Example usage::
+
+        from glide_shared.config import (
+            load_client_certificate_from_file,
+            load_client_key_from_file,
+            TlsAdvancedConfiguration
+        )
+
+        # Load client certificate and key from files
+        client_cert = load_client_certificate_from_file('/path/to/client-cert.pem')
+        client_key = load_client_key_from_file('/path/to/client-key.pem')
+
+        # Use in TLS configuration
+        tls_config = TlsAdvancedConfiguration(
+            client_cert_pem=client_cert,
+            client_key_pem=client_key
+        )
+    """
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Client key file not found: {path}")
+    except Exception as e:
+        raise ConfigurationError(f"Failed to read client key file: {e}")
+
+    if len(data) == 0:
+        raise ConfigurationError(f"Client key file is empty: {path}")
+
+    return data

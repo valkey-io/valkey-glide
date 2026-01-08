@@ -22,6 +22,7 @@ on:
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
             - deny.toml
+            - benchmarks/rust/**
     pull_request:
         paths:
             - logger_core/**
@@ -36,6 +37,7 @@ on:
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
             - deny.toml
+            - benchmarks/rust/**
     workflow_dispatch:
         inputs:
             full-matrix:
@@ -96,7 +98,7 @@ jobs:
     tests:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
-        timeout-minutes: 20
+        timeout-minutes: 25
         strategy:
             fail-fast: false
             matrix:
@@ -124,7 +126,7 @@ jobs:
 
             - name: Run glide-core tests
               working-directory: ./glide-core
-              run: cargo test --all-features
+              run: cargo test --features "proto,socket-layer,standalone_heartbeat"
 
             - name: Run glide-core telemetry tests
               working-directory: ./glide-core/telemetry

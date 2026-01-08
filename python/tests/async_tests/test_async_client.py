@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import platform
 import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union, cast
@@ -73,7 +74,16 @@ from glide_shared.commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
-from glide_shared.config import BackoffStrategy, ProtocolVersion, ServerCredentials
+from glide_shared.config import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
+    BackoffStrategy,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+    NodeAddress,
+    ProtocolVersion,
+    ServerCredentials,
+)
 from glide_shared.constants import (
     OK,
     TEncodable,
@@ -125,6 +135,12 @@ class TestGlideClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_send_and_receive_large_values(self, request, cluster_mode, protocol):
+        # Skip on macOS - the macOS tests run on self hosted VMs which have resource limits
+        # making this test flaky with "no buffer space available" errors. See - https://github.com/valkey-io/valkey-glide/issues/4902
+        system = platform.system().lower()
+        if "darwin" in system:
+            return
+
         glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
@@ -277,7 +293,7 @@ class TestGlideClients:
         assert b"db=4" in client_info
         await glide_client.close()
 
-    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_select_database_id_custom_command(self, request, cluster_mode):
         if cluster_mode:
             # Check version using a temporary standalone client
@@ -323,7 +339,13 @@ class TestGlideClients:
         assert isinstance(stats, dict)
         assert "total_connections" in stats
         assert "total_clients" in stats
-        assert len(stats) == 2
+        assert "total_values_compressed" in stats
+        assert "total_values_decompressed" in stats
+        assert "total_original_bytes" in stats
+        assert "total_bytes_compressed" in stats
+        assert "total_bytes_decompressed" in stats
+        assert "compression_skipped_count" in stats
+        assert len(stats) == 8
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -411,6 +433,163 @@ class TestGlideClients:
 
         # Clean up the main client
         await client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_connection_timeout_on_unavailable_host(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+        """
+        Test that connection_timeout is respected when connecting to an unavailable host.
+
+        This test verifies the fix for issue #4991 where standalone mode would block
+        for ~10 seconds regardless of the configured connection_timeout, while cluster
+        mode correctly respected the timeout.
+
+        The fix wraps the retry loop in a timeout so total connection time is capped
+        at connection_timeout.
+        """
+        # Use an IP address that should be unreachable (TEST-NET-1, reserved for documentation)
+        # This avoids DNS resolution delays and ensures consistent timeout behavior
+        unavailable_address = NodeAddress("192.0.2.1", 6379)
+        connection_timeout_ms = 1000  # 1 second
+
+        start_time = time.time()
+
+        with pytest.raises(ClosingError) as exc_info:
+            if cluster_mode:
+                cluster_config = GlideClusterClientConfiguration(
+                    addresses=[unavailable_address],
+                    request_timeout=connection_timeout_ms,
+                    advanced_config=AdvancedGlideClusterClientConfiguration(
+                        connection_timeout=connection_timeout_ms
+                    ),
+                )
+                await GlideClusterClient.create(cluster_config)
+            else:
+                standalone_config = GlideClientConfiguration(
+                    addresses=[unavailable_address],
+                    request_timeout=connection_timeout_ms,
+                    advanced_config=AdvancedGlideClientConfiguration(
+                        connection_timeout=connection_timeout_ms
+                    ),
+                )
+                await GlideClient.create(standalone_config)
+
+        elapsed_time = time.time() - start_time
+
+        # Verify the connection failed with a timeout-related error
+        error_message = str(exc_info.value).lower()
+        assert any(
+            msg in error_message for msg in ["timed out", "timeout", "failed to create"]
+        ), f"Expected timeout error, got: {exc_info.value}"
+
+        # The key assertion: elapsed time should be close to connection_timeout
+        # Allow some tolerance (up to 2x the timeout) for system variations
+        # Before the fix, standalone mode would take ~10 seconds regardless of timeout
+        max_allowed_time = (connection_timeout_ms / 1000) * 2.5  # 2.5 seconds max
+        assert elapsed_time < max_allowed_time, (
+            f"Connection attempt took {elapsed_time:.2f}s, expected < {max_allowed_time:.2f}s. "
+            f"This suggests connection_timeout ({connection_timeout_ms}ms) is not being respected."
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_UDS_socket_connection_failure(self, glide_client: TGlideClient):
+        """Test that the client's error handling during UDS socket connection failure"""
+        assert await glide_client.set("test_key", "test_value") == OK
+        assert await glide_client.get("test_key") == b"test_value"
+
+        # Force close the UDS connection to simulate socket failure
+        await glide_client._stream.aclose()
+
+        # Verify a ClosingError is raised
+        with pytest.raises(
+            ClosingError, match="The communication layer was unexpectedly closed"
+        ):
+            await glide_client.get("test_key")
+
+        # Verify the client is closed
+        with pytest.raises(
+            ClosingError,
+            match="Unable to execute requests; the client is closed. Please create a new client.",
+        ):
+            await glide_client.get("test_key")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_invalid_tls_config_fails_fast(self, cluster_mode: bool):
+        """
+        Test that InvalidClientConfig errors (like TLS misconfiguration) fail fast
+        without retrying until timeout.
+
+        This verifies that configuration errors are treated as permanent and don't
+        waste time retrying when the configuration itself is wrong.
+        """
+        from glide_shared.config import TlsAdvancedConfiguration, TlsMode
+
+        # Provide invalid TLS certificate data - this should fail fast
+        # The certificate parsing happens before any connection attempt
+        invalid_cert = b"-----BEGIN CERTIFICATE-----\ninvalid certificate data\n-----END CERTIFICATE-----"
+        connection_timeout_ms = 5000  # 5 seconds - we should fail much faster
+
+        start_time = time.time()
+
+        with pytest.raises(ClosingError) as exc_info:
+            tls_config = TlsAdvancedConfiguration(root_pem_cacerts=invalid_cert)
+
+            if cluster_mode:
+                cluster_config = GlideClusterClientConfiguration(
+                    addresses=[NodeAddress("localhost", 6379)],
+                    request_timeout=connection_timeout_ms,
+                    use_tls=TlsMode.SecureTls,
+                    advanced_config=AdvancedGlideClusterClientConfiguration(
+                        connection_timeout=connection_timeout_ms,
+                        tls_config=tls_config,
+                    ),
+                )
+                await GlideClusterClient.create(cluster_config)
+            else:
+                standalone_config = GlideClientConfiguration(
+                    addresses=[NodeAddress("localhost", 6379)],
+                    request_timeout=connection_timeout_ms,
+                    use_tls=TlsMode.SecureTls,
+                    advanced_config=AdvancedGlideClientConfiguration(
+                        connection_timeout=connection_timeout_ms,
+                        tls_config=tls_config,
+                    ),
+                )
+                await GlideClient.create(standalone_config)
+
+        elapsed_time = time.time() - start_time
+
+        # Verify we got a TLS/config error (not a generic timeout)
+        error_message = str(exc_info.value).lower()
+        assert any(
+            msg in error_message
+            for msg in ["tls", "certificate", "pem", "ssl", "config", "invalid"]
+        ), f"Expected TLS/config error, got: {exc_info.value}"
+
+        # The key assertion: should fail fast (< 2 seconds), not wait for full timeout
+        assert elapsed_time < 2.0, (
+            f"InvalidClientConfig error took {elapsed_time:.2f}s, expected < 2s. "
+            "Configuration errors should fail immediately without retrying."
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cancelled_request_handled_gracefully(
+        self, glide_client: TGlideClient
+    ):
+        """Assert that a cancelled request does not close the client."""
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(0.1):
+                await glide_client.blpop(["random_key"], timeout=2)
+
+        # Ensure client can still perform a simple operation
+        assert await glide_client.set(get_random_string(10), "value") == OK
 
 
 @pytest.mark.anyio
@@ -615,9 +794,15 @@ class TestCommands:
         info_result = get_first_result(info_result)
         assert b"# Memory" in info_result
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_select(self, glide_client: GlideClient):
+    async def test_select(self, glide_client: GlideClient, cluster_mode):
+        if cluster_mode:
+            if await check_if_server_version_lt(glide_client, "9.0.0"):
+                return pytest.mark.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+
         assert await glide_client.select(0) == OK
         key = get_random_string(10)
         value = get_random_string(10)
@@ -628,9 +813,15 @@ class TestCommands:
         assert await glide_client.select(0) == OK
         assert await glide_client.get(key) == value.encode()
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_move(self, glide_client: GlideClient):
+    async def test_move(self, glide_client: TGlideClient, cluster_mode):
+        if cluster_mode:
+            if await check_if_server_version_lt(glide_client, "9.0.0"):
+                return pytest.mark.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+
         key = get_random_string(10)
         value = get_random_string(10)
 
@@ -9179,6 +9370,84 @@ class TestCommands:
         finally:
             assert await glide_client.select(0) == OK
 
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cluster_copy_database(self, glide_client: GlideClusterClient):
+        source = f"{{testKey}}-{get_random_string(10)}"
+        destination = f"{{testKey}}-{get_random_string(10)}"
+        value1 = get_random_string(5)
+        value2 = get_random_string(5)
+        value1_encoded = value1.encode()
+        value2_encoded = value2.encode()
+        index1 = 1
+        index2 = 2
+
+        try:
+            assert await glide_client.custom_command(["SELECT", "0"]) == OK
+
+            # neither key exists
+            assert (
+                await glide_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
+                is False
+            )
+
+            # source exists, destination does not
+            await glide_client.set(source, value1)
+            assert (
+                await glide_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
+                is True
+            )
+            assert await glide_client.custom_command(["SELECT", "1"]) == OK
+            assert await glide_client.get(destination) == value1_encoded
+
+            # new value for source key
+            assert await glide_client.custom_command(["SELECT", "0"]) == OK
+            await glide_client.set(source, value2)
+
+            # no REPLACE, copying to existing key on DB 0 & 1, non-existing key on DB 2
+            assert (
+                await glide_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
+                is False
+            )
+            assert (
+                await glide_client.copy(
+                    source, destination, destinationDB=index2, replace=False
+                )
+                is True
+            )
+
+            # new value only gets copied to DB 2
+            assert await glide_client.custom_command(["SELECT", "1"]) == OK
+            assert await glide_client.get(destination) == value1_encoded
+            assert await glide_client.custom_command(["SELECT", "2"]) == OK
+            assert await glide_client.get(destination) == value2_encoded
+
+            # both exists, with REPLACE, when value isn't the same, source always get copied to destination
+            assert await glide_client.custom_command(["SELECT", "0"]) == OK
+            assert (
+                await glide_client.copy(
+                    source, destination, destinationDB=index1, replace=True
+                )
+                is True
+            )
+            assert await glide_client.custom_command(["SELECT", "1"]) == OK
+            assert await glide_client.get(destination) == value2_encoded
+
+            # invalid DB index
+            with pytest.raises(RequestError):
+                await glide_client.copy(
+                    source, destination, destinationDB=-1, replace=True
+                )
+        finally:
+            assert await glide_client.custom_command(["SELECT", "0"]) == OK
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_wait(self, glide_client: TGlideClient):
@@ -9217,6 +9486,17 @@ class TestCommands:
         result = await glide_client.lolwut(5, [30, 4, 4])
         assert b"ver" in result and server_version_bytes in result
 
+        # Test LOLWUT version 9 (available in Valkey 9.0.0+)
+        min_version = "9.0.0"
+        if await check_if_server_version_lt(glide_client, min_version) is False:
+            # Test with version 9 and 2 parameters (columns, rows)
+            result = await glide_client.lolwut(9, [30, 4])
+            assert b"ver" in result and server_version_bytes in result
+
+            # Test with version 9 and 4 parameters (columns, rows, real, imaginary)
+            result = await glide_client.lolwut(9, [40, 20, 1, 2])
+            assert b"ver" in result and server_version_bytes in result
+
         if isinstance(glide_client, GlideClusterClient):
             # test with multi-node route
             result = await glide_client.lolwut(route=AllNodes())
@@ -9241,6 +9521,21 @@ class TestCommands:
             result = await glide_client.lolwut(2, [10, 20], RandomNode())
             assert isinstance(result, bytes)
             assert b"ver" in result and server_version_bytes in result
+
+            # Test LOLWUT version 9 with cluster routes (available in Valkey 9.0.0+)
+            if await check_if_server_version_lt(glide_client, min_version) is False:
+                # Test with version 9 and 2 parameters on all nodes
+                result = await glide_client.lolwut(9, [30, 4], AllNodes())
+                assert isinstance(result, dict)
+                result_decoded = cast(dict, convert_bytes_to_string_object(result))
+                assert result_decoded is not None
+                for node_result in result_decoded.values():
+                    assert "ver" in node_result and server_version in node_result
+
+                # Test with version 9 and 4 parameters on random node
+                result = await glide_client.lolwut(9, [40, 20, 1, 2], RandomNode())
+                assert isinstance(result, bytes)
+                assert b"ver" in result and server_version_bytes in result
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -11928,3 +12223,51 @@ class TestScripts:
         # Verify all fields are now persistent
         ttl_results = await glide_client.httl(multi_key, field_names)
         assert ttl_results == [-1] * len(field_names)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("tcp_nodelay", [None, True, False])
+    async def test_tcp_nodelay_configuration(
+        self,
+        request,
+        cluster_mode: bool,
+        tcp_nodelay: Optional[bool],
+    ):
+        """Test TCP_NODELAY configuration option."""
+        valkey_cluster = (
+            pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
+        )
+
+        if cluster_mode:
+            cluster_config = GlideClusterClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                advanced_config=AdvancedGlideClusterClientConfiguration(
+                    tcp_nodelay=tcp_nodelay
+                ),
+            )
+            cluster_client = await GlideClusterClient.create(cluster_config)
+            try:
+                # Verify client can connect and execute commands
+                assert await cluster_client.ping() == b"PONG"
+                assert await cluster_client.set("key", "value") == "OK"
+                assert await cluster_client.get("key") == b"value"
+                # Clean up test key
+                await cluster_client.delete(["key"])
+            finally:
+                await cluster_client.close()
+        else:
+            standalone_config = GlideClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                advanced_config=AdvancedGlideClientConfiguration(
+                    tcp_nodelay=tcp_nodelay
+                ),
+            )
+            standalone_client = await GlideClient.create(standalone_config)
+            try:
+                # Verify client can connect and execute commands
+                assert await standalone_client.ping() == b"PONG"
+                assert await standalone_client.set("key", "value") == "OK"
+                assert await standalone_client.get("key") == b"value"
+                # Clean up test key
+                await standalone_client.delete(["key"])
+            finally:
+                await standalone_client.close()

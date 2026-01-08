@@ -12,6 +12,10 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE) is the off
 - **Stability and Fault Tolerance**: We brought our years of experience to create a bulletproof client.
 - **Backed and Supported by AWS and GCP**: Ensuring robust support and continuous improvement of the project.
 
+## Documentation
+
+See GLIDE's Go [documentation site](https://glide.valkey.io/languages/go).  
+
 ## Supported Engine Versions
 
 Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valkey-glide/blob/main/README.md#supported-engine-versions) for details.
@@ -50,6 +54,13 @@ To install Valkey GLIDE in your Go project, follow these steps:
     ```
 3. After installation, you can start up a Valkey server and run one of the examples in [Basic Examples](#basic-examples).
 
+### Alpine Linux / MUSL
+
+If you are running on Alpine Linux or otherwise require a MUSL-based build, you must add the 'musl' tag to your build.
+
+```
+export GOFLAGS := -tags=musl
+```
 
 ## Basic Examples
 

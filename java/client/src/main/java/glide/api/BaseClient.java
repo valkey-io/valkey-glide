@@ -82,6 +82,7 @@ import static command_request.CommandRequestOuterClass.RequestType.LTrim;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectIdleTime;
@@ -121,6 +122,9 @@ import static command_request.CommandRequestOuterClass.RequestType.SRem;
 import static command_request.CommandRequestOuterClass.RequestType.SScan;
 import static command_request.CommandRequestOuterClass.RequestType.SUnion;
 import static command_request.CommandRequestOuterClass.RequestType.SUnionStore;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptShow;
 import static command_request.CommandRequestOuterClass.RequestType.Set;
 import static command_request.CommandRequestOuterClass.RequestType.SetBit;
@@ -190,7 +194,6 @@ import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_V
 import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_VALKEY_API;
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
-import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.cast3DArray;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castArrayofArrays;
@@ -222,11 +225,13 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
+import glide.api.logging.Logger;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.HGetExOptions;
 import glide.api.models.commands.HSetExOptions;
@@ -282,20 +287,19 @@ import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
+import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
-import glide.connectors.handlers.CallbackDispatcher;
-import glide.connectors.handlers.ChannelHandler;
 import glide.connectors.handlers.MessageHandler;
-import glide.connectors.resources.Platform;
-import glide.connectors.resources.ThreadPoolResource;
-import glide.connectors.resources.ThreadPoolResourceAllocator;
 import glide.ffi.resolvers.GlideValueResolver;
+import glide.ffi.resolvers.NativeUtils;
 import glide.ffi.resolvers.StatisticsResolver;
+import glide.internal.GlideCoreClient;
 import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import glide.utils.ArgsBuilder;
+import glide.utils.BufferUtils;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -333,20 +337,71 @@ public abstract class BaseClient
     /** Valkey simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 
+    // Response processing flags
+    public enum ResponseFlags {
+        ENCODING_UTF8,
+        IS_NULLABLE
+    }
+
+    // Constants for various commands
+    public static final String WITH_VALUES_VALKEY_API = "WITHVALUES";
+    public static final String COUNT_VALKEY_API = "COUNT";
+    public static final String WITH_SCORE_VALKEY_API = "WITHSCORE";
+    public static final String WITH_SCORES_VALKEY_API = "WITHSCORES";
+    public static final String LIMIT_VALKEY_API = "LIMIT";
+    public static final String SET_LIMIT_VALKEY_API = "LIMIT";
+    public static final String COUNT_FOR_LIST_VALKEY_API = "COUNT";
+    public static final String REPLACE_VALKEY_API = "REPLACE";
+    public static final String LEN_VALKEY_API = "LEN";
+    public static final String IDX_COMMAND_STRING = "IDX";
+    public static final String MINMATCHLEN_COMMAND_STRING = "MINMATCHLEN";
+    public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
+    public static final String LCS_MATCHES_RESULT_KEY = "matches";
+
+    // Constant empty arrays to reduce allocations
+    private static final String[] EMPTY_STRING_ARRAY = new String[0];
+    protected static final GlideString[] EMPTY_GLIDE_STRING_ARRAY = new GlideString[0];
+
+    // Client components
     protected final CommandManager commandManager;
     protected final ConnectionManager connectionManager;
     protected final MessageHandler messageHandler;
     protected final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
 
+    // Native library loading
+    static {
+        try {
+            NativeUtils.loadGlideLib();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to load native library", e);
+        }
+    }
+
     /** Helper which extracts data from received {@link Response}s from GLIDE. */
     private static final BaseResponseResolver responseResolver =
-            new BaseResponseResolver(GlideValueResolver::valueFromPointer);
+            new BaseResponseResolver(
+                    pointer -> {
+                        if (pointer == null || pointer == 0) {
+                            return null;
+                        }
+                        // The pointer is an ID to retrieve the object from the registry
+                        // The object was already converted from Redis Value to Java in the native layer
+                        return GlideValueResolver.valueFromPointer(pointer);
+                    });
 
     /** Helper which extracts data with binary strings from received {@link Response}s from GLIDE. */
     private static final BaseResponseResolver binaryResponseResolver =
-            new BaseResponseResolver(GlideValueResolver::valueFromPointerBinary);
+            new BaseResponseResolver(
+                    pointer -> {
+                        if (pointer == null || pointer == 0) {
+                            return null;
+                        }
+                        // The pointer is an ID to retrieve the object from the registry
+                        // The object was already converted with binary encoding in the native layer
+                        return GlideValueResolver.valueFromPointerBinary(pointer);
+                    });
 
-    /** A constructor. */
+    /** Constructor for client initialization */
     protected BaseClient(ClientBuilder builder) {
         this.connectionManager = builder.connectionManager;
         this.commandManager = builder.commandManager;
@@ -354,7 +409,7 @@ public abstract class BaseClient
         this.subscriptionConfiguration = builder.subscriptionConfiguration;
     }
 
-    /** Auxiliary builder which wraps all fields to be initialized in the constructor. */
+    /** Auxiliary builder which wraps all fields */
     @RequiredArgsConstructor
     protected static class ClientBuilder {
         private final ConnectionManager connectionManager;
@@ -364,7 +419,7 @@ public abstract class BaseClient
     }
 
     /**
-     * Async request for an async (non-blocking) client.
+     * Create native client
      *
      * @param config client Configuration.
      * @param constructor client constructor reference.
@@ -373,30 +428,93 @@ public abstract class BaseClient
      */
     protected static <T extends BaseClient> CompletableFuture<T> createClient(
             @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
+        // Validate protocol compatibility for PubSub subscriptions
+        if (config.getSubscriptionConfiguration() != null
+                && config.getProtocol() == glide.api.models.configuration.ProtocolVersion.RESP2) {
+            throw new ConfigurationError("PubSub subscriptions require RESP3 protocol");
+        }
         try {
-            ThreadPoolResource threadPoolResource =
-                    ThreadPoolResourceAllocator.getOrCreate(Platform.getThreadPoolResourceSupplier());
+            // Create client components using build methods
+            ConnectionManager connectionManager = buildConnectionManager();
             MessageHandler messageHandler = buildMessageHandler(config);
-            ChannelHandler channelHandler = buildChannelHandler(threadPoolResource, messageHandler);
-            ConnectionManager connectionManager = buildConnectionManager(channelHandler);
-            CommandManager commandManager = buildCommandManager(channelHandler);
-            // TODO: Support exception throwing, including interrupted exceptions
+
+            // Return async chain
             return connectionManager
                     .connectToValkey(config)
                     .thenApply(
-                            ignored ->
-                                    constructor.apply(
-                                            new ClientBuilder(
-                                                    connectionManager,
-                                                    commandManager,
-                                                    messageHandler,
-                                                    Optional.ofNullable(config.getSubscriptionConfiguration()))));
-        } catch (InterruptedException e) {
-            // Something bad happened while we were establishing netty connection to UDS
+                            ignored -> {
+                                // Create CommandManager after connection established
+                                CommandManager commandManager = buildCommandManager(connectionManager);
+
+                                T client =
+                                        constructor.apply(
+                                                new ClientBuilder(
+                                                        connectionManager,
+                                                        commandManager,
+                                                        messageHandler,
+                                                        Optional.ofNullable(config.getSubscriptionConfiguration())));
+                                try {
+                                    glide.internal.GlideCoreClient.registerClient(
+                                            connectionManager.getNativeClientHandle(), client);
+                                } catch (Throwable t) {
+                                    glide.api.logging.Logger.log(
+                                            glide.api.logging.Logger.Level.WARN,
+                                            "BaseClient",
+                                            () ->
+                                                    "Failed to register native client (handle="
+                                                            + connectionManager.getNativeClientHandle()
+                                                            + ") - continuing",
+                                            t);
+                                }
+                                return client;
+                            });
+        } catch (Exception e) {
+            // Something bad happened during initial setup
             var future = new CompletableFuture<T>();
             future.completeExceptionally(e);
             return future;
         }
+    }
+
+    /** Build ConnectionManager for native client */
+    protected static ConnectionManager buildConnectionManager() {
+        return new ConnectionManager();
+    }
+
+    /** Build MessageHandler for native client */
+    protected static MessageHandler buildMessageHandler(BaseClientConfiguration config) {
+        // TODO: Extract callback and context from config
+        return new MessageHandler(
+                config.getSubscriptionConfiguration() != null
+                        ? config.getSubscriptionConfiguration().getCallback()
+                        : Optional.empty(),
+                config.getSubscriptionConfiguration() != null
+                        ? config.getSubscriptionConfiguration().getContext()
+                        : Optional.empty(),
+                responseResolver);
+    }
+
+    /** Build CommandManager for native client */
+    protected static CommandManager buildCommandManager(ConnectionManager connectionManager) {
+        // CommandManager will be created after connection is established
+        // We'll update this once the connection provides the native handle
+        GlideCoreClient core =
+                new GlideCoreClient(
+                        connectionManager.getNativeClientHandle(), connectionManager.getMaxInflightRequests());
+        // Register for PubSub push delivery
+        try {
+            GlideCoreClient.registerClient(connectionManager.getNativeClientHandle(), null);
+        } catch (Throwable t) {
+            glide.api.logging.Logger.log(
+                    glide.api.logging.Logger.Level.WARN,
+                    "BaseClient",
+                    () ->
+                            "Failed to register native client for push delivery (handle="
+                                    + connectionManager.getNativeClientHandle()
+                                    + ") - continuing",
+                    t);
+        }
+        return new CommandManager(core);
     }
 
     /**
@@ -426,6 +544,7 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
+        // Pull next message from internal queue (non-blocking)
         return messageHandler.getQueue().popSync();
     }
 
@@ -448,6 +567,7 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
+        // Return a future for the next message (non-blocking await)
         return messageHandler.getQueue().popAsync();
     }
 
@@ -460,37 +580,17 @@ public abstract class BaseClient
      */
     @Override
     public void close() throws ExecutionException {
-        try {
-            connectionManager.closeConnection().get();
-        } catch (InterruptedException e) {
-            // suppressing the interrupted exception - it is already suppressed in the future
-            throw new RuntimeException(e);
-        }
+        connectionManager.closeConnectionSync();
     }
 
-    protected static MessageHandler buildMessageHandler(BaseClientConfiguration config) {
-        if (config.getSubscriptionConfiguration() == null) {
-            return new MessageHandler(Optional.empty(), Optional.empty(), binaryResponseResolver);
-        }
-        return new MessageHandler(
-                config.getSubscriptionConfiguration().getCallback(),
-                config.getSubscriptionConfiguration().getContext(),
-                binaryResponseResolver);
+    /** Check if the client is connected and ready for commands. */
+    public boolean isConnected() {
+        return connectionManager.isConnected();
     }
 
-    protected static ChannelHandler buildChannelHandler(
-            ThreadPoolResource threadPoolResource, MessageHandler messageHandler)
-            throws InterruptedException {
-        CallbackDispatcher callbackDispatcher = new CallbackDispatcher(messageHandler);
-        return new ChannelHandler(callbackDispatcher, getSocket(), threadPoolResource);
-    }
-
-    protected static ConnectionManager buildConnectionManager(ChannelHandler channelHandler) {
-        return new ConnectionManager(channelHandler);
-    }
-
-    protected static CommandManager buildCommandManager(ChannelHandler channelHandler) {
-        return new CommandManager(channelHandler);
+    /** Get client information from the native layer. */
+    public String getClientInfo() {
+        return connectionManager.getClientInfo();
     }
 
     /**
@@ -520,6 +620,23 @@ public abstract class BaseClient
                 encodingUtf8 ? responseResolver.apply(response) : binaryResponseResolver.apply(response);
         if (isNullable && (value == null)) {
             return null;
+        }
+
+        // Handle DirectByteBuffer conversion for large responses (>16KB)
+        if (value instanceof java.nio.ByteBuffer) {
+            java.nio.ByteBuffer duplicatedBuffer = ((java.nio.ByteBuffer) value).duplicate();
+            duplicatedBuffer.rewind();
+            java.nio.ByteBuffer readOnlyBuffer = duplicatedBuffer.asReadOnlyBuffer();
+            if (classType == String.class && encodingUtf8) {
+                value = java.nio.charset.StandardCharsets.UTF_8.decode(readOnlyBuffer).toString();
+            } else if (classType == GlideString.class) {
+                value = GlideString.of(copyBufferToArray(readOnlyBuffer));
+            } else if (classType == byte[].class) {
+                value = copyBufferToArray(readOnlyBuffer);
+            } else if (classType == Map.class) {
+                // Deserialize Map from DirectByteBuffer without intermediate copy
+                value = deserializeMapFromBuffer(readOnlyBuffer, encodingUtf8);
+            }
         }
 
         value = convertByteArrayToGlideString(value);
@@ -790,6 +907,22 @@ public abstract class BaseClient
         return response;
     }
 
+    private Map<String, Object> convertBinaryLcsMap(Map<GlideString, Object> response) {
+        if (response == null) {
+            return new LinkedHashMap<>();
+        }
+        Map<String, Object> converted = new LinkedHashMap<>(Math.max(response.size(), 1));
+        for (Map.Entry<GlideString, Object> entry : response.entrySet()) {
+            GlideString key = entry.getKey();
+            if (key == null) {
+                throw new IllegalStateException(
+                        "Received null key from native layer - this indicates a bug in the protocol handling");
+            }
+            converted.put(key.toString(), entry.getValue());
+        }
+        return converted;
+    }
+
     /**
      * Update the current connection with a new password.
      *
@@ -809,6 +942,7 @@ public abstract class BaseClient
      *     password rotation on the server side.
      * @param password A new password to set.
      * @return <code>"OK"</code>.
+     * @throws ConfigurationError if the client is using IAM authentication.
      * @example
      *     <pre>{@code
      * String response = client.resetConnectionPassword("new_password", RE_AUTHENTICATE).get();
@@ -817,8 +951,22 @@ public abstract class BaseClient
      */
     public CompletableFuture<String> updateConnectionPassword(
             @NonNull String password, boolean immediateAuth) {
-        return commandManager.submitPasswordUpdate(
-                Optional.of(password), immediateAuth, this::handleStringResponse);
+        // Check if using IAM authentication
+        ServerCredentials creds = connectionManager.getCredentials();
+        if (creds != null && creds.getIamConfig() != null) {
+            throw new ConfigurationError(
+                    "updateConnectionPassword is not supported when IAM authentication is enabled.");
+        }
+
+        return commandManager
+                .submitPasswordUpdate(Optional.of(password), immediateAuth, this::handleStringResponse)
+                .thenApply(
+                        result -> {
+                            if (OK.equals(result)) {
+                                connectionManager.updateStoredPassword(password);
+                            }
+                            return result;
+                        });
     }
 
     /**
@@ -839,6 +987,7 @@ public abstract class BaseClient
      *     will be returned. <br>
      *     The default is `false`.
      * @return <code>"OK"</code>.
+     * @throws ConfigurationError if the client is using IAM authentication.
      * @example
      *     <pre>{@code
      * String response = client.resetConnectionPassword(true).get();
@@ -846,8 +995,62 @@ public abstract class BaseClient
      * }</pre>
      */
     public CompletableFuture<String> updateConnectionPassword(boolean immediateAuth) {
-        return commandManager.submitPasswordUpdate(
-                Optional.empty(), immediateAuth, this::handleStringResponse);
+        // Check if using IAM authentication
+        ServerCredentials creds = connectionManager.getCredentials();
+        if (creds != null && creds.getIamConfig() != null) {
+            throw new ConfigurationError(
+                    "updateConnectionPassword is not supported when IAM authentication is enabled.");
+        }
+
+        return commandManager
+                .submitPasswordUpdate(Optional.empty(), immediateAuth, this::handleStringResponse)
+                .thenApply(
+                        result -> {
+                            if (OK.equals(result)) {
+                                connectionManager.updateStoredPassword(null);
+                            }
+                            return result;
+                        });
+    }
+
+    /**
+     * Manually refresh the IAM token for the current connection.
+     *
+     * <p>This method is only available if the client was created with IAM authentication. It triggers
+     * an immediate refresh of the IAM token and updates the connection.
+     *
+     * @return A CompletableFuture that resolves to <code>"OK"</code> on success.
+     * @throws ConfigurationError if the client is not using IAM authentication.
+     * @example
+     *     <pre>{@code
+     * // Create client with IAM authentication
+     * GlideClientConfiguration config = GlideClientConfiguration.builder()
+     *     .address(NodeAddress.builder().host("my-cluster.amazonaws.com").port(6379).build())
+     *     .credentials(ServerCredentials.builder()
+     *         .username("myUser")
+     *         .iamConfig(IamAuthConfig.builder()
+     *             .clusterName("my-cluster")
+     *             .service(ServiceType.ELASTICACHE)
+     *             .region("us-east-1")
+     *             .build())
+     *         .build())
+     *     .build();
+     * GlideClient client = GlideClient.createClient(config).get();
+     *
+     * // Manually refresh the IAM token
+     * String response = client.refreshIamToken().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    public CompletableFuture<String> refreshIamToken() {
+        // Check if using IAM authentication
+        ServerCredentials creds = connectionManager.getCredentials();
+        if (creds == null || creds.getIamConfig() == null) {
+            throw new ConfigurationError(
+                    "refreshIamToken is only available when IAM authentication is enabled.");
+        }
+
+        return commandManager.submitRefreshIamToken(this::handleStringResponse);
     }
 
     @Override
@@ -931,7 +1134,8 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> set(
             @NonNull GlideString key, @NonNull GlideString value, @NonNull SetOptions options) {
-        GlideString[] arguments = new ArgsBuilder().add(key).add(value).add(options.toArgs()).toArray();
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add(value).add(options.toArgsBinary()).toArray();
         return commandManager.submitNewCommand(Set, arguments, this::handleStringOrNullResponse);
     }
 
@@ -974,6 +1178,18 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> move(@NonNull String key, long dbIndex) {
+        return commandManager.submitNewCommand(
+                Move, new String[] {key, Long.toString(dbIndex)}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> move(@NonNull GlideString key, long dbIndex) {
+        return commandManager.submitNewCommand(
+                Move, new GlideString[] {key, gs(Long.toString(dbIndex))}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<String> objectEncoding(@NonNull String key) {
         return commandManager.submitNewCommand(
                 ObjectEncoding, new String[] {key}, this::handleStringOrNullResponse);
@@ -981,6 +1197,16 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> objectEncoding(@NonNull GlideString key) {
+        // Prefer specialized path (textual response) without adding hot-path branching.
+        // In unit tests where CommandManager is a mock, this may return null; fallback
+        // to
+        // the generic mocked method to satisfy the unit contract.
+        CompletableFuture<String> specialized =
+                commandManager.submitObjectEncoding(
+                        new GlideString[] {key}, this::handleStringOrNullResponse);
+        if (specialized != null) {
+            return specialized;
+        }
         return commandManager.submitNewCommand(
                 ObjectEncoding, new GlideString[] {key}, this::handleStringOrNullResponse);
     }
@@ -1185,7 +1411,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> hsetex(
             @NonNull String key, @NonNull Map<String, String> fieldValueMap, HSetExOptions options) {
-        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
+        String[] optionsArgs = options != null ? options.toArgs() : EMPTY_STRING_ARRAY;
         String[] arguments =
                 concatenateArrays(
                         new String[] {key},
@@ -1216,7 +1442,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String[]> hgetex(
             @NonNull String key, @NonNull String[] fields, HGetExOptions options) {
-        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
+        String[] optionsArgs = options != null ? options.toArgs() : EMPTY_STRING_ARRAY;
         String[] arguments =
                 concatenateArrays(
                         new String[] {key},
@@ -1247,7 +1473,7 @@ public abstract class BaseClient
             long seconds,
             @NonNull String[] fields,
             HashFieldExpirationConditionOptions options) {
-        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
+        String[] optionsArgs = options != null ? options.toArgs() : EMPTY_STRING_ARRAY;
         String[] arguments =
                 concatenateArrays(
                         new String[] {key, String.valueOf(seconds)},
@@ -1297,7 +1523,7 @@ public abstract class BaseClient
             long milliseconds,
             @NonNull String[] fields,
             HashFieldExpirationConditionOptions options) {
-        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
+        String[] optionsArgs = options != null ? options.toArgs() : EMPTY_STRING_ARRAY;
         String[] arguments =
                 concatenateArrays(
                         new String[] {key, String.valueOf(milliseconds)},
@@ -1329,7 +1555,7 @@ public abstract class BaseClient
             long unixSeconds,
             @NonNull String[] fields,
             HashFieldExpirationConditionOptions options) {
-        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
+        String[] optionsArgs = options != null ? options.toArgs() : EMPTY_STRING_ARRAY;
         String[] arguments =
                 concatenateArrays(
                         new String[] {key, String.valueOf(unixSeconds)},
@@ -1361,7 +1587,7 @@ public abstract class BaseClient
             long unixMilliseconds,
             @NonNull String[] fields,
             HashFieldExpirationConditionOptions options) {
-        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
+        String[] optionsArgs = options != null ? options.toArgs() : EMPTY_STRING_ARRAY;
         String[] arguments =
                 concatenateArrays(
                         new String[] {key, String.valueOf(unixMilliseconds)},
@@ -2244,13 +2470,38 @@ public abstract class BaseClient
                 ScriptShow, new GlideString[] {sha1}, this::handleGlideStringResponse);
     }
 
+    public CompletableFuture<Boolean[]> scriptExists(@NonNull String[] sha1s) {
+        return commandManager.submitNewCommand(
+                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    public CompletableFuture<Boolean[]> scriptExists(@NonNull GlideString[] sha1s) {
+        return commandManager.submitNewCommand(
+                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    public CompletableFuture<String> scriptFlush() {
+        return commandManager.submitNewCommand(
+                ScriptFlush, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    public CompletableFuture<String> scriptFlush(@NonNull FlushMode flushMode) {
+        return commandManager.submitNewCommand(
+                ScriptFlush, flushMode.toArgs(), this::handleStringResponse);
+    }
+
+    public CompletableFuture<String> scriptKill() {
+        return commandManager.submitNewCommand(
+                ScriptKill, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
     @Override
     public CompletableFuture<Long> zadd(
             @NonNull String key,
             @NonNull Map<String, Double> membersScoresMap,
             @NonNull ZAddOptions options,
             boolean changed) {
-        String[] changedArg = changed ? new String[] {"CH"} : new String[] {};
+        String[] changedArg = changed ? new String[] {"CH"} : EMPTY_STRING_ARRAY;
         String[] membersScores = convertMapToValueKeyStringArray(membersScoresMap);
 
         String[] arguments =
@@ -3827,8 +4078,8 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> type(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                Type, new GlideString[] {key}, this::handleStringResponse);
+        return commandManager.submitNewCommandWithResponseType(
+                Type, new GlideString[] {key}, this::handleStringResponse, true);
     }
 
     @Override
@@ -4799,6 +5050,51 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull String source, @NonNull String destination, long destinationDB) {
+        String[] arguments =
+                new String[] {source, destination, DB_VALKEY_API, Long.toString(destinationDB)};
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull GlideString source, @NonNull GlideString destination, long destinationDB) {
+        GlideString[] arguments =
+                new GlideString[] {
+                    source, destination, gs(DB_VALKEY_API), gs(Long.toString(destinationDB))
+                };
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull String source, @NonNull String destination, long destinationDB, boolean replace) {
+        String[] arguments =
+                new String[] {source, destination, DB_VALKEY_API, Long.toString(destinationDB)};
+        if (replace) {
+            arguments = ArrayUtils.add(arguments, REPLACE_VALKEY_API);
+        }
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull GlideString source,
+            @NonNull GlideString destination,
+            long destinationDB,
+            boolean replace) {
+        GlideString[] arguments =
+                new GlideString[] {
+                    source, destination, gs(DB_VALKEY_API), gs(Long.toString(destinationDB))
+                };
+        if (replace) {
+            arguments = ArrayUtils.add(arguments, gs(REPLACE_VALKEY_API));
+        }
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> msetnx(@NonNull Map<String, String> keyValueMap) {
         String[] args = convertMapToKeyValueStringArray(keyValueMap);
         return commandManager.submitNewCommand(MSetNX, args, this::handleBooleanResponse);
@@ -4849,7 +5145,10 @@ public abstract class BaseClient
                 new ArgsBuilder().add(key1).add(key2).add(IDX_COMMAND_STRING).toArray();
 
         return commandManager.submitNewCommand(
-                LCS, arguments, response -> handleLcsIdxResponse(handleMapResponse(response)));
+                LCS,
+                arguments,
+                response ->
+                        handleLcsIdxResponse(convertBinaryLcsMap(handleBinaryStringMapResponse(response))));
     }
 
     @Override
@@ -4875,7 +5174,10 @@ public abstract class BaseClient
                         .add(minMatchLen)
                         .toArray();
         return commandManager.submitNewCommand(
-                LCS, arguments, response -> handleLcsIdxResponse(handleMapResponse(response)));
+                LCS,
+                arguments,
+                response ->
+                        handleLcsIdxResponse(convertBinaryLcsMap(handleBinaryStringMapResponse(response))));
     }
 
     @Override
@@ -4895,7 +5197,8 @@ public abstract class BaseClient
                         .add(IDX_COMMAND_STRING)
                         .add(WITHMATCHLEN_COMMAND_STRING)
                         .toArray();
-        return commandManager.submitNewCommand(LCS, arguments, this::handleMapResponse);
+        return commandManager.submitNewCommand(
+                LCS, arguments, response -> convertBinaryLcsMap(handleBinaryStringMapResponse(response)));
     }
 
     @Override
@@ -4926,8 +5229,8 @@ public abstract class BaseClient
                         .add(minMatchLen)
                         .add(WITHMATCHLEN_COMMAND_STRING)
                         .toArray();
-
-        return commandManager.submitNewCommand(LCS, arguments, this::handleMapResponse);
+        return commandManager.submitNewCommand(
+                LCS, arguments, response -> convertBinaryLcsMap(handleBinaryStringMapResponse(response)));
     }
 
     @Override
@@ -4959,7 +5262,7 @@ public abstract class BaseClient
     public CompletableFuture<String[]> pubsubChannels() {
         return commandManager.submitNewCommand(
                 PubSubChannels,
-                new String[0],
+                EMPTY_STRING_ARRAY,
                 response -> castArray(handleArrayResponse(response), String.class));
     }
 
@@ -4967,7 +5270,7 @@ public abstract class BaseClient
     public CompletableFuture<GlideString[]> pubsubChannelsBinary() {
         return commandManager.submitNewCommand(
                 PubSubChannels,
-                new GlideString[0],
+                EMPTY_GLIDE_STRING_ARRAY,
                 response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
@@ -4989,7 +5292,8 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> pubsubNumPat() {
-        return commandManager.submitNewCommand(PubSubNumPat, new String[0], this::handleLongResponse);
+        return commandManager.submitNewCommand(
+                PubSubNumPat, EMPTY_STRING_ARRAY, this::handleLongResponse);
     }
 
     @Override
@@ -5024,7 +5328,7 @@ public abstract class BaseClient
     }
 
     // Hack: convert all `byte[]` -> `GlideString`. Better doing it here in the Java realm
-    // rather than doing it in the Rust code using JNI calls (performance)
+    // rather than doing it in the Rust code using native calls (performance)
     private Object convertByteArrayToGlideString(Object o) {
         if (o == null) return o;
 
@@ -5051,6 +5355,122 @@ public abstract class BaseClient
                                     LinkedHashMap::putAll);
         }
         return o;
+    }
+
+    private byte[] copyBufferToArray(java.nio.ByteBuffer buffer) {
+        java.nio.ByteBuffer duplicate = buffer.duplicate();
+        duplicate.rewind();
+        byte[] bytes = new byte[duplicate.remaining()];
+        duplicate.get(bytes);
+        return bytes;
+    }
+
+    private Map<?, ?> deserializeMapFromBuffer(java.nio.ByteBuffer buffer, boolean encodingUtf8) {
+        if (buffer == null) {
+            return new LinkedHashMap<>();
+        }
+
+        java.nio.ByteBuffer workingBuffer = buffer.duplicate();
+        workingBuffer.rewind();
+        workingBuffer = workingBuffer.asReadOnlyBuffer();
+        workingBuffer.order(java.nio.ByteOrder.BIG_ENDIAN);
+
+        try {
+            if (!workingBuffer.hasRemaining()) {
+                return new LinkedHashMap<>();
+            }
+
+            byte marker = workingBuffer.get();
+            if (marker != '%') {
+                // Older buffers may omit the '%' prefix; rewind and fall back to entry-count first.
+                workingBuffer.position(workingBuffer.position() - 1);
+            }
+
+            if (workingBuffer.remaining() < Integer.BYTES) {
+                Logger.log(
+                        Logger.Level.ERROR,
+                        "BaseClient",
+                        () -> "DirectByteBuffer map payload missing entry count");
+                return new LinkedHashMap<>();
+            }
+
+            int entryCount = workingBuffer.getInt();
+            Map<Object, Object> map = new LinkedHashMap<>(Math.max(16, entryCount));
+
+            for (int i = 0; i < entryCount; i++) {
+                if (workingBuffer.remaining() < Integer.BYTES) {
+                    Logger.log(
+                            Logger.Level.ERROR,
+                            "BaseClient",
+                            () -> "DirectByteBuffer map payload truncated before key length");
+                    return new LinkedHashMap<>();
+                }
+
+                int keyLen = workingBuffer.getInt();
+                if (keyLen < 0 || keyLen > workingBuffer.remaining()) {
+                    Logger.log(
+                            Logger.Level.ERROR,
+                            "BaseClient",
+                            () -> "Invalid key length in DirectByteBuffer map: " + keyLen);
+                    return new LinkedHashMap<>();
+                }
+
+                Object key;
+                if (encodingUtf8) {
+                    // Decode UTF-8 directly from buffer
+                    key = BufferUtils.decodeUtf8(workingBuffer, keyLen);
+                } else {
+                    // For binary mode, we need the byte array
+                    byte[] keyBytes = new byte[keyLen];
+                    workingBuffer.get(keyBytes);
+                    key = GlideString.of(keyBytes);
+                }
+
+                if (workingBuffer.remaining() < Integer.BYTES) {
+                    Logger.log(
+                            Logger.Level.ERROR,
+                            "BaseClient",
+                            () -> "DirectByteBuffer map payload truncated before value length");
+                    return new LinkedHashMap<>();
+                }
+
+                int valueLen = workingBuffer.getInt();
+
+                if (valueLen < 0) {
+                    map.put(key, null);
+                    continue;
+                }
+
+                if (valueLen > workingBuffer.remaining()) {
+                    Logger.log(
+                            Logger.Level.ERROR,
+                            "BaseClient",
+                            () -> "Invalid value length in DirectByteBuffer map: " + valueLen);
+                    return new LinkedHashMap<>();
+                }
+
+                Object value;
+                if (encodingUtf8) {
+                    // Decode UTF-8 directly from buffer
+                    value = BufferUtils.decodeUtf8(workingBuffer, valueLen);
+                } else {
+                    // For binary mode, we need the byte array
+                    byte[] valueBytes = new byte[valueLen];
+                    workingBuffer.get(valueBytes);
+                    value = GlideString.of(valueBytes);
+                }
+                map.put(key, value);
+            }
+
+            return map;
+        } catch (Exception e) {
+            Logger.log(
+                    Logger.Level.ERROR,
+                    "BaseClient",
+                    () -> "Error deserializing Map from DirectByteBuffer",
+                    e);
+            return new LinkedHashMap<>();
+        }
     }
 
     @Override
@@ -5542,5 +5962,27 @@ public abstract class BaseClient
                 Wait,
                 new String[] {Long.toString(numreplicas), Long.toString(timeout)},
                 this::handleLongResponse);
+    }
+
+    /**
+     * Internal method for enqueueing PubSub messages from native callback. This is called by the
+     * native layer when PubSub messages are received.
+     */
+    public void __enqueuePubSubMessage(PubSubMessage message) {
+        // Deliver to callback if configured; otherwise enqueue for pull-based APIs
+        if (subscriptionConfiguration.isPresent()
+                && subscriptionConfiguration.get().getCallback().isPresent()) {
+            try {
+                subscriptionConfiguration
+                        .get()
+                        .getCallback()
+                        .get()
+                        .accept(message, subscriptionConfiguration.get().getContext().orElse(null));
+            } catch (Throwable ignored) {
+                // Ensure user callback exceptions do not break push delivery loop
+            }
+            return;
+        }
+        messageHandler.getQueue().push(message);
     }
 }

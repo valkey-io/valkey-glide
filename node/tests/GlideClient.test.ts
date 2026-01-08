@@ -613,6 +613,27 @@ describe("GlideClient", () => {
                 result5.includes("ver") && result5.includes(serverVersion),
             ).toBe(true);
 
+            // Test LOLWUT version 9 (available in Valkey 9.0.0+)
+            if (cluster.checkIfServerVersionLessThan("9.0.0") === false) {
+                // Test with version 9 and 2 parameters (columns, rows)
+                const result6 = await client.lolwut({
+                    version: 9,
+                    parameters: [30, 4],
+                });
+                expect(
+                    result6.includes("ver") && result6.includes(serverVersion),
+                ).toBe(true);
+
+                // Test with version 9 and 4 parameters (columns, rows, real, imaginary)
+                const result7 = await client.lolwut({
+                    version: 9,
+                    parameters: [40, 20, 1, 2],
+                });
+                expect(
+                    result7.includes("ver") && result7.includes(serverVersion),
+                ).toBe(true);
+            }
+
             // batch tests
             for (const isAtomic of [true, false]) {
                 const batch = new Batch(isAtomic);
@@ -1898,4 +1919,42 @@ describe("GlideClient", () => {
         },
         timeout: TIMEOUT,
     });
+
+    it(
+        "tcp nodelay configuration",
+        async () => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                ProtocolVersion.RESP3,
+            );
+
+            // Test default (undefined - not set)
+            const defaultClient = await GlideClient.createClient(config);
+            expect(await defaultClient.ping()).toBe("PONG");
+            expect(await defaultClient.set("key", "value")).toBe("OK");
+            expect(await defaultClient.get("key")).toBe("value");
+            defaultClient.close();
+
+            // Test explicit true
+            const clientTrue = await GlideClient.createClient({
+                ...config,
+                advancedConfiguration: { tcpNoDelay: true },
+            });
+            expect(await clientTrue.ping()).toBe("PONG");
+            expect(await clientTrue.set("key2", "value2")).toBe("OK");
+            expect(await clientTrue.get("key2")).toBe("value2");
+            clientTrue.close();
+
+            // Test explicit false
+            const clientFalse = await GlideClient.createClient({
+                ...config,
+                advancedConfiguration: { tcpNoDelay: false },
+            });
+            expect(await clientFalse.ping()).toBe("PONG");
+            expect(await clientFalse.set("key3", "value3")).toBe("OK");
+            expect(await clientFalse.get("key3")).toBe("value3");
+            clientFalse.close();
+        },
+        TIMEOUT,
+    );
 });

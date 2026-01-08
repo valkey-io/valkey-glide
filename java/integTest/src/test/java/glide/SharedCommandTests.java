@@ -11754,8 +11754,9 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void objectEncoding_binary_returns_string_embstr(BaseClient client) {
-        GlideString stringEmbstrKey = gs(UUID.randomUUID().toString());
-        assertEquals(OK, client.set(stringEmbstrKey, gs("value")).get());
+        // Use shorter key and value to ensure embstr encoding (total < 44 bytes)
+        GlideString stringEmbstrKey = gs("k" + UUID.randomUUID().toString().substring(0, 8));
+        assertEquals(OK, client.set(stringEmbstrKey, gs("abc")).get());
         String encoding = client.objectEncoding(stringEmbstrKey).get();
         // Valkey 9.0.0+ may return "raw" instead of "embstr" for short strings with long key names
         assertTrue(
@@ -14030,6 +14031,145 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void copy_with_database_id(BaseClient client) {
+        boolean isCluster = client instanceof GlideClusterClient;
+        if (isCluster) {
+            assumeTrue(
+                    SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"), "This feature added in version 6.2.0");
+        } else {
+            assumeTrue(
+                    SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
+        }
+
+        // setup
+        String source = "{key}-1" + UUID.randomUUID();
+        String destination = "{key}-2" + UUID.randomUUID();
+
+        // neither key exists, returns false
+        assertFalse(client.copy(source, destination, 1, false).get());
+        assertFalse(client.copy(source, destination, 1).get());
+
+        // source exists, destination does not
+        client.set(source, "one");
+        assertTrue(client.copy(source, destination, 1, false).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).select(1).get();
+        } else {
+            ((GlideClient) client).select(1).get();
+        }
+
+        assertEquals("one", client.get(destination).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).select(0).get();
+        } else {
+            ((GlideClient) client).select(0).get();
+        }
+
+        // setting new value for source
+        client.set(source, "two");
+
+        // both exists, no REPLACE
+        assertFalse(client.copy(source, destination, 1).get());
+        assertFalse(client.copy(source, destination, 1, false).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).select(1).get();
+        } else {
+            ((GlideClient) client).select(1).get();
+        }
+        assertEquals("one", client.get(destination).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).select(0).get();
+        } else {
+            ((GlideClient) client).select(0).get();
+        }
+
+        // both exists, with REPLACE
+        assertTrue(client.copy(source, destination, 1, true).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).select(1).get();
+        } else {
+            ((GlideClient) client).select(1).get();
+        }
+        assertEquals("two", client.get(destination).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void copy_binary_with_database_id(BaseClient client) {
+        boolean isCluster = client instanceof GlideClusterClient;
+        if (isCluster) {
+            assumeTrue(
+                    SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"), "This feature added in version 6.2.0");
+        } else {
+            assumeTrue(
+                    SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
+        }
+
+        // setup
+        GlideString source = gs("{key}-1" + UUID.randomUUID());
+        GlideString destination = gs("{key}-2" + UUID.randomUUID());
+
+        // neither key exists, returns false
+        assertFalse(client.copy(source, destination, 1, false).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).select(1).get();
+        } else {
+            ((GlideClient) client).select(1).get();
+        }
+        assertFalse(client.copy(source, destination).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).select(0).get();
+        } else {
+            ((GlideClient) client).select(0).get();
+        }
+
+        // source exists, destination does not
+        client.set(source, gs("one"));
+        assertTrue(client.copy(source, destination, 1, false).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).select(1).get();
+        } else {
+            ((GlideClient) client).select(1).get();
+        }
+        assertEquals(gs("one"), client.get(destination).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).select(0).get();
+        } else {
+            ((GlideClient) client).select(0).get();
+        }
+
+        // setting new value for source
+        client.set(source, gs("two"));
+
+        // both exists, no REPLACE
+        assertFalse(client.copy(source, destination, 1).get());
+        assertFalse(client.copy(source, destination, 1, false).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).select(1).get();
+        } else {
+            ((GlideClient) client).select(1).get();
+        }
+        assertEquals(gs("one"), client.get(destination).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).select(0).get();
+        } else {
+            ((GlideClient) client).select(0).get();
+        }
+
+        // both exists, with REPLACE
+        assertTrue(client.copy(source, destination, 1, true).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).select(1).get();
+        } else {
+            ((GlideClient) client).select(1).get();
+        }
+        assertEquals(gs("two"), client.get(destination).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void copy(BaseClient client) {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
@@ -14944,8 +15084,8 @@ public class SharedCommandTests {
         assertEquals(0L, result.get("len"));
 
         // setting string values
-        client.set(key1, "abcdefghijk");
-        client.set(key2, "defjkjuighijk");
+        assertEquals(OK, client.set(key1, "abcdefghijk").get());
+        assertEquals(OK, client.set(key2, "defjkjuighijk").get());
 
         // LCS with only IDX
         Object expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};
@@ -15027,8 +15167,8 @@ public class SharedCommandTests {
         assertEquals(0L, result.get("len"));
 
         // setting string values
-        client.set(key1, gs("abcdefghijk"));
-        client.set(key2, gs("defjkjuighijk"));
+        assertEquals(OK, client.set(key1, gs("abcdefghijk")).get());
+        assertEquals(OK, client.set(key2, gs("defjkjuighijk")).get());
 
         // LCS with only IDX
         Object expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};

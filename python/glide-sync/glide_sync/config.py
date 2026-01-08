@@ -1,4 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+from __future__ import annotations
 
 from typing import List, Optional, Union
 
@@ -6,6 +7,7 @@ from glide_shared.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
+    CompressionConfiguration,
 )
 from glide_shared.config import (
     GlideClientConfiguration as SharedGlideClientConfiguration,
@@ -60,6 +62,9 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
             nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedGlideClientConfiguration]): Advanced configuration settings for the client,
             see `AdvancedGlideClientConfiguration`.
+        pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the
+            client.
+            Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
 
         Note:
             PubSub and inflight_requests_limit are not yet supported for the sync client.
@@ -79,6 +84,10 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        pubsub_subscriptions: Optional[
+            GlideClientConfiguration.PubSubSubscriptions
+        ] = None,
+        compression: Optional["CompressionConfiguration"] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -90,11 +99,12 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
             database_id=database_id,
             client_name=client_name,
             protocol=protocol,
-            pubsub_subscriptions=None,
+            pubsub_subscriptions=pubsub_subscriptions,
             inflight_requests_limit=None,
             client_az=client_az,
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
+            compression=compression,
         )
 
 
@@ -139,6 +149,9 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
             nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration settings for the client,
             see `AdvancedGlideClusterClientConfiguration`.
+        pubsub_subscriptions (Optional[GlideClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used
+            for the client.
+            Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
 
 
     Notes:
@@ -164,6 +177,10 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        pubsub_subscriptions: Optional[
+            GlideClusterClientConfiguration.PubSubSubscriptions
+        ] = None,
+        compression: Optional["CompressionConfiguration"] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -174,11 +191,12 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
             reconnect_strategy=reconnect_strategy,
             database_id=database_id,
             periodic_checks=periodic_checks,
-            pubsub_subscriptions=None,
+            pubsub_subscriptions=pubsub_subscriptions,
             client_name=client_name,
             protocol=protocol,
             inflight_requests_limit=None,
             client_az=client_az,
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
+            compression=compression,
         )

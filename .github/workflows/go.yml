@@ -259,10 +259,17 @@ jobs:
         steps:
             - name: Install git
               run: |
-                  yum update
-                  yum install -y git tar
-                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
+                  if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
+                    yum update
+                    yum install -y git tar
+                    git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                    echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
+                  elif [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
+                    apk update
+                    apk add git bash tar
+                    git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                  fi
+
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
               with:
@@ -281,6 +288,19 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            - name: Install Musl Dependencies
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              run: |
+                  apk add clang lld compiler-rt
+                  # Ensure Rust is in PATH for container environments
+                  echo "$HOME/.cargo/bin:$PATH" >> $GITHUB_PATH
+
+            - name: Install zig
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              uses: ./.github/workflows/install-zig
+              with:
+                  target: ${{ matrix.host.TARGET }}
 
             - uses: actions/cache@v4
               with:

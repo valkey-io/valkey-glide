@@ -9,7 +9,7 @@ from glide_shared.commands.bitmap import (
     _create_bitfield_args,
     _create_bitfield_read_only_args,
 )
-from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
+from glide_shared.commands.command_args import Limit, ListDirection, ObjectType, OrderBy
 from glide_shared.commands.core_options import (
     ConditionalChange,
     ExpireOptions,
@@ -61,6 +61,8 @@ from glide_shared.exceptions import RequestError
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
 
+from .cluster_scan_cursor import ClusterScanCursor
+
 
 class CoreCommands(Protocol):
     def _execute_command(
@@ -87,6 +89,15 @@ class CoreCommands(Protocol):
         keys: Optional[List[TEncodable]] = None,
         args: Optional[List[TEncodable]] = None,
         route: Optional[Route] = None,
+    ) -> TResult: ...
+
+    def _cluster_scan(
+        self,
+        cursor: ClusterScanCursor,
+        match: Optional[TEncodable] = ...,
+        count: Optional[int] = ...,
+        type: Optional[ObjectType] = ...,
+        allow_non_covered_slots: bool = ...,
     ) -> TResult: ...
 
     def _update_connection_password(
@@ -125,6 +136,27 @@ class CoreCommands(Protocol):
             'OK'
         """
         return cast(TOK, self._update_connection_password(password, immediate_auth))
+
+    def _refresh_iam_token(self) -> TResult: ...
+
+    def refresh_iam_token(self) -> TOK:
+        """
+        Manually refresh the IAM token for the current connection.
+
+        This method is only available if the client was created with IAM authentication.
+        It triggers an immediate refresh of the IAM token and updates the connection.
+
+        Returns:
+            TOK: A simple OK response on success.
+
+        Raises:
+            ConfigurationError: If the client is not using IAM authentication.
+
+        Example:
+            >>> client.refresh_iam_token()
+            'OK'
+        """
+        return cast(TOK, self._refresh_iam_token())
 
     def set(
         self,
@@ -564,6 +596,34 @@ class CoreCommands(Protocol):
         return cast(
             bool,
             self._execute_command(RequestType.MSetNX, parameters),
+        )
+
+    def move(self, key: TEncodable, db_index: int) -> bool:
+        """
+        Move `key` from the currently selected database to the database specified by `db_index`.
+
+        Note:
+            For cluster mode move command is supported since Valkey 9.0.0
+
+        See [valkey.io](https://valkey.io/commands/move/) for more details.
+
+        Args:
+            key (TEncodable): The key to move.
+            db_index (int): The index of the database to move `key` to.
+
+        Returns:
+            bool: `True` if `key` was moved.
+
+            `False` if the `key` already exists in the destination database
+            or does not exist in the source database.
+
+        Example:
+            >>> client.move("some_key", 1)
+                True
+        """
+        return cast(
+            bool,
+            self._execute_command(RequestType.Move, [key, str(db_index)]),
         )
 
     def mget(self, keys: List[TEncodable]) -> List[Optional[bytes]]:
@@ -1085,7 +1145,7 @@ class CoreCommands(Protocol):
             - `-2`: field does not exist or key does not exist
 
         Examples:
-            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
+            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.SEC, 10))
             >>> client.httl("my_hash", ["field1", "field2", "non_existent_field"])
                 [9, 9, -2]  # field1 and field2 have ~9 seconds left, non_existent_field doesn't exist
 
@@ -1115,7 +1175,7 @@ class CoreCommands(Protocol):
             - `-2`: field does not exist or key does not exist
 
         Examples:
-            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.PX, 10000))
+            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.MILLSEC, 10000))
             >>> client.hpttl("my_hash", ["field1", "field2", "non_existent_field"])
                 [9500, 9500, -2]  # field1 and field2 have ~9500 milliseconds left, non_existent_field doesn't exist
 
@@ -1147,7 +1207,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> import time
             >>> future_timestamp = int(time.time()) + 60  # 60 seconds from now
-            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EXAT, future_timestamp))
+            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.UNIX_SEC, future_timestamp))
             >>> client.hexpiretime("my_hash", ["field1", "field2", "non_existent_field"])
                 [future_timestamp, future_timestamp, -2]  # field1 and field2 expire at future_timestamp, non_existent_field doesn't exist
 
@@ -1179,7 +1239,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> import time
             >>> future_timestamp_ms = int(time.time() * 1000) + 60000  # 60 seconds from now in milliseconds
-            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.PXAT, future_timestamp_ms))
+            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.UNIX_MILLSEC, future_timestamp_ms))
             >>> client.hpexpiretime("my_hash", ["field1", "field2", "non_existent_field"])
                 [future_timestamp_ms, future_timestamp_ms, -2]  # field1 and field2 expire at future_timestamp_ms, non_existent_field doesn't exist
 
@@ -1212,17 +1272,17 @@ class CoreCommands(Protocol):
                 - ONLY_IF_ALL_EXIST (FXX): Only set fields if all of them already exist.
                 - ONLY_IF_NONE_EXIST (FNX): Only set fields if none of them already exist.
             expiry (Optional[ExpirySet]): Expiration options for the fields:
-                - EX: Expiration time in seconds.
-                - PX: Expiration time in milliseconds.
-                - EXAT: Absolute expiration time in seconds (Unix timestamp).
-                - PXAT: Absolute expiration time in milliseconds (Unix timestamp).
-                - KEEPTTL: Retain existing TTL.
+                - SEC (EX): Expiration time in seconds.
+                - MILLSEC (PX): Expiration time in milliseconds.
+                - UNIX_SEC (EXAT): Absolute expiration time in seconds (Unix timestamp).
+                - UNIX_MILLSEC (PXAT): Absolute expiration time in milliseconds (Unix timestamp).
+                - KEEP_TTL (KEEPTTL): Retain existing TTL.
 
         Returns:
             int: 1 if all fields were set successfully, 0 if none were set due to conditional constraints.
 
         Examples:
-            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
+            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.SEC, 10))
                 1  # All fields set with 10 second expiration
             >>> client.hsetex("my_hash", {"field3": "value3"}, field_conditional_change=HashFieldConditionalChange.ONLY_IF_ALL_EXIST)
                 1  # Field set because field already exists
@@ -1268,10 +1328,10 @@ class CoreCommands(Protocol):
             key (TEncodable): The key of the hash.
             fields (List[TEncodable]): The list of fields to retrieve from the hash.
             expiry (Optional[ExpiryGetEx]): Expiration options for the retrieved fields:
-                - EX: Expiration time in seconds.
-                - PX: Expiration time in milliseconds.
-                - EXAT: Absolute expiration time in seconds (Unix timestamp).
-                - PXAT: Absolute expiration time in milliseconds (Unix timestamp).
+                - SEC (EX): Expiration time in seconds.
+                - MILLSEC (PX): Expiration time in milliseconds.
+                - UNIX_SEC (EXAT): Absolute expiration time in seconds (Unix timestamp).
+                - UNIX_MILLSEC (PXAT): Absolute expiration time in milliseconds (Unix timestamp).
                 - PERSIST: Remove expiration from the fields.
 
         Returns:
@@ -1280,10 +1340,10 @@ class CoreCommands(Protocol):
             If `key` does not exist, it is treated as an empty hash, and the function returns a list of null values.
 
         Examples:
-            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
+            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.SEC, 10))
             >>> client.hgetex("my_hash", ["field1", "field2"])
                 [b"value1", b"value2"]
-            >>> client.hgetex("my_hash", ["field1"], expiry=ExpiryGetEx(ExpiryTypeGetEx.EX, 20))
+            >>> client.hgetex("my_hash", ["field1"], expiry=ExpiryGetEx(ExpiryTypeGetEx.SEC, 20))
                 [b"value1"]  # field1 now has 20 second expiration
             >>> client.hgetex("my_hash", ["field1"], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
                 [b"value1"]  # field1 expiration removed
@@ -1337,7 +1397,7 @@ class CoreCommands(Protocol):
             - `2`: Field was deleted immediately (when seconds is 0 or timestamp is in the past).
 
         Examples:
-            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
+            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.SEC, 10))
             >>> client.hexpire("my_hash", 20, ["field1", "field2"])
                 [1, 1]  # Both fields' expiration set to 20 seconds
             >>> client.hexpire("my_hash", 30, ["field1"], option=ExpireOptions.NewExpiryGreaterThanCurrent)
@@ -1383,7 +1443,7 @@ class CoreCommands(Protocol):
             - `-2`: Field does not exist or key does not exist.
 
         Examples:
-            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
+            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.SEC, 10))
             >>> client.hpersist("my_hash", ["field1", "field2"])
                 [1, 1]  # Both fields made persistent
             >>> client.hpersist("my_hash", ["field1"])
@@ -1430,7 +1490,7 @@ class CoreCommands(Protocol):
             - `2`: Field was deleted immediately (when milliseconds is 0 or timestamp is in the past).
 
         Examples:
-            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.PX, 10000))
+            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.MILLSEC, 10000))
             >>> client.hpexpire("my_hash", 20000, ["field1", "field2"])
                 [1, 1]  # Both fields' expiration set to 20000 milliseconds
             >>> client.hpexpire("my_hash", 30000, ["field1"], option=ExpireOptions.NewExpiryGreaterThanCurrent)
@@ -1491,7 +1551,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> import time
             >>> future_timestamp = int(time.time()) + 60  # 60 seconds from now
-            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
+            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.SEC, 10))
             >>> client.hexpireat("my_hash", future_timestamp, ["field1", "field2"])
                 [1, 1]  # Both fields' expiration set to future_timestamp
             >>> past_timestamp = int(time.time()) - 60  # 60 seconds ago
@@ -1551,7 +1611,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> import time
             >>> future_timestamp_ms = int(time.time() * 1000) + 60000  # 60 seconds from now in milliseconds
-            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.PX, 10000))
+            >>> client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.MILLSEC, 10000))
             >>> client.hpexpireat("my_hash", future_timestamp_ms, ["field1", "field2"])
                 [1, 1]  # Both fields' expiration set to future_timestamp_ms
             >>> past_timestamp_ms = int(time.time() * 1000) - 60000  # 60 seconds ago in milliseconds
@@ -2190,6 +2250,20 @@ class CoreCommands(Protocol):
                 2
         """
         return cast(int, self._execute_command(RequestType.SAdd, [key] + members))
+
+    def select(self, index: int) -> TOK:
+        """
+        Change the currently selected database.
+
+        See [valkey.io](https://valkey.io/commands/select/) for details.
+
+        Args:
+            index (int): The index of the database to select.
+
+        Returns:
+            A simple OK response.
+        """
+        return cast(TOK, self._execute_command(RequestType.Select, [str(index)]))
 
     def srem(self, key: TEncodable, members: List[TEncodable]) -> int:
         """
@@ -6096,7 +6170,7 @@ class CoreCommands(Protocol):
             If the script is not found in the cache, an error is thrown.
 
         Example:
-            >>> await client.script_show(script.get_hash())
+            >>> client.script_show(script.get_hash())
                 b"return { KEYS[1], ARGV[1] }"
 
         Since: Valkey version 8.0.0.
@@ -7319,6 +7393,93 @@ class CoreCommands(Protocol):
         return cast(
             Union[int, List[int], None],
             self._execute_command(RequestType.LPos, args),
+        )
+
+    def pubsub_channels(self, pattern: Optional[TEncodable] = None) -> List[bytes]:
+        """
+        Lists the currently active channels.
+        The command is routed to all nodes, and aggregates the response to a single array.
+
+        See [valkey.io](https://valkey.io/commands/pubsub-channels) for more details.
+
+        Args:
+            pattern (Optional[TEncodable]): A glob-style pattern to match active channels.
+                If not provided, all active channels are returned.
+
+        Returns:
+            List[bytes]: A list of currently active channels matching the given pattern.
+
+            If no pattern is specified, all active channels are returned.
+
+        Examples:
+            >>> client.pubsub_channels()
+                [b"channel1", b"channel2"]
+
+            >>> client.pubsub_channels("news.*")
+                [b"news.sports", "news.weather"]
+        """
+
+        return cast(
+            List[bytes],
+            self._execute_command(
+                RequestType.PubSubChannels, [pattern] if pattern else []
+            ),
+        )
+
+    def pubsub_numpat(self) -> int:
+        """
+        Returns the number of unique patterns that are subscribed to by clients.
+
+        Note:
+            This is the total number of unique patterns all the clients are subscribed to,
+            not the count of clients subscribed to patterns.
+
+            The command is routed to all nodes, and aggregates the response the sum of all pattern subscriptions.
+
+        See [valkey.io](https://valkey.io/commands/pubsub-numpat) for more details.
+
+        Returns:
+            int: The number of unique patterns.
+
+        Examples:
+            >>> client.pubsub_numpat()
+                3
+        """
+        return cast(int, self._execute_command(RequestType.PubSubNumPat, []))
+
+    def pubsub_numsub(
+        self, channels: Optional[List[TEncodable]] = None
+    ) -> Mapping[bytes, int]:
+        """
+        Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
+
+        Note:
+            It is valid to call this command without channels. In this case, it will just return an empty map.
+
+            The command is routed to all nodes, and aggregates the response to a single map of the channels and their number
+            of subscriptions.
+
+        See [valkey.io](https://valkey.io/commands/pubsub-numsub) for more details.
+
+        Args:
+            channels (Optional[List[TEncodable]]): The list of channels to query for the number of subscribers.
+                If not provided, returns an empty map.
+
+        Returns:
+            Mapping[bytes, int]: A map where keys are the channel names and values are the number of subscribers.
+
+        Examples:
+            >>> client.pubsub_numsub(["channel1", "channel2"])
+                {b'channel1': 3, b'channel2': 5}
+
+            >>> client.pubsub_numsub()
+                {}
+        """
+        return cast(
+            Mapping[bytes, int],
+            self._execute_command(
+                RequestType.PubSubNumSub, channels if channels else []
+            ),
         )
 
     def sort(

@@ -230,12 +230,6 @@ To run the unit tests, use the following command:
 ./gradlew :client:test
 ```
 
-To run FFI tests between Java and Rust, use the following command:
-
-```bash
-./gradlew :client:testFfi
-```
-
 To run end-to-end tests, use the following command:
 
 ```bash
@@ -353,18 +347,9 @@ In the command interface each command's javadoc should contain:
 
 Refer to [closed-PRs](https://github.com/valkey-io/valkey-glide/pulls?q=is%3Apr+is%3Aclosed+label%3Ajava) to see commands that have been previously merged.
 
-### FFI naming and signatures, and features
+### JNI naming and signatures
 
-Javac will create the name of the signature in Rust convention which can be called on native code.
-
-- In the command line write:
-
-```bash
-javac -h . GlideValueResolver.java
-```
-
-The results can be found in the `glide_ffi_resolvers_GlideValueResolver` file once the `javac -h. GlideValueResolver.java` command is ran.
-In this project, only the function name and signature name is necessary. lib.rs method names explicitly point to the native functions defined there.
+The Java client now uses JNI (Java Native Interface) for direct communication with the Rust core library. Native methods are declared in `GlideNativeBridge.java` and implemented in the Rust `lib.rs` file. The JNI layer handles marshalling data between Java and Rust, including command serialization, response parsing, and callback management.
 
 ### Module Information
 

@@ -11,6 +11,7 @@ inputs:
             - aarch64-unknown-linux-gnu
             - x86_64-apple-darwin
             - aarch64-apple-darwin
+            - x86_64-pc-windows-msvc
     github-token:
         description: "GitHub token"
         type: string
@@ -23,6 +24,7 @@ runs:
           uses: dtolnay/rust-toolchain@stable
           with:
               targets: ${{ inputs.target }}
+              components: rustfmt, clippy
 
         - name: Install protoc (protobuf)
           uses: arduino/setup-protoc@v3

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, cast
+from typing import Dict, List, Mapping, Optional, Union, cast
 
 from glide_shared.commands.batch import ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
+from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import (
     FlushMode,
     FunctionRestorePolicy,
@@ -23,6 +24,7 @@ from glide_shared.exceptions import RequestError
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
 
+from .cluster_scan_cursor import ClusterScanCursor
 from .core import CoreCommands
 from .script import Script
 
@@ -888,6 +890,101 @@ class ClusterCommands(CoreCommands):
             self._execute_command(RequestType.LastSave, [], route),
         )
 
+    def publish(
+        self,
+        message: TEncodable,
+        channel: TEncodable,
+        sharded: bool = False,
+    ) -> int:
+        """
+        Publish a message on pubsub channel.
+        This command aggregates PUBLISH and SPUBLISH commands functionalities.
+        The mode is selected using the 'sharded' parameter.
+        For both sharded and non-sharded mode, request is routed using hashed channel as key.
+
+        See [PUBLISH](https://valkey.io/commands/publish) and [SPUBLISH](https://valkey.io/commands/spublish)
+        for more details.
+
+        Args:
+            message (TEncodable): Message to publish.
+            channel (TEncodable): Channel to publish the message on.
+            sharded (bool): Use sharded pubsub mode. Available since Valkey version 7.0.
+
+        Returns:
+            int: Number of subscriptions in that node that received the message.
+
+        Examples:
+            >>> client.publish("Hi all!", "global-channel", False)
+                1  # Published 1 instance of "Hi all!" message on global-channel channel using non-sharded mode
+            >>> client.publish(b"Hi to sharded channel1!", b"channel1", True)
+                2  # Published 2 instances of "Hi to sharded channel1!" message on channel1 using sharded mode
+        """
+        result = self._execute_command(
+            RequestType.SPublish if sharded else RequestType.Publish, [channel, message]
+        )
+        return cast(int, result)
+
+    def pubsub_shardchannels(self, pattern: Optional[TEncodable] = None) -> List[bytes]:
+        """
+        Lists the currently active shard channels.
+        The command is routed to all nodes, and aggregates the response to a single array.
+
+        See [valkey.io](https://valkey.io/commands/pubsub-shardchannels) for more details.
+
+        Args:
+            pattern (Optional[TEncodable]): A glob-style pattern to match active shard channels.
+                If not provided, all active shard channels are returned.
+
+        Returns:
+            List[bytes]: A list of currently active shard channels matching the given pattern.
+            If no pattern is specified, all active shard channels are returned.
+
+        Examples:
+            >>> client.pubsub_shardchannels()
+                [b'channel1', b'channel2']
+
+            >>> client.pubsub_shardchannels("channel*")
+                [b'channel1', b'channel2']
+        """
+        command_args = [pattern] if pattern is not None else []
+        return cast(
+            List[bytes],
+            self._execute_command(RequestType.PubSubShardChannels, command_args),
+        )
+
+    def pubsub_shardnumsub(
+        self, channels: Optional[List[TEncodable]] = None
+    ) -> Mapping[bytes, int]:
+        """
+        Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
+
+        Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+        The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of
+        subscriptions.
+
+        See [valkey.io](https://valkey.io/commands/pubsub-shardnumsub) for more details.
+
+        Args:
+            channels (Optional[List[TEncodable]]): The list of shard channels to query for the number of subscribers.
+                If not provided, returns an empty map.
+
+        Returns:
+            Mapping[bytes, int]: A map where keys are the shard channel names and values are the number of subscribers.
+
+        Examples:
+            >>> client.pubsub_shardnumsub(["channel1", "channel2"])
+                {b'channel1': 3, b'channel2': 5}
+
+            >>> client.pubsub_shardnumsub()
+                {}
+        """
+        return cast(
+            Mapping[bytes, int],
+            self._execute_command(
+                RequestType.PubSubShardNumSub, channels if channels else []
+            ),
+        )
+
     def flushall(
         self, flush_mode: Optional[FlushMode] = None, route: Optional[Route] = None
     ) -> TOK:
@@ -956,35 +1053,45 @@ class ClusterCommands(CoreCommands):
         self,
         source: TEncodable,
         destination: TEncodable,
+        # TODO next major release the arguments replace and destinationDB must have their order
+        # swapped to align with the standalone order.
+        # At the moment of the patch release 2.1.1. we can't have a breaking change
         replace: Optional[bool] = None,
+        destinationDB: Optional[int] = None,
     ) -> bool:
         """
-        Copies the value stored at the `source` to the `destination` key. When `replace` is True,
-        removes the `destination` key first if it already exists, otherwise performs no action.
+        Copies the value stored at the `source` to the `destination` key. If `destinationDB`
+        is specified, the value will be copied to the database specified by `destinationDB`,
+        otherwise the current database will be used. When `replace` is True, removes the
+        `destination` key first if it already exists, otherwise performs no action.
 
         See [valkey.io](https://valkey.io/commands/copy) for more details.
-
-        Note:
-            Both `source` and `destination` must map to the same hash slot.
 
         Args:
             source (TEncodable): The key to the source value.
             destination (TEncodable): The key where the value should be copied to.
             replace (Optional[bool]): If the destination key should be removed before copying the value to it.
+            destinationDB (Optional[int]): The alternative logical database index for the destination key.
 
         Returns:
-            bool: True if the source was copied. Otherwise, returns False.
+            bool: True if the source was copied. Otherwise, return False.
 
         Examples:
             >>> client.set("source", "sheep")
-            >>> client.copy(b"source", b"destination")
-                True # Source was copied
+            >>> client.copy(b"source", b"destination", destinationDB=1)
+                True # Source was copied to DB 1
+            >>> client.select(1)
             >>> client.get("destination")
                 b"sheep"
 
         Since: Valkey version 6.2.0.
+               The destinationDB argument is available since Valkey 9.0.0
         """
+
+        # Build command arguments
         args: List[TEncodable] = [source, destination]
+        if destinationDB is not None:
+            args.extend(["DB", str(destinationDB)])
         if replace is True:
             args.append("REPLACE")
         return cast(
@@ -1031,7 +1138,7 @@ class ClusterCommands(CoreCommands):
             args.extend(["VERSION", str(version)])
         if parameters:
             for var in parameters:
-                args.extend(str(var))
+                args.append(str(var))
         return cast(
             TClusterResponse[bytes],
             self._execute_command(RequestType.Lolwut, args, route),
@@ -1259,4 +1366,93 @@ class ClusterCommands(CoreCommands):
         """
         return self._execute_script(
             script.get_hash(), keys=None, args=args, route=route
+        )
+
+    def scan(
+        self,
+        cursor: ClusterScanCursor,
+        match: Optional[TEncodable] = None,
+        count: Optional[int] = None,
+        type: Optional[ObjectType] = None,
+        allow_non_covered_slots: bool = False,
+    ) -> List[Union[ClusterScanCursor, List[bytes]]]:
+        """
+        Incrementally iterates over the keys in the cluster.
+        The method returns a list containing the next cursor and a list of keys.
+
+        This command is similar to the SCAN command but is designed to work in a cluster environment.
+        For each iteration, the new cursor object should be used to continue the scan.
+        Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
+        For more information about the Cluster Scan implementation, see
+        [Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan).
+
+        Like the SCAN command, the method can be used to iterate over the keys in the database,
+        returning all keys the database has from when the scan started until the scan ends.
+        The same key can be returned in multiple scan iterations.
+
+        See [valkey.io](https://valkey.io/commands/scan/) for more details.
+
+        Args:
+            cursor (ClusterScanCursor): The cursor object that wraps the scan state.
+                To start a new scan, create a new empty ClusterScanCursor using ClusterScanCursor().
+            match (Optional[TEncodable]): A pattern to match keys against.
+            count (Optional[int]): The number of keys to return in a single iteration.
+                The actual number returned can vary and is not guaranteed to match this count exactly.
+                This parameter serves as a hint to the server on the number of steps to perform in each iteration.
+                The default value is 10.
+            type (Optional[ObjectType]): The type of object to scan for.
+            allow_non_covered_slots (bool): If set to True, the scan will perform even if some slots are not covered by any
+                node.
+                It's important to note that when set to True, the scan has no guarantee to cover all keys in the cluster,
+                and the method loses its way to validate the progress of the scan. Defaults to False.
+
+        Returns:
+            List[Union[ClusterScanCursor, List[TEncodable]]]: A list containing the next cursor and a list of keys,
+            formatted as [ClusterScanCursor, [key1, key2, ...]].
+
+        Examples:
+            >>> # Iterate over all keys in the cluster.
+            >>> client.mset({b'key1': b'value1', b'key2': b'value2', b'key3': b'value3'})
+            >>> cursor = ClusterScanCursor()
+            >>> all_keys = []
+            >>> while not cursor.is_finished():
+            >>>     cursor, keys = client.scan(cursor, count=10, allow_non_covered_slots=False)
+            >>>     all_keys.extend(keys)
+            >>> print(all_keys)  # [b'key1', b'key2', b'key3']
+
+            >>> # Iterate over keys matching the pattern "*key*".
+            >>> client.mset(
+            ...     {
+            ...         b"key1": b"value1",
+            ...         b"key2": b"value2",
+            ...         b"not_my_key": b"value3",
+            ...         b"something_else": b"value4"
+            ...     }
+            ... )
+            >>> cursor = ClusterScanCursor()
+            >>> all_keys = []
+            >>> while not cursor.is_finished():
+            >>>     cursor, keys = client.scan(cursor, match=b"*key*", count=10, allow_non_covered_slots=False)
+            >>>     all_keys.extend(keys)
+            >>> print(all_keys)  # [b'key1', b'key2', b'not_my_key']
+
+            >>> # Iterate over keys of type STRING.
+            >>> client.mset({b'key1': b'value1', b'key2': b'value2', b'key3': b'value3'})
+            >>> client.sadd(b"this_is_a_set", [b"value4"])
+            >>> cursor = ClusterScanCursor()
+            >>> all_keys = []
+            >>> while not cursor.is_finished():
+            >>>     cursor, keys = client.scan(cursor, type=ObjectType.STRING, allow_non_covered_slots=False)
+            >>>     all_keys.extend(keys)
+            >>> print(all_keys)  # [b'key1', b'key2', b'key3']
+        """
+        return cast(
+            List[Union[ClusterScanCursor, List[bytes]]],
+            self._cluster_scan(
+                cursor=cursor,
+                match=match,
+                count=count,
+                type=type,
+                allow_non_covered_slots=allow_non_covered_slots,
+            ),
         )

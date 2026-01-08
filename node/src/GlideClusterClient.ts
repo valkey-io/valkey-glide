@@ -4,36 +4,40 @@
 
 import * as net from "net";
 import { Writer } from "protobufjs/minimal";
+import { ClusterScanCursor, Script } from "../build-ts/native";
+import {
+    command_request,
+    connection_request,
+} from "../build-ts/ProtobufMessage";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
-    ClusterBatch,
-    ClusterBatchOptions,
-    ClusterScanCursor,
-    ClusterScanOptions,
     Decoder,
     DecoderOption,
+    GlideRecord,
+    GlideReturnType,
+    GlideString,
+    PubSubMsg,
+    convertGlideRecordToRecord,
+} from "./BaseClient";
+import { ClusterBatch } from "./Batch";
+import {
+    ClusterBatchOptions,
+    ClusterScanOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
     FunctionRestorePolicy,
     FunctionStatsSingleResponse,
-    GlideRecord,
-    GlideReturnType,
-    GlideString,
     InfoOptions,
     LolwutOptions,
-    PubSubMsg,
-    Script,
-    convertGlideRecordToRecord,
     createClientGetName,
     createClientId,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
     createConfigSet,
-    createCopy,
     createCustomCommand,
     createDBSize,
     createEcho,
@@ -62,11 +66,7 @@ import {
     createScriptKill,
     createTime,
     createUnWatch,
-} from ".";
-import {
-    command_request,
-    connection_request,
-} from "../build-ts/ProtobufMessage";
+} from "./Commands";
 /** An extension to command option types with {@link Routes}. */
 export interface RouteOption {
     /**
@@ -216,11 +216,23 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
  *   tlsAdvancedConfiguration: {
  *     insecure: true, // Skip TLS certificate verification (use only in development)
  *   },
+ *   refreshTopologyFromInitialNodes: true, // Refresh topology from initial seed nodes
  * };
  * ```
  */
 export type AdvancedGlideClusterClientConfiguration =
-    AdvancedBaseClientConfiguration & {};
+    AdvancedBaseClientConfiguration & {
+        /**
+         * Enables refreshing the cluster topology using only the initial nodes.
+         *
+         * When this option is enabled, all topology updates (both the periodic checks and on-demand
+         * refreshes triggered by topology changes) will query only the initial nodes provided when
+         * creating the client, rather than using the internal cluster view.
+         *
+         * If not set, defaults to `false` (uses internal cluster view for topology refresh).
+         */
+        refreshTopologyFromInitialNodes?: boolean;
+    };
 
 /**
  * If the command's routing is to one node we will get T as a response type,
@@ -541,6 +553,15 @@ export class GlideClusterClient extends BaseClient {
                 options.advancedConfiguration,
                 configuration,
             );
+
+            // Set refresh topology from initial nodes
+            if (
+                options.advancedConfiguration
+                    .refreshTopologyFromInitialNodes !== undefined
+            ) {
+                configuration.refreshTopologyFromInitialNodes =
+                    options.advancedConfiguration.refreshTopologyFromInitialNodes;
+            }
         }
 
         return configuration;
@@ -1192,37 +1213,6 @@ export class GlideClusterClient extends BaseClient {
             createTime(),
             options,
         ).then((res) => convertClusterGlideRecord(res, true, options?.route));
-    }
-
-    /**
-     * Copies the value stored at the `source` to the `destination` key. When `replace` is `true`,
-     * removes the `destination` key first if it already exists, otherwise performs no action.
-     *
-     * @see {@link https://valkey.io/commands/copy/|valkey.io} for details.
-     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
-     * @remarks Since Valkey version 6.2.0.
-     *
-     * @param source - The key to the source value.
-     * @param destination - The key where the value should be copied to.
-     * @param options - (Optional) Additional parameters:
-     * - (Optional) `replace`: if `true`, the `destination` key should be removed before copying the
-     *     value to it. If not provided, no action will be performed if the key already exists.
-     * @returns `true` if `source` was copied, `false` if the `source` was not copied.
-     *
-     * @example
-     * ```typescript
-     * const result = await client.copy("set1", "set2", { replace: true });
-     * console.log(result); // Output: true - "set1" was copied to "set2".
-     * ```
-     */
-    public async copy(
-        source: GlideString,
-        destination: GlideString,
-        options?: { replace?: boolean },
-    ): Promise<boolean> {
-        return this.createWritePromise(
-            createCopy(source, destination, options),
-        );
     }
 
     /**

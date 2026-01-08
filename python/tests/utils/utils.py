@@ -38,6 +38,7 @@ from glide_shared.commands.core_options import (
     FlushMode,
     InfoSection,
     InsertPosition,
+    PubSubMsg,
 )
 from glide_shared.commands.sorted_set import (
     AggregationType,
@@ -65,6 +66,8 @@ from glide_shared.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
+    CompressionBackend,
+    CompressionConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     NodeAddress,
@@ -543,12 +546,28 @@ def create_client_config(
     use_tls: Optional[bool] = None,
     tls_insecure: Optional[bool] = None,
     lazy_connect: Optional[bool] = False,
+    enable_compression: Optional[bool] = None,
 ) -> Union[GlideClusterClientConfiguration, GlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
     else:
         use_tls = request.config.getoption("--tls")
     tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
+
+    # Create compression configuration if enabled
+    compression_config = None
+    if enable_compression is not None:
+        use_compression = enable_compression
+    else:
+        use_compression = request.config.getoption("--compression")
+
+    if use_compression:
+        compression_config = CompressionConfiguration(
+            enabled=True,
+            backend=CompressionBackend.ZSTD,
+            compression_level=3,  # Default zstd level
+            min_compression_size=64,  # Only compress values >= 64 bytes
+        )
     if cluster_mode:
         valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
@@ -558,7 +577,7 @@ def create_client_config(
             addresses=seed_nodes if addresses is None else addresses,
             use_tls=use_tls,
             credentials=credentials,
-            database_id=database_id,  # Add database_id parameter
+            database_id=database_id,
             client_name=client_name,
             protocol=protocol,
             request_timeout=timeout,
@@ -570,6 +589,7 @@ def create_client_config(
                 connection_timeout, tls_config=tls_adv_conf
             ),
             lazy_connect=lazy_connect,
+            compression=compression_config,
         )
     else:
         valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
@@ -591,6 +611,7 @@ def create_client_config(
             ),
             reconnect_strategy=reconnect_strategy,
             lazy_connect=lazy_connect,
+            compression=compression_config,
         )
 
 
@@ -604,6 +625,12 @@ def create_sync_client_config(
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
     timeout: Optional[int] = 1000,
     connection_timeout: Optional[int] = 1000,
+    cluster_mode_pubsub: Optional[
+        GlideClusterClientConfiguration.PubSubSubscriptions
+    ] = None,
+    standalone_mode_pubsub: Optional[
+        GlideClientConfiguration.PubSubSubscriptions
+    ] = None,
     read_from: ReadFrom = ReadFrom.PRIMARY,
     client_az: Optional[str] = None,
     reconnect_strategy: Optional[BackoffStrategy] = None,
@@ -611,12 +638,29 @@ def create_sync_client_config(
     use_tls: Optional[bool] = None,
     tls_insecure: Optional[bool] = None,
     lazy_connect: Optional[bool] = False,
+    enable_compression: Optional[bool] = None,
 ) -> Union[SyncGlideClusterClientConfiguration, SyncGlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
     else:
         use_tls = request.config.getoption("--tls")
     tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
+
+    # Create compression configuration if enabled
+    compression_config = None
+    if enable_compression is not None:
+        use_compression = enable_compression
+    else:
+        use_compression = request.config.getoption("--compression")
+
+    if use_compression:
+        compression_config = CompressionConfiguration(
+            enabled=True,
+            backend=CompressionBackend.ZSTD,
+            compression_level=3,  # Default zstd level
+            min_compression_size=64,  # Only compress values >= 64 bytes
+        )
+
     if cluster_mode:
         valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
@@ -626,16 +670,18 @@ def create_sync_client_config(
             addresses=seed_nodes if addresses is None else addresses,
             use_tls=use_tls,
             credentials=credentials,
-            database_id=database_id,  # Add database_id parameter
+            database_id=database_id,
             client_name=client_name,
             protocol=protocol,
             request_timeout=timeout,
+            pubsub_subscriptions=cluster_mode_pubsub,
             read_from=read_from,
             client_az=client_az,
             advanced_config=AdvancedGlideClusterClientConfiguration(
                 connection_timeout, tls_config=tls_adv_conf
             ),
             lazy_connect=lazy_connect,
+            compression=compression_config,
         )
     else:
         valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
@@ -648,6 +694,7 @@ def create_sync_client_config(
             client_name=client_name,
             protocol=protocol,
             request_timeout=timeout,
+            pubsub_subscriptions=standalone_mode_pubsub,
             read_from=read_from,
             client_az=client_az,
             advanced_config=AdvancedGlideClientConfiguration(
@@ -655,6 +702,7 @@ def create_sync_client_config(
             ),
             reconnect_strategy=reconnect_strategy,
             lazy_connect=lazy_connect,
+            compression=compression_config,
         )
 
 
@@ -1630,3 +1678,99 @@ def helper1(
 
     transaction.renamenx(key, key2)
     args.append(False)
+
+
+def decode_pubsub_msg(msg: Optional[PubSubMsg]) -> PubSubMsg:
+    if not msg:
+        return PubSubMsg("", "", None)
+    string_msg = cast(bytes, msg.message).decode()
+    string_channel = cast(bytes, msg.channel).decode()
+    string_pattern = cast(bytes, msg.pattern).decode() if msg.pattern else None
+    decoded_msg = PubSubMsg(string_msg, string_channel, string_pattern)
+    return decoded_msg
+
+
+def create_pubsub_subscription(
+    cluster_mode,
+    cluster_channels_and_patterns: Dict[
+        GlideClusterClientConfiguration.PubSubChannelModes, Set[str]
+    ],
+    standalone_channels_and_patterns: Dict[
+        GlideClientConfiguration.PubSubChannelModes, Set[str]
+    ],
+    callback=None,
+    context=None,
+):
+    if cluster_mode:
+        return GlideClusterClientConfiguration.PubSubSubscriptions(
+            channels_and_patterns=cluster_channels_and_patterns,
+            callback=callback,
+            context=context,
+        )
+    return GlideClientConfiguration.PubSubSubscriptions(
+        channels_and_patterns=standalone_channels_and_patterns,
+        callback=callback,
+        context=context,
+    )
+
+
+def new_message(msg: PubSubMsg, context: Any):
+    received_messages: List[PubSubMsg] = context
+    received_messages.append(msg)
+
+
+def get_ca_certificate() -> bytes:
+    """
+    Load the CA certificate for TLS tests.
+    Returns the certificate data in PEM format.
+
+    The certificate is expected to be at utils/tls_crts/ca.crt relative to GLIDE_HOME_DIR.
+    This file is automatically generated when TLS clusters are started.
+    """
+    import os
+
+    from glide_shared.config import load_root_certificates_from_file
+
+    glide_home = os.environ.get(
+        "GLIDE_HOME_DIR", os.path.join(os.path.dirname(__file__), "../../..")
+    )
+    ca_cert_path = os.path.join(glide_home, "utils", "tls_crts", "ca.crt")
+    return load_root_certificates_from_file(ca_cert_path)
+
+
+def get_client_certificate() -> bytes:
+    """
+    Load the client certificate for TLS tests.
+    Returns the certificate data in PEM format.
+
+    The certificate is expected to be at utils/tls_crts/server.crt relative to GLIDE_HOME_DIR.
+    This file is automatically generated when TLS clusters are started.
+    """
+    import os
+
+    from glide_shared.config import load_client_certificate_from_file
+
+    glide_home = os.environ.get(
+        "GLIDE_HOME_DIR", os.path.join(os.path.dirname(__file__), "../../..")
+    )
+    ca_cert_path = os.path.join(glide_home, "utils", "tls_crts", "server.crt")
+    return load_client_certificate_from_file(ca_cert_path)
+
+
+def get_client_key() -> bytes:
+    """
+    Load the client private key for TLS tests.
+    Returns the certificate data in PEM format.
+
+    The certificate is expected to be at utils/tls_crts/server.key relative to GLIDE_HOME_DIR.
+    This file is automatically generated when TLS clusters are started.
+    """
+    import os
+
+    from glide_shared.config import load_client_certificate_from_file
+
+    glide_home = os.environ.get(
+        "GLIDE_HOME_DIR", os.path.join(os.path.dirname(__file__), "../../..")
+    )
+    ca_cert_path = os.path.join(glide_home, "utils", "tls_crts", "server.key")
+    return load_client_certificate_from_file(ca_cert_path)

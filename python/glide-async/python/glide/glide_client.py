@@ -48,6 +48,7 @@ from glide_shared.exceptions import (
 from glide_shared.protobuf.command_request_pb2 import (
     Command,
     CommandRequest,
+    RefreshIamToken,
     RequestType,
 )
 from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
@@ -338,7 +339,7 @@ class BaseClient(CoreCommands):
                     request.callback_idx if isinstance(request, CommandRequest) else 0
                 )
                 res_future = self._available_futures.pop(callback_idx, None)
-                if res_future:
+                if res_future and not res_future.done():
                     res_future.set_exception(e)
                 else:
                     ClientLogger.log(
@@ -355,7 +356,10 @@ class BaseClient(CoreCommands):
         b_arr = bytearray()
         for request in requests:
             ProtobufCodec.encode_delimited(b_arr, request)
-        await self._stream.send(b_arr)
+        try:
+            await self._stream.send(b_arr)
+        except (anyio.ClosedResourceError, anyio.EndOfStream):
+            raise ClosingError("The communication layer was unexpectedly closed.")
 
     def _encode_arg(self, arg: TEncodable) -> bytes:
         """
@@ -649,6 +653,15 @@ class BaseClient(CoreCommands):
 
     async def _process_response(self, response: Response) -> None:
         res_future = self._available_futures.pop(response.callback_idx, None)
+        if res_future is not None and res_future.done():
+            # Future is already completed (e.g. request was cancelled while awaiting).
+            # Do not error to keep client in a valid state.
+            ClientLogger.log(
+                LogLevel.DEBUG,
+                "completed response",
+                f"Received response for cancelled request: {response.callback_idx}",
+            )
+            return
         if not res_future or response.HasField("closing_error"):
             err_msg = (
                 response.closing_error
@@ -736,7 +749,23 @@ class BaseClient(CoreCommands):
             await self.close(str(e))
 
     async def get_statistics(self) -> dict:
-        return get_statistics()
+        """
+        Get compression and connection statistics for this client.
+
+        Returns:
+            dict: A dictionary containing statistics with integer values:
+                - total_connections: Total number of connections
+                - total_clients: Total number of clients
+                - total_values_compressed: Number of values successfully compressed
+                - total_values_decompressed: Number of values successfully decompressed
+                - total_original_bytes: Total bytes of original data before compression
+                - total_bytes_compressed: Total bytes after compression
+                - total_bytes_decompressed: Total bytes after decompression
+                - compression_skipped_count: Number of times compression was skipped
+        """
+        stats = get_statistics()
+        # Convert string values to integers for easier arithmetic operations
+        return {key: int(value) for key, value in stats.items()}
 
     async def _update_connection_password(
         self, password: Optional[str], immediate_auth: bool
@@ -752,6 +781,15 @@ class BaseClient(CoreCommands):
             if self.config.credentials is None:
                 self.config.credentials = ServerCredentials(password=password or "")
                 self.config.credentials.password = password or ""
+        return response
+
+    async def _refresh_iam_token(self) -> TResult:
+        request = CommandRequest()
+        request.callback_idx = self._get_callback_index()
+        request.refresh_iam_token.CopyFrom(
+            RefreshIamToken()
+        )  # Empty message, just triggers the refresh
+        response = await self._write_request_await_response(request)
         return response
 
 

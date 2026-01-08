@@ -20,12 +20,19 @@ redis = { path = "./redis-rs/redis", features = [
     "cluster",
     "cluster-async",
 ] }
+rustls = { version = "0.23", features = ["aws-lc-rs"] }
+rustls-pki-types = "1.9"
 telemetrylib = { path = "./telemetry" }
 tokio = { version = "1", features = ["macros", "time"] }
 logger_core = { path = "../logger_core" }
 tokio-util = { version = "^0.7", features = ["rt"], optional = true }
 num_cpus = { version = "^1", optional = true }
-tokio-retry2 = { version = "0.5", features = ["jitter"] }
+tokio-retry2 = { version = "0.6", features = ["jitter"] }
+aws-config = "1"
+aws-credential-types = "1"
+aws-sigv4 = "1"
+http = "1"
+urlencoding = "2"
 
 protobuf = { version = "3", features = [
     "bytes",
@@ -43,6 +50,10 @@ async-trait = { version = "0.1" }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 versions = "7"
+strum = "0.26"       
+strum_macros = "0.26"
+zstd = { version = "0.13" }
+lz4 = { version = "1.28" }
 
 [features]
 proto = ["protobuf"]
@@ -54,26 +65,27 @@ socket-layer = [
     "tokio-util",
 ]
 standalone_heartbeat = []
+iam_tests = []
 
 [dev-dependencies]
 rsevents = "0.3.1"
-socket2 = "^0.5"
+socket2 = "0.6"
 tempfile = "3.3.0"
-rstest = "^0.25"
+rstest = "^0.26"
 serial_test = "3"
 criterion = { version = "^0.6", features = ["html_reports", "async_tokio"] }
 which = "8"
-ctor = "0.4"
+ctor = "0.5"
 redis = { path = "./redis-rs/redis", features = ["tls-rustls-insecure"] }
 rustls = { version = "0.23", features = ["aws-lc-rs"]}
-iai-callgrind = "0.14"
+iai-callgrind = "0.15"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 glide-core = { path = ".", features = [
     "socket-layer",
 ] } # always enable this feature in tests.
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(standalone_heartbeat)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(standalone_heartbeat)', 'cfg(feature, values("iam_tests"))'] }
 
 [build-dependencies]
 protobuf-codegen = "3"

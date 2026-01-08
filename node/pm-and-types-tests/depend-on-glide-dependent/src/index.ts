@@ -1,4 +1,4 @@
-import { ValkeyWrapper } from "@test/common";
+import { ClusterScanCursor, Script, ValkeyWrapper } from "@test/common";
 import winston from "winston";
 
 // Set up logger
@@ -10,6 +10,10 @@ const logger = winston.createLogger({
 
 async function main() {
     logger.info("Starting application");
+
+    // Test native API imports
+    logger.info("Script class available:", typeof Script);
+    logger.info("ClusterScanCursor class available:", typeof ClusterScanCursor);
 
     // Configure Valkey directly with ClientConfig
     try {

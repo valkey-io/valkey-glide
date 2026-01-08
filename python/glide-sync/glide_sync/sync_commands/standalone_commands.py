@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, cast
+from typing import Dict, List, Mapping, Optional, Union, cast
 
 from glide_shared.commands.batch import Batch
 from glide_shared.commands.batch_options import BatchOptions
+from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import (
     FlushMode,
     FunctionRestorePolicy,
@@ -160,42 +161,6 @@ class StandaloneCommands(CoreCommands):
             raise_on_error=raise_on_error,
             timeout=timeout,
         )
-
-    def select(self, index: int) -> TOK:
-        """
-        Change the currently selected database.
-
-        **WARNING**: This command is NOT RECOMMENDED for production use.
-        Upon reconnection, the client will revert to the database_id specified
-        in the client configuration (default: 0), NOT the database selected
-        via this command.
-
-        **RECOMMENDED APPROACH**: Use the database_id parameter in client
-        configuration instead:
-
-        ```python
-        client = GlideClient.create_client(
-            GlideClientConfiguration(
-                addresses=[NodeAddress("localhost", 6379)],
-                database_id=5  # Recommended: persists across reconnections
-            )
-        )
-        ```
-
-        **RECONNECTION BEHAVIOR**: After any reconnection (due to network issues,
-        timeouts, etc.), the client will automatically revert to the database_id
-        specified during client creation, losing any database selection made via
-        this SELECT command.
-
-        See [valkey.io](https://valkey.io/commands/select/) for details.
-
-        Args:
-            index (int): The index of the database to select.
-
-        Returns:
-            A simple OK response.
-        """
-        return cast(TOK, self._execute_command(RequestType.Select, [str(index)]))
 
     def config_resetstat(self) -> TOK:
         """
@@ -648,30 +613,26 @@ class StandaloneCommands(CoreCommands):
             self._execute_command(RequestType.LastSave, []),
         )
 
-    def move(self, key: TEncodable, db_index: int) -> bool:
+    def publish(self, message: TEncodable, channel: TEncodable) -> int:
         """
-        Move `key` from the currently selected database to the database specified by `db_index`.
+        Publish a message on pubsub channel.
 
-        See [valkey.io](https://valkey.io/commands/move/) for more details.
+        See [valkey.io](https://valkey.io/commands/publish) for more details.
 
         Args:
-            key (TEncodable): The key to move.
-            db_index (int): The index of the database to move `key` to.
+            message (TEncodable): Message to publish
+            channel (TEncodable): Channel to publish the message on.
 
         Returns:
-            bool: `True` if `key` was moved.
+            int: Number of subscriptions in primary node that received the message.
 
-            `False` if the `key` already exists in the destination database
-            or does not exist in the source database.
+            **Note:** this value does not include subscriptions that configured on replicas.
 
-        Example:
-            >>> client.move("some_key", 1)
-                True
+        Examples:
+            >>> client.publish("Hi all!", "global-channel")
+                1 # This message was posted to 1 subscription which is configured on primary node
         """
-        return cast(
-            bool,
-            self._execute_command(RequestType.Move, [key, str(db_index)]),
-        )
+        return cast(int, self._execute_command(RequestType.Publish, [channel, message]))
 
     def flushall(self, flush_mode: Optional[FlushMode] = None) -> TOK:
         """
@@ -802,7 +763,7 @@ class StandaloneCommands(CoreCommands):
             args.extend(["VERSION", str(version)])
         if parameters:
             for var in parameters:
-                args.extend(str(var))
+                args.append(str(var))
         return cast(
             bytes,
             self._execute_command(RequestType.Lolwut, args),
@@ -965,3 +926,70 @@ class StandaloneCommands(CoreCommands):
                 [b"foo", b"bar"]
         """
         return self._execute_script(script.get_hash(), keys, args)
+
+    def scan(
+        self,
+        cursor: TEncodable,
+        match: Optional[TEncodable] = None,
+        count: Optional[int] = None,
+        type: Optional[ObjectType] = None,
+    ) -> List[Union[bytes, List[bytes]]]:
+        """
+        Incrementally iterate over a collection of keys.
+        SCAN is a cursor based iterator. This means that at every call of the command,
+        the server returns an updated cursor that the user needs to use as the cursor argument in the next call.
+        An iteration starts when the cursor is set to "0", and terminates when the cursor returned by the server is "0".
+
+        A full iteration always retrieves all the elements that were present
+        in the collection from the start to the end of a full iteration.
+        Elements that were not constantly present in the collection during a full iteration, may be returned or not.
+
+        See [valkey.io](https://valkey.io/commands/scan) for more details.
+
+        Args:
+            cursor (TResult): The cursor used for iteration. For the first iteration, the cursor should be set to "0".
+
+                - Using a non-zero cursor in the first iteration, or an invalid cursor at any iteration, will lead to
+                  undefined results.
+                - Using the same cursor in multiple iterations will, in case nothing changed between the iterations,
+                  return the same elements multiple times.
+                - If the the db has changed, it may result an undefined behavior.
+
+            match (Optional[TResult]): A pattern to match keys against.
+            count (Optional[int]): The number of keys to return per iteration.
+
+                - The number of keys returned per iteration is not guaranteed to be the same as the count argument.
+                - The argument is used as a hint for the server to know how many "steps" it can use to retrieve the keys.
+                - The default value is 10.
+
+            type (ObjectType): The type of object to scan for.
+
+        Returns:
+            List[Union[bytes, List[bytes]]]: A List containing the next cursor value and a list of keys,
+            formatted as [cursor, [key1, key2, ...]]
+
+        Examples:
+            >>> result = client.scan(b'0')
+                print(result) #[b'17', [b'key1', b'key2', b'key3', b'key4', b'key5', b'set1', b'set2', b'set3']]
+                first_cursor_result = result[0]
+                result = client.scan(first_cursor_result)
+                print(result) #[b'349', [b'key4', b'key5', b'set1', b'hash1', b'zset1', b'list1', b'list2',
+                                        b'list3', b'zset2', b'zset3', b'zset4', b'zset5', b'zset6']]
+                result = client.scan(result[0])
+                print(result) #[b'0', [b'key6', b'key7']]
+            >>> result = client.scan(first_cursor_result, match=b'key*', count=2)
+                print(result) #[b'6', [b'key4', b'key5']]
+            >>> result = client.scan("0", type=ObjectType.Set)
+                print(result) #[b'362', [b'set1', b'set2', b'set3']]
+        """
+        args = [cursor]
+        if match:
+            args.extend(["MATCH", match])
+        if count:
+            args.extend(["COUNT", str(count)])
+        if type:
+            args.extend(["TYPE", type.value])
+        return cast(
+            List[Union[bytes, List[bytes]]],
+            self._execute_command(RequestType.Scan, args),
+        )

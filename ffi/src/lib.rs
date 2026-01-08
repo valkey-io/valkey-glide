@@ -12,16 +12,17 @@ use glide_core::request_type::RequestType;
 use glide_core::scripts_container;
 use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
-    GlideOpenTelemetrySignalsExporter, GlideSpan,
+    GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };
 use protobuf::Message;
 use redis::ErrorKind;
 use redis::ObjectType;
 use redis::ScanStateRC;
+use redis::cluster_routing::ResponsePolicy;
+use redis::cluster_routing::Routable;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
-use redis::cluster_routing::{ResponsePolicy, Routable};
 use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, Pipeline, PipelineRetryStrategy, RedisResult, Value};
 use std::ffi::CStr;
@@ -1107,6 +1108,31 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             // Return as Ok to continue transaction processing
             Ok(command_response)
         }
+        Value::Push { kind, data } => {
+            // Create kind entry
+            let mut kind_entry = CommandResponse::default();
+            let map_key =
+                valkey_value_to_command_response(Value::SimpleString("kind".to_string()))?;
+            kind_entry.map_key = Box::into_raw(Box::new(map_key));
+            let map_val =
+                valkey_value_to_command_response(Value::SimpleString(format!("{:?}", kind)))?;
+            kind_entry.map_value = Box::into_raw(Box::new(map_val));
+
+            // Create values entry
+            let mut values_entry = CommandResponse::default();
+            let map_key =
+                valkey_value_to_command_response(Value::SimpleString("values".to_string()))?;
+            values_entry.map_key = Box::into_raw(Box::new(map_key));
+            let map_val = valkey_value_to_command_response(Value::Array(data))?;
+            values_entry.map_value = Box::into_raw(Box::new(map_val));
+
+            let (map_ptr, map_len) = convert_vec_to_pointer(vec![kind_entry, values_entry]);
+            command_response.array_value = map_ptr;
+            command_response.array_value_len = map_len;
+            command_response.response_type = ResponseType::Map;
+
+            Ok(command_response)
+        }
         // TODO: Add support for other return types.
         _ => todo!(),
     };
@@ -1163,8 +1189,41 @@ pub unsafe extern "C-unwind" fn command(
             return unsafe { client_adapter.handle_redis_error(err, request_id) };
         }
     };
-    for command_arg in arg_vec {
-        cmd.arg(command_arg);
+
+    // Check if compression is enabled before converting args
+    let compression_manager = client_adapter.core.client.compression_manager();
+    let should_process_compression = compression_manager
+        .as_ref()
+        .map(|cm| cm.is_enabled())
+        .unwrap_or(false);
+
+    if should_process_compression {
+        // Convert arg_vec to owned Vec<Vec<u8>> for compression processing
+        let mut owned_args: Vec<Vec<u8>> = arg_vec.iter().map(|&arg| arg.to_vec()).collect();
+
+        // Apply compression to command arguments
+        if let Err(err) = glide_core::compression::process_command_args_for_compression(
+            &mut owned_args,
+            command_type,
+            compression_manager.as_deref(),
+        ) {
+            let err = RedisError::from((
+                ErrorKind::ClientError,
+                "Compression failed",
+                err.to_string(),
+            ));
+            return unsafe { client_adapter.handle_redis_error(err, request_id) };
+        }
+
+        // Use the compressed arguments
+        for command_arg in &owned_args {
+            cmd.arg(command_arg);
+        }
+    } else {
+        // Use the original arguments
+        for command_arg in &arg_vec {
+            cmd.arg(command_arg);
+        }
     }
     if span_ptr != 0 {
         cmd.set_span(unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) });
@@ -1422,6 +1481,7 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
         let mut pattern: &[u8] = &[];
         let mut object_type: &[u8] = &[];
         let mut count: &[u8] = &[];
+        let mut allow_non_covered_slots: bool = false;
 
         let mut iter = arg_vec.iter().peekable();
         while let Some(arg) = iter.next() {
@@ -1456,6 +1516,9 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
                         return unsafe { client_adapter.handle_redis_error(err, request_id) };
                     }
                 },
+                b"ALLOW_NON_COVERED_SLOTS" => {
+                    allow_non_covered_slots = true;
+                }
                 _ => {
                     // Unknown or unsupported arg — safely skip or log
                     continue;
@@ -1505,14 +1568,22 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
         if !object_type.is_empty() {
             cluster_scan_args_builder = cluster_scan_args_builder.with_object_type(converted_type);
         }
+        cluster_scan_args_builder =
+            cluster_scan_args_builder.allow_non_covered_slots(allow_non_covered_slots);
         cluster_scan_args_builder.build()
     } else {
         ClusterScanArgs::builder().build()
     };
 
-    let scan_state_cursor = match get_cluster_scan_cursor(cursor_id) {
-        Ok(existing_cursor) => existing_cursor,
-        Err(_error) => ScanStateRC::new(),
+    let scan_state_cursor = if cursor_id.is_empty() || cursor_id == "0" {
+        ScanStateRC::new()
+    } else {
+        match get_cluster_scan_cursor(cursor_id) {
+            Ok(existing_cursor) => existing_cursor,
+            Err(err) => {
+                return unsafe { client_adapter.handle_redis_error(err, request_id) };
+            }
+        }
     };
     let mut client = client_adapter.core.client.clone();
     client_adapter.execute_request(request_id, async move {
@@ -1584,6 +1655,46 @@ pub unsafe extern "C-unwind" fn update_connection_password(
         client
             .update_connection_password(password_option, immediate_auth)
             .await
+    })
+}
+
+/// Manually refresh the IAM authentication token.
+///
+/// This function triggers an immediate refresh of the IAM token and updates the connection.
+/// It is only available if the client was created with IAM authentication.
+///
+/// # Parameters
+///
+/// * `client_adapter_ptr`: Pointer to a valid client returned from [`create_client`].
+/// * `request_id`: Unique identifier for a valid payload buffer created in the calling language.
+///
+/// # Returns
+///
+/// * A pointer to a [`CommandResult`] containing "OK" on success, or an error if:
+///   - The client is not using IAM authentication
+///   - Token generation fails
+///   - Authentication with the new token fails
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`].
+/// * `request_id` must be valid until it is passed in a call to [`free_command_response`].
+/// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn refresh_iam_token(
+    client_adapter_ptr: *const c_void,
+    request_id: usize,
+) -> *mut CommandResult {
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
+
+    let mut client = client_adapter.core.client.clone();
+    client_adapter.execute_request(request_id, async move {
+        client.refresh_iam_token().await.map(|_| Value::Okay)
     })
 }
 
@@ -1791,8 +1902,11 @@ pub unsafe extern "C" fn batch(
     };
     let mut client = client_adapter.core.client.clone();
 
+    // Get compression manager for batch operations
+    let compression_manager = client_adapter.core.client.compression_manager();
+
     // TODO handle panics
-    let mut pipeline = match unsafe { create_pipeline(batch_ptr) } {
+    let mut pipeline = match unsafe { create_pipeline(batch_ptr, compression_manager.as_ref()) } {
         Ok(pipeline) => pipeline,
         Err(err) => {
             return unsafe {
@@ -1897,7 +2011,10 @@ pub(crate) unsafe fn create_route(
 /// * `args` and `args_len` in a referred [`CmdInfo`] structure must not be `null`.
 /// * `data` in a referred [`CmdInfo`] structure must point to `arg_count` consecutive string pointers.
 /// * `args_len` in a referred [`CmdInfo`] structure must point to `arg_count` consecutive string lengths. See the safety documentation of [`convert_double_pointer_to_vec`].
-pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
+pub(crate) unsafe fn create_cmd(
+    ptr: *const CmdInfo,
+    compression_manager: Option<&std::sync::Arc<glide_core::compression::CompressionManager>>,
+) -> Result<Cmd, String> {
     let info = unsafe { *ptr };
     let arg_vec = unsafe {
         convert_double_pointer_to_vec(
@@ -1910,9 +2027,37 @@ pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
     let Some(mut cmd) = info.request_type.get_command() else {
         return Err("Couldn't fetch command type".into());
     };
-    for command_arg in arg_vec {
-        cmd.arg(command_arg);
+
+    // Check if compression is enabled before converting args
+    let should_process_compression = compression_manager
+        .as_ref()
+        .map(|cm| cm.is_enabled())
+        .unwrap_or(false);
+
+    if should_process_compression {
+        // Convert arg_vec to owned Vec<Vec<u8>> for compression processing
+        let mut owned_args: Vec<Vec<u8>> = arg_vec.iter().map(|&arg| arg.to_vec()).collect();
+
+        // Apply compression to command arguments
+        if let Err(err) = glide_core::compression::process_command_args_for_compression(
+            &mut owned_args,
+            info.request_type,
+            compression_manager.map(|m| m.as_ref()),
+        ) {
+            return Err(format!("Compression failed: {}", err));
+        }
+
+        // Use the compressed arguments
+        for command_arg in &owned_args {
+            cmd.arg(command_arg);
+        }
+    } else {
+        // Use the original arguments
+        for command_arg in &arg_vec {
+            cmd.arg(command_arg);
+        }
     }
+
     Ok(cmd)
 }
 
@@ -1925,12 +2070,15 @@ pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
 ///   They must be able to be safely casted to a valid to a slice of the corresponding type via [`from_raw_parts`]. See the safety documentation of [`from_raw_parts`].
 /// * Every pointer stored in `cmds` must not be `null` and must point to a valid [`CmdInfo`] structure.
 /// * All data in referred [`CmdInfo`] structure(s) should be valid. See the safety documentation of [`create_cmd`].
-pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, String> {
+pub(crate) unsafe fn create_pipeline(
+    ptr: *const BatchInfo,
+    compression_manager: Option<&std::sync::Arc<glide_core::compression::CompressionManager>>,
+) -> Result<Pipeline, String> {
     let info = unsafe { *ptr };
     let cmd_pointers = unsafe { from_raw_parts(info.cmds, info.cmd_count) };
     let mut pipeline = Pipeline::with_capacity(info.cmd_count);
     for (i, cmd_ptr) in cmd_pointers.iter().enumerate() {
-        match unsafe { create_cmd(*cmd_ptr) } {
+        match unsafe { create_cmd(*cmd_ptr, compression_manager) } {
             Ok(cmd) => pipeline.add_command(cmd),
             Err(err) => return Err(format!("Coudln't create {i:?}'th command: {err:?}")),
         };
@@ -2360,7 +2508,7 @@ pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
     }
 
     // Validate pointer alignment and bounds (basic safety checks)
-    if span_ptr % 8 != 0 {
+    if !span_ptr.is_multiple_of(8) {
         logger_core::log_error(
             "ffi_otel",
             format!("drop_otel_span: Invalid span pointer - misaligned: 0x{span_ptr:x}",),
@@ -2809,4 +2957,67 @@ pub unsafe extern "C" fn free_log_result(result_ptr: *mut LogResult) {
             free_c_string(result.log_error);
         }
     }
+}
+
+/// Statistics structure containing telemetry data.
+///
+/// This struct provides compression and connection statistics for the client.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct Statistics {
+    /// Total number of connections opened to Valkey
+    pub total_connections: c_ulong,
+    /// Total number of GLIDE clients
+    pub total_clients: c_ulong,
+    /// Total number of values compressed
+    pub total_values_compressed: c_ulong,
+    /// Total number of values decompressed
+    pub total_values_decompressed: c_ulong,
+    /// Total original bytes before compression
+    pub total_original_bytes: c_ulong,
+    /// Total bytes after compression
+    pub total_bytes_compressed: c_ulong,
+    /// Total bytes after decompression
+    pub total_bytes_decompressed: c_ulong,
+    /// Number of times compression was skipped
+    pub compression_skipped_count: c_ulong,
+}
+
+/// Get compression and connection statistics.
+///
+/// Returns a `Statistics` struct containing current telemetry data.
+/// This function is thread-safe and can be called at any time.
+///
+/// # Returns
+///
+/// A `Statistics` struct with the current statistics values.
+#[unsafe(no_mangle)]
+pub extern "C" fn get_statistics() -> Statistics {
+    Statistics {
+        total_connections: Telemetry::total_connections() as c_ulong,
+        total_clients: Telemetry::total_clients() as c_ulong,
+        total_values_compressed: Telemetry::total_values_compressed() as c_ulong,
+        total_values_decompressed: Telemetry::total_values_decompressed() as c_ulong,
+        total_original_bytes: Telemetry::total_original_bytes() as c_ulong,
+        total_bytes_compressed: Telemetry::total_bytes_compressed() as c_ulong,
+        total_bytes_decompressed: Telemetry::total_bytes_decompressed() as c_ulong,
+        compression_skipped_count: Telemetry::compression_skipped_count() as c_ulong,
+    }
+}
+
+/// Returns the minimum size in bytes for compression.
+///
+/// This constant represents the minimum size a value must be to be eligible for compression.
+/// It is calculated as `HEADER_SIZE + 1` to ensure that compressed data is always larger
+/// than just the compression header itself.
+///
+/// This function allows language bindings to validate compression configuration without
+/// hardcoding the constant, ensuring consistency with the Rust core implementation.
+///
+/// # Returns
+///
+/// The minimum compression size in bytes (currently 6 bytes: 5-byte header + 1 byte data).
+#[unsafe(no_mangle)]
+pub extern "C" fn get_min_compressed_size() -> c_ulong {
+    glide_core::compression::MIN_COMPRESSED_SIZE as c_ulong
 }

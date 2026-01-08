@@ -1,11 +1,16 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import sys
+import types
+import warnings
+
 from glide.glide import (
     ClusterScanCursor,
     OpenTelemetryConfig,
     OpenTelemetryMetricsConfig,
     OpenTelemetryTracesConfig,
     Script,
+    get_min_compressed_size,
 )
 from glide_shared import (
     OK,
@@ -36,6 +41,8 @@ from glide_shared import (
     ClusterBatch,
     ClusterBatchOptions,
     ClusterTransaction,
+    CompressionBackend,
+    CompressionConfiguration,
     ConditionalChange,
     ConfigurationError,
     ConnectionError,
@@ -78,6 +85,7 @@ from glide_shared import (
     GlideClusterClientConfiguration,
     GlideError,
     HashFieldConditionalChange,
+    IamAuthConfig,
     IdBound,
     InfBound,
     InfoSection,
@@ -112,6 +120,7 @@ from glide_shared import (
     ScoreBoundary,
     ScoreFilter,
     ServerCredentials,
+    ServiceType,
     SignedEncoding,
     SlotIdRoute,
     SlotKeyRoute,
@@ -159,11 +168,63 @@ from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger
 
+_glide_module = sys.modules[__name__]
+
+_legacy_modules = [
+    "glide.exceptions",
+    "glide.config",
+    "glide.constants",
+    "glide.routes",
+    "glide.async_commands",
+    "glide.async_commands.batch",
+    "glide.async_commands.batch_options",
+    "glide.async_commands.bitmap",
+    "glide.async_commands.command_args",
+    "glide.async_commands.server_modules",
+    "glide.async_commands.server_modules.ft_options",
+    "glide.async_commands.server_modules.ft_options.ft_aggregate_options",
+    "glide.async_commands.server_modules.ft_options.ft_create_options",
+    "glide.async_commands.server_modules.ft_options.ft_profile_options",
+    "glide.async_commands.server_modules.ft_options.ft_search_options",
+    "glide.async_commands.server_modules.glide_json",
+    "glide.async_commands.sorted_set",
+    "glide.async_commands.stream",
+]
+
+
+class _LegacyModule(types.ModuleType):
+    """Proxy for a deprecated module that warns when first accessed."""
+
+    def __init__(self, name):
+        super().__init__(name)
+        self._warned = False
+
+    def __getattr__(self, name):
+        if not self._warned:
+            warnings.warn(
+                f"Importing from '{self.__name__}' is deprecated. "
+                f"Please import directly from 'glide' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            self._warned = True
+
+        # Access the attribute from the real top-level glide module
+        return getattr(_glide_module, name)
+
+
+# Replace old modules with lazy proxy modules
+for old_name in _legacy_modules:
+    if old_name not in sys.modules:
+        sys.modules[old_name] = _LegacyModule(old_name)
+
 __all__ = [
     # Client
     "TGlideClient",
     "GlideClient",
     "GlideClusterClient",
+    # Internal utilities
+    "get_min_compressed_size",
     "Batch",
     "ClusterBatch",
     "ClusterTransaction",
@@ -179,8 +240,12 @@ __all__ = [
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
+    "CompressionBackend",
+    "CompressionConfiguration",
     "ReadFrom",
     "ServerCredentials",
+    "ServiceType",
+    "IamAuthConfig",
     "NodeAddress",
     "OpenTelemetryConfig",
     "OpenTelemetryMetricsConfig",

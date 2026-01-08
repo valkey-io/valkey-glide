@@ -73,6 +73,8 @@ excluded_sync_symbols = [
     "CoreCommands",  # ClassDef
     # python/glide-sync/glide_sync/sync_commands/standalone_commands.py
     "StandaloneCommands",  # ClassDef
+    # python/glide-sync/glide_sync/sync_commands/cluster_scan_cursor.py
+    "FINISHED_SCAN_CURSOR",  # Assignment
 ]
 
 excluded_shared_symbols = [
@@ -89,6 +91,9 @@ excluded_shared_symbols = [
     # python/glide-shared/glide_shared/config.py
     "BaseClientConfiguration",  # ClassDef
     "AdvancedBaseClientConfiguration",  # ClassDef
+    "load_root_certificates_from_file",  # FunctionDef
+    "load_client_certificate_from_file",  # FunctionDef
+    "load_client_key_from_file",  # FunctionDef
     # python/glide-shared/glide_shared/protobuf_codec.py
     "ProtobufCodec",  # ClassDef
     "PartialMessageException",  # Exception

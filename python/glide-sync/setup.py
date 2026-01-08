@@ -47,6 +47,7 @@ class VendorFolder:
 
 
 ROOT = Path(__file__).resolve().parent  # glide-sync/
+
 VENDORED_DEPENDENCIES = {
     "glide_shared": VendorFolder(
         source=ROOT.parent / "glide-shared" / "glide_shared",

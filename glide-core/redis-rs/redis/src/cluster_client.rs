@@ -40,11 +40,14 @@ struct BuilderParams {
     #[cfg(feature = "cluster-async")]
     slots_refresh_rate_limit: SlotsRefreshRateLimit,
     client_name: Option<String>,
+    lib_name: Option<String>,
     response_timeout: Option<Duration>,
     protocol: ProtocolVersion,
     pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
     reconnect_retry_strategy: Option<RetryStrategy>,
+    refresh_topology_from_initial_nodes: bool,
     database_id: i64,
+    tcp_nodelay: bool,
 }
 
 #[derive(Clone)]
@@ -140,12 +143,15 @@ pub struct ClusterParams {
     pub(crate) connections_validation_interval: Option<Duration>,
     pub(crate) tls_params: Option<TlsConnParams>,
     pub(crate) client_name: Option<String>,
+    pub(crate) lib_name: Option<String>,
     pub(crate) connection_timeout: Duration,
     pub(crate) response_timeout: Duration,
     pub(crate) protocol: ProtocolVersion,
     pub(crate) pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
     pub(crate) reconnect_retry_strategy: Option<RetryStrategy>,
+    pub(crate) refresh_topology_from_initial_nodes: bool,
     pub(crate) database_id: i64,
+    pub(crate) tcp_nodelay: bool,
 }
 
 impl ClusterParams {
@@ -171,11 +177,14 @@ impl ClusterParams {
             connections_validation_interval: value.connections_validation_interval,
             tls_params,
             client_name: value.client_name,
+            lib_name: value.lib_name,
             response_timeout: value.response_timeout.unwrap_or(Duration::MAX),
             protocol: value.protocol,
             pubsub_subscriptions: value.pubsub_subscriptions,
             reconnect_retry_strategy: value.reconnect_retry_strategy,
+            refresh_topology_from_initial_nodes: value.refresh_topology_from_initial_nodes,
             database_id: value.database_id,
+            tcp_nodelay: value.tcp_nodelay,
         })
     }
 }
@@ -302,6 +311,12 @@ impl ClusterClientBuilder {
     /// Sets client name for the new ClusterClient.
     pub fn client_name(mut self, client_name: String) -> ClusterClientBuilder {
         self.builder_params.client_name = Some(client_name);
+        self
+    }
+
+    /// Sets library name for the new ClusterClient.
+    pub fn lib_name(mut self, lib_name: String) -> ClusterClientBuilder {
+        self.builder_params.lib_name = Some(lib_name);
         self
     }
 
@@ -467,6 +482,29 @@ impl ClusterClientBuilder {
             interval_duration,
             max_jitter_milli,
         };
+        self
+    }
+
+    /// Enables refreshing the cluster topology from seed nodes.
+    ///
+    /// When enabled, the client will periodically query the seed nodes (the nodes provided when
+    /// creating the client) to update its internal view of the cluster topology.
+    pub fn refresh_topology_from_initial_nodes(
+        mut self,
+        refresh_topology_from_initial_nodes: bool,
+    ) -> ClusterClientBuilder {
+        self.builder_params.refresh_topology_from_initial_nodes =
+            refresh_topology_from_initial_nodes;
+        self
+    }
+
+    /// Sets the TCP_NODELAY socket option.
+    ///
+    /// When true, disables Nagle's algorithm for lower latency.
+    /// When false, enables Nagle's algorithm to reduce network overhead.
+    /// Defaults to true if not set.
+    pub fn tcp_nodelay(mut self, tcp_nodelay: bool) -> ClusterClientBuilder {
+        self.builder_params.tcp_nodelay = tcp_nodelay;
         self
     }
 

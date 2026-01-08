@@ -10,6 +10,7 @@ TARGET_DIR := $(GLIDE_FFI_PATH)/target
 # Determine the target folder based on OS and architecture
 UNAME := $(shell uname)
 ARCH := $(shell uname -m)
+IS_ALPINE := $(shell test -f /etc/alpine-release && echo true || echo false)
 
 # Set default values for GLIDE_NAME and GLIDE_VERSION
 # GLIDE_VERSION is automatically set during the deployment workflow based on the value defined in go-cd.yml.
@@ -17,20 +18,31 @@ ARCH := $(shell uname -m)
 GLIDE_NAME = GlideGo
 GLIDE_VERSION ?= unknown
 
+ifndef TARGET_TRIPLET
 ifeq ($(UNAME), Darwin)
     TARGET_TRIPLET := $(if $(filter arm64,$(ARCH)),aarch64-apple-darwin,x86_64-apple-darwin)
+else ifeq ($(UNAME), Linux)
+    ifeq ($(IS_ALPINE), true)
+        TARGET_TRIPLET := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-musl,x86_64-unknown-linux-musl)
+    else
+        TARGET_TRIPLET := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu)
+    endif
+else
+    $(error Unsupported platform: $(UNAME) $(ARCH))
+endif
+endif
+
+ifeq ($(UNAME), Darwin)
 	# https://github.com/rust-lang/rust/issues/51009#issuecomment-2274649980
 	BUILD_CMD := rustc --crate-type staticlib
 	CARGO_FIX_CMD := : # no-op
 	CARGO_POSTFIX_CMD := : # no-op
     STRIP_CMD := strip -x
 else ifeq ($(UNAME), Linux)
-    # TODO: musl
-    TARGET_TRIPLET := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu)
 	# zigbuild https://github.com/rust-cross/cargo-zigbuild
-	BUILD_CMD := zigbuild --target $(TARGET_TRIPLET).2.17
+	BUILD_CMD := zigbuild --target $(TARGET_TRIPLET)
 	# workaround for https://github.com/rust-cross/cargo-zigbuild/issues/337
-	CARGO_FIX_CMD := sed -i 's/crate-type.*/crate-type = ["staticlib"]/g' Cargo.toml
+	CARGO_FIX_CMD := sed -i 's/crate-type.*/crate-type = ["staticlib"]/g' Cargo.toml && rustup target add $(TARGET_TRIPLET)
 	CARGO_POSTFIX_CMD := git restore Cargo.toml
     STRIP_CMD := strip --strip-unneeded
 	TARGET_DIR := $(TARGET_DIR)/$(TARGET_TRIPLET)
@@ -40,6 +52,15 @@ endif
 
 # Path where compiled binary is copied to and therefore used by go
 DEST_PATH := rustbin/$(TARGET_TRIPLET)
+
+# Determine if we're using musl
+IS_MUSL := $(if $(filter true,$(IS_ALPINE)),true,$(if $(findstring musl,$(TARGET_TRIPLET)),true,false))
+
+# Set GOFLAGS for musl to use musl tag
+ifeq ($(IS_MUSL), true)
+    export GOFLAGS := -tags=musl
+endif
+
 
 install-build-tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
@@ -171,10 +192,21 @@ long-timeout-test: __it
 opentelemetry-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -otel-test $(if $(test-filter), -testify.m $(test-filter), -testify.m TestOpenTelemetry)
 opentelemetry-test: __it
 
+# Test command for integration tests
+ifeq ($(IS_MUSL), true)
+# musl gcc does not support -fsanitize=address, so we use clang instead
+# TODO - Investigate musl + address sanitizer issue - https://github.com/valkey-io/valkey-glide/issues/4671
+# Disabled for now
+# MUSL_TEST_CMD := CC=clang go test -asan -v ./integTest/...
+    TEST_CMD := CC="gcc" go test -v ./integTest/...
+else
+    TEST_CMD := CC="gcc -fsanitize=address" go test -v ./integTest/...
+endif
+
 __it:
 	mkdir -p reports
 	set -o pipefail; \
-	CC="gcc -fsanitize=address" go test -v ./integTest/... \
+	$(TEST_CMD) \
 	$(TEST_FILTER) \
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \

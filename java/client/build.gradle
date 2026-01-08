@@ -5,33 +5,34 @@ plugins {
     id 'maven-publish'
     id 'signing'
     id 'io.freefair.lombok' version '8.6'
-    id 'com.github.spotbugs' version '6.0.18'
+    id 'com.github.spotbugs' version '6.4.2'
     id 'com.google.osdetector' version '1.7.3'
-    id 'com.gradleup.shadow' version '8.3.8'
 }
 
 repositories {
     mavenCentral()
 }
 
-configurations {
-    testImplementation { extendsFrom shadow }
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Javadoc) {
+    options.encoding = 'UTF-8'
+    options.charSet = 'UTF-8'
+    options.docEncoding = 'UTF-8'
 }
 
 dependencies {
-    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.1'
-    shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    implementation('com.google.protobuf:protobuf-java') {
+        version {
+            require '[4.29.1,5.0)'
+            prefer '4.29.1'
+        }
+    }
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
 
-    // Apache Commons Pool 2 for Jedis compatibility layer
-    implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.0'
-
-    implementation group: 'io.netty', name: 'netty-handler', version: '4.1.121.Final'
-    // https://github.com/netty/netty/wiki/Native-transports
-    // At the moment, Windows is not supported
-    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.121.Final', classifier: 'linux-x86_64'
-    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.121.Final', classifier: 'linux-aarch_64'
-    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.121.Final', classifier: 'osx-aarch_64'
-    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.121.Final', classifier: 'osx-x86_64'
+    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.6'
 
     // junit
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '5.2.0'
@@ -39,19 +40,21 @@ dependencies {
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
 
     //lombok
-    compileOnly 'org.projectlombok:lombok:1.18.38'
-    annotationProcessor 'org.projectlombok:lombok:1.18.38'
-    testCompileOnly 'org.projectlombok:lombok:1.18.38'
-    testAnnotationProcessor 'org.projectlombok:lombok:1.18.38'
+    compileOnly 'org.projectlombok:lombok:1.18.42'
+    annotationProcessor 'org.projectlombok:lombok:1.18.42'
+    testCompileOnly 'org.projectlombok:lombok:1.18.42'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.42'
 }
 
 ext {
     checkProtocVersion = { String output ->
         // Line in format like: libprotoc 29.1
-        int majorVersion = Integer.parseInt(output.split(" ")[1].split("\\.")[0].trim());
-        int minorVersion = Integer.parseInt(output.split(" ")[1].split("\\.")[1].trim());
-        if (majorVersion < 29) {
-            throw new GradleException("Protobuf compiler (protoc) version 29.0 or newer is required. Current version: $output");
+        def parts = output.split(" ")[1].split("\\.")
+        int majorVersion = Integer.parseInt(parts[0].trim())
+        int minorVersion = parts.length > 1 ? Integer.parseInt(parts[1].trim()) : 0
+        if (majorVersion < 4 || (majorVersion == 4 && minorVersion < 29)) {
+            throw new GradleException(
+                    "Protobuf compiler (protoc) version 4.29 or newer is required. Current version: $output")
         }
         return output.split(" ")[1]
     }
@@ -73,7 +76,7 @@ tasks.register('protobuf', Exec) {
             }
         } catch (Exception e) {
             if (e.getMessage().startsWith("A problem occurred starting process")) {
-                throw new GradleException("No Protobuf compiler (protoc) found. Protobuf compiler version 29.0 or newer is required.");
+                throw new GradleException("No Protobuf compiler (protoc) found. Protobuf compiler version 4.29 or newer is required.");
             }
             throw e
         }
@@ -119,39 +122,10 @@ tasks.register('buildRust', Exec) {
     if (target.contains("linux") && !target.contains("musl")) {
         commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
     } else if (target.contains("musl")) {
-        commandLine 'cargo', 'build', '--target', "$target", '--release'
+        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
         environment RUSTFLAGS: '-C target-feature=-crt-static'
     } else {
         commandLine 'cargo', 'build', '--release'
-    }
-    workingDir project.rootDir
-    environment CARGO_TERM_COLOR: 'always'
-}
-
-tasks.register('buildRustFfi', Exec) {
-    def target
-    if (project.hasProperty('target')) {
-        target = project.target
-    } else {
-        if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-            target = "${arch}-unknown-linux-gnu.2.17"
-        } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-            target = "${arch}-unknown-linux-musl"
-        } else {
-            target = ""
-        }
-    }
-
-    print("Building Rust FFI with target: '$target'\n")
-    if (target.contains("linux") && !target.contains("musl")) {
-        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
-        environment RUSTFLAGS: '--cfg ffi_test'
-    } else if (target.contains("musl")) {
-        commandLine 'cargo', 'build', '--target', "$target", '--release'
-        environment RUSTFLAGS: '--cfg ffi_test -C target-feature=-crt-static'
-    } else {
-        commandLine 'cargo', 'build', '--release'
-        environment RUSTFLAGS: '--cfg ffi_test'
     }
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always'
@@ -167,13 +141,8 @@ tasks.register('buildWithProto') {
     finalizedBy 'build'
 }
 
-tasks.register('testFfi', Test) {
-    dependsOn 'buildRustFfi'
-    include "glide/ffi/FfiTest.class"
-}
-
 tasks.register('buildAll') {
-    dependsOn 'protobuf', 'buildRust', 'testFfi'
+    dependsOn 'protobuf', 'buildRust'
     finalizedBy 'build'
 }
 
@@ -189,8 +158,10 @@ tasks.register('copyNativeLib', Copy) {
         from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
+    } else {
+        from "${projectDir}/../target/release/"
     }
-    include "*.dylib", "*.so"
+    include "*.dylib", "*.so", "*.dll"
     into sourceSets.main.output.resourcesDir
 }
 
@@ -200,11 +171,6 @@ javadoc.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRust')
 compileTestJava.dependsOn('copyNativeLib')
 test.dependsOn('buildRust')
-testFfi.dependsOn('buildRustFfi')
-
-test {
-    exclude "glide/ffi/FfiTest.class"
-}
 
 sourceSets {
     main {
@@ -217,12 +183,14 @@ sourceSets {
     }
 }
 
-task javadocJar(type: Jar, dependsOn: javadoc) {
+tasks.register('javadocJar', Jar) {
+    dependsOn javadoc
     archiveClassifier = 'javadoc'
     from javadoc.destinationDir
 }
 
-task sourcesJar(type: Jar, dependsOn: classes) {
+tasks.register('sourcesJar', Jar) {
+    dependsOn classes
     archiveClassifier = 'sources'
     from sourceSets.main.allSource
     exclude 'glide/models' // exclude protobuf files
@@ -231,9 +199,9 @@ task sourcesJar(type: Jar, dependsOn: classes) {
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            from components.shadow
-            artifact javadocJar
-            artifact sourcesJar
+            from components.java
+            artifact tasks.named('javadocJar')
+            artifact tasks.named('sourcesJar')
             groupId = 'io.valkey'
             artifactId = 'valkey-glide'
             version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
@@ -268,14 +236,8 @@ publishing {
     }
 }
 
-tasks.withType(GenerateModuleMetadata) {
-    dependsOn jar, shadowJar
-}
-
 java {
     modularity.inferModulePath = true
-    withSourcesJar()
-    withJavadocJar()
 }
 
 tasks.withType(Sign) {
@@ -295,7 +257,12 @@ tasks.withType(Test) {
         showStandardStreams true
     }
     // This is needed for the FFI tests
-    if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+    if (project.hasProperty('target')) {
+        target = project.target
+        jvmArgs "-Djava.library.path=${projectDir}/../target/${target}/release"
+    } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-unknown-linux-gnu/release"
+    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-unknown-linux-musl/release"
     } else {
         jvmArgs "-Djava.library.path=${projectDir}/../target/release"
@@ -305,76 +272,14 @@ tasks.withType(Test) {
 }
 
 jar {
-    if (project.hasProperty('target') && project.target.contains("musl")) {
-        archiveClassifier = "linux_musl_${arch}"
+    if (
+        (project.hasProperty('target') && project.target.contains("musl")) ||
+        (osdetector.os == 'linux' && osdetector.release.id == 'alpine')
+        ) {
+        archiveClassifier = "linux_musl-${osdetector.arch}"
     } else {
         archiveClassifier = osdetector.classifier
     }
-}
-
-import com.github.jengelman.gradle.plugins.shadow.transformers.CacheableTransformer
-import com.github.jengelman.gradle.plugins.shadow.transformers.Transformer
-import com.github.jengelman.gradle.plugins.shadow.transformers.TransformerContext
-import org.apache.tools.zip.ZipOutputStream
-import org.apache.tools.zip.ZipEntry
-
-// https://github.com/grpc/grpc-java/blob/b3db8c2489af25b0d10b6f45e60fd50771aa93d1/netty/shaded/build.gradle#L149
-/**
- * A Transformer which updates the Netty JAR META-INF/ resources to accurately
- * reference shaded class names.
- */
-@CacheableTransformer
-class NettyResourceTransformer implements Transformer {
-
-    // A map of resource file paths to be modified
-    private Map<String, String> resources = [:]
-
-    @Override
-    boolean canTransformResource(FileTreeElement fileTreeElement) {
-        fileTreeElement.name.startsWith("META-INF/native-image/io.netty")
-    }
-
-    @Override
-    void transform(TransformerContext context) {
-        String updatedPath = context.path.replace("io.netty", "glide.io.netty")
-        String updatedContent = context.is.getText().replace("io.netty", "glide.io.netty")
-        resources.put(updatedPath, updatedContent)
-    }
-
-    @Override
-    boolean hasTransformedResource() {
-        resources.size() > 0
-    }
-
-    @Override
-    void modifyOutputStream(ZipOutputStream outputStream, boolean preserveFileTimestamps) {
-        for (resourceEntry in resources) {
-            ZipEntry entry = new ZipEntry(resourceEntry.key)
-            entry.time = TransformerContext.getEntryTimestamp(preserveFileTimestamps, entry.time)
-
-            outputStream.putNextEntry(entry)
-            outputStream.write(resourceEntry.value.getBytes())
-            outputStream.closeEntry()
-        }
-    }
-}
-
-shadowJar {
-    dependsOn('copyNativeLib')
-    if (project.hasProperty('target') && project.target.contains("musl")) {
-        archiveClassifier = "linux_musl_${arch}"
-    } else {
-        archiveClassifier = osdetector.classifier
-    }
-    excludes.remove("module-info.class")
-    relocate('io.netty', 'glide.io.netty')
-    relocate('com.google.protobuf', 'glide.com.google.protobuf')
-    relocate('org.apache.commons.pool2', 'glide.org.apache.commons.pool2')
-    mergeServiceFiles()
-
-    relocate 'META-INF/native/libnetty', 'META-INF/native/libglide_netty'
-    relocate 'META-INF/native/netty', 'META-INF/native/glide_netty'
-    transform(NettyResourceTransformer.class)
 }
 
 sourcesJar {
@@ -406,6 +311,11 @@ spotbugsMain {
             outputLocation = file("$buildDir/reports/spotbugs/main/spotbugs.xml")
         }
     }
+    excludeFilter = file('config/spotbugs-exclude.xml')
+}
+
+spotbugsTest {
+    excludeFilter = file('config/spotbugs-exclude.xml')
 }
 
 spotbugs {

@@ -168,15 +168,10 @@ jobs:
                           end
                       )
                       | if .RUNNER == "macos13" then .["test-runner"] = "macos13" else . end
-                      | .RUNNER = (
-                          if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end))
-                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end)
-                          end
-                      )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "platform_matrix=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
                   echo "Platform matrix loaded: ${PLATFORM_MATRIX}"
+
     build-native-modules:
         needs: [get-build-parameters]
         strategy:
@@ -192,7 +187,7 @@ jobs:
                   fetch-depth: 0
 
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: latest
 
@@ -326,12 +321,11 @@ jobs:
 
             # Setup Node.js for publishing to NPM and caching
             - name: Setup Node.js with npm cache
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"
                   scope: "@valkey"
-                  token: ${{ secrets.NPM_AUTH_TOKEN }}
                   cache: "npm"
                   cache-dependency-path: node/package.json
 
@@ -431,13 +425,13 @@ jobs:
               shell: bash
               working-directory: ./node/npm/glide
               env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
                   NPM_TAG: ${{ needs.get-build-parameters.outputs.npm_tag }}
+                  NPM_CONFIG_PROVENANCE: true
               run: |
                   package_name=$(cat package.json | jq -r .name)
                   version=$(cat package.json | jq -r .version)
                   echo "Publishing base package ${package_name}@${version} with tag ${NPM_TAG}"
-                  npm publish --tag ${NPM_TAG} --access public --scope=@valkey
+                  npm publish --tag ${NPM_TAG} --access public --provenance --scope=@valkey
 
                   # Check if the publish was successful
                   if [ $? -ne 0 ]; then
@@ -452,9 +446,9 @@ jobs:
               uses: geekyeggo/delete-artifact@v2
               with:
                   name: |
-                      npm-packages-${{ github.run_id }}
                       artifacts-*
                       js-files-${{ github.run_id }}
+                  failOnError: false
 
     test-published-release:
         needs: [get-build-parameters, prepare-and-publish]
@@ -499,7 +493,7 @@ jobs:
 
             - name: Setup Node.js
               if: ${{ !(matrix.build_type == 'musl') }}
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: latest
 
@@ -555,9 +549,9 @@ jobs:
               uses: geekyeggo/delete-artifact@v2
               with:
                   name: |
-                      npm-packages-${{ github.run_id }}
                       bindings-*
                       js-files-${{ github.run_id }}
+                  failOnError: false
 
     deprecate-on-failure:
         needs: [test-published-release, get-build-parameters]
@@ -565,11 +559,10 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"
-                  token: ${{ secrets.NPM_AUTH_TOKEN }}
                   scope: "@valkey"
 
             - name: Deprecate Published Packages

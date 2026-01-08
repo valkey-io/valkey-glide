@@ -139,6 +139,27 @@ class CoreCommands(Protocol):
             TOK, await self._update_connection_password(password, immediate_auth)
         )
 
+    async def _refresh_iam_token(self) -> TResult: ...
+
+    async def refresh_iam_token(self) -> TOK:
+        """
+        Manually refresh the IAM token for the current connection.
+
+        This method is only available if the client was created with IAM authentication.
+        It triggers an immediate refresh of the IAM token and updates the connection.
+
+        Returns:
+            TOK: A simple OK response on success.
+
+        Raises:
+            ConfigurationError: If the client is not using IAM authentication.
+
+        Example:
+            >>> await client.refresh_iam_token()
+            'OK'
+        """
+        return cast(TOK, await self._refresh_iam_token())
+
     async def set(
         self,
         key: TEncodable,
@@ -429,6 +450,34 @@ class CoreCommands(Protocol):
                 0 # No keys we're deleted since "key" doesn't exist.
         """
         return cast(int, await self._execute_command(RequestType.Del, keys))
+
+    async def move(self, key: TEncodable, db_index: int) -> bool:
+        """
+        Move key from the currently selected database to the specified destination database.
+
+        Note:
+            For cluster mode move command is supported since Valkey 9.0.0
+
+        See [valkey.io](https://valkey.io/commands/move/) for more details.
+
+        Args:
+            key (TEncodable): The key to move.
+            db_index (int): The destination database number.
+
+        Returns:
+            bool: True if the key was moved successfully, False if the key does not exist
+            or was already present in the destination database.
+
+        Examples:
+            >>> await client.move("some_key", 1)
+                True  # The key was successfully moved to database 1
+            >>> await client.move("nonexistent_key", 1)
+                False  # The key does not exist
+        """
+        return cast(
+            bool,
+            await self._execute_command(RequestType.Move, [key, str(db_index)]),
+        )
 
     async def incr(self, key: TEncodable) -> int:
         """
@@ -1120,7 +1169,7 @@ class CoreCommands(Protocol):
             - `-2`: field does not exist or key does not exist
 
         Examples:
-            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
+            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.SEC, 10))
             >>> await client.httl("my_hash", ["field1", "field2", "non_existent_field"])
                 [9, 9, -2]  # field1 and field2 have ~9 seconds left, non_existent_field doesn't exist
 
@@ -1150,7 +1199,7 @@ class CoreCommands(Protocol):
             - `-2`: field does not exist or key does not exist
 
         Examples:
-            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.PX, 10000))
+            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.MILLSEC, 10000))
             >>> await client.hpttl("my_hash", ["field1", "field2", "non_existent_field"])
                 [9500, 9500, -2]  # field1 and field2 have ~9500 milliseconds left, non_existent_field doesn't exist
 
@@ -1182,7 +1231,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> import time
             >>> future_timestamp = int(time.time()) + 60  # 60 seconds from now
-            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EXAT, future_timestamp))
+            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.UNIX_SEC, future_timestamp))
             >>> await client.hexpiretime("my_hash", ["field1", "field2", "non_existent_field"])
                 [future_timestamp, future_timestamp, -2]  # field1 and field2 expire at future_timestamp, non_existent_field doesn't exist
 
@@ -1216,7 +1265,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> import time
             >>> future_timestamp_ms = int(time.time() * 1000) + 60000  # 60 seconds from now in milliseconds
-            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.PXAT, future_timestamp_ms))
+            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.UNIX_MILLSEC, future_timestamp_ms))
             >>> await client.hpexpiretime("my_hash", ["field1", "field2", "non_existent_field"])
                 [future_timestamp_ms, future_timestamp_ms, -2]  # field1 and field2 expire at future_timestamp_ms, non_existent_field doesn't exist
 
@@ -1249,17 +1298,17 @@ class CoreCommands(Protocol):
                 - ONLY_IF_ALL_EXIST (FXX): Only set fields if all of them already exist.
                 - ONLY_IF_NONE_EXIST (FNX): Only set fields if none of them already exist.
             expiry (Optional[ExpirySet]): Expiration options for the fields:
-                - EX: Expiration time in seconds.
-                - PX: Expiration time in milliseconds.
-                - EXAT: Absolute expiration time in seconds (Unix timestamp).
-                - PXAT: Absolute expiration time in milliseconds (Unix timestamp).
-                - KEEPTTL: Retain existing TTL.
+                - SEC (EX): Expiration time in seconds.
+                - MILLSEC (PX): Expiration time in milliseconds.
+                - UNIX_SEC (EXAT): Absolute expiration time in seconds (Unix timestamp).
+                - UNIX_MILLSEC (PXAT): Absolute expiration time in milliseconds (Unix timestamp).
+                - KEEP_TTL (KEEPTTL): Retain existing TTL.
 
         Returns:
             int: 1 if all fields were set successfully, 0 if none were set due to conditional constraints.
 
         Examples:
-            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
+            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.SEC, 10))
                 1  # All fields set with 10 second expiration
             >>> await client.hsetex("my_hash", {"field3": "value3"}, field_conditional_change=HashFieldConditionalChange.ONLY_IF_ALL_EXIST)
                 1  # Field set because field already exists
@@ -1305,10 +1354,10 @@ class CoreCommands(Protocol):
             key (TEncodable): The key of the hash.
             fields (List[TEncodable]): The list of fields to retrieve from the hash.
             expiry (Optional[ExpiryGetEx]): Expiration options for the retrieved fields:
-                - EX: Expiration time in seconds.
-                - PX: Expiration time in milliseconds.
-                - EXAT: Absolute expiration time in seconds (Unix timestamp).
-                - PXAT: Absolute expiration time in milliseconds (Unix timestamp).
+                - SEC (EX): Expiration time in seconds.
+                - MILLSEC (PX): Expiration time in milliseconds.
+                - UNIX_SEC (EXAT): Absolute expiration time in seconds (Unix timestamp).
+                - UNIX_MILLSEC (PXAT): Absolute expiration time in milliseconds (Unix timestamp).
                 - PERSIST: Remove expiration from the fields.
 
         Returns:
@@ -1317,10 +1366,10 @@ class CoreCommands(Protocol):
             If `key` does not exist, it is treated as an empty hash, and the function returns a list of null values.
 
         Examples:
-            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
+            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.SEC, 10))
             >>> await client.hgetex("my_hash", ["field1", "field2"])
                 [b"value1", b"value2"]
-            >>> await client.hgetex("my_hash", ["field1"], expiry=ExpiryGetEx(ExpiryTypeGetEx.EX, 20))
+            >>> await client.hgetex("my_hash", ["field1"], expiry=ExpiryGetEx(ExpiryTypeGetEx.SEC, 20))
                 [b"value1"]  # field1 now has 20 second expiration
             >>> await client.hgetex("my_hash", ["field1"], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
                 [b"value1"]  # field1 expiration removed
@@ -1374,7 +1423,7 @@ class CoreCommands(Protocol):
             - `2`: Field was deleted immediately (when seconds is 0 or timestamp is in the past).
 
         Examples:
-            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
+            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.SEC, 10))
             >>> await client.hexpire("my_hash", 20, ["field1", "field2"])
                 [1, 1]  # Both fields' expiration set to 20 seconds
             >>> await client.hexpire("my_hash", 30, ["field1"], option=ExpireOptions.NewExpiryGreaterThanCurrent)
@@ -1420,7 +1469,7 @@ class CoreCommands(Protocol):
             - `-2`: Field does not exist or key does not exist.
 
         Examples:
-            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
+            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.SEC, 10))
             >>> await client.hpersist("my_hash", ["field1", "field2"])
                 [1, 1]  # Both fields made persistent
             >>> await client.hpersist("my_hash", ["field1"])
@@ -1467,7 +1516,7 @@ class CoreCommands(Protocol):
             - `2`: Field was deleted immediately (when milliseconds is 0 or timestamp is in the past).
 
         Examples:
-            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.PX, 10000))
+            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.MILLSEC, 10000))
             >>> await client.hpexpire("my_hash", 20000, ["field1", "field2"])
                 [1, 1]  # Both fields' expiration set to 20000 milliseconds
             >>> await client.hpexpire("my_hash", 30000, ["field1"], option=ExpireOptions.NewExpiryGreaterThanCurrent)
@@ -1528,7 +1577,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> import time
             >>> future_timestamp = int(time.time()) + 60  # 60 seconds from now
-            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
+            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.SEC, 10))
             >>> await client.hexpireat("my_hash", future_timestamp, ["field1", "field2"])
                 [1, 1]  # Both fields' expiration set to future_timestamp
             >>> past_timestamp = int(time.time()) - 60  # 60 seconds ago
@@ -1588,7 +1637,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> import time
             >>> future_timestamp_ms = int(time.time() * 1000) + 60000  # 60 seconds from now in milliseconds
-            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.PX, 10000))
+            >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.MILLSEC, 10000))
             >>> await client.hpexpireat("my_hash", future_timestamp_ms, ["field1", "field2"])
                 [1, 1]  # Both fields' expiration set to future_timestamp_ms
             >>> past_timestamp_ms = int(time.time() * 1000) - 60000  # 60 seconds ago in milliseconds
@@ -2241,6 +2290,20 @@ class CoreCommands(Protocol):
                 2
         """
         return cast(int, await self._execute_command(RequestType.SAdd, [key] + members))
+
+    async def select(self, index: int) -> TOK:
+        """
+        Change the currently selected database.
+
+        See [valkey.io](https://valkey.io/commands/select/) for details.
+
+        Args:
+            index (int): The index of the database to select.
+
+        Returns:
+            A simple OK response.
+        """
+        return cast(TOK, await self._execute_command(RequestType.Select, [str(index)]))
 
     async def srem(self, key: TEncodable, members: List[TEncodable]) -> int:
         """

@@ -790,6 +790,33 @@ describe("GlideClusterClient", () => {
                     result4Str.includes(serverVersion),
             ).toBe(true);
 
+            // Test LOLWUT version 9 (available in Valkey 9.0.0+)
+            if (cluster.checkIfServerVersionLessThan("9.0.0") === false) {
+                // Test with version 9 and 2 parameters on all nodes
+                const result5 = await client.lolwut({
+                    version: 9,
+                    parameters: [30, 4],
+                    route: "allNodes",
+                });
+                const result5Str = intoString(result5);
+                expect(
+                    result5Str.includes("ver") &&
+                        result5Str.includes(serverVersion),
+                ).toBe(true);
+
+                // Test with version 9 and 4 parameters on random node
+                const result6 = await client.lolwut({
+                    version: 9,
+                    parameters: [40, 20, 1, 2],
+                    route: "randomNode",
+                });
+                const result6Str = intoString(result6);
+                expect(
+                    result6Str.includes("ver") &&
+                        result6Str.includes(serverVersion),
+                ).toBe(true);
+            }
+
             // batch tests
             for (const isAtomic of [true, false]) {
                 const batch = new ClusterBatch(isAtomic);
@@ -884,6 +911,128 @@ describe("GlideClusterClient", () => {
 
             client.close();
         },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "select test %p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("9.0.0")) return;
+
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            expect(await client.select(0)).toEqual("OK");
+
+            const key = getRandomKey();
+            const value = getRandomKey();
+            const result = await client.set(key, value);
+            expect(result).toEqual("OK");
+
+            expect(await client.select(1)).toEqual("OK");
+            expect(await client.get(key)).toEqual(null);
+            expect(await client.flushdb()).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
+
+            expect(await client.select(0)).toEqual("OK");
+            expect(await client.get(key)).toEqual(value);
+
+            client.close();
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "copy with DB test_%p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("9.0.0")) return;
+
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const source = `{key}-${getRandomKey()}`;
+            const destination = `{key}-${getRandomKey()}`;
+            const value1 = getRandomKey();
+            const value2 = getRandomKey();
+            const index1 = 1;
+            const index2 = 2;
+
+            // neither key exists
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(false);
+
+            // source exists, destination does not
+            expect(await client.set(source, value1)).toEqual("OK");
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(true);
+            expect(await client.select(1)).toEqual("OK");
+            expect(await client.get(destination)).toEqual(value1);
+
+            // new value for source key
+            expect(await client.select(0)).toEqual("OK");
+            expect(await client.set(source, value2)).toEqual("OK");
+
+            // no REPLACE, copying to existing key on DB 1, non-existing key on DB 2
+            expect(
+                await client.copy(Buffer.from(source), destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(false);
+            expect(
+                await client.copy(source, Buffer.from(destination), {
+                    destinationDB: index2,
+                    replace: false,
+                }),
+            ).toEqual(true);
+
+            // new value only gets copied to DB 2
+            expect(await client.select(1)).toEqual("OK");
+            expect(await client.get(destination)).toEqual(value1);
+            expect(await client.customCommand(["SELECT", "2"])).toEqual("OK");
+            expect(await client.get(destination)).toEqual(value2);
+
+            // both exists, with REPLACE, when value isn't the same, source always get copied to
+            // destination
+            expect(await client.select(0)).toEqual("OK");
+            expect(
+                await client.copy(
+                    Buffer.from(source),
+                    Buffer.from(destination),
+                    {
+                        destinationDB: index1,
+                        replace: true,
+                    },
+                ),
+            ).toEqual(true);
+            expect(await client.select(1)).toEqual("OK");
+            expect(await client.get(destination)).toEqual(value2);
+
+            // batch tests
+            for (const isAtomic of [true, false]) {
+                const batch = new ClusterBatch(isAtomic);
+                batch.customCommand(["SELECT", "1"]);
+                batch.set(source, value1);
+                batch.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: true,
+                });
+                batch.get(destination);
+                const results = await client.exec(batch, true);
+
+                expect(results).toEqual(["OK", "OK", true, value1]);
+            }
+
+            client.close();
+        },
+        TIMEOUT,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -2308,7 +2457,13 @@ describe("GlideClusterClient", () => {
                 expect(typeof stats).toBe("object");
                 expect(stats).toHaveProperty("total_connections");
                 expect(stats).toHaveProperty("total_clients");
-                expect(Object.keys(stats)).toHaveLength(2);
+                expect(stats).toHaveProperty("total_values_compressed");
+                expect(stats).toHaveProperty("total_values_decompressed");
+                expect(stats).toHaveProperty("total_original_bytes");
+                expect(stats).toHaveProperty("total_bytes_compressed");
+                expect(stats).toHaveProperty("total_bytes_decompressed");
+                expect(stats).toHaveProperty("compression_skipped_count");
+                expect(Object.keys(stats)).toHaveLength(8);
             } finally {
                 // Ensure the client is properly closed
                 glideClientForTesting?.close();
@@ -2887,6 +3042,108 @@ describe("GlideClusterClient", () => {
             } finally {
                 client.close();
             }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "move test_%p",
+        async (protocol) => {
+            // Skip test if version is below 9.0.0 (Valkey 9)
+            if (cluster.checkIfServerVersionLessThan("9.0.0")) return;
+
+            const client_db0 = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    databaseId: 0,
+                }),
+            );
+            const client_db1 = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    databaseId: 1,
+                }),
+            );
+
+            try {
+                const key1 = "{key}-1" + getRandomKey();
+                const key2 = "{key}-2" + getRandomKey();
+                const value = getRandomKey();
+
+                // Test moving non-existent key
+                expect(await client_db0.move(key1, 1)).toEqual(false);
+
+                // Set a key in database 0 and move it to database 1
+                expect(await client_db0.set(key1, value)).toEqual("OK");
+                expect(await client_db0.get(key1)).toEqual(value);
+                expect(await client_db0.move(Buffer.from(key1), 1)).toEqual(
+                    true,
+                );
+                expect(await client_db0.get(key1)).toEqual(null);
+                expect(await client_db1.get(key1)).toEqual(value);
+
+                // Test error with invalid database number
+                await expect(client_db0.move(key1, -1)).rejects.toThrow(
+                    RequestError,
+                );
+
+                // batch tests
+                for (const isAtomic of [true, false]) {
+                    expect(await client_db0.flushall()).toEqual("OK");
+                    expect(await client_db1.flushall()).toEqual("OK");
+
+                    const batch = new ClusterBatch(isAtomic);
+                    batch.move(key2, 1);
+                    batch.set(key2, value);
+                    batch.move(key2, 1);
+                    batch.get(key2);
+                    const results = await client_db0.exec(batch, true);
+
+                    expect(results).toEqual([false, "OK", true, null]);
+
+                    // Verify key exists in database 1
+                    expect(await client_db1.get(key2)).toEqual(value);
+                }
+            } finally {
+                client_db0.close();
+                client_db1.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "tcp nodelay configuration",
+        async () => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                ProtocolVersion.RESP3,
+            );
+
+            // Test default (undefined - not set)
+            const defaultClient = await GlideClusterClient.createClient(config);
+            expect(await defaultClient.ping()).toBe("PONG");
+            expect(await defaultClient.set("key", "value")).toBe("OK");
+            expect(await defaultClient.get("key")).toBe("value");
+            defaultClient.close();
+
+            // Test explicit true
+            const clientTrue = await GlideClusterClient.createClient({
+                ...config,
+                advancedConfiguration: { tcpNoDelay: true },
+            });
+            expect(await clientTrue.ping()).toBe("PONG");
+            expect(await clientTrue.set("key2", "value2")).toBe("OK");
+            expect(await clientTrue.get("key2")).toBe("value2");
+            clientTrue.close();
+
+            // Test explicit false
+            const clientFalse = await GlideClusterClient.createClient({
+                ...config,
+                advancedConfiguration: { tcpNoDelay: false },
+            });
+            expect(await clientFalse.ping()).toBe("PONG");
+            expect(await clientFalse.set("key3", "value3")).toBe("OK");
+            expect(await clientFalse.get("key3")).toBe("value3");
+            clientFalse.close();
         },
         TIMEOUT,
     );

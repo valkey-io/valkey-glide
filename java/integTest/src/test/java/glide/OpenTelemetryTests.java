@@ -25,13 +25,74 @@ import org.junit.jupiter.params.provider.MethodSource;
 @Timeout(30) // seconds
 public class OpenTelemetryTests {
 
-    private static final String VALID_ENDPOINT_TRACES = "/tmp/spans.json";
+    private static final String VALID_ENDPOINT_TRACES =
+            System.getProperty("java.io.tmpdir") + System.getProperty("file.separator") + "spans.json";
     private static final String VALID_FILE_ENDPOINT_TRACES = "file://" + VALID_ENDPOINT_TRACES;
     private static final String VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics";
     private static GlideClusterClient client;
     private static final int DELAY_500 = 500;
     private static final int DELAY_5000 = 5000;
     private static final int DELAY_1000 = 1000;
+
+    /**
+     * Wait for spans to be exported with retry logic.
+     *
+     * @param spanFilePath Path to the span file
+     * @param expectedSpanCount Expected number of spans
+     * @param spanName Name of the span to look for
+     * @param maxWaitMs Maximum time to wait in milliseconds
+     * @return SpanFileData if successful
+     * @throws Exception if timeout or other error
+     */
+    private static SpanFileData waitForSpansWithRetry(
+            String spanFilePath, int expectedSpanCount, String spanName, long maxWaitMs)
+            throws Exception {
+
+        long startTime = System.currentTimeMillis();
+        long pollIntervalMs = 500; // Check every 500ms
+        File spanFile = new File(spanFilePath);
+
+        while (System.currentTimeMillis() - startTime < maxWaitMs) {
+            if (!spanFile.exists() || spanFile.length() == 0) {
+                Thread.sleep(pollIntervalMs);
+                continue;
+            }
+
+            try {
+                SpanFileData spanData = readAndParseSpanFile(spanFilePath);
+                long matchingSpans =
+                        spanData.spanNames.stream().filter(name -> name.equals(spanName)).count();
+
+                if (matchingSpans >= expectedSpanCount) {
+                    return spanData;
+                }
+
+                Thread.sleep(pollIntervalMs);
+            } catch (Exception e) {
+                // File might be partially written, wait and retry
+                Thread.sleep(pollIntervalMs);
+            }
+        }
+
+        // Timeout - try to provide diagnostic info
+        String diagnosticInfo =
+                "Timeout waiting for "
+                        + expectedSpanCount
+                        + " '"
+                        + spanName
+                        + "' spans after "
+                        + maxWaitMs
+                        + "ms";
+        if (spanFile.exists() && spanFile.length() > 0) {
+            try {
+                SpanFileData spanData = readAndParseSpanFile(spanFilePath);
+                long found = spanData.spanNames.stream().filter(n -> n.equals(spanName)).count();
+                diagnosticInfo += ". Found " + found + " spans. All spans: " + spanData.spanNames;
+            } catch (Exception ignored) {
+            }
+        }
+        throw new Exception(diagnosticInfo);
+    }
 
     /**
      * Reads and parses a span file, extracting span data and names.
@@ -239,11 +300,15 @@ public class OpenTelemetryTests {
             String key = "testPercentageRequestsConfig_" + i;
             client.get(key).get();
         }
-        // Wait for spans to be flushed to file
-        Thread.sleep(DELAY_5000);
 
-        // Read the span file and check span names
-        SpanFileData spanData = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
+        // Wait for spans with retry logic (up to 10 seconds)
+        SpanFileData spanData =
+                waitForSpansWithRetry(
+                        VALID_ENDPOINT_TRACES,
+                        10, // Expected 10 "Get" spans
+                        "Get", // Span name to look for
+                        10000 // Max wait 10 seconds
+                        );
 
         assertTrue(spanData.spanNames.contains("Get"));
         // Check that spans were exported exactly 10 times

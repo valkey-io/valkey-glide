@@ -6,8 +6,10 @@ package glide
 // #cgo !windows LDFLAGS: -lm
 // #cgo darwin LDFLAGS: -framework Security
 // #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
-// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/rustbin/x86_64-unknown-linux-gnu
-// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/rustbin/aarch64-unknown-linux-gnu
+// #cgo linux,amd64,!musl LDFLAGS: -L${SRCDIR}/rustbin/x86_64-unknown-linux-gnu
+// #cgo linux,amd64,musl LDFLAGS: -L${SRCDIR}/rustbin/x86_64-unknown-linux-musl
+// #cgo linux,arm64,!musl LDFLAGS: -L${SRCDIR}/rustbin/aarch64-unknown-linux-gnu
+// #cgo linux,arm64,musl LDFLAGS: -L${SRCDIR}/rustbin/aarch64-unknown-linux-musl
 // #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/rustbin/aarch64-apple-darwin
 // #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/rustbin/x86_64-apple-darwin
 // #include "lib.h"
@@ -729,6 +731,132 @@ func (client *baseClient) ResetConnectionPassword(ctx context.Context) (string, 
 	return client.submitConnectionPasswordUpdate(ctx, "", false)
 }
 
+// submitRefreshIamToken is the internal implementation for manually refreshing the IAM authentication token.
+//
+// This method sends a refresh request to the core client to generate a new IAM token and update
+// the connection. It handles context cancellation and manages the asynchronous communication with
+// the underlying C client.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns "OK" on successful token refresh, or an error if the operation fails.
+//
+// Note: This is an internal method. Use RefreshIamToken() for the public API.
+func (client *baseClient) submitRefreshIamToken(ctx context.Context) (string, error) {
+	// Check if context is already done
+	select {
+	case <-ctx.Done():
+		return models.DefaultStringResponse, ctx.Err()
+	default:
+		// Continue with execution
+	}
+
+	// Create a channel to receive the result
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return models.DefaultStringResponse, NewClosingError("RefreshIamToken failed. The client is closed.")
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+
+	C.refresh_iam_token(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
+	)
+	client.mu.Unlock()
+
+	// Wait for result or context cancellation
+	var payload payload
+	select {
+	case <-ctx.Done():
+		client.mu.Lock()
+		if client.pending != nil {
+			delete(client.pending, resultChannelPtr)
+		}
+		client.mu.Unlock()
+		// Start cleanup goroutine
+		go func() {
+			// Wait for payload on separate channel
+			if payload := <-resultChannel; payload.value != nil {
+				C.free_command_response(payload.value)
+			}
+		}()
+		return models.DefaultStringResponse, ctx.Err()
+	case payload = <-resultChannel:
+		// Continue with normal processing
+	}
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return models.DefaultStringResponse, payload.error
+	}
+
+	return handleOkResponse(payload.value)
+}
+
+// RefreshIamToken manually refreshes the IAM authentication token for the current connection.
+//
+// This method is only available if the client was created with IAM authentication
+// (using [ServerCredentials] with [IamAuthConfig]). It triggers an immediate refresh of the
+// IAM token and updates the connection with the new token.
+//
+// Normally, IAM tokens are refreshed automatically based on the refresh interval configured
+// in [IamAuthConfig]. Use this method when you need to force an immediate token refresh,
+// such as when credentials have been rotated or when troubleshooting authentication issues.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns "OK" on successful token refresh.
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - The client was not configured with IAM authentication
+//	  - The token refresh operation fails
+//	  - The context is cancelled
+//	  - The client is closed
+//
+// Example:
+//
+//	// Create client with IAM authentication
+//	iamConfig := config.NewIamAuthConfig("my-cluster", config.ElastiCache, "us-east-1")
+//	creds, _ := config.NewServerCredentialsWithIam("myuser", iamConfig)
+//	clientConfig := config.NewClientConfiguration().WithCredentials(creds)
+//	client, _ := glide.NewClient(clientConfig)
+//
+//	// Manually refresh the token
+//	result, err := client.RefreshIamToken(context.Background())
+//	if err != nil {
+//	    log.Printf("Token refresh failed: %v", err)
+//	    return
+//	}
+//	log.Printf("Token refreshed: %s", result) // "OK"
+//
+// See also: [IamAuthConfig], [ServerCredentials], [NewServerCredentialsWithIam]
+func (client *baseClient) RefreshIamToken(ctx context.Context) (string, error) {
+	return client.submitRefreshIamToken(ctx)
+}
+
 // Set the given key with the given value. The return value is a response from Valkey containing the string "OK".
 //
 // See [valkey.io] for details.
@@ -933,6 +1061,35 @@ func (client *baseClient) MSet(ctx context.Context, keyValueMap map[string]strin
 // [valkey.io]: https://valkey.io/commands/msetnx/
 func (client *baseClient) MSetNX(ctx context.Context, keyValueMap map[string]string) (bool, error) {
 	result, err := client.executeCommand(ctx, C.MSetNX, utils.MapToString(keyValueMap))
+	if err != nil {
+		return models.DefaultBoolResponse, err
+	}
+
+	return handleBoolResponse(result)
+}
+
+// Move key from the currently selected database to the database specified by `dbIndex`.
+//
+// Note:
+//
+//	In cluster mode move is available since Valkey 9.0.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	key - The key to move.
+//	dbIndex - The index of the database to move key to.
+//
+// Return value:
+//
+//	`true` if `key` was moved, or `false` if the `key` already exists in the destination
+//	database or does not exist in the source database.
+//
+// [valkey.io]: https://valkey.io/commands/move/
+func (client *baseClient) Move(ctx context.Context, key string, dbIndex int64) (bool, error) {
+	result, err := client.executeCommand(ctx, C.Move, []string{key, utils.IntToString(dbIndex)})
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}

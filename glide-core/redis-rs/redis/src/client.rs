@@ -96,6 +96,9 @@ pub struct GlideConnectionOptions {
     pub connection_timeout: Option<Duration>,
     /// Retry strategy configuration for reconnect attempts.
     pub connection_retry_strategy: Option<RetryStrategy>,
+    /// TCP_NODELAY socket option. When true, disables Nagle's algorithm for lower latency.
+    /// When false, enables Nagle's algorithm to reduce network overhead.
+    pub tcp_nodelay: bool,
 }
 
 /// To enable async support you need to enable the feature: `tokio-comp`
@@ -115,7 +118,10 @@ impl Client {
         let (con, _ip) = match Runtime::locate() {
             #[cfg(feature = "tokio-comp")]
             Runtime::Tokio => {
-                self.get_simple_async_connection::<crate::aio::tokio::Tokio>(None)
+                // Note: tcp_nodelay is hardcoded to true (default) since this deprecated API
+                // doesn't accept GlideConnectionOptions. Modern code should use
+                // get_multiplexed_async_connection which allows configuring tcp_nodelay.
+                self.get_simple_async_connection::<crate::aio::tokio::Tokio>(None, true)
                     .await?
             }
         };
@@ -427,7 +433,9 @@ impl Client {
     where
         T: crate::aio::RedisRuntime,
     {
-        let (con, ip) = self.get_simple_async_connection::<T>(socket_addr).await?;
+        let (con, ip) = self
+            .get_simple_async_connection::<T>(socket_addr, glide_connection_options.tcp_nodelay)
+            .await?;
         crate::aio::MultiplexedConnection::new_with_response_timeout(
             &self.connection_info,
             con,
@@ -441,6 +449,7 @@ impl Client {
     async fn get_simple_async_connection<T>(
         &self,
         socket_addr: Option<SocketAddr>,
+        tcp_nodelay: bool,
     ) -> RedisResult<(
         Pin<Box<dyn crate::aio::AsyncStream + Send + Sync>>,
         Option<IpAddr>,
@@ -449,7 +458,8 @@ impl Client {
         T: crate::aio::RedisRuntime,
     {
         let (conn, ip) =
-            crate::aio::connect_simple::<T>(&self.connection_info, socket_addr).await?;
+            crate::aio::connect_simple::<T>(&self.connection_info, socket_addr, tcp_nodelay)
+                .await?;
         Ok((conn.boxed(), ip))
     }
 
@@ -519,11 +529,11 @@ impl Client {
     ///
     ///     let mut con = client.get_async_connection(None).await?;
     ///
-    ///     con.set("key1", b"foo").await?;
+    ///     con.set::<_, _, ()>("key1", b"foo").await?;
     ///
     ///     redis::cmd("SET")
     ///         .arg(&["key2", "bar"])
-    ///         .query_async(&mut con)
+    ///         .query_async::<_, ()>(&mut con)
     ///         .await?;
     ///
     ///     let result = redis::cmd("MGET")
@@ -568,6 +578,25 @@ impl Client {
     /// Updates the password in connection_info.
     pub fn update_password(&mut self, password: Option<String>) {
         self.connection_info.redis.password = password;
+    }
+
+    /// Updates the database ID in connection_info.
+    ///
+    /// This method updates the database field in the connection information,
+    /// which will be used for subsequent connections and reconnections.
+    ///
+    /// # Arguments
+    ///
+    /// * `database_id` - The database ID to use for connections (typically 0-15)
+    ///
+    /// ```
+    pub fn update_database(&mut self, database_id: i64) {
+        self.connection_info.redis.db = database_id;
+    }
+
+    /// Updates the client_name in connection_info.
+    pub fn update_client_name(&mut self, client_name: Option<String>) {
+        self.connection_info.redis.client_name = client_name;
     }
 }
 
@@ -617,5 +646,20 @@ mod test {
     #[test]
     fn regression_293_parse_ipv6_with_interface() {
         assert!(Client::open(("fe80::cafe:beef%eno1", 6379)).is_ok());
+    }
+
+    #[test]
+    fn test_update_database() {
+        // Test database ID updates with valid value (1)
+        let mut client = Client::open("redis://127.0.0.1/0").unwrap();
+
+        // Verify initial database is 0
+        assert_eq!(client.connection_info.redis.db, 0);
+
+        // Update to database 1
+        client.update_database(1);
+
+        // Verify database was updated
+        assert_eq!(client.connection_info.redis.db, 1);
     }
 }

@@ -83,4 +83,13 @@ impl Client {
     ) -> RedisResult<Value> {
         todo!()
     }
+
+    pub async fn refresh_iam_token(&mut self) -> RedisResult<()> {
+        todo!()
+    }
+
+    /// Mock compression_manager method for Miri tests
+    pub fn compression_manager(&self) -> Option<std::sync::Arc<crate::compression::CompressionManager>> {
+        None
+    }
 }

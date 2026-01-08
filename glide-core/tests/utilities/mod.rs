@@ -24,8 +24,8 @@ use versions::Versioning;
 pub mod cluster;
 pub mod mocks;
 
-pub(crate) const SHORT_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(10_000);
-pub(crate) const LONG_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(20_000);
+pub(crate) const SHORT_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(20_000);
+pub(crate) const LONG_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(40_000);
 
 // Code copied from redis-rs
 
@@ -137,7 +137,7 @@ impl RedisServer {
         addr: redis::ConnectionAddr,
         modules: &[Module],
     ) -> RedisServer {
-        RedisServer::new_with_addr_tls_modules_and_spawner(addr, None, modules, |cmd| {
+        RedisServer::new_with_addr_tls_modules_and_spawner(addr, None, modules, false, |cmd| {
             cmd.spawn()
                 .unwrap_or_else(|err| panic!("Failed to run {cmd:?}: {err}"))
         })
@@ -149,6 +149,7 @@ impl RedisServer {
         addr: redis::ConnectionAddr,
         tls_paths: Option<TlsFilePaths>,
         modules: &[Module],
+        tls_auth_clients: bool,
         spawner: F,
     ) -> RedisServer {
         let mut redis_cmd = process::Command::new("redis-server");
@@ -188,6 +189,10 @@ impl RedisServer {
             }
             redis::ConnectionAddr::TcpTls { ref host, port, .. } => {
                 let tls_paths = tls_paths.unwrap_or_else(|| build_keys_and_certs_for_tls(&tempdir));
+                let tls_auth_clients_arg_value = match tls_auth_clients {
+                    true => "yes",
+                    _ => "no",
+                };
 
                 // prepare redis with TLS
                 redis_cmd
@@ -202,7 +207,7 @@ impl RedisServer {
                     .arg("--tls-ca-cert-file")
                     .arg(&tls_paths.ca_crt)
                     .arg("--tls-auth-clients") // Make it so client doesn't have to send cert
-                    .arg("no")
+                    .arg(tls_auth_clients_arg_value)
                     .arg("--bind")
                     .arg(host);
 
@@ -395,8 +400,8 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
         .wait()
         .expect("failed to create CA cert");
 
-    // Build x509v3 extensions file
-    fs::write(&ext_file, b"keyUsage = digitalSignature, keyEncipherment")
+    // Build x509v3 extensions file with SAN for 127.0.0.1
+    fs::write(&ext_file, b"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,DNS:localhost")
         .expect("failed to create x509v3 extensions file");
 
     // Read redis key
@@ -445,6 +450,18 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
         redis_crt,
         redis_key,
         ca_crt,
+    }
+}
+
+impl TlsFilePaths {
+    pub fn read_ca_cert_as_bytes(&self) -> Vec<u8> {
+        fs::read(&self.ca_crt).expect("Failed to read CA certificate file")
+    }
+    pub fn read_redis_cert_as_bytes(&self) -> Vec<u8> {
+        fs::read(&self.redis_crt).expect("Failed to read redis certificate file")
+    }
+    pub fn read_redis_key_as_bytes(&self) -> Vec<u8> {
+        fs::read(&self.redis_key).expect("Failed to read redis private key file")
     }
 }
 
@@ -572,6 +589,7 @@ fn set_connection_info_to_connection_request(
             protobuf::MessageField(Some(Box::new(AuthenticationInfo {
                 password: connection_info.password.unwrap().into(),
                 username: connection_info.username.unwrap_or_default().into(),
+                iam_credentials: protobuf::MessageField::none(),
                 ..Default::default()
             })));
     }
@@ -707,9 +725,10 @@ pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration
     connection_request.cluster_mode_enabled = false;
     connection_request.protocol = configuration.protocol.into();
     let (push_sender, push_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let client = StandaloneClient::create_client(connection_request.into(), Some(push_sender))
-        .await
-        .unwrap();
+    let client =
+        StandaloneClient::create_client(connection_request.into(), Some(push_sender), None)
+            .await
+            .unwrap();
 
     TestBasics {
         server,

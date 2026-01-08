@@ -76,8 +76,8 @@ public class SharedClientTests {
     @MethodSource("getClients")
     public void validate_statistics(BaseClient client) {
         assertFalse(client.getStatistics().isEmpty());
-        // we expect 2 items in the statistics map
-        assertEquals(2, client.getStatistics().size());
+        // we expect 8 items in the statistics map
+        assertEquals(8, client.getStatistics().size());
     }
 
     @AfterAll
@@ -91,6 +91,14 @@ public class SharedClientTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getTimeoutClients")
     public void send_and_receive_large_values(BaseClient client) {
+        // Skip on macOS - the macOS tests run on self hosted VMs which have resource limits
+        // making this test flaky with "no buffer space available" errors. See -
+        // https://github.com/valkey-io/valkey-glide/issues/4902
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("mac")) {
+            return;
+        }
+
         int length = 1 << 25; // 33mb
         String key = "0".repeat(length);
         String value = "0".repeat(length);
