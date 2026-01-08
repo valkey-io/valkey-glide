@@ -74,7 +74,15 @@ from glide_shared.commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
-from glide_shared.config import BackoffStrategy, ProtocolVersion, ServerCredentials
+from glide_shared.config import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
+    BackoffStrategy,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+    ProtocolVersion,
+    ServerCredentials,
+)
 from glide_shared.constants import (
     OK,
     TEncodable,
