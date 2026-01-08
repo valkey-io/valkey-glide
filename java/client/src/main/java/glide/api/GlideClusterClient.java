@@ -25,7 +25,6 @@ import static command_request.CommandRequestOuterClass.RequestType.FunctionStats
 import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
-import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
@@ -63,7 +62,6 @@ import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.ScriptArgOptions;
 import glide.api.models.commands.ScriptArgOptionsGlideString;
 import glide.api.models.commands.batch.ClusterBatchOptions;
@@ -1323,68 +1321,6 @@ public class GlideClusterClient extends BaseClient
                 arguments,
                 SimpleSingleNodeRoute.RANDOM,
                 response -> castArray(handleArrayResponse(response), Long.class));
-    }
-
-    @Override
-    public CompletableFuture<String> migrate(
-            String host, long port, String key, long destinationDB, long timeout) {
-        return commandManager.submitNewCommand(
-                Migrate,
-                new String[] {
-                    host, Long.toString(port), key, Long.toString(destinationDB), Long.toString(timeout)
-                },
-                this::handleStringResponse);
-    }
-
-    @Override
-    public CompletableFuture<String> migrate(
-            String host, long port, GlideString key, long destinationDB, long timeout) {
-        return commandManager.submitNewCommand(
-                Migrate,
-                new ArgsBuilder().add(host).add(port).add(key).add(destinationDB).add(timeout).toArray(),
-                this::handleStringResponse);
-    }
-
-    @Override
-    public CompletableFuture<String> migrate(
-            String host,
-            long port,
-            String key,
-            long destinationDB,
-            long timeout,
-            MigrateOptions migrateOptions) {
-        return commandManager.submitNewCommand(
-                Migrate,
-                new ArgsBuilder()
-                        .add(host)
-                        .add(Long.toString(port))
-                        .add(key)
-                        .add(Long.toString(destinationDB))
-                        .add(Long.toString(timeout))
-                        .add(migrateOptions.toArgs())
-                        .toArray(),
-                this::handleStringResponse);
-    }
-
-    @Override
-    public CompletableFuture<String> migrate(
-            String host,
-            long port,
-            GlideString key,
-            long destinationDB,
-            long timeout,
-            MigrateOptions migrateOptions) {
-        return commandManager.submitNewCommand(
-                Migrate,
-                new ArgsBuilder()
-                        .add(host)
-                        .add(port)
-                        .add(key)
-                        .add(destinationDB)
-                        .add(timeout)
-                        .add(migrateOptions.toArgs())
-                        .toArray(),
-                this::handleStringResponse);
     }
 
     /**
