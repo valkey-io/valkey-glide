@@ -1327,22 +1327,6 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String[]> keys(String pattern) {
-        return commandManager.submitNewCommand(
-                Keys,
-                new String[] {pattern},
-                response -> castArray(handleArrayResponse(response), String.class));
-    }
-
-    @Override
-    public CompletableFuture<GlideString[]> keys(GlideString pattern) {
-        return commandManager.submitNewCommand(
-                Keys,
-                new GlideString[] {pattern},
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
-    }
-
-    @Override
     public CompletableFuture<String> migrate(
             String host, long port, String key, long destinationDB, long timeout) {
         return commandManager.submitNewCommand(

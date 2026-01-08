@@ -5,6 +5,7 @@
 #### Fixes
 * CORE: Enforce connection_timeout for initial standalone connection failures  ([#4991](https://github.com/valkey-io/valkey-glide/issues/4991))
 * Node: Fixed `Failed to convert napi value Undefined into rust type u32` error  ([#5128](https://github.com/valkey-io/valkey-glide/pull/5128))
+* JAVA: Add KEYS, MIGRATE, and WAITAOF command support ([#5017](https://github.com/valkey-io/valkey-glide/pull/5107))
 
 #### Operational Enhancements
 
@@ -24,7 +25,6 @@
 * Python: Add Python 3.14 support ([#4897](https://github.com/valkey-io/valkey-glide/pull/4897))
 * JAVA: Implement TLS support for Java client ([#4905](https://github.com/valkey-io/valkey-glide/pull/4905))
 * Node: Implement TLS support for Node client ([#4911](https://github.com/valkey-io/valkey-glide/pull/4911))
-* JAVA: Add KEYS, MIGRATE, and WAITAOF command support ([#5017](https://github.com/valkey-io/valkey-glide/pull/5107))
 
 #### Fixes
 

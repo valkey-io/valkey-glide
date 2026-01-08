@@ -5994,28 +5994,28 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> migrate(
-            String host, long port, String key, long destinationDB, long timeout) {
+            String destinationHost, long destinationPort, String key, long destinationDB, long timeout) {
         return commandManager.submitNewCommand(
                 Migrate,
                 new String[] {
-                    host, Long.toString(port), key, Long.toString(destinationDB), Long.toString(timeout)
+                    destinationHost, Long.toString(destinationPort), key, Long.toString(destinationDB), Long.toString(timeout)
                 },
                 this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> migrate(
-            String host, long port, GlideString key, long destinationDB, long timeout) {
+            String destinationHost, long destinationPort, GlideString key, long destinationDB, long timeout) {
         return commandManager.submitNewCommand(
                 Migrate,
-                new ArgsBuilder().add(host).add(port).add(key).add(destinationDB).add(timeout).toArray(),
+                new ArgsBuilder().add(destinationHost).add(destinationPort).add(key).add(destinationDB).add(timeout).toArray(),
                 this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> migrate(
-            String host,
-            long port,
+            String destinationHost,
+            long destinationPort,
             String key,
             long destinationDB,
             long timeout,
@@ -6023,8 +6023,8 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 Migrate,
                 new ArgsBuilder()
-                        .add(host)
-                        .add(Long.toString(port))
+                        .add(destinationHost)
+                        .add(Long.toString(destinationPort))
                         .add(key)
                         .add(Long.toString(destinationDB))
                         .add(Long.toString(timeout))
@@ -6035,8 +6035,8 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> migrate(
-            String host,
-            long port,
+            String destinationHost,
+            long destinationPort,
             GlideString key,
             long destinationDB,
             long timeout,
@@ -6044,8 +6044,8 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 Migrate,
                 new ArgsBuilder()
-                        .add(host)
-                        .add(port)
+                        .add(destinationHost)
+                        .add(destinationPort)
                         .add(key)
                         .add(destinationDB)
                         .add(timeout)

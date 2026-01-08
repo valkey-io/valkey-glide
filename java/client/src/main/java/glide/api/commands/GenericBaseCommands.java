@@ -1690,8 +1690,8 @@ public interface GenericBaseCommands {
      * to exist in the destination instance.
      *
      * @see <a href="https://valkey.io/commands/migrate/">valkey.io</a> for details.
-     * @param host The destination host.
-     * @param port The destination port.
+     * @param destinationHost The destination host.
+     * @param destinationPort The destination port.
      * @param key The key to migrate.
      * @param destinationDB The destination database index.
      * @param timeout The timeout in milliseconds.
@@ -1705,17 +1705,20 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> migrate(
-            String host, long port, String key, long destinationDB, long timeout);
+            String destinationHost, long destinationPort, String key, long destinationDB, long timeout);
 
     /**
      * Atomically transfers a key from a source Valkey instance to a destination Valkey instance. Once
      * the key is successfully transferred, it is deleted from the source instance and is guaranteed
      * to exist in the destination instance.
      *
+     * <p>Note: The host and port are String/long types because they represent network addresses,
+     * while the key can be GlideString to support binary-safe key names.
+     *
      * @see <a href="https://valkey.io/commands/migrate/">valkey.io</a> for details.
-     * @param host The destination host.
-     * @param port The destination port.
-     * @param key The key to migrate.
+     * @param destinationHost The destination host.
+     * @param destinationPort The destination port.
+     * @param key The key to migrate (binary-safe).
      * @param destinationDB The destination database index.
      * @param timeout The timeout in milliseconds.
      * @return <code>"OK"</code> on success, or <code>"NOKEY"</code> if no keys were found in the
@@ -1728,7 +1731,7 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> migrate(
-            String host, long port, GlideString key, long destinationDB, long timeout);
+            String destinationHost, long destinationPort, GlideString key, long destinationDB, long timeout);
 
     /**
      * Atomically transfers a key from a source Valkey instance to a destination Valkey instance. Once
@@ -1736,8 +1739,8 @@ public interface GenericBaseCommands {
      * specified) and is guaranteed to exist in the destination instance.
      *
      * @see <a href="https://valkey.io/commands/migrate/">valkey.io</a> for details.
-     * @param host The destination host.
-     * @param port The destination port.
+     * @param destinationHost The destination host.
+     * @param destinationPort The destination port.
      * @param key The key to migrate.
      * @param destinationDB The destination database index.
      * @param timeout The timeout in milliseconds.
@@ -1753,8 +1756,8 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> migrate(
-            String host,
-            long port,
+            String destinationHost,
+            long destinationPort,
             String key,
             long destinationDB,
             long timeout,
@@ -1765,10 +1768,13 @@ public interface GenericBaseCommands {
      * the key is successfully transferred, it is deleted from the source instance (unless COPY is
      * specified) and is guaranteed to exist in the destination instance.
      *
+     * <p>Note: The host and port are String/long types because they represent network addresses,
+     * while the key can be GlideString to support binary-safe key names.
+     *
      * @see <a href="https://valkey.io/commands/migrate/">valkey.io</a> for details.
-     * @param host The destination host.
-     * @param port The destination port.
-     * @param key The key to migrate.
+     * @param destinationHost The destination host.
+     * @param destinationPort The destination port.
+     * @param key The key to migrate (binary-safe).
      * @param destinationDB The destination database index.
      * @param timeout The timeout in milliseconds.
      * @param migrateOptions Additional options for the MIGRATE command.
@@ -1783,8 +1789,8 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> migrate(
-            String host,
-            long port,
+            String destinationHost,
+            long destinationPort,
             GlideString key,
             long destinationDB,
             long timeout,
