@@ -4,6 +4,8 @@
 
 * CORE: Add client certificate and private key support for mTLS ([#5092](https://github.com/valkey-io/valkey-glide/issues/5092))
 * Python: Add client certificate and private key support for mTLS ([5123](https://github.com/valkey-io/valkey-glide/issues/5123))
+* JAVA: Add ACL server management commands (ACL CAT, ACL DELUSER, ACL DRYRUN, ACL GENPASS, ACL GETUSER, ACL LIST, ACL LOAD, ACL LOG, ACL SAVE, ACL SETUSER, ACL USERS, ACL WHOAMI)
+* CORE: Fix typo in ACL SETUSER command mapping (AclSetSser → AclSetUser)
 
 #### Fixes
 * CORE: Enforce connection_timeout for initial standalone connection failures  ([#4991](https://github.com/valkey-io/valkey-glide/issues/4991))
