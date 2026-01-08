@@ -105,6 +105,7 @@ message ConnectionRequest {
     optional CompressionConfig compression_config = 21;
     bytes client_cert = 22;
     bytes client_key = 23;
+    optional bool tcp_nodelay = 24;
 }
 
 message ConnectionRetryStrategy {
