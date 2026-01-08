@@ -10948,6 +10948,7 @@ export function runBaseTests(config: {
 
                     if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
                         const result = await client.zscan(key1, initialCursor, {
+                            match: "member*",
                             noScores: true,
                         });
                         const resultCursor = result[resultCursorIndex];
