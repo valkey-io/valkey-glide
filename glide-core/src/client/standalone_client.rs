@@ -154,20 +154,7 @@ impl StandaloneClient {
 
         let tcp_nodelay = connection_request.tcp_nodelay;
 
-        let has_root_certs = !connection_request.root_certs.is_empty();
-        let has_client_cert = !connection_request.client_cert.is_empty();
-        let has_client_key = !connection_request.client_key.is_empty();
-        if has_client_cert != has_client_key {
-            return Err(StandaloneClientConnectionError::FailedConnection(vec![(
-                None,
-                RedisError::from((
-                    redis::ErrorKind::InvalidClientConfig,
-                    "client_cert and client_key must both be provided or both be empty",
-                )),
-            )]));
-        }
-
-        let tls_params = if has_root_certs || has_client_cert || has_client_key {
+        let tls_params = if !connection_request.root_certs.is_empty() {
             if tls_mode.unwrap_or(TlsMode::NoTls) == TlsMode::NoTls {
                 return Err(StandaloneClientConnectionError::FailedConnection(vec![(
                     None,

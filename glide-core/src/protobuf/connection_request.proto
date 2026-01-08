@@ -90,9 +90,7 @@ message ConnectionRequest {
     bool refresh_topology_from_initial_nodes = 18;
     string lib_name = 19;
     repeated bytes root_certs = 20;
-    optional CompressionConfig compression_config = 21;
-    bytes client_cert = 22;
-    bytes client_key = 23;
+    // for future backport: the number skip is due to not porting PR 4759 and 5093
     optional bool tcp_nodelay = 24;
 }
 
