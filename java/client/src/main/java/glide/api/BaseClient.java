@@ -5043,8 +5043,7 @@ public abstract class BaseClient
     public CompletableFuture<Object> evalReadOnly(
             @NonNull GlideString script, @NonNull GlideString[] keys, @NonNull GlideString[] args) {
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {script, gs(String.valueOf(keys.length))}, keys, args);
+                concatenateArrays(new GlideString[] {script, gs(String.valueOf(keys.length))}, keys, args);
         return commandManager.submitNewCommand(
                 EvalReadOnly, arguments, this::handleBinaryObjectOrNullResponse);
     }
@@ -5072,8 +5071,7 @@ public abstract class BaseClient
     public CompletableFuture<Object> evalshaReadOnly(
             @NonNull GlideString sha1, @NonNull GlideString[] keys, @NonNull GlideString[] args) {
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {sha1, gs(String.valueOf(keys.length))}, keys, args);
+                concatenateArrays(new GlideString[] {sha1, gs(String.valueOf(keys.length))}, keys, args);
         return commandManager.submitNewCommand(
                 EvalShaReadOnly, arguments, this::handleBinaryObjectOrNullResponse);
     }
