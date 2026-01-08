@@ -13,29 +13,14 @@ public enum ScriptDebugMode {
      * Enable non-blocking asynchronous debugging mode. The server will fork a debugging session that
      * won't block the server.
      */
-    YES("YES"),
+    YES,
 
     /**
      * Enable blocking synchronous debugging mode. The server will block and wait for commands from
      * the debugging client.
      */
-    SYNC("SYNC"),
+    SYNC,
 
     /** Disable script debugging mode. */
-    NO("NO");
-
-    private final String valkeyApi;
-
-    ScriptDebugMode(String valkeyApi) {
-        this.valkeyApi = valkeyApi;
-    }
-
-    /**
-     * Get the Valkey API string representation of the debug mode.
-     *
-     * @return The string value used in the Valkey command.
-     */
-    public String getValkeyApi() {
-        return valkeyApi;
-    }
+    NO
 }
