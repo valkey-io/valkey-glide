@@ -1731,7 +1731,11 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> migrate(
-            String destinationHost, long destinationPort, GlideString key, long destinationDB, long timeout);
+            String destinationHost,
+            long destinationPort,
+            GlideString key,
+            long destinationDB,
+            long timeout);
 
     /**
      * Atomically transfers a key from a source Valkey instance to a destination Valkey instance. Once

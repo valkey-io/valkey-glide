@@ -23,7 +23,6 @@ import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
 import static command_request.CommandRequestOuterClass.RequestType.Info;
-import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Migrate;

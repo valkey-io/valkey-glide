@@ -5998,17 +5998,31 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 Migrate,
                 new String[] {
-                    destinationHost, Long.toString(destinationPort), key, Long.toString(destinationDB), Long.toString(timeout)
+                    destinationHost,
+                    Long.toString(destinationPort),
+                    key,
+                    Long.toString(destinationDB),
+                    Long.toString(timeout)
                 },
                 this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> migrate(
-            String destinationHost, long destinationPort, GlideString key, long destinationDB, long timeout) {
+            String destinationHost,
+            long destinationPort,
+            GlideString key,
+            long destinationDB,
+            long timeout) {
         return commandManager.submitNewCommand(
                 Migrate,
-                new ArgsBuilder().add(destinationHost).add(destinationPort).add(key).add(destinationDB).add(timeout).toArray(),
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(destinationPort)
+                        .add(key)
+                        .add(destinationDB)
+                        .add(timeout)
+                        .toArray(),
                 this::handleStringResponse);
     }
 
