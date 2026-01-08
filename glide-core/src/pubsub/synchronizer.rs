@@ -71,6 +71,9 @@ pub struct GlidePubSubSynchronizer {
 
     /// Configurable reconciliation interval
     reconciliation_interval: Duration,
+
+    /// Request timeout for non-blocking operations
+    request_timeout: Duration,
 }
 
 impl GlidePubSubSynchronizer {
@@ -78,6 +81,7 @@ impl GlidePubSubSynchronizer {
         initial_subscriptions: Option<PubSubSubscriptionInfo>,
         is_cluster: bool,
         reconciliation_interval: Option<Duration>,
+        request_timeout: Duration,
     ) -> Arc<Self> {
         let interval = reconciliation_interval.unwrap_or(DEFAULT_RECONCILIATION_INTERVAL);
 
@@ -91,6 +95,7 @@ impl GlidePubSubSynchronizer {
             reconciliation_task_handle: Mutex::new(None),
             pending_unsubscribes: RwLock::new(HashMap::new()),
             reconciliation_interval: interval,
+            request_timeout,
         });
 
         sync.start_reconciliation_task();
@@ -434,7 +439,7 @@ impl GlidePubSubSynchronizer {
                 acc
             });
 
-        for (slot, slot_channels) in channels_by_slot {
+        for (_, slot_channels) in channels_by_slot {
             self.execute_subscription_change(
                 slot_channels,
                 PubSubSubscriptionKind::Sharded,
@@ -608,6 +613,18 @@ impl GlidePubSubSynchronizer {
             .expect(LOCK_ERR)
             .clone()
     }
+
+    /// Run a synchronous operation with a timeout
+    async fn run_sync_with_timeout<T, F>(&self, f: F) -> RedisResult<T>
+    where
+        F: FnOnce() -> RedisResult<T> + Send,
+        T: Send,
+    {
+        match tokio::time::timeout(self.request_timeout, async move { f() }).await {
+            Ok(result) => result,
+            Err(_) => Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into()),
+        }
+    }
 }
 
 impl Drop for GlidePubSubSynchronizer {
@@ -707,7 +724,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         } else {
             // For regular subscriptions (Exact/Pattern), remove from ALL addresses.
             // These are not slot-bound, and the server's unsubscribe is authoritative.
-            for (addr, addr_subs) in current_by_addr.iter_mut() {
+            for (_, addr_subs) in current_by_addr.iter_mut() {
                 if let Some(existing) = addr_subs.get_mut(&subscription_type) {
                     for channel in &channels {
                         existing.remove(channel);
@@ -742,9 +759,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
             .expect(LOCK_ERR);
 
         for address in addresses {
-            if let Some(removed_subs) = current_by_addr.remove(address) {
-                let channels_count: usize = removed_subs.values().map(|s| s.len()).sum();
-            }
+            current_by_addr.remove(address);
         }
         self.trigger_reconciliation();
     }
@@ -874,24 +889,60 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         match command_str {
             // Non-blocking subscribe commands
             "SUBSCRIBE" => {
-                Some(self.handle_lazy_subscription(cmd, PubSubSubscriptionKind::Exact, true))
+                let cmd = cmd.clone();
+                Some(
+                    self.run_sync_with_timeout(|| {
+                        self.handle_lazy_subscription(&cmd, PubSubSubscriptionKind::Exact, true)
+                    })
+                    .await,
+                )
             }
             "PSUBSCRIBE" => {
-                Some(self.handle_lazy_subscription(cmd, PubSubSubscriptionKind::Pattern, true))
+                let cmd = cmd.clone();
+                Some(
+                    self.run_sync_with_timeout(|| {
+                        self.handle_lazy_subscription(&cmd, PubSubSubscriptionKind::Pattern, true)
+                    })
+                    .await,
+                )
             }
             "SSUBSCRIBE" => {
-                Some(self.handle_lazy_subscription(cmd, PubSubSubscriptionKind::Sharded, true))
+                let cmd = cmd.clone();
+                Some(
+                    self.run_sync_with_timeout(|| {
+                        self.handle_lazy_subscription(&cmd, PubSubSubscriptionKind::Sharded, true)
+                    })
+                    .await,
+                )
             }
 
             // Non-blocking unsubscribe commands
             "UNSUBSCRIBE" => {
-                Some(self.handle_lazy_subscription(cmd, PubSubSubscriptionKind::Exact, false))
+                let cmd = cmd.clone();
+                Some(
+                    self.run_sync_with_timeout(|| {
+                        self.handle_lazy_subscription(&cmd, PubSubSubscriptionKind::Exact, false)
+                    })
+                    .await,
+                )
             }
             "PUNSUBSCRIBE" => {
-                Some(self.handle_lazy_subscription(cmd, PubSubSubscriptionKind::Pattern, false))
+                let cmd = cmd.clone();
+                Some(
+                    self.run_sync_with_timeout(|| {
+                        self.handle_lazy_subscription(&cmd, PubSubSubscriptionKind::Pattern, false)
+                    })
+                    .await,
+                )
             }
             "SUNSUBSCRIBE" => {
-                Some(self.handle_lazy_subscription(cmd, PubSubSubscriptionKind::Sharded, false))
+                let cmd = cmd.clone();
+                Some(
+                    self.run_sync_with_timeout(|| {
+                        self.handle_lazy_subscription(&cmd, PubSubSubscriptionKind::Sharded, false)
+                    })
+                    .await,
+                )
             }
 
             // Blocking subscribe commands
@@ -923,7 +974,10 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
             ),
 
             // Get subscriptions
-            "GET_SUBSCRIPTIONS" => Some(Ok(self.get_subscriptions_as_value())),
+            "GET_SUBSCRIPTIONS" => Some(
+                self.run_sync_with_timeout(|| Ok(self.get_subscriptions_as_value()))
+                    .await,
+            ),
 
             // Not a pubsub command we handle
             _ => None,

@@ -1753,6 +1753,8 @@ def get_client_key() -> bytes:
     )
     ca_cert_path = os.path.join(glide_home, "utils", "tls_crts", "server.key")
     return load_client_certificate_from_file(ca_cert_path)
+
+
 class SubscriptionMethod(IntEnum):
     """
     Enumeration for specifying how subscriptions are established.

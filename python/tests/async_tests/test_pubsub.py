@@ -30,7 +30,6 @@ from tests.utils.utils import (
     get_pubsub_modes,
     kill_connections,
     new_message,
-    parse_info_response,
     psubscribe_by_method,
     pubsub_client_cleanup,
     punsubscribe_by_method,

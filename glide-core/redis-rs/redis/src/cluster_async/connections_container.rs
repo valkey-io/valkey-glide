@@ -1,4 +1,3 @@
-use crate::aio::ConnectionLike;
 use crate::cluster_async::ConnectionFuture;
 use crate::cluster_routing::{Route, ShardAddrs, SlotAddr};
 use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap, SlotMapValue};

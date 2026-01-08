@@ -1686,6 +1686,7 @@ impl Client {
                 request.cluster_mode_enabled,
                 Arc::downgrade(&internal_client_arc),
                 reconciliation_interval,
+                request_timeout,
             )
             .await;
 
@@ -2100,6 +2101,7 @@ mod tests {
             false,
             Weak::new(),
             None,
+            Duration::from_millis(250),
         ));
 
         Client {

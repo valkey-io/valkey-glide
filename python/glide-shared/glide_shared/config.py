@@ -471,12 +471,6 @@ class AdvancedBaseClientConfiguration:
         pubsub_reconciliation_interval (Optional[int]): The interval in milliseconds between PubSub subscription
             reconciliation attempts. The reconciliation process ensures that the client's desired subscriptions
             match the actual subscriptions on the server.
-            - When subscriptions become out of sync (e.g., due to network issues or topology changes),
-              the reconciliation task will attempt to restore them at this interval.
-            - A shorter interval means faster recovery but higher overhead.
-            - A longer interval reduces overhead but may delay subscription recovery.
-            - Must be at least 100 milliseconds.
-            - If not explicitly set, a default value of 3000 milliseconds (3 seconds) will be used.
     """
 
     def __init__(
@@ -494,56 +488,65 @@ class AdvancedBaseClientConfiguration:
     def _create_a_protobuf_conn_request(
         self, request: ConnectionRequest
     ) -> ConnectionRequest:
-        if self.connection_timeout:
+        if self.connection_timeout is not None:
             request.connection_timeout = self.connection_timeout
 
         if self.tcp_nodelay is not None:
             request.tcp_nodelay = self.tcp_nodelay
-            
+
         if self.pubsub_reconciliation_interval is not None:
             request.pubsub_reconciliation_interval_ms = (
                 self.pubsub_reconciliation_interval
             )
 
-        if self.tls_config:
-            if self.tls_config.use_insecure_tls:
-                # Validate that TLS is enabled before allowing insecure mode
-                if request.tls_mode == TlsMode.NoTls:
-                    raise ConfigurationError(
-                        "use_insecure_tls cannot be enabled when use_tls is disabled."
-                    )
-
-                # Override the default SecureTls mode to InsecureTls when user explicitly requests it
-                request.tls_mode = TlsMode.InsecureTls
-
-            # Handle root certificates
-            if self.tls_config.root_pem_cacerts is not None:
-                if len(self.tls_config.root_pem_cacerts) == 0:
-                    raise ConfigurationError(
-                        "root_pem_cacerts cannot be an empty bytes object; use None to use platform verifier"
-                    )
-                request.root_certs.append(self.tls_config.root_pem_cacerts)
-
-            # Handle client certificate for mutual TLS
-            if self.tls_config.client_cert_pem is not None:
-                if len(self.tls_config.client_cert_pem) == 0:
-                    raise ConfigurationError(
-                        "client_cert_pem cannot be an empty bytes object; use None if not providing client certificate"
-                    )
-                request.client_cert = self.tls_config.client_cert_pem
-
-            # Handle client key for mutual TLS
-            if self.tls_config.client_key_pem is not None:
-                if len(self.tls_config.client_key_pem) == 0:
-                    raise ConfigurationError(
-                        "client_key_pem cannot be an empty bytes object; use None if not providing client key"
-                    )
-                request.client_key = self.tls_config.client_key_pem
-
-            # Ensure client cert and client key are both provided or not provided
-            self._validate_client_auth_tls()
+        if self.tls_config is not None:
+            self._apply_tls_config(request, self.tls_config)
 
         return request
+
+    def _apply_tls_config(
+        self, request: ConnectionRequest, tls_config: TlsAdvancedConfiguration
+    ) -> None:
+        # Validate and handle insecure TLS
+        if tls_config.use_insecure_tls:
+            # Validate that TLS is enabled before allowing insecure mode
+            if request.tls_mode == TlsMode.NoTls:
+                raise ConfigurationError(
+                    "use_insecure_tls cannot be enabled when use_tls is disabled."
+                )
+
+            # Override the default SecureTls mode to InsecureTls when user explicitly requests it
+            request.tls_mode = TlsMode.InsecureTls
+
+        # Handle root certificates
+        root_certs = tls_config.root_pem_cacerts
+        if root_certs is not None:
+            if len(root_certs) == 0:
+                raise ConfigurationError(
+                    "root_pem_cacerts cannot be an empty bytes object; use None to use platform verifier"
+                )
+            request.root_certs.append(root_certs)
+
+        # Handle client certificate for mutual TLS
+        client_cert = tls_config.client_cert_pem
+        if client_cert is not None:
+            if len(client_cert) == 0:
+                raise ConfigurationError(
+                    "client_cert_pem cannot be an empty bytes object; use None if not providing client certificate"
+                )
+            request.client_cert = client_cert
+
+        # Handle client key for mutual TLS
+        client_key = tls_config.client_key_pem
+        if client_key is not None:
+            if len(client_key) == 0:
+                raise ConfigurationError(
+                    "client_key_pem cannot be an empty bytes object; use None if not providing client key"
+                )
+            request.client_key = client_key
+
+        # Ensure client cert and client key are both provided or not provided
+        self._validate_client_auth_tls()
 
     def _validate_client_auth_tls(self):
         if self.tls_config.client_cert_pem and not self.tls_config.client_key_pem:
@@ -806,7 +809,9 @@ class AdvancedGlideClientConfiguration(AdvancedBaseClientConfiguration):
         pubsub_reconciliation_interval: Optional[int] = None,
     ):
 
-        super().__init__(connection_timeout, tls_config, tcp_nodelay, pubsub_reconciliation_interval)
+        super().__init__(
+            connection_timeout, tls_config, tcp_nodelay, pubsub_reconciliation_interval
+        )
 
 
 class GlideClientConfiguration(BaseClientConfiguration):
@@ -996,13 +1001,6 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
         pubsub_reconciliation_interval (Optional[int]): The interval in milliseconds between PubSub subscription
             reconciliation attempts. The reconciliation process ensures that the client's desired subscriptions
             match the actual subscriptions on the server.
-
-            - When subscriptions become out of sync (e.g., due to network issues or topology changes),
-              the reconciliation task will attempt to restore them at this interval.
-            - A shorter interval means faster recovery but higher overhead.
-            - A longer interval reduces overhead but may delay subscription recovery.
-            - Must be at least 100 milliseconds.
-            - If not explicitly set, a default value of 3000 milliseconds (3 seconds) will be used.
     """
 
     def __init__(
@@ -1013,7 +1011,9 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
         tcp_nodelay: Optional[bool] = None,
         pubsub_reconciliation_interval: Optional[int] = None,
     ):
-        super().__init__(connection_timeout, tls_config, tcp_nodelay, pubsub_reconciliation_interval)
+        super().__init__(
+            connection_timeout, tls_config, tcp_nodelay, pubsub_reconciliation_interval
+        )
         self.refresh_topology_from_initial_nodes = refresh_topology_from_initial_nodes
 
     def _create_a_protobuf_conn_request(

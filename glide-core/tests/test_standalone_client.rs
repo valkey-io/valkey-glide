@@ -954,9 +954,10 @@ mod standalone_client_tests {
             connection_request.client_key = tls_paths.read_redis_key_as_bytes().clone().into();
 
             // Test that connection works with custom root cert and client TLS auth
-            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
-                .await
-                .expect("Failed to create client with custom root cert");
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .expect("Failed to create client with custom root cert");
 
             // Verify connection works by sending a command
             let ping_result = client.send_command(&redis::cmd("PING")).await;

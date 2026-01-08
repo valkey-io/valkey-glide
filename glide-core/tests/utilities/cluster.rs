@@ -461,6 +461,7 @@ impl PubSubTestSetup {
             true,
             Weak::new(),
             reconciliation_interval,
+            Duration::from_millis(1000),
         )
         .await;
 

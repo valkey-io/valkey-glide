@@ -26,6 +26,7 @@ pub async fn create_pubsub_synchronizer(
     is_cluster: bool,
     internal_client: Weak<RwLock<ClientWrapper>>,
     reconciliation_interval: Option<Duration>,
+    _request_timeout: Duration,
 ) -> Arc<dyn PubSubSynchronizer> {
     #[cfg(feature = "mock-pubsub")]
     {
@@ -52,6 +53,7 @@ pub async fn create_pubsub_synchronizer(
             initial_subscriptions,
             is_cluster,
             reconciliation_interval,
+            _request_timeout,
         );
         // Only set if the weak pointer can be upgraded (is not empty)
         // This is because OnceCell::set only works once - if we set an empty Weak::new(),

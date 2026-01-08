@@ -218,7 +218,8 @@ impl StandaloneClient {
                 let sync = pubsub_synchronizer.clone();
                 async move {
                     get_connection_and_replication_info(
-                        &address, &retry, &info, tls, &sender, discover, timeout, params, nodelay, &sync,
+                        &address, &retry, &info, tls, &sender, discover, timeout, params, nodelay,
+                        &sync,
                     )
                     .await
                     .map_err(|err| (format!("{}:{}", address.host, address.port), err))
