@@ -30,6 +30,7 @@ pub struct ConnectionRequest {
     pub lazy_connect: bool,
     pub refresh_topology_from_initial_nodes: bool,
     pub root_certs: Vec<Vec<u8>>,
+    pub tcp_nodelay: bool,
 }
 
 /// Authentication information for connecting to Redis/Valkey servers
@@ -283,6 +284,8 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             .map(|cert| cert.to_vec())
             .collect();
 
+        let tcp_nodelay = value.tcp_nodelay.unwrap_or(true);
+
         ConnectionRequest {
             read_from,
             client_name,
@@ -302,6 +305,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             lazy_connect,
             refresh_topology_from_initial_nodes,
             root_certs,
+            tcp_nodelay,
         }
     }
 }

@@ -289,21 +289,30 @@ class AdvancedBaseClientConfiguration:
         tls_config (Optional[TlsAdvancedConfiguration]): The advanced TLS configuration settings.
             This allows for more granular control of TLS behavior, such as enabling an insecure mode
             that bypasses certificate validation.
+        tcp_nodelay (Optional[bool]): Controls TCP_NODELAY socket option (Nagle's algorithm).
+            When True, disables Nagle's algorithm for lower latency by sending packets immediately without buffering.
+            When False, enables Nagle's algorithm to reduce network overhead by buffering small packets.
+            If not explicitly set, defaults to True.
     """
 
     def __init__(
         self,
         connection_timeout: Optional[int] = None,
         tls_config: Optional[TlsAdvancedConfiguration] = None,
+        tcp_nodelay: Optional[bool] = None,
     ):
         self.connection_timeout = connection_timeout
         self.tls_config = tls_config
+        self.tcp_nodelay = tcp_nodelay
 
     def _create_a_protobuf_conn_request(
         self, request: ConnectionRequest
     ) -> ConnectionRequest:
         if self.connection_timeout:
             request.connection_timeout = self.connection_timeout
+
+        if self.tcp_nodelay is not None:
+            request.tcp_nodelay = self.tcp_nodelay
 
         if self.tls_config:
             if self.tls_config.use_insecure_tls:
@@ -564,9 +573,10 @@ class AdvancedGlideClientConfiguration(AdvancedBaseClientConfiguration):
         self,
         connection_timeout: Optional[int] = None,
         tls_config: Optional[TlsAdvancedConfiguration] = None,
+        tcp_nodelay: Optional[bool] = None,
     ):
 
-        super().__init__(connection_timeout, tls_config)
+        super().__init__(connection_timeout, tls_config, tcp_nodelay)
 
 
 class GlideClientConfiguration(BaseClientConfiguration):
@@ -744,8 +754,9 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
         connection_timeout: Optional[int] = None,
         tls_config: Optional[TlsAdvancedConfiguration] = None,
         refresh_topology_from_initial_nodes: bool = False,
+        tcp_nodelay: Optional[bool] = None,
     ):
-        super().__init__(connection_timeout, tls_config)
+        super().__init__(connection_timeout, tls_config, tcp_nodelay)
         self.refresh_topology_from_initial_nodes = refresh_topology_from_initial_nodes
 
     def _create_a_protobuf_conn_request(

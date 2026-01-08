@@ -1919,4 +1919,42 @@ describe("GlideClient", () => {
         },
         timeout: TIMEOUT,
     });
+
+    it(
+        "tcp nodelay configuration",
+        async () => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                ProtocolVersion.RESP3,
+            );
+
+            // Test default (undefined - not set)
+            const defaultClient = await GlideClient.createClient(config);
+            expect(await defaultClient.ping()).toBe("PONG");
+            expect(await defaultClient.set("key", "value")).toBe("OK");
+            expect(await defaultClient.get("key")).toBe("value");
+            defaultClient.close();
+
+            // Test explicit true
+            const clientTrue = await GlideClient.createClient({
+                ...config,
+                advancedConfiguration: { tcpNoDelay: true },
+            });
+            expect(await clientTrue.ping()).toBe("PONG");
+            expect(await clientTrue.set("key2", "value2")).toBe("OK");
+            expect(await clientTrue.get("key2")).toBe("value2");
+            clientTrue.close();
+
+            // Test explicit false
+            const clientFalse = await GlideClient.createClient({
+                ...config,
+                advancedConfiguration: { tcpNoDelay: false },
+            });
+            expect(await clientFalse.ping()).toBe("PONG");
+            expect(await clientFalse.set("key3", "value3")).toBe("OK");
+            expect(await clientFalse.get("key3")).toBe("value3");
+            clientFalse.close();
+        },
+        TIMEOUT,
+    );
 });
