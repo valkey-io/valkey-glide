@@ -2168,11 +2168,13 @@ where
                             })
                             .unwrap_or(None);
 
-                        // If we found a connection by IP lookup, wrap it to update the PushManager
-                        // address when the connection is next used. This ensures the PushManager
-                        // stores the DNS address (which matches the connection_map key) instead
-                        // of the old IP or config endpoint address, which is needed for pubsub tracking
-                        let conn = conn.map(|node| node.with_updated_address(addr.clone()));
+                        // If we found a connection by IP lookup, update the PushManager. This ensures the PushManager
+                        // stores the DNS address (which matches the connection_map key) instead of the old IP
+                        // or config endpoint address, which is needed for pubsub tracking
+                        if let Some(ref node) = conn {
+                            let mut connection = node.user_connection.conn.clone().await;
+                            connection.update_push_manager_node_address(addr.clone());
+                        }
 
                         addrs_and_conns.push((addr, conn));
                         addrs_and_conns

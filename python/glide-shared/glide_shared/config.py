@@ -452,10 +452,6 @@ class TlsAdvancedConfiguration:
         self.client_key_pem = client_key_pem
 
 
-# Default reconciliation interval in milliseconds (3 seconds)
-DEFAULT_PUBSUB_RECONCILIATION_INTERVAL_MS = 3000
-
-
 class AdvancedBaseClientConfiguration:
     """
     Represents the advanced configuration settings for a base Glide client.

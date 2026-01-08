@@ -93,7 +93,7 @@ pub trait ConnectionLike {
 
     /// Update the node address used for PubSub tracking.
     /// Default implementation does nothing - only MultiplexedConnection implements this.
-    fn update_node_address(&mut self, _address: String) {
+    fn update_push_manager_node_address(&mut self, _address: String) {
         // Default: no-op
     }
 }

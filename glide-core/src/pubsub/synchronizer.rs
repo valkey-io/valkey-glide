@@ -31,10 +31,8 @@ const STANDALONE_SUBSCRIPTION_KINDS: &[PubSubSubscriptionKind] = &[
 ];
 
 /// Result of checking synchronization state - avoids recomputation
-struct SyncCheckResult {
+struct SyncDiff {
     is_synchronized: bool,
-    desired: PubSubSubscriptionInfo,
-    actual: PubSubSubscriptionInfo,
     to_subscribe: PubSubSubscriptionInfo,
     to_unsubscribe_by_address: HashMap<String, PubSubSubscriptionInfo>,
 }
@@ -76,7 +74,7 @@ pub struct GlidePubSubSynchronizer {
 }
 
 impl GlidePubSubSynchronizer {
-    pub async fn create(
+    pub fn new(
         initial_subscriptions: Option<PubSubSubscriptionInfo>,
         is_cluster: bool,
         reconciliation_interval: Option<Duration>,
@@ -113,9 +111,33 @@ impl GlidePubSubSynchronizer {
         }
     }
 
-    /// Compute full sync state
-    fn compute_sync_state(&self) -> SyncCheckResult {
-        // O(desired_subscriptions) clone - we need owned data and must release lock
+    // get the actual subscriptions not by address
+    fn compute_actual_subscriptions(&self) -> PubSubSubscriptionInfo {
+        let current_by_addr = self
+            .current_subscriptions_by_address
+            .read()
+            .expect(LOCK_ERR);
+
+        let mut actual: PubSubSubscriptionInfo = self
+            .subscription_kinds()
+            .iter()
+            .map(|k| (*k, HashSet::new()))
+            .collect();
+
+        for subs in current_by_addr.values() {
+            for (kind, channels) in subs.iter() {
+                actual
+                    .get_mut(kind)
+                    .unwrap()
+                    .extend(channels.iter().cloned());
+            }
+        }
+
+        actual
+    }
+
+    /// Compute synchronization diff - what needs to be subscribed/unsubscribed
+    fn compute_sync_diff(&self) -> SyncDiff {
         let desired = self.desired_subscriptions.read().expect(LOCK_ERR).clone();
         let current_by_addr = self
             .current_subscriptions_by_address
@@ -131,7 +153,7 @@ impl GlidePubSubSynchronizer {
         let mut to_unsubscribe_by_address: HashMap<String, PubSubSubscriptionInfo> = HashMap::new();
 
         // Pass 1: O(current_subscriptions)
-        // Iterate over current subcriptions and add to to_unsub each subscription not in desired
+        // Iterate over current subscriptions and add to to_unsub each subscription not in desired
         for (addr, subs) in current_by_addr.iter() {
             for (kind, channels) in subs.iter() {
                 actual
@@ -161,7 +183,7 @@ impl GlidePubSubSynchronizer {
         let mut to_subscribe = PubSubSubscriptionInfo::new();
 
         // Pass 2: O(desired_subscriptions)
-        // Iterate over desired subcriptions and add to to_sub each subscription not in current
+        // Iterate over desired subscriptions and add to to_sub each subscription not in actual
         for kind in self.subscription_kinds() {
             if let Some(desired_channels) = desired.get(kind) {
                 let actual_channels = actual.get(kind);
@@ -180,17 +202,8 @@ impl GlidePubSubSynchronizer {
 
         let is_synchronized = to_subscribe.is_empty() && to_unsubscribe_by_address.is_empty();
 
-        // O(desired_subscriptions) - clone desired for reporting
-        let desired_result: PubSubSubscriptionInfo = self
-            .subscription_kinds()
-            .iter()
-            .map(|k| (*k, desired.get(k).cloned().unwrap_or_default()))
-            .collect();
-
-        SyncCheckResult {
+        SyncDiff {
             is_synchronized,
-            desired: desired_result,
-            actual,
             to_subscribe,
             to_unsubscribe_by_address,
         }
@@ -198,7 +211,7 @@ impl GlidePubSubSynchronizer {
 
     /// Check sync state and update metrics - single computation
     fn check_and_record_sync_state(&self) {
-        let state = self.compute_sync_state();
+        let state = self.compute_sync_diff();
 
         if state.is_synchronized {
             let _ = GlideOpenTelemetry::update_subscription_last_sync_timestamp();
@@ -206,17 +219,9 @@ impl GlidePubSubSynchronizer {
         }
 
         let _ = GlideOpenTelemetry::record_subscription_out_of_sync();
-        log_info(
-            "pubsub_synchronizer",
-            format!(
-                "Subscriptions out of sync - desired: {}, actual: {}",
-                Self::format_subscription_info(&state.desired),
-                Self::format_subscription_info(&state.actual)
-            ),
-        );
     }
 
-    async fn send_command(
+    async fn apply_pubsub(
         &self,
         cmd: &mut Cmd,
         routing: Option<SingleNodeRoutingInfo>,
@@ -297,20 +302,22 @@ impl GlidePubSubSynchronizer {
     }
 
     async fn reconcile(&self) -> RedisResult<()> {
+        // This are unsubscription stemming from slot migrations (we do them for load balancing reasons)
+        // We need to process them first in order to get a correct view of our sync state during reconciliation
         self.process_pending_unsubscribes().await;
 
-        let state = self.compute_sync_state();
+        let diff = self.compute_sync_diff();
 
-        if state.is_synchronized {
+        if diff.is_synchronized {
             return Ok(());
         }
 
-        for (kind, channels) in state.to_subscribe {
+        for (kind, channels) in diff.to_subscribe {
             self.execute_subscription_change(channels, kind, true, None)
                 .await;
         }
 
-        for (addr, subs_by_kind) in state.to_unsubscribe_by_address {
+        for (addr, subs_by_kind) in diff.to_unsubscribe_by_address {
             let routing = Self::parse_address_to_routing(&addr).ok();
 
             for (kind, channels) in subs_by_kind {
@@ -410,7 +417,7 @@ impl GlidePubSubSynchronizer {
         } else {
             "unsubscribe"
         };
-        match self.send_command(&mut cmd, routing).await {
+        match self.apply_pubsub(&mut cmd, routing).await {
             Ok(_) => {
                 log_debug(
                     "pubsub_synchronizer",
@@ -465,25 +472,6 @@ impl GlidePubSubSynchronizer {
             )
             .await;
         }
-    }
-
-    fn format_subscription_info(info: &PubSubSubscriptionInfo) -> String {
-        let formatted: Vec<_> = info
-            .iter()
-            .map(|(kind, channels)| {
-                let kind_str = match kind {
-                    PubSubSubscriptionKind::Exact => "Exact",
-                    PubSubSubscriptionKind::Pattern => "Pattern",
-                    PubSubSubscriptionKind::Sharded => "Sharded",
-                };
-                let channels_str: Vec<_> = channels
-                    .iter()
-                    .map(|c| String::from_utf8_lossy(c).to_string())
-                    .collect();
-                format!("{}: {:?}", kind_str, channels_str)
-            })
-            .collect();
-        format!("{{{}}}", formatted.join(", "))
     }
 
     fn extract_channels_from_cmd(cmd: &Cmd) -> Vec<PubSubChannelOrPattern> {
@@ -612,13 +600,13 @@ impl GlidePubSubSynchronizer {
 
     /// Convert subscription state to Value for GET_SUBSCRIPTIONS response
     fn get_subscriptions_as_value(&self) -> Value {
-        let state = self.compute_sync_state();
+        let (desired, actual) = self.get_subscription_state();
 
         Value::Array(vec![
             Value::BulkString(b"desired".to_vec()),
-            Self::convert_sub_map_to_value(state.desired),
+            Self::convert_sub_map_to_value(desired),
             Value::BulkString(b"actual".to_vec()),
-            Self::convert_sub_map_to_value(state.actual),
+            Self::convert_sub_map_to_value(actual),
         ])
     }
 
@@ -988,8 +976,9 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
     }
 
     fn get_subscription_state(&self) -> (PubSubSubscriptionInfo, PubSubSubscriptionInfo) {
-        let state = self.compute_sync_state();
-        (state.desired, state.actual)
+        let desired = self.desired_subscriptions.read().expect(LOCK_ERR).clone();
+        let actual = self.compute_actual_subscriptions();
+        (desired, actual)
     }
 
     fn trigger_reconciliation(&self) {
@@ -1076,24 +1065,24 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
             let notified = self.reconciliation_complete_notify.notified();
 
             let condition_met = {
-                let state = self.compute_sync_state();
-
-                // If no specific expectations, check full synchronization
+                // If no specific expectations, just check overall synchronization
                 if expected_channels.is_none()
                     && expected_patterns.is_none()
                     && expected_sharded.is_none()
                 {
-                    state.is_synchronized
+                    self.compute_sync_diff().is_synchronized
                 } else {
                     // Check that specified channels are synced (desired == actual for those channels)
+                    let (desired, actual) = self.get_subscription_state();
+
                     let is_synced_for_channels = |channels: &Option<
                         HashSet<PubSubChannelOrPattern>,
                     >,
                                                   kind: PubSubSubscriptionKind|
                      -> bool {
                         channels.as_ref().is_none_or(|chs| {
-                            let desired_set = state.desired.get(&kind);
-                            let actual_set = state.actual.get(&kind);
+                            let desired_set = desired.get(&kind);
+                            let actual_set = actual.get(&kind);
 
                             if chs.is_empty() {
                                 // When expecting empty set (unsubscribe-all), verify both

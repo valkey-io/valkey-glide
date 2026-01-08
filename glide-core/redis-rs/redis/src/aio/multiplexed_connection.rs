@@ -769,7 +769,7 @@ impl MultiplexedConnection {
 
     /// Update the node address used for PubSub tracking.
     /// This updates both the Pipeline's shared PushManager and the local copy.
-    pub fn update_node_address(&mut self, address: String) {
+    pub fn update_push_manager_node_address(&mut self, address: String) {
         let updated_pm = self.push_manager.with_address(address);
         self.pipeline.set_push_manager(updated_pm.clone());
         self.push_manager = updated_pm;
@@ -895,8 +895,8 @@ impl ConnectionLike for MultiplexedConnection {
         self.availability_zone = az;
     }
 
-    fn update_node_address(&mut self, address: String) {
-        MultiplexedConnection::update_node_address(self, address);
+    fn update_push_manager_node_address(&mut self, address: String) {
+        MultiplexedConnection::update_push_manager_node_address(self, address);
     }
 }
 impl MultiplexedConnection {
