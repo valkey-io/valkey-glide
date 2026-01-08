@@ -2,7 +2,7 @@
 
 use crate::client::{ClientWrapper, PubSubCommandApplier};
 use async_trait::async_trait;
-use logger_core::{log_debug, log_error, log_info, log_warn};
+use logger_core::{log_debug, log_error, log_warn};
 use once_cell::sync::OnceCell;
 use redis::{
     Cmd, ErrorKind, PubSubChannelOrPattern, PubSubSubscriptionInfo, PubSubSubscriptionKind,
@@ -270,15 +270,17 @@ impl GlidePubSubSynchronizer {
     }
 
     fn start_reconciliation_task(self: &Arc<Self>) {
-        // We use a weak ref to self here as an indication that the client has dropped and thus there
-        // is no longer a strong ref of the synchornizer and we should break from the loop
+        // Create a Weak pointer for the spawned task. This is necessary because:
+        // 1. tokio::spawn requires 'static lifetime - we can't use a borrowed reference
+        // 2. Using Arc::clone would prevent the synchronizer from ever being dropped (memory leak)
+        // 3. Weak doesn't increment the strong count, so when all external strong refs are dropped,
+        //    the synchronizer is dropped and weak.upgrade() returns None, signaling the task to exit
         let sync_weak = Arc::downgrade(self);
         let interval = self.reconciliation_interval;
 
         let handle = tokio::spawn(async move {
             loop {
                 let Some(sync) = sync_weak.upgrade() else {
-                    log_debug("pubsub_synchronizer", "Synchronizer dropped, exiting task");
                     break;
                 };
                 tokio::select! {
@@ -361,16 +363,6 @@ impl GlidePubSubSynchronizer {
                     continue;
                 }
 
-                log_debug(
-                    "pubsub_synchronizer",
-                    format!(
-                        "Sending {:?} preemptive unsubscribe to {} for {} channels due to topology change",
-                        kind,
-                        address,
-                        channels.len()
-                    ),
-                );
-
                 if kind == PubSubSubscriptionKind::Sharded {
                     self.execute_sharded_unsubscribe_by_slot(channels, routing.clone())
                         .await;
@@ -418,20 +410,7 @@ impl GlidePubSubSynchronizer {
             "unsubscribe"
         };
         match self.apply_pubsub(&mut cmd, routing).await {
-            Ok(_) => {
-                log_debug(
-                    "pubsub_synchronizer",
-                    format!(
-                        "Sent {} for {:?} channels: {:?}",
-                        action,
-                        kind,
-                        channels
-                            .iter()
-                            .map(|c| String::from_utf8_lossy(c).to_string())
-                            .collect::<Vec<_>>()
-                    ),
-                );
-            }
+            Ok(_) => {}
             Err(e) => {
                 log_error(
                     "pubsub_synchronizer",
@@ -456,14 +435,6 @@ impl GlidePubSubSynchronizer {
             });
 
         for (slot, slot_channels) in channels_by_slot {
-            log_debug(
-                "pubsub_synchronizer",
-                format!(
-                    "Sending SUNSUBSCRIBE for slot {} with {} channels",
-                    slot,
-                    slot_channels.len()
-                ),
-            );
             self.execute_subscription_change(
                 slot_channels,
                 PubSubSubscriptionKind::Sharded,
@@ -658,18 +629,6 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         channels: HashSet<PubSubChannelOrPattern>,
         subscription_type: PubSubSubscriptionKind,
     ) {
-        log_debug(
-            "pubsub_synchronizer",
-            format!(
-                "Adding {:?} to desired: {:?}",
-                subscription_type,
-                channels
-                    .iter()
-                    .map(|c| String::from_utf8_lossy(c).to_string())
-                    .collect::<Vec<_>>()
-            ),
-        );
-
         {
             let mut desired = self.desired_subscriptions.write().expect(LOCK_ERR);
             desired
@@ -686,21 +645,6 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         channels: Option<HashSet<PubSubChannelOrPattern>>,
         subscription_type: PubSubSubscriptionKind,
     ) {
-        log_debug(
-            "pubsub_synchronizer",
-            format!(
-                "Removing {:?} from desired: {:?}",
-                subscription_type,
-                channels
-                    .as_ref()
-                    .map(|chs| chs
-                        .iter()
-                        .map(|c| String::from_utf8_lossy(c).to_string())
-                        .collect::<Vec<_>>())
-                    .unwrap_or_else(|| vec!["<all>".to_string()])
-            ),
-        );
-
         {
             let mut desired = self.desired_subscriptions.write().expect(LOCK_ERR);
             match channels {
@@ -726,19 +670,6 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         subscription_type: PubSubSubscriptionKind,
         address: String,
     ) {
-        log_debug(
-            "pubsub_synchronizer",
-            format!(
-                "Adding {:?} to address '{}': {:?}",
-                subscription_type,
-                address,
-                channels
-                    .iter()
-                    .map(|c| String::from_utf8_lossy(c).to_string())
-                    .collect::<Vec<_>>()
-            ),
-        );
-
         let mut current_by_addr = self
             .current_subscriptions_by_address
             .write()
@@ -757,19 +688,6 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         subscription_type: PubSubSubscriptionKind,
         address: String,
     ) {
-        log_debug(
-            "pubsub_synchronizer",
-            format!(
-                "Removing {:?} channels {:?} (notification from '{}')",
-                subscription_type,
-                channels
-                    .iter()
-                    .map(|c| String::from_utf8_lossy(c).to_string())
-                    .collect::<Vec<_>>(),
-                address
-            ),
-        );
-
         let mut current_by_addr = self
             .current_subscriptions_by_address
             .write()
@@ -783,16 +701,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
                 && let Some(existing) = addr_subs.get_mut(&subscription_type)
             {
                 for channel in &channels {
-                    if existing.remove(channel) {
-                        log_debug(
-                            "pubsub_synchronizer",
-                            format!(
-                                "Removed sharded '{}' from address '{}'",
-                                String::from_utf8_lossy(channel),
-                                address
-                            ),
-                        );
-                    }
+                    existing.remove(channel);
                 }
             }
         } else {
@@ -801,16 +710,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
             for (addr, addr_subs) in current_by_addr.iter_mut() {
                 if let Some(existing) = addr_subs.get_mut(&subscription_type) {
                     for channel in &channels {
-                        if existing.remove(channel) {
-                            log_debug(
-                                "pubsub_synchronizer",
-                                format!(
-                                    "Removed '{}' from address '{}'",
-                                    String::from_utf8_lossy(channel),
-                                    addr
-                                ),
-                            );
-                        }
+                        existing.remove(channel);
                     }
                 }
             }
@@ -844,30 +744,12 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         for address in addresses {
             if let Some(removed_subs) = current_by_addr.remove(address) {
                 let channels_count: usize = removed_subs.values().map(|s| s.len()).sum();
-                log_debug(
-                    "pubsub_synchronizer",
-                    format!(
-                        "Removed {} subscription(s) for address '{}': {:?}",
-                        channels_count,
-                        address,
-                        removed_subs
-                            .iter()
-                            .flat_map(|(_, channels)| channels.iter())
-                            .map(|c| String::from_utf8_lossy(c).to_string())
-                            .collect::<Vec<_>>()
-                    ),
-                );
             }
         }
         self.trigger_reconciliation();
     }
 
     fn handle_topology_refresh(&self, new_slot_map: &SlotMap) {
-        log_debug(
-            "pubsub_synchronizer",
-            "pubsub synchronizer notified of topology change",
-        );
-
         let new_addresses: HashSet<String> = new_slot_map
             .all_node_addresses()
             .iter()
@@ -894,7 +776,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
                     log_debug(
                         "pubsub_synchronizer",
                         format!(
-                            "Queueing unsubscribe for {} {:?} channels from {}",
+                            "Slot migration detected, queueing unsubscribe for {} {:?} channels from {}",
                             channels.len(),
                             kind,
                             addr
