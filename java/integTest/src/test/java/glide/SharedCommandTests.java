@@ -17919,6 +17919,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void acl_dryrun(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "ACL DRYRUN added in version 7.0");
+
         String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
 
         try {
