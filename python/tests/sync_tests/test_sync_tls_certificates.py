@@ -6,6 +6,7 @@ import pytest
 from glide_sync import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
+    ConfigurationError,
     GlideClient,
     GlideClientConfiguration,
     GlideClusterClient,
@@ -14,7 +15,7 @@ from glide_sync import (
     TlsAdvancedConfiguration,
 )
 
-from tests.utils.utils import get_ca_certificate
+from tests.utils.utils import get_ca_certificate, get_client_certificate, get_client_key
 
 
 class TestSyncTlsCertificates:
@@ -231,3 +232,126 @@ class TestSyncTlsCertificates:
             )
             with pytest.raises(Exception):
                 GlideClient.create(standalone_config)
+
+
+class TestClientCertificates:
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_client_fails_if_client_cert_provided_but_private_key_not_provided(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        # Get the TLS cluster addresses
+        valkey_cluster = (
+            pytest.valkey_tls_cluster if cluster_mode else pytest.standalone_tls_cluster  # type: ignore
+        )
+
+        if cluster_mode:
+            cluster_config = GlideClusterClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                use_tls=True,
+                protocol=protocol,
+                advanced_config=AdvancedGlideClusterClientConfiguration(
+                    tls_config=TlsAdvancedConfiguration(
+                        root_pem_cacerts=get_ca_certificate(),
+                        client_cert_pem=get_client_certificate(),
+                        client_key_pem=None,
+                    ),
+                ),
+            )
+            with pytest.raises(ConfigurationError):
+                GlideClusterClient.create(cluster_config)
+        else:
+            standalone_config = GlideClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                use_tls=True,
+                protocol=protocol,
+                advanced_config=AdvancedGlideClientConfiguration(
+                    tls_config=TlsAdvancedConfiguration(
+                        root_pem_cacerts=get_ca_certificate(),
+                        client_cert_pem=get_client_certificate(),
+                        client_key_pem=None,
+                    ),
+                ),
+            )
+            with pytest.raises(ConfigurationError):
+                GlideClient.create(standalone_config)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_client_fails_if_client_cert_not_provided_but_private_key_is_provided(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        # Get the TLS cluster addresses
+        valkey_cluster = (
+            pytest.valkey_tls_cluster if cluster_mode else pytest.standalone_tls_cluster  # type: ignore
+        )
+
+        if cluster_mode:
+            cluster_config = GlideClusterClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                use_tls=True,
+                protocol=protocol,
+                advanced_config=AdvancedGlideClusterClientConfiguration(
+                    tls_config=TlsAdvancedConfiguration(
+                        root_pem_cacerts=get_ca_certificate(),
+                        client_cert_pem=None,
+                        client_key_pem=get_client_key(),
+                    ),
+                ),
+            )
+            with pytest.raises(ConfigurationError):
+                GlideClusterClient.create(cluster_config)
+        else:
+            standalone_config = GlideClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                use_tls=True,
+                protocol=protocol,
+                advanced_config=AdvancedGlideClientConfiguration(
+                    tls_config=TlsAdvancedConfiguration(
+                        root_pem_cacerts=get_ca_certificate(),
+                        client_cert_pem=None,
+                        client_key_pem=get_client_key(),
+                    ),
+                ),
+            )
+            with pytest.raises(ConfigurationError):
+                GlideClient.create(standalone_config)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_client_inits_if_client_cert_and_client_key_provided(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        # Get the TLS cluster addresses
+        valkey_cluster = (
+            pytest.valkey_tls_cluster if cluster_mode else pytest.standalone_tls_cluster  # type: ignore
+        )
+
+        if cluster_mode:
+            cluster_config = GlideClusterClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                use_tls=True,
+                protocol=protocol,
+                advanced_config=AdvancedGlideClusterClientConfiguration(
+                    tls_config=TlsAdvancedConfiguration(
+                        root_pem_cacerts=get_ca_certificate(),
+                        client_cert_pem=get_client_certificate(),
+                        client_key_pem=get_client_key(),
+                    ),
+                ),
+            )
+            GlideClusterClient.create(cluster_config)
+        else:
+            standalone_config = GlideClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                use_tls=True,
+                protocol=protocol,
+                advanced_config=AdvancedGlideClientConfiguration(
+                    tls_config=TlsAdvancedConfiguration(
+                        root_pem_cacerts=get_ca_certificate(),
+                        client_cert_pem=get_client_certificate(),
+                        client_key_pem=get_client_key(),
+                    ),
+                ),
+            )
+            GlideClient.create(standalone_config)
