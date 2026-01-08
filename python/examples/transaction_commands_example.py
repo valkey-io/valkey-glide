@@ -27,7 +27,7 @@ async def transaction_commands_example():
         # Start a transaction
         print("Starting transaction with MULTI...")
         result = await client.multi()
-        print(f"MULTI result: {result}")
+        print(f"MULTI result: {result}")  # Should be "OK"
         
         # Queue commands
         print("Queueing commands...")

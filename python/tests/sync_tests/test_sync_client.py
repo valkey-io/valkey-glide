@@ -9663,11 +9663,11 @@ class TestCommands:
         key2 = get_random_string(10)
         
         # Test basic MULTI/EXEC transaction
-        assert glide_sync_client.multi() == OK
-        assert glide_sync_client.set(key1, "value1") == b"QUEUED"
-        assert glide_sync_client.set(key2, "value2") == b"QUEUED"
-        assert glide_sync_client.get(key1) == b"QUEUED"
-        assert glide_sync_client.get(key2) == b"QUEUED"
+        assert glide_sync_client.multi() == "OK"
+        assert glide_sync_client.set(key1, "value1") == "QUEUED"
+        assert glide_sync_client.set(key2, "value2") == "QUEUED"
+        assert glide_sync_client.get(key1) == "QUEUED"
+        assert glide_sync_client.get(key2) == "QUEUED"
         
         result = glide_sync_client.exec()
         assert result is not None
@@ -9690,12 +9690,12 @@ class TestCommands:
         assert glide_sync_client.set(key, "initial") == OK
         
         # Start transaction and queue commands
-        assert glide_sync_client.multi() == OK
-        assert glide_sync_client.set(key, "discarded_value") == b"QUEUED"
-        assert glide_sync_client.incr(key) == b"QUEUED"  # This would fail, but we'll discard
+        assert glide_sync_client.multi() == "OK"
+        assert glide_sync_client.set(key, "discarded_value") == "QUEUED"
+        assert glide_sync_client.incr(key) == "QUEUED"  # This would fail, but we'll discard
         
         # Discard the transaction
-        assert glide_sync_client.discard() == OK
+        assert glide_sync_client.discard() == "OK"
         
         # Verify the key still has the initial value
         assert glide_sync_client.get(key) == b"initial"
@@ -9714,9 +9714,9 @@ class TestCommands:
         assert glide_sync_client.watch([key]) == OK
         
         # Start transaction
-        assert glide_sync_client.multi() == OK
-        assert glide_sync_client.set(key, "modified") == b"QUEUED"
-        assert glide_sync_client.get(key) == b"QUEUED"
+        assert glide_sync_client.multi() == "OK"
+        assert glide_sync_client.set(key, "modified") == "QUEUED"
+        assert glide_sync_client.get(key) == "QUEUED"
         
         # Execute transaction (should succeed since key wasn't modified)
         result = glide_sync_client.exec()
@@ -9738,8 +9738,8 @@ class TestCommands:
         assert glide_sync_client.watch([key]) == OK
         
         # Start transaction
-        assert glide_sync_client.multi() == OK
-        assert glide_sync_client.set(key, "should_not_be_set") == b"QUEUED"
+        assert glide_sync_client.multi() == "OK"
+        assert glide_sync_client.set(key, "should_not_be_set") == "QUEUED"
         
         # Modify the watched key from outside the transaction
         assert glide_sync_client.set(key, "external_modification") == OK
@@ -9760,10 +9760,10 @@ class TestCommands:
         assert glide_sync_client.set(key, "not_a_number") == OK
         
         # Start transaction with a command that will fail
-        assert glide_sync_client.multi() == OK
-        assert glide_sync_client.set(key, "value1") == b"QUEUED"
-        assert glide_sync_client.incr(key) == b"QUEUED"  # This will fail since key is not a number
-        assert glide_sync_client.get(key) == b"QUEUED"
+        assert glide_sync_client.multi() == "OK"
+        assert glide_sync_client.set(key, "value1") == "QUEUED"
+        assert glide_sync_client.incr(key) == "QUEUED"  # This will fail since key is not a number
+        assert glide_sync_client.get(key) == "QUEUED"
         
         # Execute transaction - should return results with error
         result = glide_sync_client.exec()
@@ -9777,13 +9777,13 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_nested_multi_error(self, glide_sync_client: TGlideClient):
         # Test that calling MULTI inside a transaction returns an error
-        assert glide_sync_client.multi() == OK
+        assert glide_sync_client.multi() == "OK"
         
         with pytest.raises(RequestError, match="MULTI calls can not be nested"):
             glide_sync_client.multi()
         
         # Clean up by discarding the transaction
-        assert glide_sync_client.discard() == OK
+        assert glide_sync_client.discard() == "OK"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

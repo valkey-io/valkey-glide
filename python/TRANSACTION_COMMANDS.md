@@ -78,6 +78,35 @@ def discard(self) -> TOK
 await client.discard()  # Cancel transaction
 ```
 
+## Redis Server Response Patterns
+
+The implementation follows the exact Redis server response patterns:
+
+### Command Responses
+
+| Command | Context | Response | Type |
+|---------|---------|----------|------|
+| `MULTI` | Always | `"OK"` | Simple string |
+| `DISCARD` | Always | `"OK"` | Simple string |
+| `EXEC` | Success | `[result1, result2, ...]` | Array of command results |
+| `EXEC` | WATCH abort | `None` | Null reply |
+| Any command | After MULTI | `"QUEUED"` | Simple string |
+
+### Response Type Details
+
+- **Simple string responses**: `"OK"`, `"QUEUED"` (not bytes)
+- **Array responses**: List containing individual command results
+- **Null responses**: `None` when transaction is aborted by WATCH
+- **Command results**: Each command's result in its normal format (e.g., `b"value"` for GET, `"OK"` for SET)
+
+### Error Conditions
+
+| Scenario | Error Message |
+|----------|---------------|
+| Nested MULTI | `"MULTI calls can not be nested"` |
+| EXEC without MULTI | `"EXEC without MULTI"` |
+| DISCARD without MULTI | `"DISCARD without MULTI"` |
+
 ## Usage Patterns
 
 ### Basic Transaction
