@@ -12,6 +12,7 @@
 
 * Rust: Rust 2024 compatibility fix ([#5101](https://github.com/valkey-io/valkey-glide/pull/5101))
 * CI: Update NPM CD with Trusted Publishing ([#5110](https://github.com/valkey-io/valkey-glide/pull/5110))
+* Rust: Add RUSTSEC-2025-0141 to ignore list in deny.toml ([#5137](https://github.com/valkey-io/valkey-glide/pull/5137))
 
 ## 2.2.3
 
