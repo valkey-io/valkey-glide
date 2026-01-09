@@ -54,6 +54,9 @@ EXCLUDED_TESTS = {
         "test_inflight_request_limit",
         "test_statistics",
         "test_UDS_socket_connection_failure",
+        "test_cancelled_request_handled_gracefully",
+        "test_connection_timeout_on_unavailable_host",
+        "test_invalid_tls_config_fails_fast",
     ],
     "sync_only": ["test_sync_fork"],
 }

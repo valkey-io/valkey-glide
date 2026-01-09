@@ -152,23 +152,54 @@ impl StandaloneClient {
             DEFAULT_CONNECTION_TIMEOUT,
         );
 
-        let tls_params = if !connection_request.root_certs.is_empty() {
+        let tcp_nodelay = connection_request.tcp_nodelay;
+
+        let has_root_certs = !connection_request.root_certs.is_empty();
+        let has_client_cert = !connection_request.client_cert.is_empty();
+        let has_client_key = !connection_request.client_key.is_empty();
+        if has_client_cert != has_client_key {
+            return Err(StandaloneClientConnectionError::FailedConnection(vec![(
+                None,
+                RedisError::from((
+                    redis::ErrorKind::InvalidClientConfig,
+                    "client_cert and client_key must both be provided or both be empty",
+                )),
+            )]));
+        }
+
+        let tls_params = if has_root_certs || has_client_cert || has_client_key {
             if tls_mode.unwrap_or(TlsMode::NoTls) == TlsMode::NoTls {
                 return Err(StandaloneClientConnectionError::FailedConnection(vec![(
                     None,
                     RedisError::from((
                         redis::ErrorKind::InvalidClientConfig,
-                        "Custom root certificates provided but TLS is disabled",
+                        "TLS certificates provided but TLS is disabled",
                     )),
                 )]));
             }
-            let mut combined_certs = Vec::new();
-            for cert in &connection_request.root_certs {
-                combined_certs.extend_from_slice(cert);
-            }
+
+            let root_cert = if has_root_certs {
+                let mut combined_certs = Vec::new();
+                for cert in &connection_request.root_certs {
+                    combined_certs.extend_from_slice(cert);
+                }
+                Some(combined_certs)
+            } else {
+                None
+            };
+
+            let client_tls = if has_client_cert && has_client_key {
+                Some(redis::ClientTlsConfig {
+                    client_cert: connection_request.client_cert.clone(),
+                    client_key: connection_request.client_key.clone(),
+                })
+            } else {
+                None
+            };
+
             let tls_certificates = redis::TlsCertificates {
-                client_tls: None,
-                root_cert: Some(combined_certs),
+                client_tls,
+                root_cert,
             };
             Some(
                 redis::retrieve_tls_certificates(tls_certificates).map_err(|err| {
@@ -192,9 +223,10 @@ impl StandaloneClient {
                 let discover = discover_az;
                 let timeout = connection_timeout;
                 let params = tls_params.clone();
+                let nodelay = tcp_nodelay;
                 async move {
                     get_connection_and_replication_info(
-                        &address, &retry, &info, tls, &sender, discover, timeout, params,
+                        &address, &retry, &info, tls, &sender, discover, timeout, params, nodelay,
                     )
                     .await
                     .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -692,6 +724,7 @@ async fn get_connection_and_replication_info(
     discover_az: bool,
     connection_timeout: Duration,
     tls_params: Option<redis::TlsConnParams>,
+    tcp_nodelay: bool,
 ) -> Result<(ReconnectingConnection, Value), (ReconnectingConnection, RedisError)> {
     let reconnecting_connection = ReconnectingConnection::new(
         address,
@@ -702,6 +735,7 @@ async fn get_connection_and_replication_info(
         discover_az,
         connection_timeout,
         tls_params,
+        tcp_nodelay,
     )
     .await?;
 
