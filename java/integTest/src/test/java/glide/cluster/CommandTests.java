@@ -3861,8 +3861,7 @@ public class CommandTests {
             assertEquals(OK, client.set(key, value).get());
 
             // WAITAOF in cluster mode with explicit routing to the correct primary
-            SlotKeyRoute route =
-                    new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
+            SlotKeyRoute route = new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
             Long[] result = client.waitaof(0, 0, 1000, route).get();
             assertNotNull(result);
             assertEquals(2, result.length);

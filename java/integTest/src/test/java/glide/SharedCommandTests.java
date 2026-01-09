@@ -17820,8 +17820,7 @@ public class SharedCommandTests {
         Long[] result;
         if (client instanceof GlideClusterClient) {
             // Cluster mode: must specify route to the primary that handled the write
-            SlotKeyRoute route =
-                    new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
+            SlotKeyRoute route = new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
             result = ((GlideClusterClient) client).waitaof(0, 0, 1000, route).get();
         } else {
             // Standalone mode: no route needed
@@ -17852,8 +17851,7 @@ public class SharedCommandTests {
         Long[] result;
         if (client instanceof GlideClusterClient) {
             // Cluster mode: must specify route to the primary that handled the write
-            SlotKeyRoute route =
-                    new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
+            SlotKeyRoute route = new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
             result = ((GlideClusterClient) client).waitaof(0, 0, 100, route).get();
         } else {
             // Standalone mode: no route needed
