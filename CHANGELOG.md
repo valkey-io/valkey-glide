@@ -1,3 +1,18 @@
+## 2.2.5
+
+#### Changes
+
+* All Clients: Add TCPNoDelay option ([#5100](https://github.com/valkey-io/valkey-glide/pull/5100))
+
+#### Fixes
+
+* Node: Fix `Failed to convert napi value Undefined into rust type u32` error ([#5128](https://github.com/valkey-io/valkey-glide/pull/5128))
+
+#### Operational Enhancements
+
+* Rust: Rust 2024 compatibility fix ([#5101](https://github.com/valkey-io/valkey-glide/pull/5101))
+* CI: Update NPM CD with Trusted Publishing ([#5110](https://github.com/valkey-io/valkey-glide/pull/5110))
+
 ## 2.2.3
 
 * JAVA: Unshadow Apache Commons Lang3 to avoid failures due to dependency conflicts
