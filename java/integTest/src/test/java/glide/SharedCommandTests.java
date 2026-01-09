@@ -115,6 +115,8 @@ import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.api.models.configuration.ProtocolVersion;
+import glide.api.models.configuration.RequestRoutingConfiguration;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -17815,7 +17817,16 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, value).get());
 
         // Wait for AOF acknowledgment
-        Long[] result = client.waitaof(0, 0, 1000).get();
+        Long[] result;
+        if (client instanceof GlideClusterClient) {
+            // Cluster mode: must specify route to the primary that handled the write
+            SlotKeyRoute route =
+                    new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
+            result = ((GlideClusterClient) client).waitaof(0, 0, 1000, route).get();
+        } else {
+            // Standalone mode: no route needed
+            result = client.waitaof(0, 0, 1000).get();
+        }
         assertNotNull(result);
         assertEquals(2, result.length);
         assertTrue(result[0] >= 0); // local acks
@@ -17838,7 +17849,16 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, value).get());
 
         // Wait with a short timeout - should return even if not all replicas ack
-        Long[] result = client.waitaof(0, 0, 100).get();
+        Long[] result;
+        if (client instanceof GlideClusterClient) {
+            // Cluster mode: must specify route to the primary that handled the write
+            SlotKeyRoute route =
+                    new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
+            result = ((GlideClusterClient) client).waitaof(0, 0, 100, route).get();
+        } else {
+            // Standalone mode: no route needed
+            result = client.waitaof(0, 0, 100).get();
+        }
         assertNotNull(result);
         assertEquals(2, result.length);
 

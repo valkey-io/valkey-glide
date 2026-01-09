@@ -1313,13 +1313,14 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<Long[]> waitaof(long numlocal, long numreplicas, long timeout) {
+    public CompletableFuture<Long[]> waitaof(
+            long numlocal, long numreplicas, long timeout, @NonNull Route route) {
         String[] arguments =
                 new String[] {Long.toString(numlocal), Long.toString(numreplicas), Long.toString(timeout)};
         return commandManager.submitNewCommand(
                 WaitAof,
                 arguments,
-                SimpleSingleNodeRoute.RANDOM,
+                route,
                 response -> castArray(handleArrayResponse(response), Long.class));
     }
 

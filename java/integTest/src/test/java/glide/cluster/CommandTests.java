@@ -3860,8 +3860,10 @@ public class CommandTests {
             // Set a key
             assertEquals(OK, client.set(key, value).get());
 
-            // WAITAOF in cluster mode routes to a random node
-            Long[] result = client.waitaof(0, 0, 1000).get();
+            // WAITAOF in cluster mode with explicit routing to the correct primary
+            SlotKeyRoute route =
+                    new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
+            Long[] result = client.waitaof(0, 0, 1000, route).get();
             assertNotNull(result);
             assertEquals(2, result.length);
             assertTrue(result[0] >= 0); // local acks
