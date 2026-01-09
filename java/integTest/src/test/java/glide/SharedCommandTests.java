@@ -58,6 +58,7 @@ import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RestoreOptions;
+import glide.api.models.commands.ScriptDebugMode;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
@@ -5294,6 +5295,124 @@ public class SharedCommandTests {
         String nonExistingSha1 = UUID.randomUUID().toString();
         assertThrows(ExecutionException.class, () -> client.scriptShow(nonExistingSha1).get());
         assertThrows(ExecutionException.class, () -> client.scriptShow(gs(nonExistingSha1)).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void evalReadOnly_test(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+
+        // Test simple script without keys/args
+        String simpleScript = "return 'Hello, World!'";
+        assertEquals("Hello, World!", client.evalReadOnly(simpleScript).get());
+
+        // Test script with keys and args
+        String scriptWithKeysArgs = "return {KEYS[1], ARGV[1]}";
+        String key = UUID.randomUUID().toString();
+        String arg = UUID.randomUUID().toString();
+        Object[] result =
+                (Object[])
+                        client.evalReadOnly(scriptWithKeysArgs, new String[] {key}, new String[] {arg}).get();
+        assertEquals(key, result[0]);
+        assertEquals(arg, result[1]);
+
+        // Test binary-safe simple script
+        GlideString binaryScript = gs("return 'Binary Hello'");
+        assertEquals(gs("Binary Hello"), client.evalReadOnly(binaryScript).get());
+
+        // Test binary-safe script with keys and args
+        GlideString binaryKey = gs(UUID.randomUUID().toString());
+        GlideString binaryArg = gs(UUID.randomUUID().toString());
+        Object[] binaryResult =
+                (Object[])
+                        client
+                                .evalReadOnly(
+                                        gs(scriptWithKeysArgs),
+                                        new GlideString[] {binaryKey},
+                                        new GlideString[] {binaryArg})
+                                .get();
+        assertEquals(binaryKey, binaryResult[0]);
+        assertEquals(binaryArg, binaryResult[1]);
+
+        // Test read-only script accessing keys
+        String readKey = UUID.randomUUID().toString();
+        client.set(readKey, "test_value").get();
+        String readScript = "return redis.call('GET', KEYS[1])";
+        assertEquals(
+                "test_value", client.evalReadOnly(readScript, new String[] {readKey}, new String[0]).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void evalshaReadOnly_test(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+
+        // Load a script first
+        String script = "return 'Hello from SHA!'";
+        Script scriptObj = new Script(script, false);
+        client.invokeScript(scriptObj).get();
+        String sha1 = scriptObj.getHash();
+
+        // Test simple execution by SHA1
+        assertEquals("Hello from SHA!", client.evalshaReadOnly(sha1).get());
+
+        // Load script with keys and args
+        String scriptWithKeysArgs = "return {KEYS[1], ARGV[1]}";
+        Script scriptObj2 = new Script(scriptWithKeysArgs, false);
+        client.invokeScript(scriptObj2).get();
+        String sha2 = scriptObj2.getHash();
+
+        // Test execution by SHA1 with keys and args
+        String key = UUID.randomUUID().toString();
+        String arg = UUID.randomUUID().toString();
+        Object[] result =
+                (Object[]) client.evalshaReadOnly(sha2, new String[] {key}, new String[] {arg}).get();
+        assertEquals(key, result[0]);
+        assertEquals(arg, result[1]);
+
+        // Test binary-safe SHA1 execution
+        GlideString binarySha1 = gs(sha1);
+        assertEquals(gs("Hello from SHA!"), client.evalshaReadOnly(binarySha1).get());
+
+        // Test binary-safe SHA1 with keys and args
+        GlideString binaryKey = gs(UUID.randomUUID().toString());
+        GlideString binaryArg = gs(UUID.randomUUID().toString());
+        Object[] binaryResult =
+                (Object[])
+                        client
+                                .evalshaReadOnly(
+                                        gs(sha2), new GlideString[] {binaryKey}, new GlideString[] {binaryArg})
+                                .get();
+        assertEquals(binaryKey, binaryResult[0]);
+        assertEquals(binaryArg, binaryResult[1]);
+
+        // Test with non-existent SHA1
+        String nonExistentSha = "0000000000000000000000000000000000000000";
+        ExecutionException exception =
+                assertThrows(ExecutionException.class, () -> client.evalshaReadOnly(nonExistentSha).get());
+        assertTrue(exception.getCause() instanceof RequestException);
+        assertTrue(exception.getMessage().toLowerCase().contains("noscript"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void scriptDebug_test(BaseClient client) {
+        // Test enabling async debugging mode
+        assertEquals("OK", client.scriptDebug(ScriptDebugMode.YES).get());
+
+        // Test enabling sync debugging mode
+        assertEquals("OK", client.scriptDebug(ScriptDebugMode.SYNC).get());
+
+        // Test disabling debugging mode
+        assertEquals("OK", client.scriptDebug(ScriptDebugMode.NO).get());
+
+        // Verify we can still execute scripts after changing debug mode
+        // Use invokeScript
+        Script script = new Script("return 'Debug test'", false);
+        assertEquals("Debug test", client.invokeScript(script).get());
     }
 
     @SneakyThrows
