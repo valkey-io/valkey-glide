@@ -2,6 +2,7 @@
 
 #### Changes
 
+* JAVA: Add EVAL_RO, EVALSHA_RO, and SCRIPT DEBUG commands ([#5125](https://github.com/valkey-io/valkey-glide/pull/5125))
 * CORE: Add client certificate and private key support for mTLS ([#5092](https://github.com/valkey-io/valkey-glide/issues/5092))
 * Python: Add client certificate and private key support for mTLS ([5123](https://github.com/valkey-io/valkey-glide/issues/5123))
 * JAVA: Add ACL server management commands (ACL CAT, ACL DELUSER, ACL DRYRUN, ACL GENPASS, ACL GETUSER, ACL LIST, ACL LOAD, ACL LOG, ACL SAVE, ACL SETUSER, ACL USERS, ACL WHOAMI)
@@ -9,6 +10,7 @@
 
 #### Fixes
 * CORE: Enforce connection_timeout for initial standalone connection failures  ([#4991](https://github.com/valkey-io/valkey-glide/issues/4991))
+* CORE: Rust Lint is failing due to unmaintained advisory detected (RUSTSEC-2025-0141)  ([#5136](https://github.com/valkey-io/valkey-glide/issues/5136))
 * Node: Fixed `Failed to convert napi value Undefined into rust type u32` error  ([#5128](https://github.com/valkey-io/valkey-glide/pull/5128))
 
 #### Operational Enhancements
