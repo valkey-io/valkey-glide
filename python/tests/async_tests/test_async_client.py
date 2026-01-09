@@ -74,7 +74,15 @@ from glide_shared.commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
-from glide_shared.config import BackoffStrategy, ProtocolVersion, ServerCredentials
+from glide_shared.config import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
+    BackoffStrategy,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+    ProtocolVersion,
+    ServerCredentials,
+)
 from glide_shared.constants import (
     OK,
     TEncodable,
@@ -12074,3 +12082,51 @@ class TestScripts:
         # Verify all fields are now persistent
         ttl_results = await glide_client.httl(multi_key, field_names)
         assert ttl_results == [-1] * len(field_names)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("tcp_nodelay", [None, True, False])
+    async def test_tcp_nodelay_configuration(
+        self,
+        request,
+        cluster_mode: bool,
+        tcp_nodelay: Optional[bool],
+    ):
+        """Test TCP_NODELAY configuration option."""
+        valkey_cluster = (
+            pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
+        )
+
+        if cluster_mode:
+            cluster_config = GlideClusterClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                advanced_config=AdvancedGlideClusterClientConfiguration(
+                    tcp_nodelay=tcp_nodelay
+                ),
+            )
+            cluster_client = await GlideClusterClient.create(cluster_config)
+            try:
+                # Verify client can connect and execute commands
+                assert await cluster_client.ping() == b"PONG"
+                assert await cluster_client.set("key", "value") == "OK"
+                assert await cluster_client.get("key") == b"value"
+                # Clean up test key
+                await cluster_client.delete(["key"])
+            finally:
+                await cluster_client.close()
+        else:
+            standalone_config = GlideClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                advanced_config=AdvancedGlideClientConfiguration(
+                    tcp_nodelay=tcp_nodelay
+                ),
+            )
+            standalone_client = await GlideClient.create(standalone_config)
+            try:
+                # Verify client can connect and execute commands
+                assert await standalone_client.ping() == b"PONG"
+                assert await standalone_client.set("key", "value") == "OK"
+                assert await standalone_client.get("key") == b"value"
+                # Clean up test key
+                await standalone_client.delete(["key"])
+            finally:
+                await standalone_client.close()

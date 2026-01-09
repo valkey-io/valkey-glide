@@ -90,6 +90,8 @@ message ConnectionRequest {
     bool refresh_topology_from_initial_nodes = 18;
     string lib_name = 19;
     repeated bytes root_certs = 20;
+    // for future backport: the number skip is due to not porting PR 4759 and 5093
+    optional bool tcp_nodelay = 24;
 }
 
 message ConnectionRetryStrategy {
