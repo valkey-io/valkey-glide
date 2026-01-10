@@ -3801,14 +3801,21 @@ public class CommandTests {
             assertEquals(OK, client.set(key3, value).get());
 
             // KEYS command in cluster mode should search all primary nodes
-            String[] keys = client.keys("*:test:*").get();
-            assertTrue(keys.length >= 3, "Should find at least 3 keys across all nodes");
+            ClusterValue<String[]> keysResult = client.keys("*:test:*").get();
+            Map<String, String[]> keysMap = keysResult.getMultiValue();
+            
+            // Collect all keys from all nodes
+            List<String> allKeys = new ArrayList<>();
+            for (String[] nodeKeys : keysMap.values()) {
+                allKeys.addAll(Arrays.asList(nodeKeys));
+            }
+            
+            assertTrue(allKeys.size() >= 3, "Should find at least 3 keys across all nodes");
 
             // Verify our keys are in the result
-            List<String> keyList = Arrays.asList(keys);
-            assertTrue(keyList.contains(key1));
-            assertTrue(keyList.contains(key2));
-            assertTrue(keyList.contains(key3));
+            assertTrue(allKeys.contains(key1));
+            assertTrue(allKeys.contains(key2));
+            assertTrue(allKeys.contains(key3));
 
             // Clean up
             client.del(new String[] {key1, key2, key3}).get();
@@ -3834,8 +3841,16 @@ public class CommandTests {
             assertEquals(OK, client.set(key2, value).get());
 
             // KEYS command should search all nodes
-            GlideString[] keys = client.keys(gs("*:test:*")).get();
-            assertTrue(keys.length >= 2);
+            ClusterValue<GlideString[]> keysResult = client.keys(gs("*:test:*")).get();
+            Map<String, GlideString[]> keysMap = keysResult.getMultiValue();
+            
+            // Collect all keys from all nodes
+            List<GlideString> allKeys = new ArrayList<>();
+            for (GlideString[] nodeKeys : keysMap.values()) {
+                allKeys.addAll(Arrays.asList(nodeKeys));
+            }
+            
+            assertTrue(allKeys.size() >= 2);
 
             // Clean up
             client.del(new GlideString[] {key1, key2}).get();
@@ -3860,7 +3875,7 @@ public class CommandTests {
             // Set a key
             assertEquals(OK, client.set(key, value).get());
 
-            // WAITAOF in cluster mode with explicit routing to the correct primary
+            // WAITAOF with explicit routing to the primary that handled the write
             SlotKeyRoute route = new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
             Long[] result = client.waitaof(0, 0, 1000, route).get();
             assertNotNull(result);

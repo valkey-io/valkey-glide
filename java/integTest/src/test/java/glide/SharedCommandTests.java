@@ -36,6 +36,7 @@ import glide.api.GlideClusterClient;
 import glide.api.models.BaseBatch;
 import glide.api.models.Batch;
 import glide.api.models.ClusterBatch;
+import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
@@ -17878,14 +17879,22 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key3, value).get());
 
         // Test pattern matching
-        String[] keys = client.keys("{key}:test*").get();
-        assertTrue(keys.length >= 2);
-        assertTrue(Arrays.asList(keys).contains(key1));
-        assertTrue(Arrays.asList(keys).contains(key2));
-
-        // Test wildcard pattern
-        keys = client.keys("{key}:*").get();
-        assertTrue(keys.length >= 3);
+        if (client instanceof GlideClusterClient) {
+            ClusterValue<String[]> result = ((GlideClusterClient) client).keys("{key}:test*").get();
+            // Collect all keys from all nodes
+            List<String> allKeys = new ArrayList<>();
+            for (String[] nodeKeys : result.getMultiValue().values()) {
+                allKeys.addAll(Arrays.asList(nodeKeys));
+            }
+            assertTrue(allKeys.size() >= 2);
+            assertTrue(allKeys.contains(key1));
+            assertTrue(allKeys.contains(key2));
+        } else {
+            String[] keys = ((GlideClient) client).keys("{key}:test*").get();
+            assertTrue(keys.length >= 2);
+            assertTrue(Arrays.asList(keys).contains(key1));
+            assertTrue(Arrays.asList(keys).contains(key2));
+        }
 
         // Clean up
         client.del(new String[] {key1, key2, key3}).get();
@@ -17906,10 +17915,23 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key3, value).get());
 
         // Test pattern matching
-        GlideString[] keys = client.keys(gs("{key}:test*")).get();
-        assertTrue(keys.length >= 2);
-        assertTrue(Arrays.asList(keys).contains(key1));
-        assertTrue(Arrays.asList(keys).contains(key2));
+        if (client instanceof GlideClusterClient) {
+            ClusterValue<GlideString[]> result =
+                    ((GlideClusterClient) client).keys(gs("{key}:test*")).get();
+            // Collect all keys from all nodes
+            List<GlideString> allKeys = new ArrayList<>();
+            for (GlideString[] nodeKeys : result.getMultiValue().values()) {
+                allKeys.addAll(Arrays.asList(nodeKeys));
+            }
+            assertTrue(allKeys.size() >= 2);
+            assertTrue(allKeys.contains(key1));
+            assertTrue(allKeys.contains(key2));
+        } else {
+            GlideString[] keys = ((GlideClient) client).keys(gs("{key}:test*")).get();
+            assertTrue(keys.length >= 2);
+            assertTrue(Arrays.asList(keys).contains(key1));
+            assertTrue(Arrays.asList(keys).contains(key2));
+        }
 
         // Clean up
         client.del(new GlideString[] {key1, key2, key3}).get();
@@ -17919,8 +17941,19 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void keys_with_no_match(BaseClient client) {
-        String[] keys = client.keys("non_existent_pattern_" + UUID.randomUUID() + "*").get();
-        assertEquals(0, keys.length);
+        if (client instanceof GlideClusterClient) {
+            ClusterValue<String[]> result =
+                    ((GlideClusterClient) client)
+                            .keys("non_existent_pattern_" + UUID.randomUUID() + "*")
+                            .get();
+            // All nodes should return empty arrays
+            for (String[] nodeKeys : result.getMultiValue().values()) {
+                assertEquals(0, nodeKeys.length);
+            }
+        } else {
+            String[] keys = ((GlideClient) client).keys("non_existent_pattern_" + UUID.randomUUID() + "*").get();
+            assertEquals(0, keys.length);
+        }
     }
 
     @SneakyThrows
@@ -17942,7 +17975,7 @@ public class SharedCommandTests {
             SlotKeyRoute route = new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
             result = ((GlideClusterClient) client).waitaof(0, 0, 1000, route).get();
         } else {
-            // Standalone mode: no route needed
+            // Standalone mode
             result = client.waitaof(0, 0, 1000).get();
         }
         assertNotNull(result);
@@ -17966,14 +17999,14 @@ public class SharedCommandTests {
         // Set a key
         assertEquals(OK, client.set(key, value).get());
 
-        // Wait with a short timeout - should return even if not all replicas ack
+        // Wait with a short timeout
         Long[] result;
         if (client instanceof GlideClusterClient) {
             // Cluster mode: must specify route to the primary that handled the write
             SlotKeyRoute route = new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
             result = ((GlideClusterClient) client).waitaof(0, 0, 100, route).get();
         } else {
-            // Standalone mode: no route needed
+            // Standalone mode
             result = client.waitaof(0, 0, 100).get();
         }
         assertNotNull(result);

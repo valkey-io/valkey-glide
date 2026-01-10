@@ -548,8 +548,9 @@ impl ResponsePolicy {
             | b"PING" | b"SCRIPT FLUSH" | b"SCRIPT LOAD" | b"SELECT" | b"SLOWLOG RESET"
             | b"UNWATCH" | b"WATCH" => Some(ResponsePolicy::AllSucceeded),
 
-            b"KEYS"
-            | b"FT._ALIASLIST"
+            b"KEYS" => Some(ResponsePolicy::Special),
+
+            b"FT._ALIASLIST"
             | b"FT._LIST"
             | b"MGET"
             | b"JSON.MGET"
@@ -646,8 +647,9 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"SCRIPT EXISTS"
         | b"UNWATCH"
         | b"WAIT"
-        | b"RANDOMKEY"
-        | b"WAITAOF" => RouteBy::AllPrimaries,
+        | b"RANDOMKEY" => RouteBy::AllPrimaries,
+
+        b"WAITAOF" => RouteBy::Undefined,
 
         b"MGET" | b"DEL" | b"EXISTS" | b"UNLINK" | b"TOUCH" | b"WATCH" => {
             RouteBy::MultiShard(MultiSlotArgPattern::KeysOnly)

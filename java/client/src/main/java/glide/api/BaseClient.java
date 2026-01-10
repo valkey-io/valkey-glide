@@ -780,6 +780,30 @@ public abstract class BaseClient
 
     /**
      * @param response A Protobuf response
+     * @return A map of <code>String</code> to <code>String[]</code>
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<String, Object[]>
+    protected Map<String, String[]> handleMapOfArraysResponse(Response response)
+            throws GlideException {
+        Map<String, Object[]> mapResponse =
+                handleValkeyResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
+        return castMapOfArrays(mapResponse, String.class);
+    }
+
+    /**
+     * @param response A Protobuf response
+     * @return A map of <code>String</code> to <code>GlideString[]</code>
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<String, Object[]>
+    protected Map<String, GlideString[]> handleBinaryStringMapOfArraysResponse(Response response)
+            throws GlideException {
+        Map<String, Object[]> mapResponse =
+                handleValkeyResponse(Map.class, EnumSet.noneOf(ResponseFlags.class), response);
+        return castMapOfArrays(mapResponse, GlideString.class);
+    }
+
+    /**
+     * @param response A Protobuf response
      * @return A map of a map of <code>String[][]</code>
      */
     protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
@@ -6040,22 +6064,6 @@ public abstract class BaseClient
                 WaitAof,
                 new String[] {Long.toString(numlocal), Long.toString(numreplicas), Long.toString(timeout)},
                 response -> castArray(handleArrayResponse(response), Long.class));
-    }
-
-    @Override
-    public CompletableFuture<String[]> keys(String pattern) {
-        return commandManager.submitNewCommand(
-                Keys,
-                new String[] {pattern},
-                response -> castArray(handleArrayResponse(response), String.class));
-    }
-
-    @Override
-    public CompletableFuture<GlideString[]> keys(GlideString pattern) {
-        return commandManager.submitNewCommand(
-                Keys,
-                new GlideString[] {pattern},
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
     }
 
     @Override

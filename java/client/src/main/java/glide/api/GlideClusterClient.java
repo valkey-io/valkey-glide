@@ -23,6 +23,7 @@ import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
 import static command_request.CommandRequestOuterClass.RequestType.Info;
+import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
@@ -1303,6 +1304,48 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<GlideString> randomKeyBinary() {
         return commandManager.submitNewCommand(
                 RandomKey, BaseClient.EMPTY_GLIDE_STRING_ARRAY, this::handleGlideStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String[]>> keys(String pattern) {
+        return commandManager.submitNewCommand(
+                Keys,
+                new String[] {pattern},
+                response -> ClusterValue.of(handleMapOfArraysResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<GlideString[]>> keys(GlideString pattern) {
+        return commandManager.submitNewCommand(
+                Keys,
+                new GlideString[] {pattern},
+                response -> ClusterValue.ofMultiValue(handleBinaryStringMapOfArraysResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String[]>> keys(String pattern, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                Keys,
+                new String[] {pattern},
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(castArray(handleArrayResponse(response), String.class))
+                                : ClusterValue.of(handleMapOfArraysResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<GlideString[]>> keys(
+            GlideString pattern, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                Keys,
+                new GlideString[] {pattern},
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(
+                                        castArray(handleArrayResponseBinary(response), GlideString.class))
+                                : ClusterValue.ofMultiValue(handleBinaryStringMapOfArraysResponse(response)));
     }
 
     @Override

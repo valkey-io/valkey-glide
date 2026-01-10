@@ -1647,44 +1647,6 @@ public interface GenericBaseCommands {
     CompletableFuture<Long[]> waitaof(long numlocal, long numreplicas, long timeout);
 
     /**
-     * Returns all keys matching <code>pattern</code>.
-     *
-     * @apiNote In cluster mode, this command is routed to all primary nodes and returns the combined
-     *     result from all nodes.
-     * @see <a href="https://valkey.io/commands/keys/">valkey.io</a> for details.
-     * @param pattern The pattern to match keys against.
-     * @return An array of keys matching the pattern. If no keys match, returns an empty array.
-     * @example
-     *     <pre>{@code
-     * client.set("key1", "value1").get();
-     * client.set("key2", "value2").get();
-     * client.set("another", "value3").get();
-     * String[] keys = client.keys("key*").get();
-     * assert keys.length == 2; // Returns ["key1", "key2"]
-     * }</pre>
-     */
-    CompletableFuture<String[]> keys(String pattern);
-
-    /**
-     * Returns all keys matching <code>pattern</code>.
-     *
-     * @apiNote In cluster mode, this command is routed to all primary nodes and returns the combined
-     *     result from all nodes.
-     * @see <a href="https://valkey.io/commands/keys/">valkey.io</a> for details.
-     * @param pattern The pattern to match keys against.
-     * @return An array of keys matching the pattern. If no keys match, returns an empty array.
-     * @example
-     *     <pre>{@code
-     * client.set(gs("key1"), gs("value1")).get();
-     * client.set(gs("key2"), gs("value2")).get();
-     * client.set(gs("another"), gs("value3")).get();
-     * GlideString[] keys = client.keys(gs("key*")).get();
-     * assert keys.length == 2; // Returns [gs("key1"), gs("key2")]
-     * }</pre>
-     */
-    CompletableFuture<GlideString[]> keys(GlideString pattern);
-
-    /**
      * Atomically transfers a key from a source Valkey instance to a destination Valkey instance. Once
      * the key is successfully transferred, it is deleted from the source instance and is guaranteed
      * to exist in the destination instance.

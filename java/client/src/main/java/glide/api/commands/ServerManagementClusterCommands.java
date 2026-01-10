@@ -667,16 +667,16 @@ public interface ServerManagementClusterCommands {
      * were not yet reached.
      *
      * @since Valkey 7.2 and above.
-     * @apiNote <code>WAITAOF</code> cannot be used on replica instances. Ensure the <code>route
-     *     </code> parameter routes to a primary node.
+     * @apiNote <code>WAITAOF</code> cannot be used on replica instances. The <code>route</code>
+     *     parameter is required in cluster mode to specify which primary node to check. Typically,
+     *     you should route to the primary that handled the write operation you want to wait for.
      * @see <a href="https://valkey.io/commands/waitaof/">valkey.io</a> for details.
      * @param numlocal The number of local replicas to reach.
      * @param numreplicas The number of replicas to reach.
      * @param timeout The timeout value specified in milliseconds. A value of <code>0</code> will
      *     block indefinitely.
      * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the nodes defined by <code>route</code>. The route should target a primary node
-     *     since <code>WAITAOF</code> cannot run on replicas.
+     *     command to the nodes defined by <code>route</code>.
      * @return An <code>array</code> of two <code>Long</code> values: the number of local replicas
      *     reached and the number of replicas reached.
      * @example
