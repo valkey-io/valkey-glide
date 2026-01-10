@@ -1311,7 +1311,8 @@ public class GlideClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 Keys,
                 new String[] {pattern},
-                response -> ClusterValue.ofSingleValue(castArray(handleArrayResponse(response), String.class)));
+                response ->
+                        ClusterValue.ofSingleValue(castArray(handleArrayResponse(response), String.class)));
     }
 
     @Override
@@ -1319,7 +1320,9 @@ public class GlideClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 Keys,
                 new GlideString[] {pattern},
-                response -> ClusterValue.ofSingleValue(castArray(handleArrayResponseBinary(response), GlideString.class)));
+                response ->
+                        ClusterValue.ofSingleValue(
+                                castArray(handleArrayResponseBinary(response), GlideString.class)));
     }
 
     @Override
@@ -1328,7 +1331,8 @@ public class GlideClusterClient extends BaseClient
                 Keys,
                 new String[] {pattern},
                 route,
-                response -> ClusterValue.ofSingleValue(castArray(handleArrayResponse(response), String.class)));
+                response ->
+                        ClusterValue.ofSingleValue(castArray(handleArrayResponse(response), String.class)));
     }
 
     @Override
@@ -1338,7 +1342,9 @@ public class GlideClusterClient extends BaseClient
                 Keys,
                 new GlideString[] {pattern},
                 route,
-                response -> ClusterValue.ofSingleValue(castArray(handleArrayResponseBinary(response), GlideString.class)));
+                response ->
+                        ClusterValue.ofSingleValue(
+                                castArray(handleArrayResponseBinary(response), GlideString.class)));
     }
 
     @Override
