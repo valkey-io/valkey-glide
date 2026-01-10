@@ -10946,8 +10946,10 @@ export function runBaseTests(config: {
                         result[resultCollectionIndex].length,
                     ).toBeGreaterThan(0);
 
+                    // Test noScores with match only returns a list of members without scores
                     if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
                         const result = await client.zscan(key1, initialCursor, {
+                            match: "member*",
                             noScores: true,
                         });
                         const resultCursor = result[resultCursorIndex];
