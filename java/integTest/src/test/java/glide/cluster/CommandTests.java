@@ -1219,10 +1219,13 @@ public class CommandTests {
             assertEquals(OK, clusterClient.flushall(ASYNC).get());
         }
 
-        // TODO replace with KEYS command when implemented
-        Object[] keysAfter =
-                (Object[]) clusterClient.customCommand(new String[] {"keys", "*"}).get().getSingleValue();
-        assertEquals(0, keysAfter.length);
+        // Verify all keys are flushed
+        ClusterValue<String[]> keysResult = clusterClient.keys("*").get();
+        int totalKeys = 0;
+        for (String[] nodeKeys : keysResult.getMultiValue().values()) {
+            totalKeys += nodeKeys.length;
+        }
+        assertEquals(0, totalKeys);
 
         var route = new SlotKeyRoute("key", PRIMARY);
         assertEquals(OK, clusterClient.flushall().get());
