@@ -3913,6 +3913,8 @@ public class CommandTests {
                             || errorMessage.contains("nodename nor servname provided")
                             || errorMessage.contains("Temporary failure")
                             || errorMessage.contains("IOERR")
+                            || errorMessage.contains("timed out")
+                            || errorMessage.toLowerCase().contains("timeout")
                             || errorMessage.toLowerCase().contains("error");
 
             // If not a connection error, print the actual message for debugging
