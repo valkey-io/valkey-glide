@@ -1560,7 +1560,7 @@ mod tests_routing {
             RoutingInfo::for_routable(&cmd("KEYS")),
             Some(RoutingInfo::MultiNode((
                 MultipleNodeRoutingInfo::AllMasters,
-                Some(ResponsePolicy::CombineArrays)
+                Some(ResponsePolicy::Special)
             )))
         );
 
