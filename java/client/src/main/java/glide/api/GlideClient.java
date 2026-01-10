@@ -507,7 +507,9 @@ public class GlideClient extends BaseClient
      */
     public CompletableFuture<String[]> keys(String pattern) {
         return commandManager.submitNewCommand(
-                Keys, new String[] {pattern}, response -> castArray(handleArrayResponse(response), String.class));
+                Keys,
+                new String[] {pattern},
+                response -> castArray(handleArrayResponse(response), String.class));
     }
 
     /**

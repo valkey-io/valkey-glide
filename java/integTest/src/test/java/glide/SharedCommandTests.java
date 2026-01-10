@@ -17951,7 +17951,8 @@ public class SharedCommandTests {
                 assertEquals(0, nodeKeys.length);
             }
         } else {
-            String[] keys = ((GlideClient) client).keys("non_existent_pattern_" + UUID.randomUUID() + "*").get();
+            String[] keys =
+                    ((GlideClient) client).keys("non_existent_pattern_" + UUID.randomUUID() + "*").get();
             assertEquals(0, keys.length);
         }
     }

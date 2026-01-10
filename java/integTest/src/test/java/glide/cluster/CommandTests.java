@@ -3803,13 +3803,13 @@ public class CommandTests {
             // KEYS command in cluster mode should search all primary nodes
             ClusterValue<String[]> keysResult = client.keys("*:test:*").get();
             Map<String, String[]> keysMap = keysResult.getMultiValue();
-            
+
             // Collect all keys from all nodes
             List<String> allKeys = new ArrayList<>();
             for (String[] nodeKeys : keysMap.values()) {
                 allKeys.addAll(Arrays.asList(nodeKeys));
             }
-            
+
             assertTrue(allKeys.size() >= 3, "Should find at least 3 keys across all nodes");
 
             // Verify our keys are in the result
@@ -3843,13 +3843,13 @@ public class CommandTests {
             // KEYS command should search all nodes
             ClusterValue<GlideString[]> keysResult = client.keys(gs("*:test:*")).get();
             Map<String, GlideString[]> keysMap = keysResult.getMultiValue();
-            
+
             // Collect all keys from all nodes
             List<GlideString> allKeys = new ArrayList<>();
             for (GlideString[] nodeKeys : keysMap.values()) {
                 allKeys.addAll(Arrays.asList(nodeKeys));
             }
-            
+
             assertTrue(allKeys.size() >= 2);
 
             // Clean up

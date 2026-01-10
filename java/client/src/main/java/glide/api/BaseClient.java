@@ -67,7 +67,6 @@ import static command_request.CommandRequestOuterClass.RequestType.HVals;
 import static command_request.CommandRequestOuterClass.RequestType.Incr;
 import static command_request.CommandRequestOuterClass.RequestType.IncrBy;
 import static command_request.CommandRequestOuterClass.RequestType.IncrByFloat;
-import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LCS;
 import static command_request.CommandRequestOuterClass.RequestType.LIndex;
 import static command_request.CommandRequestOuterClass.RequestType.LInsert;
