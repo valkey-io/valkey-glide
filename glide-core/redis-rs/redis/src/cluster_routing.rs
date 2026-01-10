@@ -548,9 +548,8 @@ impl ResponsePolicy {
             | b"PING" | b"SCRIPT FLUSH" | b"SCRIPT LOAD" | b"SELECT" | b"SLOWLOG RESET"
             | b"UNWATCH" | b"WATCH" => Some(ResponsePolicy::AllSucceeded),
 
-            b"KEYS" => Some(ResponsePolicy::Special),
-
-            b"FT._ALIASLIST"
+            b"KEYS"
+            | b"FT._ALIASLIST"
             | b"FT._LIST"
             | b"MGET"
             | b"JSON.MGET"
@@ -1560,7 +1559,7 @@ mod tests_routing {
             RoutingInfo::for_routable(&cmd("KEYS")),
             Some(RoutingInfo::MultiNode((
                 MultipleNodeRoutingInfo::AllMasters,
-                Some(ResponsePolicy::Special)
+                Some(ResponsePolicy::CombineArrays)
             )))
         );
 

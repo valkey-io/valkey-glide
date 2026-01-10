@@ -1221,11 +1221,8 @@ public class CommandTests {
 
         // Verify all keys are flushed
         ClusterValue<String[]> keysResult = clusterClient.keys("*").get();
-        int totalKeys = 0;
-        for (String[] nodeKeys : keysResult.getMultiValue().values()) {
-            totalKeys += nodeKeys.length;
-        }
-        assertEquals(0, totalKeys);
+        String[] allKeys = keysResult.getSingleValue();
+        assertEquals(0, allKeys.length);
 
         var route = new SlotKeyRoute("key", PRIMARY);
         assertEquals(OK, clusterClient.flushall().get());
@@ -3805,20 +3802,15 @@ public class CommandTests {
 
             // KEYS command in cluster mode should search all primary nodes
             ClusterValue<String[]> keysResult = client.keys("*:test:*").get();
-            Map<String, String[]> keysMap = keysResult.getMultiValue();
+            String[] allKeys = keysResult.getSingleValue();
 
-            // Collect all keys from all nodes
-            List<String> allKeys = new ArrayList<>();
-            for (String[] nodeKeys : keysMap.values()) {
-                allKeys.addAll(Arrays.asList(nodeKeys));
-            }
-
-            assertTrue(allKeys.size() >= 3, "Should find at least 3 keys across all nodes");
+            assertTrue(allKeys.length >= 3, "Should find at least 3 keys across all nodes");
 
             // Verify our keys are in the result
-            assertTrue(allKeys.contains(key1));
-            assertTrue(allKeys.contains(key2));
-            assertTrue(allKeys.contains(key3));
+            List<String> keyList = Arrays.asList(allKeys);
+            assertTrue(keyList.contains(key1));
+            assertTrue(keyList.contains(key2));
+            assertTrue(keyList.contains(key3));
 
             // Clean up
             client.del(new String[] {key1, key2, key3}).get();
@@ -3845,15 +3837,9 @@ public class CommandTests {
 
             // KEYS command should search all nodes
             ClusterValue<GlideString[]> keysResult = client.keys(gs("*:test:*")).get();
-            Map<String, GlideString[]> keysMap = keysResult.getMultiValue();
+            GlideString[] allKeys = keysResult.getSingleValue();
 
-            // Collect all keys from all nodes
-            List<GlideString> allKeys = new ArrayList<>();
-            for (GlideString[] nodeKeys : keysMap.values()) {
-                allKeys.addAll(Arrays.asList(nodeKeys));
-            }
-
-            assertTrue(allKeys.size() >= 2);
+            assertTrue(allKeys.length >= 2);
 
             // Clean up
             client.del(new GlideString[] {key1, key2}).get();

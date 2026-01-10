@@ -1311,7 +1311,7 @@ public class GlideClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 Keys,
                 new String[] {pattern},
-                response -> ClusterValue.of(handleMapOfArraysResponse(response)));
+                response -> ClusterValue.ofSingleValue(castArray(handleArrayResponse(response), String.class)));
     }
 
     @Override
@@ -1319,7 +1319,7 @@ public class GlideClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 Keys,
                 new GlideString[] {pattern},
-                response -> ClusterValue.ofMultiValue(handleBinaryStringMapOfArraysResponse(response)));
+                response -> ClusterValue.ofSingleValue(castArray(handleArrayResponseBinary(response), GlideString.class)));
     }
 
     @Override
@@ -1328,10 +1328,7 @@ public class GlideClusterClient extends BaseClient
                 Keys,
                 new String[] {pattern},
                 route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(castArray(handleArrayResponse(response), String.class))
-                                : ClusterValue.of(handleMapOfArraysResponse(response)));
+                response -> ClusterValue.ofSingleValue(castArray(handleArrayResponse(response), String.class)));
     }
 
     @Override
@@ -1341,11 +1338,7 @@ public class GlideClusterClient extends BaseClient
                 Keys,
                 new GlideString[] {pattern},
                 route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(
-                                        castArray(handleArrayResponseBinary(response), GlideString.class))
-                                : ClusterValue.ofMultiValue(handleBinaryStringMapOfArraysResponse(response)));
+                response -> ClusterValue.ofSingleValue(castArray(handleArrayResponseBinary(response), GlideString.class)));
     }
 
     @Override

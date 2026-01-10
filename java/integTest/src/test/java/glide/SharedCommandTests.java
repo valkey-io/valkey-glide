@@ -17881,14 +17881,10 @@ public class SharedCommandTests {
         // Test pattern matching
         if (client instanceof GlideClusterClient) {
             ClusterValue<String[]> result = ((GlideClusterClient) client).keys("{key}:test*").get();
-            // Collect all keys from all nodes
-            List<String> allKeys = new ArrayList<>();
-            for (String[] nodeKeys : result.getMultiValue().values()) {
-                allKeys.addAll(Arrays.asList(nodeKeys));
-            }
-            assertTrue(allKeys.size() >= 2);
-            assertTrue(allKeys.contains(key1));
-            assertTrue(allKeys.contains(key2));
+            String[] allKeys = result.getSingleValue();
+            assertTrue(allKeys.length >= 2);
+            assertTrue(Arrays.asList(allKeys).contains(key1));
+            assertTrue(Arrays.asList(allKeys).contains(key2));
         } else {
             String[] keys = ((GlideClient) client).keys("{key}:test*").get();
             assertTrue(keys.length >= 2);
@@ -17918,14 +17914,10 @@ public class SharedCommandTests {
         if (client instanceof GlideClusterClient) {
             ClusterValue<GlideString[]> result =
                     ((GlideClusterClient) client).keys(gs("{key}:test*")).get();
-            // Collect all keys from all nodes
-            List<GlideString> allKeys = new ArrayList<>();
-            for (GlideString[] nodeKeys : result.getMultiValue().values()) {
-                allKeys.addAll(Arrays.asList(nodeKeys));
-            }
-            assertTrue(allKeys.size() >= 2);
-            assertTrue(allKeys.contains(key1));
-            assertTrue(allKeys.contains(key2));
+            GlideString[] allKeys = result.getSingleValue();
+            assertTrue(allKeys.length >= 2);
+            assertTrue(Arrays.asList(allKeys).contains(key1));
+            assertTrue(Arrays.asList(allKeys).contains(key2));
         } else {
             GlideString[] keys = ((GlideClient) client).keys(gs("{key}:test*")).get();
             assertTrue(keys.length >= 2);
@@ -17946,10 +17938,8 @@ public class SharedCommandTests {
                     ((GlideClusterClient) client)
                             .keys("non_existent_pattern_" + UUID.randomUUID() + "*")
                             .get();
-            // All nodes should return empty arrays
-            for (String[] nodeKeys : result.getMultiValue().values()) {
-                assertEquals(0, nodeKeys.length);
-            }
+            String[] keys = result.getSingleValue();
+            assertEquals(0, keys.length);
         } else {
             String[] keys =
                     ((GlideClient) client).keys("non_existent_pattern_" + UUID.randomUUID() + "*").get();
