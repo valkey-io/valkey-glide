@@ -1500,7 +1500,7 @@ class ClusterCommands(CoreCommands):
 
         Since: Valkey 7.0.0.
         """
-        await self._execute_command(RequestType.SSubscribeLazy, list(channels))
+        await self._execute_command(RequestType.SSubscribe, list(channels))
 
     async def ssubscribe(self, channels: Set[str], timeout_ms: int = 0) -> None:
         """
@@ -1530,7 +1530,7 @@ class ClusterCommands(CoreCommands):
         Since: Valkey 7.0.0.
         """
         args = list(channels) + [str(timeout_ms)]
-        await self._execute_command(RequestType.SSubscribe, list(args))
+        await self._execute_command(RequestType.SSubscribeBlocking, list(args))
 
     async def sunsubscribe_lazy(self, channels: Optional[Set[str]] = None) -> None:
         """
@@ -1559,7 +1559,7 @@ class ClusterCommands(CoreCommands):
         Since: Valkey 7.0.0.
         """
         await self._execute_command(
-            RequestType.SUnsubscribeLazy, list(channels) if channels else []
+            RequestType.SUnsubscribe, list(channels) if channels else []
         )
 
     async def sunsubscribe(
@@ -1596,4 +1596,4 @@ class ClusterCommands(CoreCommands):
         Since: Valkey 7.0.0.
         """
         args = (list(channels) if channels else []) + [str(timeout_ms)]
-        await self._execute_command(RequestType.SUnsubscribe, list(args))
+        await self._execute_command(RequestType.SUnsubscribeBlocking, list(args))

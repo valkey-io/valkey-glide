@@ -34,7 +34,7 @@ use crate::{
     client::GlideConnectionOptions,
     cluster_routing::{Routable, RoutingInfo, ShardUpdateResult},
     cluster_topology::{
-        calculate_topology, get_slot, SlotRefreshState, DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES,
+        calculate_topology, SlotRefreshState, DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES,
         DEFAULT_REFRESH_SLOTS_RETRY_BASE_DURATION_MILLIS, DEFAULT_REFRESH_SLOTS_RETRY_BASE_FACTOR,
     },
     cmd,
@@ -81,9 +81,7 @@ use crate::{
     cluster_client::{ClusterParams, RetryParams},
     cluster_routing::{
         self, MultipleNodeRoutingInfo, Redirect, ResponsePolicy, Route, SingleNodeRoutingInfo,
-        SlotAddr,
     },
-    connection::{PubSubSubscriptionInfo, PubSubSubscriptionKind},
     push_manager::PushInfo,
     Cmd, ConnectionInfo, ErrorKind, IntoConnectionInfo, RedisError, RedisFuture, RedisResult,
     Value,
@@ -111,7 +109,6 @@ use std::sync::RwLock as StdRwLock;
 use tokio::sync::{
     mpsc,
     oneshot::{self, Receiver},
-    RwLock as TokioRwLock,
 };
 use tracing::{debug, info, trace, warn};
 
@@ -435,8 +432,6 @@ pub(crate) struct InnerCore<C> {
     pending_requests: Mutex<Vec<PendingRequest<C>>>,
     slot_refresh_state: SlotRefreshState,
     initial_nodes: Vec<ConnectionInfo>,
-    subscriptions_by_address: TokioRwLock<HashMap<String, PubSubSubscriptionInfo>>,
-    unassigned_subscriptions: TokioRwLock<PubSubSubscriptionInfo>,
     glide_connection_options: GlideConnectionOptions,
 }
 
@@ -1163,14 +1158,6 @@ where
             pending_requests: Mutex::new(Vec::new()),
             slot_refresh_state: SlotRefreshState::new(slots_refresh_rate_limiter),
             initial_nodes: initial_nodes.to_vec(),
-            unassigned_subscriptions: TokioRwLock::new(
-                if let Some(subs) = cluster_params.pubsub_subscriptions {
-                    subs.clone()
-                } else {
-                    PubSubSubscriptionInfo::new()
-                },
-            ),
-            subscriptions_by_address: TokioRwLock::new(Default::default()),
             glide_connection_options,
         });
         let mut connection = ClusterConnInner {
@@ -1262,10 +1249,9 @@ where
             Self::try_to_expand_initial_nodes(initial_nodes).await;
         let connections = stream::iter(initial_nodes.iter().cloned())
             .map(|(node_addr, socket_addr)| {
-                let mut params: ClusterParams = params.clone();
+                let params: ClusterParams = params.clone();
                 let glide_connection_options = glide_connection_options.clone();
                 // set subscriptions to none, they will be applied upon the topology discovery
-                params.pubsub_subscriptions = None;
 
                 async move {
                     let result = connect_and_check(
@@ -1414,11 +1400,6 @@ where
                 false,
             )
             .await;
-
-            // Trigger reconciliation after connections are refreshed
-            if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
-                sync.trigger_reconciliation();
-            }
         }
     }
 
@@ -1459,10 +1440,6 @@ where
         check_existing_conn: bool,
     ) -> Vec<Arc<Notify>> {
         debug!("Triggering refresh connections tasks to {:?} ", addresses);
-
-        if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
-            sync.remove_current_subscriptions_for_addresses(&addresses);
-        };
 
         let mut notifiers = Vec::<Arc<Notify>>::new();
 
@@ -1515,15 +1492,11 @@ where
                 )));
                 let mut first_attempt = true;
                 for backoff_duration in infinite_backoff_iter {
-                    let mut cluster_params = inner_clone
+                    let cluster_params = inner_clone
                         .cluster_params
                         .read()
                         .expect(MUTEX_READ_ERR)
                         .clone();
-                    let subs_guard = inner_clone.subscriptions_by_address.read().await;
-                    cluster_params.pubsub_subscriptions =
-                        subs_guard.get(&address_clone_for_task).cloned();
-                    drop(subs_guard);
 
                     node_result = get_or_create_conn(
                         &address_clone_for_task,
@@ -2043,9 +2016,6 @@ where
             .await;
         }
         in_progress.store(false, Ordering::Relaxed);
-
-        Self::refresh_pubsub_subscriptions(inner).await;
-
         res
     }
 
@@ -2067,7 +2037,7 @@ where
         loop {
             let _ = boxed_sleep(interval_duration).await;
             // Check and refresh topology if needed
-            let should_refresh_pubsub = match Self::check_topology_and_refresh_if_diff(
+            let _ = match Self::check_topology_and_refresh_if_diff(
                 inner.clone(),
                 &RefreshPolicy::Throttable,
             )
@@ -2082,15 +2052,6 @@ where
                     true
                 }
             };
-
-            // Refresh pubsub subscriptions if topology wasn't changed or an error occurred.
-            // This serves as a safety measure for validating pubsub subscriptions state in case it has drifted
-            // while topology stayed the same.
-            // For example, a failed attempt to refresh a connection which is triggered from refresh_pubsub_subscriptions(),
-            // might leave a node unconnected indefinitely in case topology is stable and no request are attempted to this node.
-            if should_refresh_pubsub {
-                Self::refresh_pubsub_subscriptions(inner.clone()).await;
-            }
         }
     }
 
@@ -2107,92 +2068,6 @@ where
             }
 
             Self::validate_all_user_connections(inner.clone()).await;
-        }
-    }
-
-    async fn refresh_pubsub_subscriptions(inner: Arc<InnerCore<C>>) {
-        if inner.cluster_params.read().expect(MUTEX_READ_ERR).protocol
-            != crate::types::ProtocolVersion::RESP3
-        {
-            return;
-        }
-
-        let mut addrs_to_refresh: HashSet<String> = HashSet::new();
-        {
-            let mut subs_by_address_guard = inner.subscriptions_by_address.write().await;
-            let mut unassigned_subs_guard = inner.unassigned_subscriptions.write().await;
-            let conns_read_guard = inner.conn_lock.read().expect(MUTEX_READ_ERR);
-            // validate active subscriptions location
-            subs_by_address_guard.retain(|current_address, address_subs| {
-                address_subs.retain(|kind, channels_patterns| {
-                    channels_patterns.retain(|channel_pattern| {
-                        let new_slot = get_slot(channel_pattern);
-                        let valid = if let Some((new_address, _)) = conns_read_guard
-                            .connection_for_route(&Route::new(new_slot, SlotAddr::Master))
-                        {
-                            *new_address == *current_address
-                        } else {
-                            false
-                        };
-                        // no new address or new address differ - move to unassigned and store this address for connection reset
-                        if !valid {
-                            // need to drop the original connection for clearing the subscription in the server, avoiding possible double-receivers
-                            if conns_read_guard
-                                .connection_for_address(current_address)
-                                .is_some()
-                            {
-                                addrs_to_refresh.insert(current_address.clone());
-                            }
-
-                            unassigned_subs_guard
-                                .entry(*kind)
-                                .and_modify(|channels_patterns| {
-                                    channels_patterns.insert(channel_pattern.clone());
-                                })
-                                .or_insert(HashSet::from([channel_pattern.clone()]));
-                        }
-                        valid
-                    });
-                    !channels_patterns.is_empty()
-                });
-                !address_subs.is_empty()
-            });
-
-            // try to assign new addresses
-            unassigned_subs_guard.retain(|kind: &PubSubSubscriptionKind, channels_patterns| {
-                channels_patterns.retain(|channel_pattern| {
-                    let new_slot = get_slot(channel_pattern);
-                    if let Some((new_address, _)) = conns_read_guard
-                        .connection_for_route(&Route::new(new_slot, SlotAddr::Master))
-                    {
-                        // need to drop the new connection so the subscription will be picked up in setup_connection()
-                        addrs_to_refresh.insert(new_address.clone());
-
-                        let e = subs_by_address_guard
-                            .entry(new_address.clone())
-                            .or_insert(PubSubSubscriptionInfo::new());
-
-                        e.entry(*kind)
-                            .or_insert(HashSet::new())
-                            .insert(channel_pattern.clone());
-
-                        return false;
-                    }
-                    true
-                });
-                !channels_patterns.is_empty()
-            });
-        }
-
-        if !addrs_to_refresh.is_empty() {
-            // immediately trigger connection reestablishment
-            Self::refresh_and_update_connections(
-                inner.clone(),
-                addrs_to_refresh,
-                RefreshConnectionType::AllConnections,
-                false,
-            )
-            .await;
         }
     }
 
@@ -2292,6 +2167,15 @@ where
                                 })
                             })
                             .unwrap_or(None);
+
+                        // If we found a connection by IP lookup, update the PushManager. This ensures the PushManager
+                        // stores the DNS address (which matches the connection_map key) instead of the old IP
+                        // or config endpoint address, which is needed for pubsub tracking
+                        if let Some(ref node) = conn {
+                            let mut connection = node.user_connection.conn.clone().await;
+                            connection.update_push_manager_node_address(addr.clone());
+                        }
+
                         addrs_and_conns.push((addr, conn));
                         addrs_and_conns
                     }
@@ -2302,12 +2186,9 @@ where
             .fold(
                 ConnectionsMap(DashMap::with_capacity(nodes_len)),
                 |connections, (addr, node)| async {
-                    let mut cluster_params = inner
+                    let cluster_params = inner
                         .get_cluster_param(|params| params.clone())
                         .expect(MUTEX_READ_ERR);
-                    let subs_guard = inner.subscriptions_by_address.read().await;
-                    cluster_params.pubsub_subscriptions = subs_guard.get(&addr).cloned();
-                    drop(subs_guard);
                     let node = get_or_create_conn(
                         &addr,
                         node,

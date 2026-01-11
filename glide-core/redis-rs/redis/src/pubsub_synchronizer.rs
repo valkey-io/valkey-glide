@@ -74,14 +74,28 @@ pub trait PubSubSynchronizer: Send + Sync {
         None
     }
 
-    /// Set initial subscriptions from client configuration and trigger immediate reconciliation
-    fn set_initial_subscriptions(
+    /// Wait for subscriptions to synchronize.
+    ///
+    /// # Arguments
+    /// * `timeout_ms` - Timeout in milliseconds. If 0, waits indefinitely until sync completes.
+    /// * `expected_channels` - If provided, waits until these exact channels are synced (desired == actual).
+    /// * `expected_patterns` - If provided, waits until these patterns are synced (desired == actual).
+    /// * `expected_sharded` - If provided, waits until these sharded channels are synced (desired == actual).
+    ///
+    /// - If all optional parameters are `None`, waits until desired == actual for all subscription types.
+    /// - If specific parameters are provided, waits only for those channels/patterns to be synced,
+    ///
+    /// # Returns
+    /// * `Ok(())` - Sync completed successfully.
+    /// * `Err` - Timeout occurred before sync completed (when `timeout_ms > 0`).
+    async fn wait_for_sync(
         &self,
-        _channels: HashSet<PubSubChannelOrPattern>,
-        _patterns: HashSet<PubSubChannelOrPattern>,
-        _sharded: HashSet<PubSubChannelOrPattern>,
-    ) {
-        // Default: no-op
+        _timeout_ms: u64,
+        _expected_channels: Option<HashSet<Vec<u8>>>,
+        _expected_patterns: Option<HashSet<Vec<u8>>>,
+        _expected_sharded: Option<HashSet<Vec<u8>>>,
+    ) -> RedisResult<()> {
+        Ok(()) // Default: no-op
     }
 
     /// Allows downcasting to concrete types

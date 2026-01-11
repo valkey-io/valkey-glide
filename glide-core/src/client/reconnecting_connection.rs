@@ -8,7 +8,6 @@ use redis::aio::{DisconnectNotifier, MultiplexedConnection};
 use redis::{
     GlideConnectionOptions, PushInfo, RedisConnectionInfo, RedisError, RedisResult, RetryStrategy,
 };
-use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -390,13 +389,6 @@ impl ReconnectingConnection {
                                 .connection_available_signal
                                 .set();
                             *guard = ConnectionState::Connected(connection);
-                        }
-
-                        if let Some(sync) = &connection_clone.connection_options.pubsub_synchronizer
-                        {
-                            sync.remove_current_subscriptions_for_addresses(&HashSet::from([
-                                connection_clone.node_address(),
-                            ]));
                         }
 
                         Telemetry::incr_total_connections(1);

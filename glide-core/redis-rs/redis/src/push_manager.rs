@@ -114,6 +114,20 @@ impl PushManager {
     pub fn get_address(&self) -> Option<String> {
         self.address.clone()
     }
+
+    /// Get the PubSub synchronizer if one is configured
+    pub fn get_synchronizer(&self) -> Option<Arc<dyn PubSubSynchronizer>> {
+        self.pubsub_synchronizer.clone()
+    }
+
+    /// Create a new PushManager with an updated address, preserving sender and synchronizer
+    pub fn with_address(&self, address: String) -> PushManager {
+        PushManager {
+            sender: self.sender.clone(),
+            pubsub_synchronizer: self.pubsub_synchronizer.clone(),
+            address: Some(address),
+        }
+    }
 }
 
 #[cfg(test)]

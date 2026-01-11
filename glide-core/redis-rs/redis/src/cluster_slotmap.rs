@@ -161,7 +161,7 @@ impl SlotMap {
 
     /// Retrieves the shard addresses (`ShardAddrs`) for the specified `slot` by looking it up in the `slots` tree,
     /// returning a reference to the stored shard addresses if found.
-    pub(crate) fn shard_addrs_for_slot(&self, slot: u16) -> Option<Arc<ShardAddrs>> {
+    pub fn shard_addrs_for_slot(&self, slot: u16) -> Option<Arc<ShardAddrs>> {
         self.slots
             .range(slot..)
             .next()

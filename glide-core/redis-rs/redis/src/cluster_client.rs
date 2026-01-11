@@ -6,7 +6,7 @@ use crate::cluster_topology::{
 use crate::connection::{ConnectionAddr, ConnectionInfo, IntoConnectionInfo};
 use crate::types::{ErrorKind, ProtocolVersion, RedisError, RedisResult};
 use crate::{cluster, cluster::TlsMode};
-use crate::{PubSubSubscriptionInfo, PushInfo, RetryStrategy};
+use crate::{PushInfo, RetryStrategy};
 use rand::Rng;
 #[cfg(feature = "cluster-async")]
 use std::ops::Add;
@@ -44,7 +44,6 @@ struct BuilderParams {
     lib_name: Option<String>,
     response_timeout: Option<Duration>,
     protocol: ProtocolVersion,
-    pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
     reconnect_retry_strategy: Option<RetryStrategy>,
     refresh_topology_from_initial_nodes: bool,
     database_id: i64,
@@ -148,7 +147,6 @@ pub struct ClusterParams {
     pub(crate) connection_timeout: Duration,
     pub(crate) response_timeout: Duration,
     pub(crate) protocol: ProtocolVersion,
-    pub(crate) pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
     pub(crate) reconnect_retry_strategy: Option<RetryStrategy>,
     pub(crate) refresh_topology_from_initial_nodes: bool,
     pub(crate) database_id: i64,
@@ -181,7 +179,6 @@ impl ClusterParams {
             lib_name: value.lib_name,
             response_timeout: value.response_timeout.unwrap_or(Duration::MAX),
             protocol: value.protocol,
-            pubsub_subscriptions: value.pubsub_subscriptions,
             reconnect_retry_strategy: value.reconnect_retry_strategy,
             refresh_topology_from_initial_nodes: value.refresh_topology_from_initial_nodes,
             database_id: value.database_id,
@@ -554,15 +551,6 @@ impl ClusterClientBuilder {
         } else {
             ReadFromReplicaStrategy::AlwaysFromPrimary
         };
-        self
-    }
-
-    /// Sets the pubsub configuration for the new ClusterClient.
-    pub fn pubsub_subscriptions(
-        mut self,
-        pubsub_subscriptions: PubSubSubscriptionInfo,
-    ) -> ClusterClientBuilder {
-        self.builder_params.pubsub_subscriptions = Some(pubsub_subscriptions);
         self
     }
 }
