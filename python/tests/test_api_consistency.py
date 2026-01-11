@@ -92,7 +92,7 @@ EXCLUDED_TESTS = {
         "test_subscribe_empty_set",
         "test_unsubscribe_from_nonexistent",
         "test_subscription_sync_timestamp_metric_on_success",
-        # Dynamic PubSub tests helper functions
+        # Dynamic PubSub tests helper functions - TODO remove once pubsub implemented for the sync client
         "subscribe_by_method",
         "unsubscribe_by_method",
         "psubscribe_by_method",
@@ -112,8 +112,13 @@ EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
         "test_opentelemetry.py",
         "test_deprecation_warnings.py",
+        # TODO: Remove when implementing dynamic pubsub for the sync client
+        "test_pubsub.py",
     ],
-    "sync_only": [],
+    "sync_only": [
+        # TODO: Remove when implementing dynamic pubsub for the sync client
+        "test_sync_pubsub.py"
+    ],
 }
 
 

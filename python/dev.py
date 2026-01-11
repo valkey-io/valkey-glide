@@ -457,11 +457,15 @@ def run_linters(check_only: bool = False) -> None:
     print("[OK] All linters completed successfully.")
 
 
-def run_tests(extra_args: Optional[List[str]] = None) -> None:
+def run_tests(
+    extra_args: Optional[List[str]] = None, mock_pubsub: bool = False
+) -> None:
     print("[INFO] Running test suite...")
     env = get_venv_env()
 
     cmd = ["pytest", "-v"]
+    if mock_pubsub:
+        cmd.append("--mock-pubsub")
     if extra_args:
         cmd += extra_args
 
@@ -541,6 +545,11 @@ Examples:
         nargs=argparse.REMAINDER,
         help="Additional arguments to pass to pytest",
     )
+    test_parser.add_argument(
+        "--mock-pubsub",
+        action="store_true",
+        help="Indicate running with mock pubsub (skips connection kill tests)",
+    )
 
     args = parser.parse_args()
     check_dependencies()
@@ -557,7 +566,7 @@ Examples:
 
     elif args.command == "test":
         print("🧪 Running tests...")
-        run_tests(args.args)
+        run_tests(args.args, mock_pubsub=args.mock_pubsub)
 
     elif args.command == "build":
         version = args.glide_version

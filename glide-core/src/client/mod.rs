@@ -35,7 +35,6 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
-use crate::pubsub::set_synchronizer_applier;
 use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
 use crate::request_type::RequestType;
 use redis::InfoDict;
@@ -169,7 +168,6 @@ pub async fn get_valkey_connection_info(
     let db = connection_request.database_id;
     let client_name = connection_request.client_name.clone();
     let lib_name = connection_request.lib_name.clone();
-    let pubsub_subscriptions = connection_request.pubsub_subscriptions.clone();
 
     match &connection_request.authentication_info {
         Some(info) => {
@@ -189,7 +187,6 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
-                    pubsub_subscriptions,
                 }
             } else {
                 // Regular password-based authentication
@@ -200,7 +197,6 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
-                    pubsub_subscriptions,
                 }
             }
         }
@@ -209,7 +205,6 @@ pub async fn get_valkey_connection_info(
             protocol,
             client_name,
             lib_name,
-            pubsub_subscriptions,
             ..Default::default()
         },
     }
@@ -405,13 +400,6 @@ impl Client {
         cmd.command().is_some_and(|bytes| bytes == b"SELECT")
     }
 
-    /// Checks if the given command is an SUNSUBSCRIBE command.
-    /// Returns true if the command is "SUNSUBSCRIBE", false otherwise.
-    /// Note: The underlying redis-rs library normalizes commands to uppercase.
-    fn is_sunsubscribe_command(&self, cmd: &Cmd) -> bool {
-        cmd.command().is_some_and(|bytes| bytes == b"SUNSUBSCRIBE")
-    }
-
     /// Extracts the database ID from a SELECT command.
     /// Parses the first argument of the SELECT command as an i64 database ID.
     /// Returns appropriate errors for invalid formats or missing arguments.
@@ -587,6 +575,23 @@ impl Client {
             *guard = real_client;
         }
 
+        // We must drop the guard so the pubsub synchronizer can acquire it when subscribing
+        // to channels provided via config. Keeping the guard would cause a deadlock. We wait
+        // for the subscription here to ensure the lazy client is subscribed immediately upon creation.
+        drop(guard);
+        if let Err(e) = self
+            .pubsub_synchronizer
+            .wait_for_sync(0, None, None, None)
+            .await
+        {
+            log_warn(
+                "Client::new",
+                format!("Failed to establish initial subscriptions within timeout: {e:?}"),
+            );
+        }
+
+        // Re-acquire for the return
+        let guard = self.internal_client.read().await;
         Ok(guard.clone()) // ✅ Return clone of the now-initialized wrapper
     }
 
@@ -599,11 +604,6 @@ impl Client {
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             let client = self.get_or_initialize_client().await?;
-
-            // SUNSUBSCRIBE requires setting the fenced flag, so we must create a mutable copy
-            if self.is_sunsubscribe_command(cmd) {
-                cmd.set_fenced(true);
-            }
 
             if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
                 return result;
@@ -1212,24 +1212,52 @@ impl Client {
         Ok(())
     }
 }
-/// Trait for executing PubSub commands.
-/// Defined in glide-core so we can implement it for `RwLock<Client>`.
+/// Trait for executing PubSub commands on the internal client wrapper
 pub trait PubSubCommandApplier: Send + Sync {
     /// Send a subscription command (SUBSCRIBE, UNSUBSCRIBE, etc.)
+    /// If routing is provided, use it; otherwise use default routing logic
     fn apply_pubsub_command<'a>(
-        &'a self,
+        &'a mut self,
         cmd: &'a mut Cmd,
+        routing: Option<SingleNodeRoutingInfo>,
     ) -> Pin<Box<dyn Future<Output = RedisResult<Value>> + Send + 'a>>;
 }
 
-impl PubSubCommandApplier for RwLock<Client> {
+/// Implement the trait for ClientWrapper
+impl PubSubCommandApplier for ClientWrapper {
     fn apply_pubsub_command<'a>(
-        &'a self,
+        &'a mut self,
         cmd: &'a mut Cmd,
+        routing: Option<SingleNodeRoutingInfo>,
     ) -> Pin<Box<dyn Future<Output = RedisResult<Value>> + Send + 'a>> {
         Box::pin(async move {
-            let mut guard = self.write().await;
-            guard.send_command(cmd, None).await
+            match self {
+                ClientWrapper::Standalone(client) => {
+                    // For standalone mode, send unsubscribe commands to all nodes.
+                    // This handles ElastiCache scenarios where DNS address could change
+                    // So we can't know which node we subscribed to
+                    if let Some(command) = cmd.command() {
+                        let cmd_upper = command.to_ascii_uppercase();
+                        if cmd_upper == b"UNSUBSCRIBE" || cmd_upper == b"PUNSUBSCRIBE" {
+                            return client
+                                .send_request_to_all_nodes(cmd, Some(ResponsePolicy::AllSucceeded))
+                                .await;
+                        }
+                    }
+                    client.send_command(cmd).await
+                }
+                ClientWrapper::Cluster { client } => {
+                    let final_routing = routing
+                        .map(RoutingInfo::SingleNode)
+                        .or_else(|| RoutingInfo::for_routable(cmd))
+                        .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random));
+                    client.route_command(cmd, final_routing).await
+                }
+                ClientWrapper::Lazy(_) => Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Client not initialized",
+                ))),
+            }
         })
     }
 }
@@ -1374,9 +1402,6 @@ async fn create_cluster_client(
             builder = builder.certs(certs);
         }
     }
-    if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions.clone() {
-        builder = builder.pubsub_subscriptions(pubsub_subscriptions);
-    }
 
     let retry_strategy = match request.connection_retry_strategy {
         Some(strategy) => RetryStrategy::new(
@@ -1412,7 +1437,7 @@ async fn create_cluster_client(
     // However, this approach would leave the application unaware that the subscriptions were not applied, requiring the user to analyze logs to identify the issue.
     // Instead, we explicitly check the engine version here and fail the connection creation if it is incompatible with sharded subscriptions.
 
-    if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions
+    if let Some(pubsub_subscriptions) = &request.pubsub_subscriptions
         && pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded)
     {
         let info_res = con
@@ -1639,6 +1664,11 @@ impl Client {
         // Create compression manager from configuration
         let compression_manager = create_compression_manager(request.compression_config.clone())?;
 
+        let reconciliation_interval = match request.pubsub_reconciliation_interval_ms {
+            Some(ms) if ms > 0 => Some(Duration::from_millis(ms as u64)),
+            _ => None,
+        };
+
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
@@ -1654,6 +1684,9 @@ impl Client {
                 push_sender.clone(),
                 initial_subscriptions,
                 request.cluster_mode_enabled,
+                Arc::downgrade(&internal_client_arc),
+                reconciliation_interval,
+                request_timeout,
             )
             .await;
 
@@ -1669,11 +1702,6 @@ impl Client {
 
             let client_arc = Arc::new(RwLock::new(client));
 
-            //  Set the client as the command applier in the synchronizer
-            //  so the synchronizer can send pubsub commands through the client
-            let applier: Arc<dyn PubSubCommandApplier> = client_arc.clone();
-            set_synchronizer_applier(&pubsub_synchronizer, Arc::downgrade(&applier));
-
             // Create IAM token manager if needed, passing a strong Arc to the callback
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
                 Self::create_iam_token_manager(auth_info, Arc::clone(&client_arc)).await
@@ -1687,7 +1715,8 @@ impl Client {
                 client_guard.iam_token_manager = iam_token_manager.clone();
             }
 
-            let internal_client = if request.lazy_connect {
+            let is_lazy = request.lazy_connect;
+            let internal_client = if is_lazy {
                 ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request,
                     push_sender,
@@ -1719,6 +1748,19 @@ impl Client {
             {
                 let mut guard = internal_client_arc.write().await;
                 *guard = internal_client;
+            }
+
+            if !is_lazy {
+                pubsub_synchronizer.trigger_reconciliation();
+                if let Err(e) = pubsub_synchronizer.wait_for_sync(0, None, None, None).await {
+                    log_error(
+                        "Client::new",
+                        format!(
+                            "Failed to establish initial subscriptions within timeout: {:?}",
+                            e
+                        ),
+                    );
+                }
             }
 
             // Return the client from the Arc
@@ -1783,6 +1825,20 @@ impl GlideClientForTests for StandaloneClient {
     }
 }
 
+// This is used for pubsub tests
+impl GlideClientForTests for ClusterConnection {
+    fn send_command<'a>(
+        &'a mut self,
+        cmd: &'a mut redis::Cmd,
+        routing: Option<RoutingInfo>,
+    ) -> redis::RedisFuture<'a, Value> {
+        let final_routing =
+            routing.unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random));
+
+        async move { self.route_command(cmd, final_routing).await }.boxed()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -1795,6 +1851,7 @@ mod tests {
     };
 
     use super::{Client, ClientWrapper, LazyClient, get_timeout_from_cmd_arg};
+    use std::sync::Weak;
 
     #[test]
     fn test_get_timeout_from_cmd_returns_correct_duration_int() {
@@ -2038,7 +2095,14 @@ mod tests {
         // Create runtime to initialize a stub pubsub synchronizer
         // We do this in order to keep the pubsub_synchronizer in the client struct non-optional.
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let pubsub_synchronizer = rt.block_on(create_pubsub_synchronizer(None, None, false));
+        let pubsub_synchronizer = rt.block_on(create_pubsub_synchronizer(
+            None,
+            None,
+            false,
+            Weak::new(),
+            None,
+            Duration::from_millis(250),
+        ));
 
         Client {
             internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),

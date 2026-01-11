@@ -113,6 +113,21 @@ pin_project! {
         is_stream_closed: Arc<AtomicBool>,
         response_sync_lost: bool,
     }
+
+        impl<T> PinnedDrop for PipelineSink<T> {
+        fn drop(this: Pin<&mut Self>) {
+            let this = this.project();
+            let push_manager = this.push_manager.load();
+            let address = push_manager.get_address();
+
+            if let Some(address) = address {
+                if let Some(sync) = push_manager.get_synchronizer() {
+                    let addresses = std::collections::HashSet::from([address.clone()]);
+                    sync.remove_current_subscriptions_for_addresses(&addresses);
+                }
+            }
+        }
+    }
 }
 
 impl<T> PipelineSink<T>
@@ -542,7 +557,7 @@ where
     }
 
     /// Sets `PushManager` of Pipeline
-    async fn set_push_manager(&mut self, push_manager: PushManager) {
+    fn set_push_manager(&mut self, push_manager: PushManager) {
         self.push_manager.store(Arc::new(push_manager));
     }
 
@@ -617,7 +632,7 @@ impl MultiplexedConnection {
             Some(connection_info.addr.to_string()),
         );
 
-        pipeline.set_push_manager(pm.clone()).await;
+        pipeline.set_push_manager(pm.clone());
 
         let mut con = MultiplexedConnection::builder(pipeline)
             .with_db(connection_info.redis.db)
@@ -729,7 +744,7 @@ impl MultiplexedConnection {
     /// Sets `PushManager` of connection
     pub async fn set_push_manager(&mut self, push_manager: PushManager) {
         self.push_manager = push_manager.clone();
-        self.pipeline.set_push_manager(push_manager).await;
+        self.pipeline.set_push_manager(push_manager);
     }
 
     /// For external visibility (glide-core)
@@ -750,6 +765,14 @@ impl MultiplexedConnection {
     /// Creates a new `MultiplexedConnectionBuilder` for constructing a `MultiplexedConnection`.
     pub(crate) fn builder(pipeline: Pipeline<Vec<u8>>) -> MultiplexedConnectionBuilder {
         MultiplexedConnectionBuilder::new(pipeline)
+    }
+
+    /// Update the node address used for PubSub tracking.
+    /// This updates both the Pipeline's shared PushManager and the local copy.
+    pub fn update_push_manager_node_address(&mut self, address: String) {
+        let updated_pm = self.push_manager.with_address(address);
+        self.pipeline.set_push_manager(updated_pm.clone());
+        self.push_manager = updated_pm;
     }
 }
 
@@ -870,6 +893,10 @@ impl ConnectionLike for MultiplexedConnection {
     /// Set the node's availability zone
     fn set_az(&mut self, az: Option<String>) {
         self.availability_zone = az;
+    }
+
+    fn update_push_manager_node_address(&mut self, address: String) {
+        MultiplexedConnection::update_push_manager_node_address(self, address);
     }
 }
 impl MultiplexedConnection {
