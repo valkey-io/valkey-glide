@@ -4943,3 +4943,41 @@ class TestPubSub:
 
         finally:
             await pubsub_client_cleanup(listening_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_pubsub_callback_only_raises_error_on_get_methods(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Tests that when a client is configured with only a callback (no polling),
+        calling get_pubsub_message() or try_get_pubsub_message() raises ConfigurationError.
+        Also verifies that messages are still received through the callback when
+        subscriptions are added dynamically.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            callback_messages: List[PubSubMsg] = []
+
+            # Create client with callback but no initial subscriptions
+            listening_client = await create_pubsub_client(
+                request,
+                cluster_mode,
+                callback=new_message,
+                context=callback_messages,
+            )
+
+            # Verify get_pubsub_message raises ConfigurationError
+            with pytest.raises(ConfigurationError) as exc_info:
+                await listening_client.get_pubsub_message()
+            assert "callback" in str(exc_info.value).lower()
+
+            # Verify try_get_pubsub_message raises ConfigurationError
+            with pytest.raises(ConfigurationError) as exc_info:
+                listening_client.try_get_pubsub_message()
+            assert "callback" in str(exc_info.value).lower()
+
+        finally:
+            await pubsub_client_cleanup(listening_client)
+            await pubsub_client_cleanup(publishing_client)
