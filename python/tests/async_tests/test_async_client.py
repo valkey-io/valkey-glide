@@ -10420,7 +10420,9 @@ class TestClusterRoutes:
 
         # Test no_scores option
         if not await check_if_server_version_lt(glide_client, "8.0.0"):
-            result = await glide_client.zscan(key1, initial_cursor, no_scores=True)
+            result = await glide_client.zscan(
+                key1, initial_cursor, match="value*", no_scores=True
+            )
             assert result[result_cursor_index] != b"0"
             values_array = cast(List[bytes], result[result_collection_index])
             # Verify that scores are not included
