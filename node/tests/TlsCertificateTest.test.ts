@@ -24,6 +24,7 @@ import {
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
+const CLUSTER_CREATION_TIMEOUT = 120000; // Increased timeout for TLS cluster creation
 
 describe("TLS with custom certificates", () => {
     let standaloneCluster: ValkeyCluster;
@@ -70,7 +71,10 @@ describe("TLS with custom certificates", () => {
             process.env.GLIDE_HOME_DIR || process.cwd() + "/..";
         const caCertPath = `${glideHomeDir}/utils/tls_crts/ca.crt`;
         caCertData = fs.readFileSync(caCertPath);
-    }, TIMEOUT);
+
+        // Small delay to ensure cluster is fully ready after TLS setup
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }, CLUSTER_CREATION_TIMEOUT);
 
     afterEach(async () => {
         if (standaloneClient) {

@@ -16,6 +16,7 @@ import {
     getServerVersion,
 } from "./TestUtilities";
 const TIMEOUT = 50000;
+const CLUSTER_CREATION_TIMEOUT = 120000; // Increased timeout for TLS cluster creation
 const TLS_OPTIONS = {
     advancedConfiguration: {
         tlsAdvancedConfiguration: { insecure: true },
@@ -37,7 +38,9 @@ describe("tls GlideClusterClient", () => {
             true,
             TLS_OPTIONS,
         );
-    }, TIMEOUT);
+        // Small delay to ensure cluster is fully ready after TLS setup
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }, CLUSTER_CREATION_TIMEOUT);
 
     afterEach(async () => {
         await flushAndCloseClient(
@@ -63,6 +66,9 @@ describe("tls GlideClusterClient", () => {
                 error as Error,
             );
         }
+
+        // Additional delay to ensure proper TLS cleanup
+        await new Promise((resolve) => setTimeout(resolve, 100));
     });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -99,7 +105,9 @@ describe("tls GlideClient", () => {
             true,
             TLS_OPTIONS,
         );
-    }, TIMEOUT);
+        // Small delay to ensure cluster is fully ready after TLS setup
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }, CLUSTER_CREATION_TIMEOUT);
 
     afterEach(async () => {
         await flushAndCloseClient(
@@ -125,6 +133,9 @@ describe("tls GlideClient", () => {
                 error as Error,
             );
         }
+
+        // Additional delay to ensure proper TLS cleanup
+        await new Promise((resolve) => setTimeout(resolve, 100));
     });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
