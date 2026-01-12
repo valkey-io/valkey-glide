@@ -49,7 +49,7 @@ use pipeline_routing::{
     route_for_pipeline, PipelineResponses, ResponsePoliciesMap,
 };
 
-use logger_core::{log_error, log_warn};
+use logger_core::log_error;
 use rand::seq::IteratorRandom;
 
 use std::{
