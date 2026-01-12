@@ -154,11 +154,61 @@ jobs:
             - name: Copy generated files to repo
               run: |
                   cd artifacts
+
+                  # Collect all platforms for tools.go generation
+                  PLATFORMS=()
+
                   for dir in */; do
                     target_name=${dir%/}
+                    PLATFORMS+=("$target_name")
+                    
                     mkdir -p $GITHUB_WORKSPACE/go/rustbin/${target_name}
                     cp ${target_name}/ffi/target/release/libglide_ffi.a $GITHUB_WORKSPACE/go/rustbin/${target_name}/
+                    
+                    # Create doc.go marker file for vendoring support
+                    # Convert platform name to valid Go package name (hyphens to underscores)
+                    package_name="rustbin_${target_name//-/_}"
+                    
+                    cat > "$GITHUB_WORKSPACE/go/rustbin/${target_name}/doc.go" << EOF
+                  // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
+                  // Package ${package_name} exists solely to ensure this directory is included
+                  // when using 'go mod vendor'.
+                  //
+                  // This directory contains libglide_ffi.a, the precompiled Rust FFI library
+                  // for the ${target_name} target.
+                  //
+                  // DO NOT IMPORT THIS PACKAGE. It contains no usable Go code and is never
+                  // compiled into binaries. This file only exists to make the directory a valid
+                  // Go package for vendoring purposes.
+                  //
+                  // See: https://github.com/valkey-io/valkey-glide/issues/4721
+                  package ${package_name}
+                  EOF
                   done
+
+                  # Generate tools.go to import all platform packages for vendoring
+                  cat > "$GITHUB_WORKSPACE/go/tools.go" << 'EOF'
+                  //go:build tools
+
+                  package glide
+
+                  // This file ensures rustbin platform directories are included when using 'go mod vendor'.
+                  //
+                  // This file is AUTO-GENERATED during releases. Do not edit manually.
+                  // It forces vendoring to include all platform-specific rustbin packages.
+                  //
+                  // See: https://github.com/valkey-io/valkey-glide/issues/4721
+                  import (
+                  EOF
+
+                  # Add imports for each platform
+                  for platform in "${PLATFORMS[@]}"; do
+                    echo "	_ \"github.com/valkey-io/valkey-glide/go/v2/rustbin/${platform}\"" >> "$GITHUB_WORKSPACE/go/tools.go"
+                  done
+
+                  echo ")" >> "$GITHUB_WORKSPACE/go/tools.go"
+
                   # TODO: move generation of protobuf and header file to a non-matrix step
                   cd x86_64-unknown-linux-gnu
                   cp go/lib.h $GITHUB_WORKSPACE/go/
