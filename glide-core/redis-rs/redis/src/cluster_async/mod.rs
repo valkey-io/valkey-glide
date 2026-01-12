@@ -3311,66 +3311,112 @@ where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
     // Resolve initial nodes to get their addresses.
-    // The resolved addresses are tuples of (host, Option<IpAddr>).
-    // Representing the host and its resolved IP address (if available).
+    // Returns Vec<(dns_address, Option<SocketAddr>)>
     let resolved_addresses =
         ClusterConnInner::<C>::try_to_expand_initial_nodes(&inner.initial_nodes).await;
 
-    // Filter the resolved addresses to keep only those with valid IP addresses.
-    let valid_addresses: Vec<String> = resolved_addresses
-        .into_iter()
-        .filter_map(|(host, socket_addr)| match socket_addr {
-            Some(addr) => Some(addr.to_string()),
-            None => {
-                log_warn("No valid IP address found for host: {}", host);
-                None
-            }
-        })
-        .collect();
-
-    if valid_addresses.is_empty() {
+    if resolved_addresses.is_empty() {
         return Err(RedisError::from((
             ErrorKind::AllConnectionsUnavailable,
-            "No valid addresses found",
+            "No initial nodes available",
         )));
     }
 
-    let selected_addresses: Vec<String> = {
+    // Collect address pairs: (dns_address, Option<ip_address>)
+    let address_pairs: Vec<(String, Option<String>)> = resolved_addresses
+        .into_iter()
+        .map(|(dns_addr, socket_addr)| {
+            let ip_addr = socket_addr.map(|addr| addr.to_string());
+            (dns_addr, ip_addr)
+        })
+        .collect();
+
+    // Select random addresses
+    let selected_pairs: Vec<(String, Option<String>)> = {
         let mut rng = rand::rng();
-        valid_addresses
-            .clone()
+        address_pairs
             .into_iter()
             .choose_multiple(&mut rng, num_of_nodes_to_query)
     };
 
-    // Run refresh_and_update_connections with a timeout of connection timeout
-    // If selected hosts do not have active connections, this will initiate connections to them and will add them to the connection map.
-    // If they already have active connections, it will return those connections.
-    let _ = tokio::time::timeout(
-        inner.get_cluster_param(|p| p.connection_timeout)?,
-        ClusterConnInner::refresh_and_update_connections(
-            inner.clone(),
-            selected_addresses.iter().cloned().collect(),
-            RefreshConnectionType::OnlyManagementConnection,
-            true,
-        ),
-    )
-    .await;
+    // Try to find existing connections for selected addresses
+    let mut connections = Vec::with_capacity(selected_pairs.len());
+    let mut addresses_needing_connection = Vec::new();
 
-    // Create a future for each selected address to establish a connection.
-    let connections = selected_addresses
-        .into_iter()
-        .filter_map(|address| {
-            let conn = inner
-                .conn_lock
-                .read()
-                .expect(MUTEX_READ_ERR)
-                .management_connection_for_address(&address);
-            conn
-        })
-        .collect::<Vec<_>>();
+    // Partition selected addresses into those with existing connections and those without
+    for (dns_addr, ip_addr) in selected_pairs {
+        match find_connection_by_dns_or_ip(inner, &dns_addr, ip_addr.as_deref()).await {
+            Some(conn) => connections.push(conn),
+            None => addresses_needing_connection.push((dns_addr, ip_addr)),
+        }
+    }
+    // Trigger connection refresh for addresses that need connections
+    if !addresses_needing_connection.is_empty() {
+        // Use IP addresses for refresh if available, otherwise DNS
+        let addresses_to_refresh: std::collections::HashSet<String> = addresses_needing_connection
+            .iter()
+            .map(|(dns, ip)| ip.clone().unwrap_or_else(|| dns.clone()))
+            .collect();
+
+        let _ = tokio::time::timeout(
+            inner.get_cluster_param(|p| p.connection_timeout)?,
+            ClusterConnInner::refresh_and_update_connections(
+                inner.clone(),
+                addresses_to_refresh,
+                RefreshConnectionType::OnlyManagementConnection,
+                true,
+            ),
+        )
+        .await;
+
+        // Try to get the connections again (check both DNS and IP)
+        for (dns_addr, ip_addr) in addresses_needing_connection {
+            if let Some(conn) =
+                find_connection_by_dns_or_ip(inner, &dns_addr, ip_addr.as_deref()).await
+            {
+                connections.push(conn);
+            }
+        }
+    }
+
+    if connections.is_empty() {
+        return Err(RedisError::from((
+            ErrorKind::AllConnectionsUnavailable,
+            "No valid connections found from initial nodes",
+        )));
+    }
 
     Ok(connections)
+}
+
+/// Finds a connection by DNS address or by resolved IP address.
+///
+/// The connection map can store connections by either DNS hostname or IP address.
+/// This function checks both to find an existing connection.
+/// If a connection is found by DNS, it is returned immediately.
+/// If not found by DNS, it checks by IP address (if provided), which is an O(n) search.
+async fn find_connection_by_dns_or_ip<C>(
+    inner: &Core<C>,
+    dns_addr: &str,
+    ip_addr: Option<&str>,
+) -> Option<(String, Shared<Pin<Box<dyn Future<Output = C> + Send>>>)>
+where
+    C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
+{
+    println!(
+        "Finding connection for DNS: {}, IP: {:?}",
+        dns_addr, ip_addr
+    );
+
+    let conn_lock = inner.conn_lock.read().expect(MUTEX_READ_ERR);
+
+    // First, try to get a connection by DNS address
+    if let Some(conn) = conn_lock.management_connection_for_address(dns_addr) {
+        return Some(conn);
+    }
+
+    // Fall back to IP address
+    ip_addr.and_then(|ip| conn_lock.management_connection_for_ip_address(ip))
 }
 
 async fn calculate_topology_from_random_nodes<C>(

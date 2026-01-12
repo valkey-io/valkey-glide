@@ -1,3 +1,4 @@
+use crate::cluster_async::testing::get_host_and_port_from_addr;
 use crate::cluster_async::ConnectionFuture;
 use crate::cluster_routing::{Route, ShardAddrs, SlotAddr};
 use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap, SlotMapValue};
@@ -616,6 +617,39 @@ where
             let (address, conn) = (item.key(), item.value());
             (address.clone(), conn.user_connection.conn.clone())
         })
+    }
+
+    /// Find a node by its IP address (stored in ConnectionDetails.ip)
+    /// Returns the DNS address (key) and the ClusterNode if found
+    /// This is an O(n) search, since we have to look through all nodes
+    pub(crate) fn node_for_ip_address(
+        &self,
+        ip_address: &str,
+    ) -> Option<(String, ClusterNode<Connection>)> {
+        // Parse IP from address string (might include port like "172.31.32.124:6379")
+        let target_ip: IpAddr = get_host_and_port_from_addr(ip_address)
+            .and_then(|(host, _port)| host.parse().ok())
+            .or_else(|| ip_address.parse().ok())?;
+
+        self.connection_map
+            .iter()
+            .find(|item| item.value().user_connection.ip == Some(target_ip))
+            .map(|item| (item.key().clone(), item.value().clone()))
+    }
+
+    /// Find management connection by IP address
+    /// Returns (dns_address, connection_future)
+    /// This is an O(n) search, since we have to look through all nodes
+    pub(crate) fn management_connection_for_ip_address(
+        &self,
+        ip_address: &str,
+    ) -> Option<(String, Connection)> {
+        self.node_for_ip_address(ip_address)
+            .and_then(|(dns_addr, node)| {
+                node.management_connection
+                    .map(|mc| (dns_addr.clone(), mc.conn))
+                    .or_else(|| Some((dns_addr, node.user_connection.conn)))
+            })
     }
 
     /// Returns the management connection for the given address if it exists,
