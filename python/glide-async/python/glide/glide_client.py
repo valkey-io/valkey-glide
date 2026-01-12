@@ -46,6 +46,7 @@ from glide_shared.constants import (
 )
 from glide_shared.exceptions import (
     ClosingError,
+    ConfigurationError,
     ConnectionError,
     RequestError,
     get_request_error_class,
@@ -532,6 +533,11 @@ class BaseClient(CoreCommands):
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
 
+        if self.config._get_pubsub_callback_and_context()[0] is not None:
+            raise ConfigurationError(
+                "The operation will never complete since messages will be passed to the configured callback."
+            )
+
         # locking might not be required
         response_future: "TFuture" = _get_new_future_instance()
         try:
@@ -547,6 +553,11 @@ class BaseClient(CoreCommands):
         if self._is_closed:
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
+            )
+
+        if self.config._get_pubsub_callback_and_context()[0] is not None:
+            raise ConfigurationError(
+                "The operation will never complete since messages will be passed to the configured callback."
             )
 
         # locking might not be required
