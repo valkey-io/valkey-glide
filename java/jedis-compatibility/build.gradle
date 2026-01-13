@@ -29,7 +29,7 @@ dependencies {
     implementation project(':client')
 
     // Transitive dependencies needed by GLIDE client
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.18.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
 
     implementation('com.google.protobuf:protobuf-java') {
         version {
@@ -39,7 +39,7 @@ dependencies {
     }
 
     // Apache Commons Pool 2 for connection pooling - part of public API
-    implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
+    implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.13.1'
 
     // Test dependencies
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
@@ -53,7 +53,7 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok:1.18.42'
 
     // SpotBugs annotations for static analysis (compile-only to avoid IDE errors)
-    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.0'
+    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.9.8'
 }
 
 java {
