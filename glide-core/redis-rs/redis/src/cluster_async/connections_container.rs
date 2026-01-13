@@ -621,34 +621,33 @@ where
 
     /// Find a node by its IP address (stored in ConnectionDetails.ip)
     /// Returns the DNS address (key) and the ClusterNode if found
-    /// This is an O(n) search, since we have to look through all nodes
+    /// Note: This function performs an O(n) search over the connection map,
+    /// where n is the number of nodes.
     pub(crate) fn node_for_ip_address(
         &self,
-        ip_address: &str,
+        ip_address: IpAddr,
     ) -> Option<(String, ClusterNode<Connection>)> {
-        // Parse IP from address string (might include port like "172.31.32.124:6379")
-        let target_ip: IpAddr = get_host_and_port_from_addr(ip_address)
-            .and_then(|(host, _port)| host.parse().ok())
-            .or_else(|| ip_address.parse().ok())?;
-
         self.connection_map
             .iter()
-            .find(|item| item.value().user_connection.ip == Some(target_ip))
+            .find(|item| item.value().user_connection.ip == Some(ip_address))
             .map(|item| (item.key().clone(), item.value().clone()))
     }
 
-    /// Find management connection by IP address
+    /// Find connection by IP address, preferring management connection.
+    /// Returns management connection if available, otherwise user connection.
     /// Returns (dns_address, connection_future)
-    /// This is an O(n) search, since we have to look through all nodes
+    /// Note: This function performs an O(n) search over the connection map,
+    /// where n is the number of nodes.
     pub(crate) fn management_connection_for_ip_address(
         &self,
-        ip_address: &str,
+        ip_address: IpAddr,
     ) -> Option<(String, Connection)> {
         self.node_for_ip_address(ip_address)
-            .and_then(|(dns_addr, node)| {
-                node.management_connection
-                    .map(|mc| (dns_addr.clone(), mc.conn))
-                    .or_else(|| Some((dns_addr, node.user_connection.conn)))
+            .map(|(dns_addr, node)| {
+                (
+                    dns_addr,
+                    node.get_connection(&ConnectionType::PreferManagement),
+                )
             })
     }
 
@@ -659,14 +658,10 @@ where
         address: &str,
     ) -> Option<ConnectionAndAddress<Connection>> {
         self.connection_map.get(address).map(|item| {
-            let (address, conn) = (item.key(), item.value());
             (
-                address.clone(),
-                conn.management_connection
-                    .as_ref()
-                    .unwrap_or(&conn.user_connection)
-                    .conn
-                    .clone(),
+                item.key().clone(),
+                item.value()
+                    .get_connection(&ConnectionType::PreferManagement),
             )
         })
     }
@@ -806,6 +801,86 @@ mod tests {
                 None
             },
         )
+    }
+
+    fn create_cluster_node_with_ip(
+        connection: usize,
+        use_management_connections: bool,
+        ip: Option<IpAddr>,
+        node_az: Option<String>,
+    ) -> ClusterNode<usize> {
+        ClusterNode::new(
+            (connection, ip, node_az.clone()).into(),
+            if use_management_connections {
+                Some((connection * 10, ip, node_az).into())
+            } else {
+                None
+            },
+        )
+    }
+
+    fn create_container_with_ips() -> ConnectionsContainer<usize> {
+        let slot_map = SlotMap::new(
+            vec![
+                Slot::new(1, 1000, "primary1".to_owned(), Vec::new()),
+                Slot::new(
+                    1002,
+                    2000,
+                    "primary2".to_owned(),
+                    vec!["replica2-1".to_owned()],
+                ),
+                Slot::new(
+                    2001,
+                    3000,
+                    "primary3".to_owned(),
+                    vec!["replica3-1".to_owned(), "replica3-2".to_owned()],
+                ),
+            ],
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        let connection_map = DashMap::new();
+        connection_map.insert(
+            "primary1".into(),
+            create_cluster_node_with_ip(1, false, Some("192.168.1.1".parse().unwrap()), None),
+        );
+        connection_map.insert(
+            "primary2".into(),
+            create_cluster_node_with_ip(
+                2,
+                true, // has management connection
+                Some("192.168.1.2".parse().unwrap()),
+                None,
+            ),
+        );
+        connection_map.insert(
+            "primary3".into(),
+            create_cluster_node_with_ip(3, false, Some("192.168.1.3".parse().unwrap()), None),
+        );
+        connection_map.insert(
+            "replica2-1".into(),
+            create_cluster_node_with_ip(
+                21,
+                true, // has management connection
+                Some("192.168.1.21".parse().unwrap()),
+                None,
+            ),
+        );
+        connection_map.insert(
+            "replica3-1".into(),
+            create_cluster_node_with_ip(31, false, None, None), // no IP set
+        );
+        connection_map.insert(
+            "replica3-2".into(),
+            create_cluster_node_with_ip(32, false, Some("192.168.1.32".parse().unwrap()), None),
+        );
+
+        ConnectionsContainer {
+            slot_map,
+            connection_map,
+            read_from_replica_strategy: ReadFromReplicaStrategy::RoundRobin,
+            topology_hash: 0,
+            refresh_conn_state: Default::default(),
+        }
     }
 
     fn create_container_with_az_strategy(
@@ -1621,5 +1696,96 @@ mod tests {
         current_addresses.sort();
         new_addresses.sort();
         assert_eq!(current_addresses, new_addresses);
+    }
+
+    #[test]
+    fn node_for_ip_address_returns_node_when_ip_matches() {
+        let container = create_container_with_ips();
+        // matches primary1 IP address
+        let ip: IpAddr = "192.168.1.1".parse().unwrap();
+
+        let result = container.node_for_ip_address(ip);
+
+        assert!(result.is_some());
+        let (address, node) = result.unwrap();
+        assert_eq!(address, "primary1");
+        assert_eq!(node.user_connection.conn, 1);
+    }
+
+    #[test]
+    fn node_for_ip_address_returns_none_when_ip_not_found() {
+        let container = create_container_with_ips();
+        // IP address not present in any node
+        let ip: IpAddr = "10.0.0.1".parse().unwrap();
+
+        let result = container.node_for_ip_address(ip);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn node_for_ip_address_returns_none_for_empty_container() {
+        let container = create_container();
+        remove_all_connections(&container);
+        let ip: IpAddr = "192.168.1.1".parse().unwrap();
+
+        let result = container.node_for_ip_address(ip);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn node_for_ip_address_works_with_ipv6() {
+        let container = create_container();
+        let ipv6: IpAddr = "2001:db8::1".parse().unwrap();
+        container.replace_or_add_connection_for_address(
+            "ipv6-node",
+            create_cluster_node_with_ip(100, false, Some(ipv6), None),
+        );
+
+        let result = container.node_for_ip_address(ipv6);
+
+        assert!(result.is_some());
+        let (address, node) = result.unwrap();
+        assert_eq!(address, "ipv6-node");
+        assert_eq!(node.user_connection.conn, 100);
+    }
+
+    #[test]
+    fn management_connection_for_ip_address_returns_management_conn_when_available() {
+        let container = create_container_with_ips();
+        // primary2 has management connection (connection * 10 = 20)
+        let ip: IpAddr = "192.168.1.2".parse().unwrap();
+
+        let result = container.management_connection_for_ip_address(ip);
+
+        assert!(result.is_some());
+        let (address, conn) = result.unwrap();
+        assert_eq!(address, "primary2");
+        assert_eq!(conn, 20); // management connection
+    }
+
+    #[test]
+    fn management_connection_for_ip_address_returns_user_conn_when_no_management_conn() {
+        let container = create_container_with_ips();
+        // primary1 has no management connection
+        let ip: IpAddr = "192.168.1.1".parse().unwrap();
+
+        let result = container.management_connection_for_ip_address(ip);
+
+        assert!(result.is_some());
+        let (address, conn) = result.unwrap();
+        assert_eq!(address, "primary1");
+        assert_eq!(conn, 1); // user connection (fallback)
+    }
+
+    #[test]
+    fn management_connection_for_ip_address_returns_none_when_ip_not_found() {
+        let container = create_container_with_ips();
+        let ip: IpAddr = "10.0.0.1".parse().unwrap();
+
+        let result = container.management_connection_for_ip_address(ip);
+
+        assert!(result.is_none());
     }
 }
