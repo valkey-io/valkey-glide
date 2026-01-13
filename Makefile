@@ -1,4 +1,4 @@
-.PHONY: all java java-test python python-test node node-test check-valkey-server go go-test
+.PHONY: all java java-test python python-test node node-test check-valkey-server go go-test prettier-check prettier-fix
 
 BLUE=\033[34m
 YELLOW=\033[33m
@@ -62,6 +62,23 @@ node-test: .build/node_deps check-valkey-server
 node-lint: .build/node_deps
 	@echo "$(GREEN)Running linters for NodeJS$(RESET)"
 	@cd node && npx run lint:fix
+
+##
+## Prettier targets
+##
+prettier-check:
+	@echo "$(GREEN)Checking formatting with Prettier$(RESET)"
+	@npx prettier --check .github/
+	@for folder in node benchmarks/node benchmarks/utilities; do \
+		npx prettier --check $$folder; \
+	done
+
+prettier-fix:
+	@echo "$(GREEN)Fixing formatting with Prettier$(RESET)"
+	@npx prettier --write .github/
+	@for folder in node benchmarks/node benchmarks/utilities; do \
+		npx prettier --write $$folder; \
+	done
 
 ##
 ## Go targets
