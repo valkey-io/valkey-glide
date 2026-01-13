@@ -3310,73 +3310,71 @@ async fn get_random_connections_from_initial_nodes<C>(
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    // Resolve initial nodes to get their addresses.
-    // Returns Vec<(dns_address, Option<SocketAddr>)>
-    let resolved_addresses =
-        ClusterConnInner::<C>::try_to_expand_initial_nodes(&inner.initial_nodes).await;
-
-    if resolved_addresses.is_empty() {
+    if inner.initial_nodes.is_empty() {
         return Err(RedisError::from((
             ErrorKind::AllConnectionsUnavailable,
-            "No initial nodes available",
+            "No initial nodes configured",
         )));
     }
 
-    // Collect address pairs: (dns_address, Option<ip_address>)
-    let address_pairs: Vec<(String, Option<String>)> = resolved_addresses
-        .into_iter()
-        .map(|(dns_addr, socket_addr)| {
-            let ip_addr = socket_addr.map(|addr| addr.to_string());
-            (dns_addr, ip_addr)
-        })
-        .collect();
+    // Resolve initial nodes to get their addresses.
+    let resolved_addresses =
+        ClusterConnInner::<C>::try_to_expand_initial_nodes(&inner.initial_nodes).await;
 
-    // Select random addresses
-    let selected_pairs: Vec<(String, Option<String>)> = {
+    // Select random addresses from initial nodes for topology query
+    let selected_pairs: Vec<(String, Option<SocketAddr>)> = {
         let mut rng = rand::rng();
-        address_pairs
+        resolved_addresses
             .into_iter()
             .choose_multiple(&mut rng, num_of_nodes_to_query)
+            .into_iter()
+            .map(|(original_addr, socket_addr)| {
+                let resolved_ip = socket_addr.map(|addr| addr);
+                (original_addr, resolved_ip)
+            })
+            .collect()
     };
 
     // Try to find existing connections for selected addresses
     let mut connections = Vec::with_capacity(selected_pairs.len());
-    let mut addresses_needing_connection = Vec::new();
+    let mut addresses_without_connection = Vec::new();
 
     // Partition selected addresses into those with existing connections and those without
-    for (dns_addr, ip_addr) in selected_pairs {
-        match find_connection_by_dns_or_ip(inner, &dns_addr, ip_addr.as_deref()).await {
+    for (dns_addr, socket_addr) in selected_pairs {
+        match find_management_connection(inner, &dns_addr, socket_addr.map(|addr| addr.ip())) {
             Some(conn) => connections.push(conn),
-            None => addresses_needing_connection.push((dns_addr, ip_addr)),
+            None => addresses_without_connection.push((dns_addr, socket_addr)),
         }
     }
     // Trigger connection refresh for addresses that need connections
-    if !addresses_needing_connection.is_empty() {
-        // Use IP addresses for refresh if available, otherwise DNS
-        let addresses_to_refresh: std::collections::HashSet<String> = addresses_needing_connection
+    if !addresses_without_connection.is_empty() {
+        // Use IP addresses for refresh if available, otherwise use original address
+        let addresses_to_refresh: HashSet<String> = addresses_without_connection
             .iter()
-            .map(|(dns, ip)| ip.clone().unwrap_or_else(|| dns.clone()))
-            .collect();
+            .map(|(original_addr, socket_addr)| {
+                socket_addr
+                    .map(|addr| addr.to_string())
+                    .unwrap_or_else(|| original_addr.clone())
+            })
+            .collect(); // TODO: check what we need, dns or ip
 
         let _ = tokio::time::timeout(
             inner.get_cluster_param(|p| p.connection_timeout)?,
             ClusterConnInner::refresh_and_update_connections(
                 inner.clone(),
                 addresses_to_refresh,
-                RefreshConnectionType::OnlyManagementConnection,
+                RefreshConnectionType::AllConnections,
                 true,
             ),
         )
         .await;
 
-        // Try to get the connections again (check both DNS and IP)
-        for (dns_addr, ip_addr) in addresses_needing_connection {
-            if let Some(conn) =
-                find_connection_by_dns_or_ip(inner, &dns_addr, ip_addr.as_deref()).await
-            {
-                connections.push(conn);
-            }
-        }
+        // Try to get connections after refresh
+        connections.extend(addresses_without_connection.into_iter().filter_map(
+            |(original_addr, socket_addr)| {
+                find_management_connection(inner, &original_addr, socket_addr.map(|addr| addr.ip()))
+            },
+        ));
     }
 
     if connections.is_empty() {
@@ -3389,34 +3387,25 @@ where
     Ok(connections)
 }
 
-/// Finds a connection by DNS address or by resolved IP address.
+/// Finds a management connection for a node.
 ///
-/// The connection map can store connections by either DNS hostname or IP address.
-/// This function checks both to find an existing connection.
-/// If a connection is found by DNS, it is returned immediately.
-/// If not found by DNS, it checks by IP address (if provided), which is an O(n) search.
-async fn find_connection_by_dns_or_ip<C>(
+/// Tries to find an existing connection by the original address first (O(1) lookup).
+/// If not found, falls back to searching by resolved IP address (O(n) lookup).
+/// This fallback is needed because the connection map may be keyed by either
+/// the original address or the resolved IP, depending on how connections were established.
+fn find_management_connection<C>(
     inner: &Core<C>,
-    dns_addr: &str,
-    ip_addr: Option<&str>,
+    original_addr: &str,
+    resolved_ip: Option<IpAddr>,
 ) -> Option<(String, Shared<Pin<Box<dyn Future<Output = C> + Send>>>)>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    println!(
-        "Finding connection for DNS: {}, IP: {:?}",
-        dns_addr, ip_addr
-    );
-
     let conn_lock = inner.conn_lock.read().expect(MUTEX_READ_ERR);
 
-    // First, try to get a connection by DNS address
-    if let Some(conn) = conn_lock.management_connection_for_address(dns_addr) {
-        return Some(conn);
-    }
-
-    // Fall back to IP address
-    ip_addr.and_then(|ip| conn_lock.management_connection_for_ip_address(ip))
+    conn_lock
+        .management_connection_for_address(original_addr)
+        .or_else(|| resolved_ip.and_then(|ip| conn_lock.management_connection_for_ip_address(ip)))
 }
 
 async fn calculate_topology_from_random_nodes<C>(
@@ -3443,7 +3432,7 @@ where
         {
             Ok(connections_futures) => connections_futures,
             Err(err) => {
-                return (Err(err), std::collections::HashSet::new());
+                return (Err(err), HashSet::new());
             }
         },
         false => {
