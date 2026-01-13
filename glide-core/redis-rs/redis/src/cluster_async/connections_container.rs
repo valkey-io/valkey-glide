@@ -1,4 +1,3 @@
-use crate::cluster_async::testing::get_host_and_port_from_addr;
 use crate::cluster_async::ConnectionFuture;
 use crate::cluster_routing::{Route, ShardAddrs, SlotAddr};
 use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap, SlotMapValue};

@@ -3328,10 +3328,6 @@ where
             .into_iter()
             .choose_multiple(&mut rng, num_of_nodes_to_query)
             .into_iter()
-            .map(|(original_addr, socket_addr)| {
-                let resolved_ip = socket_addr.map(|addr| addr);
-                (original_addr, resolved_ip)
-            })
             .collect()
     };
 
@@ -3393,6 +3389,7 @@ where
 /// If not found, falls back to searching by resolved IP address (O(n) lookup).
 /// This fallback is needed because the connection map may be keyed by either
 /// the original address or the resolved IP, depending on how connections were established.
+#[allow(clippy::type_complexity)]
 fn find_management_connection<C>(
     inner: &Core<C>,
     original_addr: &str,
