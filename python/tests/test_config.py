@@ -2,6 +2,7 @@
 
 import pytest
 from glide_shared.config import (
+    AdvancedBaseClientConfiguration,
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
@@ -295,6 +296,12 @@ def test_refresh_topology_from_initial_nodes_in_cluster_config():
 TEST_ADDRESSES = [NodeAddress("127.0.0.1")]
 TEST_CERT_DATA_1 = b"-----BEGIN CERTIFICATE-----\nMIIC1...\n-----END CERTIFICATE-----"
 TEST_CERT_DATA_2 = b"-----BEGIN CERTIFICATE-----\nMIIC2...\n-----END CERTIFICATE-----"
+TEST_CLIENT_CERT_DATA = (
+    b"-----BEGIN CERTIFICATE-----\nMIIC3...\n-----END CERTIFICATE-----"
+)
+TEST_CLIENT_KEY_DATA = (
+    b"-----BEGIN PRIVATE KEY-----\nMIIC4...\n-----END PRIVATE KEY-----"
+)
 
 
 def _build_standalone_config(tls_config=None):
@@ -522,3 +529,188 @@ def test_load_root_certificates_integration(tmp_path):
     assert cluster_request.tls_mode == TlsMode.SecureTls
     assert len(cluster_request.root_certs) == 1
     assert cluster_request.root_certs[0] == TEST_CERT_DATA_1
+
+
+def test_tls_client_auth():
+    """Test TLS configuration with custom client certificates."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=TEST_CLIENT_CERT_DATA,
+        client_key_pem=TEST_CLIENT_KEY_DATA,
+    )
+
+    # Test standalone client
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+
+    assert isinstance(request, ConnectionRequest)
+    assert request.tls_mode == TlsMode.SecureTls
+    assert request.client_cert == TEST_CLIENT_CERT_DATA
+    assert request.client_key == TEST_CLIENT_KEY_DATA
+
+    # Test cluster client
+    cluster_config = _build_cluster_config(tls_config)
+    cluster_request = cluster_config._create_a_protobuf_conn_request(cluster_mode=True)
+
+    assert isinstance(cluster_request, ConnectionRequest)
+    assert cluster_request.tls_mode == TlsMode.SecureTls
+    assert cluster_request.client_cert == TEST_CLIENT_CERT_DATA
+    assert cluster_request.client_key == TEST_CLIENT_KEY_DATA
+
+
+def test_tls_client_auth_none():
+    """Test TLS configuration with custom client certificates."""
+    tls_config = TlsAdvancedConfiguration(
+        client_cert_pem=None,
+        client_key_pem=None,
+    )
+
+    # Test standalone client
+    config = _build_standalone_config(tls_config)
+    request = config._create_a_protobuf_conn_request()
+
+    assert isinstance(request, ConnectionRequest)
+    assert request.tls_mode == TlsMode.SecureTls
+    assert request.client_cert == b""
+    assert request.client_key == b""
+
+    # Test cluster client
+    cluster_config = _build_cluster_config(tls_config)
+    cluster_request = cluster_config._create_a_protobuf_conn_request(cluster_mode=True)
+
+    assert isinstance(cluster_request, ConnectionRequest)
+    assert cluster_request.tls_mode == TlsMode.SecureTls
+    assert cluster_request.client_cert == b""
+    assert cluster_request.client_key == b""
+
+
+def test_load_client_certificate_from_file_success(tmp_path):
+    """Test loading certificates from a file successfully."""
+    from glide_shared.config import load_client_certificate_from_file
+
+    # Create a temporary certificate file
+    cert_path = tmp_path / "test-cert.pem"
+    cert_content = TEST_CLIENT_CERT_DATA
+    cert_path.write_bytes(cert_content)
+
+    # Load the certificate
+    loaded_cert = load_client_certificate_from_file(str(cert_path))
+    assert loaded_cert == cert_content
+
+
+def test_load_client_certificate_from_file_not_found():
+    """Test loading certificates from a non-existent file."""
+    from glide_shared.config import load_client_certificate_from_file
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        load_client_certificate_from_file("/nonexistent/path/cert.pem")
+    assert "Client certificate file not found" in str(exc_info.value)
+
+
+def test_load_client_certificate_from_file_empty(tmp_path):
+    """Test loading certificates from an empty file."""
+    from glide_shared.config import load_client_certificate_from_file
+
+    # Create an empty certificate file
+    cert_path = tmp_path / "empty-cert.pem"
+    cert_path.write_bytes(b"")
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_client_certificate_from_file(str(cert_path))
+    assert "Client certificate file is empty" in str(exc_info.value)
+
+
+def test_load_client_key_from_file_success(tmp_path):
+    """Test loading certificates from a file successfully."""
+    from glide_shared.config import load_client_key_from_file
+
+    # Create a temporary key file
+    cert_path = tmp_path / "test-key.pem"
+    cert_content = TEST_CLIENT_KEY_DATA
+    cert_path.write_bytes(cert_content)
+
+    # Load the key
+    loaded_cert = load_client_key_from_file(str(cert_path))
+    assert loaded_cert == cert_content
+
+
+def test_load_client_key_from_file_not_found():
+    """Test loading certificates from a non-existent file."""
+    from glide_shared.config import load_client_key_from_file
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        load_client_key_from_file("/nonexistent/path/key.pem")
+    assert "Client key file not found" in str(exc_info.value)
+
+
+def test_load_client_key_from_file_empty(tmp_path):
+    """Test loading certificates from an empty file."""
+    from glide_shared.config import load_client_key_from_file
+
+    # Create an empty key file
+    cert_path = tmp_path / "empty-key.pem"
+    cert_path.write_bytes(b"")
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_client_key_from_file(str(cert_path))
+    assert "Client key file is empty" in str(exc_info.value)
+
+
+def test_tls_configuration_client_cert_key_consistency():
+    config = AdvancedBaseClientConfiguration(
+        tls_config=TlsAdvancedConfiguration(),
+    )
+    request = ConnectionRequest()
+    # Do not raise if both client_cert_pem and client_key_pem are not provided.
+    config._create_a_protobuf_conn_request(request)
+
+    config.tls_config.client_cert_pem = b"nonempty"
+    config.tls_config.client_key_pem = None
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request(request)
+    assert "client_cert_pem is provided but client_key_pem not provided" in str(
+        exc_info.value
+    )
+
+    config.tls_config.client_cert_pem = None
+    config.tls_config.client_key_pem = b"nonempty"
+    with pytest.raises(ConfigurationError) as exc_info:
+        config._create_a_protobuf_conn_request(request)
+    assert "client_key_pem is provided but client_cert_pem not provided" in str(
+        exc_info.value
+    )
+
+
+def test_tcp_nodelay_default_value():
+    """Test that tcp_nodelay defaults to None (not set)."""
+    standalone_config = AdvancedGlideClientConfiguration()
+    assert standalone_config.tcp_nodelay is None
+
+    cluster_config = AdvancedGlideClusterClientConfiguration()
+    assert cluster_config.tcp_nodelay is None
+
+
+def test_tcp_nodelay_in_protobuf_request():
+    """Test that tcp_nodelay is correctly set in protobuf request."""
+    # Test with True
+    config_true = GlideClientConfiguration(
+        addresses=[NodeAddress("localhost", 6379)],
+        advanced_config=AdvancedGlideClientConfiguration(tcp_nodelay=True),
+    )
+    request_true = config_true._create_a_protobuf_conn_request()
+    assert request_true.tcp_nodelay is True
+
+    # Test with False
+    config_false = GlideClientConfiguration(
+        addresses=[NodeAddress("localhost", 6379)],
+        advanced_config=AdvancedGlideClientConfiguration(tcp_nodelay=False),
+    )
+    request_false = config_false._create_a_protobuf_conn_request()
+    assert request_false.tcp_nodelay is False
+
+    # Test default (None - not set in protobuf)
+    config_default = GlideClientConfiguration(
+        addresses=[NodeAddress("localhost", 6379)],
+        advanced_config=AdvancedGlideClientConfiguration(),
+    )
+    request_default = config_default._create_a_protobuf_conn_request()
+    assert not request_default.HasField("tcp_nodelay")

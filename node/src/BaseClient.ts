@@ -923,6 +923,19 @@ export interface AdvancedBaseClientConfiguration {
          */
         rootCertificates?: string | Buffer;
     };
+
+    /**
+     * Controls TCP_NODELAY socket option (Nagle's algorithm).
+     *
+     * - When `true`, disables Nagle's algorithm for lower latency by sending packets immediately without buffering.
+     *   This is optimal for Redis/Valkey workloads with many small requests.
+     *
+     * - When `false`, enables Nagle's algorithm to reduce network overhead by buffering small packets.
+     *   This may increase latency by up to 200ms but reduces the number of packets sent.
+     *
+     * - If not explicitly set, a default value of `true` will be used by the Rust core.
+     */
+    tcpNoDelay?: boolean;
 }
 
 /**
@@ -1188,7 +1201,12 @@ export class BaseClient {
 
             if (typeof message.respPointer === "number") {
                 // Response from type number
-                pointer = new PointerResponse(message.respPointer);
+                const long = Long.fromNumber(message.respPointer);
+                pointer = new PointerResponse(
+                    message.respPointer,
+                    long.high,
+                    long.low,
+                );
             } else {
                 // Response from type long
                 pointer = new PointerResponse(
@@ -9206,6 +9224,11 @@ export class BaseClient {
         request.connectionTimeout =
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
+
+        // Set TCP_NODELAY if explicitly configured
+        if (options.tcpNoDelay !== undefined) {
+            request.tcpNodelay = options.tcpNoDelay;
+        }
 
         // Apply TLS configuration if present
         if (options.tlsAdvancedConfiguration) {
