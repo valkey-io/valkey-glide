@@ -550,12 +550,8 @@ public abstract class BaseClient
      * @return A message if any or <code>null</code> if there are no unread messages.
      */
     public PubSubMessage tryGetPubSubMessage() {
-        if (subscriptionConfiguration.isEmpty()) {
-            throw new ConfigurationError(
-                    "The operation will never complete since there was no pubsub subscriptions applied to the"
-                            + " client.");
-        }
-        if (subscriptionConfiguration.get().getCallback().isPresent()) {
+        if (subscriptionConfiguration.isPresent()
+                && subscriptionConfiguration.get().getCallback().isPresent()) {
             throw new ConfigurationError(
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
@@ -573,12 +569,8 @@ public abstract class BaseClient
      * @return A {@link CompletableFuture} which will asynchronously hold the next available message.
      */
     public CompletableFuture<PubSubMessage> getPubSubMessage() {
-        if (subscriptionConfiguration.isEmpty()) {
-            throw new ConfigurationError(
-                    "The operation will never complete since there was no pubsub subscriptions applied to the"
-                            + " client.");
-        }
-        if (subscriptionConfiguration.get().getCallback().isPresent()) {
+        if (subscriptionConfiguration.isPresent()
+                && subscriptionConfiguration.get().getCallback().isPresent()) {
             throw new ConfigurationError(
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");

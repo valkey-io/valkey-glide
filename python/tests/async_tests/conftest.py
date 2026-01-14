@@ -167,6 +167,7 @@ async def create_client(
     tls_insecure: Optional[bool] = None,
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
+    reconciliation_interval_ms: Optional[int] = None,
 ) -> Union[GlideClient, GlideClusterClient]:
     config = create_client_config(
         request,
@@ -189,6 +190,7 @@ async def create_client(
         tls_insecure,
         lazy_connect,
         enable_compression,
+        reconciliation_interval_ms,
     )
     if cluster_mode:
         return await GlideClusterClient.create(config)

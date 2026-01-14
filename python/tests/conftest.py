@@ -95,6 +95,13 @@ def pytest_addoption(parser):
         default=None,
     )
 
+    parser.addoption(
+        "--mock-pubsub",
+        default=False,
+        action="store_true",
+        help="Running with mock pubsub (skips tests that require real server connections)",
+    )
+
 
 def parse_endpoints(endpoints_str: str) -> List[List[str]]:
     """
@@ -304,3 +311,21 @@ def tls_insecure(request) -> bool:
     # If the test has param'd tls_insecure, use it
     # Otherwise default to False
     return getattr(request, "param", False)
+
+
+@pytest.fixture(autouse=True)
+def skip_if_mock_pubsub(request):
+    """
+    Skip test(s) if running with mock pubsub and test is marked with skip_if_mock_pubsub.
+
+    Example:
+        @pytest.mark.skip_if_mock_pubsub
+        async def test_resubscribe_after_connection_kill(...):
+            ...
+    """
+    if request.node.get_closest_marker("skip_if_mock_pubsub"):
+        if request.config.getoption("--mock-pubsub"):
+            pytest.skip(
+                reason="Test skipped because it requires real server connections (running with --mock-pubsub)",
+                allow_module_level=True,
+            )
