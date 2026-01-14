@@ -130,38 +130,27 @@ pub async fn ensure_client_for_handle(handle_id: u64) -> Result<GlideClient> {
     if let Some(mut cfg) = pending {
         cfg.lazy_connect = false;
 
-        // Setup push channel if subscriptions configured
-        let has_pubsub = cfg
-            .pubsub_subscriptions
-            .as_ref()
-            .map(|m| !m.is_empty())
-            .unwrap_or(false);
+        // Always setup push channel for push message support
+        // This enables dynamic subscriptions to work,
+        // even when no initial subscriptions are configured
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
 
-        let (tx_opt, rx_opt) = if has_pubsub {
-            let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
-            (Some(tx), Some(rx))
-        } else {
-            (None, None)
-        };
-
-        let client = create_glide_client(cfg, tx_opt).await?;
+        let client = create_glide_client(cfg, Some(tx)).await?;
         table.insert(handle_id, client.clone());
 
-        // Handle push notifications if needed
-        if let Some(mut rx) = rx_opt {
-            let jvm_arc = JVM.get().cloned();
-            let handle_for_java = handle_id as jlong;
-            get_runtime().spawn(async move {
-                while let Some(push) = rx.recv().await {
-                    if let Some(jvm) = jvm_arc.as_ref()
-                        && let Ok(mut env) = jvm.attach_current_thread_as_daemon()
-                    {
-                        // Handle push notification callback to Java
-                        handle_push_notification(&mut env, handle_for_java, push);
-                    }
+        // Always spawn push notification handler
+        let jvm_arc = JVM.get().cloned();
+        let handle_for_java = handle_id as jlong;
+        get_runtime().spawn(async move {
+            while let Some(push) = rx.recv().await {
+                if let Some(jvm) = jvm_arc.as_ref()
+                    && let Ok(mut env) = jvm.attach_current_thread_as_daemon()
+                {
+                    // Handle push notification callback to Java
+                    handle_push_notification(&mut env, handle_for_java, push);
                 }
-            });
-        }
+            }
+        });
 
         return Ok(table.get(&handle_id).unwrap().value().clone());
     }
