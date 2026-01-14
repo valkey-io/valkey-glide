@@ -18156,4 +18156,44 @@ public class SharedCommandTests {
             }
         }
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_load(BaseClient client) {
+        // Test ACL LOAD - reloads ACL rules from the configured ACL file
+        // This command will fail if no ACL file is configured
+        try {
+            String result = client.aclLoad().get();
+            assertEquals("OK", result);
+        } catch (ExecutionException e) {
+            // If server doesn't have an ACL file configured, it will throw an error
+            assertTrue(e.getCause() instanceof RequestException);
+            String errorMessage = e.getMessage().toLowerCase();
+            assertTrue(
+                    errorMessage.contains("no acl file")
+                            || errorMessage.contains("aclfile")
+                            || errorMessage.contains("not configured"));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_save(BaseClient client) {
+        // Test ACL SAVE - saves current ACL rules to the configured ACL file
+        // This command will fail if no ACL file is configured
+        try {
+            String result = client.aclSave().get();
+            assertEquals("OK", result);
+        } catch (ExecutionException e) {
+            // If server doesn't have an ACL file configured, it will throw an error
+            assertTrue(e.getCause() instanceof RequestException);
+            String errorMessage = e.getMessage().toLowerCase();
+            assertTrue(
+                    errorMessage.contains("no acl file")
+                            || errorMessage.contains("aclfile")
+                            || errorMessage.contains("not configured"));
+        }
+    }
 }
