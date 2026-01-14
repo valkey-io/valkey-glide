@@ -1,6 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-import time
 from typing import Union
 
 import pytest
@@ -15,7 +14,12 @@ from glide_shared.config import (
     TlsAdvancedConfiguration,
 )
 
-from tests.utils.utils import get_ca_certificate, get_client_certificate, get_client_key
+from tests.utils.utils import (
+    create_client_with_retry,
+    get_ca_certificate,
+    get_client_certificate,
+    get_client_key,
+)
 
 
 @pytest.mark.anyio
@@ -82,14 +86,7 @@ class TestTlsCertificates:
                 protocol=protocol,
                 advanced_config=cluster_advanced_config,
             )
-            for i in range(3):
-                try:
-                    client = await GlideClusterClient.create(cluster_config)
-                    break
-                except Exception:
-                    if i == 2:
-                        raise
-                    time.sleep(2**i)
+            client = await create_client_with_retry(cluster_config)
         else:
             standalone_advanced_config = AdvancedGlideClientConfiguration(
                 tls_config=tls_config
@@ -100,14 +97,7 @@ class TestTlsCertificates:
                 protocol=protocol,
                 advanced_config=standalone_advanced_config,
             )
-            for i in range(3):
-                try:
-                    client = await GlideClient.create(standalone_config)
-                    break
-                except Exception:
-                    if i == 2:
-                        raise
-                    time.sleep(2**i)
+            client = await create_client_with_retry(standalone_config)
 
         try:
             result = await client.ping()
@@ -145,14 +135,7 @@ class TestTlsCertificates:
                 protocol=protocol,
                 advanced_config=cluster_advanced_config,
             )
-            for i in range(3):
-                try:
-                    client = await GlideClusterClient.create(cluster_config)
-                    break
-                except Exception:
-                    if i == 2:
-                        raise
-                    time.sleep(2**i)
+            client = await create_client_with_retry(cluster_config)
         else:
             standalone_advanced_config = AdvancedGlideClientConfiguration(
                 tls_config=tls_config
@@ -163,14 +146,7 @@ class TestTlsCertificates:
                 protocol=protocol,
                 advanced_config=standalone_advanced_config,
             )
-            for i in range(3):
-                try:
-                    client = await GlideClient.create(standalone_config)
-                    break
-                except Exception:
-                    if i == 2:
-                        raise
-                    time.sleep(2**i)
+            client = await create_client_with_retry(standalone_config)
 
         try:
             result = await client.ping()
