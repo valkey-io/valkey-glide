@@ -29,7 +29,14 @@ This is the Java client binding for Valkey GLIDE, providing both standalone and 
 - macOS: 13.7+ (x86_64), 14.7+ (aarch64)
 - **Note:** Alpine Linux/MUSL not supported due to native Java component incompatibility
 
-**Classifiers Available:** `osx-aarch_64`, `osx-x86_64`, `linux-aarch_64`, `linux-x86_64`, `linux_musl-aarch_64`, `linux_musl-x86_64`
+**Classifiers Available:**
+- `osx-aarch_64`
+- `osx-x86_64`
+- `linux-aarch_64`
+- `linux-x86_64`
+- `linux_musl-aarch_64`
+- `linux_musl-x86_64`
+- `windows-x86_64`
 
 ## Build and Test Rules (Agents)
 

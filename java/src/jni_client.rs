@@ -10,12 +10,50 @@ use jni::JNIEnv;
 use jni::JavaVM;
 use jni::objects::{GlobalRef, JClass, JObject, JStaticMethodID, JValue};
 use jni::signature;
-use jni::sys::{jlong, jstring};
+use jni::sys::{JNI_VERSION_1_8, jint, jlong, jstring};
+use parking_lot::Mutex;
 use redis::{RedisError, Value as ServerValue};
+use std::ffi::c_void;
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, channel};
 use std::thread;
 use tokio::runtime::Runtime;
+
+#[unsafe(no_mangle)]
+pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
+    // Cache JavaVM env for later use
+    let _ = JVM.set(Arc::new(vm));
+
+    // Pre-cache MethodCache and JavaValueConversionCache with correct classloader context
+    // GlideCoreClientCache and RegistryMethodCache will be cached automatically later
+    if let Some(jvm) = JVM.get()
+        && let Ok(mut env) = jvm.get_env()
+    {
+        let _ = get_method_cache(&mut env);
+        let _ = crate::get_java_value_conversion_cache(&mut env);
+    }
+
+    JNI_VERSION_1_8
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn JNI_OnUnload(_vm: *const JavaVM, _reserved: *const c_void) {
+    // Clean up global references by setting cached Options to None
+    // This triggers Drop on GlobalRef objects, which calls delete_global_ref
+    // Note: All cache functions use unsafe transmute to return static references
+    // from OnceLock data that lives for the entire program duration
+
+    if let Some(cache_mutex) = METHOD_CACHE.get() {
+        *cache_mutex.lock() = None;
+    }
+
+    if let Some(cache_mutex) = GLIDE_CORE_CLIENT_CACHE.get() {
+        *cache_mutex.lock() = None;
+    }
+
+    // Clean up caches in lib.rs
+    crate::cleanup_global_caches();
+}
 
 // Type aliases for complex types
 type PushMessageTuple = (Vec<u8>, Vec<u8>, Option<Vec<u8>>);
@@ -202,7 +240,7 @@ pub(crate) fn handle_push_notification(env: &mut JNIEnv, handle_id: jlong, push:
             let jc_obj: JObject = jc.into();
             let jp_obj: JObject = jp.map(Into::into).unwrap_or(JObject::null());
 
-            if let Ok(cache) = get_glide_core_client_cache(env) {
+            if let Ok(cache) = get_glide_core_client_cache_safe(env) {
                 unsafe {
                     let _ = env.call_static_method_unchecked(
                         &cache.class,
@@ -231,12 +269,11 @@ pub(crate) struct MethodCache {
     complete_error_with_code_method: JStaticMethodID,
 }
 
-static METHOD_CACHE: std::sync::OnceLock<parking_lot::Mutex<Option<MethodCache>>> =
-    std::sync::OnceLock::new();
+static METHOD_CACHE: std::sync::OnceLock<Mutex<Option<MethodCache>>> = std::sync::OnceLock::new();
 
 /// Get or initialize the method cache.
 pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
-    let cache_mutex = METHOD_CACHE.get_or_init(|| parking_lot::Mutex::new(None));
+    let cache_mutex = METHOD_CACHE.get_or_init(|| Mutex::new(None));
 
     {
         let cache_guard = cache_mutex.lock();
@@ -584,7 +621,7 @@ fn register_buffer_cleaner<'local>(
     buffer: &JObject<'local>,
     id: u64,
 ) -> Result<(), crate::errors::FFIError> {
-    let cache = get_glide_core_client_cache(env).map_err(|_e| {
+    let cache = get_glide_core_client_cache_safe(env).map_err(|_e| {
         // Map to a representative JNI error variant
         jni::errors::Error::JNIEnvMethodNotFound("GlideCoreClient cache")
     })?;
@@ -741,12 +778,23 @@ struct GlideCoreClientCache {
     register_native_buffer_cleaner: JStaticMethodID,
 }
 
-static GLIDE_CORE_CLIENT_CACHE: std::sync::OnceLock<
-    parking_lot::Mutex<Option<GlideCoreClientCache>>,
-> = std::sync::OnceLock::new();
+static GLIDE_CORE_CLIENT_CACHE: std::sync::OnceLock<Mutex<Option<GlideCoreClientCache>>> =
+    std::sync::OnceLock::new();
+
+/// Get GLIDE core client cache using correct classloader context
+fn get_glide_core_client_cache_safe(fallback_env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
+    // Try cached JVM env first
+    if let Some(cached_jvm) = JVM.get()
+        && let Ok(mut cached_env) = cached_jvm.get_env()
+    {
+        return get_glide_core_client_cache(&mut cached_env);
+    }
+    // Otherwise fallback to provided env
+    get_glide_core_client_cache(fallback_env)
+}
 
 fn get_glide_core_client_cache(env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
-    let cache_mutex = GLIDE_CORE_CLIENT_CACHE.get_or_init(|| parking_lot::Mutex::new(None));
+    let cache_mutex = GLIDE_CORE_CLIENT_CACHE.get_or_init(|| Mutex::new(None));
     {
         let guard = cache_mutex.lock();
         if let Some(c) = guard.as_ref() {
