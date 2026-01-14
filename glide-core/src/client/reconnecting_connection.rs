@@ -124,6 +124,7 @@ async fn create_connection(
     discover_az: bool,
     connection_timeout: Duration,
     tcp_nodelay: bool,
+    pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
 ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
     let client = {
         let guard = connection_backend
@@ -142,6 +143,7 @@ async fn create_connection(
         connection_timeout: Some(connection_timeout),
         connection_retry_strategy: Some(retry_strategy),
         tcp_nodelay,
+        pubsub_synchronizer,
     };
 
     // Wrap retry loop in timeout so total time respects connection_timeout
@@ -248,6 +250,7 @@ impl ReconnectingConnection {
         connection_timeout: Duration,
         tls_params: Option<redis::TlsConnParams>,
         tcp_nodelay: bool,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
@@ -267,6 +270,7 @@ impl ReconnectingConnection {
             discover_az,
             connection_timeout,
             tcp_nodelay,
+            pubsub_synchronizer,
         )
         .await
     }
@@ -386,6 +390,7 @@ impl ReconnectingConnection {
                                 .set();
                             *guard = ConnectionState::Connected(connection);
                         }
+
                         Telemetry::incr_total_connections(1);
                         return;
                     }

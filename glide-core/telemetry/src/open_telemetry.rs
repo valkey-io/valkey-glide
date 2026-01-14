@@ -1,3 +1,4 @@
+use crate::Telemetry;
 use logger_core::log_warn;
 use once_cell::sync::OnceCell;
 use opentelemetry::global::ObjectSafeSpan;
@@ -26,6 +27,8 @@ const TRACE_SCOPE: &str = "valkey_glide";
 const TIMEOUT_ERROR_METRIC: &str = "glide.timeout_errors";
 const RETRIES_METRIC: &str = "glide.retry_attempts";
 const MOVED_ERROR_METRIC: &str = "glide.moved_errors";
+const SUBSCRIPTION_OUT_OF_SYNC_METRIC: &str = "glide.subscription_out_of_sync_count";
+const SUBSCRIPTION_LAST_SYNC_TIMESTAMP_METRIC: &str = "glide.subscription_last_sync_timestamp";
 
 /// Custom error type for OpenTelemetry errors in Glide
 #[derive(Debug, Error)]
@@ -508,6 +511,9 @@ pub struct GlideOpenTelemetry {}
 static TIMEOUT_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
 static RETRIES_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
 static MOVED_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
+static SUBSCRIPTION_OUT_OF_SYNC_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> =
+    OnceLock::new();
+static SUBSCRIPTION_LAST_SYNC_GAUGE: OnceLock<opentelemetry::metrics::Gauge<u64>> = OnceLock::new();
 
 /// Singleton instance of GlideOpenTelemetry. Ensures that telemetry setup happens only once across the application.
 static OTEL: OnceCell<RwLock<GlideOpenTelemetry>> = OnceCell::new();
@@ -854,6 +860,36 @@ impl GlideOpenTelemetry {
                     "OpenTelemetry error: Failed to initialize moved counter".to_owned(),
                 )
             })?;
+        // Create subscription out of sync counter
+        SUBSCRIPTION_OUT_OF_SYNC_COUNTER
+            .set(
+                meter
+                    .u64_counter(SUBSCRIPTION_OUT_OF_SYNC_METRIC)
+                    .with_description("Number of times subscriptions were detected as out of sync")
+                    .with_unit("1")
+                    .build(),
+            )
+            .map_err(|_| {
+                GlideOTELError::Other(
+                    "OpenTelemetry error: Failed to initialize subscription out of sync counter"
+                        .to_owned(),
+                )
+            })?;
+
+        // Create subscription last sync timestamp gauge
+        SUBSCRIPTION_LAST_SYNC_GAUGE
+            .set(
+                meter
+                    .u64_gauge(SUBSCRIPTION_LAST_SYNC_TIMESTAMP_METRIC)
+                    .with_description("Unix timestamp (in milliseconds) of the last time subscriptions were in sync")
+                    .with_unit("ms")
+                    .build(),
+            )
+            .map_err(|_| {
+                GlideOTELError::Other(
+                    "OpenTelemetry error: Failed to initialize subscription last sync gauge".to_owned(),
+                )
+            })?;
 
         Ok(())
     }
@@ -905,6 +941,52 @@ impl GlideOpenTelemetry {
                     )
                 })?
                 .add(1, &[]);
+        }
+        Ok(())
+    }
+
+    /// Record that subscriptions are out of sync
+    ///
+    /// If OpenTelemetry is not initialized, this method will do nothing.
+    pub fn record_subscription_out_of_sync() -> Result<(), GlideOTELError> {
+        Telemetry::incr_subscription_out_of_sync();
+        if GlideOpenTelemetry::is_initialized() {
+            SUBSCRIPTION_OUT_OF_SYNC_COUNTER
+                .get()
+                .ok_or_else(|| {
+                    GlideOTELError::Other(
+                        "OpenTelemetry error: Subscription out of sync counter not initialized"
+                            .to_string(),
+                    )
+                })?
+                .add(1, &[]);
+        }
+        Ok(())
+    }
+
+    /// Update the timestamp of when subscriptions were last in sync
+    ///
+    /// Records the current system time as a Unix timestamp in milliseconds.
+    ///
+    /// If OpenTelemetry is not initialized, this method will do nothing.
+    pub fn update_subscription_last_sync_timestamp() -> Result<(), GlideOTELError> {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| GlideOTELError::Other(format!("Failed to get system time: {}", e)))?
+            .as_millis() as u64;
+
+        Telemetry::update_subscription_last_sync_timestamp(timestamp);
+
+        if GlideOpenTelemetry::is_initialized() {
+            SUBSCRIPTION_LAST_SYNC_GAUGE
+                .get()
+                .ok_or_else(|| {
+                    GlideOTELError::Other(
+                        "OpenTelemetry error: Subscription last sync gauge not initialized"
+                            .to_string(),
+                    )
+                })?
+                .record(timestamp, &[]);
         }
         Ok(())
     }
