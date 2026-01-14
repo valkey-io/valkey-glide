@@ -14,6 +14,8 @@
 
 #### Operational Enhancements
 
+* CI: Upgrade ORT from 46.0.0 to 59.0.0 to fix Synopsys repository 403 error ([#5169](https://github.com/valkey-io/valkey-glide/pull/5169))
+
 ## 2.2
 
 #### Changes
