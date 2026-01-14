@@ -6,9 +6,39 @@ here](https://github.com/valkey-io/valkey-glide/blob/main/CONTRIBUTING.md)
 
 -->
 
+### Summary
+
+<!--
+Add a summary describing the changes
+-->
+
 ### Issue link
 
 This Pull Request is linked to issue (URL): [REPLACE ME]
+
+### Features / Behaviour Changes
+
+<!--
+Outline the feature support or behaviour changes included in this PR
+-->
+
+### Implementation
+
+<!--
+Describe the implementations details. Highlight key code changes and call out any areas where you want reviewers to pay extra attention
+-->
+
+### Limitations
+
+<!-- 
+Describe any features or use cases that are not implemented or are only partially supported
+-->
+
+### Testing
+
+<!-- 
+Describe what tests have been conducted and any relevant test results
+-->
 
 ### Checklist
 
