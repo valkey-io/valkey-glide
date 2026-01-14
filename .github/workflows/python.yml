@@ -69,6 +69,10 @@ on:
                 required: false
                 type: boolean
                 default: false
+            run-dynamic-pubsub-with-mock:
+                description: "Build with mock pubsub and run dynamic pubsub tests"
+                type: boolean
+                default: false
 
     workflow_call:
         inputs:
@@ -249,25 +253,49 @@ jobs:
               if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY == 'false' && env.RUN_ASYNC_ONLY == 'false' }}
               working-directory: ./python
               run: |
-                  python3 dev.py test --args -k pubsub --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args -k 'pubsub' --html=pytest_report.html --self-contained-html
 
             - name: Test pubsub with pytest (full matrix)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
               working-directory: ./python
               run: |
-                  python3 dev.py test --args -k pubsub --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args -k 'pubsub' --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test pubsub with pytest (async only)
               if: ${{ env.RUN_ASYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
               working-directory: ./python
               run: |
-                  python3 dev.py test --args -k pubsub tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args -k 'pubsub' tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test pubsub with pytest (sync only)
               if: ${{ env.RUN_SYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
               working-directory: ./python
               run: |
-                  python3 dev.py test --args -k pubsub tests/sync_tests --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args -k 'pubsub' tests/sync_tests --html=pytest_report.html --self-contained-html
+
+            - name: Detect mock pubsub changes
+              id: pubsub_mock_changes
+              uses: dorny/paths-filter@v3
+              with:
+                  filters: |
+                      mock_pubsub:
+                          - glide-core/src/pubsub/mock.rs
+
+            - name: Rebuild Python wrapper with pubsub mock
+              if: ${{ github.event.inputs.run-dynamic-pubsub-with-mock == 'true' || steps.pubsub_mock_changes.outputs.mock_pubsub == 'true' }}
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+                  features: mock-pubsub
+
+            - name: Test dynamic pubsub with mock
+              if: ${{ github.event.inputs.run-dynamic-pubsub-with-mock == 'true' || steps.pubsub_mock_changes.outputs.mock_pubsub == 'true'  }}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --mock-pubsub --args -k 'pubsub' tests/async_tests --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()

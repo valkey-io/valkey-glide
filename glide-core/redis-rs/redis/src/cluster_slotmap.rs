@@ -14,10 +14,16 @@ use crate::RedisResult;
 pub(crate) type NodesMap = DashMap<Arc<String>, Arc<ShardAddrs>>;
 
 #[derive(Debug)]
-pub(crate) struct SlotMapValue {
-    pub(crate) start: u16,
-    pub(crate) addrs: Arc<ShardAddrs>,
-    pub(crate) last_used_replica: Arc<AtomicUsize>,
+/// Represents a slot range entry in the [`SlotMap`].
+pub struct SlotMapValue {
+    /// The starting slot number of this range.
+    pub start: u16,
+
+    /// The shard addresses responsible for this slot range.
+    pub addrs: Arc<ShardAddrs>,
+
+    /// Index of the last used replica for round-robin load balancing when reading from replicas.
+    pub last_used_replica: Arc<AtomicUsize>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -38,8 +44,9 @@ pub enum ReadFromReplicaStrategy {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct SlotMap {
-    pub(crate) slots: BTreeMap<u16, SlotMapValue>,
+/// Represents the slot-to-node mapping for a Valkey Cluster.
+pub struct SlotMap {
+    slots: BTreeMap<u16, SlotMapValue>,
     nodes_map: NodesMap,
     read_from_replica: ReadFromReplicaStrategy,
 }
@@ -119,12 +126,14 @@ impl SlotMap {
         &self.nodes_map
     }
 
+    /// Returns `true` if the given address is a primary node in the cluster.
     pub fn is_primary(&self, address: &String) -> bool {
         self.nodes_map
             .get(address)
             .is_some_and(|shard_addrs| *shard_addrs.primary() == *address)
     }
 
+    /// Returns the [`SlotMapValue`] containing the slot range that includes the route's slot.
     pub fn slot_value_for_route(&self, route: &Route) -> Option<&SlotMapValue> {
         let slot = route.slot();
         self.slots
@@ -139,6 +148,7 @@ impl SlotMap {
             })
     }
 
+    /// Returns the node address for the given route based on the configured read-from-replica strategy.
     pub fn slot_addr_for_route(&self, route: &Route) -> Option<Arc<String>> {
         self.slot_value_for_route(route).map(|slot_value| {
             get_address_from_slot(
@@ -151,13 +161,14 @@ impl SlotMap {
 
     /// Retrieves the shard addresses (`ShardAddrs`) for the specified `slot` by looking it up in the `slots` tree,
     /// returning a reference to the stored shard addresses if found.
-    pub(crate) fn shard_addrs_for_slot(&self, slot: u16) -> Option<Arc<ShardAddrs>> {
+    pub fn shard_addrs_for_slot(&self, slot: u16) -> Option<Arc<ShardAddrs>> {
         self.slots
             .range(slot..)
             .next()
             .map(|(_, slot_value)| slot_value.addrs.clone())
     }
 
+    /// Returns a set of all primary node addresses in the cluster.
     pub fn addresses_for_all_primaries(&self) -> HashSet<Arc<String>> {
         self.nodes_map
             .iter()
@@ -168,6 +179,7 @@ impl SlotMap {
             .collect()
     }
 
+    /// Returns a set of all node addresses (primaries and replicas) in the cluster.
     pub fn all_node_addresses(&self) -> HashSet<Arc<String>> {
         self.nodes_map
             .iter()
@@ -178,6 +190,7 @@ impl SlotMap {
             .collect()
     }
 
+    /// Returns an iterator of node addresses for each route, or `None` if a slot is not covered.
     pub fn addresses_for_multi_slot<'a, 'b>(
         &'a self,
         routes: &'b [(Route, Vec<usize>)],
@@ -206,11 +219,8 @@ impl SlotMap {
             .collect()
     }
 
-    pub(crate) fn node_address_for_slot(
-        &self,
-        slot: u16,
-        slot_addr: SlotAddr,
-    ) -> Option<Arc<String>> {
+    /// Returns the node address for the given slot based on the slot address type.
+    pub fn node_address_for_slot(&self, slot: u16, slot_addr: SlotAddr) -> Option<Arc<String>> {
         self.slots.range(slot..).next().and_then(|(_, slot_value)| {
             if slot_value.start <= slot {
                 Some(get_address_from_slot(

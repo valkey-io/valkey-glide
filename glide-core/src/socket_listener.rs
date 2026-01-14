@@ -343,7 +343,7 @@ async fn send_command(
     }
 
     let res = client
-        .send_command(&cmd, routing)
+        .send_command(&mut cmd, routing)
         .await
         .map_err(|err| err.into());
 

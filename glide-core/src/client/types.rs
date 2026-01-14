@@ -40,6 +40,7 @@ pub struct ConnectionRequest {
     pub client_key: Vec<u8>,
     pub compression_config: Option<CompressionConfig>,
     pub tcp_nodelay: bool,
+    pub pubsub_reconciliation_interval_ms: Option<u32>,
 }
 
 /// Authentication information for connecting to Redis/Valkey servers
@@ -322,6 +323,8 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         });
 
         let tcp_nodelay = value.tcp_nodelay.unwrap_or(true);
+        let pubsub_reconciliation_interval_ms =
+            value.pubsub_reconciliation_interval_ms.filter(|&v| v != 0);
 
         ConnectionRequest {
             read_from,
@@ -346,6 +349,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             client_key,
             compression_config,
             tcp_nodelay,
+            pubsub_reconciliation_interval_ms,
         }
     }
 }

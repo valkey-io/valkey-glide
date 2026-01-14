@@ -32,6 +32,20 @@ EXCLUDED_API_FUNCTIONS = {
         "is_lower",
         "py_init",
         "py_log",
+        # PubSub
+        "get_subscriptions",
+        "subscribe",
+        "unsubscribe",
+        "psubscribe",
+        "punsubscribe",
+        "ssubscribe",
+        "sunsubscribe",
+        "psubscribe_lazy",
+        "punsubscribe_lazy",
+        "ssubscribe_lazy",
+        "subscribe_lazy",
+        "sunsubscribe_lazy",
+        "unsubscribe_lazy",
         # others
         "init_callback",
         "create_leaked_bytes_vec",
@@ -57,6 +71,39 @@ EXCLUDED_TESTS = {
         "test_cancelled_request_handled_gracefully",
         "test_connection_timeout_on_unavailable_host",
         "test_invalid_tls_config_fails_fast",
+        # Dynamic PubSub tests (no sync equivalent yet)
+        "test_subscribe_basic",
+        "test_unsubscribe_basic",
+        "test_psubscribe_basic",
+        "test_punsubscribe_basic",
+        "test_ssubscribe_basic",
+        "test_sunsubscribe_basic",
+        "test_subscribe_coexistence_async_sync",
+        "test_subscribe_multiple_channels",
+        "test_unsubscribe_all_channels",
+        "test_mixed_lazy_and_blocking",
+        "test_get_subscriptions_empty",
+        "test_subscription_metrics_on_acl_failure",
+        "test_subscription_metrics_repeated_reconciliation_failures",
+        "test_desired_vs_actual_state_during_reconciliation",
+        "test_dynamic_subscription_with_initial_config",
+        "test_lazy_vs_blocking_timeout",
+        "test_pattern_and_exact_same_channel",
+        "test_subscribe_empty_set",
+        "test_unsubscribe_from_nonexistent",
+        "test_subscription_sync_timestamp_metric_on_success",
+        # Dynamic PubSub tests helper functions - TODO remove once pubsub implemented for the sync client
+        "subscribe_by_method",
+        "unsubscribe_by_method",
+        "psubscribe_by_method",
+        "punsubscribe_by_method",
+        "ssubscribe_by_method",
+        "sunsubscribe_by_method",
+        "wait_for_subscription_if_needed",
+        "get_pubsub_channel_modes_from_client",
+        "create_pubsub_subscription",
+        "decode_pubsub_msg",
+        "new_message",
     ],
     "sync_only": ["test_sync_fork"],
 }
@@ -65,8 +112,13 @@ EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
         "test_opentelemetry.py",
         "test_deprecation_warnings.py",
+        # TODO: Remove when implementing dynamic pubsub for the sync client
+        "test_pubsub.py",
     ],
-    "sync_only": [],
+    "sync_only": [
+        # TODO: Remove when implementing dynamic pubsub for the sync client
+        "test_sync_pubsub.py"
+    ],
 }
 
 

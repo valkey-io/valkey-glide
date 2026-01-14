@@ -994,7 +994,6 @@ pub(crate) fn get_connection_info(
             lib_name: cluster_params.lib_name,
             protocol: cluster_params.protocol,
             db: cluster_params.database_id,
-            pubsub_subscriptions: cluster_params.pubsub_subscriptions,
         },
     })
 }

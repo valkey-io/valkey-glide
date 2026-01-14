@@ -26,6 +26,10 @@ inputs:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true
         type: string
+    features:
+        description: "Comma separated list of Rust features to enable for maturin"
+        required: false
+        type: string
 env:
     CARGO_TERM_COLOR: always
 
@@ -55,5 +59,12 @@ runs:
           shell: bash
           working-directory: ./python
           if: ${{ inputs.publish != 'true' }}
+          env:
+              FEATURES: ${{ inputs.features }}
           run: |
-              python3 dev.py build --no-cache
+              FEATURE_ARGS=""
+                  if [ -n "$FEATURES" ]; then
+                      FEATURE_ARGS="--features $FEATURES"
+                  fi
+
+                  python3 dev.py build --no-cache $FEATURE_ARGS

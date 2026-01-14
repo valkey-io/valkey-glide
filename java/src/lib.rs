@@ -86,7 +86,7 @@ async fn execute_command_request_and_complete(
         let root_span_ptr_opt = command_request.root_span_ptr;
         match &command_request.command {
             Some(protobuf_bridge::command_request::Command::SingleCommand(command)) => {
-                let cmd = protobuf_bridge::create_valkey_command(command).map_err(|e| {
+                let mut cmd = protobuf_bridge::create_valkey_command(command).map_err(|e| {
                     redis::RedisError::from((
                         redis::ErrorKind::ClientError,
                         "Failed to create command",
@@ -108,7 +108,7 @@ async fn execute_command_request_and_complete(
                     None
                 };
 
-                let exec = client.send_command(&cmd, routing).await;
+                let exec = client.send_command(&mut cmd, routing).await;
 
                 if let Some(root_span_ptr) = root_span_ptr_opt
                     && root_span_ptr != 0
@@ -1285,22 +1285,13 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
 
             // Direct client creation (no lazy loading for simplified implementation)
             let runtime = get_runtime();
-            // Enable push channel if pubsub subscriptions are present
-            let mut rx_opt: Option<tokio::sync::mpsc::UnboundedReceiver<redis::PushInfo>> = None;
 
-            // Check if pubsub subscriptions exist in the connection request
-            let has_pubsub = connection_request.pubsub_subscriptions.is_some();
+            // Always create push channel to support dynamic subscriptions via customCommand
+            // This matches the behavior of socket_listener.rs which always creates push channels
+            let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
 
-            let tx_opt: Option<tokio::sync::mpsc::UnboundedSender<redis::PushInfo>> = if has_pubsub
-            {
-                let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
-                rx_opt = Some(rx);
-                Some(tx)
-            } else {
-                None
-            };
-
-            match runtime.block_on(async { create_glide_client(connection_request, tx_opt).await })
+            match runtime
+                .block_on(async { create_glide_client(connection_request, Some(tx)).await })
             {
                 Ok(client) => {
                     let safe_handle = jni_client::generate_safe_handle();
@@ -1309,20 +1300,19 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                     // Store in handle table
                     handle_table.insert(safe_handle, client);
 
-                    // If we created a push channel, spawn a forwarder to deliver pushes to Java
-                    if let Some(mut rx) = rx_opt {
-                        let jvm_arc = jni_client::JVM.get().cloned();
-                        let handle_for_java = safe_handle as jlong;
-                        get_runtime().spawn(async move {
-                            while let Some(push) = rx.recv().await {
-                                if let Some(jvm) = jvm_arc.as_ref()
-                                    && let Ok(mut env) = jvm.attach_current_thread_as_daemon()
-                                {
-                                    handle_push_notification(&mut env, handle_for_java, push);
-                                }
+                    // Always spawn push forwarder to deliver pushes to Java
+                    let jvm_arc = jni_client::JVM.get().cloned();
+                    let handle_for_java = safe_handle as jlong;
+                    get_runtime().spawn(async move {
+                        let mut rx = rx;
+                        while let Some(push) = rx.recv().await {
+                            if let Some(jvm) = jvm_arc.as_ref()
+                                && let Ok(mut env) = jvm.attach_current_thread_as_daemon()
+                            {
+                                handle_push_notification(&mut env, handle_for_java, push);
                             }
-                        });
-                    }
+                        }
+                    });
 
                     Some(safe_handle as jlong)
                 }

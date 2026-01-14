@@ -1133,7 +1133,7 @@ mod test_cluster_pipeline {
             ))
             .build()
             .unwrap()
-            .get_async_connection(None)
+            .get_async_connection(None, None)
             .await
             .unwrap();
 

@@ -15,6 +15,7 @@ pub mod scripts_container;
 pub use client::ConnectionRequest;
 pub mod cluster_scan_container;
 pub mod iam;
+pub mod pubsub;
 pub mod request_type;
 pub use telemetrylib::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, DEFAULT_TRACE_SAMPLE_PERCENTAGE, GlideOpenTelemetry,

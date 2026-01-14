@@ -125,7 +125,7 @@ fn cluster_connection_benchmark(
                     builder = builder.read_from_replicas();
                 }
                 let client = builder.build().unwrap();
-                client.get_async_connection(None).await
+                client.get_async_connection(None, None).await
             })
             .unwrap()
     });

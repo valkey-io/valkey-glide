@@ -271,46 +271,105 @@ describe("PubSub", () => {
         return mySubscriptions;
     }
 
+    interface SubscriptionEntry {
+        key: string;
+        value: Buffer[];
+    }
+
+    function parseActualSubscriptions(result: unknown): {
+        exact: Buffer[];
+        pattern: Buffer[];
+        sharded: Buffer[];
+    } {
+        // Result format: ["desired", [{key, value}, ...], "actual", [{key, value}, ...]]
+        const actualArray = (result as unknown[])?.[3] as
+            | SubscriptionEntry[]
+            | undefined;
+
+        if (!Array.isArray(actualArray)) {
+            return { exact: [], pattern: [], sharded: [] };
+        }
+
+        const findChannels = (key: string): Buffer[] => {
+            const entry = actualArray.find((e) => e.key === key);
+            return Array.isArray(entry?.value) ? entry.value : [];
+        };
+
+        return {
+            exact: findChannels("Exact"),
+            pattern: findChannels("Pattern"),
+            sharded: findChannels("Sharded"),
+        };
+    }
+
     async function clientCleanup(
         client: TGlideClient,
         clusterModeSubs?: GlideClusterClientConfiguration.PubSubSubscriptions,
-    ) {
+    ): Promise<void> {
         if (client === null) {
             return;
         }
 
-        if (clusterModeSubs) {
-            for (const [channelType, channelPatterns] of Object.entries(
-                clusterModeSubs.channelsAndPatterns,
-            )) {
-                let cmd;
+        const clusterMode = clusterModeSubs !== undefined;
 
-                if (
-                    channelType ===
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact.toString()
-                ) {
-                    cmd = "UNSUBSCRIBE";
-                } else if (
-                    channelType ===
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern.toString()
-                ) {
-                    cmd = "PUNSUBSCRIBE";
-                } else if (!cmeCluster.checkIfServerVersionLessThan("7.0.0")) {
-                    cmd = "SUNSUBSCRIBE";
-                } else {
-                    // Disregard sharded config for versions < 7.0.0
-                    continue;
-                }
+        try {
+            const result = await client.customCommand(["GET_SUBSCRIPTIONS"]);
+            const { exact, pattern, sharded } =
+                parseActualSubscriptions(result);
 
-                for (const channelPattern of channelPatterns) {
-                    await client.customCommand([cmd, channelPattern]);
-                }
+            const hasSubscriptions =
+                exact.length > 0 ||
+                pattern.length > 0 ||
+                (clusterMode && sharded.length > 0);
+
+            if (!hasSubscriptions) {
+                return;
             }
-        }
 
-        client.close();
-        // Wait briefly to ensure closure is completed
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+            // Send unsubscribe commands
+            if (exact.length > 0) {
+                await client.customCommand(["UNSUBSCRIBE"]).catch(() => void 0);
+            }
+
+            if (pattern.length > 0) {
+                await client
+                    .customCommand(["PUNSUBSCRIBE"])
+                    .catch(() => void 0);
+            }
+
+            if (clusterMode && sharded.length > 0) {
+                await client
+                    .customCommand(["SUNSUBSCRIBE"])
+                    .catch(() => void 0);
+            }
+
+            // Wait for subscriptions to clear
+            const timeoutMs = 3000;
+            const startTime = Date.now();
+
+            while (Date.now() - startTime < timeoutMs) {
+                const pollResult = await client
+                    .customCommand(["GET_SUBSCRIPTIONS"])
+                    .catch(() => null);
+
+                if (pollResult === null) break;
+
+                const poll = parseActualSubscriptions(pollResult);
+                const isEmpty =
+                    poll.exact.length === 0 &&
+                    poll.pattern.length === 0 &&
+                    (!clusterMode || poll.sharded.length === 0);
+
+                if (isEmpty) break;
+
+                await new Promise((resolve) => setTimeout(resolve, 100));
+            }
+        } catch {
+            void 0;
+        } finally {
+            client.close();
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
     }
 
     function newMessage(msg: PubSubMsg, context: PubSubMsg[]): void {

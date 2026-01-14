@@ -194,6 +194,7 @@ where
             connection_timeout: Some(params.connection_timeout),
             connection_retry_strategy: None,
             tcp_nodelay: params.tcp_nodelay,
+            pubsub_synchronizer: None,
         },
     )
     .await
@@ -383,7 +384,7 @@ where
 
 async fn create_connection<C>(
     node: &str,
-    mut params: ClusterParams,
+    params: ClusterParams,
     socket_addr: Option<SocketAddr>,
     is_management: bool,
     mut glide_connection_options: GlideConnectionOptions,
@@ -393,14 +394,12 @@ where
 {
     let connection_timeout = params.connection_timeout;
     let response_timeout = params.response_timeout;
-    // ignore pubsub subscriptions and push notifications for management connections
-    if is_management {
-        params.pubsub_subscriptions = None;
-    }
     let info = get_connection_info(node, params)?;
     // management connection does not require notifications or disconnect notifications
+    // or pubsub synchronizer (subscriptions only exist on user connections)
     if is_management {
         glide_connection_options.disconnect_notifier = None;
+        glide_connection_options.pubsub_synchronizer = None;
     }
     C::connect(
         info,

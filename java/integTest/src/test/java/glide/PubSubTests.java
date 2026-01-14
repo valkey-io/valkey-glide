@@ -939,10 +939,7 @@ public class PubSubTests {
     @SneakyThrows
     @Test
     public void error_cases() {
-        // client isn't configured with subscriptions
         var client = createClient(true);
-        assertThrows(ConfigurationError.class, client::tryGetPubSubMessage);
-        client.close();
 
         // client configured with callback and doesn't return pubsubMessages via API
         MessageCallback callback = (msg, ctx) -> fail();
@@ -1601,5 +1598,112 @@ public class PubSubTests {
                         .pubsubShardNumSub(
                                 new GlideString[] {gs("channel1"), gs("channel2"), gs("channel3"), gs("channel4")})
                         .get());
+    }
+
+    /**
+     * Test that a client with no initial PubSub subscriptions can dynamically subscribe via
+     * customCommand and receive messages through the pull-based APIs.
+     *
+     * <p>This verifies that the push message infrastructure is always enabled, even when no
+     * subscriptions are configured at client creation time.
+     */
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}, read via {1}")
+    @MethodSource("getTestScenarios")
+    public void pubsub_with_dynamic_subscription_via_custom_command(
+            boolean standalone, MessageReadMethod method) {
+        // Skip callback method - this test is specifically for creating a client with no pubsub config
+        if (method == MessageReadMethod.Callback) {
+            return;
+        }
+
+        GlideString channel = gs("dynamic-subscribe-test-channel");
+        GlideString message1 = gs("dynamic-message-1");
+        GlideString message2 = gs("dynamic-message-2");
+
+        BaseClient listener = createClient(standalone);
+
+        // Subscribe to channel dynamically via customCommand
+        if (standalone) {
+            ((GlideClient) listener).customCommand(new GlideString[] {gs("subscribe"), channel}).get();
+        } else {
+            ((GlideClusterClient) listener)
+                    .customCommand(new GlideString[] {gs("subscribe"), channel})
+                    .get();
+        }
+
+        // Update listeners map for cleanup
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(PubSubChannelMode.EXACT, Set.of(channel))
+                        : Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel));
+        listeners.put(listener, subscriptions);
+
+        // Create sender client
+        BaseClient sender = createClient(standalone);
+
+        // Publish messages
+        sender.publish(message1, channel).get();
+        sender.publish(message2, channel).get();
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Verify messages received via pull-based API
+        verifyReceivedPubsubMessages(
+                Set.of(
+                        Pair.of(1, new PubSubMessage(message1, channel)),
+                        Pair.of(1, new PubSubMessage(message2, channel))),
+                listener,
+                method);
+    }
+
+    /**
+     * Test that a client with a callback can dynamically subscribe to additional channels via
+     * customCommand and receive messages for both initial and dynamic subscriptions through the
+     * callback.
+     */
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void pubsub_callback_with_dynamic_subscription_via_custom_command(boolean standalone) {
+        GlideString dynamicChannel = gs("dynamic-channel");
+        GlideString message = gs("dynamic-channel-message");
+
+        // Create client with callback and no initial subscriptions
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(PubSubChannelMode.EXACT, Set.of())
+                        : Map.of(PubSubClusterChannelMode.EXACT, Set.of());
+
+        BaseClient listener = createListener(standalone, true, 1, subscriptions);
+
+        // Dynamically subscribe to additional channel via customCommand
+        if (standalone) {
+            ((GlideClient) listener)
+                    .customCommand(new GlideString[] {gs("subscribe"), dynamicChannel})
+                    .get();
+        } else {
+            ((GlideClusterClient) listener)
+                    .customCommand(new GlideString[] {gs("subscribe"), dynamicChannel})
+                    .get();
+        }
+
+        // Update listeners map for cleanup (include both channels)
+        listeners.put(
+                listener,
+                standalone
+                        ? Map.of(PubSubChannelMode.EXACT, Set.of(dynamicChannel))
+                        : Map.of(PubSubClusterChannelMode.EXACT, Set.of(dynamicChannel)));
+
+        BaseClient sender = createClient(standalone);
+
+        // Publish to both channels
+        sender.publish(message, dynamicChannel).get();
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Verify both messages received via callback
+        verifyReceivedPubsubMessages(
+                Set.of(Pair.of(1, new PubSubMessage(message, dynamicChannel))),
+                listener,
+                MessageReadMethod.Callback);
     }
 }

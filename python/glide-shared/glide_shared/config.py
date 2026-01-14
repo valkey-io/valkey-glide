@@ -468,6 +468,9 @@ class AdvancedBaseClientConfiguration:
             When True, disables Nagle's algorithm for lower latency by sending packets immediately without buffering.
             When False, enables Nagle's algorithm to reduce network overhead by buffering small packets.
             If not explicitly set, defaults to True.
+        pubsub_reconciliation_interval (Optional[int]): The interval in milliseconds between PubSub subscription
+            reconciliation attempts. The reconciliation process ensures that the client's desired subscriptions
+            match the actual subscriptions on the server.
     """
 
     def __init__(
@@ -475,59 +478,75 @@ class AdvancedBaseClientConfiguration:
         connection_timeout: Optional[int] = None,
         tls_config: Optional[TlsAdvancedConfiguration] = None,
         tcp_nodelay: Optional[bool] = None,
+        pubsub_reconciliation_interval: Optional[int] = None,
     ):
         self.connection_timeout = connection_timeout
         self.tls_config = tls_config
         self.tcp_nodelay = tcp_nodelay
+        self.pubsub_reconciliation_interval = pubsub_reconciliation_interval
 
     def _create_a_protobuf_conn_request(
         self, request: ConnectionRequest
     ) -> ConnectionRequest:
-        if self.connection_timeout:
+        if self.connection_timeout is not None:
             request.connection_timeout = self.connection_timeout
 
         if self.tcp_nodelay is not None:
             request.tcp_nodelay = self.tcp_nodelay
 
-        if self.tls_config:
-            if self.tls_config.use_insecure_tls:
-                # Validate that TLS is enabled before allowing insecure mode
-                if request.tls_mode == TlsMode.NoTls:
-                    raise ConfigurationError(
-                        "use_insecure_tls cannot be enabled when use_tls is disabled."
-                    )
+        if self.pubsub_reconciliation_interval is not None:
+            request.pubsub_reconciliation_interval_ms = (
+                self.pubsub_reconciliation_interval
+            )
 
-                # Override the default SecureTls mode to InsecureTls when user explicitly requests it
-                request.tls_mode = TlsMode.InsecureTls
-
-            # Handle root certificates
-            if self.tls_config.root_pem_cacerts is not None:
-                if len(self.tls_config.root_pem_cacerts) == 0:
-                    raise ConfigurationError(
-                        "root_pem_cacerts cannot be an empty bytes object; use None to use platform verifier"
-                    )
-                request.root_certs.append(self.tls_config.root_pem_cacerts)
-
-            # Handle client certificate for mutual TLS
-            if self.tls_config.client_cert_pem is not None:
-                if len(self.tls_config.client_cert_pem) == 0:
-                    raise ConfigurationError(
-                        "client_cert_pem cannot be an empty bytes object; use None if not providing client certificate"
-                    )
-                request.client_cert = self.tls_config.client_cert_pem
-
-            # Handle client key for mutual TLS
-            if self.tls_config.client_key_pem is not None:
-                if len(self.tls_config.client_key_pem) == 0:
-                    raise ConfigurationError(
-                        "client_key_pem cannot be an empty bytes object; use None if not providing client key"
-                    )
-                request.client_key = self.tls_config.client_key_pem
-
-            # Ensure client cert and client key are both provided or not provided
-            self._validate_client_auth_tls()
+        if self.tls_config is not None:
+            self._apply_tls_config(request, self.tls_config)
 
         return request
+
+    def _apply_tls_config(
+        self, request: ConnectionRequest, tls_config: TlsAdvancedConfiguration
+    ) -> None:
+        # Validate and handle insecure TLS
+        if tls_config.use_insecure_tls:
+            # Validate that TLS is enabled before allowing insecure mode
+            if request.tls_mode == TlsMode.NoTls:
+                raise ConfigurationError(
+                    "use_insecure_tls cannot be enabled when use_tls is disabled."
+                )
+
+            # Override the default SecureTls mode to InsecureTls when user explicitly requests it
+            request.tls_mode = TlsMode.InsecureTls
+
+        # Handle root certificates
+        root_certs = tls_config.root_pem_cacerts
+        if root_certs is not None:
+            if len(root_certs) == 0:
+                raise ConfigurationError(
+                    "root_pem_cacerts cannot be an empty bytes object; use None to use platform verifier"
+                )
+            request.root_certs.append(root_certs)
+
+        # Handle client certificate for mutual TLS
+        client_cert = tls_config.client_cert_pem
+        if client_cert is not None:
+            if len(client_cert) == 0:
+                raise ConfigurationError(
+                    "client_cert_pem cannot be an empty bytes object; use None if not providing client certificate"
+                )
+            request.client_cert = client_cert
+
+        # Handle client key for mutual TLS
+        client_key = tls_config.client_key_pem
+        if client_key is not None:
+            if len(client_key) == 0:
+                raise ConfigurationError(
+                    "client_key_pem cannot be an empty bytes object; use None if not providing client key"
+                )
+            request.client_key = client_key
+
+        # Ensure client cert and client key are both provided or not provided
+        self._validate_client_auth_tls()
 
     def _validate_client_auth_tls(self):
         if self.tls_config.client_cert_pem and not self.tls_config.client_key_pem:
@@ -767,6 +786,7 @@ class BaseClientConfiguration:
             request.compression_config.CopyFrom(self.compression._to_protobuf())
         return request
 
+    # TODO: remove this function once dynamic pubsub is implemented for the python wrappers
     def _is_pubsub_configured(self) -> bool:
         return False
 
@@ -786,9 +806,12 @@ class AdvancedGlideClientConfiguration(AdvancedBaseClientConfiguration):
         connection_timeout: Optional[int] = None,
         tls_config: Optional[TlsAdvancedConfiguration] = None,
         tcp_nodelay: Optional[bool] = None,
+        pubsub_reconciliation_interval: Optional[int] = None,
     ):
 
-        super().__init__(connection_timeout, tls_config, tcp_nodelay)
+        super().__init__(
+            connection_timeout, tls_config, tcp_nodelay, pubsub_reconciliation_interval
+        )
 
 
 class GlideClientConfiguration(BaseClientConfiguration):
@@ -873,6 +896,15 @@ class GlideClientConfiguration(BaseClientConfiguration):
         callback: Optional[Callable[[PubSubMsg, Any], None]]
         context: Any
 
+    @dataclass
+    class PubSubState:
+        desired_subscriptions: Dict[
+            GlideClientConfiguration.PubSubChannelModes, Set[str]
+        ]
+        actual_subscriptions: Dict[
+            GlideClientConfiguration.PubSubChannelModes, Set[str]
+        ]
+
     def __init__(
         self,
         addresses: List[NodeAddress],
@@ -939,6 +971,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
 
         return request
 
+    # TODO: remove this function once dynamic pubsub is implemented for the python wrappers
     def _is_pubsub_configured(self) -> bool:
         return self.pubsub_subscriptions is not None
 
@@ -965,6 +998,9 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
         refresh_topology_from_initial_nodes (bool): Enables refreshing the cluster topology using only the initial nodes.
             When this option is enabled, all topology updates (both the periodic checks and on-demand refreshes
             triggered by topology changes) will query only the initial nodes provided when creating the client, rather than using the internal cluster view.
+        pubsub_reconciliation_interval (Optional[int]): The interval in milliseconds between PubSub subscription
+            reconciliation attempts. The reconciliation process ensures that the client's desired subscriptions
+            match the actual subscriptions on the server.
     """
 
     def __init__(
@@ -973,8 +1009,11 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
         tls_config: Optional[TlsAdvancedConfiguration] = None,
         refresh_topology_from_initial_nodes: bool = False,
         tcp_nodelay: Optional[bool] = None,
+        pubsub_reconciliation_interval: Optional[int] = None,
     ):
-        super().__init__(connection_timeout, tls_config, tcp_nodelay)
+        super().__init__(
+            connection_timeout, tls_config, tcp_nodelay, pubsub_reconciliation_interval
+        )
         self.refresh_topology_from_initial_nodes = refresh_topology_from_initial_nodes
 
     def _create_a_protobuf_conn_request(
@@ -1080,6 +1119,15 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         callback: Optional[Callable[[PubSubMsg, Any], None]]
         context: Any
 
+    @dataclass
+    class PubSubState:
+        desired_subscriptions: Dict[
+            GlideClusterClientConfiguration.PubSubChannelModes, Set[str]
+        ]
+        actual_subscriptions: Dict[
+            GlideClusterClientConfiguration.PubSubChannelModes, Set[str]
+        ]
+
     def __init__(
         self,
         addresses: List[NodeAddress],
@@ -1158,6 +1206,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             request.lazy_connect = self.lazy_connect
         return request
 
+    # TODO: remove this function once dynamic pubsub is implemented for the python wrappers
     def _is_pubsub_configured(self) -> bool:
         return self.pubsub_subscriptions is not None
 

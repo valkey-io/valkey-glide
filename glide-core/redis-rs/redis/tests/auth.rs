@@ -41,7 +41,7 @@ mod auth {
                 let cluster_context =
                     cluster_context.expect("ClusterContext is required for Cluster connection");
                 let builder = get_builder(cluster_context, password);
-                let connection = builder.build()?.get_async_connection(None).await?;
+                let connection = builder.build()?.get_async_connection(None, None).await?;
                 Ok(Connection::Cluster(connection))
             }
             ConnectionType::Standalone => {

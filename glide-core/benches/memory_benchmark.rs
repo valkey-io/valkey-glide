@@ -41,10 +41,8 @@ fn just_setup() {
 #[library_benchmark]
 fn send_message() {
     runner(|mut client| async move {
-        client
-            .send_command(&black_box(cmd("PING")), None)
-            .await
-            .unwrap();
+        let mut command = black_box(cmd("PING"));
+        client.send_command(&mut command, None).await.unwrap();
     });
 }
 
@@ -53,22 +51,18 @@ fn send_and_receive_messages() {
     runner(|mut client| async move {
         let mut command = cmd("SET");
         command.arg("foo").arg("bar");
-        client
-            .send_command(&black_box(command), None)
-            .await
-            .unwrap();
+        let mut command = black_box(command);
+        client.send_command(&mut command, None).await.unwrap();
+
         let mut command = cmd("SET");
         command.arg("baz").arg("foo");
-        client
-            .send_command(&black_box(command), None)
-            .await
-            .unwrap();
+        let mut command = black_box(command);
+        client.send_command(&mut command, None).await.unwrap();
+
         let mut command = cmd("MGET");
         command.arg("baz").arg("foo");
-        let result = client
-            .send_command(&black_box(command), None)
-            .await
-            .unwrap();
+        let mut command = black_box(command);
+        let result = client.send_command(&mut command, None).await.unwrap();
         assert!(
             result
                 == Value::Array(vec![
@@ -85,22 +79,18 @@ fn lots_of_messages() {
         for _ in 0..1000 {
             let mut command = cmd("SET");
             command.arg("foo").arg("bar");
-            client
-                .send_command(&black_box(command), None)
-                .await
-                .unwrap();
+            let mut command = black_box(command);
+            client.send_command(&mut command, None).await.unwrap();
+
             let mut command = cmd("SET");
             command.arg("baz").arg("foo");
-            client
-                .send_command(&black_box(command), None)
-                .await
-                .unwrap();
+            let mut command = black_box(command);
+            client.send_command(&mut command, None).await.unwrap();
+
             let mut command = cmd("MGET");
             command.arg("baz").arg("foo");
-            let result = client
-                .send_command(&black_box(command), None)
-                .await
-                .unwrap();
+            let mut command = black_box(command);
+            let result = client.send_command(&mut command, None).await.unwrap();
             assert!(
                 result
                     == Value::Array(vec![

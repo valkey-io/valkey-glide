@@ -5,7 +5,7 @@ mod support;
 #[cfg(test)]
 mod cluster_async {
     use std::{
-        collections::{HashMap, HashSet},
+        collections::HashMap,
         net::{IpAddr, SocketAddr},
         str::from_utf8,
         sync::{
@@ -32,124 +32,18 @@ mod cluster_async {
             MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
         },
         cluster_topology::{get_slot, DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES},
-        cmd, from_owned_redis_value, parse_redis_value, AsyncCommands, Cmd, ConnectionAddr,
-        ErrorKind, FromRedisValue, GlideConnectionOptions, InfoDict, IntoConnectionInfo,
-        PipelineRetryStrategy, ProtocolVersion, PubSubChannelOrPattern, PubSubSubscriptionInfo,
-        PubSubSubscriptionKind, PushInfo, PushKind, RedisError, RedisFuture, RedisResult, Value,
+        cmd, fenced_cmd, from_owned_redis_value, parse_redis_value, AsyncCommands, Cmd,
+        ConnectionAddr, ErrorKind, FromRedisValue, GlideConnectionOptions, InfoDict,
+        IntoConnectionInfo, PipelineRetryStrategy, ProtocolVersion, RedisError, RedisFuture,
+        RedisResult, Value,
     };
 
     use crate::support::*;
-    use tokio::sync::mpsc;
     fn broken_pipe_error() -> RedisError {
         RedisError::from(std::io::Error::new(
             std::io::ErrorKind::BrokenPipe,
             "mock-io-error",
         ))
-    }
-
-    #[derive(Debug, Clone, Copy)]
-    enum PublishCommand {
-        Publish,
-        SPublish,
-    }
-
-    async fn retry_publish_until_expected_subscribers(
-        command: PublishCommand,
-        connection: &mut redis::cluster_async::ClusterConnection,
-        channel: &str,
-        message: &str,
-        expected_count: i64,
-        max_retries: u32,
-    ) -> redis::RedisResult<redis::Value> {
-        use futures_time::time::Duration;
-        let mut delay_ms = 100u64;
-
-        for attempt in 0..max_retries {
-            let cmd_name = match command {
-                PublishCommand::Publish => "PUBLISH",
-                PublishCommand::SPublish => "SPUBLISH",
-            };
-
-            let result = redis::cmd(cmd_name)
-                .arg(channel)
-                .arg(message)
-                .query_async(connection)
-                .await;
-
-            match result {
-                Ok(redis::Value::Int(count)) if count == expected_count => {
-                    return Ok(redis::Value::Int(count));
-                }
-                Ok(redis::Value::Int(count)) => {
-                    // Got a different count than expected, retry after delay
-                    if attempt < max_retries - 1 {
-                        tokio::time::sleep(Duration::from_millis(delay_ms).into()).await;
-                        delay_ms *= 2; // exponential backoff
-                    } else {
-                        return Ok(redis::Value::Int(count)); // return the last result
-                    }
-                }
-                Ok(other) => return Ok(other),
-                Err(e) => return Err(e),
-            }
-        }
-
-        // This should not be reached due to the loop logic above
-        unreachable!()
-    }
-
-    fn validate_subscriptions(
-        pubsub_subs: &PubSubSubscriptionInfo,
-        notifications_rx: &mut mpsc::UnboundedReceiver<PushInfo>,
-        allow_disconnects: bool,
-    ) {
-        let mut subscribe_cnt =
-            if let Some(exact_subs) = pubsub_subs.get(&PubSubSubscriptionKind::Exact) {
-                exact_subs.len()
-            } else {
-                0
-            };
-
-        let mut psubscribe_cnt =
-            if let Some(pattern_subs) = pubsub_subs.get(&PubSubSubscriptionKind::Pattern) {
-                pattern_subs.len()
-            } else {
-                0
-            };
-
-        let mut ssubscribe_cnt =
-            if let Some(sharded_subs) = pubsub_subs.get(&PubSubSubscriptionKind::Sharded) {
-                sharded_subs.len()
-            } else {
-                0
-            };
-
-        for _ in 0..(subscribe_cnt + psubscribe_cnt + ssubscribe_cnt) {
-            let result = notifications_rx.try_recv();
-            assert!(result.is_ok());
-            let PushInfo { kind, data: _ } = result.unwrap();
-            assert!(
-                kind == PushKind::Subscribe
-                    || kind == PushKind::PSubscribe
-                    || kind == PushKind::SSubscribe
-                    || if allow_disconnects {
-                        kind == PushKind::Disconnection
-                    } else {
-                        false
-                    }
-            );
-            if kind == PushKind::Subscribe {
-                subscribe_cnt -= 1;
-            } else if kind == PushKind::PSubscribe {
-                psubscribe_cnt -= 1;
-            } else if kind == PushKind::SSubscribe {
-                ssubscribe_cnt -= 1;
-            }
-        }
-
-        assert!(subscribe_cnt == 0);
-        assert!(psubscribe_cnt == 0);
-        assert!(ssubscribe_cnt == 0);
     }
 
     const SPANS_JSON: &str = "/tmp/spans.json";
@@ -845,7 +739,7 @@ mod cluster_async {
             .read_from(strategy)
             .build()
             .unwrap()
-            .get_async_connection(None)
+            .get_async_connection(None, None)
             .await
             .unwrap();
 
@@ -948,7 +842,7 @@ mod cluster_async {
             .read_from(strategy)
             .build()
             .unwrap()
-            .get_async_connection(None)
+            .get_async_connection(None, None)
             .await
             .unwrap();
 
@@ -1053,7 +947,7 @@ mod cluster_async {
             )
             .build()
             .unwrap()
-            .get_async_connection(None)
+            .get_async_connection(None, None)
             .await
             .unwrap();
 
@@ -1231,7 +1125,7 @@ mod cluster_async {
             let client = ClusterClient::builder(cluster_addresses.clone())
                 .read_from_replicas()
                 .build()?;
-            let mut connection = client.get_async_connection(None).await?;
+            let mut connection = client.get_async_connection(None, None).await?;
 
             let route_to_all_nodes = redis::cluster_routing::MultipleNodeRoutingInfo::AllNodes;
             let routing = RoutingInfo::MultiNode((route_to_all_nodes, None));
@@ -2268,7 +2162,7 @@ mod cluster_async {
                         .build()
                         .unwrap();
 
-                let mut conn = client.get_async_connection(None).await.unwrap();
+                let mut conn = client.get_async_connection(None, None).await.unwrap();
 
                 // Disable full coverage requirement
                 let _ = conn
@@ -4947,569 +4841,6 @@ mod cluster_async {
 
     #[test]
     #[serial_test::serial]
-    fn test_async_cluster_restore_resp3_pubsub_state_passive_disconnect() {
-        let redis_ver = std::env::var("REDIS_VERSION").unwrap_or_default();
-        let use_sharded = redis_ver.starts_with("7.");
-
-        let mut client_subscriptions = PubSubSubscriptionInfo::from([(
-            PubSubSubscriptionKind::Exact,
-            HashSet::from([PubSubChannelOrPattern::from("test_channel".as_bytes())]),
-        )]);
-
-        if use_sharded {
-            client_subscriptions.insert(
-                PubSubSubscriptionKind::Sharded,
-                HashSet::from([PubSubChannelOrPattern::from("test_channel_?".as_bytes())]),
-            );
-        }
-
-        // note topology change detection is not activated since no topology change is expected
-        let cluster = TestClusterContext::new_with_cluster_client_builder(
-            3,
-            0,
-            |builder| {
-                builder
-                    .retries(3)
-                    .use_protocol(ProtocolVersion::RESP3)
-                    .pubsub_subscriptions(client_subscriptions.clone())
-                    .periodic_connections_checks(Some(Duration::from_secs(1)))
-            },
-            false,
-        );
-
-        block_on_all(async move {
-            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<PushInfo>();
-            let mut _listening_con = cluster.async_connection(Some(tx.clone())).await;
-            // Note, publishing connection has the same pubsub config
-            let mut publishing_con = cluster.async_connection(None).await;
-
-            // short sleep to allow the server to push subscription notification
-            sleep(futures_time::time::Duration::from_secs(1)).await;
-
-            // validate subscriptions
-            validate_subscriptions(&client_subscriptions, &mut rx, false);
-
-            // validate PUBLISH - retry until expected subscribers are available
-            let result = retry_publish_until_expected_subscribers(
-                PublishCommand::Publish,
-                &mut publishing_con,
-                "test_channel",
-                "test_message",
-                2,
-                10, // max retries
-            )
-            .await;
-            assert_eq!(
-                result,
-                Ok(Value::Int(2)) // 2 connections with the same pubsub config
-            );
-
-            sleep(futures_time::time::Duration::from_secs(1)).await;
-            let result = rx.try_recv();
-            assert!(result.is_ok());
-            let PushInfo { kind, data } = result.unwrap();
-            assert_eq!(
-                (kind, data),
-                (
-                    PushKind::Message,
-                    vec![
-                        Value::BulkString("test_channel".into()),
-                        Value::BulkString("test_message".into()),
-                    ]
-                )
-            );
-
-            if use_sharded {
-                // validate SPUBLISH - retry until expected subscribers are available
-                let result = retry_publish_until_expected_subscribers(
-                    PublishCommand::SPublish,
-                    &mut publishing_con,
-                    "test_channel_?",
-                    "test_message",
-                    2,
-                    10, // max retries
-                )
-                .await;
-                assert_eq!(
-                    result,
-                    Ok(Value::Int(2)) // 2 connections with the same pubsub config
-                );
-
-                sleep(futures_time::time::Duration::from_secs(1)).await;
-                let result = rx.try_recv();
-                assert!(result.is_ok());
-                let PushInfo { kind, data } = result.unwrap();
-                assert_eq!(
-                    (kind, data),
-                    (
-                        PushKind::SMessage,
-                        vec![
-                            Value::BulkString("test_channel_?".into()),
-                            Value::BulkString("test_message".into()),
-                        ]
-                    )
-                );
-            }
-
-            // simulate passive disconnect
-            drop(cluster);
-
-            // recreate the cluster, the assumtion is that the cluster is built with exactly the same params (ports, slots map...)
-            let _cluster =
-                TestClusterContext::new_with_cluster_client_builder(3, 0, |builder| builder, false);
-
-            // sleep for 1 periodic_connections_checks + overhead
-            sleep(futures_time::time::Duration::from_secs(1 + 1)).await;
-
-            // new subscription notifications due to resubscriptions
-            validate_subscriptions(&client_subscriptions, &mut rx, true);
-
-            // validate PUBLISH - retry until expected subscribers are available
-            let result = retry_publish_until_expected_subscribers(
-                PublishCommand::Publish,
-                &mut publishing_con,
-                "test_channel",
-                "test_message",
-                2,
-                10, // max retries
-            )
-            .await;
-            assert_eq!(
-                result,
-                Ok(Value::Int(2)) // 2 connections with the same pubsub config
-            );
-
-            sleep(futures_time::time::Duration::from_secs(1)).await;
-            let result = rx.try_recv();
-            assert!(result.is_ok());
-            let PushInfo { kind, data } = result.unwrap();
-            assert_eq!(
-                (kind, data),
-                (
-                    PushKind::Message,
-                    vec![
-                        Value::BulkString("test_channel".into()),
-                        Value::BulkString("test_message".into()),
-                    ]
-                )
-            );
-
-            if use_sharded {
-                // validate SPUBLISH - retry until expected subscribers are available
-                let result = retry_publish_until_expected_subscribers(
-                    PublishCommand::SPublish,
-                    &mut publishing_con,
-                    "test_channel_?",
-                    "test_message",
-                    2,
-                    10, // max retries
-                )
-                .await;
-                assert_eq!(
-                    result,
-                    Ok(Value::Int(2)) // 2 connections with the same pubsub config
-                );
-
-                sleep(futures_time::time::Duration::from_secs(1)).await;
-                let result = rx.try_recv();
-                assert!(result.is_ok());
-                let PushInfo { kind, data } = result.unwrap();
-                assert_eq!(
-                    (kind, data),
-                    (
-                        PushKind::SMessage,
-                        vec![
-                            Value::BulkString("test_channel_?".into()),
-                            Value::BulkString("test_message".into()),
-                        ]
-                    )
-                );
-            }
-
-            Ok(())
-        })
-        .unwrap();
-    }
-
-    #[test]
-    #[serial_test::serial]
-    fn test_async_cluster_restore_resp3_pubsub_state_after_scale_out() {
-        let redis_ver = std::env::var("REDIS_VERSION").unwrap_or_default();
-        let use_sharded = redis_ver.starts_with("7.");
-
-        let mut client_subscriptions = PubSubSubscriptionInfo::from([
-            // test_channel_? is used as it maps to 14212 slot, which is the last node in both 3 and 6 node config
-            // (assuming slots allocation is monotonicaly increasing starting from node 0)
-            (
-                PubSubSubscriptionKind::Exact,
-                HashSet::from([PubSubChannelOrPattern::from("test_channel_?".as_bytes())]),
-            ),
-        ]);
-
-        if use_sharded {
-            client_subscriptions.insert(
-                PubSubSubscriptionKind::Sharded,
-                HashSet::from([PubSubChannelOrPattern::from("test_channel_?".as_bytes())]),
-            );
-        }
-
-        let slot_14212 = get_slot(b"test_channel_?");
-        assert_eq!(slot_14212, 14212);
-
-        let cluster = TestClusterContext::new_with_cluster_client_builder(
-            3,
-            0,
-            |builder| {
-                builder
-            .retries(3)
-            .use_protocol(ProtocolVersion::RESP3)
-            .pubsub_subscriptions(client_subscriptions.clone())
-            // periodic connection check is required to detect the disconnect from the last node
-            .periodic_connections_checks(Some(Duration::from_secs(1)))
-            // periodic topology check is required to detect topology change
-            .periodic_topology_checks(Duration::from_secs(1))
-            .slots_refresh_rate_limit(Duration::from_secs(0), 0)
-            },
-            false,
-        );
-
-        block_on_all(async move {
-            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<PushInfo>();
-            let mut _listening_con = cluster.async_connection(Some(tx.clone())).await;
-            // Note, publishing connection has the same pubsub config
-            let mut publishing_con = cluster.async_connection(None).await;
-
-            // short sleep to allow the server to push subscription notification
-            sleep(futures_time::time::Duration::from_secs(1)).await;
-
-            // validate subscriptions
-            validate_subscriptions(&client_subscriptions, &mut rx, false);
-
-            // validate PUBLISH - retry until expected subscribers are available
-            let result = retry_publish_until_expected_subscribers(
-                PublishCommand::Publish,
-                &mut publishing_con,
-                "test_channel_?",
-                "test_message",
-                2,
-                10, // max retries
-            )
-            .await;
-            assert_eq!(
-                result,
-                Ok(Value::Int(2)) // 2 connections with the same pubsub config
-            );
-
-            sleep(futures_time::time::Duration::from_secs(1)).await;
-            let result = rx.try_recv();
-            assert!(result.is_ok());
-            let PushInfo { kind, data } = result.unwrap();
-            assert_eq!(
-                (kind, data),
-                (
-                    PushKind::Message,
-                    vec![
-                        Value::BulkString("test_channel_?".into()),
-                        Value::BulkString("test_message".into()),
-                    ]
-                )
-            );
-
-            if use_sharded {
-                // validate SPUBLISH - retry until expected subscribers are available
-                let result = retry_publish_until_expected_subscribers(
-                    PublishCommand::SPublish,
-                    &mut publishing_con,
-                    "test_channel_?",
-                    "test_message",
-                    2,
-                    10, // max retries
-                )
-                .await;
-                assert_eq!(
-                    result,
-                    Ok(Value::Int(2)) // 2 connections with the same pubsub config
-                );
-
-                sleep(futures_time::time::Duration::from_secs(1)).await;
-                let result = rx.try_recv();
-                assert!(result.is_ok());
-                let PushInfo { kind, data } = result.unwrap();
-                assert_eq!(
-                    (kind, data),
-                    (
-                        PushKind::SMessage,
-                        vec![
-                            Value::BulkString("test_channel_?".into()),
-                            Value::BulkString("test_message".into()),
-                        ]
-                    )
-                );
-            }
-
-            // drop and recreate a cluster with more nodes
-            drop(cluster);
-
-            // recreate the cluster, the assumtion is that the cluster is built with exactly the same params (ports, slots map...)
-            let cluster =
-                TestClusterContext::new_with_cluster_client_builder(6, 0, |builder| builder, false);
-
-            // assume slot 14212 will reside in the last node
-            let last_server_port = {
-                let addr = cluster.cluster.servers.last().unwrap().addr.clone();
-                match addr {
-                    redis::ConnectionAddr::TcpTls {
-                        host: _,
-                        port,
-                        insecure: _,
-                        tls_params: _,
-                    } => port,
-                    redis::ConnectionAddr::Tcp(_, port) => port,
-                    _ => {
-                        panic!("Wrong server address type: {addr:?}");
-                    }
-                }
-            };
-
-            // wait for new topology discovery
-            let max_requests = 5;
-            let mut i = 0;
-            let mut cmd = redis::cmd("INFO");
-            cmd.arg("SERVER");
-            loop {
-                if i == max_requests {
-                    panic!("Failed to recover and discover new topology");
-                }
-                i += 1;
-
-                if let Ok(res) = publishing_con
-                    .route_command(
-                        &cmd,
-                        RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
-                            slot_14212,
-                            SlotAddr::Master,
-                        ))),
-                    )
-                    .await
-                {
-                    match res {
-                        Value::VerbatimString { format: _, text } => {
-                            if text.contains(format!("tcp_port:{last_server_port}").as_str()) {
-                                // new topology rediscovered
-                                break;
-                            }
-                        }
-                        _ => {
-                            panic!("Wrong return type for INFO SERVER command: {res:?}");
-                        }
-                    }
-                    sleep(futures_time::time::Duration::from_secs(1)).await;
-                }
-            }
-
-            // sleep for one one cycle of topology refresh
-            sleep(futures_time::time::Duration::from_secs(1)).await;
-
-            // validate PUBLISH - retry until expected subscribers are available
-            let result = retry_publish_until_expected_subscribers(
-                PublishCommand::Publish,
-                &mut publishing_con,
-                "test_channel_?",
-                "test_message",
-                2,
-                10, // max retries
-            )
-            .await;
-            assert_eq!(
-                result,
-                Ok(Value::Int(2)) // 2 connections with the same pubsub config
-            );
-
-            // allow message to propagate
-            sleep(futures_time::time::Duration::from_secs(1)).await;
-
-            loop {
-                let result = rx.try_recv();
-                assert!(result.is_ok());
-                let PushInfo { kind, data } = result.unwrap();
-                // ignore disconnection and subscription notifications due to resubscriptions
-                if kind == PushKind::Message {
-                    assert_eq!(
-                        data,
-                        vec![
-                            Value::BulkString("test_channel_?".into()),
-                            Value::BulkString("test_message".into()),
-                        ]
-                    );
-                    break;
-                }
-            }
-
-            if use_sharded {
-                // validate SPUBLISH - retry until expected subscribers are available
-                let result = retry_publish_until_expected_subscribers(
-                    PublishCommand::SPublish,
-                    &mut publishing_con,
-                    "test_channel_?",
-                    "test_message",
-                    2,
-                    10, // max retries
-                )
-                .await;
-                assert_eq!(
-                    result,
-                    Ok(Value::Int(2)) // 2 connections with the same pubsub config
-                );
-
-                // allow message to propagate
-                sleep(futures_time::time::Duration::from_secs(1)).await;
-
-                let result = rx.try_recv();
-                assert!(result.is_ok());
-                let PushInfo { kind, data } = result.unwrap();
-                assert_eq!(
-                    (kind, data),
-                    (
-                        PushKind::SMessage,
-                        vec![
-                            Value::BulkString("test_channel_?".into()),
-                            Value::BulkString("test_message".into()),
-                        ]
-                    )
-                );
-            }
-
-            drop(publishing_con);
-            drop(_listening_con);
-
-            Ok(())
-        })
-        .unwrap();
-
-        block_on_all(async move {
-            sleep(futures_time::time::Duration::from_secs(10)).await;
-            Ok(())
-        })
-        .unwrap();
-    }
-
-    #[test]
-    #[serial_test::serial]
-    fn test_async_cluster_resp3_pubsub() {
-        let redis_ver = std::env::var("REDIS_VERSION").unwrap_or_default();
-        let use_sharded = redis_ver.starts_with("7.");
-
-        let mut client_subscriptions = PubSubSubscriptionInfo::from([
-            (
-                PubSubSubscriptionKind::Exact,
-                HashSet::from([PubSubChannelOrPattern::from("test_channel_?".as_bytes())]),
-            ),
-            (
-                PubSubSubscriptionKind::Pattern,
-                HashSet::from([
-                    PubSubChannelOrPattern::from("test_*".as_bytes()),
-                    PubSubChannelOrPattern::from("*".as_bytes()),
-                ]),
-            ),
-        ]);
-
-        if use_sharded {
-            client_subscriptions.insert(
-                PubSubSubscriptionKind::Sharded,
-                HashSet::from([PubSubChannelOrPattern::from("test_channel_?".as_bytes())]),
-            );
-        }
-
-        let cluster = TestClusterContext::new_with_cluster_client_builder(
-            3,
-            0,
-            |builder| {
-                builder
-                    .retries(3)
-                    .use_protocol(ProtocolVersion::RESP3)
-                    .pubsub_subscriptions(client_subscriptions.clone())
-            },
-            false,
-        );
-
-        block_on_all(async move {
-            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<PushInfo>();
-            let mut connection = cluster.async_connection(Some(tx.clone())).await;
-
-            // short sleep to allow the server to push subscription notification
-            sleep(futures_time::time::Duration::from_secs(1)).await;
-
-            validate_subscriptions(&client_subscriptions, &mut rx, false);
-
-            let slot_14212 = get_slot(b"test_channel_?");
-            assert_eq!(slot_14212, 14212);
-
-            let slot_0_route =
-                redis::cluster_routing::Route::new(0, redis::cluster_routing::SlotAddr::Master);
-            let node_0_route =
-                redis::cluster_routing::SingleNodeRoutingInfo::SpecificNode(slot_0_route);
-
-            // node 0 route is used to ensure that the publish is propagated correctly
-            let result = connection
-                .route_command(
-                    redis::Cmd::new()
-                        .arg("PUBLISH")
-                        .arg("test_channel_?")
-                        .arg("test_message"),
-                    RoutingInfo::SingleNode(node_0_route.clone()),
-                )
-                .await;
-            assert!(result.is_ok());
-
-            sleep(futures_time::time::Duration::from_secs(1)).await;
-
-            let mut pmsg_cnt = 0;
-            let mut msg_cnt = 0;
-            for _ in 0..3 {
-                let result = rx.try_recv();
-                assert!(result.is_ok());
-                let PushInfo { kind, data: _ } = result.unwrap();
-                assert!(kind == PushKind::Message || kind == PushKind::PMessage);
-                if kind == PushKind::Message {
-                    msg_cnt += 1;
-                } else {
-                    pmsg_cnt += 1;
-                }
-            }
-            assert_eq!(msg_cnt, 1);
-            assert_eq!(pmsg_cnt, 2);
-
-            if use_sharded {
-                let result = cmd("SPUBLISH")
-                    .arg("test_channel_?")
-                    .arg("test_message")
-                    .query_async(&mut connection)
-                    .await;
-                assert_eq!(result, Ok(Value::Int(1)));
-
-                sleep(futures_time::time::Duration::from_secs(1)).await;
-                let result = rx.try_recv();
-                assert!(result.is_ok());
-                let PushInfo { kind, data } = result.unwrap();
-                assert_eq!(
-                    (kind, data),
-                    (
-                        PushKind::SMessage,
-                        vec![
-                            Value::BulkString("test_channel_?".into()),
-                            Value::BulkString("test_message".into()),
-                        ]
-                    )
-                );
-            }
-
-            Ok(())
-        })
-        .unwrap();
-    }
-
-    #[test]
-    #[serial_test::serial]
     fn test_async_cluster_periodic_checks_update_topology_after_failover() {
         // This test aims to validate the functionality of periodic topology checks by detecting and updating topology changes.
         // We will repeatedly execute CLUSTER NODES commands against the primary node responsible for slot 0, recording its node ID.
@@ -6381,6 +5712,501 @@ mod cluster_async {
         assert_eq!(request_counter.load(Ordering::Relaxed), 1);
     }
 
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_fenced_command_with_successful_response() {
+        // Test fenced command returns correct value (command result, then PONG).
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0).use_protocol(ProtocolVersion::RESP3),
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            let _: () = connection.set("test_key", "test_value").await.unwrap();
+
+            let mut fenced_cmd = fenced_cmd("GET");
+            fenced_cmd.arg("test_key");
+
+            let result: String = fenced_cmd.query_async(&mut connection).await.unwrap();
+            assert_eq!(result, "test_value");
+
+            // Verify ordering is correct after fenced command
+            let result: String = cmd("GET")
+                .arg("test_key")
+                .query_async(&mut connection)
+                .await
+                .unwrap();
+            assert_eq!(result, "test_value");
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_fenced_command_with_server_error() {
+        // Test fenced command correctly returns server error (error, then PONG).
+
+        let key = "type_error_test_key";
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0).use_protocol(ProtocolVersion::RESP3),
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            // Set key to string value
+            let _: () = connection.set(key, "hello").await.unwrap();
+
+            // Try LPUSH to string key (will fail with WRONGTYPE)
+            let mut lpush_cmd = fenced_cmd("LPUSH");
+            lpush_cmd.arg(key).arg("1");
+
+            let result = lpush_cmd.query_async::<_, Value>(&mut connection).await;
+
+            match result {
+                Err(e) if e.kind() == ErrorKind::ExtensionError => {
+                    assert_eq!(e.code(), Some("WRONGTYPE"));
+                }
+                Err(e) => panic!("Expected WRONGTYPE error but got {:?}: {}", e.kind(), e),
+                Ok(val) => panic!("Expected Err(WRONGTYPE) but got Ok: {:?}", val),
+            }
+
+            // Verify connection still works
+            let ping_result: String = cmd("PING").query_async(&mut connection).await.unwrap();
+            assert_eq!(ping_result, "PONG");
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_fenced_command_with_connection_error() {
+        // Test fenced command correctly handles connection errors.
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0).use_protocol(ProtocolVersion::RESP3),
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            let mut fenced_cmd = fenced_cmd("GET");
+            fenced_cmd.arg("some_key");
+
+            // Drop cluster to kill all connections
+            drop(cluster);
+
+            let result = connection.req_packed_command(&fenced_cmd).await;
+
+            assert!(
+                result
+                    .as_ref()
+                    .is_err_and(|e| e.kind() == ErrorKind::FatalSendError
+                        || e.kind() == ErrorKind::FatalReceiveError),
+                "Expected connection error, but got: {:?}",
+                result
+            );
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_fenced_sunsubscribe_with_moved_error() {
+        // Test fenced SUNSUBSCRIBE receives MOVED error after slot migration,
+        // verifying the fenced command logic handles it correctly.
+        // This scenario is similar to the one described in - https://github.com/valkey-io/valkey/issues/1066
+
+        let channel = "fenced_sunsubscribe_test_channel";
+        let channel_slot = get_slot(channel.as_bytes());
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0).use_protocol(ProtocolVersion::RESP3),
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            let _: () = cmd("SSUBSCRIBE")
+                .arg(channel)
+                .query_async(&mut connection)
+                .await
+                .unwrap();
+
+            let old_node_route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                Route::new(channel_slot, SlotAddr::Master),
+            ));
+
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+            cluster
+                .move_specific_slot(channel_slot, slot_distribution)
+                .await;
+
+            let mut unsubscribe_cmd = fenced_cmd("SUNSUBSCRIBE");
+            unsubscribe_cmd.arg(channel);
+
+            let result = connection
+                .route_command(&unsubscribe_cmd, old_node_route)
+                .await;
+
+            match result {
+                Err(e) if e.kind() == ErrorKind::Moved => {}
+                Err(e) => panic!(
+                    "Expected Err(MOVED) but got different error: kind={:?}, detail={:?}",
+                    e.kind(),
+                    e.detail()
+                ),
+                Ok(val) => panic!("Expected Err(MOVED) but got Ok: {:?}", val),
+            }
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_fenced_sunsubscribe_with_slot_deletion_error() {
+        // Test fenced SUNSUBSCRIBE receives error after slot deletion,
+        // verifying the fenced command logic handles it correctly.
+        // This scenario is similar to the one described in - https://github.com/valkey-io/valkey/issues/1066
+
+        let channel = "fenced_sunsubscribe_deletion_test_channel";
+        let channel_slot = get_slot(channel.as_bytes());
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0).use_protocol(ProtocolVersion::RESP3),
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            let _: () = cmd("SSUBSCRIBE")
+                .arg(channel)
+                .query_async(&mut connection)
+                .await
+                .unwrap();
+
+            let old_node_route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                Route::new(channel_slot, SlotAddr::Master),
+            ));
+
+            cluster.delete_specific_slot(channel_slot, None).await;
+
+            let mut unsubscribe_cmd = fenced_cmd("SUNSUBSCRIBE");
+            unsubscribe_cmd.arg(channel);
+
+            let result = connection
+                .route_command(&unsubscribe_cmd, old_node_route)
+                .await;
+
+            // Verify we got a server error (slot no longer owned by this node)
+            match result {
+                Err(e) if e.kind() == ErrorKind::ClusterDown => {}
+                Err(e) => panic!("Expected CLUSTERDOWN error but got {:?}: {}", e.kind(), e),
+                Ok(val) => panic!("Expected Err(CLUSTERDOWN) but got Ok: {:?}", val),
+            }
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_fenced_sunsubscribe_successful() {
+        // Test fenced SUNSUBSCRIBE correctly handles PONG as the response of the command,
+        // indicating the fenced command completed successfully.
+
+        let channel = "successful_sunsubscribe_test_channel";
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0).use_protocol(ProtocolVersion::RESP3),
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            let _: () = cmd("SSUBSCRIBE")
+                .arg(channel)
+                .query_async(&mut connection)
+                .await
+                .unwrap();
+
+            let mut unsubscribe_cmd = fenced_cmd("SUNSUBSCRIBE");
+            unsubscribe_cmd.arg(channel);
+
+            let result = unsubscribe_cmd
+                .query_async::<_, Value>(&mut connection)
+                .await;
+
+            assert!(
+                matches!(result, Ok(Value::Nil)),
+                "Expected Nil but got: {:?}",
+                result
+            );
+
+            // Verify ordering is still correct
+            let ping_result: String = cmd("PING").query_async(&mut connection).await.unwrap();
+            assert_eq!(ping_result, "PONG");
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_multiple_fenced_commands_sequential() {
+        // Test multiple fenced commands sent sequentially each receive correct responses.
+
+        let channels = vec![
+            "fenced_seq_channel_1",
+            "fenced_seq_channel_2",
+            "fenced_seq_channel_3",
+            "fenced_seq_channel_4",
+        ];
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0).use_protocol(ProtocolVersion::RESP3),
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+
+            // Subscribe to all channels
+            for channel in &channels {
+                let _: () = cmd("SSUBSCRIBE")
+                    .arg(channel)
+                    .query_async(&mut connection)
+                    .await
+                    .unwrap();
+            }
+
+            // Send fenced SUNSUBSCRIBE for each channel
+            for channel in &channels {
+                let mut unsubscribe_cmd = fenced_cmd("SUNSUBSCRIBE");
+                unsubscribe_cmd.arg(channel);
+
+                let result = unsubscribe_cmd
+                    .query_async::<_, Value>(&mut connection)
+                    .await;
+
+                assert!(
+                    matches!(result, Ok(Value::Nil)),
+                    "Expected Nil for channel '{}' but got: {:?}",
+                    channel,
+                    result
+                );
+            }
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_response_ordering_during_slot_migration() {
+        // Verifies that if there's an unrelated InFlight request while receiving an unprompted
+        // SUNSUBSCRIBE push notification, it does not interfere with response ordering
+
+        let channel = "migration_test_channel";
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| {
+                builder
+                    .retries(3)
+                    .use_protocol(ProtocolVersion::RESP3)
+                    .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            },
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+            let mut push_connection = cluster.async_connection(None).await;
+
+            let _: () = cmd("SSUBSCRIBE")
+                .arg(channel)
+                .query_async(&mut connection)
+                .await
+                .unwrap();
+
+            let channel_slot = get_slot(channel.as_bytes());
+
+            // Start blocking BLPOP
+            let blpop_key = "blocking_list_key";
+            let expected_value = "test_value";
+            let mut connection_clone = connection.clone();
+            let blpop_handle = tokio::spawn(async move {
+                connection_clone
+                    .blpop::<_, Option<(String, String)>>(blpop_key, 10.0)
+                    .await
+            });
+
+            // Move slot to trigger unprompted SUNSUBSCRIBE
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+            cluster
+                .move_specific_slot(channel_slot, slot_distribution)
+                .await;
+
+            // Push value to unblock BLPOP
+            let _: () = push_connection
+                .rpush(blpop_key, expected_value)
+                .await
+                .unwrap();
+
+            // Verify BLPOP received correct value
+            let blpop_result = blpop_handle.await.unwrap();
+            match blpop_result {
+                Ok(Some((key, value))) => {
+                    assert_eq!(key, blpop_key);
+                    assert_eq!(value, expected_value);
+                }
+                Ok(None) => panic!("BLPOP timed out"),
+                Err(e) => panic!("BLPOP failed: {:?}", e),
+            }
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_protocol_desync_when_fenced_command_fails() {
+        let test_user = "test_desync_user";
+        let test_password = "test_password";
+
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| {
+                builder
+                    .retries(0)
+                    .use_protocol(ProtocolVersion::RESP3)
+                    .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            },
+            false,
+        );
+
+        block_on_all(async {
+            // Use admin connection for ACL commands (default user)
+            let mut admin_connection = cluster.async_connection(None).await;
+
+            // Set up test user with PING initially to allow connection setup
+            let _: () = redis::cmd("ACL")
+                .arg("SETUSER")
+                .arg(test_user)
+                .arg("on")
+                .arg(&format!(">{}", test_password))
+                .arg("+subscribe")
+                .arg("+ssubscribe")
+                .arg("+sunsubscribe")
+                .arg("+unsubscribe")
+                .arg("+ping")      // Allow PING initially
+                .arg("+cluster")   // Allow CLUSTER commands for topology discovery
+                .arg("allkeys")
+                .query_async(&mut admin_connection)
+                .await
+                .unwrap();
+
+            // Create a separate client for test user
+            let test_user_client = ClusterClient::builder(cluster.nodes.clone())
+                .use_protocol(ProtocolVersion::RESP3)
+                .username(test_user.to_string())
+                .password(test_password.to_string())
+                .build()
+                .unwrap();
+
+            let mut connection = test_user_client
+                .get_async_connection(None, None)
+                .await
+                .unwrap();
+
+            // Now revoke PING permission
+            let _: () = redis::cmd("ACL")
+                .arg("SETUSER")
+                .arg(test_user)
+                .arg("-ping")  // Revoke PING
+                .query_async(&mut admin_connection)
+                .await
+                .unwrap();
+
+            // Try fenced command (will fail because PING is denied)
+            let mut cmd = fenced_cmd("SET");
+            cmd.arg("test_key");
+            cmd.arg("test_value");
+
+            let result = cmd.query_async::<_, Value>(&mut connection).await;
+
+            // Verify - should fail with ProtocolDesync
+            match result {
+                Err(e) if e.kind() == ErrorKind::ProtocolDesync => {}
+                Err(e) => panic!(
+                    "Expected ProtocolDesync error but got {:?}: {}",
+                    e.kind(),
+                    e
+                ),
+                Ok(val) => panic!("Expected Err(ProtocolDesync) but got Ok: {:?}", val),
+            }
+
+            // Verify: Subsequent command also fails with ProtocolDesync
+            let subsequent_result = cmd.query_async::<_, String>(&mut connection).await;
+            assert!(subsequent_result.is_err(), "Subsequent PING should fail");
+            assert_eq!(
+                subsequent_result.unwrap_err().kind(),
+                ErrorKind::ProtocolDesync
+            );
+
+            // Cleanup: Delete test user
+            let _: () = redis::cmd("ACL")
+                .arg("DELUSER")
+                .arg(test_user)
+                .query_async(&mut admin_connection)
+                .await
+                .unwrap();
+
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;
@@ -6393,7 +6219,7 @@ mod cluster_async {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
                 let client = create_cluster_client_from_cluster(&cluster, true).unwrap();
-                let mut connection = client.get_async_connection(None).await.unwrap();
+                let mut connection = client.get_async_connection(None, None).await.unwrap();
                 cmd("SET")
                     .arg("test")
                     .arg("test_data")
@@ -6416,7 +6242,7 @@ mod cluster_async {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
             let client = create_cluster_client_from_cluster(&cluster, false).unwrap();
-            let connection = client.get_async_connection(None).await;
+            let connection = client.get_async_connection(None, None).await;
             match cluster.cluster.servers.first().unwrap().connection_info() {
                 ConnectionInfo {
                     addr: redis::ConnectionAddr::TcpTls { .. },

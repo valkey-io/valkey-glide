@@ -256,9 +256,10 @@ mod standalone_client_tests {
         connection_request.read_from = config.read_from.into();
 
         block_on_all(async {
-            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
-                .await
-                .unwrap();
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .unwrap();
             logger_core::log_info(
                 "Test",
                 format!(
@@ -402,9 +403,10 @@ mod standalone_client_tests {
         let connection_request =
             create_connection_request(addresses.as_slice(), &Default::default());
         block_on_all(async {
-            let client_res = StandaloneClient::create_client(connection_request.into(), None, None)
-                .await
-                .map_err(ConnectionError::Standalone);
+            let client_res =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .map_err(ConnectionError::Standalone);
             assert!(client_res.is_err());
             let error = client_res.unwrap_err();
             assert!(matches!(error, ConnectionError::Standalone(_),));
@@ -441,9 +443,10 @@ mod standalone_client_tests {
             create_connection_request(addresses.as_slice(), &Default::default());
 
         block_on_all(async {
-            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
-                .await
-                .unwrap();
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .unwrap();
 
             let result = client.send_command(&cmd).await;
             assert_eq!(result, Ok(Value::Okay));
@@ -613,7 +616,7 @@ mod standalone_client_tests {
                 ),
             );
             let ping_response = lazy_glide_client_enum
-                .send_command(&redis::cmd("PING"), None)
+                .send_command(&mut redis::cmd("PING"), None)
                 .await;
             assert!(
                 ping_response.is_ok(),
@@ -685,9 +688,10 @@ mod standalone_client_tests {
             connection_request.root_certs = vec![ca_cert_bytes.into()];
 
             // Test that connection works with custom root cert
-            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
-                .await
-                .expect("Failed to create client with custom root cert");
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .expect("Failed to create client with custom root cert");
 
             // Verify connection works by sending a command
             let ping_result = client.send_command(&redis::cmd("PING")).await;
@@ -757,7 +761,7 @@ mod standalone_client_tests {
 
             // Connection should fail due to certificate mismatch
             let client_result =
-                StandaloneClient::create_client(connection_request.into(), None, None).await;
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
             assert!(
                 client_result.is_err(),
                 "Expected connection to fail with wrong root certificate"
@@ -796,7 +800,7 @@ mod standalone_client_tests {
 
             // Client creation should fail during certificate parsing
             let client_result =
-                StandaloneClient::create_client(connection_request.into(), None, None).await;
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
             assert!(
                 client_result.is_err(),
                 "Expected client creation to fail with invalid certificate bytes"
@@ -826,7 +830,7 @@ mod standalone_client_tests {
 
             // Client creation should fail due to invalid configuration
             let client_result =
-                StandaloneClient::create_client(connection_request.into(), None, None).await;
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
             assert!(
                 client_result.is_err(),
                 "Expected client creation to fail when custom certs provided with NoTls mode"
@@ -892,9 +896,10 @@ mod standalone_client_tests {
                 vec![invalid_ca_cert_bytes.into(), valid_ca_cert_bytes.into()];
 
             // Connection should succeed using the second (valid) certificate
-            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
-                .await
-                .expect("Failed to create client with multiple root certs");
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .expect("Failed to create client with multiple root certs");
 
             let ping_result = client.send_command(&redis::cmd("PING")).await;
             assert_eq!(
@@ -949,9 +954,10 @@ mod standalone_client_tests {
             connection_request.client_key = tls_paths.read_redis_key_as_bytes().clone().into();
 
             // Test that connection works with custom root cert and client TLS auth
-            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
-                .await
-                .expect("Failed to create client with custom root cert");
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .expect("Failed to create client with custom root cert");
 
             // Verify connection works by sending a command
             let ping_result = client.send_command(&redis::cmd("PING")).await;
