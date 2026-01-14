@@ -451,12 +451,12 @@ public interface ConnectionManagementCommands {
      *
      * @since Valkey 3.2 and above.
      * @see <a href="https://valkey.io/commands/client-reply/">valkey.io</a> for details.
-     * @param mode The reply mode: {@link glide.api.models.commands.ClientReplyMode#ON},
-     *     {@link glide.api.models.commands.ClientReplyMode#OFF}, or
-     *     {@link glide.api.models.commands.ClientReplyMode#SKIP}.
+     * @param mode The reply mode: {@link glide.api.models.commands.ClientReplyMode#ON}, {@link
+     *     glide.api.models.commands.ClientReplyMode#OFF}, or {@link
+     *     glide.api.models.commands.ClientReplyMode#SKIP}.
      * @return <code>OK</code> when mode is {@link glide.api.models.commands.ClientReplyMode#ON} or
-     *     {@link glide.api.models.commands.ClientReplyMode#SKIP}. No reply for
-     *     {@link glide.api.models.commands.ClientReplyMode#OFF} mode.
+     *     {@link glide.api.models.commands.ClientReplyMode#SKIP}. No reply for {@link
+     *     glide.api.models.commands.ClientReplyMode#OFF} mode.
      * @example
      *     <pre>{@code
      * String response = client.clientReply(ClientReplyMode.ON).get();

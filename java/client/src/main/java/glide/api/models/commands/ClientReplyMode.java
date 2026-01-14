@@ -9,8 +9,9 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
  * Defines reply modes for the <code>CLIENT REPLY</code> command.
  *
  * <ul>
- *   <li><code>CLIENT REPLY</code> command implemented by {@link GlideClient#clientReply(ClientReplyMode)},
- *       {@link GlideClusterClient#clientReply(ClientReplyMode)}, and {@link
+ *   <li><code>CLIENT REPLY</code> command implemented by {@link
+ *       GlideClient#clientReply(ClientReplyMode)}, {@link
+ *       GlideClusterClient#clientReply(ClientReplyMode)}, and {@link
  *       GlideClusterClient#clientReply(ClientReplyMode, Route)}.
  * </ul>
  *
@@ -18,19 +19,15 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
  * @see <a href="https://valkey.io/commands/client-reply/">client-reply</a> at valkey.io
  */
 public enum ClientReplyMode {
-    /**
-     * The server will reply to commands as usual.
-     */
+    /** The server will reply to commands as usual. */
     ON,
-    
+
     /**
      * The server will not reply to commands. The connection is still open and can receive commands.
      */
     OFF,
-    
-    /**
-     * The server will skip the reply of the immediately following command.
-     */
+
+    /** The server will skip the reply of the immediately following command. */
     SKIP;
 
     // Pre-allocated argument arrays to reduce allocations
@@ -39,8 +36,8 @@ public enum ClientReplyMode {
     private static final String[] SKIP_ARGS = new String[] {"SKIP"};
 
     /**
-     * Returns the command arguments for this client reply mode. Uses pre-allocated arrays to reduce GC
-     * pressure.
+     * Returns the command arguments for this client reply mode. Uses pre-allocated arrays to reduce
+     * GC pressure.
      *
      * @return Array containing the reply mode as a string argument
      */
@@ -57,4 +54,3 @@ public enum ClientReplyMode {
         }
     }
 }
-
