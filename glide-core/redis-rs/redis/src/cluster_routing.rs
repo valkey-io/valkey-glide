@@ -38,6 +38,13 @@ pub enum AggregateOp {
     // Max, omitted due to dead code warnings. ATM this value isn't constructed anywhere
 }
 
+/// Array aggregating operators for element-wise operations.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ArrayAggregateOp {
+    /// Choose minimal value for each array element
+    Min,
+}
+
 /// Policy defining how to combine multiple responses into one.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ResponsePolicy {
@@ -51,6 +58,8 @@ pub enum ResponsePolicy {
     AggregateLogical(LogicalAggregateOp),
     /// Aggregate success results according to a numeric operator. Return error on any failed request or on a response that isn't an integer.
     Aggregate(AggregateOp),
+    /// Aggregate array responses element-wise according to a numeric operator. Return error on any failed request or on a response that isn't an array of integers.
+    AggregateArray(ArrayAggregateOp),
     /// Aggregate array responses into a single array. Return error on any failed request or on a response that isn't an array.
     CombineArrays,
     /// Handling is not defined by the Redis standard. Will receive a special case
@@ -200,6 +209,54 @@ pub fn logical_aggregate(values: Vec<Value>, op: LogicalAggregateOp) -> RedisRes
         results
             .into_iter()
             .map(|result| Value::Int(result as i64))
+            .collect(),
+    ))
+}
+
+/// Aggregate array responses element-wise according to a numeric operator.
+pub fn aggregate_array(values: Vec<Value>, op: ArrayAggregateOp) -> RedisResult<Value> {
+    let initial_value = match op {
+        ArrayAggregateOp::Min => i64::MAX,
+    };
+    let results = values.into_iter().try_fold(Vec::new(), |acc, curr| {
+        let values = match curr {
+            Value::Array(values) => values,
+            _ => {
+                return RedisResult::Err(
+                    (
+                        ErrorKind::TypeError,
+                        "expected array of integers as response",
+                    )
+                        .into(),
+                );
+            }
+        };
+        let mut acc = if acc.is_empty() {
+            vec![initial_value; values.len()]
+        } else {
+            acc
+        };
+        for (index, value) in values.into_iter().enumerate() {
+            let int = match value {
+                Value::Int(int) => int,
+                _ => {
+                    return Err((
+                        ErrorKind::TypeError,
+                        "expected array of integers as response",
+                    )
+                        .into());
+                }
+            };
+            acc[index] = match op {
+                ArrayAggregateOp::Min => min(acc[index], int),
+            };
+        }
+        Ok(acc)
+    })?;
+    Ok(Value::Array(
+        results
+            .into_iter()
+            .map(|result| Value::Int(result))
             .collect(),
     ))
 }
@@ -541,6 +598,8 @@ impl ResponsePolicy {
 
             b"WAIT" => Some(ResponsePolicy::Aggregate(AggregateOp::Min)),
 
+            b"WAITAOF" => Some(ResponsePolicy::AggregateArray(ArrayAggregateOp::Min)),
+
             b"ACL SETUSER" | b"ACL DELUSER" | b"ACL SAVE" | b"CLIENT SETNAME"
             | b"CLIENT SETINFO" | b"CONFIG SET" | b"CONFIG RESETSTAT" | b"CONFIG REWRITE"
             | b"FLUSHALL" | b"FLUSHDB" | b"FUNCTION DELETE" | b"FUNCTION FLUSH"
@@ -646,9 +705,8 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"SCRIPT EXISTS"
         | b"UNWATCH"
         | b"WAIT"
-        | b"RANDOMKEY" => RouteBy::AllPrimaries,
-
-        b"WAITAOF" => RouteBy::Undefined,
+        | b"RANDOMKEY"
+        | b"WAITAOF" => RouteBy::AllPrimaries,
 
         b"MGET" | b"DEL" | b"EXISTS" | b"UNLINK" | b"TOUCH" | b"WATCH" => {
             RouteBy::MultiShard(MultiSlotArgPattern::KeysOnly)

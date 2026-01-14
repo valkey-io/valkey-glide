@@ -18010,6 +18010,30 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void waitaof_without_route(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"), "WAITAOF requires Valkey 7.2+");
+
+        String key = "{key}:" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        // Set a key
+        assertEquals(OK, client.set(key, value).get());
+
+        // Wait for AOF acknowledgment without specifying route
+        // In cluster mode, this uses the default AllPrimaries routing
+        Long[] result = client.waitaof(0, 0, 1000).get();
+        assertNotNull(result);
+        assertEquals(2, result.length);
+        assertTrue(result[0] >= 0); // local acks
+        assertTrue(result[1] >= 0); // replica acks
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void migrate_basic(BaseClient client) {
         // Note: Full MIGRATE testing requires a second server instance
         // This test verifies the command is properly implemented

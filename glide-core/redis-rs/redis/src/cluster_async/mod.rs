@@ -1744,6 +1744,7 @@ where
             // ────────────────────────────────────────────────────────────────
             Some(ResponsePolicy::AllSucceeded)
             | Some(ResponsePolicy::Aggregate(_))
+            | Some(ResponsePolicy::AggregateArray(_))
             | Some(ResponsePolicy::AggregateLogical(_))
             | Some(ResponsePolicy::CombineArrays)
             | Some(ResponsePolicy::CombineMaps)
@@ -1791,6 +1792,7 @@ where
             | Some(ResponsePolicy::Special)
             | Some(ResponsePolicy::AllSucceeded)
             | Some(ResponsePolicy::Aggregate(_))
+            | Some(ResponsePolicy::AggregateArray(_))
             | Some(ResponsePolicy::AggregateLogical(_))
             | Some(ResponsePolicy::CombineMaps)
             | None => true,
@@ -1831,6 +1833,14 @@ where
             Some(ResponsePolicy::Aggregate(op)) => {
                 let all_vals: Vec<Value> = resolved.into_iter().map(|(_addr, val)| val).collect();
                 crate::cluster_routing::aggregate(all_vals, op)
+            }
+
+            // ——————————————————————————————————————————
+            // AggregateArray(op): fail on any Err, otherwise call cluster_routing::aggregate_array
+            // ——————————————————————————————————————————
+            Some(ResponsePolicy::AggregateArray(op)) => {
+                let all_vals: Vec<Value> = resolved.into_iter().map(|(_addr, val)| val).collect();
+                crate::cluster_routing::aggregate_array(all_vals, op)
             }
 
             // ——————————————————————————————————————————

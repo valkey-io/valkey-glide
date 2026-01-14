@@ -519,6 +519,9 @@ impl StandaloneClient {
             Some(ResponsePolicy::Aggregate(op)) => future::try_join_all(requests)
                 .await
                 .and_then(|results| cluster_routing::aggregate(results, op)),
+            Some(ResponsePolicy::AggregateArray(op)) => future::try_join_all(requests)
+                .await
+                .and_then(|results| cluster_routing::aggregate_array(results, op)),
             Some(ResponsePolicy::AggregateLogical(op)) => future::try_join_all(requests)
                 .await
                 .and_then(|results| cluster_routing::logical_aggregate(results, op)),
