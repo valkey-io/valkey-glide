@@ -2461,3 +2461,71 @@ fn get_ok_jstring<'a>(env: &mut JNIEnv<'a>) -> Result<JString<'a>, FFIError> {
     let local = env.new_local_ref(global.as_obj())?;
     Ok(JString::from(local))
 }
+
+/// Get cache metrics asynchronously
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_getCacheMetrics(
+    env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    callback_id: jlong,
+    metrics_type: jint,
+) {
+    handle_panics(
+        move || {
+            let handle_id = client_ptr as u64;
+
+            let jvm = match env.get_java_vm() {
+                Ok(jvm) => Arc::new(jvm),
+                Err(_) => {
+                    log::error!("JVM error in getCacheMetrics");
+                    return Some(());
+                }
+            };
+
+            let runtime = get_runtime();
+            runtime.spawn(async move {
+                let client_result = ensure_client_for_handle(handle_id).await;
+                match client_result {
+                    Ok(client) => {
+                        // Convert metrics_type to CacheMetricsType enum
+                        let result = match metrics_type {
+                            0 => client.cache_hit_rate(),      // HitRate
+                            1 => client.cache_miss_rate(),     // MissRate  
+                            2 => client.cache_entry_count(),   // EntryCount
+                            3 => client.cache_evictions(),     // Evictions
+                            4 => client.cache_expirations(),   // Expirations
+                            _ => Err(redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Invalid cache metrics type",
+                                format!("Unknown metrics type: {}", metrics_type),
+                            ))),
+                        };
+
+                        let final_result = result.map_err(|e| {
+                            redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Cache metrics error",
+                                e.to_string(),
+                            ))
+                        });
+
+                        complete_callback(jvm, callback_id, final_result, false);
+                    }
+                    Err(err) => {
+                        let error = Err(redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Client not found",
+                            err.to_string(),
+                        )));
+                        complete_callback(jvm, callback_id, error, false);
+                    }
+                }
+            });
+
+            Some(())
+        },
+        "getCacheMetrics",
+    )
+    .unwrap_or(())
+}

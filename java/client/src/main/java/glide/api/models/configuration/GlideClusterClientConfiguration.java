@@ -25,6 +25,7 @@ import lombok.experimental.SuperBuilder;
  *         .subscriptionConfiguration(subscriptionConfiguration)
  *         .reconnectStrategy(reconnectionConfiguration)
  *         .inflightRequestsLimit(1000)
+ *         .clientSideCache(ClientSideCache.create(1024))
  *         .advancedConfiguration(AdvancedGlideClusterClientConfiguration.builder().connectionTimeout(500).build())
  *         .build();
  * }</pre>

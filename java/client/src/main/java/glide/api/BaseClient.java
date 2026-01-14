@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static command_request.CommandRequestOuterClass.CacheMetricsType;
 import static command_request.CommandRequestOuterClass.RequestType.Append;
 import static command_request.CommandRequestOuterClass.RequestType.BLMPop;
 import static command_request.CommandRequestOuterClass.RequestType.BLMove;
@@ -1051,6 +1052,117 @@ public abstract class BaseClient
         }
 
         return commandManager.submitRefreshIamToken(this::handleStringResponse);
+    }
+
+    /**
+     * Get cache metrics.
+     *
+     * <p>This is the internal method that communicates with the core to retrieve cache metrics. All
+     * public cache metric methods delegate to this method.
+     *
+     * @param metricsType The type of metric to retrieve.
+     * @return A CompletableFuture that resolves to the requested cache metric.
+     * @throws RequestException if caching is not enabled or metrics are disabled.
+     */
+    private CompletableFuture<Object> getCacheMetrics(CacheMetricsType metricsType) {
+        return commandManager.submitGetCacheMetrics(metricsType, this::handleObjectOrNullResponse);
+    }
+
+    /**
+     * Get the cache hit rate metric.
+     *
+     * <p>This method returns the percentage of cache hits out of total cache requests. Only available
+     * when client-side caching is enabled with metrics collection.
+     *
+     * @return A CompletableFuture that resolves to the cache hit rate as a percentage (0.0 to 100.0).
+     * @throws RequestException if caching is not enabled or metrics are disabled.
+     * @example
+     *     <pre>{@code
+     * // Get cache hit rate
+     * Double hitRate = client.getCacheHitRate().get();
+     * System.out.println("Cache hit rate: " + hitRate + "%");
+     * }</pre>
+     */
+    public CompletableFuture<Double> getCacheHitRate() {
+        return getCacheMetrics(CacheMetricsType.HitRate).thenApply(result -> (Double) result);
+    }
+
+    /**
+     * Get the cache miss rate metric.
+     *
+     * <p>This method returns the percentage of cache misses out of total cache requests. Only
+     * available when client-side caching is enabled with metrics collection.
+     *
+     * @return A CompletableFuture that resolves to the cache miss rate as a percentage (0.0 to
+     *     100.0).
+     * @throws RequestException if caching is not enabled or metrics are disabled.
+     * @example
+     *     <pre>{@code
+     * // Get cache miss rate
+     * Double missRate = client.getCacheMissRate().get();
+     * System.out.println("Cache miss rate: " + missRate + "%");
+     * }</pre>
+     */
+    public CompletableFuture<Double> getCacheMissRate() {
+        return getCacheMetrics(CacheMetricsType.MissRate).thenApply(result -> (Double) result);
+    }
+
+    /**
+     * Get the current number of entries in the cache.
+     *
+     * <p>This method returns the total count of cached entries currently stored in the client-side
+     * cache. Available when client-side caching is enabled.
+     *
+     * @return A CompletableFuture that resolves to the number of cache entries.
+     * @throws RequestException if caching is not enabled.
+     * @example
+     *     <pre>{@code
+     * // Get cache entry count
+     * Long entryCount = client.getCacheEntryCount().get();
+     * System.out.println("Cache entries: " + entryCount);
+     * }</pre>
+     */
+    public CompletableFuture<Long> getCacheEntryCount() {
+        return getCacheMetrics(CacheMetricsType.EntryCount).thenApply(result -> (Long) result);
+    }
+
+    /**
+     * Get the total number of cache evictions.
+     *
+     * <p>This method returns the count of entries that have been evicted from the cache due to memory
+     * limits or eviction policies. Only available when client-side caching is enabled with metrics
+     * collection.
+     *
+     * @return A CompletableFuture that resolves to the total number of evictions.
+     * @throws RequestException if caching is not enabled or metrics are disabled.
+     * @example
+     *     <pre>{@code
+     * // Get cache evictions count
+     * Long evictions = client.getCacheEvictions().get();
+     * System.out.println("Cache evictions: " + evictions);
+     * }</pre>
+     */
+    public CompletableFuture<Long> getCacheEvictions() {
+        return getCacheMetrics(CacheMetricsType.Evictions).thenApply(result -> (Long) result);
+    }
+
+    /**
+     * Get the total number of cache expirations.
+     *
+     * <p>This method returns the count of entries that have expired from the cache due to TTL
+     * settings. Only available when client-side caching is enabled with metrics collection.
+     *
+     * @return A CompletableFuture that resolves to the total number of expirations.
+     * @throws RequestException if caching is not enabled or metrics are disabled.
+     * @example
+     *     <pre>{@code
+     * // Get cache expirations count
+     * Long expirations = client.getCacheExpirations().get();
+     * System.out.println("Cache expirations: " + expirations);
+     * }</pre>
+     */
+    public CompletableFuture<Long> getCacheExpirations() {
+        return getCacheMetrics(CacheMetricsType.Expirations).thenApply(result -> (Long) result);
     }
 
     @Override

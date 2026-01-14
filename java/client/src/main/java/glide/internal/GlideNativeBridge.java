@@ -84,4 +84,7 @@ public class GlideNativeBridge {
             String objectType,
             boolean expectUtf8Response,
             long callbackId);
+
+    /** Get cache metrics */
+    public static native void getCacheMetrics(long clientPtr, long callbackId, int metricsType);
 }

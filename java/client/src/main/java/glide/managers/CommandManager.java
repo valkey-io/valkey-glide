@@ -4,6 +4,7 @@ package glide.managers;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
 import command_request.CommandRequestOuterClass;
+import command_request.CommandRequestOuterClass.CacheMetricsType;
 import command_request.CommandRequestOuterClass.Command;
 import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.CommandRequest;
@@ -474,6 +475,26 @@ public class CommandManager {
                             Response.Builder responseBuilder = Response.newBuilder();
                             if ("OK".equals(result)) {
                                 responseBuilder.setConstantResponse(ConstantResponse.OK);
+                            }
+                            return responseHandler.apply(responseBuilder.build());
+                        });
+    }
+
+    /** Submit a cache metrics request to GLIDE core. */
+    public <T> CompletableFuture<T> submitGetCacheMetrics(
+            CacheMetricsType metricsType, GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        return coreClient
+                .getCacheMetrics(metricsType)
+                .thenApply(
+                        result -> {
+                            // Convert JNI result to protobuf Response format
+                            Response.Builder responseBuilder = Response.newBuilder();
+                            if (result != null) {
+                                long objectId = JniResponseRegistry.storeObject(result);
+                                responseBuilder.setRespPointer(objectId);
+                            } else {
+                                responseBuilder.setRespPointer(0L);
                             }
                             return responseHandler.apply(responseBuilder.build());
                         });

@@ -2,6 +2,7 @@
 package glide.api.models.configuration;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import glide.api.models.ClientSideCache;
 import java.util.List;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -30,6 +31,9 @@ public abstract class BaseClientConfiguration {
     @Getter(AccessLevel.NONE)
     @Singular
     private final List<NodeAddress> addresses;
+
+    /** Client-side cache configuration. If provided, enables caching for this client. */
+    private final ClientSideCache clientSideCache;
 
     /**
      * True if communication with the cluster should use Transport Level Security.

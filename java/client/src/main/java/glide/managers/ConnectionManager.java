@@ -349,6 +349,37 @@ public class ConnectionManager {
                             requestBuilder.setTcpNodelay(advanced.getTcpNoDelay());
                         }
 
+                        // Set client-side cache configuration if provided
+                        glide.api.models.ClientSideCache clientSideCache =
+                                extractClientSideCache(configuration);
+                        if (clientSideCache != null) {
+                            ClientSideCache.Builder cacheBuilder = ClientSideCache.newBuilder();
+
+                            // Set required fields
+                            cacheBuilder.setCacheId(clientSideCache.getCacheId());
+                            cacheBuilder.setMaxCacheKb(clientSideCache.getMaxCacheKb());
+                            cacheBuilder.setEnableMetrics(clientSideCache.isEnableMetrics());
+
+                            // Set optional TTL
+                            if (clientSideCache.getEntryTtlSeconds() != null) {
+                                cacheBuilder.setEntryTtlSeconds(clientSideCache.getEntryTtlSeconds());
+                            }
+
+                            // Set optional eviction policy
+                            if (clientSideCache.getEvictionPolicy() != null) {
+                                switch (clientSideCache.getEvictionPolicy()) {
+                                    case LRU:
+                                        cacheBuilder.setEvictionPolicy(EvictionPolicy.LRU);
+                                        break;
+                                    case LFU:
+                                        cacheBuilder.setEvictionPolicy(EvictionPolicy.LFU);
+                                        break;
+                                }
+                            }
+
+                            requestBuilder.setClientSideCache(cacheBuilder.build());
+                        }
+
                         // Build and serialize to bytes
                         ConnectionRequest request = requestBuilder.build();
                         byte[] requestBytes = request.toByteArray();
@@ -515,6 +546,17 @@ public class ConnectionManager {
         }
         if (configuration instanceof GlideClusterClientConfiguration) {
             return ((GlideClusterClientConfiguration) configuration).getAdvancedConfiguration();
+        }
+        return null;
+    }
+
+    private static glide.api.models.ClientSideCache extractClientSideCache(
+            BaseClientConfiguration configuration) {
+        if (configuration instanceof GlideClientConfiguration) {
+            return ((GlideClientConfiguration) configuration).getClientSideCache();
+        }
+        if (configuration instanceof GlideClusterClientConfiguration) {
+            return ((GlideClusterClientConfiguration) configuration).getClientSideCache();
         }
         return null;
     }
