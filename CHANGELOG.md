@@ -10,6 +10,7 @@
 * CORE: Enforce connection_timeout for initial standalone connection failures  ([#4991](https://github.com/valkey-io/valkey-glide/issues/4991))
 * CORE: Rust Lint is failing due to unmaintained advisory detected (RUSTSEC-2025-0141)  ([#5136](https://github.com/valkey-io/valkey-glide/issues/5136))
 * Node: Fixed `Failed to convert napi value Undefined into rust type u32` error  ([#5128](https://github.com/valkey-io/valkey-glide/pull/5128))
+* Python: Fix Sphinx docs build failure with duplicate object warnings  ([#5163](https://github.com/valkey-io/valkey-glide/issues/5163))
 
 #### Operational Enhancements
 
@@ -25,6 +26,7 @@
 * JAVA: Add IAM authentication support for ElastiCache/MemoryDB ([#4891](https://github.com/valkey-io/valkey-glide/pull/4891/))
 * FFI/GO: Add IAM authentication support with automatic token refresh ([#4892](https://github.com/valkey-io/valkey-glide/pull/4892))
 * GO: Add TLS Custom Root Certificate Support for Go Client ([#4921](https://github.com/valkey-io/valkey-glide/pull/4921))
+* GO: Enable `go mod vendor` support via CI-generated marker files ([#4721](https://github.com/valkey-io/valkey-glide/issues/4721))
 * Python: Add Custom Root Certificate Support for Python TLS Connections ([#4930](https://github.com/valkey-io/valkey-glide/pull/4930))
 * Python: Add Python 3.14 support ([#4897](https://github.com/valkey-io/valkey-glide/pull/4897))
 * JAVA: Implement TLS support for Java client ([#4905](https://github.com/valkey-io/valkey-glide/pull/4905))
