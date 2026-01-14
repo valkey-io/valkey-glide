@@ -15,8 +15,10 @@ use std::net::IpAddr;
 use std::net::SocketAddr;
 #[cfg(feature = "aio")]
 use std::pin::Pin;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
+use crate::pubsub_synchronizer::PubSubSynchronizer;
 use crate::tls::{inner_build_with_tls, TlsCertificates};
 
 /// The client type.
@@ -99,6 +101,8 @@ pub struct GlideConnectionOptions {
     /// TCP_NODELAY socket option. When true, disables Nagle's algorithm for lower latency.
     /// When false, enables Nagle's algorithm to reduce network overhead.
     pub tcp_nodelay: bool,
+    /// Optional PubSub synchronizer for managing subscription state
+    pub pubsub_synchronizer: Option<Arc<dyn PubSubSynchronizer>>,
 }
 
 /// To enable async support you need to enable the feature: `tokio-comp`

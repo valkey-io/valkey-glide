@@ -146,7 +146,7 @@ pub(crate) mod shared_client_tests {
             let _ = test_basics
                 .client
                 .send_command(
-                    &cmd,
+                    &mut cmd,
                     Some(RoutingInfo::MultiNode((
                         MultipleNodeRoutingInfo::AllNodes,
                         None,
@@ -175,7 +175,7 @@ pub(crate) mod shared_client_tests {
             let values = test_basics
                 .client
                 .send_command(
-                    &cmd,
+                    &mut cmd,
                     Some(RoutingInfo::MultiNode((
                         MultipleNodeRoutingInfo::AllNodes,
                         None,
@@ -236,7 +236,7 @@ pub(crate) mod shared_client_tests {
             let hello: std::collections::HashMap<String, Value> = redis::from_owned_redis_value(
                 test_basics
                     .client
-                    .send_command(&redis::cmd("HELLO"), None)
+                    .send_command(&mut redis::cmd("HELLO"), None)
                     .await
                     .unwrap(),
             )
@@ -245,14 +245,26 @@ pub(crate) mod shared_client_tests {
 
             let mut cmd = redis::cmd("HSET");
             cmd.arg("hash").arg("foo").arg("baz");
-            test_basics.client.send_command(&cmd, None).await.unwrap();
+            test_basics
+                .client
+                .send_command(&mut cmd, None)
+                .await
+                .unwrap();
             let mut cmd = redis::cmd("HSET");
             cmd.arg("hash").arg("bar").arg("foobar");
-            test_basics.client.send_command(&cmd, None).await.unwrap();
+            test_basics
+                .client
+                .send_command(&mut cmd, None)
+                .await
+                .unwrap();
 
             let mut cmd = redis::cmd("HGETALL");
             cmd.arg("hash");
-            let result = test_basics.client.send_command(&cmd, None).await.unwrap();
+            let result = test_basics
+                .client
+                .send_command(&mut cmd, None)
+                .await
+                .unwrap();
 
             assert_eq!(
                 result,
@@ -455,7 +467,7 @@ pub(crate) mod shared_client_tests {
             match client_result {
                 Ok(mut client) => {
                     // If the client is successfully created, try sending a command
-                    let result = client.send_command(&redis::cmd("PING"), None).await;
+                    let result = client.send_command(&mut redis::cmd("PING"), None).await;
                     assert!(result.is_ok(), "PING command should succeed: {result:?}");
                 }
                 Err(err) => {
@@ -516,7 +528,7 @@ pub(crate) mod shared_client_tests {
             match client_result {
                 Ok(mut client) => {
                     // If the client is successfully created, try sending a command
-                    let result = client.send_command(&redis::cmd("PING"), None).await;
+                    let result = client.send_command(&mut redis::cmd("PING"), None).await;
                     assert!(result.is_ok(), "PING command should succeed: {result:?}");
                 }
                 Err(err) => {
@@ -577,7 +589,7 @@ pub(crate) mod shared_client_tests {
             match client_result {
                 Ok(mut client) => {
                     // If the client is successfully created, try sending a command
-                    let result = client.send_command(&redis::cmd("PING"), None).await;
+                    let result = client.send_command(&mut redis::cmd("PING"), None).await;
                     assert!(result.is_ok(), "PING command should succeed: {result:?}");
                 }
                 Err(err) => {
@@ -644,7 +656,7 @@ pub(crate) mod shared_client_tests {
                     // The connection should be established on the first command
 
                     // Send the first command - this should trigger the connection establishment
-                    let result = client.send_command(&redis::cmd("PING"), None).await;
+                    let result = client.send_command(&mut redis::cmd("PING"), None).await;
 
                     match result {
                         Ok(value) => {
@@ -740,7 +752,7 @@ pub(crate) mod shared_client_tests {
                     // The connection should be established on the first command
 
                     // Send the first command - this should trigger the connection establishment
-                    let result = client.send_command(&redis::cmd("PING"), None).await;
+                    let result = client.send_command(&mut redis::cmd("PING"), None).await;
 
                     match result {
                         Ok(value) => {
@@ -839,7 +851,7 @@ pub(crate) mod shared_client_tests {
             match client_result {
                 Ok(mut client) => {
                     // Test initial connection with PING
-                    let initial_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    let initial_ping = client.send_command(&mut redis::cmd("PING"), None).await;
                     assert!(
                         initial_ping.is_ok(),
                         "Initial PING should succeed: {initial_ping:?}"
@@ -874,7 +886,7 @@ pub(crate) mod shared_client_tests {
                     kill_connection(&mut client).await;
 
                     // Test that the client can reconnect and function properly after connection kill
-                    let reconnect_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    let reconnect_ping = client.send_command(&mut redis::cmd("PING"), None).await;
                     assert!(
                         reconnect_ping.is_ok(),
                         "PING after reconnection should succeed: {reconnect_ping:?}"
@@ -955,7 +967,7 @@ pub(crate) mod shared_client_tests {
             match client_result {
                 Ok(mut client) => {
                     // Test initial connection with PING
-                    let initial_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    let initial_ping = client.send_command(&mut redis::cmd("PING"), None).await;
                     assert!(
                         initial_ping.is_ok(),
                         "Initial PING should succeed: {initial_ping:?}"
@@ -969,7 +981,8 @@ pub(crate) mod shared_client_tests {
                     );
 
                     // Verify that the client still works after token refresh
-                    let post_refresh_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    let post_refresh_ping =
+                        client.send_command(&mut redis::cmd("PING"), None).await;
                     assert!(
                         post_refresh_ping.is_ok(),
                         "PING after token refresh should succeed: {post_refresh_ping:?}"
@@ -984,7 +997,7 @@ pub(crate) mod shared_client_tests {
                         );
 
                         // Verify client still works after each refresh
-                        let ping_result = client.send_command(&redis::cmd("PING"), None).await;
+                        let ping_result = client.send_command(&mut redis::cmd("PING"), None).await;
                         assert!(
                             ping_result.is_ok(),
                             "PING after refresh #{i} should succeed: {ping_result:?}"
@@ -1050,7 +1063,7 @@ pub(crate) mod shared_client_tests {
             match client_result {
                 Ok(mut client) => {
                     // Test initial connection with PING
-                    let initial_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    let initial_ping = client.send_command(&mut redis::cmd("PING"), None).await;
                     assert!(
                         initial_ping.is_ok(),
                         "Initial PING should succeed: {initial_ping:?}"
@@ -1088,7 +1101,7 @@ pub(crate) mod shared_client_tests {
                     kill_connection(&mut client).await;
 
                     // Test that the client can reconnect and function properly after connection kill
-                    let reconnect_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    let reconnect_ping = client.send_command(&mut redis::cmd("PING"), None).await;
                     assert!(
                         reconnect_ping.is_ok(),
                         "PING after reconnection should succeed: {reconnect_ping:?}"
@@ -1169,7 +1182,7 @@ pub(crate) mod shared_client_tests {
                     // Test initial connection with PING
 
                     use logger_core::log_info;
-                    let initial_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    let initial_ping = client.send_command(&mut redis::cmd("PING"), None).await;
                     assert!(
                         initial_ping.is_ok(),
                         "Initial PING should succeed: {initial_ping:?}"
@@ -1198,7 +1211,8 @@ pub(crate) mod shared_client_tests {
                     );
 
                     // Verify that the client still works after token refresh
-                    let post_refresh_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    let post_refresh_ping =
+                        client.send_command(&mut redis::cmd("PING"), None).await;
                     assert!(
                         post_refresh_ping.is_ok(),
                         "PING after token refresh should succeed: {post_refresh_ping:?}"
@@ -1222,7 +1236,8 @@ pub(crate) mod shared_client_tests {
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
                     // Verify that the client still works after token refresh
-                    let post_refresh_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    let post_refresh_ping =
+                        client.send_command(&mut redis::cmd("PING"), None).await;
                     assert!(
                         post_refresh_ping.is_ok(),
                         "PING after token refresh should succeed: {post_refresh_ping:?}"
@@ -1279,7 +1294,7 @@ pub(crate) mod shared_client_tests {
                 "#,
                 )
                 .arg("0");
-            let result = test_basics.client.send_command(&cmd, None).await;
+            let result = test_basics.client.send_command(&mut cmd, None).await;
             assert!(result.is_err());
             let err = result.unwrap_err();
             assert!(err.is_timeout(), "{err}");
@@ -1308,7 +1323,7 @@ pub(crate) mod shared_client_tests {
 
             let mut cmd = redis::Cmd::new();
             cmd.arg("BLPOP").arg(generate_random_string(10)).arg(0.3); // server should return null after 300 millisecond
-            let result = test_basics.client.send_command(&cmd, None).await;
+            let result = test_basics.client.send_command(&mut cmd, None).await;
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), Value::Nil);
         });
@@ -1333,7 +1348,7 @@ pub(crate) mod shared_client_tests {
             .await;
             let mut cmd = redis::Cmd::new();
             cmd.arg("BLPOP").arg(generate_random_string(10)).arg(-1);
-            let result = test_basics.client.send_command(&cmd, None).await;
+            let result = test_basics.client.send_command(&mut cmd, None).await;
             assert!(result.is_err());
             let err = result.unwrap_err();
             assert_eq!(err.kind(), redis::ErrorKind::ResponseError);
@@ -1359,7 +1374,7 @@ pub(crate) mod shared_client_tests {
             let future = async move {
                 let mut cmd = redis::Cmd::new();
                 cmd.arg("BLPOP").arg(key).arg(0); // `0` should block indefinitely
-                test_basics.client.send_command(&cmd, None).await
+                test_basics.client.send_command(&mut cmd, None).await
             };
             // We execute the command with Tokio's timeout wrapper to prevent the test from hanging indefinitely.
             let tokio_timeout_result =
@@ -1389,7 +1404,7 @@ pub(crate) mod shared_client_tests {
             let _ = test_basics
                 .client
                 .send_command(
-                    &cmd,
+                    &mut cmd,
                     Some(RoutingInfo::MultiNode((
                         MultipleNodeRoutingInfo::AllNodes,
                         None,
@@ -1434,7 +1449,7 @@ pub(crate) mod shared_client_tests {
                 let client_infos: HashMap<String, String> = {
                     let variant_res = client
                         .send_command(
-                            &client_info_cmd,
+                            &mut client_info_cmd,
                             Some(RoutingInfo::MultiNode((
                                 MultipleNodeRoutingInfo::AllNodes,
                                 None,
@@ -1501,7 +1516,7 @@ pub(crate) mod shared_client_tests {
             let hello: std::collections::HashMap<String, Value> = redis::from_owned_redis_value(
                 test_basics
                     .client
-                    .send_command(&redis::cmd("HELLO"), None)
+                    .send_command(&mut redis::cmd("HELLO"), None)
                     .await
                     .expect("HELLO failed"),
             )
@@ -2369,7 +2384,7 @@ pub(crate) mod shared_client_tests {
             let cluster = cluster::setup_default_cluster().await;
             println!("Creating 1st cluster client...");
             let mut c1 = cluster::setup_default_client(&cluster).await;
-            let result = c1.send_command(&redis::cmd("MSET"), None).await;
+            let result = c1.send_command(&mut redis::cmd("MSET"), None).await;
             assert!(result.is_err());
             let e = result.unwrap_err();
             assert!(e.kind().clone().eq(&redis::ErrorKind::ResponseError));
@@ -2469,7 +2484,7 @@ pub(crate) mod shared_client_tests {
             // Verify initial connection is to database 0
             let initial_client_info_response = test_basics
                 .client
-                .send_command(&client_info_cmd, None)
+                .send_command(&mut client_info_cmd, None)
                 .await
                 .unwrap();
 
@@ -2490,7 +2505,7 @@ pub(crate) mod shared_client_tests {
             // Execute SELECT command to change to database 5
             let select_result = test_basics
                 .client
-                .send_command(&select_cmd, None)
+                .send_command(&mut select_cmd, None)
                 .await
                 .unwrap();
             assert_eq!(select_result, Value::Okay);
@@ -2498,7 +2513,7 @@ pub(crate) mod shared_client_tests {
             // Verify we're now on database 5
             let post_select_client_info_response = test_basics
                 .client
-                .send_command(&client_info_cmd, None)
+                .send_command(&mut client_info_cmd, None)
                 .await
                 .unwrap();
 
@@ -2518,7 +2533,7 @@ pub(crate) mod shared_client_tests {
             // Try to send another command - this should trigger reconnection
             let res = test_basics
                 .client
-                .send_command(&client_info_cmd, None)
+                .send_command(&mut client_info_cmd, None)
                 .await;
             match res {
                 Err(err) => {
@@ -2530,7 +2545,8 @@ pub(crate) mod shared_client_tests {
                     // Retry and verify we're still on database 5 after reconnection
                     let client_info = repeat_try_create(|| async {
                         let mut client = test_basics.client.clone();
-                        let response = client.send_command(&client_info_cmd, None).await.ok()?;
+                        let mut cmd = client_info_cmd.clone();
+                        let response = client.send_command(&mut cmd, None).await.ok()?;
                         match response {
                             Value::BulkString(bytes) => {
                                 Some(String::from_utf8_lossy(&bytes).to_string())
@@ -2602,7 +2618,7 @@ pub(crate) mod shared_client_tests {
             // Verify initial connection client name
             let initial_client_info_response = test_basics
                 .client
-                .send_command(&client_info_cmd, None)
+                .send_command(&mut client_info_cmd, None)
                 .await
                 .unwrap();
 
@@ -2623,7 +2639,7 @@ pub(crate) mod shared_client_tests {
             // Execute CLIENT SETNAME command to change to 2ndName
             let client_setname_result = test_basics
                 .client
-                .send_command(&client_setname_cmd, None)
+                .send_command(&mut client_setname_cmd, None)
                 .await
                 .unwrap();
             assert_eq!(client_setname_result, Value::Okay);
@@ -2631,7 +2647,7 @@ pub(crate) mod shared_client_tests {
             // Verify we're now on 2ndName
             let post_client_setname_client_info_response = test_basics
                 .client
-                .send_command(&client_info_cmd, None)
+                .send_command(&mut client_info_cmd, None)
                 .await
                 .unwrap();
 
@@ -2651,7 +2667,7 @@ pub(crate) mod shared_client_tests {
             // Try to send another command - this should trigger reconnection
             let res = test_basics
                 .client
-                .send_command(&client_info_cmd, None)
+                .send_command(&mut client_info_cmd, None)
                 .await;
             match res {
                 Err(err) => {
@@ -2663,7 +2679,8 @@ pub(crate) mod shared_client_tests {
                     // Retry and verify we're still on name 2ndName after reconnection
                     let client_info = repeat_try_create(|| async {
                         let mut client = test_basics.client.clone();
-                        let response = client.send_command(&client_info_cmd, None).await.ok()?;
+                        let mut cmd = client_info_cmd.clone();
+                        let response = client.send_command(&mut cmd, None).await.ok()?;
                         match response {
                             Value::BulkString(bytes) => {
                                 Some(String::from_utf8_lossy(&bytes).to_string())
