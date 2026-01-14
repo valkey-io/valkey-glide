@@ -334,3 +334,118 @@ func (suite *GlideTestSuite) TestLazyConnectionEstablishesOnFirstCommand() {
 			"Lazy client should establish expected number of new connections after the first command")
 	})
 }
+
+func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
+	// Test TCP_NODELAY configuration for both standalone and cluster modes
+	suite.runWithTimeoutClients(func(client interfaces.BaseClientCommands) {
+		ctx := context.Background()
+		_, isCluster := client.(interfaces.GlideClusterClientCommands)
+
+		// Start a dedicated server
+		output, err := startDedicatedValkeyServer(suite, isCluster)
+		suite.NoError(err)
+		clusterFolder := extractClusterFolder(suite, output)
+		addresses := extractAddresses(suite, output)
+		defer stopDedicatedValkeyServer(suite, clusterFolder)
+
+		// Test with TCP_NODELAY enabled (true)
+		var clientWithTcpNoDelayTrue interfaces.BaseClientCommands
+		if isCluster {
+			cfg := config.NewClusterClientConfiguration()
+			for _, addr := range addresses {
+				cfg.WithAddress(&addr)
+			}
+			cfg.WithAdvancedConfiguration(
+				config.NewAdvancedClusterClientConfiguration().WithTcpNoDelay(true),
+			)
+			clientWithTcpNoDelayTrue, err = glide.NewClusterClient(cfg)
+		} else {
+			cfg := config.NewClientConfiguration()
+			for _, addr := range addresses {
+				cfg.WithAddress(&addr)
+			}
+			cfg.WithAdvancedConfiguration(
+				config.NewAdvancedClientConfiguration().WithTcpNoDelay(true),
+			)
+			clientWithTcpNoDelayTrue, err = glide.NewClient(cfg)
+		}
+		suite.NoError(err)
+		defer clientWithTcpNoDelayTrue.Close()
+
+		// Verify client can connect and execute commands
+		var result interface{}
+		if isCluster {
+			clusterClient := clientWithTcpNoDelayTrue.(interfaces.GlideClusterClientCommands)
+			result, err = clusterClient.Ping(ctx)
+		} else {
+			glideClient := clientWithTcpNoDelayTrue.(interfaces.GlideClientCommands)
+			result, err = glideClient.Ping(ctx)
+		}
+		suite.NoError(err)
+		suite.Equal("PONG", result)
+
+		// Test with TCP_NODELAY disabled (false)
+		var clientWithTcpNoDelayFalse interfaces.BaseClientCommands
+		if isCluster {
+			cfg := config.NewClusterClientConfiguration()
+			for _, addr := range addresses {
+				cfg.WithAddress(&addr)
+			}
+			cfg.WithAdvancedConfiguration(
+				config.NewAdvancedClusterClientConfiguration().WithTcpNoDelay(false),
+			)
+			clientWithTcpNoDelayFalse, err = glide.NewClusterClient(cfg)
+		} else {
+			cfg := config.NewClientConfiguration()
+			for _, addr := range addresses {
+				cfg.WithAddress(&addr)
+			}
+			cfg.WithAdvancedConfiguration(
+				config.NewAdvancedClientConfiguration().WithTcpNoDelay(false),
+			)
+			clientWithTcpNoDelayFalse, err = glide.NewClient(cfg)
+		}
+		suite.NoError(err)
+		defer clientWithTcpNoDelayFalse.Close()
+
+		// Verify client can connect and execute commands
+		if isCluster {
+			clusterClient := clientWithTcpNoDelayFalse.(interfaces.GlideClusterClientCommands)
+			result, err = clusterClient.Ping(ctx)
+		} else {
+			glideClient := clientWithTcpNoDelayFalse.(interfaces.GlideClientCommands)
+			result, err = glideClient.Ping(ctx)
+		}
+		suite.NoError(err)
+		suite.Equal("PONG", result)
+
+		// Test with TCP_NODELAY not set (default behavior)
+		var clientWithDefaultTcpNoDelay interfaces.BaseClientCommands
+		if isCluster {
+			cfg := config.NewClusterClientConfiguration()
+			for _, addr := range addresses {
+				cfg.WithAddress(&addr)
+			}
+			clientWithDefaultTcpNoDelay, err = glide.NewClusterClient(cfg)
+		} else {
+			cfg := config.NewClientConfiguration()
+			for _, addr := range addresses {
+				cfg.WithAddress(&addr)
+			}
+			clientWithDefaultTcpNoDelay, err = glide.NewClient(cfg)
+		}
+		suite.NoError(err)
+		defer clientWithDefaultTcpNoDelay.Close()
+
+		// Verify client can connect and execute commands
+		if isCluster {
+			clusterClient := clientWithDefaultTcpNoDelay.(interfaces.GlideClusterClientCommands)
+			result, err = clusterClient.Ping(ctx)
+		} else {
+			glideClient := clientWithDefaultTcpNoDelay.(interfaces.GlideClientCommands)
+			result, err = glideClient.Ping(ctx)
+		}
+		suite.NoError(err)
+		suite.Equal("PONG", result)
+	})
+}
