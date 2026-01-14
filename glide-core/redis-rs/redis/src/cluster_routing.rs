@@ -256,7 +256,7 @@ pub fn aggregate_array(values: Vec<Value>, op: ArrayAggregateOp) -> RedisResult<
     Ok(Value::Array(
         results
             .into_iter()
-            .map(|result| Value::Int(result))
+            .map(Value::Int)
             .collect(),
     ))
 }
