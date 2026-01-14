@@ -1774,3 +1774,34 @@ def get_client_key() -> bytes:
     )
     ca_cert_path = os.path.join(glide_home, "utils", "tls_crts", "server.key")
     return load_client_certificate_from_file(ca_cert_path)
+
+
+async def create_client_with_retry(config, max_retries: int = 3):
+    """
+    Create a GlideClient or GlideClusterClient with exponential backoff retry and jitter.
+
+    Args:
+        config: The client configuration (GlideClientConfiguration or GlideClusterClientConfiguration).
+        max_retries: Maximum number of retry attempts (default: 3).
+
+    Returns:
+        GlideClient or GlideClusterClient: The created client instance.
+
+    Raises:
+        Exception: If all retry attempts fail.
+    """
+    import time
+
+    is_cluster = isinstance(config, GlideClusterClientConfiguration)
+    client_class = GlideClusterClient if is_cluster else GlideClient
+
+    for i in range(max_retries):
+        try:
+            return await client_class.create(config)
+        except Exception:
+            if i == max_retries - 1:
+                raise
+            # Exponential backoff with jitter (±25%)
+            base_delay = 2**i
+            jitter = base_delay * random.uniform(-0.25, 0.25)
+            time.sleep(base_delay + jitter)
