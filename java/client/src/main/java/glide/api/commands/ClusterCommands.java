@@ -4,6 +4,7 @@ package glide.api.commands;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -256,33 +257,37 @@ public interface ClusterCommands {
      *
      * @since Valkey 7.0.0 and above.
      * @see <a href="https://valkey.io/commands/cluster-addslotsrange/">valkey.io</a> for details.
-     * @param slotRanges An array of slot range pairs [start, end] to assign to the node.
+     * @param slotRanges An array of slot range pairs where each entry represents a range with the key
+     *     as the start slot and the value as the end slot.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
      * // Assign slots 1-100 and 500-600
-     * String result = client.clusterAddSlotsRange(new long[][]{{1, 100}, {500, 600}}).get();
+     * String result = client.clusterAddSlotsRange(
+     *     new Map.Entry[]{Map.entry(1L, 100L), Map.entry(500L, 600L)}).get();
      * assert result.equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> clusterAddSlotsRange(long[][] slotRanges);
+    CompletableFuture<String> clusterAddSlotsRange(Map.Entry<Long, Long>[] slotRanges);
 
     /**
      * Assigns hash slot ranges to the node, per the <code>CLUSTER ADDSLOTSRANGE</code> command.
      *
      * @since Valkey 7.0.0 and above.
      * @see <a href="https://valkey.io/commands/cluster-addslotsrange/">valkey.io</a> for details.
-     * @param slotRanges An array of slot range pairs [start, end] to assign to the node.
+     * @param slotRanges An array of slot range pairs where each entry represents a range with the key
+     *     as the start slot and the value as the end slot.
      * @param route Specifies the routing configuration for the command.
      * @return <code>OK</code> or a {@link ClusterValue}.
      * @example
      *     <pre>{@code
      * ClusterValue<String> result = client.clusterAddSlotsRange(
-     *     new long[][]{{1, 100}, {500, 600}}, RANDOM).get();
+     *     new Map.Entry[]{Map.entry(1L, 100L), Map.entry(500L, 600L)}, RANDOM).get();
      * assert result.getSingleValue().equals("OK");
      * }</pre>
      */
-    CompletableFuture<ClusterValue<String>> clusterAddSlotsRange(long[][] slotRanges, Route route);
+    CompletableFuture<ClusterValue<String>> clusterAddSlotsRange(
+            Map.Entry<Long, Long>[] slotRanges, Route route);
 
     /**
      * Removes hash slots from the node, per the <code>CLUSTER DELSLOTS</code> command.
@@ -320,32 +325,36 @@ public interface ClusterCommands {
      *
      * @since Valkey 7.0.0 and above.
      * @see <a href="https://valkey.io/commands/cluster-delslotsrange/">valkey.io</a> for details.
-     * @param slotRanges An array of slot range pairs [start, end] to remove from the node.
+     * @param slotRanges An array of slot range pairs where each entry represents a range with the key
+     *     as the start slot and the value as the end slot.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
-     * String result = client.clusterDelSlotsRange(new long[][]{{1, 100}, {500, 600}}).get();
+     * String result = client.clusterDelSlotsRange(
+     *     new Map.Entry[]{Map.entry(1L, 100L), Map.entry(500L, 600L)}).get();
      * assert result.equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> clusterDelSlotsRange(long[][] slotRanges);
+    CompletableFuture<String> clusterDelSlotsRange(Map.Entry<Long, Long>[] slotRanges);
 
     /**
      * Removes hash slot ranges from the node, per the <code>CLUSTER DELSLOTSRANGE</code> command.
      *
      * @since Valkey 7.0.0 and above.
      * @see <a href="https://valkey.io/commands/cluster-delslotsrange/">valkey.io</a> for details.
-     * @param slotRanges An array of slot range pairs [start, end] to remove from the node.
+     * @param slotRanges An array of slot range pairs where each entry represents a range with the key
+     *     as the start slot and the value as the end slot.
      * @param route Specifies the routing configuration for the command.
      * @return <code>OK</code> or a {@link ClusterValue}.
      * @example
      *     <pre>{@code
      * ClusterValue<String> result = client.clusterDelSlotsRange(
-     *     new long[][]{{1, 100}, {500, 600}}, RANDOM).get();
+     *     new Map.Entry[]{Map.entry(1L, 100L), Map.entry(500L, 600L)}, RANDOM).get();
      * assert result.getSingleValue().equals("OK");
      * }</pre>
      */
-    CompletableFuture<ClusterValue<String>> clusterDelSlotsRange(long[][] slotRanges, Route route);
+    CompletableFuture<ClusterValue<String>> clusterDelSlotsRange(
+            Map.Entry<Long, Long>[] slotRanges, Route route);
 
     /**
      * Forces a node to start a manual failover, per the <code>CLUSTER FAILOVER</code> command.

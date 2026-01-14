@@ -99,7 +99,7 @@ public class ClusterCommandValidationTests {
         IllegalArgumentException exception =
                 assertThrows(
                         IllegalArgumentException.class,
-                        () -> clusterClient.clusterAddSlotsRange(new long[][] {{-10, 100}}));
+                        () -> clusterClient.clusterAddSlotsRange(new Map.Entry[] {Map.entry(-10L, 100L)}));
         assertEquals(
                 "Slot range start at index 0 must be between 0 and 16383, but got: -10",
                 exception.getMessage());
@@ -111,7 +111,7 @@ public class ClusterCommandValidationTests {
         IllegalArgumentException exception =
                 assertThrows(
                         IllegalArgumentException.class,
-                        () -> clusterClient.clusterAddSlotsRange(new long[][] {{100, 20000}}));
+                        () -> clusterClient.clusterAddSlotsRange(new Map.Entry[] {Map.entry(100L, 20000L)}));
         assertEquals(
                 "Slot range end at index 0 must be between 0 and 16383, but got: 20000",
                 exception.getMessage());
@@ -123,7 +123,7 @@ public class ClusterCommandValidationTests {
         IllegalArgumentException exception =
                 assertThrows(
                         IllegalArgumentException.class,
-                        () -> clusterClient.clusterAddSlotsRange(new long[][] {{500, 100}}));
+                        () -> clusterClient.clusterAddSlotsRange(new Map.Entry[] {Map.entry(500L, 100L)}));
         assertEquals(
                 "Slot range at index 0 is invalid: start (500) must be <= end (100)",
                 exception.getMessage());
@@ -131,14 +131,12 @@ public class ClusterCommandValidationTests {
 
     @Test
     @SneakyThrows
-    public void clusterAddSlotsRange_invalidRange_wrongArraySize_throwsException() {
+    public void clusterAddSlotsRange_nullEntry_throwsException() {
         IllegalArgumentException exception =
                 assertThrows(
                         IllegalArgumentException.class,
-                        () -> clusterClient.clusterAddSlotsRange(new long[][] {{100, 200, 300}}));
-        assertEquals(
-                "Slot range at index 0 must be an array of 2 elements [start, end]",
-                exception.getMessage());
+                        () -> clusterClient.clusterAddSlotsRange(new Map.Entry[] {null}));
+        assertEquals("Slot range at index 0 cannot be null", exception.getMessage());
     }
 
     @Test
@@ -147,7 +145,7 @@ public class ClusterCommandValidationTests {
         IllegalArgumentException exception =
                 assertThrows(
                         IllegalArgumentException.class,
-                        () -> clusterClient.clusterAddSlotsRange(new long[][] {}));
+                        () -> clusterClient.clusterAddSlotsRange(new Map.Entry[] {}));
         assertEquals("Slot ranges array cannot be empty", exception.getMessage());
     }
 
@@ -157,7 +155,9 @@ public class ClusterCommandValidationTests {
         IllegalArgumentException exception =
                 assertThrows(
                         IllegalArgumentException.class,
-                        () -> clusterClient.clusterDelSlotsRange(new long[][] {{0, 100}, {16384, 16400}}));
+                        () ->
+                                clusterClient.clusterDelSlotsRange(
+                                        new Map.Entry[] {Map.entry(0L, 100L), Map.entry(16384L, 16400L)}));
         assertEquals(
                 "Slot range start at index 1 must be between 0 and 16383, but got: 16384",
                 exception.getMessage());

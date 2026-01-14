@@ -598,7 +598,8 @@ public class ClusterManagementCommandsTests {
     public void clusterAddSlotsRange_expectsFailureOrSuccess() {
         // Test adding slot ranges
         try {
-            String result = clusterClient.clusterAddSlotsRange(new long[][] {{15000, 15100}}).get();
+            String result =
+                    clusterClient.clusterAddSlotsRange(new Map.Entry[] {Map.entry(15000L, 15100L)}).get();
             assertEquals(OK, result);
         } catch (ExecutionException e) {
             // Expected to fail if slots are already assigned
@@ -611,7 +612,8 @@ public class ClusterManagementCommandsTests {
     public void clusterDelSlotsRange_expectsFailureOrSuccess() {
         // Test deleting slot ranges
         try {
-            String result = clusterClient.clusterDelSlotsRange(new long[][] {{15000, 15100}}).get();
+            String result =
+                    clusterClient.clusterDelSlotsRange(new Map.Entry[] {Map.entry(15000L, 15100L)}).get();
             assertEquals(OK, result);
         } catch (ExecutionException e) {
             // Expected to fail if slots are not assigned to this node

@@ -1470,11 +1470,14 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> clusterAddSlotsRange(@NonNull long[][] slotRanges) {
+    public CompletableFuture<String> clusterAddSlotsRange(
+            @NonNull Map.Entry<Long, Long>[] slotRanges) {
         validateSlotRanges(slotRanges);
         String[] arguments =
                 Arrays.stream(slotRanges)
-                        .flatMap(range -> Arrays.stream(range).mapToObj(String::valueOf))
+                        .flatMap(
+                                range ->
+                                        Stream.of(String.valueOf(range.getKey()), String.valueOf(range.getValue())))
                         .toArray(String[]::new);
         return commandManager.submitNewCommand(
                 ClusterAddSlotsRange, arguments, this::handleStringResponse);
@@ -1482,11 +1485,13 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<ClusterValue<String>> clusterAddSlotsRange(
-            @NonNull long[][] slotRanges, @NonNull Route route) {
+            @NonNull Map.Entry<Long, Long>[] slotRanges, @NonNull Route route) {
         validateSlotRanges(slotRanges);
         String[] arguments =
                 Arrays.stream(slotRanges)
-                        .flatMap(range -> Arrays.stream(range).mapToObj(String::valueOf))
+                        .flatMap(
+                                range ->
+                                        Stream.of(String.valueOf(range.getKey()), String.valueOf(range.getValue())))
                         .toArray(String[]::new);
         return commandManager.submitNewCommand(
                 ClusterAddSlotsRange,
@@ -1521,11 +1526,14 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> clusterDelSlotsRange(@NonNull long[][] slotRanges) {
+    public CompletableFuture<String> clusterDelSlotsRange(
+            @NonNull Map.Entry<Long, Long>[] slotRanges) {
         validateSlotRanges(slotRanges);
         String[] arguments =
                 Arrays.stream(slotRanges)
-                        .flatMap(range -> Arrays.stream(range).mapToObj(String::valueOf))
+                        .flatMap(
+                                range ->
+                                        Stream.of(String.valueOf(range.getKey()), String.valueOf(range.getValue())))
                         .toArray(String[]::new);
         return commandManager.submitNewCommand(
                 ClusterDelSlotsRange, arguments, this::handleStringResponse);
@@ -1533,11 +1541,13 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<ClusterValue<String>> clusterDelSlotsRange(
-            @NonNull long[][] slotRanges, @NonNull Route route) {
+            @NonNull Map.Entry<Long, Long>[] slotRanges, @NonNull Route route) {
         validateSlotRanges(slotRanges);
         String[] arguments =
                 Arrays.stream(slotRanges)
-                        .flatMap(range -> Arrays.stream(range).mapToObj(String::valueOf))
+                        .flatMap(
+                                range ->
+                                        Stream.of(String.valueOf(range.getKey()), String.valueOf(range.getValue())))
                         .toArray(String[]::new);
         return commandManager.submitNewCommand(
                 ClusterDelSlotsRange,

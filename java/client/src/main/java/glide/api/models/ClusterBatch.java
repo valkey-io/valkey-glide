@@ -37,6 +37,7 @@ import static glide.utils.ArgsBuilder.checkTypeOrThrow;
 import static glide.utils.ArgsBuilder.newArgsBuilder;
 
 import glide.api.GlideClusterClient;
+import java.util.Map;
 import lombok.NonNull;
 
 /**
@@ -255,17 +256,17 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
 
     /**
      * Assigns slot ranges to the node. See {@link
-     * glide.api.commands.ClusterCommands#clusterAddSlotsRange(long[][])} for details.
+     * glide.api.commands.ClusterCommands#clusterAddSlotsRange(Map.Entry[])} for details.
      *
-     * @param slotRanges The slot range pairs [start, end] to assign.
+     * @param slotRanges An array of slot range pairs where each entry represents a range with the key
+     *     as the start slot and the value as the end slot.
      * @return Command response - <code>OK</code>.
      */
-    public ClusterBatch clusterAddSlotsRange(@NonNull long[][] slotRanges) {
+    public ClusterBatch clusterAddSlotsRange(@NonNull Map.Entry<Long, Long>[] slotRanges) {
         var args = newArgsBuilder();
-        for (long[] range : slotRanges) {
-            for (long slot : range) {
-                args.add(slot);
-            }
+        for (Map.Entry<Long, Long> range : slotRanges) {
+            args.add(range.getKey());
+            args.add(range.getValue());
         }
         protobufBatch.addCommands(buildCommand(ClusterAddSlotsRange, args));
         return getThis();
@@ -289,17 +290,17 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
 
     /**
      * Removes slot ranges from the node. See {@link
-     * glide.api.commands.ClusterCommands#clusterDelSlotsRange(long[][])} for details.
+     * glide.api.commands.ClusterCommands#clusterDelSlotsRange(Map.Entry[])} for details.
      *
-     * @param slotRanges The slot range pairs [start, end] to remove.
+     * @param slotRanges An array of slot range pairs where each entry represents a range with the key
+     *     as the start slot and the value as the end slot.
      * @return Command response - <code>OK</code>.
      */
-    public ClusterBatch clusterDelSlotsRange(@NonNull long[][] slotRanges) {
+    public ClusterBatch clusterDelSlotsRange(@NonNull Map.Entry<Long, Long>[] slotRanges) {
         var args = newArgsBuilder();
-        for (long[] range : slotRanges) {
-            for (long slot : range) {
-                args.add(slot);
-            }
+        for (Map.Entry<Long, Long> range : slotRanges) {
+            args.add(range.getKey());
+            args.add(range.getValue());
         }
         protobufBatch.addCommands(buildCommand(ClusterDelSlotsRange, args));
         return getThis();

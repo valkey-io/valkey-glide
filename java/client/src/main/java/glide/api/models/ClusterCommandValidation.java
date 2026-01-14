@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
@@ -69,10 +70,11 @@ public final class ClusterCommandValidation {
     /**
      * Validates that all slot ranges are within the valid range (0-16383) and properly formed.
      *
-     * @param slotRanges The array of slot ranges to validate. Each range should be [start, end].
+     * @param slotRanges The array of slot range entries to validate. Each entry represents a range
+     *     where the key is the start slot and the value is the end slot.
      * @throws IllegalArgumentException if any range is invalid.
      */
-    public static void validateSlotRanges(long[][] slotRanges) {
+    public static void validateSlotRanges(Map.Entry<Long, Long>[] slotRanges) {
         if (slotRanges == null) {
             throw new IllegalArgumentException("Slot ranges array cannot be null");
         }
@@ -80,13 +82,17 @@ public final class ClusterCommandValidation {
             throw new IllegalArgumentException("Slot ranges array cannot be empty");
         }
         for (int i = 0; i < slotRanges.length; i++) {
-            long[] range = slotRanges[i];
-            if (range == null || range.length != 2) {
+            Map.Entry<Long, Long> range = slotRanges[i];
+            if (range == null) {
                 throw new IllegalArgumentException(
-                        String.format("Slot range at index %d must be an array of 2 elements [start, end]", i));
+                        String.format("Slot range at index %d cannot be null", i));
             }
-            long start = range[0];
-            long end = range[1];
+            if (range.getKey() == null || range.getValue() == null) {
+                throw new IllegalArgumentException(
+                        String.format("Slot range at index %d must have both start and end slots defined", i));
+            }
+            long start = range.getKey();
+            long end = range.getValue();
             if (start < MIN_SLOT || start > MAX_SLOT) {
                 throw new IllegalArgumentException(
                         String.format(
