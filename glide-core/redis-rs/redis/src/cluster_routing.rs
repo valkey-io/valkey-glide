@@ -253,12 +253,7 @@ pub fn aggregate_array(values: Vec<Value>, op: ArrayAggregateOp) -> RedisResult<
         }
         Ok(acc)
     })?;
-    Ok(Value::Array(
-        results
-            .into_iter()
-            .map(Value::Int)
-            .collect(),
-    ))
+    Ok(Value::Array(results.into_iter().map(Value::Int).collect()))
 }
 /// Aggregate array responses into a single map.
 pub fn combine_map_results(values: Vec<Value>) -> RedisResult<Value> {
