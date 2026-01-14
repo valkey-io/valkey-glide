@@ -5,6 +5,8 @@
 * JAVA: Add EVAL_RO, EVALSHA_RO, and SCRIPT DEBUG commands ([#5125](https://github.com/valkey-io/valkey-glide/pull/5125))
 * CORE: Add client certificate and private key support for mTLS ([#5092](https://github.com/valkey-io/valkey-glide/issues/5092))
 * Python: Add client certificate and private key support for mTLS ([5123](https://github.com/valkey-io/valkey-glide/issues/5123))
+* JAVA: Implement Connection Management commands - CLIENT REPLY, CLIENT CACHING, CLIENT SETINFO, CLIENT TRACKINGINFO, CLIENT GETREDIR, CLIENT INFO, CLIENT KILL, CLIENT LIST, CLIENT NO-EVICT, CLIENT NO-TOUCH, CLIENT PAUSE, CLIENT UNPAUSE, CLIENT UNBLOCK, QUIT, RESET, AUTH, HELLO, ECHO, PING, SELECT, CLIENT GETNAME, CLIENT SETNAME, CLIENT ID ([#5115](https://github.com/valkey-io/valkey-glide/pull/5115))
+* JAVA: Refactor CLIENT REPLY command to use type-safe ClientReplyMode enum for better API consistency ([#5115](https://github.com/valkey-io/valkey-glide/pull/5115))
 
 #### Fixes
 * CORE: Enforce connection_timeout for initial standalone connection failures  ([#4991](https://github.com/valkey-io/valkey-glide/issues/4991))

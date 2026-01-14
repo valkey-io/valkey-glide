@@ -363,7 +363,7 @@ public abstract class BaseClient
     public static final String LCS_MATCHES_RESULT_KEY = "matches";
 
     // Constant empty arrays to reduce allocations
-    private static final String[] EMPTY_STRING_ARRAY = new String[0];
+    protected static final String[] EMPTY_STRING_ARRAY = new String[0];
     protected static final GlideString[] EMPTY_GLIDE_STRING_ARRAY = new GlideString[0];
 
     // Client components

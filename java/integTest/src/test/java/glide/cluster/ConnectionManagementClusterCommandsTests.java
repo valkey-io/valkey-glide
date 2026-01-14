@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Named.named;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
+import glide.api.models.commands.ClientReplyMode;
 import glide.api.models.configuration.ProtocolVersion;
 import java.util.Map;
 import java.util.UUID;
@@ -416,7 +417,7 @@ public class ConnectionManagementClusterCommandsTests {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("3.2.0"), "This feature is added in version 3.2.0");
 
-        String result = client.clientReply("ON").get();
+        String result = client.clientReply(ClientReplyMode.ON).get();
         assertEquals(OK, result);
     }
 

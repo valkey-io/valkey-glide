@@ -63,6 +63,7 @@ import glide.api.commands.TransactionsCommands;
 import glide.api.models.Batch;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
+import glide.api.models.commands.ClientReplyMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.batch.BatchOptions;
@@ -199,7 +200,7 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> ping() {
-        return commandManager.submitNewCommand(Ping, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(Ping, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -216,7 +217,7 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> info() {
-        return commandManager.submitNewCommand(Info, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(Info, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -260,18 +261,18 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Long> clientId() {
-        return commandManager.submitNewCommand(ClientId, new String[0], this::handleLongResponse);
+        return commandManager.submitNewCommand(ClientId, EMPTY_STRING_ARRAY, this::handleLongResponse);
     }
 
     @Override
     public CompletableFuture<String> clientGetName() {
         return commandManager.submitNewCommand(
-                ClientGetName, new String[0], this::handleStringOrNullResponse);
+                ClientGetName, EMPTY_STRING_ARRAY, this::handleStringOrNullResponse);
     }
 
     @Override
     public CompletableFuture<String> clientInfo() {
-        return commandManager.submitNewCommand(ClientInfo, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(ClientInfo, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -288,7 +289,7 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> clientList() {
-        return commandManager.submitNewCommand(ClientList, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(ClientList, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -312,7 +313,7 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<String> clientUnpause() {
         return commandManager.submitNewCommand(
-                ClientUnpause, new String[0], this::handleStringResponse);
+                ClientUnpause, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -345,13 +346,13 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Long> clientGetRedir() {
-        return commandManager.submitNewCommand(ClientGetRedir, new String[0], this::handleLongResponse);
+        return commandManager.submitNewCommand(ClientGetRedir, EMPTY_STRING_ARRAY, this::handleLongResponse);
     }
 
     @Override
     public CompletableFuture<Object[]> clientTrackingInfo() {
         return commandManager.submitNewCommand(
-                ClientTrackingInfo, new String[0], this::handleArrayResponse);
+                ClientTrackingInfo, EMPTY_STRING_ARRAY, this::handleArrayResponse);
     }
 
     @Override
@@ -374,19 +375,19 @@ public class GlideClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> clientReply(@NonNull String mode) {
+    public CompletableFuture<String> clientReply(@NonNull ClientReplyMode mode) {
         return commandManager.submitNewCommand(
-                ClientReply, new String[] {mode}, this::handleStringResponse);
+                ClientReply, mode.toArgs(), this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> quit() {
-        return commandManager.submitNewCommand(Quit, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(Quit, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> reset() {
-        return commandManager.submitNewCommand(Reset, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(Reset, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -449,13 +450,13 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<String> configRewrite() {
         return commandManager.submitNewCommand(
-                ConfigRewrite, new String[0], this::handleStringResponse);
+                ConfigRewrite, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> configResetStat() {
         return commandManager.submitNewCommand(
-                ConfigResetStat, new String[0], this::handleStringResponse);
+                ConfigResetStat, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -484,17 +485,17 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<String[]> time() {
         return commandManager.submitNewCommand(
-                Time, new String[0], response -> castArray(handleArrayResponse(response), String.class));
+                Time, EMPTY_STRING_ARRAY, response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
     public CompletableFuture<Long> lastsave() {
-        return commandManager.submitNewCommand(LastSave, new String[0], this::handleLongResponse);
+        return commandManager.submitNewCommand(LastSave, EMPTY_STRING_ARRAY, this::handleLongResponse);
     }
 
     @Override
     public CompletableFuture<String> flushall() {
-        return commandManager.submitNewCommand(FlushAll, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(FlushAll, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -505,7 +506,7 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> flushdb() {
-        return commandManager.submitNewCommand(FlushDB, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(FlushDB, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -516,7 +517,7 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> lolwut() {
-        return commandManager.submitNewCommand(Lolwut, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(Lolwut, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -545,7 +546,7 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Long> dbsize() {
-        return commandManager.submitNewCommand(DBSize, new String[0], this::handleLongResponse);
+        return commandManager.submitNewCommand(DBSize, EMPTY_STRING_ARRAY, this::handleLongResponse);
     }
 
     @Override
@@ -570,7 +571,7 @@ public class GlideClient extends BaseClient
     public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                withCode ? new String[] {WITH_CODE_VALKEY_API} : new String[0],
+                withCode ? new String[] {WITH_CODE_VALKEY_API} : EMPTY_STRING_ARRAY,
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
@@ -609,7 +610,7 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<String> functionFlush() {
         return commandManager.submitNewCommand(
-                FunctionFlush, new String[0], this::handleStringResponse);
+                FunctionFlush, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -653,7 +654,7 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> fcall(@NonNull String function) {
-        return fcall(function, new String[0], new String[0]);
+        return fcall(function, EMPTY_STRING_ARRAY, EMPTY_STRING_ARRAY);
     }
 
     @Override
@@ -664,7 +665,7 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> fcallReadOnly(@NonNull String function) {
-        return fcallReadOnly(function, new String[0], new String[0]);
+        return fcallReadOnly(function, EMPTY_STRING_ARRAY, EMPTY_STRING_ARRAY);
     }
 
     @Override
@@ -675,14 +676,14 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> functionKill() {
-        return commandManager.submitNewCommand(FunctionKill, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(FunctionKill, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<Map<String, Map<String, Map<String, Object>>>> functionStats() {
         return commandManager.submitNewCommand(
                 FunctionStats,
-                new String[0],
+                EMPTY_STRING_ARRAY,
                 response -> handleFunctionStatsResponse(response, false).getMultiValue());
     }
 
@@ -697,13 +698,13 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> unwatch() {
-        return commandManager.submitNewCommand(UnWatch, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(UnWatch, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> randomKey() {
         return commandManager.submitNewCommand(
-                RandomKey, new String[0], this::handleStringOrNullResponse);
+                RandomKey, EMPTY_STRING_ARRAY, this::handleStringOrNullResponse);
     }
 
     @Override
