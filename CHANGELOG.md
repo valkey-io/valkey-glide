@@ -10,11 +10,57 @@
 
 #### Fixes
 * CORE: Enforce connection_timeout for initial standalone connection failures  ([#4991](https://github.com/valkey-io/valkey-glide/issues/4991))
-* CORE: Rust Lint is failing due to unmaintained advisory detected (RUSTSEC-2025-0141)  ([#5136](https://github.com/valkey-io/valkey-glide/issues/5136))
 * Node: Fixed `Failed to convert napi value Undefined into rust type u32` error  ([#5128](https://github.com/valkey-io/valkey-glide/pull/5128))
 * Python: Fix Sphinx docs build failure with duplicate object warnings  ([#5163](https://github.com/valkey-io/valkey-glide/issues/5163))
+* Java: Restore shading and relocation of protobuf ([#5031](https://github.com/valkey-io/valkey-glide/pull/5031))
 
 #### Operational Enhancements
+* Docs: Add missing references to windows-x86_64 classifier ([#5028](https://github.com/valkey-io/valkey-glide/pull/5028))
+* CI: Upgrade ORT from 46.0.0 to 59.0.0 to fix Synopsys repository 403 error ([#5169](https://github.com/valkey-io/valkey-glide/pull/5169))
+
+## 2.2.5
+
+#### Changes
+
+* All Clients: Add TCPNoDelay option ([#5100](https://github.com/valkey-io/valkey-glide/pull/5100))
+
+#### Fixes
+
+* Node: Fix `Failed to convert napi value Undefined into rust type u32` error ([#5128](https://github.com/valkey-io/valkey-glide/pull/5128))
+
+#### Operational Enhancements
+
+* Rust: Rust 2024 compatibility fix ([#5101](https://github.com/valkey-io/valkey-glide/pull/5101))
+* CI: Update NPM CD with Trusted Publishing ([#5110](https://github.com/valkey-io/valkey-glide/pull/5110))
+* Rust: Add RUSTSEC-2025-0141 to ignore list in deny.toml ([#5137](https://github.com/valkey-io/valkey-glide/pull/5137))
+
+## 2.2.3
+
+#### Changes
+
+* JAVA: Unshadow Apache Commons Lang3 to avoid failures due to dependency conflicts ([#5074](https://github.com/valkey-io/valkey-glide/pull/5074))
+
+#### Fixes
+
+* CORE: Rust Lint is failing due to unmaintained advisory detected (RUSTSEC-2025-0141)  ([#5136](https://github.com/valkey-io/valkey-glide/issues/5136))
+
+## 2.2.2
+
+#### Security Fixes
+
+* JAVA: Update Apache Commons Lang3 from 3.13.0 to 3.20.0 to address CVE-2025-48924 ([#5049](https://github.com/valkey-io/valkey-glide/pull/5049))
+
+#### Fixes
+
+* JAVA: Add protobuf shading to prevent version conflicts with user dependencies ([#5031](https://github.com/valkey-io/valkey-glide/pull/5031))
+* JAVA: Fix classloader issues in JNI method caching ([#5029](https://github.com/valkey-io/valkey-glide/pull/5029))
+* PYTHON: Update sniffio dependency ([#5044](https://github.com/valkey-io/valkey-glide/pull/5044))
+
+## 2.2.1
+
+#### Changes
+
+* JAVA: Windows Java binaries are now available ([#5049](https://github.com/valkey-io/valkey-glide/pull/5049))
 
 ## 2.2
 
@@ -47,6 +93,7 @@
 #### Operational Enhancements
 
 * Rust: Updates the `install-rust-and-protoc` action to explicitly include the `rustfmt` and `clippy` components. ([#4816](https://github.com/valkey-io/valkey-glide/issues/4816))
+
 ## 2.1.1
 
 #### Changes

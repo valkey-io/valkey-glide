@@ -8,13 +8,16 @@ from typing import Any, List, Optional, Tuple, Union, cast
 
 import pytest
 from glide_shared.commands.core_options import PubSubMsg
-from glide_shared.config import (
-    GlideClientConfiguration,
-    GlideClusterClientConfiguration,
-    ProtocolVersion,
-)
 from glide_shared.constants import OK
 from glide_shared.exceptions import ConfigurationError
+from glide_sync import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+    NodeAddress,
+    ProtocolVersion,
+)
 from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 
 from tests.sync_tests.conftest import create_sync_client
@@ -129,9 +132,12 @@ def check_no_messages_left(
 def client_cleanup(
     client: Optional[Union[GlideClient, GlideClusterClient]],
     cluster_mode_subs: Optional[
-        GlideClusterClientConfiguration.PubSubSubscriptions
+        Union[
+            GlideClusterClientConfiguration.PubSubSubscriptions,
+            GlideClientConfiguration.PubSubSubscriptions,
+        ]
     ] = None,
-):
+) -> None:
     """
     This function tries its best to clear state assosiated with client
     Its explicitly calls client.close() and deletes the object
@@ -2695,3 +2701,45 @@ class TestSyncPubSub:
         finally:
             client_cleanup(client1, pub_sub1 if cluster_mode else None)
             client_cleanup(client2, pub_sub2 if cluster_mode else None)
+
+    # TODO: remove once dynamic pubsub is implemented for the sync client
+    def test_sync_clients_reject_pubsub_reconciliation_interval(self):
+        """
+        Test that GlideClientConfiguration raises ConfigurationError when
+        pubsub_reconciliation_interval is configured in advanced_config.
+        """
+        addresses = [NodeAddress("localhost", 6379)]
+
+        # Create advanced config with pubsub_reconciliation_interval
+        advanced_config = AdvancedGlideClientConfiguration(
+            pubsub_reconciliation_interval=500,
+        )
+
+        # Verify that creating the config raises ConfigurationError
+        with pytest.raises(ConfigurationError) as exc_info:
+            GlideClientConfiguration(
+                addresses=addresses,
+                advanced_config=advanced_config,
+            )
+
+        assert (
+            "pubsub_reconciliation_interval is not supported for the sync client"
+            in str(exc_info.value)
+        )
+
+        # Create advanced config with pubsub_reconciliation_interval
+        advanced_cluster_config = AdvancedGlideClusterClientConfiguration(
+            pubsub_reconciliation_interval=500,
+        )
+
+        # Verify that creating the config raises ConfigurationError
+        with pytest.raises(ConfigurationError) as exc_info:
+            GlideClusterClientConfiguration(
+                addresses=addresses,
+                advanced_config=advanced_cluster_config,
+            )
+
+        assert (
+            "pubsub_reconciliation_interval is not supported for the sync client"
+            in str(exc_info.value)
+        )

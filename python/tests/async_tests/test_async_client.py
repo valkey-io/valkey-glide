@@ -345,7 +345,9 @@ class TestGlideClients:
         assert "total_bytes_compressed" in stats
         assert "total_bytes_decompressed" in stats
         assert "compression_skipped_count" in stats
-        assert len(stats) == 8
+        assert "subscription_out_of_sync_count" in stats
+        assert "subscription_last_sync_timestamp" in stats
+        assert len(stats) == 10
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

@@ -234,8 +234,6 @@ pub struct RedisConnectionInfo {
     pub client_name: Option<String>,
     /// Optionally a library name that should be used for connection
     pub lib_name: Option<String>,
-    /// Optionally a pubsub subscriptions that should be used for connection
-    pub pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
 }
 
 impl FromStr for ConnectionInfo {
@@ -394,7 +392,6 @@ fn url_to_tcp_connection_info(url: url::Url) -> RedisResult<ConnectionInfo> {
             },
             client_name: None,
             lib_name: None,
-            pubsub_subscriptions: None,
         },
     })
 }
@@ -428,7 +425,6 @@ fn url_to_unix_connection_info(url: url::Url) -> RedisResult<ConnectionInfo> {
             },
             client_name: None,
             lib_name: None,
-            pubsub_subscriptions: None,
         },
     })
 }
@@ -958,7 +954,7 @@ fn setup_connection(
         db: connection_info.db,
         pubsub: false,
         protocol: connection_info.protocol,
-        push_manager: PushManager::new(),
+        push_manager: PushManager::new(None, None, None),
     };
 
     if connection_info.protocol != ProtocolVersion::RESP2 {
@@ -1876,7 +1872,6 @@ mod tests {
                         protocol: ProtocolVersion::RESP2,
                         client_name: None,
                         lib_name: None,
-                        pubsub_subscriptions: None,
                     },
                 },
             ),
