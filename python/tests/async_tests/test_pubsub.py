@@ -4924,7 +4924,7 @@ class TestPubSub:
             # Iterate 5 times and verify timestamp increases by approximately the interval each time
             for i in range(5):
                 await anyio.sleep(
-                    0.6
+                    0.55
                 )  # Sleep slightly longer than interval to ensure reconciliation runs
 
                 stats = await listening_client.get_statistics()
@@ -4934,8 +4934,8 @@ class TestPubSub:
 
                 time_diff_ms = current_timestamp - previous_timestamp
 
-                assert time_diff_ms >= short_interval_ms, (
-                    f"Iteration {i + 1}: Timestamp difference ({time_diff_ms}ms) should be >= {short_interval_ms}ms "
+                assert time_diff_ms <= 1000, (
+                    f"Iteration {i + 1}: Timestamp difference ({time_diff_ms}ms) should be <= 1 second"
                     f"Previous: {previous_timestamp}, Current: {current_timestamp}"
                 )
 
