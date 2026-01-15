@@ -636,4 +636,3 @@ mod test_get_host_and_port_from_addr {
         );
     }
 }
-
