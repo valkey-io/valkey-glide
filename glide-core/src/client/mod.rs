@@ -1211,6 +1211,32 @@ impl Client {
         iam_manager.refresh_token().await;
         Ok(())
     }
+
+    /// Close all connections to the server.
+    /// This will close the underlying TCP connections, which will cause any pending
+    /// blocking commands (like BLPOP) to be cancelled on the server side.
+    /// This is called when the client disconnects to prevent responses from cancelled
+    /// requests from being lost.
+    pub async fn close(&self) {
+        log_debug("Client::close", "starting close");
+        let guard = self.internal_client.read().await;
+        match &*guard {
+            ClientWrapper::Standalone(client) => {
+                log_debug("Client::close", "closing standalone client");
+                client.close();
+            }
+            ClientWrapper::Cluster { client } => {
+                log_debug("Client::close", "closing cluster client");
+                let mut client = client.clone();
+                client.close().await;
+                log_debug("Client::close", "cluster client closed");
+            }
+            ClientWrapper::Lazy(_) => {
+                log_debug("Client::close", "lazy client, nothing to close");
+            }
+        }
+        log_debug("Client::close", "close completed");
+    }
 }
 /// Trait for executing PubSub commands on the internal client wrapper
 pub trait PubSubCommandApplier: Send + Sync {

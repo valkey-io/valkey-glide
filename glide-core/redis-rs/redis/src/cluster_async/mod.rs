@@ -287,9 +287,9 @@ where
     }
 
     /// Send commands in `pipeline` to the given `route`. If `route` is [None], it will be computed from `pipeline`.
-    /// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.  
-    ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
-    ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).  
+    /// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.
+    ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).
+    ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).
     ///     TODO: add wiki link.
     pub async fn route_pipeline<'a>(
         &'a mut self,
@@ -357,6 +357,14 @@ where
     /// Get the username used to authenticate with all cluster servers
     pub async fn get_username(&mut self) -> RedisResult<Value> {
         self.route_operation_request(Operation::GetUsername).await
+    }
+
+    /// Close all connections in the cluster.
+    /// This is used when the client disconnects to cancel any pending blocking
+    /// commands (like BLPOP) on the server by closing the underlying TCP connections.
+    pub async fn close(&mut self) {
+        // We ignore errors here since we're closing anyway
+        let _ = self.route_operation_request(Operation::Close).await;
     }
 
     /// Routes an operation request to the appropriate handler.
@@ -653,9 +661,9 @@ enum CmdArg<C> {
         count: usize,
         route: Option<InternalSingleNodeRouting<C>>,
         sub_pipeline: bool,
-        /// Configures retry behavior for pipeline commands.  
-        ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
-        ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).  
+        /// Configures retry behavior for pipeline commands.
+        ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).
+        ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).
         pipeline_retry_strategy: PipelineRetryStrategy,
     },
     ClusterScan {
@@ -673,6 +681,9 @@ enum Operation {
     UpdateConnectionDatabase(i64),
     UpdateConnectionClientName(Option<String>),
     GetUsername,
+    /// Close all connections in the cluster. This is used when the client disconnects
+    /// to cancel any pending blocking commands (like BLPOP) on the server.
+    Close,
 }
 
 fn boxed_sleep(duration: Duration) -> BoxFuture<'static, ()> {
@@ -2534,6 +2545,43 @@ where
                         None => Value::Nil,
                     };
                     Ok(Response::Single(username))
+                }
+                Operation::Close => {
+                    // Close all connections to terminate the underlying TCP connections.
+                    // This will cause any pending blocking commands (like BLPOP) to be
+                    // cancelled on the server side.
+                    debug!("ClusterConnection: Close operation received, closing all connections");
+
+                    // Get all connections and close them
+                    let connections: Vec<_> = if let Ok(guard) = core.conn_lock.read() {
+                        guard
+                            .connection_map()
+                            .iter()
+                            .flat_map(|entry| {
+                                let node = entry.value();
+                                let mut conns = vec![node.user_connection.conn.clone()];
+                                if let Some(mgmt) = &node.management_connection {
+                                    conns.push(mgmt.conn.clone());
+                                }
+                                conns
+                            })
+                            .collect()
+                    } else {
+                        vec![]
+                    };
+
+                    // Await each connection future and call close() on the connection
+                    for conn_future in connections {
+                        let mut conn = conn_future.await;
+                        conn.close();
+                    }
+
+                    // Now clear the connection map
+                    if let Ok(mut guard) = core.conn_lock.write() {
+                        guard.remove_all_connections();
+                        debug!("ClusterConnection: All connections closed and removed");
+                    }
+                    Ok(Response::Single(Value::Okay))
                 }
             },
         }

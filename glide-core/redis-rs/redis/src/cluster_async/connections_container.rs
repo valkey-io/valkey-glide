@@ -709,6 +709,23 @@ where
     pub(crate) fn is_empty(&self) -> bool {
         self.connection_map.is_empty()
     }
+
+    /// Remove all connections from the container.
+    /// This is used when the client disconnects to close all underlying TCP connections,
+    /// which will cause any pending blocking commands (like BLPOP) to be cancelled.
+    pub(crate) fn remove_all_connections(&mut self) {
+        // Clear refresh state first
+        self.refresh_conn_state.clear_refresh_state();
+
+        // Count connections before clearing for telemetry
+        let count = count_connections!(&self.connection_map);
+
+        // Clear all connections
+        self.connection_map.clear();
+
+        // Update telemetry
+        Telemetry::decr_total_connections(count);
+    }
 }
 
 #[cfg(test)]

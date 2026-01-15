@@ -301,6 +301,27 @@ impl ReconnectingConnection {
             .store(true, Ordering::Relaxed)
     }
 
+    /// Close the connection immediately. This will:
+    /// 1. Mark the connection as dropped to prevent reconnection attempts
+    /// 2. Drop the underlying MultiplexedConnection, which closes the TCP connection
+    ///
+    /// This is useful when a client disconnects and we want to cancel any pending
+    /// blocking commands (like BLPOP) on the Redis server.
+    pub(super) fn close(&self) {
+        // Mark as dropped first to prevent reconnection attempts
+        if !self.is_dropped() {
+            self.mark_as_dropped();
+        }
+
+        // Drop the connection by replacing it with Reconnecting state
+        // This will cause the MultiplexedConnection to be dropped, closing the TCP connection
+        let mut guard = self.inner.state.lock().unwrap();
+        if matches!(*guard, ConnectionState::Connected(_)) {
+            log_debug("ReconnectingConnection", "closing connection");
+            *guard = ConnectionState::Reconnecting;
+        }
+    }
+
     pub(super) async fn try_get_connection(&self) -> Option<MultiplexedConnection> {
         let guard = self.inner.state.lock().unwrap();
         if let ConnectionState::Connected(connection) = &*guard {

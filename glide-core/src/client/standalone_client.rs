@@ -700,6 +700,15 @@ impl StandaloneClient {
         Ok(Value::Okay)
     }
 
+    /// Close all connections to the Redis server.
+    /// This will close the underlying TCP connections, which will cause any pending
+    /// blocking commands (like BLPOP) to be cancelled on the Redis server.
+    pub fn close(&self) {
+        for node in self.inner.nodes.iter() {
+            node.close();
+        }
+    }
+
     /// Retrieve the username used to authenticate with the server.
     pub fn get_username(&self) -> Option<String> {
         // All nodes in the client should have the same username configured, thus any connection would work here.

@@ -74,6 +74,11 @@ struct Writer {
     lock: Mutex<()>,
     accumulated_outputs: Cell<Vec<u8>>,
     closing_sender: Sender<ClosingReason>,
+    /// Flag indicating whether the connection is closed. When set to true,
+    /// responses from pending requests will be discarded instead of being
+    /// written to the socket. This prevents responses from cancelled requests
+    /// from being lost when the connection is closed.
+    is_closed: Cell<bool>,
 }
 
 enum PipeListeningResult<TRequest: Message> {
@@ -193,6 +198,25 @@ async fn write_result(
     writer: &Rc<Writer>,
     command_span_ptr: Option<u64>,
 ) -> Result<(), io::Error> {
+    // Check if the connection is closed before processing the response.
+    // This prevents responses from pending requests (like BLPOP) from being
+    // processed after the client has disconnected, which would cause the
+    // response to be lost and subsequent requests to miss the value.
+    if writer.is_closed.get() {
+        log_debug(
+            "write_result",
+            format!(
+                "Discarding response for callback {} - connection is closed",
+                callback_index
+            ),
+        );
+        // Clean up span if it was created
+        if let Some(span) = command_span_ptr.and_then(|ptr| get_unsafe_span_from_ptr(Some(ptr))) {
+            span.set_status(GlideSpanStatus::Error("Connection closed".into()));
+        }
+        return Ok(());
+    }
+
     let mut response = Response::new();
     response.callback_idx = callback_index;
     response.is_push = false;
@@ -926,6 +950,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
         lock: write_lock,
         accumulated_outputs,
         closing_sender: sender,
+        is_closed: Cell::new(false),
     });
     let client_creation = wait_for_connection_configuration_and_create_client(
         &mut client_listener,
@@ -971,12 +996,16 @@ async fn listen_on_client_stream(socket: UnixStream) {
     log_info("connection", "new connection started");
     tokio::select! {
             reader_closing = read_values_loop(client_listener, &client, writer.clone()) => {
+                // Mark the connection as closed so pending requests will discard their responses
+                writer.is_closed.set(true);
                 if let ClosingReason::UnhandledError(err) = reader_closing {
                     let _res = write_closing_error(ClosingError{err_message: err.to_string()}, u32::MAX, &writer, "client closing").await;
                 };
                 log_trace("client closing", "reader closed");
             },
             writer_closing = receiver.recv() => {
+                // Mark the connection as closed so pending requests will discard their responses
+                writer.is_closed.set(true);
                 if let Some(ClosingReason::UnhandledError(err)) = writer_closing {
                     log_error("client closing", format!("Writer closed with error: {err}"));
                 } else {
@@ -984,9 +1013,17 @@ async fn listen_on_client_stream(socket: UnixStream) {
                 }
             },
             _ = push_manager_loop(push_rx, writer.clone()) => {
+                // Mark the connection as closed so pending requests will discard their responses
+                writer.is_closed.set(true);
                 log_trace("client closing", "push manager closed");
             }
     }
+    // Close the client's connections to the server. This will close the underlying
+    // TCP connections, which will cause any pending blocking commands (like BLPOP)
+    // to be cancelled on the server side.
+    log_debug("client closing", "calling client.close()");
+    client.close().await;
+    log_debug("client closing", "client.close() completed");
     log_trace("client closing", "closing connection");
 }
 

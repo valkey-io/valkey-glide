@@ -83,6 +83,14 @@ pub trait ConnectionLike {
     /// Returns the state of the connection
     fn is_closed(&self) -> bool;
 
+    /// Close the connection by signaling the driver to stop.
+    /// This will close the underlying TCP connection, which will cancel any pending
+    /// blocking commands (like BLPOP) on the server.
+    /// Default implementation does nothing - only MultiplexedConnection implements this.
+    fn close(&mut self) {
+        // Default: no-op
+    }
+
     /// Get the connection availibility zone
     fn get_az(&self) -> Option<String> {
         None

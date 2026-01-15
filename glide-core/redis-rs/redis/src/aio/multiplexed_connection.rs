@@ -11,7 +11,7 @@ use crate::types::{RedisError, RedisFuture, RedisResult, Value};
 use crate::{cmd, ConnectionInfo, ProtocolVersion, PushKind};
 use ::tokio::{
     io::{AsyncRead, AsyncWrite},
-    sync::{mpsc, oneshot},
+    sync::{mpsc, oneshot, watch},
 };
 use arc_swap::ArcSwap;
 use futures_util::{
@@ -91,6 +91,7 @@ pub(crate) struct Pipeline<SinkItem> {
     sender: mpsc::Sender<PipelineMessage<SinkItem>>,
     push_manager: Arc<ArcSwap<PushManager>>,
     is_stream_closed: Arc<AtomicBool>,
+    close_sender: watch::Sender<bool>,
 }
 
 impl<SinkItem> Debug for Pipeline<SinkItem>
@@ -477,24 +478,43 @@ where
     {
         const BUFFER_SIZE: usize = 50;
         let (sender, mut receiver) = mpsc::channel(BUFFER_SIZE);
+        let (close_sender, mut close_receiver) = watch::channel(false);
         let push_manager: Arc<ArcSwap<PushManager>> =
             Arc::new(ArcSwap::new(Arc::new(PushManager::default())));
         let is_stream_closed = Arc::new(AtomicBool::new(false));
+        let is_stream_closed_clone = is_stream_closed.clone();
         let sink = PipelineSink::new::<SinkItem>(
             sink_stream,
             push_manager.clone(),
             disconnect_notifier,
             is_stream_closed.clone(),
         );
-        let f = stream::poll_fn(move |cx| receiver.poll_recv(cx))
-            .map(Ok)
-            .forward(sink)
-            .map(|_| ());
+
+        // Create the driver future that forwards messages from receiver to sink,
+        // but also listens for close signals to terminate early
+        let f = async move {
+            let forward_future = stream::poll_fn(move |cx| receiver.poll_recv(cx))
+                .map(Ok)
+                .forward(sink);
+
+            tokio::select! {
+                _ = forward_future => {
+                    // Normal completion - stream ended
+                }
+                _ = close_receiver.changed() => {
+                    // Close signal received - mark stream as closed and exit
+                    // This will cause the TCP connection to be dropped
+                    is_stream_closed_clone.store(true, Ordering::Relaxed);
+                }
+            }
+        };
+
         (
             Pipeline {
                 sender,
                 push_manager,
                 is_stream_closed,
+                close_sender,
             },
             f,
         )
@@ -564,6 +584,15 @@ where
     /// Checks if the pipeline is closed.
     pub fn is_closed(&self) -> bool {
         self.is_stream_closed.load(Ordering::Relaxed)
+    }
+
+    /// Close the pipeline by sending a close signal to the driver.
+    /// This will cause the driver future to stop and close the underlying TCP connection,
+    /// which will cancel any pending blocking commands (like BLPOP) on the server.
+    pub fn close(&self) {
+        // Send close signal to the driver - ignore errors if receiver is already dropped
+        let _ = self.close_sender.send(true);
+        self.is_stream_closed.store(true, Ordering::Relaxed);
     }
 }
 
@@ -774,6 +803,13 @@ impl MultiplexedConnection {
         self.pipeline.set_push_manager(updated_pm.clone());
         self.push_manager = updated_pm;
     }
+
+    /// Close the connection by signaling the driver to stop.
+    /// This will close the underlying TCP connection, which will cancel any pending
+    /// blocking commands (like BLPOP) on the server.
+    pub fn close(&self) {
+        self.pipeline.close();
+    }
 }
 
 /// A builder for creating `MultiplexedConnection` instances.
@@ -883,6 +919,10 @@ impl ConnectionLike for MultiplexedConnection {
 
     fn is_closed(&self) -> bool {
         self.pipeline.is_closed()
+    }
+
+    fn close(&mut self) {
+        self.pipeline.close();
     }
 
     /// Get the node's availability zone
