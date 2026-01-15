@@ -347,7 +347,7 @@ where
     /// Returns an iterator over the nodes in the `slot_map`, yielding pairs of the node address and its associated shard addresses.
     pub(crate) fn slot_map_nodes(
         &self,
-    ) -> impl Iterator<Item = (Arc<String>, Arc<ShardAddrs>)> + '_ {
+    ) -> impl Iterator<Item = (Arc<String>, (Option<IpAddr>, Arc<ShardAddrs>))> + '_ {
         self.slot_map
             .nodes_map()
             .iter()
@@ -634,7 +634,7 @@ where
 
     /// Find connection by IP address, preferring management connection.
     /// Returns management connection if available, otherwise user connection.
-    /// Returns (dns_address, connection_future)
+    /// Returns (origin_addr, connection_future)
     /// Note: This function performs an O(n) search over the connection map,
     /// where n is the number of nodes.
     pub(crate) fn management_connection_for_ip_address(
@@ -642,9 +642,9 @@ where
         ip_address: IpAddr,
     ) -> Option<(String, Connection)> {
         self.node_for_ip_address(ip_address)
-            .map(|(dns_addr, node)| {
+            .map(|(origin_addr, node)| {
                 (
-                    dns_addr,
+                    origin_addr,
                     node.get_connection(&ConnectionType::PreferManagement),
                 )
             })
@@ -819,6 +819,14 @@ mod tests {
     }
 
     fn create_container_with_ips() -> ConnectionsContainer<usize> {
+        // Create IP mappings for the slot map
+        let mut ip_mappings = HashMap::new();
+        ip_mappings.insert("primary1".to_string(), "192.168.1.1".parse().unwrap());
+        ip_mappings.insert("primary2".to_string(), "192.168.1.2".parse().unwrap());
+        ip_mappings.insert("primary3".to_string(), "192.168.1.3".parse().unwrap());
+        ip_mappings.insert("replica2-1".to_string(), "192.168.1.21".parse().unwrap());
+        // replica3-1 intentionally has no IP
+        ip_mappings.insert("replica3-2".to_string(), "192.168.1.32".parse().unwrap());
         let slot_map = SlotMap::new(
             vec![
                 Slot::new(1, 1000, "primary1".to_owned(), Vec::new()),
@@ -835,8 +843,10 @@ mod tests {
                     vec!["replica3-1".to_owned(), "replica3-2".to_owned()],
                 ),
             ],
+            ip_mappings,
             ReadFromReplicaStrategy::AlwaysFromPrimary,
         );
+
         let connection_map = DashMap::new();
         connection_map.insert(
             "primary1".into(),
@@ -906,6 +916,7 @@ mod tests {
                     ],
                 ),
             ],
+            HashMap::new(),
             ReadFromReplicaStrategy::AlwaysFromPrimary, // this argument shouldn't matter, since we overload the RFR strategy.
         );
         let connection_map = DashMap::new();
@@ -968,6 +979,7 @@ mod tests {
                     vec!["replica3-1".to_owned(), "replica3-2".to_owned()],
                 ),
             ],
+            HashMap::new(),
             ReadFromReplicaStrategy::AlwaysFromPrimary, // this argument shouldn't matter, since we overload the RFR strategy.
         );
         let connection_map = DashMap::new();
@@ -1785,6 +1797,21 @@ mod tests {
 
         let result = container.management_connection_for_ip_address(ip);
 
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn slot_map_node_address_for_ip_returns_correct_address() {
+        let container = create_container_with_ips();
+
+        // Verify slot map IP lookup works
+        let ip: IpAddr = "192.168.1.1".parse().unwrap();
+        let result = container.slot_map.node_address_for_ip(ip);
+        assert_eq!(result, Some(Arc::new("primary1".to_string())));
+
+        // Node without IP in slot map returns None
+        let unknown_ip: IpAddr = "10.0.0.1".parse().unwrap();
+        let result = container.slot_map.node_address_for_ip(unknown_ip);
         assert!(result.is_none());
     }
 }

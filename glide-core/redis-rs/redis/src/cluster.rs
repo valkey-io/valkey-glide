@@ -226,6 +226,7 @@ where
             connections: RefCell::new(HashMap::new()),
             slots: RefCell::new(SlotMap::new(
                 vec![],
+                HashMap::new(),
                 cluster_params.read_from_replicas.clone(),
             )),
             auto_reconnect: RefCell::new(true),
@@ -382,9 +383,15 @@ where
                 ErrorKind::ClientError,
                 "can't parse node address",
             )))?;
-            match parse_and_count_slots(&value, self.cluster_params.tls, addr).map(|slots_data| {
-                SlotMap::new(slots_data.1, self.cluster_params.read_from_replicas.clone())
-            }) {
+            match parse_and_count_slots(&value, self.cluster_params.tls, addr).map(
+                |((_slots_count, slots), address_to_ip_map)| {
+                    SlotMap::new(
+                        slots,
+                        address_to_ip_map,
+                        self.cluster_params.read_from_replicas.clone(),
+                    )
+                },
+            ) {
                 Ok(new_slots) => {
                     result = Ok(new_slots);
                     break;
