@@ -18162,19 +18162,11 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void acl_load(BaseClient client) {
         // Test ACL LOAD - reloads ACL rules from the configured ACL file
-        // This command will fail if no ACL file is configured
-        try {
-            String result = client.aclLoad().get();
-            assertEquals("OK", result);
-        } catch (ExecutionException e) {
-            // If server doesn't have an ACL file configured, it will throw an error
-            assertTrue(e.getCause() instanceof RequestException);
-            String errorMessage = e.getMessage().toLowerCase();
-            assertTrue(
-                    errorMessage.contains("no acl file")
-                            || errorMessage.contains("aclfile")
-                            || errorMessage.contains("not configured"));
-        }
+        // Skip test if no ACL file is configured on the server
+        assumeTrue(isAclFileConfigured(client), "Skipping test: ACL file not configured on server");
+
+        String result = client.aclLoad().get();
+        assertEquals("OK", result);
     }
 
     @SneakyThrows
@@ -18182,18 +18174,33 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void acl_save(BaseClient client) {
         // Test ACL SAVE - saves current ACL rules to the configured ACL file
-        // This command will fail if no ACL file is configured
+        // Skip test if no ACL file is configured on the server
+        assumeTrue(isAclFileConfigured(client), "Skipping test: ACL file not configured on server");
+
+        String result = client.aclSave().get();
+        assertEquals("OK", result);
+    }
+
+    /**
+     * Helper method to check if ACL file is configured on the server. Attempts to call ACL LOAD
+     * and returns true if successful, false if it fails with ACL file not configured error.
+     */
+    @SneakyThrows
+    private boolean isAclFileConfigured(BaseClient client) {
         try {
-            String result = client.aclSave().get();
-            assertEquals("OK", result);
+            client.aclLoad().get();
+            return true;
         } catch (ExecutionException e) {
-            // If server doesn't have an ACL file configured, it will throw an error
-            assertTrue(e.getCause() instanceof RequestException);
-            String errorMessage = e.getMessage().toLowerCase();
-            assertTrue(
-                    errorMessage.contains("no acl file")
-                            || errorMessage.contains("aclfile")
-                            || errorMessage.contains("not configured"));
+            if (e.getCause() instanceof RequestException) {
+                String errorMessage = e.getMessage().toLowerCase();
+                if (errorMessage.contains("no acl file")
+                        || errorMessage.contains("aclfile")
+                        || errorMessage.contains("not configured")) {
+                    return false;
+                }
+            }
+            // If it's a different error, rethrow it
+            throw e;
         }
     }
 }
