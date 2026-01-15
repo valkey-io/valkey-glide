@@ -33,13 +33,6 @@ import org.junit.jupiter.params.provider.MethodSource;
  * <p>These tests verify the behavior of client-side caching across both standalone and cluster
  * modes. The tests cover cache hit/miss metrics, TTL expiration, eviction policies, and various
  * edge cases.
- *
- * <p><strong>Note:</strong> These tests are currently disabled because the native implementation
- * for client-side cache methods is not yet complete. The tests will be enabled once the underlying
- * Rust/FFI implementation is finished.
- *
- * <p>The tests are based on the Python client-side cache tests and provide equivalent coverage for
- * the Java client, ensuring consistent behavior across language bindings.
  */
 @Timeout(35) // seconds
 public class ClientSideCacheTests {
