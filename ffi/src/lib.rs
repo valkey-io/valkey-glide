@@ -756,7 +756,10 @@ fn create_client_internal(
     let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
 
     let client = runtime
-        .block_on(GlideClient::new(ConnectionRequest::from(request), Some(push_tx)))
+        .block_on(GlideClient::new(
+            ConnectionRequest::from(request),
+            Some(push_tx),
+        ))
         .map_err(|err| err.to_string())?;
 
     // Create the client adapter that will be returned and used as conn_ptr
@@ -765,8 +768,8 @@ fn create_client_internal(
         client_type,
     });
     let pubsub_callback_store = Arc::new(std::sync::RwLock::new(pubsub_callback));
-    let client_adapter = Arc::new(ClientAdapter { 
-        runtime, 
+    let client_adapter = Arc::new(ClientAdapter {
+        runtime,
         core,
         pubsub_callback: pubsub_callback_store.clone(),
     });
@@ -824,16 +827,15 @@ pub unsafe extern "C-unwind" fn create_client(
     let request_bytes =
         unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
     let client_type = unsafe { &*client_type };
-    
+
     // Convert callback pointer to Option - 0 means no callback
     let callback_opt = if pubsub_callback as usize == 0 {
         None
     } else {
         Some(pubsub_callback)
     };
-    
-    let response = match create_client_internal(request_bytes, client_type.clone(), callback_opt)
-    {
+
+    let response = match create_client_internal(request_bytes, client_type.clone(), callback_opt) {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
