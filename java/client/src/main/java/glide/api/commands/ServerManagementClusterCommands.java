@@ -659,4 +659,225 @@ public interface ServerManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<Long> dbsize(Route route);
+
+    /**
+     * Returns a list of all ACL categories, or a list of commands within a category.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/acl-cat/">valkey.io</a> for details.
+     * @return An array of ACL categories or commands.
+     * @example
+     *     <pre>{@code
+     * String[] categories = client.aclCat().get();
+     * assert Arrays.asList(categories).contains("string");
+     * }</pre>
+     */
+    CompletableFuture<String[]> aclCat();
+
+    /**
+     * Returns a list of commands within the specified ACL category.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/acl-cat/">valkey.io</a> for details.
+     * @param category The ACL category to list commands for.
+     * @return An array of commands within the specified category.
+     * @example
+     *     <pre>{@code
+     * String[] commands = client.aclCat("string").get();
+     * assert Arrays.asList(commands).contains("get");
+     * }</pre>
+     */
+    CompletableFuture<String[]> aclCat(String category);
+
+    /**
+     * Deletes all specified ACL users and terminates their connections.<br>
+     * The command will be routed to all nodes.
+     *
+     * @see <a href="https://valkey.io/commands/acl-deluser/">valkey.io</a> for details.
+     * @param usernames An array of usernames to delete.
+     * @return The number of users deleted.
+     * @example
+     *     <pre>{@code
+     * Long deletedCount = client.aclDelUser(new String[] {"user1", "user2"}).get();
+     * assert deletedCount == 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> aclDelUser(String[] usernames);
+
+    /**
+     * Simulates the execution of a command by a user without actually executing the command.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/acl-dryrun/">valkey.io</a> for details.
+     * @param username The username to simulate command execution for.
+     * @param command The command to simulate.
+     * @param args The command arguments.
+     * @return <code>"OK"</code> if the user can execute the command, otherwise an error is returned.
+     * @example
+     *     <pre>{@code
+     * String result = client.aclDryRun("user1", "get", new String[] {"key"}).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> aclDryRun(String username, String command, String[] args);
+
+    /**
+     * Generates a random password for ACL users.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/acl-genpass/">valkey.io</a> for details.
+     * @return A randomly generated password string.
+     * @example
+     *     <pre>{@code
+     * String password = client.aclGenPass().get();
+     * assert password.length() == 64; // Default length
+     * }</pre>
+     */
+    CompletableFuture<String> aclGenPass();
+
+    /**
+     * Generates a random password with the specified number of bits for ACL users.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/acl-genpass/">valkey.io</a> for details.
+     * @param bits The number of bits for the password (must be a multiple of 4, between 1 and 4096).
+     * @return A randomly generated password string.
+     * @example
+     *     <pre>{@code
+     * String password = client.aclGenPass(128).get();
+     * assert password.length() == 32; // 128 bits = 32 hex characters
+     * }</pre>
+     */
+    CompletableFuture<String> aclGenPass(int bits);
+
+    /**
+     * Returns all ACL rules for the specified user.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/acl-getuser/">valkey.io</a> for details.
+     * @param username The username to get ACL rules for.
+     * @return An array or map describing the ACL rules for the user, or <code>null</code> if user
+     *     doesn't exist.
+     * @example
+     *     <pre>{@code
+     * Object userInfo = client.aclGetUser("default").get();
+     * assert userInfo != null;
+     * }</pre>
+     */
+    CompletableFuture<Object> aclGetUser(String username);
+
+    /**
+     * Returns a list of all ACL users and their rules in ACL configuration file format.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/acl-list/">valkey.io</a> for details.
+     * @return An array of ACL rules for all users.
+     * @example
+     *     <pre>{@code
+     * String[] aclList = client.aclList().get();
+     * assert aclList.length > 0;
+     * }</pre>
+     */
+    CompletableFuture<String[]> aclList();
+
+    /**
+     * Reloads ACL rules from the configured ACL configuration file.<br>
+     * The command will be routed to all nodes.
+     *
+     * @see <a href="https://valkey.io/commands/acl-load/">valkey.io</a> for details.
+     * @return <code>"OK"</code> on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.aclLoad().get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> aclLoad();
+
+    /**
+     * Returns the ACL security events log.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/acl-log/">valkey.io</a> for details.
+     * @return An array of ACL security events.
+     * @example
+     *     <pre>{@code
+     * Object[] log = client.aclLog().get();
+     * System.out.printf("ACL log has %d entries%n", log.length);
+     * }</pre>
+     */
+    CompletableFuture<Object[]> aclLog();
+
+    /**
+     * Returns the specified number of ACL security events from the log.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/acl-log/">valkey.io</a> for details.
+     * @param count The number of entries to return.
+     * @return An array of ACL security events.
+     * @example
+     *     <pre>{@code
+     * Object[] log = client.aclLog(10).get();
+     * assert log.length <= 10;
+     * }</pre>
+     */
+    CompletableFuture<Object[]> aclLog(int count);
+
+    /**
+     * Saves the current ACL rules to the configured ACL configuration file.<br>
+     * The command will be routed to all nodes.
+     *
+     * @see <a href="https://valkey.io/commands/acl-save/">valkey.io</a> for details.
+     * @return <code>"OK"</code> on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.aclSave().get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> aclSave();
+
+    /**
+     * Creates or modifies an ACL user and its rules.<br>
+     * The command will be routed to all nodes.
+     *
+     * @see <a href="https://valkey.io/commands/acl-setuser/">valkey.io</a> for details.
+     * @param username The username for the ACL user.
+     * @param rules An array of ACL rules to apply to the user.
+     * @return <code>"OK"</code> on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.aclSetUser("user1", new String[] {"on", "+get", "~*"}).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> aclSetUser(String username, String[] rules);
+
+    /**
+     * Returns a list of all ACL usernames.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/acl-users/">valkey.io</a> for details.
+     * @return An array of ACL usernames.
+     * @example
+     *     <pre>{@code
+     * String[] users = client.aclUsers().get();
+     * assert Arrays.asList(users).contains("default");
+     * }</pre>
+     */
+    CompletableFuture<String[]> aclUsers();
+
+    /**
+     * Returns the username of the current connection.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/acl-whoami/">valkey.io</a> for details.
+     * @return The username of the current connection.
+     * @example
+     *     <pre>{@code
+     * String username = client.aclWhoami().get();
+     * assert username.equals("default");
+     * }</pre>
+     */
+    CompletableFuture<String> aclWhoami();
 }
