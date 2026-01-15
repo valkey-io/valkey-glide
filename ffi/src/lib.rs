@@ -783,11 +783,12 @@ fn create_client_internal(
                 || push_msg.kind == redis::PushKind::PMessage
                 || push_msg.kind == redis::PushKind::SMessage)
                 && let Ok(guard) = callback_store.read()
-                    && let Some(callback) = *guard {
-                        unsafe {
-                            process_push_notification(push_msg, callback, client_adapter_ptr);
-                        }
-                    }
+                && let Some(callback) = *guard
+            {
+                unsafe {
+                    process_push_notification(push_msg, callback, client_adapter_ptr);
+                }
+            }
         }
     });
 
