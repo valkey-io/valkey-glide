@@ -33,9 +33,11 @@ pub mod testing {
 use crate::{
     client::GlideConnectionOptions,
     cluster_routing::{Routable, RoutingInfo, ShardUpdateResult},
+    cluster_slotmap::SlotMap,
     cluster_topology::{
-        calculate_topology, SlotRefreshState, DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES,
-        DEFAULT_REFRESH_SLOTS_RETRY_BASE_DURATION_MILLIS, DEFAULT_REFRESH_SLOTS_RETRY_BASE_FACTOR,
+        calculate_topology, SlotRefreshState, TopologyHash,
+        DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES, DEFAULT_REFRESH_SLOTS_RETRY_BASE_DURATION_MILLIS,
+        DEFAULT_REFRESH_SLOTS_RETRY_BASE_FACTOR,
     },
     cmd,
     commands::cluster_scan::{cluster_scan, ClusterScanArgs, ScanStateRC},
@@ -2078,12 +2080,18 @@ where
         let num_of_nodes = inner.conn_lock.read().expect(MUTEX_READ_ERR).len();
         let num_of_nodes_to_query =
             std::cmp::max(num_of_nodes.checked_ilog2().unwrap_or(0) as usize, 1);
-        let (res, failed_connections) = calculate_topology_from_random_nodes(
-            &inner,
-            num_of_nodes_to_query,
-            DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES,
-        )
-        .await;
+        let (res, failed_connections, topology_changed_hint) =
+            calculate_topology_from_random_nodes(
+                &inner,
+                num_of_nodes_to_query,
+                DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES,
+            )
+            .await;
+
+        // Early detection: topology change detected during initial nodes lookup
+        if topology_changed_hint {
+            return true;
+        }
 
         if let Ok((_, found_topology_hash)) = res {
             if inner
@@ -2278,7 +2286,7 @@ where
 
         let mut wlock_conn_container = inner.conn_lock.write().expect(MUTEX_READ_ERR);
         let mut nodes_iter = wlock_conn_container.slot_map_nodes();
-        for (node_addr, shard_addrs_arc) in &mut nodes_iter {
+        for (node_addr, (ip_addr, shard_addrs_arc)) in &mut nodes_iter {
             if node_addr == new_primary {
                 let is_existing_primary = shard_addrs_arc.primary().eq(&new_primary);
                 if is_existing_primary {
@@ -2293,9 +2301,11 @@ where
                     // Remove the replica from its existing shard and treat it as a new node in a new shard.
                     shard_addrs_arc.remove_replica(new_primary.clone())?;
                     drop(nodes_iter);
-                    return wlock_conn_container
-                        .slot_map
-                        .add_new_primary(slot, new_primary);
+                    return wlock_conn_container.slot_map.add_new_primary(
+                        slot,
+                        new_primary,
+                        ip_addr,
+                    );
                 }
             }
         }
@@ -2304,7 +2314,7 @@ where
         // Scenario 5: New Node - The new primary is not present in the current slots map, add it as a primary of a new shard.
         wlock_conn_container
             .slot_map
-            .add_new_primary(slot, new_primary)
+            .add_new_primary(slot, new_primary, None)
     }
 
     async fn execute_on_multiple_nodes<'a>(
@@ -3306,7 +3316,10 @@ where
 async fn get_random_connections_from_initial_nodes<C>(
     inner: &Core<C>,
     num_of_nodes_to_query: usize,
-) -> RedisResult<Vec<(String, Shared<Pin<Box<dyn Future<Output = C> + Send>>>)>>
+) -> RedisResult<(
+    Vec<(String, Shared<Pin<Box<dyn Future<Output = C> + Send>>>)>,
+    bool,
+)>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
@@ -3327,50 +3340,18 @@ where
         resolved_addresses
             .into_iter()
             .choose_multiple(&mut rng, num_of_nodes_to_query)
-            .into_iter()
-            .collect()
     };
 
-    // Try to find existing connections for selected addresses
+    // Find existing connections for selected addresses
     let mut connections = Vec::with_capacity(selected_pairs.len());
-    let mut addresses_without_connection = Vec::new();
 
-    // Partition selected addresses into those with existing connections and those without
-    for (dns_addr, socket_addr) in selected_pairs {
-        match find_management_connection(inner, &dns_addr, socket_addr.map(|addr| addr.ip())) {
+    for (original_addr, socket_addr) in selected_pairs {
+        match find_management_connection(inner, &original_addr, socket_addr.map(|addr| addr.ip())) {
             Some(conn) => connections.push(conn),
-            None => addresses_without_connection.push((dns_addr, socket_addr)),
+            // No existing connection found for this address, therefor, the cluster topology had changed
+            // Since we know for sure that there's a change in the topology, we can return an early indicator and skip further processing
+            None => return Ok((connections, true)),
         }
-    }
-    // Trigger connection refresh for addresses that need connections
-    if !addresses_without_connection.is_empty() {
-        // Use IP addresses for refresh if available, otherwise use original address
-        let addresses_to_refresh: HashSet<String> = addresses_without_connection
-            .iter()
-            .map(|(original_addr, socket_addr)| {
-                socket_addr
-                    .map(|addr| addr.to_string())
-                    .unwrap_or_else(|| original_addr.clone())
-            })
-            .collect(); // TODO: check what we need, dns or ip
-
-        let _ = tokio::time::timeout(
-            inner.get_cluster_param(|p| p.connection_timeout)?,
-            ClusterConnInner::refresh_and_update_connections(
-                inner.clone(),
-                addresses_to_refresh,
-                RefreshConnectionType::AllConnections,
-                true,
-            ),
-        )
-        .await;
-
-        // Try to get connections after refresh
-        connections.extend(addresses_without_connection.into_iter().filter_map(
-            |(original_addr, socket_addr)| {
-                find_management_connection(inner, &original_addr, socket_addr.map(|addr| addr.ip()))
-            },
-        ));
     }
 
     if connections.is_empty() {
@@ -3380,15 +3361,20 @@ where
         )));
     }
 
-    Ok(connections)
+    Ok((connections, false))
 }
 
-/// Finds a management connection for a node.
+/// Finds a management connection for a node using multiple lookup strategies.
 ///
-/// Tries to find an existing connection by the original address first (O(1) lookup).
-/// If not found, falls back to searching by resolved IP address (O(n) lookup).
-/// This fallback is needed because the connection map may be keyed by either
-/// the original address or the resolved IP, depending on how connections were established.
+/// This function handles the common case where the address used to identify a node
+/// (e.g., from initial configuration) may differ from how it's stored in the
+/// connection map (e.g., DNS hostname vs resolved IP).
+///
+/// # Lookup Strategies (in order):
+/// 1. **Direct address lookup** (O(1)) - Exact match in connection map
+/// 2. **IP lookup in connection map** (O(n)) - Search by resolved IP in connection metadata
+/// 3. **Canonical address via slot map** (O(n)) - Find the cluster's canonical address
+///    for this IP from the topology, then lookup by that address
 #[allow(clippy::type_complexity)]
 fn find_management_connection<C>(
     inner: &Core<C>,
@@ -3401,20 +3387,32 @@ where
     let conn_lock = inner.conn_lock.read().expect(MUTEX_READ_ERR);
 
     conn_lock
+        // Strategy 1: Direct lookup by original address
         .management_connection_for_address(original_addr)
+        // Strategy 2: Search by IP in connection map
         .or_else(|| resolved_ip.and_then(|ip| conn_lock.management_connection_for_ip_address(ip)))
+        // Strategy 3: Find canonical address from slot map, then lookup
+        .or_else(|| {
+            resolved_ip.and_then(|ip| {
+                conn_lock
+                    .slot_map
+                    .node_address_for_ip(ip)
+                    .and_then(|canonical_addr| {
+                        conn_lock.management_connection_for_address(&canonical_addr)
+                    })
+            })
+        })
 }
 
+/// Queries random cluster nodes to calculate the current topology.
 async fn calculate_topology_from_random_nodes<C>(
     inner: &Core<C>,
     num_of_nodes_to_query: usize,
     curr_retry: usize,
 ) -> (
-    RedisResult<(
-        crate::cluster_slotmap::SlotMap,
-        crate::cluster_topology::TopologyHash,
-    )>,
-    std::collections::HashSet<String>,
+    RedisResult<(SlotMap, TopologyHash)>,
+    HashSet<String>,
+    bool, // topology_changed_hint
 )
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
@@ -3427,9 +3425,19 @@ where
     let requested_nodes = match refresh_topology_from_initial_nodes {
         true => match get_random_connections_from_initial_nodes(inner, num_of_nodes_to_query).await
         {
-            Ok(connections_futures) => connections_futures,
+            Ok((connections_futures, topology_changed_hint)) => {
+                // Early return if topology change was detected during connection lookup
+                if topology_changed_hint {
+                    return (
+                        Ok((SlotMap::default(), TopologyHash::default())),
+                        HashSet::new(),
+                        true,
+                    );
+                }
+                connections_futures
+            }
             Err(err) => {
-                return (Err(err), HashSet::new());
+                return (Err(err), HashSet::new(), false);
             }
         },
         false => {
@@ -3447,6 +3455,7 @@ where
                         "No available connections to refresh slots from",
                     ))),
                     std::collections::HashSet::new(),
+                    false,
                 );
             }
         }
@@ -3490,6 +3499,7 @@ where
             read_from_replicas,
         ),
         failed_addresses,
+        false,
     )
 }
 
