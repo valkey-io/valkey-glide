@@ -178,23 +178,43 @@ pub(crate) fn parse_and_count_slots(
                         let mut metadata_ip: Option<IpAddr> = None;
                         let mut metadata_hostname: Option<String> = None;
                         if node.len() >= 4 {
-                            if let Value::Array(metadata) = &node[3] {
-                                let mut i = 0;
-                                while i + 1 < metadata.len() {
-                                    if let (Value::BulkString(key), Value::BulkString(value)) =
-                                        (&metadata[i], &metadata[i + 1])
-                                    {
-                                        let key_str = String::from_utf8_lossy(key);
-                                        let value_str = String::from_utf8_lossy(value);
+                            let mut process_kv = |key_bytes: &[u8], value_bytes: &[u8]| {
+                                let key_str = String::from_utf8_lossy(key_bytes);
+                                let value_str = String::from_utf8_lossy(value_bytes);
 
-                                        if key_str == "ip" {
-                                            metadata_ip = value_str.parse::<IpAddr>().ok();
-                                        } else if key_str == "hostname" {
-                                            metadata_hostname = Some(value_str.into_owned());
+                                if key_str == "ip" {
+                                    metadata_ip = value_str.parse::<IpAddr>().ok();
+                                } else if key_str == "hostname" {
+                                    metadata_hostname = Some(value_str.into_owned());
+                                }
+                            };
+
+                            match &node[3] {
+                                // Array format: ["ip", "127.0.0.1", "hostname", "example.com", ...]
+                                Value::Array(metadata) => {
+                                    let mut i = 0;
+                                    while i + 1 < metadata.len() {
+                                        if let (Value::BulkString(key), Value::BulkString(value)) =
+                                            (&metadata[i], &metadata[i + 1])
+                                        {
+                                            process_kv(key, value);
+                                        }
+                                        i += 2;
+                                    }
+                                }
+                                // Map format: {("ip", "127.0.0.1"), ("hostname", "example.com")}
+                                Value::Map(metadata) => {
+                                    for (key, value) in metadata {
+                                        if let (
+                                            Value::BulkString(key_bytes),
+                                            Value::BulkString(value_bytes),
+                                        ) = (key, value)
+                                        {
+                                            process_kv(key_bytes, value_bytes);
                                         }
                                     }
-                                    i += 2;
                                 }
+                                _ => {} // Ignore other formats
                             }
                         }
 
