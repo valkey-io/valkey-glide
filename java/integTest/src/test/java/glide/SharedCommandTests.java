@@ -18182,8 +18182,8 @@ public class SharedCommandTests {
     }
 
     /**
-     * Helper method to check if ACL file is configured on the server. Attempts to call ACL LOAD
-     * and returns true if successful, false if it fails with ACL file not configured error.
+     * Helper method to check if ACL file is configured on the server. Attempts to call ACL LOAD and
+     * returns true if successful, false if it fails with ACL file not configured error.
      */
     @SneakyThrows
     private boolean isAclFileConfigured(BaseClient client) {
