@@ -419,6 +419,7 @@ pub enum ClientType {
 pub struct ClientAdapter {
     runtime: Runtime,
     core: Arc<CommandExecutionCore>,
+    pubsub_callback: Arc<std::sync::RwLock<Option<PubSubCallback>>>,
 }
 
 struct CommandExecutionCore {
@@ -736,7 +737,7 @@ unsafe fn process_push_notification(
 fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
-    pubsub_callback: PubSubCallback,
+    pubsub_callback: Option<PubSubCallback>,
 ) -> Result<*const ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
@@ -751,15 +752,11 @@ fn create_client_internal(
             errors::error_message(&redis_error)
         })?;
 
-    let is_subscriber = request.pubsub_subscriptions.is_some() && pubsub_callback as usize != 0;
+    // Always create push channels to support dynamic pubsub
     let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
-    let tx = match is_subscriber {
-        true => Some(push_tx),
-        false => None,
-    };
 
     let client = runtime
-        .block_on(GlideClient::new(ConnectionRequest::from(request), tx))
+        .block_on(GlideClient::new(ConnectionRequest::from(request), Some(push_tx)))
         .map_err(|err| err.to_string())?;
 
     // Create the client adapter that will be returned and used as conn_ptr
@@ -767,25 +764,32 @@ fn create_client_internal(
         client,
         client_type,
     });
-    let client_adapter = Arc::new(ClientAdapter { runtime, core });
-    // Clone client_adapter before moving it into the async block
+    let pubsub_callback_store = Arc::new(std::sync::RwLock::new(pubsub_callback));
+    let client_adapter = Arc::new(ClientAdapter { 
+        runtime, 
+        core,
+        pubsub_callback: pubsub_callback_store.clone(),
+    });
     let client_adapter_ptr = Arc::as_ptr(&client_adapter).addr();
 
-    // If pubsub_callback is provided (not null), spawn a task to handle push notifications
-    if is_subscriber {
-        client_adapter.runtime.spawn(async move {
-            while let Some(push_msg) = push_rx.recv().await {
-                if push_msg.kind == redis::PushKind::Message
-                    || push_msg.kind == redis::PushKind::PMessage
-                    || push_msg.kind == redis::PushKind::SMessage
-                {
-                    unsafe {
-                        process_push_notification(push_msg, pubsub_callback, client_adapter_ptr);
+    // Always spawn push handler to support dynamic pubsub
+    let callback_store = pubsub_callback_store.clone();
+    client_adapter.runtime.spawn(async move {
+        while let Some(push_msg) = push_rx.recv().await {
+            if push_msg.kind == redis::PushKind::Message
+                || push_msg.kind == redis::PushKind::PMessage
+                || push_msg.kind == redis::PushKind::SMessage
+            {
+                if let Ok(guard) = callback_store.read() {
+                    if let Some(callback) = *guard {
+                        unsafe {
+                            process_push_notification(push_msg, callback, client_adapter_ptr);
+                        }
                     }
                 }
             }
-        });
-    }
+        }
+    });
 
     Ok(Arc::into_raw(client_adapter))
 }
@@ -798,6 +802,7 @@ fn create_client_internal(
 /// `connection_request_len` is the number of bytes in `connection_request_bytes`.
 /// `success_callback` is the callback that will be called when a command succeeds.
 /// `failure_callback` is the callback that will be called when a command fails.
+/// `pubsub_callback` is an optional callback for pubsub messages. Pass 0 (null) to create a client without pubsub support.
 ///
 /// # Safety
 ///
@@ -806,6 +811,7 @@ fn create_client_internal(
 /// * The `conn_ptr` pointer in the returned `ConnectionResponse` must live while the client is open/active and must be explicitly freed by calling [`close_client``].
 /// * The `connection_error_message` pointer in the returned `ConnectionResponse` must live until the returned `ConnectionResponse` pointer is passed to [`free_connection_response``].
 /// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
+/// * If `pubsub_callback` is non-zero, it must be a valid function pointer that lives while the client is open/active.
 // TODO: Consider making this async
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn create_client(
@@ -818,7 +824,15 @@ pub unsafe extern "C-unwind" fn create_client(
     let request_bytes =
         unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
     let client_type = unsafe { &*client_type };
-    let response = match create_client_internal(request_bytes, client_type.clone(), pubsub_callback)
+    
+    // Convert callback pointer to Option - 0 means no callback
+    let callback_opt = if pubsub_callback as usize == 0 {
+        None
+    } else {
+        Some(pubsub_callback)
+    };
+    
+    let response = match create_client_internal(request_bytes, client_type.clone(), callback_opt)
     {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
@@ -3020,4 +3034,66 @@ pub extern "C" fn get_statistics() -> Statistics {
 #[unsafe(no_mangle)]
 pub extern "C" fn get_min_compressed_size() -> c_ulong {
     glide_core::compression::MIN_COMPRESSED_SIZE as c_ulong
+}
+
+/// Register a pubsub callback for an existing client.
+///
+/// # Safety
+/// * `client_adapter_ptr` must be a valid client pointer from create_client
+/// * `pubsub_callback` must be a valid function pointer that lives while the client is active
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn register_pubsub_callback(
+    client_adapter_ptr: *const c_void,
+    pubsub_callback: PubSubCallback,
+) -> *const c_char {
+    if client_adapter_ptr.is_null() {
+        return CString::new("Client adapter pointer is null")
+            .unwrap()
+            .into_raw();
+    }
+
+    let client_adapter = unsafe {
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *const ClientAdapter)
+    };
+
+    match client_adapter.pubsub_callback.write() {
+        Ok(mut guard) => {
+            *guard = Some(pubsub_callback);
+            std::ptr::null()
+        }
+        Err(_) => CString::new("Failed to acquire write lock on pubsub callback")
+            .unwrap()
+            .into_raw(),
+    }
+}
+
+/// Unregister pubsub callback for a client.
+///
+/// # Safety
+/// * `client_adapter_ptr` must be a valid client pointer from create_client
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn unregister_pubsub_callback(
+    client_adapter_ptr: *const c_void,
+) -> *const c_char {
+    if client_adapter_ptr.is_null() {
+        return CString::new("Client adapter pointer is null")
+            .unwrap()
+            .into_raw();
+    }
+
+    let client_adapter = unsafe {
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *const ClientAdapter)
+    };
+
+    match client_adapter.pubsub_callback.write() {
+        Ok(mut guard) => {
+            *guard = None;
+            std::ptr::null()
+        }
+        Err(_) => CString::new("Failed to acquire write lock on pubsub callback")
+            .unwrap()
+            .into_raw(),
+    }
 }
