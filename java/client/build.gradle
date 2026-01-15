@@ -7,6 +7,7 @@ plugins {
     id 'io.freefair.lombok' version '8.6'
     id 'com.github.spotbugs' version '6.4.2'
     id 'com.google.osdetector' version '1.7.3'
+    id 'com.gradleup.shadow' version '9.1.0'
 }
 
 repositories {
@@ -23,14 +24,15 @@ tasks.withType(Javadoc) {
     options.docEncoding = 'UTF-8'
 }
 
+
+configurations {
+    testImplementation { extendsFrom shadow }
+}
+
 dependencies {
-    implementation('com.google.protobuf:protobuf-java') {
-        version {
-            require '[4.29.1,5.0)'
-            prefer '4.29.1'
-        }
-    }
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    implementation group: 'com.google.protobuf', name:'protobuf-java', version: '4.29.1'
+
+    shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
 
     compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.6'
 
@@ -166,7 +168,7 @@ tasks.register('copyNativeLib', Copy) {
 }
 
 delombok.dependsOn('compileJava')
-jar.dependsOn('copyNativeLib')
+shadowJar.dependsOn('copyNativeLib')
 javadoc.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRust')
 compileTestJava.dependsOn('copyNativeLib')
@@ -199,7 +201,7 @@ tasks.register('sourcesJar', Jar) {
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            from components.java
+            from components.shadow
             artifact tasks.named('javadocJar')
             artifact tasks.named('sourcesJar')
             groupId = 'io.valkey'
@@ -238,6 +240,10 @@ publishing {
 
 java {
     modularity.inferModulePath = true
+}
+
+tasks.withType(GenerateModuleMetadata) {
+    dependsOn shadowJar
 }
 
 tasks.withType(Sign) {
@@ -280,6 +286,32 @@ jar {
     } else {
         archiveClassifier = osdetector.classifier
     }
+}
+
+shadowJar {
+    // Relocate protobuf to avoid version conflicts
+    relocate 'com.google.protobuf', 'glide.com.google.protobuf'
+
+    // Keep the same classifier as regular jar
+    if (
+        (project.hasProperty('target') && project.target.contains("musl")) ||
+        (osdetector.os == 'linux' && osdetector.release.id == 'alpine')
+        ) {
+        archiveClassifier = "linux_musl-${osdetector.arch}"
+    } else {
+        archiveClassifier = osdetector.classifier
+    }
+
+    // Important configurations from original shadow setup
+    excludes.remove("module-info.class")
+    mergeServiceFiles()
+    minimize()
+}
+
+// Make shadowJar the default artifact
+jar {
+    enabled = false
+    dependsOn shadowJar
 }
 
 sourcesJar {
