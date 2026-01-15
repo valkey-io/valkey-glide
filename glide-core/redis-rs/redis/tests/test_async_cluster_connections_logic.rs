@@ -616,10 +616,7 @@ mod test_get_host_and_port_from_addr {
             get_host_and_port_from_addr("2001:db8:85a3:8d3:1319:8a2e:370:7348:6379"),
             Some(("2001:db8:85a3:8d3:1319:8a2e:370:7348", 6379))
         );
-        assert_eq!(
-            get_host_and_port_from_addr("::1:6379"),
-            Some(("::1", 6379))
-        );
+        assert_eq!(get_host_and_port_from_addr("::1:6379"), Some(("::1", 6379)));
     }
 
     #[test]
@@ -633,7 +630,10 @@ mod test_get_host_and_port_from_addr {
         // Port out of range
         assert_eq!(get_host_and_port_from_addr("127.0.0.1:99999"), None);
         // Invalid IPv6 address
-        assert_eq!(get_host_and_port_from_addr("[2001:db8:85a3:8d3:1319]:6379"), None);
+        assert_eq!(
+            get_host_and_port_from_addr("[2001:db8:85a3:8d3:1319]:6379"),
+            None
+        );
     }
 }
 

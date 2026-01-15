@@ -487,7 +487,6 @@ where
 /// [addr] should be in one of the following formats:
 /// - IPv4/hostname: "<host>:<port>" (e.g., "127.0.0.1:6379")
 /// - IPv6 bracketed: "[<ipv6>]:<port>" (e.g., "[2001:db8::1]:6379")
-/// - IPv6 unbracketed with port: "<ipv6>:<port>" - last segment treated as port (e.g., "2001:db8::1:6379" → host "2001:db8::1", port 6379)
 pub fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
     let (host, port_str) = addr.rsplit_once(':')?;
     let port = port_str.parse::<u16>().ok()?;
