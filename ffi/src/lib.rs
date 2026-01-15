@@ -779,18 +779,15 @@ fn create_client_internal(
     let callback_store = pubsub_callback_store.clone();
     client_adapter.runtime.spawn(async move {
         while let Some(push_msg) = push_rx.recv().await {
-            if push_msg.kind == redis::PushKind::Message
+            if (push_msg.kind == redis::PushKind::Message
                 || push_msg.kind == redis::PushKind::PMessage
-                || push_msg.kind == redis::PushKind::SMessage
-            {
-                if let Ok(guard) = callback_store.read() {
-                    if let Some(callback) = *guard {
+                || push_msg.kind == redis::PushKind::SMessage)
+                && let Ok(guard) = callback_store.read()
+                    && let Some(callback) = *guard {
                         unsafe {
                             process_push_notification(push_msg, callback, client_adapter_ptr);
                         }
                     }
-                }
-            }
         }
     });
 
