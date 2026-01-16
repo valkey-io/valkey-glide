@@ -6143,6 +6143,8 @@ public abstract class BaseClient
                         .add(migrateOptions.toArgs())
                         .toArray(),
                 this::handleStringResponse);
+    }
+
     public CompletableFuture<String[]> aclCat() {
         return commandManager.submitNewCommand(
                 AclCat,

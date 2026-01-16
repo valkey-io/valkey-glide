@@ -17894,6 +17894,11 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new String[] {key1, key2, key3}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void acl_cat_without_category(BaseClient client) {
         // Test ACL CAT without category - should return all categories
         String[] categories = client.aclCat().get();
@@ -17935,6 +17940,11 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new GlideString[] {key1, key2, key3}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void acl_cat_with_category(BaseClient client) {
         // Test ACL CAT with specific category - should return commands in that category
         String[] stringCommands = client.aclCat("string").get();
@@ -17978,6 +17988,12 @@ public class SharedCommandTests {
             String[] keys =
                     ((GlideClient) client).keys("non_existent_pattern_" + UUID.randomUUID() + "*").get();
             assertEquals(0, keys.length);
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void acl_setuser_and_deluser(BaseClient client) {
         String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
 
@@ -18035,6 +18051,11 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void acl_deluser_multiple_users(BaseClient client) {
         String username1 = "testuser1_" + UUID.randomUUID().toString().replace("-", "");
         String username2 = "testuser2_" + UUID.randomUUID().toString().replace("-", "");
@@ -18088,6 +18109,11 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void acl_getuser(BaseClient client) {
         String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
 
@@ -18133,6 +18159,11 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void acl_list(BaseClient client) {
         // Test ACL LIST - should return ACL rules for all users
         String[] aclList = client.aclList().get();
@@ -18179,6 +18210,11 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void acl_users(BaseClient client) {
         // Test ACL USERS - should return list of usernames
         String[] users = client.aclUsers().get();
@@ -18272,6 +18308,11 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new GlideString[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void acl_genpass_with_bits(BaseClient client) {
         // Test ACL GENPASS with 128 bits - should return 32-character password
         String password = client.aclGenPass(128).get();
@@ -18375,6 +18416,11 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void acl_load(BaseClient client) {
         // Test ACL LOAD - reloads ACL rules from the configured ACL file
         // Skip test if no ACL file is configured on the server

@@ -691,6 +691,8 @@ public interface ServerManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<Long[]> waitaof(long numlocal, long numreplicas, long timeout, Route route);
+
+    /**
      * Returns a list of all ACL categories, or a list of commands within a category.<br>
      * The command will be routed to a random node.
      *
