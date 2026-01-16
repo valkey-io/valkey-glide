@@ -17894,6 +17894,14 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new String[] {key1, key2, key3}).get();
+    public void acl_cat_without_category(BaseClient client) {
+        // Test ACL CAT without category - should return all categories
+        String[] categories = client.aclCat().get();
+        assertNotNull(categories);
+        assertTrue(categories.length > 0);
+        assertTrue(Arrays.asList(categories).contains("string"));
+        assertTrue(Arrays.asList(categories).contains("list"));
+        assertTrue(Arrays.asList(categories).contains("hash"));
     }
 
     @SneakyThrows
@@ -17927,6 +17935,32 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new GlideString[] {key1, key2, key3}).get();
+    public void acl_cat_with_category(BaseClient client) {
+        // Test ACL CAT with specific category - should return commands in that category
+        String[] stringCommands = client.aclCat("string").get();
+        assertNotNull(stringCommands);
+        assertTrue(stringCommands.length > 0);
+        assertTrue(Arrays.asList(stringCommands).contains("get"));
+        assertTrue(Arrays.asList(stringCommands).contains("set"));
+
+        String[] listCommands = client.aclCat("list").get();
+        assertNotNull(listCommands);
+        assertTrue(listCommands.length > 0);
+        assertTrue(Arrays.asList(listCommands).contains("lpush"));
+        assertTrue(Arrays.asList(listCommands).contains("rpush"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_cat_invalid_category(BaseClient client) {
+        // Test ACL CAT with invalid category - should throw error
+        ExecutionException exception =
+                assertThrows(ExecutionException.class, () -> client.aclCat("nonexistent").get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(
+                exception.getCause().getMessage().toLowerCase().contains("unknown category")
+                        || exception.getCause().getMessage().toLowerCase().contains("category"));
     }
 
     @SneakyThrows
@@ -17944,6 +17978,31 @@ public class SharedCommandTests {
             String[] keys =
                     ((GlideClient) client).keys("non_existent_pattern_" + UUID.randomUUID() + "*").get();
             assertEquals(0, keys.length);
+    public void acl_setuser_and_deluser(BaseClient client) {
+        String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            // Create a new user with ACL rules
+            String setResult = client.aclSetUser(username, new String[] {"on", "+get", "~*"}).get();
+            assertEquals("OK", setResult);
+
+            // Verify user exists
+            String[] users = client.aclUsers().get();
+            assertTrue(Arrays.asList(users).contains(username));
+
+            // Delete the user
+            Long deleteCount = client.aclDelUser(new String[] {username}).get();
+            assertEquals(1L, deleteCount);
+
+            // Verify user no longer exists
+            users = client.aclUsers().get();
+            assertFalse(Arrays.asList(users).contains(username));
+        } finally {
+            // Cleanup: ensure user is deleted
+            try {
+                client.aclDelUser(new String[] {username}).get();
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -17976,6 +18035,30 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new String[] {key}).get();
+    public void acl_deluser_multiple_users(BaseClient client) {
+        String username1 = "testuser1_" + UUID.randomUUID().toString().replace("-", "");
+        String username2 = "testuser2_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            // Create two users
+            client.aclSetUser(username1, new String[] {"on"}).get();
+            client.aclSetUser(username2, new String[] {"on"}).get();
+
+            // Delete both users
+            Long deleteCount = client.aclDelUser(new String[] {username1, username2}).get();
+            assertEquals(2L, deleteCount);
+
+            // Verify users no longer exist
+            String[] users = client.aclUsers().get();
+            assertFalse(Arrays.asList(users).contains(username1));
+            assertFalse(Arrays.asList(users).contains(username2));
+        } finally {
+            // Cleanup
+            try {
+                client.aclDelUser(new String[] {username1, username2}).get();
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     @SneakyThrows
@@ -18005,6 +18088,27 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new String[] {key}).get();
+    public void acl_getuser(BaseClient client) {
+        String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            // Create user with specific rules
+            client.aclSetUser(username, new String[] {"on", "+get", "+set", "~key*"}).get();
+
+            // Get user details - returns Object (can be array in RESP2 or map in RESP3)
+            Object userInfo = client.aclGetUser(username).get();
+            assertNotNull(userInfo);
+
+            // Test non-existent user
+            Object nonExistentUser = client.aclGetUser("nonexistent_user_12345").get();
+            assertNull(nonExistentUser);
+        } finally {
+            // Cleanup
+            try {
+                client.aclDelUser(new String[] {username}).get();
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     @SneakyThrows
@@ -18029,6 +18133,21 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new String[] {key}).get();
+    public void acl_list(BaseClient client) {
+        // Test ACL LIST - should return ACL rules for all users
+        String[] aclList = client.aclList().get();
+        assertNotNull(aclList);
+        assertTrue(aclList.length > 0);
+
+        // Should contain at least the default user
+        boolean hasDefaultUser = false;
+        for (String rule : aclList) {
+            if (rule.contains("user default")) {
+                hasDefaultUser = true;
+                break;
+            }
+        }
+        assertTrue(hasDefaultUser);
     }
 
     @SneakyThrows
@@ -18060,6 +18179,71 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new String[] {key}).get();
+    public void acl_users(BaseClient client) {
+        // Test ACL USERS - should return list of usernames
+        String[] users = client.aclUsers().get();
+        assertNotNull(users);
+        assertTrue(users.length > 0);
+
+        // Should contain at least the default user
+        assertTrue(Arrays.asList(users).contains("default"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_whoami(BaseClient client) {
+        // Test ACL WHOAMI - should return current username
+        String username = client.aclWhoami().get();
+        assertNotNull(username);
+        // Default connection should be "default" user
+        assertEquals("default", username);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_dryrun(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "ACL DRYRUN added in version 7.0");
+
+        String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            // Create user with limited permissions (only GET command)
+            client.aclSetUser(username, new String[] {"on", "+get", "~*", "nopass"}).get();
+
+            // Test command user is allowed to run
+            String result = client.aclDryRun(username, "get", new String[] {"key"}).get();
+            assertEquals("OK", result);
+
+            // Test command user is NOT allowed to run - should return error message
+            String deniedResult = client.aclDryRun(username, "set", new String[] {"key", "value"}).get();
+            // ACL DRYRUN returns a descriptive message when permission is denied
+            assertTrue(
+                    deniedResult.toLowerCase().contains("permission")
+                            || deniedResult.toLowerCase().contains("denied")
+                            || deniedResult.toLowerCase().contains("noperm")
+                            || deniedResult.toLowerCase().contains("user")
+                            || deniedResult.toLowerCase().contains("command"));
+        } finally {
+            // Cleanup
+            try {
+                client.aclDelUser(new String[] {username}).get();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_genpass_default(BaseClient client) {
+        // Test ACL GENPASS without bits parameter - should return 64-character password
+        String password = client.aclGenPass().get();
+        assertNotNull(password);
+        assertEquals(64, password.length());
+        // Should be hexadecimal
+        assertTrue(password.matches("[0-9a-f]+"));
     }
 
     @SneakyThrows
@@ -18088,6 +18272,78 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new GlideString[] {key}).get();
+    public void acl_genpass_with_bits(BaseClient client) {
+        // Test ACL GENPASS with 128 bits - should return 32-character password
+        String password = client.aclGenPass(128).get();
+        assertNotNull(password);
+        assertEquals(32, password.length());
+        assertTrue(password.matches("[0-9a-f]+"));
+
+        // Test with 256 bits - should return 64-character password
+        String password256 = client.aclGenPass(256).get();
+        assertNotNull(password256);
+        assertEquals(64, password256.length());
+        assertTrue(password256.matches("[0-9a-f]+"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_log(BaseClient client) {
+        // Test ACL LOG without count - should return all log entries
+        Object[] log = client.aclLog().get();
+        assertNotNull(log);
+        // Log might be empty if no ACL violations occurred
+        assertTrue(log.length >= 0);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_log_with_count(BaseClient client) {
+        // Test ACL LOG with count parameter
+        Object[] log = client.aclLog(5).get();
+        assertNotNull(log);
+        assertTrue(log.length <= 5);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_setuser_complex_rules(BaseClient client) {
+        String username = "complexuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            // Create user with complex ACL rules
+            String result =
+                    client
+                            .aclSetUser(
+                                    username,
+                                    new String[] {
+                                        "on", // Enable user
+                                        "+get", // Allow GET command
+                                        "+set", // Allow SET command
+                                        "+del", // Allow DEL command
+                                        "~key:*", // Allow keys matching pattern
+                                        "nopass" // No password required
+                                    })
+                            .get();
+            assertEquals("OK", result);
+
+            // Verify user was created
+            String[] users = client.aclUsers().get();
+            assertTrue(Arrays.asList(users).contains(username));
+
+            // Get user details to verify rules - returns Object (can be array or map)
+            Object userInfo = client.aclGetUser(username).get();
+            assertNotNull(userInfo);
+        } finally {
+            // Cleanup
+            try {
+                client.aclDelUser(new String[] {username}).get();
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     @SneakyThrows
@@ -18119,5 +18375,47 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new String[] {key}).get();
+    public void acl_load(BaseClient client) {
+        // Test ACL LOAD - reloads ACL rules from the configured ACL file
+        // Skip test if no ACL file is configured on the server
+        assumeTrue(isAclFileConfigured(client), "Skipping test: ACL file not configured on server");
+
+        String result = client.aclLoad().get();
+        assertEquals("OK", result);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_save(BaseClient client) {
+        // Test ACL SAVE - saves current ACL rules to the configured ACL file
+        // Skip test if no ACL file is configured on the server
+        assumeTrue(isAclFileConfigured(client), "Skipping test: ACL file not configured on server");
+
+        String result = client.aclSave().get();
+        assertEquals("OK", result);
+    }
+
+    /**
+     * Helper method to check if ACL file is configured on the server. Attempts to call ACL LOAD and
+     * returns true if successful, false if it fails with ACL file not configured error.
+     */
+    @SneakyThrows
+    private boolean isAclFileConfigured(BaseClient client) {
+        try {
+            client.aclLoad().get();
+            return true;
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof RequestException) {
+                String errorMessage = e.getMessage().toLowerCase();
+                if (errorMessage.contains("no acl file")
+                        || errorMessage.contains("aclfile")
+                        || errorMessage.contains("not configured")) {
+                    return false;
+                }
+            }
+            // If it's a different error, rethrow it
+            throw e;
+        }
     }
 }

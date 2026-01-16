@@ -1,6 +1,18 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static command_request.CommandRequestOuterClass.RequestType.AclCat;
+import static command_request.CommandRequestOuterClass.RequestType.AclDelUser;
+import static command_request.CommandRequestOuterClass.RequestType.AclDryRun;
+import static command_request.CommandRequestOuterClass.RequestType.AclGenPass;
+import static command_request.CommandRequestOuterClass.RequestType.AclGetUser;
+import static command_request.CommandRequestOuterClass.RequestType.AclList;
+import static command_request.CommandRequestOuterClass.RequestType.AclLoad;
+import static command_request.CommandRequestOuterClass.RequestType.AclLog;
+import static command_request.CommandRequestOuterClass.RequestType.AclSave;
+import static command_request.CommandRequestOuterClass.RequestType.AclSetUser;
+import static command_request.CommandRequestOuterClass.RequestType.AclUsers;
+import static command_request.CommandRequestOuterClass.RequestType.AclWhoami;
 import static command_request.CommandRequestOuterClass.RequestType.Append;
 import static command_request.CommandRequestOuterClass.RequestType.BLMPop;
 import static command_request.CommandRequestOuterClass.RequestType.BLMove;
@@ -6131,6 +6143,83 @@ public abstract class BaseClient
                         .add(migrateOptions.toArgs())
                         .toArray(),
                 this::handleStringResponse);
+    public CompletableFuture<String[]> aclCat() {
+        return commandManager.submitNewCommand(
+                AclCat,
+                EMPTY_STRING_ARRAY,
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    public CompletableFuture<String[]> aclCat(String category) {
+        return commandManager.submitNewCommand(
+                AclCat,
+                new String[] {category},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    public CompletableFuture<Long> aclDelUser(String[] usernames) {
+        return commandManager.submitNewCommand(AclDelUser, usernames, this::handleLongResponse);
+    }
+
+    public CompletableFuture<String> aclDryRun(String username, String command, String[] args) {
+        String[] arguments = concatenateArrays(new String[] {username, command}, args);
+        return commandManager.submitNewCommand(AclDryRun, arguments, this::handleStringResponse);
+    }
+
+    public CompletableFuture<String> aclGenPass() {
+        return commandManager.submitNewCommand(
+                AclGenPass, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    public CompletableFuture<String> aclGenPass(int bits) {
+        return commandManager.submitNewCommand(
+                AclGenPass, new String[] {String.valueOf(bits)}, this::handleStringResponse);
+    }
+
+    public CompletableFuture<Object> aclGetUser(String username) {
+        return commandManager.submitNewCommand(
+                AclGetUser, new String[] {username}, this::handleObjectOrNullResponse);
+    }
+
+    public CompletableFuture<String[]> aclList() {
+        return commandManager.submitNewCommand(
+                AclList,
+                EMPTY_STRING_ARRAY,
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    public CompletableFuture<String> aclLoad() {
+        return commandManager.submitNewCommand(AclLoad, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    public CompletableFuture<Object[]> aclLog() {
+        return commandManager.submitNewCommand(AclLog, EMPTY_STRING_ARRAY, this::handleArrayResponse);
+    }
+
+    public CompletableFuture<Object[]> aclLog(int count) {
+        return commandManager.submitNewCommand(
+                AclLog, new String[] {String.valueOf(count)}, this::handleArrayResponse);
+    }
+
+    public CompletableFuture<String> aclSave() {
+        return commandManager.submitNewCommand(AclSave, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    public CompletableFuture<String> aclSetUser(String username, String[] rules) {
+        String[] arguments = concatenateArrays(new String[] {username}, rules);
+        return commandManager.submitNewCommand(AclSetUser, arguments, this::handleStringResponse);
+    }
+
+    public CompletableFuture<String[]> aclUsers() {
+        return commandManager.submitNewCommand(
+                AclUsers,
+                EMPTY_STRING_ARRAY,
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    public CompletableFuture<String> aclWhoami() {
+        return commandManager.submitNewCommand(
+                AclWhoami, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     /**
