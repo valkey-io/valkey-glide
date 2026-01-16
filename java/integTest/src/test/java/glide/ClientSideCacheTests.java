@@ -346,27 +346,27 @@ public class ClientSideCacheTests {
         try {
             // Use larger values to force eviction
             String value = "x".repeat(250); // ~250 bytes
+            String randomSuffix = getRandomString(5);
 
-            // Set and cache 3 keys
-            for (int i = 1; i <= 3; i++) {
-                String key = "lru_key" + i + "_" + getRandomString(5);
-                assertEquals(OK, lruClient.set(key, value).get());
-                assertEquals(value, lruClient.get(key).get());
+            // Set and cache 3 keys - store key names for later reuse
+            String[] keys = new String[5];
+            for (int i = 0; i < 3; i++) {
+                keys[i] = "lru_key" + (i + 1) + "_" + randomSuffix;
+                assertEquals(OK, lruClient.set(keys[i], value).get());
+                assertEquals(value, lruClient.get(keys[i]).get());
             }
 
             // Cache should have 3 entries now
             assertEquals(3L, lruClient.getCacheEntryCount().get(), "Expected 3 entries in cache");
 
-            // Access key1 to make it recently used
-            String key1 = "lru_key1_" + getRandomString(5);
-            assertEquals(OK, lruClient.set(key1, value).get());
-            assertEquals(value, lruClient.get(key1).get());
+            // Access key1 again to make it recently used (this creates a cache hit)
+            assertEquals(value, lruClient.get(keys[0]).get());
 
             // Add 2 more keys - should evict some entries due to memory limit
-            for (int i = 4; i <= 5; i++) {
-                String key = "lru_key" + i + "_" + getRandomString(5);
-                assertEquals(OK, lruClient.set(key, value).get());
-                assertEquals(value, lruClient.get(key).get());
+            for (int i = 3; i < 5; i++) {
+                keys[i] = "lru_key" + (i + 1) + "_" + randomSuffix;
+                assertEquals(OK, lruClient.set(keys[i], value).get());
+                assertEquals(value, lruClient.get(keys[i]).get());
             }
 
             // Verify evictions occurred
@@ -374,6 +374,7 @@ public class ClientSideCacheTests {
             assertTrue(evictions >= 1, "Expected at least 1 eviction");
 
             // Verify cache is working (hit rate > 0)
+            // We had 1 cache hit (accessing keys[0] again) out of 6 total GETs
             Double hitRate = lruClient.getCacheHitRate().get();
             assertTrue(hitRate > 0, "Cache should have some hits");
         } finally {

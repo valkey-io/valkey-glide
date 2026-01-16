@@ -32,7 +32,8 @@ import lombok.experimental.SuperBuilder;
  */
 @SuperBuilder
 @Getter
-public class GlideClusterClientConfiguration extends BaseClientConfiguration {
+public class GlideClusterClientConfiguration
+        extends BaseClientConfiguration<GlideClusterClientConfiguration> {
 
     /** Subscription configuration for the current client. */
     private final ClusterSubscriptionConfiguration subscriptionConfiguration;
@@ -41,4 +42,9 @@ public class GlideClusterClientConfiguration extends BaseClientConfiguration {
     @Builder.Default
     private final AdvancedGlideClusterClientConfiguration advancedConfiguration =
             AdvancedGlideClusterClientConfiguration.builder().build();
+
+    @Override
+    public AdvancedGlideClusterClientConfiguration getAdvancedConfiguration() {
+        return advancedConfiguration;
+    }
 }

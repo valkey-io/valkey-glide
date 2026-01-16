@@ -1,7 +1,10 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
-/** Represents the eviction policy for client-side caching. */
+/**
+ * Represents the eviction policy for client-side caching. Note: Numeric values must match the
+ * protobuf EvictionPolicy enum in connection_request.proto
+ */
 public enum EvictionPolicy {
     /** Least Recently Used - evicts the least recently accessed entries first. */
     LRU(0),

@@ -428,7 +428,7 @@ public abstract class BaseClient
      * @return a Future to connect and return a client.
      */
     protected static <T extends BaseClient> CompletableFuture<T> createClient(
-            @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
+            @NonNull BaseClientConfiguration<?> config, Function<ClientBuilder, T> constructor) {
         // Validate protocol compatibility for PubSub subscriptions
         if (config.getSubscriptionConfiguration() != null
                 && config.getProtocol() == glide.api.models.configuration.ProtocolVersion.RESP2) {
@@ -483,7 +483,7 @@ public abstract class BaseClient
     }
 
     /** Build MessageHandler for native client */
-    protected static MessageHandler buildMessageHandler(BaseClientConfiguration config) {
+    protected static MessageHandler buildMessageHandler(BaseClientConfiguration<?> config) {
         // TODO: Extract callback and context from config
         return new MessageHandler(
                 config.getSubscriptionConfiguration() != null

@@ -14,13 +14,15 @@ import lombok.experimental.SuperBuilder;
 /**
  * Configuration settings class for creating a client. Shared settings for standalone and cluster
  * clients.
+ *
+ * @param <Derived> The derived configuration type (CRTP pattern)
  */
 @Getter
 @SuppressFBWarnings(
         value = "CT_CONSTRUCTOR_THROW",
         justification = "Lombok-generated builder validates inputs and throws before object escapes")
 @SuperBuilder
-public abstract class BaseClientConfiguration {
+public abstract class BaseClientConfiguration<Derived extends BaseClientConfiguration<Derived>> {
     /**
      * DNS Addresses and ports of known nodes in the cluster. If the server is in cluster mode the
      * list can be partial, as the client will attempt to map out the cluster and find all nodes. If
@@ -135,4 +137,21 @@ public abstract class BaseClientConfiguration {
     public List<NodeAddress> getAddresses() {
         return List.copyOf(addresses);
     }
+
+    /**
+     * Returns this configuration instance cast to its derived type.
+     *
+     * @return This instance as the derived type
+     */
+    @SuppressWarnings("unchecked")
+    protected Derived self() {
+        return (Derived) this;
+    }
+
+    /**
+     * Returns the advanced configuration for this client.
+     *
+     * @return The advanced configuration, or null if not set
+     */
+    public abstract AdvancedBaseClientConfiguration getAdvancedConfiguration();
 }

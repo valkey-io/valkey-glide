@@ -6,7 +6,6 @@ import static connection_request.ConnectionRequestOuterClass.*;
 import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
-import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
@@ -42,7 +41,7 @@ public class ConnectionManager {
      * @param configuration Connection Configuration
      * @return CompletableFuture that completes when connection is established
      */
-    public CompletableFuture<Void> connectToValkey(BaseClientConfiguration configuration) {
+    public CompletableFuture<Void> connectToValkey(BaseClientConfiguration<?> configuration) {
         return CompletableFuture.supplyAsync(
                 () -> {
                     try {
@@ -344,16 +343,16 @@ public class ConnectionManager {
                         }
 
                         // Set TCP_NODELAY option (only if explicitly configured)
-                        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+                        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
                         if (advanced != null && advanced.getTcpNoDelay() != null) {
                             requestBuilder.setTcpNodelay(advanced.getTcpNoDelay());
                         }
 
                         // Set client-side cache configuration if provided
-                        glide.api.models.ClientSideCache clientSideCache =
-                                extractClientSideCache(configuration);
+                        glide.api.models.ClientSideCache clientSideCache = configuration.getClientSideCache();
                         if (clientSideCache != null) {
-                            ClientSideCache.Builder cacheBuilder = ClientSideCache.newBuilder();
+                            ClientSideCache.Builder cacheBuilder =
+                                    connection_request.ConnectionRequestOuterClass.ClientSideCache.newBuilder();
 
                             // Set required fields
                             cacheBuilder.setCacheId(clientSideCache.getCacheId());
@@ -503,16 +502,16 @@ public class ConnectionManager {
         return GlideNativeBridge.getClientInfo(nativeClientHandle);
     }
 
-    private static int resolveConnectionTimeout(BaseClientConfiguration configuration) {
-        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+    private static int resolveConnectionTimeout(BaseClientConfiguration<?> configuration) {
+        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
         if (advanced != null && advanced.getConnectionTimeout() != null) {
             return advanced.getConnectionTimeout();
         }
         return (int) GlideNativeBridge.getGlideCoreDefaultConnectionTimeoutMs();
     }
 
-    private static boolean resolveInsecureTls(BaseClientConfiguration configuration) {
-        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+    private static boolean resolveInsecureTls(BaseClientConfiguration<?> configuration) {
+        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
         if (advanced == null) {
             return false;
         }
@@ -527,8 +526,8 @@ public class ConnectionManager {
         return false;
     }
 
-    private static byte[] extractRootCertificates(BaseClientConfiguration configuration) {
-        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+    private static byte[] extractRootCertificates(BaseClientConfiguration<?> configuration) {
+        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
         if (advanced == null) {
             return null;
         }
@@ -537,27 +536,5 @@ public class ConnectionManager {
             return null;
         }
         return tlsConfig.getRootCertificates();
-    }
-
-    private static AdvancedBaseClientConfiguration extractAdvancedConfiguration(
-            BaseClientConfiguration configuration) {
-        if (configuration instanceof GlideClientConfiguration) {
-            return ((GlideClientConfiguration) configuration).getAdvancedConfiguration();
-        }
-        if (configuration instanceof GlideClusterClientConfiguration) {
-            return ((GlideClusterClientConfiguration) configuration).getAdvancedConfiguration();
-        }
-        return null;
-    }
-
-    private static glide.api.models.ClientSideCache extractClientSideCache(
-            BaseClientConfiguration configuration) {
-        if (configuration instanceof GlideClientConfiguration) {
-            return ((GlideClientConfiguration) configuration).getClientSideCache();
-        }
-        if (configuration instanceof GlideClusterClientConfiguration) {
-            return ((GlideClusterClientConfiguration) configuration).getClientSideCache();
-        }
-        return null;
     }
 }
