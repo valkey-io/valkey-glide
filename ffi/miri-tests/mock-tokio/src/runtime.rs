@@ -18,17 +18,13 @@ impl Runtime {
         }
     }
 
-    pub fn spawn<F>(&self, future: F) -> JoinHandle<F::Output> 
+    pub fn spawn<F>(&self, _future: F) -> JoinHandle<F::Output> 
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let waker = std::task::Waker::noop();
-        let context = &mut Context::from_waker(&waker);
-        match std::pin::pin!(future).poll(context) {
-            Poll::Ready(result) => result,
-            _ => panic!("No result found")
-        };
+        // Don't poll the future - just return a handle
+        // This allows long-running tasks like pubsub listeners to be spawned
         JoinHandle {
             _p: std::marker::PhantomData::<F::Output>
         }
