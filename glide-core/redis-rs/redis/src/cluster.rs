@@ -631,6 +631,13 @@ where
                     .collect::<RedisResult<Vec<_>>>()?;
                 crate::cluster_routing::aggregate(results, op)
             }
+            Some(ResponsePolicy::AggregateArray(op)) => {
+                let results = results
+                    .into_iter()
+                    .map(|res| res.map(|(_, val)| val))
+                    .collect::<RedisResult<Vec<_>>>()?;
+                crate::cluster_routing::aggregate_array(results, op)
+            }
             Some(ResponsePolicy::AggregateLogical(op)) => {
                 let results = results
                     .into_iter()

@@ -661,6 +661,38 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<Long> dbsize(Route route);
 
     /**
+     * Blocks the current client until all previous write commands are successfully transferred and
+     * acknowledged by at least <code>numlocal</code> and <code>numreplicas</code> of replicas. If
+     * <code>timeout</code> is reached, the command returns even if the specified number of replicas
+     * were not yet reached.
+     *
+     * @since Valkey 7.2 and above.
+     * @apiNote <code>WAITAOF</code> cannot be used on replica instances. The <code>route</code>
+     *     parameter is required in cluster mode to specify which primary node to check. Typically,
+     *     you should route to the primary that handled the write operation you want to wait for.
+     * @see <a href="https://valkey.io/commands/waitaof/">valkey.io</a> for details.
+     * @param numlocal The number of local replicas to reach.
+     * @param numreplicas The number of replicas to reach.
+     * @param timeout The timeout value specified in milliseconds. A value of <code>0</code> will
+     *     block indefinitely.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return An <code>array</code> of two <code>Long</code> values: the number of local replicas
+     *     reached and the number of replicas reached.
+     * @example
+     *     <pre>{@code
+     * String key = "{key}:test";
+     * client.set(key, "value").get();
+     * // Route to the primary node managing this key
+     * Route route = new SlotKeyRoute(key, PRIMARY);
+     * Long[] result = client.waitaof(1L, 1L, 1000L, route).get();
+     * assert result[0] >= 1L; // At least 1 local replica reached
+     * assert result[1] >= 1L; // At least 1 replica reached
+     * }</pre>
+     */
+    CompletableFuture<Long[]> waitaof(long numlocal, long numreplicas, long timeout, Route route);
+
+    /**
      * Returns a list of all ACL categories, or a list of commands within a category.<br>
      * The command will be routed to a random node.
      *
