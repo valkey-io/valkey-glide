@@ -16,6 +16,7 @@ inputs:
             - aarch64-apple-darwin
             - aarch64-unknown-linux-musl
             - x86_64-unknown-linux-musl
+            - x86_64-pc-windows-msvc
 
 env:
     CARGO_TERM_COLOR: always
@@ -31,7 +32,8 @@ runs:
           run: |
               echo "ENGINE_VERSION=$ENGINE_VERSION" >> $GITHUB_ENV
 
-        - name: Prepare Valkey sources
+        - name: Prepare Valkey sources (non-Windows)
+          if: "${{ !contains(inputs.target, 'windows') }}"
           shell: bash
           run: |
               echo "Cloning and checking out Valkey $ENGINE_VERSION"
@@ -49,6 +51,7 @@ runs:
               echo "SOURCES_VERSION=$SOURCES_VERSION" >> $GITHUB_ENV
 
         - uses: actions/cache@v4
+          if: "${{ !contains(inputs.target, 'windows') }}"
           id: cache-valkey
           with:
               path: |
@@ -57,8 +60,8 @@ runs:
               key: valkey-${{ env.SOURCES_VERSION }}-${{ inputs.target }}
 
         # Manual install, because makefile target rebuilds everything, we want to avoid that
-        - name: Install cached engine
-          if: ${{ steps.cache-valkey.outputs.cache-hit == 'true' }}
+        - name: Install cached engine (non-Windows)
+          if: ${{ steps.cache-valkey.outputs.cache-hit == 'true' && !contains(inputs.target, 'windows') }}
           shell: bash
           run: |
               cd valkey/src
@@ -80,8 +83,8 @@ runs:
               fi
               echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
-        - name: Build and install engine
-          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
+        - name: Build and install engine (non-Windows)
+          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' && !contains(inputs.target, 'windows') }}
           shell: bash
           run: |
               cd valkey
@@ -95,6 +98,37 @@ runs:
                   make install
               fi
               echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
+
+        - name: Install Valkey in WSL (Windows)
+          if: "${{ contains(inputs.target, 'windows') }}"
+          shell: bash
+          run: |
+              echo "=== Installing Valkey directly in WSL ==="
+
+              # Install Valkey directly in WSL
+              wsl -- bash -c "
+                # Clone and build Valkey
+                cd /tmp
+                git clone https://github.com/valkey-io/valkey.git
+                cd valkey
+                git checkout \"$ENGINE_VERSION\"
+                make BUILD_TLS=yes -j4
+                sudo make install
+                
+                # Verify installation
+                valkey-server --version
+                valkey-cli --version
+                
+                # Fix system configuration for cluster mode
+                echo 'Configuring system for cluster mode...'
+                sudo sysctl vm.overcommit_memory=1 || echo 'Cannot set overcommit'
+                sudo bash -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' || echo 'Cannot disable hugepage'
+                
+                # Set file descriptor limits
+                ulimit -n 65536 || echo 'Cannot set file descriptor limit'
+                
+                echo 'Valkey installation complete in WSL'
+              "
 
         # TODO: This seems redundant to me. Is it necessary? Do we check that the Python we install is the correct version?
         # Why here and not elsewhere? All Git git repos were created equal

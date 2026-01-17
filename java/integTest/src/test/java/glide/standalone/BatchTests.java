@@ -51,7 +51,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(10) // seconds
+@Timeout(20) // seconds
 public class BatchTests {
 
     @SneakyThrows
