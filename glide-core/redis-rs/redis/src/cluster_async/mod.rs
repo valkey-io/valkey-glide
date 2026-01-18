@@ -582,6 +582,15 @@ pub(crate) enum RefreshPolicy {
     NotThrottable,
 }
 
+/// Indicates what triggered a slot refresh operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SlotRefreshTrigger {
+    /// Initial cluster connection setup - reuse existing connections to avoid double DNS lookup
+    InitialConnection,
+    /// Runtime refresh - periodic checks, topology changes, error recovery
+    RuntimeRefresh,
+}
+
 impl<C> From<cluster_routing::RoutingInfo> for InternalRoutingInfo<C> {
     fn from(value: cluster_routing::RoutingInfo) -> Self {
         match value {
@@ -1174,7 +1183,7 @@ where
         Self::refresh_slots_and_subscriptions_with_retries(
             connection.inner.clone(),
             &RefreshPolicy::NotThrottable,
-            true,
+            SlotRefreshTrigger::InitialConnection,
         )
         .await?;
 
@@ -1338,7 +1347,7 @@ where
             if let Err(err) = Self::refresh_slots_and_subscriptions_with_retries(
                 inner.clone(),
                 &RefreshPolicy::NotThrottable,
-                true,
+                SlotRefreshTrigger::InitialConnection,
             )
             .await
             {
@@ -1602,8 +1611,12 @@ where
 
         // Spawn the background task and return its handle
         tokio::spawn(async move {
-            Self::refresh_slots_and_subscriptions_with_retries(inner_clone, &policy_clone, false)
-                .await
+            Self::refresh_slots_and_subscriptions_with_retries(
+                inner_clone,
+                &policy_clone,
+                SlotRefreshTrigger::RuntimeRefresh,
+            )
+            .await
         })
     }
 
@@ -1961,7 +1974,7 @@ where
     async fn refresh_slots_and_subscriptions_with_retries(
         inner: Arc<InnerCore<C>>,
         policy: &RefreshPolicy,
-        is_init_phase: bool,
+        trigger: SlotRefreshTrigger,
     ) -> RedisResult<()> {
         let SlotRefreshState {
             in_progress,
@@ -2010,7 +2023,7 @@ where
             let retries_counter = AtomicUsize::new(0);
             res = Retry::spawn(retry_strategy, || async {
                 let curr_retry = retries_counter.fetch_add(1, atomic::Ordering::Relaxed);
-                Self::refresh_slots(inner.clone(), curr_retry, is_init_phase)
+                Self::refresh_slots(inner.clone(), curr_retry, trigger)
                     .await
                     .map_err(|err| {
                         if err.kind() == ErrorKind::AllConnectionsUnavailable {
@@ -2035,8 +2048,12 @@ where
     ) -> RedisResult<bool> {
         let topology_changed = Self::check_for_topology_diff(inner.clone()).await;
         if topology_changed {
-            Self::refresh_slots_and_subscriptions_with_retries(inner.clone(), policy, false)
-                .await?;
+            Self::refresh_slots_and_subscriptions_with_retries(
+                inner.clone(),
+                policy,
+                SlotRefreshTrigger::RuntimeRefresh,
+            )
+            .await?;
         }
         Ok(topology_changed)
     }
@@ -2086,14 +2103,30 @@ where
         let num_of_nodes = inner.conn_lock.read().expect(MUTEX_READ_ERR).len();
         let num_of_nodes_to_query =
             std::cmp::max(num_of_nodes.checked_ilog2().unwrap_or(0) as usize, 1);
-        let (res, failed_connections, topology_changed_hint) =
-            calculate_topology_from_random_nodes(
-                &inner,
-                num_of_nodes_to_query,
-                DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES,
-                false,
-            )
-            .await;
+        let TopologyQueryResult {
+            topology_result,
+            failed_connections,
+            topology_changed_hint,
+        } = calculate_topology_from_random_nodes(
+            &inner,
+            num_of_nodes_to_query,
+            DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES,
+            SlotRefreshTrigger::RuntimeRefresh,
+        )
+        .await;
+
+        if let Ok((_, found_topology_hash)) = topology_result {
+            if inner
+                .conn_lock
+                .read()
+                .expect(MUTEX_READ_ERR)
+                .get_current_topology_hash()
+                != found_topology_hash
+                || topology_changed_hint
+            {
+                return true;
+            }
+        }
 
         if !failed_connections.is_empty() {
             trace!("check_for_topology_diff: calling trigger_refresh_connection_tasks");
@@ -2106,44 +2139,27 @@ where
             .await;
         }
 
-        // Early detection: topology change detected during initial nodes lookup
-        if topology_changed_hint {
-            return true;
-        }
-
-        if let Ok((_, found_topology_hash)) = res {
-            if inner
-                .conn_lock
-                .read()
-                .expect(MUTEX_READ_ERR)
-                .get_current_topology_hash()
-                != found_topology_hash
-            {
-                return true;
-            }
-        }
-
         false
     }
 
     async fn refresh_slots(
         inner: Arc<InnerCore<C>>,
         curr_retry: usize,
-        is_init_phase: bool,
+        trigger: SlotRefreshTrigger,
     ) -> RedisResult<()> {
         // Update the slot refresh last run timestamp
         let now = SystemTime::now();
         let mut last_run_wlock = inner.slot_refresh_state.last_run.write().await;
         *last_run_wlock = Some(now);
         drop(last_run_wlock);
-        Self::refresh_slots_inner(inner, curr_retry, is_init_phase).await
+        Self::refresh_slots_inner(inner, curr_retry, trigger).await
     }
 
     // Query a node to discover slot-> master mappings
     async fn refresh_slots_inner(
         inner: Arc<InnerCore<C>>,
         curr_retry: usize,
-        is_init_phase: bool,
+        trigger: SlotRefreshTrigger,
     ) -> RedisResult<()> {
         let num_of_nodes = inner.conn_lock.read().expect(MUTEX_READ_ERR).len();
         const MAX_REQUESTED_NODES: usize = 10;
@@ -2152,10 +2168,10 @@ where
             &inner,
             num_of_nodes_to_query,
             curr_retry,
-            is_init_phase,
+            trigger,
         )
         .await
-        .0?;
+        .topology_result?;
         // Create a new connection vector of the found nodes
         let nodes = new_slots.all_node_addresses();
         let nodes_len = nodes.len();
@@ -3331,33 +3347,39 @@ where
     }
 }
 
-// Retrieves random connections from initial seed nodes after resolving their addresses.
+/// Result of attempting to get connections from initial seed nodes.
+struct InitialNodeConnectionsResult<C> {
+    /// Successfully found connections with their addresses
+    #[allow(clippy::type_complexity)]
+    connections: Vec<(String, Shared<Pin<Box<dyn Future<Output = C> + Send>>>)>,
+    /// Addresses that need connection refresh (exists in slot map but not in connection map)
+    addresses_needing_refresh: HashSet<String>,
+    /// True if topology change was detected during lookup (node not in slot map)
+    topology_changed_hint: bool,
+}
+
+/// Returns connections found for randomly selected initial nodes, along with addresses
+/// that need refresh and a hint if topology change was detected.
 async fn get_random_connections_from_initial_nodes<C>(
     inner: &Core<C>,
     num_of_nodes_to_query: usize,
-) -> RedisResult<(
-    Vec<(String, Shared<Pin<Box<dyn Future<Output = C> + Send>>>)>,
-    HashSet<String>,
-    bool,
-)>
+) -> RedisResult<InitialNodeConnectionsResult<C>>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
     if inner.initial_nodes.is_empty() {
         return Err(RedisError::from((
-            ErrorKind::AllConnectionsUnavailable,
-            "No initial nodes configured",
+            ErrorKind::InvalidClientConfig,
+            "Cannot refresh topology from initial nodes: no initial nodes configured",
         )));
     }
 
-    // Resolve initial nodes to get their addresses.
-    let resolved_addresses =
-        ClusterConnInner::<C>::try_to_expand_initial_nodes(&inner.initial_nodes).await;
-
-    // Select random addresses from initial nodes for topology query
-    let selected_pairs: Vec<(String, Option<SocketAddr>)> = {
+    // Resolve initial nodes and select random addresses for topology query.
+    let selected_pairs = {
+        let resolved =
+            ClusterConnInner::<C>::try_to_expand_initial_nodes(&inner.initial_nodes).await;
         let mut rng = rand::rng();
-        resolved_addresses
+        resolved
             .into_iter()
             .choose_multiple(&mut rng, num_of_nodes_to_query)
     };
@@ -3378,7 +3400,11 @@ where
             }
             ConnectionLookupResult::TopologyChanged => {
                 // Node not in slot map - topology has changed, return early
-                return Ok((connections, addresses_needing_refresh, true));
+                return Ok(InitialNodeConnectionsResult {
+                    connections,
+                    addresses_needing_refresh,
+                    topology_changed_hint: true,
+                });
             }
         }
     }
@@ -3390,7 +3416,11 @@ where
         )));
     }
 
-    Ok((connections, addresses_needing_refresh, false))
+    Ok(InitialNodeConnectionsResult {
+        connections,
+        addresses_needing_refresh,
+        topology_changed_hint: false,
+    })
 }
 
 /// Result of attempting to find a connection for a node
@@ -3460,17 +3490,32 @@ where
     }
 }
 
+/// Result of querying random cluster nodes for topology calculation.
+struct TopologyQueryResult {
+    /// The calculated topology (slot map and hash), or an error if calculation failed
+    topology_result: RedisResult<(SlotMap, TopologyHash)>,
+    /// Addresses of connections that failed during the query and need refresh
+    failed_connections: HashSet<String>,
+    /// True if topology change was detected early (e.g., node not found in slot map).
+    /// This allows short-circuiting before full topology calculation.
+    topology_changed_hint: bool,
+}
+
 /// Queries random cluster nodes to calculate the current topology.
+///
+/// Selects up to `num_of_nodes_to_query` random nodes and queries them for their
+/// view of the cluster topology. The results are aggregated to determine the
+/// most common topology view.
+///
+/// When `trigger` is `SlotRefreshTrigger::RuntimeRefresh` and `refresh_topology_from_initial_nodes`
+/// is enabled, connections are obtained from initial seed nodes rather than
+/// existing cluster connections.
 async fn calculate_topology_from_random_nodes<C>(
     inner: &Core<C>,
     num_of_nodes_to_query: usize,
     curr_retry: usize,
-    is_init_phase: bool,
-) -> (
-    RedisResult<(SlotMap, TopologyHash)>,
-    HashSet<String>,
-    bool, // topology_changed_hint
-)
+    trigger: SlotRefreshTrigger,
+) -> TopologyQueryResult
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
@@ -3479,25 +3524,34 @@ where
         .unwrap_or(false);
 
     // During initial connection, use existing connections to avoid double DNS lookup
-    let use_initial_nodes_lookup = refresh_topology_from_initial_nodes && !is_init_phase;
+    let use_initial_nodes_lookup = refresh_topology_from_initial_nodes
+        && matches!(trigger, SlotRefreshTrigger::InitialConnection);
 
     // Get connections either from seed nodes or random existing connections.
     let (requested_nodes, mut failed_addresses) = match use_initial_nodes_lookup {
         true => match get_random_connections_from_initial_nodes(inner, num_of_nodes_to_query).await
         {
-            Ok((connections, failed_addresses, topology_changed_hint)) => {
+            Ok(InitialNodeConnectionsResult {
+                connections,
+                addresses_needing_refresh,
+                topology_changed_hint,
+            }) => {
                 // Early return if topology change was detected during connection lookup
                 if topology_changed_hint {
-                    return (
-                        Ok((SlotMap::default(), TopologyHash::default())),
-                        failed_addresses,
-                        true,
-                    );
+                    return TopologyQueryResult {
+                        topology_result: Ok((SlotMap::default(), TopologyHash::default())),
+                        failed_connections: addresses_needing_refresh,
+                        topology_changed_hint: true,
+                    };
                 }
-                (connections, failed_addresses)
+                (connections, addresses_needing_refresh)
             }
             Err(err) => {
-                return (Err(err), HashSet::new(), false);
+                return TopologyQueryResult {
+                    topology_result: Err(err),
+                    failed_connections: HashSet::new(),
+                    topology_changed_hint: false,
+                };
             }
         },
         false => {
@@ -3509,14 +3563,14 @@ where
             {
                 (random_conns, HashSet::new())
             } else {
-                return (
-                    Err(RedisError::from((
+                return TopologyQueryResult {
+                    topology_result: Err(RedisError::from((
                         ErrorKind::AllConnectionsUnavailable,
                         "No available connections to refresh slots from",
                     ))),
-                    std::collections::HashSet::new(),
-                    false,
-                );
+                    failed_connections: std::collections::HashSet::new(),
+                    topology_changed_hint: false,
+                };
             }
         }
     };
@@ -3551,17 +3605,17 @@ where
     let read_from_replicas = inner
         .get_cluster_param(|params| params.read_from_replicas.clone())
         .expect(MUTEX_READ_ERR);
-    (
-        calculate_topology(
+    TopologyQueryResult {
+        topology_result: calculate_topology(
             topology_values,
             curr_retry,
             tls_mode,
             num_of_nodes_to_query,
             read_from_replicas,
         ),
-        failed_addresses,
-        false,
-    )
+        failed_connections: failed_addresses,
+        topology_changed_hint: false,
+    }
 }
 
 impl<C> ConnectionLike for ClusterConnection<C>

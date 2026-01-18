@@ -344,7 +344,8 @@ where
         }
     }
 
-    /// Returns an iterator over the nodes in the `slot_map`, yielding pairs of the node address and its associated shard addresses.
+    /// Returns an iterator over the nodes in the `slot_map`, yielding tuples of
+    /// (node address, (optional IP address, shard addresses)).
     pub(crate) fn slot_map_nodes(
         &self,
     ) -> impl Iterator<Item = (Arc<String>, (Option<IpAddr>, Arc<ShardAddrs>))> + '_ {
@@ -625,10 +626,10 @@ where
         address: &str,
     ) -> Option<ConnectionAndAddress<Connection>> {
         self.connection_map.get(address).map(|item| {
+            let (address, conn) = (item.key(), item.value());
             (
-                item.key().clone(),
-                item.value()
-                    .get_connection(&ConnectionType::PreferManagement),
+                address.clone(),
+                conn.get_connection(&ConnectionType::PreferManagement),
             )
         })
     }

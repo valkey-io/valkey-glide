@@ -42,7 +42,7 @@ use crate::cluster_routing::{
     MultipleNodeRoutingInfo, ResponsePolicy, Routable, SingleNodeRoutingInfo,
 };
 use crate::cluster_slotmap::SlotMap;
-use crate::cluster_topology::parse_and_count_slots;
+use crate::cluster_topology::{parse_and_count_slots, ParsedSlotsResult};
 use crate::cmd::{cmd, Cmd};
 use crate::connection::{
     connect, Connection, ConnectionAddr, ConnectionInfo, ConnectionLike, RedisConnectionInfo,
@@ -384,7 +384,11 @@ where
                 "can't parse node address",
             )))?;
             match parse_and_count_slots(&value, self.cluster_params.tls, addr).map(
-                |((_slots_count, slots), address_to_ip_map)| {
+                |ParsedSlotsResult {
+                     slots,
+                     address_to_ip_map,
+                     ..
+                 }| {
                     SlotMap::new(
                         slots,
                         address_to_ip_map,

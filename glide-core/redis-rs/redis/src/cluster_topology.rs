@@ -8,6 +8,7 @@ use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap};
 use crate::{cluster::TlsMode, ErrorKind, RedisError, RedisResult, Value};
 #[cfg(all(feature = "cluster-async", not(feature = "tokio-comp")))]
 use async_std::sync::RwLock;
+use logger_core::log_warn;
 use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
@@ -96,14 +97,26 @@ pub fn get_slot(key: &[u8]) -> u16 {
     slot(key)
 }
 
-/// Parse slot data from raw redis value.
-#[allow(clippy::type_complexity)]
+/// Parsed slot data from CLUSTER SLOTS response.
+pub(crate) struct ParsedSlotsResult {
+    /// Total number of slots covered
+    pub(crate) slots_count: u16,
+    /// Slot definitions with their ranges and node assignments
+    pub(crate) slots: Vec<Slot>,
+    /// Mapping from node addresses (hostname:port) to their IP addresses.
+    /// Populated from node metadata when available.
+    pub(crate) address_to_ip_map: HashMap<String, IpAddr>,
+}
+
+/// Parses slot data from raw CLUSTER SLOTS response.
+///
+/// Extracts slot ranges, node assignments, and IP address mappings from the
+/// Redis CLUSTER SLOTS response format.
 pub(crate) fn parse_and_count_slots(
     raw_slot_resp: &Value,
     tls: Option<TlsMode>,
-    // The DNS address of the node from which `raw_slot_resp` was received.
     addr_of_answering_node: &str,
-) -> RedisResult<((u16, Vec<Slot>), HashMap<String, IpAddr>)> {
+) -> RedisResult<ParsedSlotsResult> {
     // Parse response.
     let mut slots = Vec::with_capacity(2);
     let mut slots_count = 0;
@@ -132,8 +145,9 @@ pub(crate) fn parse_and_count_slots(
             // Parses a single node entry from CLUSTER SLOTS response.
             //
             // Node format: [address, port, node_id, metadata]
-            // - address: hostname (ElastiCache) or IP (Valkey)
-            // - metadata: optional array with ["ip", "..."] or ["hostname", "..."] pairs
+            // - address: Preferred endpoint (Either an IP address, hostname, or NULL)
+            // - metadata: A map or array of key-value pairs of additional networking metadata,
+            //   for example ["ip", "..."] or ["hostname", "..."]
             let mut nodes: Vec<String> = item
                 .iter()
                 .skip(2)
@@ -173,64 +187,75 @@ pub(crate) fn parse_and_count_slots(
 
                         // node[2] contains the node ID, which we don't need here.
 
-                        // Extract metadata (IP and/or hostname) from node[3] if present
-                        // Metadata format: ["key1", "value1", "key2", "value2", ...]
+                        // Extract metadata (IP and/or hostname) from node[3] if present.
+                        // The metadata format varies by server version/configuration:
+                        // - Older versions or RESP2: Array of alternating key-value pairs
+                        // - Newer versions with RESP3: Map of key-value pairs
                         let mut metadata_ip: Option<IpAddr> = None;
                         let mut metadata_hostname: Option<String> = None;
                         if node.len() >= 4 {
                             let mut process_kv = |key_bytes: &[u8], value_bytes: &[u8]| {
                                 let key_str = String::from_utf8_lossy(key_bytes);
-                                let value_str = String::from_utf8_lossy(value_bytes);
-
                                 if key_str == "ip" {
-                                    metadata_ip = value_str.parse::<IpAddr>().ok();
+                                    metadata_ip =
+                                        String::from_utf8_lossy(value_bytes).parse::<IpAddr>().ok();
                                 } else if key_str == "hostname" {
-                                    metadata_hostname = Some(value_str.into_owned());
+                                    metadata_hostname =
+                                        Some(String::from_utf8_lossy(value_bytes).into_owned());
                                 }
+                                // Other keys are ignored - we only need ip and hostname
                             };
 
                             match &node[3] {
                                 // Array format: ["ip", "127.0.0.1", "hostname", "example.com", ...]
                                 Value::Array(metadata) => {
-                                    let mut i = 0;
-                                    while i + 1 < metadata.len() {
+                                    if metadata.len() % 2 != 0 {
+                                        log_warn(
+                                                "cluster_topology",
+                                                "Node metadata array has odd length, some entries may be skipped"
+                                            );
+                                    }
+                                    for chunk in metadata.chunks_exact(2) {
                                         if let (Value::BulkString(key), Value::BulkString(value)) =
-                                            (&metadata[i], &metadata[i + 1])
+                                            (&chunk[0], &chunk[1])
                                         {
                                             process_kv(key, value);
                                         }
-                                        i += 2;
                                     }
                                 }
                                 // Map format: {("ip", "127.0.0.1"), ("hostname", "example.com")}
                                 Value::Map(metadata) => {
                                     for (key, value) in metadata {
-                                        if let (
-                                            Value::BulkString(key_bytes),
-                                            Value::BulkString(value_bytes),
-                                        ) = (key, value)
+                                        if let (Value::BulkString(key_bytes), Value::BulkString(value_bytes)) =
+                                            (key, value)
                                         {
                                             process_kv(key_bytes, value_bytes);
                                         }
                                     }
                                 }
-                                _ => {} // Ignore other formats
+                                other => {
+                                    log_warn(
+                                        "cluster_topology",
+                                        format!("Unexpected node metadata format: {:?}", other)
+                                    );
+                                }
+    
                             }
                         }
 
                         // Determine canonical hostname and IP based on response format:
-                        // - Valkey: primary_identifier is IP, hostname comes from metadata (if available)
-                        // - ElastiCache: primary_identifier is hostname, IP comes from metadata
+                        // - Default/OSS cluster: primary_identifier is IP, hostname may come from metadata
+                        // - ElastiCache with TLS: primary_identifier is hostname, IP comes from metadata
                         let (canonical_hostname, resolved_ip) =
                             if let Ok(primary_as_ip) = primary_identifier.parse::<IpAddr>() {
-                                // Valkey case: primary is IP, prefer hostname from metadata
+                                // Primary is IP address - use hostname from metadata if available
                                 (
                                     metadata_hostname
                                         .unwrap_or_else(|| primary_identifier.into_owned()),
                                     Some(primary_as_ip),
                                 )
                             } else {
-                                // ElastiCache case: primary is hostname, IP from metadata
+                                // Primary is hostname - use IP from metadata if available
                                 (primary_identifier.into_owned(), metadata_ip)
                             };
 
@@ -269,7 +294,11 @@ pub(crate) fn parse_and_count_slots(
         )));
     }
 
-    Ok(((slots_count, slots), address_to_ip_map))
+    Ok(ParsedSlotsResult {
+        slots_count,
+        slots,
+        address_to_ip_map,
+    })
 }
 
 fn calculate_hash<T: Hash>(t: &T) -> u64 {
@@ -287,14 +316,17 @@ pub(crate) fn calculate_topology<'a>(
 ) -> RedisResult<(SlotMap, TopologyHash)> {
     let mut hash_view_map = HashMap::new();
     for (host, view) in topology_views {
-        if let Ok((slots_and_count, address_to_ip_map)) =
-            parse_and_count_slots(view, tls_mode, host)
+        if let Ok(ParsedSlotsResult {
+            slots_count,
+            slots,
+            address_to_ip_map,
+        }) = parse_and_count_slots(view, tls_mode, host)
         {
-            let hash_value = calculate_hash(&slots_and_count);
+            let hash_value = calculate_hash(&(slots_count, &slots));
             let topology_entry = hash_view_map.entry(hash_value).or_insert(TopologyView {
                 hash_value,
                 nodes_count: 0,
-                slots_and_count,
+                slots_and_count: (slots_count, slots),
                 address_to_ip_map,
             });
             topology_entry.nodes_count += 1;
@@ -511,15 +543,18 @@ mod tests {
             ),
         ]);
 
-        let (res1, _) = parse_and_count_slots(&view1, None, "foo").unwrap();
-        let (res2, _) = parse_and_count_slots(&view2, None, "foo").unwrap();
-        assert_eq!(calculate_hash(&res1), calculate_hash(&res2));
-        assert_eq!(res1.0, res2.0);
-        assert_eq!(res1.1.len(), res2.1.len());
+        let res1 = parse_and_count_slots(&view1, None, "foo").unwrap();
+        let res2 = parse_and_count_slots(&view2, None, "foo").unwrap();
+        assert_eq!(
+            calculate_hash(&(res1.slots_count, &res1.slots)),
+            calculate_hash(&(res2.slots_count, &res2.slots))
+        );
+        assert_eq!(res1.slots_count, res2.slots_count);
+        assert_eq!(res1.slots.len(), res2.slots.len());
         let check = res1
-            .1
+            .slots
             .into_iter()
-            .zip(res2.1)
+            .zip(res2.slots)
             .all(|(first, second)| first.replicas() == second.replicas());
         assert!(check);
     }
@@ -528,8 +563,10 @@ mod tests {
     fn parse_slots_returns_slots_with_host_name_if_missing() {
         let view = Value::Array(vec![slot_value(0, 4000, "", 6379)]);
 
-        let ((slot_count, slots), _) = parse_and_count_slots(&view, None, "node").unwrap();
-        assert_eq!(slot_count, 4001);
+        let ParsedSlotsResult {
+            slots_count, slots, ..
+        } = parse_and_count_slots(&view, None, "node").unwrap();
+        assert_eq!(slots_count, 4001);
         assert_eq!(slots[0].master(), "node:6379");
     }
 
@@ -565,22 +602,25 @@ mod tests {
             ),
         ]);
 
-        let (res1, _) = parse_and_count_slots(&view1, None, "node1").unwrap();
-        let (res2, _) = parse_and_count_slots(&view2, None, "node3").unwrap();
+        let res1 = parse_and_count_slots(&view1, None, "node1").unwrap();
+        let res2 = parse_and_count_slots(&view2, None, "node3").unwrap();
 
-        assert_eq!(calculate_hash(&res1), calculate_hash(&res2));
-        assert_eq!(res1.0, res2.0);
-        assert_eq!(res1.1.len(), res2.1.len());
+        assert_eq!(
+            calculate_hash(&(res1.slots_count, &res1.slots)),
+            calculate_hash(&(res2.slots_count, &res2.slots))
+        );
+        assert_eq!(res1.slots_count, res2.slots_count);
+        assert_eq!(res1.slots.len(), res2.slots.len());
         let equality_check = res1
-            .1
+            .slots
             .iter()
-            .zip(&res2.1)
+            .zip(&res2.slots)
             .all(|(first, second)| first.start == second.start && first.end == second.end);
         assert!(equality_check);
         let replicas_check = res1
-            .1
+            .slots
             .iter()
-            .zip(res2.1)
+            .zip(&res2.slots)
             .all(|(first, second)| first.replicas() == second.replicas());
         assert!(replicas_check);
     }
@@ -605,10 +645,13 @@ mod tests {
             ],
         )]);
 
-        let ((slot_count, slots), address_to_ip_map) =
-            parse_and_count_slots(&view, None, "fallback").unwrap();
+        let ParsedSlotsResult {
+            slots_count,
+            slots,
+            address_to_ip_map,
+        } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
-        assert_eq!(slot_count, 16384);
+        assert_eq!(slots_count, 16384);
         assert_eq!(slots.len(), 1);
         assert_eq!(slots[0].master(), "valkey-node-1.example.com:6379");
         assert_eq!(
@@ -648,10 +691,13 @@ mod tests {
             ],
         )]);
 
-        let ((slot_count, slots), address_to_ip_map) =
-            parse_and_count_slots(&view, None, "fallback").unwrap();
+        let ParsedSlotsResult {
+            slots_count,
+            slots,
+            address_to_ip_map,
+        } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
-        assert_eq!(slot_count, 16384);
+        assert_eq!(slots_count, 16384);
         assert_eq!(slots.len(), 1);
         // Should use hostname from metadata as canonical address
         assert_eq!(slots[0].master(), "host-1.valkey.example.com:30001");
@@ -684,10 +730,13 @@ mod tests {
             ],
         )]);
 
-        let ((slot_count, slots), address_to_ip_map) =
-            parse_and_count_slots(&view, None, "fallback").unwrap();
+        let ParsedSlotsResult {
+            slots_count,
+            slots,
+            address_to_ip_map,
+        } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
-        assert_eq!(slot_count, 16384);
+        assert_eq!(slots_count, 16384);
         assert_eq!(slots.len(), 1);
         assert_eq!(slots[0].master(), "192.168.1.1:6379");
         assert_eq!(slots[0].replicas(), vec!["192.168.1.2:6379".to_string()]);
@@ -713,8 +762,11 @@ mod tests {
             vec![("node1", 6379), ("replica1", 6379)],
         )]);
 
-        let ((_, slots), address_to_ip_map) =
-            parse_and_count_slots(&view, None, "fallback").unwrap();
+        let ParsedSlotsResult {
+            slots,
+            address_to_ip_map,
+            ..
+        } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
         assert_eq!(slots[0].master(), "node1:6379");
         assert!(address_to_ip_map.is_empty());
@@ -732,7 +784,9 @@ mod tests {
             ],
         )]);
 
-        let ((_, _), address_to_ip_map) = parse_and_count_slots(&view, None, "fallback").unwrap();
+        let ParsedSlotsResult {
+            address_to_ip_map, ..
+        } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
         // Only the node with IP metadata should be mapped
         assert_eq!(address_to_ip_map.len(), 1);
@@ -752,8 +806,11 @@ mod tests {
             vec![("node1.example.com", 6379, Some(vec![("ip", "not-an-ip")]))],
         )]);
 
-        let ((_, slots), address_to_ip_map) =
-            parse_and_count_slots(&view, None, "fallback").unwrap();
+        let ParsedSlotsResult {
+            slots,
+            address_to_ip_map,
+            ..
+        } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
         assert_eq!(slots[0].master(), "node1.example.com:6379");
         assert!(address_to_ip_map.is_empty());
@@ -799,10 +856,13 @@ mod tests {
             ),
         ]);
 
-        let ((slot_count, slots), address_to_ip_map) =
-            parse_and_count_slots(&view, None, "fallback").unwrap();
+        let ParsedSlotsResult {
+            slots_count,
+            slots,
+            address_to_ip_map,
+        } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
-        assert_eq!(slot_count, 16384);
+        assert_eq!(slots_count, 16384);
         assert_eq!(slots.len(), 3);
 
         // All 4 unique nodes should have IP mappings
@@ -834,7 +894,9 @@ mod tests {
             vec![("node1.example.com", 6379, Some(vec![("ip", "2001:db8::1")]))],
         )]);
 
-        let ((_, _), address_to_ip_map) = parse_and_count_slots(&view, None, "fallback").unwrap();
+        let ParsedSlotsResult {
+            address_to_ip_map, ..
+        } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
         assert_eq!(address_to_ip_map.len(), 1);
         assert_eq!(
