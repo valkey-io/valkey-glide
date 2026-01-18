@@ -239,7 +239,6 @@ pub(crate) fn parse_and_count_slots(
                                         format!("Unexpected node metadata format: {:?}", other)
                                     );
                                 }
-    
                             }
                         }
 
@@ -435,10 +434,17 @@ mod tests {
         Value::Array(slot_vec)
     }
 
+    #[derive(Clone, Copy)]
+    enum MetadataFormat {
+        Array,
+        Map,
+    }
+
     fn slot_value_with_metadata(
         start: u16,
         end: u16,
         nodes: Vec<(&str, u16, Option<Vec<(&str, &str)>>)>, // (address, port, metadata)
+        format: MetadataFormat,
     ) -> Value {
         let node_values: Vec<Value> = nodes
             .iter()
@@ -450,16 +456,33 @@ mod tests {
                 ];
 
                 if let Some(meta) = metadata {
-                    let meta_values: Vec<Value> = meta
-                        .iter()
-                        .flat_map(|(k, v)| {
-                            vec![
-                                Value::BulkString(k.as_bytes().to_vec()),
-                                Value::BulkString(v.as_bytes().to_vec()),
-                            ]
-                        })
-                        .collect();
-                    node_vec.push(Value::Array(meta_values));
+                    let metadata_value = match format {
+                        MetadataFormat::Array => {
+                            let meta_values: Vec<Value> = meta
+                                .iter()
+                                .flat_map(|(k, v)| {
+                                    vec![
+                                        Value::BulkString(k.as_bytes().to_vec()),
+                                        Value::BulkString(v.as_bytes().to_vec()),
+                                    ]
+                                })
+                                .collect();
+                            Value::Array(meta_values)
+                        }
+                        MetadataFormat::Map => {
+                            let meta_pairs: Vec<(Value, Value)> = meta
+                                .iter()
+                                .map(|(k, v)| {
+                                    (
+                                        Value::BulkString(k.as_bytes().to_vec()),
+                                        Value::BulkString(v.as_bytes().to_vec()),
+                                    )
+                                })
+                                .collect();
+                            Value::Map(meta_pairs)
+                        }
+                    };
+                    node_vec.push(metadata_value);
                 }
 
                 Value::Array(node_vec)
@@ -473,6 +496,14 @@ mod tests {
 
     fn slot_value(start: u16, end: u16, node: &str, port: u16) -> Value {
         slot_value_with_replicas(start, end, vec![(node, port)])
+    }
+
+    fn run_with_both_formats<F>(test_fn: F)
+    where
+        F: Fn(MetadataFormat),
+    {
+        test_fn(MetadataFormat::Array);
+        test_fn(MetadataFormat::Map);
     }
 
     #[test]
@@ -627,130 +658,132 @@ mod tests {
 
     #[test]
     fn parse_slots_hostname_primary_format_extracts_ip_from_metadata() {
-        // ElastiCache format: hostname in node[0], IP in metadata
-        let view = Value::Array(vec![slot_value_with_metadata(
-            0,
-            16383,
-            vec![
-                (
-                    "valkey-node-1.example.com",
-                    6379,
-                    Some(vec![("ip", "172.31.24.34")]),
-                ),
-                (
-                    "valkey-node-2.example.com",
-                    6379,
-                    Some(vec![("ip", "172.31.24.35")]),
-                ),
-            ],
-        )]);
+        run_with_both_formats(|format| {
+            let view = Value::Array(vec![slot_value_with_metadata(
+                0,
+                16383,
+                vec![
+                    (
+                        "valkey-node-1.example.com",
+                        6379,
+                        Some(vec![("ip", "172.31.24.34")]),
+                    ),
+                    (
+                        "valkey-node-2.example.com",
+                        6379,
+                        Some(vec![("ip", "172.31.24.35")]),
+                    ),
+                ],
+                format,
+            )]);
 
-        let ParsedSlotsResult {
-            slots_count,
-            slots,
-            address_to_ip_map,
-        } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            let ParsedSlotsResult {
+                slots_count,
+                slots,
+                address_to_ip_map,
+            } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
-        assert_eq!(slots_count, 16384);
-        assert_eq!(slots.len(), 1);
-        assert_eq!(slots[0].master(), "valkey-node-1.example.com:6379");
-        assert_eq!(
-            slots[0].replicas(),
-            vec!["valkey-node-2.example.com:6379".to_string()]
-        );
+            assert_eq!(slots_count, 16384);
+            assert_eq!(slots.len(), 1);
+            assert_eq!(slots[0].master(), "valkey-node-1.example.com:6379");
+            assert_eq!(
+                slots[0].replicas(),
+                vec!["valkey-node-2.example.com:6379".to_string()]
+            );
 
-        // Verify IP mappings
-        assert_eq!(address_to_ip_map.len(), 2);
-        assert_eq!(
-            address_to_ip_map.get("valkey-node-1.example.com:6379"),
-            Some(&"172.31.24.34".parse().unwrap())
-        );
-        assert_eq!(
-            address_to_ip_map.get("valkey-node-2.example.com:6379"),
-            Some(&"172.31.24.35".parse().unwrap())
-        );
+            assert_eq!(address_to_ip_map.len(), 2);
+            assert_eq!(
+                address_to_ip_map.get("valkey-node-1.example.com:6379"),
+                Some(&"172.31.24.34".parse().unwrap())
+            );
+            assert_eq!(
+                address_to_ip_map.get("valkey-node-2.example.com:6379"),
+                Some(&"172.31.24.35".parse().unwrap())
+            );
+        });
     }
 
     #[test]
     fn parse_slots_ip_primary_format_extracts_hostname_from_metadata() {
-        // Valkey format: IP in node[0], hostname in metadata
-        let view = Value::Array(vec![slot_value_with_metadata(
-            0,
-            16383,
-            vec![
-                (
-                    "127.0.0.1",
-                    30001,
-                    Some(vec![("hostname", "host-1.valkey.example.com")]),
-                ),
-                (
-                    "127.0.0.2",
-                    30002,
-                    Some(vec![("hostname", "host-2.valkey.example.com")]),
-                ),
-            ],
-        )]);
+        run_with_both_formats(|format| {
+            let view = Value::Array(vec![slot_value_with_metadata(
+                0,
+                16383,
+                vec![
+                    (
+                        "127.0.0.1",
+                        30001,
+                        Some(vec![("hostname", "host-1.valkey.example.com")]),
+                    ),
+                    (
+                        "127.0.0.2",
+                        30002,
+                        Some(vec![("hostname", "host-2.valkey.example.com")]),
+                    ),
+                ],
+                format,
+            )]);
 
-        let ParsedSlotsResult {
-            slots_count,
-            slots,
-            address_to_ip_map,
-        } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            let ParsedSlotsResult {
+                slots_count,
+                slots,
+                address_to_ip_map,
+            } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
-        assert_eq!(slots_count, 16384);
-        assert_eq!(slots.len(), 1);
-        // Should use hostname from metadata as canonical address
-        assert_eq!(slots[0].master(), "host-1.valkey.example.com:30001");
-        assert_eq!(
-            slots[0].replicas(),
-            vec!["host-2.valkey.example.com:30002".to_string()]
-        );
+            assert_eq!(slots_count, 16384);
+            assert_eq!(slots.len(), 1);
+            assert_eq!(slots[0].master(), "host-1.valkey.example.com:30001");
+            assert_eq!(
+                slots[0].replicas(),
+                vec!["host-2.valkey.example.com:30002".to_string()]
+            );
 
-        // Verify IP mappings (IP from node[0])
-        assert_eq!(address_to_ip_map.len(), 2);
-        assert_eq!(
-            address_to_ip_map.get("host-1.valkey.example.com:30001"),
-            Some(&"127.0.0.1".parse().unwrap())
-        );
-        assert_eq!(
-            address_to_ip_map.get("host-2.valkey.example.com:30002"),
-            Some(&"127.0.0.2".parse().unwrap())
-        );
+            assert_eq!(address_to_ip_map.len(), 2);
+            assert_eq!(
+                address_to_ip_map.get("host-1.valkey.example.com:30001"),
+                Some(&"127.0.0.1".parse().unwrap())
+            );
+            assert_eq!(
+                address_to_ip_map.get("host-2.valkey.example.com:30002"),
+                Some(&"127.0.0.2".parse().unwrap())
+            );
+        });
     }
 
     #[test]
     fn parse_slots_valkey_format_without_hostname_uses_ip_as_address() {
-        // Valkey format with IP but no hostname in metadata
-        let view = Value::Array(vec![slot_value_with_metadata(
-            0,
-            16383,
-            vec![
-                ("192.168.1.1", 6379, Some(vec![("somekey", "somevalue")])), // No hostname
-                ("192.168.1.2", 6379, None),                                 // No metadata at all
-            ],
-        )]);
+        run_with_both_formats(|format| {
+            let view = Value::Array(vec![slot_value_with_metadata(
+                0,
+                16383,
+                vec![
+                    ("192.168.1.1", 6379, Some(vec![("somekey", "somevalue")])),
+                    ("192.168.1.2", 6379, None),
+                ],
+                format,
+            )]);
 
-        let ParsedSlotsResult {
-            slots_count,
-            slots,
-            address_to_ip_map,
-        } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            let ParsedSlotsResult {
+                slots_count,
+                slots,
+                address_to_ip_map,
+            } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
-        assert_eq!(slots_count, 16384);
-        assert_eq!(slots.len(), 1);
-        assert_eq!(slots[0].master(), "192.168.1.1:6379");
-        assert_eq!(slots[0].replicas(), vec!["192.168.1.2:6379".to_string()]);
+            assert_eq!(slots_count, 16384);
+            assert_eq!(slots.len(), 1);
+            assert_eq!(slots[0].master(), "192.168.1.1:6379");
+            assert_eq!(slots[0].replicas(), vec!["192.168.1.2:6379".to_string()]);
 
-        // Both IPs should be mapped (extracted from node[0])
-        assert_eq!(address_to_ip_map.len(), 2);
-        assert_eq!(
-            address_to_ip_map.get("192.168.1.1:6379"),
-            Some(&"192.168.1.1".parse().unwrap())
-        );
-        assert_eq!(
-            address_to_ip_map.get("192.168.1.2:6379"),
-            Some(&"192.168.1.2".parse().unwrap())
-        );
+            assert_eq!(address_to_ip_map.len(), 2);
+            assert_eq!(
+                address_to_ip_map.get("192.168.1.1:6379"),
+                Some(&"192.168.1.1".parse().unwrap())
+            );
+            assert_eq!(
+                address_to_ip_map.get("192.168.1.2:6379"),
+                Some(&"192.168.1.2".parse().unwrap())
+            );
+        });
     }
 
     #[test]
@@ -774,135 +807,143 @@ mod tests {
 
     #[test]
     fn parse_slots_mixed_nodes_with_and_without_ip() {
-        // Some nodes have IP metadata, some don't
-        let view = Value::Array(vec![slot_value_with_metadata(
-            0,
-            16383,
-            vec![
-                ("primary.example.com", 6379, Some(vec![("ip", "10.0.0.1")])),
-                ("replica.example.com", 6379, None), // No metadata
-            ],
-        )]);
+        run_with_both_formats(|format| {
+            let view = Value::Array(vec![slot_value_with_metadata(
+                0,
+                16383,
+                vec![
+                    ("primary.example.com", 6379, Some(vec![("ip", "10.0.0.1")])),
+                    ("replica.example.com", 6379, None),
+                ],
+                format,
+            )]);
 
-        let ParsedSlotsResult {
-            address_to_ip_map, ..
-        } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            let ParsedSlotsResult {
+                address_to_ip_map, ..
+            } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
-        // Only the node with IP metadata should be mapped
-        assert_eq!(address_to_ip_map.len(), 1);
-        assert_eq!(
-            address_to_ip_map.get("primary.example.com:6379"),
-            Some(&"10.0.0.1".parse().unwrap())
-        );
-        assert!(!address_to_ip_map.contains_key("replica.example.com:6379"));
+            assert_eq!(address_to_ip_map.len(), 1);
+            assert_eq!(
+                address_to_ip_map.get("primary.example.com:6379"),
+                Some(&"10.0.0.1".parse().unwrap())
+            );
+            assert!(!address_to_ip_map.contains_key("replica.example.com:6379"));
+        });
     }
 
     #[test]
     fn parse_slots_invalid_ip_in_metadata_ignored() {
-        // Invalid IP in metadata should be ignored
-        let view = Value::Array(vec![slot_value_with_metadata(
-            0,
-            16383,
-            vec![("node1.example.com", 6379, Some(vec![("ip", "not-an-ip")]))],
-        )]);
+        run_with_both_formats(|format| {
+            let view = Value::Array(vec![slot_value_with_metadata(
+                0,
+                16383,
+                vec![("node1.example.com", 6379, Some(vec![("ip", "not-an-ip")]))],
+                format,
+            )]);
 
-        let ParsedSlotsResult {
-            slots,
-            address_to_ip_map,
-            ..
-        } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            let ParsedSlotsResult {
+                slots,
+                address_to_ip_map,
+                ..
+            } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
-        assert_eq!(slots[0].master(), "node1.example.com:6379");
-        assert!(address_to_ip_map.is_empty());
+            assert_eq!(slots[0].master(), "node1.example.com:6379");
+            assert!(address_to_ip_map.is_empty());
+        });
     }
 
     #[test]
     fn parse_slots_multiple_slot_ranges_with_ip_mapping() {
-        // Multiple slot ranges, each with IP mappings
-        let view = Value::Array(vec![
-            slot_value_with_metadata(
-                0,
-                5461,
-                vec![
-                    (
-                        "shard1-primary.example.com",
+        run_with_both_formats(|format| {
+            let view = Value::Array(vec![
+                slot_value_with_metadata(
+                    0,
+                    5461,
+                    vec![
+                        (
+                            "shard1-primary.example.com",
+                            6379,
+                            Some(vec![("ip", "10.0.1.1")]),
+                        ),
+                        (
+                            "shard1-replica.example.com",
+                            6379,
+                            Some(vec![("ip", "10.0.1.2")]),
+                        ),
+                    ],
+                    format,
+                ),
+                slot_value_with_metadata(
+                    5462,
+                    10922,
+                    vec![(
+                        "shard2-primary.example.com",
                         6379,
-                        Some(vec![("ip", "10.0.1.1")]),
-                    ),
-                    (
-                        "shard1-replica.example.com",
+                        Some(vec![("ip", "10.0.2.1")]),
+                    )],
+                    format,
+                ),
+                slot_value_with_metadata(
+                    10923,
+                    16383,
+                    vec![(
+                        "shard3-primary.example.com",
                         6379,
-                        Some(vec![("ip", "10.0.1.2")]),
-                    ),
-                ],
-            ),
-            slot_value_with_metadata(
-                5462,
-                10922,
-                vec![(
-                    "shard2-primary.example.com",
-                    6379,
-                    Some(vec![("ip", "10.0.2.1")]),
-                )],
-            ),
-            slot_value_with_metadata(
-                10923,
-                16383,
-                vec![(
-                    "shard3-primary.example.com",
-                    6379,
-                    Some(vec![("ip", "10.0.3.1")]),
-                )],
-            ),
-        ]);
+                        Some(vec![("ip", "10.0.3.1")]),
+                    )],
+                    format,
+                ),
+            ]);
 
-        let ParsedSlotsResult {
-            slots_count,
-            slots,
-            address_to_ip_map,
-        } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            let ParsedSlotsResult {
+                slots_count,
+                slots,
+                address_to_ip_map,
+            } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
-        assert_eq!(slots_count, 16384);
-        assert_eq!(slots.len(), 3);
+            assert_eq!(slots_count, 16384);
+            assert_eq!(slots.len(), 3);
 
-        // All 4 unique nodes should have IP mappings
-        assert_eq!(address_to_ip_map.len(), 4);
-        assert_eq!(
-            address_to_ip_map.get("shard1-primary.example.com:6379"),
-            Some(&"10.0.1.1".parse().unwrap())
-        );
-        assert_eq!(
-            address_to_ip_map.get("shard2-primary.example.com:6379"),
-            Some(&"10.0.2.1".parse().unwrap())
-        );
-        assert_eq!(
-            address_to_ip_map.get("shard1-replica.example.com:6379"),
-            Some(&"10.0.1.2".parse().unwrap())
-        );
-        assert_eq!(
-            address_to_ip_map.get("shard3-primary.example.com:6379"),
-            Some(&"10.0.3.1".parse().unwrap())
-        );
+            assert_eq!(address_to_ip_map.len(), 4);
+            assert_eq!(
+                address_to_ip_map.get("shard1-primary.example.com:6379"),
+                Some(&"10.0.1.1".parse().unwrap())
+            );
+            assert_eq!(
+                address_to_ip_map.get("shard2-primary.example.com:6379"),
+                Some(&"10.0.2.1".parse().unwrap())
+            );
+            assert_eq!(
+                address_to_ip_map.get("shard1-replica.example.com:6379"),
+                Some(&"10.0.1.2".parse().unwrap())
+            );
+            assert_eq!(
+                address_to_ip_map.get("shard3-primary.example.com:6379"),
+                Some(&"10.0.3.1".parse().unwrap())
+            );
+        });
     }
 
     #[test]
     fn parse_slots_ipv6_address_in_metadata() {
-        // IPv6 address in metadata
-        let view = Value::Array(vec![slot_value_with_metadata(
-            0,
-            16383,
-            vec![("node1.example.com", 6379, Some(vec![("ip", "2001:db8::1")]))],
-        )]);
+        run_with_both_formats(|format| {
+            let view = Value::Array(vec![slot_value_with_metadata(
+                0,
+                16383,
+                vec![("node1.example.com", 6379, Some(vec![("ip", "2001:db8::1")]))],
+                format,
+            )]);
 
-        let ParsedSlotsResult {
-            address_to_ip_map, ..
-        } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            let ParsedSlotsResult {
+                address_to_ip_map, ..
+            } = parse_and_count_slots(&view, None, "fallback").unwrap();
 
-        assert_eq!(address_to_ip_map.len(), 1);
-        assert_eq!(
-            address_to_ip_map.get("node1.example.com:6379"),
-            Some(&"2001:db8::1".parse().unwrap())
-        );
+            assert_eq!(address_to_ip_map.len(), 1);
+            assert_eq!(
+                address_to_ip_map.get("node1.example.com:6379"),
+                Some(&"2001:db8::1".parse().unwrap())
+            );
+        });
     }
 
     enum ViewType {
