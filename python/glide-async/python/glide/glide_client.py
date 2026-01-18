@@ -424,7 +424,7 @@ class BaseClient(CoreCommands):
             bytes(elem, encoding="utf8") if isinstance(elem, str) else elem
             for elem in args
         ]
-        (encoded_args, args_size) = self._encode_and_sum_size(args)
+        encoded_args, args_size = self._encode_and_sum_size(args)
         if args_size < MAX_REQUEST_ARGS_LEN:
             request.single_command.args_array.args[:] = encoded_args
         else:
@@ -469,7 +469,7 @@ class BaseClient(CoreCommands):
             command.request_type = requst_type
             # For now, we allow the user to pass the command as array of strings
             # we convert them here into bytes (the datatype that our rust core expects)
-            (encoded_args, args_size) = self._encode_and_sum_size(args)
+            encoded_args, args_size = self._encode_and_sum_size(args)
             if args_size < MAX_REQUEST_ARGS_LEN:
                 command.args_array.args[:] = encoded_args
             else:
@@ -503,8 +503,8 @@ class BaseClient(CoreCommands):
             )
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
-        (encoded_keys, keys_size) = self._encode_and_sum_size(keys)
-        (encoded_args, args_size) = self._encode_and_sum_size(args)
+        encoded_keys, keys_size = self._encode_and_sum_size(keys)
+        encoded_args, args_size = self._encode_and_sum_size(args)
         if (keys_size + args_size) < MAX_REQUEST_ARGS_LEN:
             request.script_invocation.hash = hash
             request.script_invocation.keys[:] = encoded_keys
