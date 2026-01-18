@@ -4898,48 +4898,58 @@ class TestPubSub:
         cluster_mode: bool,
     ):
         """
-        Test that a short pubsub_reconciliation_interval causes faster reconciliation.
+        Test that pubsub_reconciliation_interval controls reconciliation frequency.
 
-        Uses sync timestamp metrics to verify reconciliation happens at approximately
-        the configured interval.
+        Configures a 1 second interval, then measures the actual time between
+        two consecutive reconciliation events by polling the sync timestamp.
+        Verifies the interval is within +/- 50% tolerance (500ms to 1500ms).
         """
         listening_client = None
         try:
-            # Use a short interval (500ms) for faster testing
-            short_interval_ms = 500
+            interval_ms = 1000  # 1 second interval
+            poll_interval_s = 0.1  # 100ms polling
 
-            # Create client with short reconciliation interval
+            # Create client with configured reconciliation interval
             listening_client = await create_pubsub_client(
                 request,
                 cluster_mode,
-                reconciliation_interval_ms=short_interval_ms,
+                reconciliation_interval_ms=interval_ms,
             )
+
+            async def poll_for_timestamp_change(
+                previous_ts: int, timeout_s: float = 5.0
+            ) -> int:
+                """Poll until sync timestamp changes, return new timestamp."""
+                start = anyio.current_time()
+                while (anyio.current_time() - start) < timeout_s:
+                    stats = await listening_client.get_statistics()
+                    current_ts = int(stats.get("subscription_last_sync_timestamp", "0"))
+                    if current_ts != previous_ts:
+                        return current_ts
+                    await anyio.sleep(poll_interval_s)
+
+                raise TimeoutError(
+                    f"Sync timestamp did not change within {timeout_s}s. Previous: {previous_ts}"
+                )
 
             # Get initial timestamp
             initial_stats = await listening_client.get_statistics()
-            previous_timestamp = int(
-                initial_stats.get("subscription_last_sync_timestamp", "0")
+            initial_ts = int(initial_stats.get("subscription_last_sync_timestamp", "0"))
+
+            # Wait for first sync event
+            first_sync_ts = await poll_for_timestamp_change(initial_ts)
+
+            # Wait for second sync event
+            second_sync_ts = await poll_for_timestamp_change(first_sync_ts)
+
+            # Compute the actual interval between syncs (timestamps are in milliseconds)
+            actual_interval_ms = second_sync_ts - first_sync_ts
+
+            # Assert interval is within +/- 50% tolerance
+            assert interval_ms * 0.5 <= actual_interval_ms <= interval_ms * 1.5, (
+                f"Reconciliation interval ({actual_interval_ms}ms) should be between "
+                f"{interval_ms * 0.5}ms and {interval_ms * 1.5}ms"
             )
-
-            # Iterate 5 times and verify timestamp increases by approximately the interval each time
-            for i in range(5):
-                await anyio.sleep(
-                    0.55
-                )  # Sleep slightly longer than interval to ensure reconciliation runs
-
-                stats = await listening_client.get_statistics()
-                current_timestamp = int(
-                    stats.get("subscription_last_sync_timestamp", "0")
-                )
-
-                time_diff_ms = current_timestamp - previous_timestamp
-
-                assert time_diff_ms <= 1000, (
-                    f"Iteration {i + 1}: Timestamp difference ({time_diff_ms}ms) should be <= 1 second"
-                    f"Previous: {previous_timestamp}, Current: {current_timestamp}"
-                )
-
-                previous_timestamp = current_timestamp
 
         finally:
             await pubsub_client_cleanup(listening_client)
