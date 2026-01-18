@@ -3511,7 +3511,7 @@ where
 
     // During initial connection, use existing connections to avoid double DNS lookup
     let use_initial_nodes_lookup = refresh_topology_from_initial_nodes
-        && matches!(trigger, SlotRefreshTrigger::InitialConnection);
+        && !matches!(trigger, SlotRefreshTrigger::InitialConnection);
 
     // Get connections either from seed nodes or random existing connections.
     let (requested_nodes, mut failed_addresses) = if use_initial_nodes_lookup {
