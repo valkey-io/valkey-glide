@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::Display,
-    sync::atomic::AtomicUsize,
+    net::IpAddr,
+    sync::{atomic::AtomicUsize, Arc},
 };
 
 use dashmap::DashMap;
@@ -11,7 +11,8 @@ use crate::cluster_routing::{Route, ShardAddrs, Slot, SlotAddr};
 use crate::ErrorKind;
 use crate::RedisError;
 use crate::RedisResult;
-pub(crate) type NodesMap = DashMap<Arc<String>, Arc<ShardAddrs>>;
+/// Maps node addresses to their IP address and shard information.
+pub(crate) type NodesMap = DashMap<Arc<String>, (Option<IpAddr>, Arc<ShardAddrs>)>;
 
 #[derive(Debug)]
 pub(crate) struct SlotMapValue {
@@ -76,37 +77,48 @@ impl SlotMap {
         }
     }
 
-    pub(crate) fn new(slots: Vec<Slot>, read_from_replica: ReadFromReplicaStrategy) -> Self {
+    /// Creates a new SlotMap from parsed slot data and IP mappings.
+    pub(crate) fn new(
+        slots: Vec<Slot>,
+        ip_mappings: HashMap<String, IpAddr>,
+        read_from_replica: ReadFromReplicaStrategy,
+    ) -> Self {
         let mut slot_map = SlotMap::new_with_read_strategy(read_from_replica);
-        let mut shard_id = 0;
         for slot in slots {
-            let primary = Arc::new(slot.master);
+            let primary_addr = Arc::new(slot.master.clone());
+            // Get IP for this primary (if available)
+            let primary_ip = ip_mappings.get(slot.master.as_str()).copied();
+
             // Get the shard addresses if the primary is already in nodes_map;
             // otherwise, create a new ShardAddrs and add it
             let shard_addrs_arc = slot_map
                 .nodes_map
-                .entry(primary.clone())
+                .entry(primary_addr.clone())
                 .or_insert_with(|| {
-                    shard_id += 1;
                     let replicas: Vec<Arc<String>> =
                         slot.replicas.into_iter().map(Arc::new).collect();
-                    Arc::new(ShardAddrs::new(primary, replicas))
+                    (
+                        primary_ip,
+                        Arc::new(ShardAddrs::new(primary_addr, replicas)),
+                    )
                 })
+                .1
                 .clone();
 
             // Add all replicas to nodes_map with a reference to the same ShardAddrs if not already present
-            shard_addrs_arc.replicas().iter().for_each(|replica| {
+            shard_addrs_arc.replicas().iter().for_each(|replica_addr| {
+                let replica_ip = ip_mappings.get(replica_addr.as_str()).copied();
                 slot_map
                     .nodes_map
-                    .entry(replica.clone())
-                    .or_insert(shard_addrs_arc.clone());
+                    .entry(replica_addr.clone())
+                    .or_insert((replica_ip, shard_addrs_arc.clone()));
             });
 
             // Insert the slot value into the slots map
             slot_map.slots.insert(
                 slot.end,
                 SlotMapValue {
-                    addrs: shard_addrs_arc.clone(),
+                    addrs: shard_addrs_arc,
                     start: slot.start,
                     last_used_replica: Arc::new(AtomicUsize::new(0)),
                 },
@@ -120,9 +132,10 @@ impl SlotMap {
     }
 
     pub fn is_primary(&self, address: &String) -> bool {
-        self.nodes_map
-            .get(address)
-            .is_some_and(|shard_addrs| *shard_addrs.primary() == *address)
+        self.nodes_map.get(address).is_some_and(|entry| {
+            let (_ip, shard_addrs) = entry.value();
+            *shard_addrs.primary() == *address
+        })
     }
 
     pub fn slot_value_for_route(&self, route: &Route) -> Option<&SlotMapValue> {
@@ -158,11 +171,21 @@ impl SlotMap {
             .map(|(_, slot_value)| slot_value.addrs.clone())
     }
 
+    /// Find the canonical node address for a given IP address.
+    /// Returns the node address (hostname:port) if found in the slot map.
+    /// Note: This is an O(n) search through all nodes.
+    pub(crate) fn node_address_for_ip(&self, ip: IpAddr) -> Option<Arc<String>> {
+        self.nodes_map.iter().find_map(|entry| {
+            let (node_ip, _shard_addrs) = entry.value();
+            (*node_ip == Some(ip)).then(|| entry.key().clone())
+        })
+    }
+
     pub fn addresses_for_all_primaries(&self) -> HashSet<Arc<String>> {
         self.nodes_map
             .iter()
             .map(|map_item| {
-                let shard_addrs = map_item.value();
+                let (_ip, shard_addrs) = map_item.value();
                 shard_addrs.primary().clone()
             })
             .collect()
@@ -245,11 +268,17 @@ impl SlotMap {
         )
     }
 
-    /// Creats a new shard addresses that contain only the primary node, adds it to the nodes map
+    /// Creates a new shard addresses that contain only the primary node, adds it to the nodes map
     /// and updates the slots tree for the given `slot` to point to the new primary.
-    pub(crate) fn add_new_primary(&mut self, slot: u16, node_addr: Arc<String>) -> RedisResult<()> {
+    pub(crate) fn add_new_primary(
+        &mut self,
+        slot: u16,
+        node_addr: Arc<String>,
+        ip_addr: Option<IpAddr>,
+    ) -> RedisResult<()> {
         let shard_addrs = Arc::new(ShardAddrs::new_with_primary(node_addr.clone()));
-        self.nodes_map.insert(node_addr, shard_addrs.clone());
+        self.nodes_map
+            .insert(node_addr, (ip_addr, shard_addrs.clone()));
         self.update_slot_range(slot, shard_addrs)
     }
 
@@ -460,18 +489,33 @@ impl SlotMap {
 
 impl Display for SlotMap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Strategy: {:?}. Slot mapping:", self.read_from_replica)?;
+        writeln!(f, "Strategy: {:?}", self.read_from_replica)?;
+
+        writeln!(f, "\nSlot mapping:")?;
         for (end, slot_map_value) in self.slots.iter() {
             let addrs = &slot_map_value.addrs;
             writeln!(
                 f,
-                "({}-{}): primary: {}, replicas: {:?}",
+                "  ({}-{}): primary: {}, replicas: {:?}",
                 slot_map_value.start,
                 end,
                 addrs.primary(),
                 addrs.replicas()
             )?;
         }
+
+        writeln!(f, "\nNode IP mappings:")?;
+        let mut nodes: Vec<_> = self.nodes_map.iter().collect();
+        nodes.sort_by(|a, b| a.key().cmp(b.key()));
+        for entry in nodes {
+            let node_addr = entry.key();
+            let (ip_opt, _shard_addrs) = entry.value();
+            match ip_opt {
+                Some(ip) => writeln!(f, "  {} -> {}", node_addr, ip)?,
+                None => writeln!(f, "  {} -> (no IP)", node_addr)?,
+            }
+        }
+
         Ok(())
     }
 }
@@ -510,6 +554,7 @@ mod tests_cluster_slotmap {
                     vec!["replica2:6379".to_owned()],
                 ),
             ],
+            HashMap::new(),
             ReadFromReplicaStrategy::AlwaysFromPrimary,
         );
 
@@ -593,7 +638,42 @@ mod tests_cluster_slotmap {
                     vec!["replica2:6379".to_owned(), "replica3:6379".to_owned()],
                 ),
             ],
+            HashMap::new(),
             read_from_replica,
+        )
+    }
+
+    fn get_slot_map_with_ip_mappings() -> SlotMap {
+        let mut ip_mappings = HashMap::new();
+        ip_mappings.insert("node1:6379".to_string(), "10.0.0.1".parse().unwrap());
+        ip_mappings.insert("replica1:6379".to_string(), "10.0.0.2".parse().unwrap());
+        ip_mappings.insert("node2:6379".to_string(), "10.0.0.3".parse().unwrap());
+        ip_mappings.insert("replica2:6379".to_string(), "10.0.0.4".parse().unwrap());
+        // node3 and replica3 intentionally have no IP mappings
+
+        SlotMap::new(
+            vec![
+                Slot::new(
+                    0,
+                    5461,
+                    "node1:6379".to_owned(),
+                    vec!["replica1:6379".to_owned()],
+                ),
+                Slot::new(
+                    5462,
+                    10922,
+                    "node2:6379".to_owned(),
+                    vec!["replica2:6379".to_owned()],
+                ),
+                Slot::new(
+                    10923,
+                    16383,
+                    "node3:6379".to_owned(),
+                    vec!["replica3:6379".to_owned()],
+                ),
+            ],
+            ip_mappings,
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
         )
     }
 
@@ -802,7 +882,11 @@ mod tests_cluster_slotmap {
             create_slot(8001, 16383, "node3:6379", vec!["replica3:6379"]),
         ];
 
-        let mut slot_map = SlotMap::new(before_slots, ReadFromReplicaStrategy::AlwaysFromPrimary);
+        let mut slot_map = SlotMap::new(
+            before_slots,
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
         let new_shard_addrs = slot_map
             .shard_addrs_for_slot(8001)
             .expect("Couldn't find shard address for slot");
@@ -827,7 +911,11 @@ mod tests_cluster_slotmap {
             create_slot(8000, 16383, "node2:6379", vec!["replica2:6379"]),
         ];
 
-        let mut slot_map = SlotMap::new(before_slots, ReadFromReplicaStrategy::AlwaysFromPrimary);
+        let mut slot_map = SlotMap::new(
+            before_slots,
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
         let new_shard_addrs = slot_map
             .shard_addrs_for_slot(8000)
             .expect("Couldn't find shard address for slot");
@@ -851,7 +939,11 @@ mod tests_cluster_slotmap {
             create_slot(8000, 16383, "node2:6379", vec!["replica2:6379"]),
         ];
 
-        let mut slot_map = SlotMap::new(before_slots, ReadFromReplicaStrategy::AlwaysFromPrimary);
+        let mut slot_map = SlotMap::new(
+            before_slots,
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
         let new_shard_addrs = Arc::new(ShardAddrs::new(
             Arc::new("node3:6379".to_owned()),
             vec![Arc::new("replica3:6379".to_owned())],
@@ -877,7 +969,11 @@ mod tests_cluster_slotmap {
             create_slot(8000, 16383, "node2:6379", vec!["replica2:6379"]),
         ];
 
-        let mut slot_map = SlotMap::new(before_slots, ReadFromReplicaStrategy::AlwaysFromPrimary);
+        let mut slot_map = SlotMap::new(
+            before_slots,
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
         let new_shard_addrs = slot_map
             .shard_addrs_for_slot(7999)
             .expect("Couldn't find shard address for slot");
@@ -901,7 +997,11 @@ mod tests_cluster_slotmap {
             create_slot(8000, 16383, "node2:6379", vec!["replica2:6379"]),
         ];
 
-        let mut slot_map = SlotMap::new(before_slots, ReadFromReplicaStrategy::AlwaysFromPrimary);
+        let mut slot_map = SlotMap::new(
+            before_slots,
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
         let new_shard_addrs = Arc::new(ShardAddrs::new(
             Arc::new("node3:6379".to_owned()),
             vec![Arc::new("replica3:6379".to_owned())],
@@ -927,7 +1027,11 @@ mod tests_cluster_slotmap {
             create_slot(8000, 16383, "node2:6379", vec!["replica2:6379"]),
         ];
 
-        let mut slot_map = SlotMap::new(before_slots, ReadFromReplicaStrategy::AlwaysFromPrimary);
+        let mut slot_map = SlotMap::new(
+            before_slots,
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
         let new_shard_addrs = slot_map
             .shard_addrs_for_slot(8000)
             .expect("Couldn't find shard address for slot");
@@ -952,7 +1056,11 @@ mod tests_cluster_slotmap {
             create_slot(8000, 16383, "node2:6379", vec!["replica2:6379"]),
         ];
 
-        let mut slot_map = SlotMap::new(before_slots, ReadFromReplicaStrategy::AlwaysFromPrimary);
+        let mut slot_map = SlotMap::new(
+            before_slots,
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
         let new_shard_addrs = slot_map
             .shard_addrs_for_slot(8000)
             .expect("Couldn't find shard address for slot");
@@ -976,7 +1084,11 @@ mod tests_cluster_slotmap {
             create_slot(8000, 16383, "node2:6379", vec!["replica2:6379"]),
         ];
 
-        let mut slot_map = SlotMap::new(before_slots, ReadFromReplicaStrategy::AlwaysFromPrimary);
+        let mut slot_map = SlotMap::new(
+            before_slots,
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
         let new_shard_addrs = slot_map
             .shard_addrs_for_slot(8000)
             .expect("Couldn't find shard address for slot");
@@ -999,7 +1111,11 @@ mod tests_cluster_slotmap {
             create_slot(8000, 16383, "node2:6379", vec!["replica2:6379"]),
         ];
 
-        let mut slot_map = SlotMap::new(before_slots, ReadFromReplicaStrategy::AlwaysFromPrimary);
+        let mut slot_map = SlotMap::new(
+            before_slots,
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
         let new_shard_addrs = slot_map
             .shard_addrs_for_slot(7000)
             .expect("Couldn't find shard address for slot");
@@ -1024,6 +1140,7 @@ mod tests_cluster_slotmap {
 
         let mut slot_map = SlotMap::new(
             before_slots.clone(),
+            HashMap::new(),
             ReadFromReplicaStrategy::AlwaysFromPrimary,
         );
         let new_shard_addrs = slot_map
@@ -1047,6 +1164,7 @@ mod tests_cluster_slotmap {
 
         let mut slot_map = SlotMap::new(
             before_slots.clone(),
+            HashMap::new(),
             ReadFromReplicaStrategy::AlwaysFromPrimary,
         );
         let new_shard_addrs = slot_map
@@ -1074,6 +1192,7 @@ mod tests_cluster_slotmap {
 
         let mut slot_map = SlotMap::new(
             before_slots.clone(),
+            HashMap::new(),
             ReadFromReplicaStrategy::AlwaysFromPrimary,
         );
         let new_shard_addrs = slot_map
@@ -1100,6 +1219,7 @@ mod tests_cluster_slotmap {
 
         let mut slot_map = SlotMap::new(
             before_slots.clone(),
+            HashMap::new(),
             ReadFromReplicaStrategy::AlwaysFromPrimary,
         );
         let new_shard_addrs = slot_map
@@ -1127,6 +1247,7 @@ mod tests_cluster_slotmap {
 
         let mut slot_map = SlotMap::new(
             before_slots.clone(),
+            HashMap::new(),
             ReadFromReplicaStrategy::AlwaysFromPrimary,
         );
         let new_shard_addrs = slot_map
@@ -1141,5 +1262,231 @@ mod tests_cluster_slotmap {
             create_slot(min_slot + 1, 16383, "node2:6379", vec!["replica2:6379"]),
         ];
         assert_slot_map_and_shard_addrs(slot_map, min_slot, new_shard_addrs, after_slots);
+    }
+
+    #[test]
+    fn test_slot_map_stores_ip_mappings_in_nodes_map() {
+        let slot_map = get_slot_map_with_ip_mappings();
+
+        // Verify nodes with IP mappings have correct IPs stored
+        let node1_key = Arc::new("node1:6379".to_string());
+        let node1_entry = slot_map.nodes_map.get(&node1_key).unwrap();
+        assert_eq!(node1_entry.value().0, Some("10.0.0.1".parse().unwrap()));
+
+        let replica1_key = Arc::new("replica1:6379".to_string());
+        let replica1_entry = slot_map.nodes_map.get(&replica1_key).unwrap();
+        assert_eq!(replica1_entry.value().0, Some("10.0.0.2".parse().unwrap()));
+
+        let node2_key = Arc::new("node2:6379".to_string());
+        let node2_entry = slot_map.nodes_map.get(&node2_key).unwrap();
+        assert_eq!(node2_entry.value().0, Some("10.0.0.3".parse().unwrap()));
+
+        let replica2_key = Arc::new("replica2:6379".to_string());
+        let replica2_entry = slot_map.nodes_map.get(&replica2_key).unwrap();
+        assert_eq!(replica2_entry.value().0, Some("10.0.0.4".parse().unwrap()));
+
+        // Verify nodes without IP mappings have None
+        let node3_key = Arc::new("node3:6379".to_string());
+        let node3_entry = slot_map.nodes_map.get(&node3_key).unwrap();
+        assert_eq!(node3_entry.value().0, None);
+
+        let replica3_key = Arc::new("replica3:6379".to_string());
+        let replica3_entry = slot_map.nodes_map.get(&replica3_key).unwrap();
+        assert_eq!(replica3_entry.value().0, None);
+    }
+
+    #[test]
+    fn test_node_address_for_ip() {
+        let slot_map = get_slot_map_with_ip_mappings();
+
+        let result = slot_map.node_address_for_ip("10.0.0.1".parse().unwrap());
+        assert_eq!(result, Some(Arc::new("node1:6379".to_string())));
+
+        let result = slot_map.node_address_for_ip("10.0.0.3".parse().unwrap());
+        assert_eq!(result, Some(Arc::new("node2:6379".to_string())));
+
+        let result = slot_map.node_address_for_ip("10.0.0.2".parse().unwrap());
+        assert_eq!(result, Some(Arc::new("replica1:6379".to_string())));
+
+        let result = slot_map.node_address_for_ip("10.0.0.4".parse().unwrap());
+        assert_eq!(result, Some(Arc::new("replica2:6379".to_string())));
+    }
+
+    #[test]
+    fn test_node_address_for_ip_returns_none_for_unknown_ip() {
+        let slot_map = get_slot_map_with_ip_mappings();
+
+        let result = slot_map.node_address_for_ip("192.168.1.1".parse().unwrap());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_node_address_for_ip_with_ipv6() {
+        let mut ip_mappings = HashMap::new();
+        ip_mappings.insert("node1:6379".to_string(), "2001:db8::1".parse().unwrap());
+        ip_mappings.insert("replica1:6379".to_string(), "2001:db8::2".parse().unwrap());
+
+        let slot_map = SlotMap::new(
+            vec![Slot::new(
+                0,
+                16383,
+                "node1:6379".to_owned(),
+                vec!["replica1:6379".to_owned()],
+            )],
+            ip_mappings,
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+
+        let result = slot_map.node_address_for_ip("2001:db8::1".parse().unwrap());
+        assert_eq!(result, Some(Arc::new("node1:6379".to_string())));
+
+        let result = slot_map.node_address_for_ip("2001:db8::2".parse().unwrap());
+        assert_eq!(result, Some(Arc::new("replica1:6379".to_string())));
+
+        // Unknown IPv6
+        let result = slot_map.node_address_for_ip("2001:db8::99".parse().unwrap());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_slot_map_new_with_empty_ip_mappings() {
+        let slot_map = SlotMap::new(
+            vec![
+                Slot::new(
+                    0,
+                    8191,
+                    "node1:6379".to_owned(),
+                    vec!["replica1:6379".to_owned()],
+                ),
+                Slot::new(
+                    8192,
+                    16383,
+                    "node2:6379".to_owned(),
+                    vec!["replica2:6379".to_owned()],
+                ),
+            ],
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+
+        // All nodes should have None for IP
+        for entry in slot_map.nodes_map.iter() {
+            assert_eq!(entry.value().0, None);
+        }
+
+        // node_address_for_ip should return None for any IP
+        assert!(slot_map
+            .node_address_for_ip("10.0.0.1".parse().unwrap())
+            .is_none());
+    }
+
+    #[test]
+    fn test_slot_map_partial_ip_mappings() {
+        let mut ip_mappings = HashMap::new();
+        // Only primary has IP, replica does not
+        ip_mappings.insert("node1:6379".to_string(), "10.0.0.1".parse().unwrap());
+
+        let slot_map = SlotMap::new(
+            vec![Slot::new(
+                0,
+                16383,
+                "node1:6379".to_owned(),
+                vec!["replica1:6379".to_owned()],
+            )],
+            ip_mappings,
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+
+        // Primary has IP
+        let node1_entry = slot_map
+            .nodes_map
+            .get(&Arc::new("node1:6379".to_string()))
+            .unwrap();
+        assert_eq!(node1_entry.value().0, Some("10.0.0.1".parse().unwrap()));
+
+        // Replica has no IP
+        let replica1_entry = slot_map
+            .nodes_map
+            .get(&Arc::new("replica1:6379".to_string()))
+            .unwrap();
+        assert_eq!(replica1_entry.value().0, None);
+
+        // Can find primary by IP
+        let result = slot_map.node_address_for_ip("10.0.0.1".parse().unwrap());
+        assert_eq!(result, Some(Arc::new("node1:6379".to_string())));
+    }
+
+    #[test]
+    fn test_nodes_map_preserves_shard_addrs_with_ip() {
+        let slot_map = get_slot_map_with_ip_mappings();
+
+        // Verify that shard addresses are still correctly stored alongside IPs
+        let node1_entry = slot_map
+            .nodes_map
+            .get(&Arc::new("node1:6379".to_string()))
+            .unwrap();
+        let (ip, shard_addrs) = node1_entry.value();
+
+        assert_eq!(*ip, Some("10.0.0.1".parse().unwrap()));
+        assert_eq!(*shard_addrs.primary(), "node1:6379");
+        assert_eq!(
+            *shard_addrs.replicas(),
+            vec![Arc::new("replica1:6379".to_string())]
+        );
+
+        // Replica should point to the same shard
+        let replica1_entry = slot_map
+            .nodes_map
+            .get(&Arc::new("replica1:6379".to_string()))
+            .unwrap();
+        let (replica_ip, replica_shard_addrs) = replica1_entry.value();
+
+        assert_eq!(*replica_ip, Some("10.0.0.2".parse().unwrap()));
+        assert_eq!(*replica_shard_addrs.primary(), "node1:6379");
+    }
+
+    #[test]
+    fn test_add_new_primary_without_ip() {
+        let mut slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, "node1:6379".to_owned(), vec![])],
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+
+        // Add a new primary without IP
+        let result = slot_map.add_new_primary(100, Arc::new("new-node:6379".to_owned()), None);
+        assert!(result.is_ok());
+
+        // The new node should have no IP mapping
+        let new_node_entry = slot_map
+            .nodes_map
+            .get(&Arc::new("new-node:6379".to_string()))
+            .unwrap();
+        assert_eq!(new_node_entry.value().0, None);
+    }
+
+    #[test]
+    fn test_add_new_primary_with_ip() {
+        let mut slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, "node1:6379".to_owned(), vec![])],
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+
+        // Add a new primary with IP
+        let ip: IpAddr = "10.0.0.100".parse().unwrap();
+        let result = slot_map.add_new_primary(100, Arc::new("new-node:6379".to_owned()), Some(ip));
+        assert!(result.is_ok());
+
+        // The new node should have the IP mapping
+        let new_node_entry = slot_map
+            .nodes_map
+            .get(&Arc::new("new-node:6379".to_string()))
+            .unwrap();
+        assert_eq!(new_node_entry.value().0, Some(ip));
+
+        // Should be findable by IP
+        let found_addr = slot_map.node_address_for_ip(ip);
+        assert_eq!(found_addr, Some(Arc::new("new-node:6379".to_string())));
     }
 }
