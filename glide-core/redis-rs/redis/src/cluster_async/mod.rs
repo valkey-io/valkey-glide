@@ -3395,13 +3395,6 @@ where
         }
     }
 
-    if connections.is_empty() && addresses_needing_refresh.is_empty() {
-        return Err(RedisError::from((
-            ErrorKind::AllConnectionsUnavailable,
-            "No valid connections found from initial nodes",
-        )));
-    }
-
     Ok(InitialNodeConnectionsResult {
         connections,
         addresses_needing_refresh,
@@ -3411,7 +3404,7 @@ where
 /// Result of attempting to find a connection for a node
 #[allow(clippy::type_complexity)]
 enum ConnectionLookupResult<C> {
-    /// Connection found
+    /// Connection found - returns the node address as stored in the connection map and the connection future
     Found((String, Shared<Pin<Box<dyn Future<Output = C> + Send>>>)),
     /// Connection not found - needs refresh for the given address
     NeedsConnectionRefresh(String),
@@ -3448,37 +3441,38 @@ fn lookup_management_connection<C>(
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    let conn_lock = inner.conn_lock.read().expect(MUTEX_READ_ERR);
     let original_addr_key = Arc::new(original_addr.to_string());
 
-    // Resolve canonical address: slot map lookup, fallback to original_addr
-    let canonical_addr = if conn_lock
-        .slot_map
-        .nodes_map()
-        .contains_key(&original_addr_key)
-    {
-        // Original address is canonical
-        original_addr.to_string()
-    } else {
-        // Try searching for the resolved IP in the slot map
-        resolved_ip
-            .and_then(|ip| {
-                conn_lock
-                    .slot_map
-                    .node_address_for_ip(ip)
-                    .map(|a| (*a).clone())
-            })
-            .unwrap_or_else(|| original_addr.to_string()) // Fallback to original address
-    };
+    let (canonical_addr, conn_opt) = {
+        let conn_lock = inner.conn_lock.read().expect(MUTEX_READ_ERR);
 
-    // Lookup connection for canonical address
-    if let Some(conn) = conn_lock.management_connection_for_address(&canonical_addr) {
-        ConnectionLookupResult::Found(conn)
-    } else {
-        ConnectionLookupResult::NeedsConnectionRefresh(canonical_addr)
+        // Resolve canonical address: slot map lookup, fallback to original_addr
+        let canonical_addr = if conn_lock
+            .slot_map
+            .nodes_map()
+            .contains_key(&original_addr_key)
+        {
+            original_addr.to_string()
+        } else {
+            resolved_ip
+                .and_then(|ip| {
+                    conn_lock
+                        .slot_map
+                        .node_address_for_ip(ip)
+                        .map(|a| (*a).clone())
+                })
+                .unwrap_or_else(|| original_addr.to_string())
+        };
+
+        let conn_opt = conn_lock.management_connection_for_address(&canonical_addr);
+        (canonical_addr, conn_opt)
+    }; // Lock released here
+
+    match conn_opt {
+        Some(conn) => ConnectionLookupResult::Found(conn),
+        None => ConnectionLookupResult::NeedsConnectionRefresh(canonical_addr),
     }
 }
-
 /// Result of querying random cluster nodes for topology calculation.
 struct TopologyQueryResult {
     /// The calculated topology (slot map and hash), or an error if calculation failed
