@@ -63,7 +63,6 @@ docs/markdown/node/**
 docs/site/**
 copilot.yml
 memory-bank/
-CLAUDE*
 #cpp files
 cpp/benchmarks/build/
 cpp/build/
