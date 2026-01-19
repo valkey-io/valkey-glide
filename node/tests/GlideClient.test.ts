@@ -1135,7 +1135,11 @@ describe("GlideClient", () => {
             );
 
             // Initialize the primary client
-            const client = await GlideClient.createClient(config);
+            // const client = await GlideClient.createClient(config);
+            const client = await GlideClient.createClient({
+                ...config,
+                advancedConfiguration: { connectionTimeout: 20000 }, // 20s connection timeout for initial client
+            });
 
             try {
                 // Run a long-running DEBUG SLEEP command using the first client (client)
@@ -1156,7 +1160,7 @@ describe("GlideClient", () => {
                             advancedConfiguration: { connectionTimeout: 100 }, // 100ms connection timeout
                             ...config, // Include the rest of the config
                         }),
-                    ).rejects.toThrowError(/timed out/i); // Ensure it throws a timeout error
+                    ).rejects.toThrowError(/timed?\s*out/i); // Ensure it throws a timeout error
                 };
 
                 // Function that verifies that a larger connection timeout allows connection

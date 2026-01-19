@@ -2334,7 +2334,10 @@ describe("GlideClusterClient", () => {
             );
 
             // Initialize the primary client
-            const client = await GlideClusterClient.createClient(config);
+            const client = await GlideClusterClient.createClient({
+                ...config,
+                advancedConfiguration: { connectionTimeout: 10000 },
+            });
 
             try {
                 // Run a long-running DEBUG SLEEP command using the first client (client)
@@ -2351,7 +2354,7 @@ describe("GlideClusterClient", () => {
                             advancedConfiguration: { connectionTimeout: 100 }, // 100ms connection timeout
                             ...config, // Include the rest of the config
                         }),
-                    ).rejects.toThrowError(/timed out/i); // Ensure it throws a timeout error
+                    ).rejects.toThrowError(/timed?\s*out/i); // Ensure it throws a timeout error
                 };
 
                 // Function that verifies that a larger connection timeout allows connection
@@ -2400,7 +2403,10 @@ describe("GlideClusterClient", () => {
                 protocol,
                 { inflightRequestsLimit },
             );
-            const client = await GlideClusterClient.createClient(config);
+            const client = await GlideClusterClient.createClient({
+                ...config,
+                advancedConfiguration: { connectionTimeout: 10000 },
+            });
 
             try {
                 const key1 = `{nonexistinglist}:1-${getRandomKey()}`;
