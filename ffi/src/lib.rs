@@ -1262,11 +1262,8 @@ pub unsafe extern "C-unwind" fn command(
 
     // Check inflight request limit
     if !client_adapter.core.client.reserve_inflight_request() {
-        let err = RedisError::from((
-            ErrorKind::ClientError,
-            "Reached maximum inflight requests",
-        ));
-        return client_adapter.handle_redis_error(err, request_id);
+        let err = RedisError::from((ErrorKind::ClientError, "Reached maximum inflight requests"));
+        return unsafe { client_adapter.handle_redis_error(err, request_id) };
     }
 
     let child_span = create_child_span(cmd.span().as_ref(), "send_command");

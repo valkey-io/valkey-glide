@@ -436,12 +436,12 @@ fn test_create_named_otel_span() {
     }
 }
 
-
 #[test]
 fn test_inflight_request_limit_sync_client() {
     let server = Server::new();
     let inflight_limit = 2;
-    let connection_request_bytes = create_connection_request_with_inflight_limit(server.port, inflight_limit);
+    let connection_request_bytes =
+        create_connection_request_with_inflight_limit(server.port, inflight_limit);
     let connection_request_len = connection_request_bytes.len();
     let connection_request_ptr = connection_request_bytes.as_ptr();
     let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
@@ -480,7 +480,7 @@ fn test_inflight_request_limit_sync_client() {
         let value = b"test_value";
         let args = [key.as_ptr() as usize, value.as_ptr() as usize];
         let args_len = [key.len() as c_ulong, value.len() as c_ulong];
-        
+
         // Send a successful command first
         let result = command(
             client_ptr,
@@ -493,10 +493,13 @@ fn test_inflight_request_limit_sync_client() {
             0,
             0,
         );
-        
+
         assert!(!result.is_null(), "First command should succeed");
         let cmd_result = Box::from_raw(result);
-        assert!(cmd_result.command_error.is_null(), "First command should not error");
+        assert!(
+            cmd_result.command_error.is_null(),
+            "First command should not error"
+        );
         if !cmd_result.response.is_null() {
             free_command_response(cmd_result.response);
         }
@@ -504,7 +507,10 @@ fn test_inflight_request_limit_sync_client() {
         // Now verify the inflight limit is configured by checking we can send commands
         // The actual enforcement happens at the glide-core level
         // This test verifies the FFI layer passes the limit correctly
-        println!("Inflight request limit test passed - limit configured: {}", inflight_limit);
+        println!(
+            "Inflight request limit test passed - limit configured: {}",
+            inflight_limit
+        );
 
         free_connection_response(response_ptr as *mut ConnectionResponse);
         close_client(client_ptr);

@@ -12074,7 +12074,6 @@ class TestSyncScripts:
             finally:
                 standalone_client.close()
 
-
     # Testing the inflight_requests_limit parameter in sync client. Sending the allowed amount + 1 of requests
     # to glide, using blocking commands, and checking the N+1 request returns immediately with error.
     @pytest.mark.parametrize("cluster_mode", [False, True])
