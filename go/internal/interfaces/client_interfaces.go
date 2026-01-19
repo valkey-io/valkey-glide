@@ -55,6 +55,7 @@ type GlideClusterClientCommands interface {
 	ConnectionManagementClusterCommands
 	ScriptingAndFunctionClusterCommands
 	PubSubClusterCommands
+	ClusterManagementCommands
 
 	UnwatchWithOptions(ctx context.Context, route options.RouteOption) (string, error)
 	Exec(ctx context.Context, batch pipeline.ClusterBatch, raiseOnError bool) ([]any, error)
