@@ -12095,10 +12095,12 @@ class TestSyncScripts:
 
         def _blpop():
             try:
-                test_client.blpop([key1], 0)
+                test_client.blpop([key1], 1)  # Use 1 second timeout instead of 0 (infinite)
             except RequestError as e:
-                if "maximum inflight requests" in str(e).lower():
+                error_msg = str(e).lower()
+                if "maximum inflight requests" in error_msg:
                     max_reached.set()
+                # Ignore timeout errors - these are expected for blocked threads
 
         threads = []
         for _ in range(inflight_requests_limit + 1):
@@ -12108,5 +12110,9 @@ class TestSyncScripts:
 
         # Wait for the max inflight error to occur
         assert max_reached.wait(timeout=10), "Expected inflight request limit error"
+
+        # Wait for threads to complete (they'll timeout after 1 second)
+        for thread in threads:
+            thread.join(timeout=2)
 
         test_client.close()
