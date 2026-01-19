@@ -1260,11 +1260,23 @@ pub unsafe extern "C-unwind" fn command(
         Routes::default()
     };
 
+    // Check inflight request limit
+    if !client_adapter.core.client.reserve_inflight_request() {
+        let err = RedisError::from((
+            ErrorKind::ClientError,
+            "Reached maximum inflight requests",
+        ));
+        return client_adapter.handle_redis_error(err, request_id);
+    }
+
     let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let mut client = client_adapter.core.client.clone();
+    let client_for_release = client_adapter.core.client.clone();
     let result = client_adapter.execute_request(request_id, async move {
         let routing_info = get_route(route, Some(&cmd))?;
-        client.send_command(&mut cmd, routing_info).await
+        let result = client.send_command(&mut cmd, routing_info).await;
+        client_for_release.release_inflight_request();
+        result
     });
     if let Ok(span) = child_span {
         span.end();
