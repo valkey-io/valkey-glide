@@ -2981,3 +2981,228 @@ func (suite *GlideTestSuite) TestClusterScanEarlyTerminationMemoryLeak() {
 		t.Logf("Heap memory growth is acceptable: %d bytes", heapGrowth)
 	}
 }
+
+func (suite *GlideTestSuite) TestClusterInfo() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Test ClusterInfo without route
+	result, err := client.ClusterInfo(context.Background())
+	assert.NoError(t, err)
+	assert.Contains(t, result, "cluster_state:")
+	assert.Contains(t, result, "cluster_slots_assigned:")
+	assert.Contains(t, result, "cluster_known_nodes:")
+
+	// Test ClusterInfoWithRoute - single node
+	routeOption := options.RouteOption{Route: config.RandomRoute}
+	clusterResult, err := client.ClusterInfoWithRoute(context.Background(), routeOption)
+	assert.NoError(t, err)
+	assert.Contains(t, clusterResult.SingleValue(), "cluster_state:")
+
+	// Test ClusterInfoWithRoute - all nodes
+	routeOption = options.RouteOption{Route: config.AllNodes}
+	clusterResult, err = client.ClusterInfoWithRoute(context.Background(), routeOption)
+	assert.NoError(t, err)
+	for _, info := range clusterResult.MultiValue() {
+		assert.Contains(t, info, "cluster_state:")
+	}
+}
+
+func (suite *GlideTestSuite) TestClusterNodes() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Test ClusterNodes without route
+	result, err := client.ClusterNodes(context.Background())
+	assert.NoError(t, err)
+	// Result should contain node IDs and connection info
+	assert.Contains(t, result, "myself")
+	// Should have multiple lines (one per node)
+	lines := strings.Split(strings.TrimSpace(result), "\n")
+	assert.GreaterOrEqual(t, len(lines), 1)
+
+	// Test ClusterNodesWithRoute - single node
+	routeOption := options.RouteOption{Route: config.RandomRoute}
+	clusterResult, err := client.ClusterNodesWithRoute(context.Background(), routeOption)
+	assert.NoError(t, err)
+	assert.Contains(t, clusterResult.SingleValue(), "myself")
+}
+
+func (suite *GlideTestSuite) TestClusterShards() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// CLUSTER SHARDS requires Valkey 7.0+
+	if suite.serverVersion < "7.0.0" {
+		t.Skip("CLUSTER SHARDS requires Valkey 7.0 or above")
+	}
+
+	// Test ClusterShards without route
+	result, err := client.ClusterShards(context.Background())
+	assert.NoError(t, err)
+	assert.Greater(t, len(result), 0)
+
+	// Each shard should have slots and nodes info
+	for _, shard := range result {
+		assert.NotNil(t, shard)
+		_, hasSlots := shard["slots"]
+		_, hasNodes := shard["nodes"]
+		assert.True(t, hasSlots || hasNodes, "Shard should have slots or nodes info")
+	}
+}
+
+func (suite *GlideTestSuite) TestClusterSlots() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Test ClusterSlots - deprecated but should still work
+	result, err := client.ClusterSlots(context.Background())
+	assert.NoError(t, err)
+	assert.Greater(t, len(result), 0)
+}
+
+func (suite *GlideTestSuite) TestClusterKeySlot() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Test with various keys
+	testCases := []struct {
+		key          string
+		expectedSlot int64
+	}{
+		{"key", 12539},      // known slot for "key"
+		{"hello", 866},      // known slot for "hello"
+		{"{user}:1", 5474},  // hash tag
+		{"{user}:2", 5474},  // same hash tag = same slot
+		{"foo{bar}baz", 5061}, // hash tag in middle
+	}
+
+	for _, tc := range testCases {
+		slot, err := client.ClusterKeySlot(context.Background(), tc.key)
+		assert.NoError(t, err)
+		assert.GreaterOrEqual(t, slot, int64(0))
+		assert.Less(t, slot, int64(16384))
+	}
+
+	// Keys with same hash tag should map to same slot
+	slot1, _ := client.ClusterKeySlot(context.Background(), "{user}:1")
+	slot2, _ := client.ClusterKeySlot(context.Background(), "{user}:2")
+	assert.Equal(t, slot1, slot2)
+}
+
+func (suite *GlideTestSuite) TestClusterMyId() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Test ClusterMyId without route
+	result, err := client.ClusterMyId(context.Background())
+	assert.NoError(t, err)
+	// Node ID is 40 characters hex string
+	assert.Len(t, result, 40)
+
+	// Test ClusterMyIdWithRoute - all nodes
+	routeOption := options.RouteOption{Route: config.AllNodes}
+	clusterResult, err := client.ClusterMyIdWithRoute(context.Background(), routeOption)
+	assert.NoError(t, err)
+	for _, nodeId := range clusterResult.MultiValue() {
+		assert.Len(t, nodeId, 40)
+	}
+}
+
+func (suite *GlideTestSuite) TestClusterMyShardId() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// CLUSTER MYSHARDID requires Valkey 7.2+
+	if suite.serverVersion < "7.2.0" {
+		t.Skip("CLUSTER MYSHARDID requires Valkey 7.2 or above")
+	}
+
+	// Test ClusterMyShardId without route
+	result, err := client.ClusterMyShardId(context.Background())
+	assert.NoError(t, err)
+	// Shard ID is 40 characters hex string
+	assert.Len(t, result, 40)
+
+	// Test ClusterMyShardIdWithRoute - all nodes
+	routeOption := options.RouteOption{Route: config.AllNodes}
+	clusterResult, err := client.ClusterMyShardIdWithRoute(context.Background(), routeOption)
+	assert.NoError(t, err)
+	for _, shardId := range clusterResult.MultiValue() {
+		assert.Len(t, shardId, 40)
+	}
+}
+
+func (suite *GlideTestSuite) TestClusterGetKeysInSlot() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// First, set some keys to ensure there are keys in a slot
+	key := "{testslot}:key1"
+	_, err := client.Set(context.Background(), key, "value1")
+	assert.NoError(t, err)
+
+	// Get the slot for our key
+	slot, err := client.ClusterKeySlot(context.Background(), key)
+	assert.NoError(t, err)
+
+	// Get keys in that slot
+	keys, err := client.ClusterGetKeysInSlot(context.Background(), slot, 10)
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, len(keys), 1)
+	assert.Contains(t, keys, key)
+
+	// Clean up
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestClusterCountKeysInSlot() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// First, set some keys in the same slot
+	keys := []string{"{counttest}:key1", "{counttest}:key2", "{counttest}:key3"}
+	for _, key := range keys {
+		_, err := client.Set(context.Background(), key, "value")
+		assert.NoError(t, err)
+	}
+
+	// Get the slot for our keys
+	slot, err := client.ClusterKeySlot(context.Background(), keys[0])
+	assert.NoError(t, err)
+
+	// Count keys in that slot
+	count, err := client.ClusterCountKeysInSlot(context.Background(), slot)
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, count, int64(3))
+
+	// Clean up
+	client.Del(context.Background(), keys)
+}
+
+func (suite *GlideTestSuite) TestClusterLinks() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// CLUSTER LINKS requires Valkey 7.0+
+	if suite.serverVersion < "7.0.0" {
+		t.Skip("CLUSTER LINKS requires Valkey 7.0 or above")
+	}
+
+	// Test ClusterLinks without route
+	result, err := client.ClusterLinks(context.Background())
+	assert.NoError(t, err)
+	// Should return array of link info
+	assert.NotNil(t, result)
+
+	// Each link should have connection info
+	for _, link := range result {
+		assert.NotNil(t, link)
+	}
+
+	// Test ClusterLinksWithRoute - single node
+	routeOption := options.RouteOption{Route: config.RandomRoute}
+	clusterResult, err := client.ClusterLinksWithRoute(context.Background(), routeOption)
+	assert.NoError(t, err)
+	assert.NotNil(t, clusterResult.SingleValue())
+}
