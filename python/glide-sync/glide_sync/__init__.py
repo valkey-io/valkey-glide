@@ -154,6 +154,12 @@ from .config import GlideClientConfiguration, GlideClusterClientConfiguration
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger
+from .opentelemetry import (
+    OpenTelemetry,
+    OpenTelemetryConfig,
+    OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig,
+)
 from .sync_commands import ft, glide_json
 from .sync_commands.cluster_scan_cursor import ClusterScanCursor
 from .sync_commands.script import Script
@@ -299,6 +305,11 @@ __all__ = [
     # Logger
     "Logger",
     "LogLevel",
+    # OpenTelemetry
+    "OpenTelemetry",
+    "OpenTelemetryConfig",
+    "OpenTelemetryMetricsConfig",
+    "OpenTelemetryTracesConfig",
     # Ft
     "DataType",
     "DistanceMetricType",
