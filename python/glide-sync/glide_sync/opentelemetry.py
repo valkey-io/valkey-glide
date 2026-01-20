@@ -38,7 +38,7 @@ import random
 from typing import Optional
 
 from glide_shared.exceptions import ConfigurationError
-from glide_shared.opentelemetry import (
+from glide_shared.opentelemetry import (  # noqa: F401
     OpenTelemetryConfig,
     OpenTelemetryMetricsConfig,
     OpenTelemetryTracesConfig,
