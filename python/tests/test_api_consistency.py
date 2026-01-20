@@ -60,7 +60,7 @@ EXCLUDED_API_FILENAMES = {
     "async_only": [
         "opentelemetry.py",
     ],
-    "sync_only": ["_glide_ffi.py"],
+    "sync_only": ["_glide_ffi.py", "opentelemetry.py"],
 }
 
 EXCLUDED_TESTS = {
@@ -116,6 +116,7 @@ EXCLUDED_TESTS_FILENAMES = {
         "test_pubsub.py",
     ],
     "sync_only": [
+        "test_sync_opentelemetry.py",
         # TODO: Remove when implementing dynamic pubsub for the sync client
         "test_sync_pubsub.py"
     ],
