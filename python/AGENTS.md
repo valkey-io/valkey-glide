@@ -13,7 +13,7 @@ This is the Python client binding for Valkey GLIDE, providing both async and syn
 **Key Components:**
 - `glide-async/` - Async client using PyO3 bindings and Unix Domain Socket communication
 - `glide-sync/` - Sync client using CFFI bindings and direct FFI communication  
-- `glide-shared/` - Shared Python logic used by both clients (including OpenTelemetry config classes)
+- `glide-shared/` - Shared Python logic used by both clients
 - `tests/` - Shared test suite for both clients
 - `dev.py` - CLI utility for build, test, and development tasks
 
