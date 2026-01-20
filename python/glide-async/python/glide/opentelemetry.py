@@ -66,7 +66,7 @@ class OpenTelemetry:
         if not cls._instance:
             cls._config = config
             # Initialize the underlying OpenTelemetry implementation
-            init_opentelemetry(config)
+            init_opentelemetry(config)  # type: ignore[arg-type]
             cls._instance = OpenTelemetry()
             Logger.log(
                 Level.INFO,
