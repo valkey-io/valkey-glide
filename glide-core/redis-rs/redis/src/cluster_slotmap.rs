@@ -42,6 +42,8 @@ pub enum ReadFromReplicaStrategy {
     /// Spread the read requests among nodes within the client's Availability Zone (AZ) in a round robin manner,
     /// prioritizing local replicas, then the local primary, and falling back to any replica or the primary if needed.
     AZAffinityReplicasAndPrimary(String),
+    /// Spread the read requests between all nodes (primary and replicas) in a round robin manner.
+    AllNodes,
 }
 
 #[derive(Debug, Default)]
@@ -69,6 +71,19 @@ fn get_address_from_slot(
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                 % addrs.replicas().len();
             addrs.replicas()[index].clone()
+        }
+        ReadFromReplicaStrategy::AllNodes => {
+            // Round-robin across all nodes: primary + all replicas
+            let total_nodes = addrs.replicas().len() + 1;
+            let index = slot
+                .last_used_replica
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                % total_nodes;
+            if index == 0 {
+                addrs.primary()
+            } else {
+                addrs.replicas()[index - 1].clone()
+            }
         }
         ReadFromReplicaStrategy::AZAffinity(_az) => todo!(), // Drop sync client
         ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(_az) => todo!(), // Drop sync client
@@ -804,6 +819,27 @@ mod tests_cluster_slotmap {
         assert_eq!(
             addresses,
             vec!["replica4:6379", "replica5:6379", "replica6:6379"]
+                .into_iter()
+                .map(|s| Arc::new(s.to_string()))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_slot_map_all_nodes_includes_primary_and_replicas() {
+        let slot_map = get_slot_map(ReadFromReplicaStrategy::AllNodes);
+        let route = Route::new(2001, SlotAddr::ReplicaOptional);
+        // With 3 replicas + 1 primary = 4 nodes total, we should cycle through all
+        let mut addresses = vec![
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+        ];
+        addresses.sort();
+        assert_eq!(
+            addresses,
+            vec!["node3:6379", "replica4:6379", "replica5:6379", "replica6:6379"]
                 .into_iter()
                 .map(|s| Arc::new(s.to_string()))
                 .collect::<Vec<_>>()
