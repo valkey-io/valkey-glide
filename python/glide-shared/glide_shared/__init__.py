@@ -170,6 +170,11 @@ from .routes import (
     SlotKeyRoute,
     SlotType,
 )
+from .opentelemetry import (
+    OpenTelemetryConfig,
+    OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig,
+)
 
 __all__ = [
     # Client
@@ -331,4 +336,8 @@ __all__ = [
     "FtAggregateSortProperty",
     "FtProfileOptions",
     "QueryType",
+    # OpenTelemetry
+    "OpenTelemetryConfig",
+    "OpenTelemetryMetricsConfig",
+    "OpenTelemetryTracesConfig",
 ]
