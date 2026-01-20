@@ -344,10 +344,11 @@ where
         }
     }
 
-    /// Returns an iterator over the nodes in the `slot_map`, yielding pairs of the node address and its associated shard addresses.
+    /// Returns an iterator over the nodes in the `slot_map`, yielding tuples of
+    /// (node address, (optional IP address, shard addresses)).
     pub(crate) fn slot_map_nodes(
         &self,
-    ) -> impl Iterator<Item = (Arc<String>, Arc<ShardAddrs>)> + '_ {
+    ) -> impl Iterator<Item = (Arc<String>, (Option<IpAddr>, Arc<ShardAddrs>))> + '_ {
         self.slot_map
             .nodes_map()
             .iter()
@@ -628,11 +629,7 @@ where
             let (address, conn) = (item.key(), item.value());
             (
                 address.clone(),
-                conn.management_connection
-                    .as_ref()
-                    .unwrap_or(&conn.user_connection)
-                    .conn
-                    .clone(),
+                conn.get_connection(&ConnectionType::PreferManagement),
             )
         })
     }
@@ -798,6 +795,7 @@ mod tests {
                     ],
                 ),
             ],
+            HashMap::new(),
             ReadFromReplicaStrategy::AlwaysFromPrimary, // this argument shouldn't matter, since we overload the RFR strategy.
         );
         let connection_map = DashMap::new();
@@ -860,6 +858,7 @@ mod tests {
                     vec!["replica3-1".to_owned(), "replica3-2".to_owned()],
                 ),
             ],
+            HashMap::new(),
             ReadFromReplicaStrategy::AlwaysFromPrimary, // this argument shouldn't matter, since we overload the RFR strategy.
         );
         let connection_map = DashMap::new();

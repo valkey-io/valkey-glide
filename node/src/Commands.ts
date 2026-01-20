@@ -51,10 +51,13 @@ function toBuffersArray(args: GlideString[]) {
     const argsBytes: Uint8Array[] = [];
 
     for (const arg of args) {
-        if (typeof arg == "string") {
+        if (Buffer.isBuffer(arg)) {
+            argsBytes.push(arg);
+        } else if (typeof arg === "string") {
             argsBytes.push(Buffer.from(arg));
         } else {
-            argsBytes.push(arg);
+            // Fallback for unexpected types (number, boolean, etc.)
+            argsBytes.push(Buffer.from(String(arg)));
         }
     }
 
