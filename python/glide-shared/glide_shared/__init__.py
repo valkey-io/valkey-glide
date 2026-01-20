@@ -160,6 +160,11 @@ from .exceptions import (
     RequestError,
     TimeoutError,
 )
+from .opentelemetry import (
+    OpenTelemetryConfig,
+    OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig,
+)
 from .routes import (
     AllNodes,
     AllPrimaries,
@@ -169,11 +174,6 @@ from .routes import (
     SlotIdRoute,
     SlotKeyRoute,
     SlotType,
-)
-from .opentelemetry import (
-    OpenTelemetryConfig,
-    OpenTelemetryMetricsConfig,
-    OpenTelemetryTracesConfig,
 )
 
 __all__ = [
