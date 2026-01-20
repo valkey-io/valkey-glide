@@ -18,8 +18,8 @@ from glide_sync.opentelemetry import OpenTelemetry
 from tests.sync_tests.conftest import create_sync_client
 from tests.test_otel_utils import (
     read_and_parse_span_file,
-    wait_for_spans_sync as wait_for_spans_to_be_flushed,
 )
+from tests.test_otel_utils import wait_for_spans_sync as wait_for_spans_to_be_flushed
 
 # Constants
 TIMEOUT = 50  # seconds
