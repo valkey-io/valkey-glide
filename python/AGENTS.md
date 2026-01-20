@@ -13,7 +13,7 @@ This is the Python client binding for Valkey GLIDE, providing both async and syn
 **Key Components:**
 - `glide-async/` - Async client using PyO3 bindings and Unix Domain Socket communication
 - `glide-sync/` - Sync client using CFFI bindings and direct FFI communication  
-- `glide-shared/` - Shared Python logic used by both clients
+- `glide-shared/` - Shared Python logic used by both clients (including OpenTelemetry config classes)
 - `tests/` - Shared test suite for both clients
 - `dev.py` - CLI utility for build, test, and development tasks
 
@@ -228,7 +228,7 @@ python/
 **Packages:** `valkey-glide` (async), `valkey-glide-sync` (sync) on PyPI
 **API Styles:** Async (asyncio/trio), Sync (blocking)
 **Client Types:** GlideClient (standalone), GlideClusterClient (cluster) for both async/sync
-**Key Features:** Dual client architecture, shared logic, multi-async framework support
+**Key Features:** Dual client architecture, shared logic, multi-async framework support, OpenTelemetry observability
 **Testing:** pytest with async backend selection, shared test suite
 **Platforms:** Linux (Ubuntu, AL2/AL2023), macOS (Intel/Apple Silicon)
 **Dependencies:** Python 3.9+, Rust toolchain, protobuf compiler
