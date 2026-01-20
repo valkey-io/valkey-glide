@@ -60,7 +60,7 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
             (sent but not yet completed).
             This limit is used to control the memory usage and prevent the client from overwhelming the server or getting
             stuck in case of a queue backlog.
-            If not set, a default value will be used.
+            If not set, the default value of 1000 will be used.
         client_az (Optional[str]): Availability Zone of the client.
             If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
             the specified AZ if exits.
@@ -159,7 +159,7 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
             (sent but not yet completed).
             This limit is used to control the memory usage and prevent the client from overwhelming the server or getting
             stuck in case of a queue backlog.
-            If not set, a default value will be used.
+            If not set, the default value of 1000 will be used.
         periodic_checks (Union[PeriodicChecksStatus, PeriodicChecksManualInterval]): Configure the periodic topology checks.
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
             Periodic checks ensure a quick and efficient process by querying a limited number of nodes.

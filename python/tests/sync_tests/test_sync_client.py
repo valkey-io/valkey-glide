@@ -12095,7 +12095,9 @@ class TestSyncScripts:
 
         def _blpop():
             try:
-                test_client.blpop([key1], 1)  # Use 1 second timeout instead of 0 (infinite)
+                test_client.blpop(
+                    [key1], 1
+                )  # Use 1 second timeout instead of 0 (infinite)
             except RequestError as e:
                 error_msg = str(e).lower()
                 if "maximum inflight requests" in error_msg:
