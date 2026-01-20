@@ -499,6 +499,9 @@ where
                 ReadFromReplicaStrategy::RoundRobin => {
                     self.round_robin_read_from_replica(slot_map_value)
                 }
+                ReadFromReplicaStrategy::AllNodes => {
+                    self.round_robin_read_from_replica(slot_map_value)
+                }
                 ReadFromReplicaStrategy::AZAffinity(az) => self
                     .round_robin_read_from_replica_with_az_awareness(
                         slot_map_value,

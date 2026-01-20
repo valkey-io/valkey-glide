@@ -105,6 +105,7 @@ pub enum ReadFrom {
     PreferReplica,
     AZAffinity(String),
     AZAffinityReplicasAndPrimary(String),
+    AllNodes,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]
@@ -146,6 +147,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             protobuf::ReadFrom::Primary => ReadFrom::Primary,
             protobuf::ReadFrom::PreferReplica => ReadFrom::PreferReplica,
             protobuf::ReadFrom::LowestLatency => todo!(),
+            protobuf::ReadFrom::AllNodes => ReadFrom::AllNodes,
             protobuf::ReadFrom::AZAffinity => {
                 if let Some(client_az) = chars_to_string_option(&value.client_az) {
                     ReadFrom::AZAffinity(client_az)

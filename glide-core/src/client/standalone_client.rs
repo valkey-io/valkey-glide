@@ -757,6 +757,9 @@ fn get_read_from(read_from: Option<super::ReadFrom>) -> ReadFrom {
         Some(super::ReadFrom::PreferReplica) => ReadFrom::PreferReplica {
             latest_read_replica_index: Default::default(),
         },
+        Some(super::ReadFrom::AllNodes) => ReadFrom::PreferReplica {
+            latest_read_replica_index: Default::default(),
+        },
         Some(super::ReadFrom::AZAffinity(az)) => ReadFrom::AZAffinity {
             client_az: az,
             last_read_replica_index: Default::default(),
