@@ -9,12 +9,12 @@ See glide_shared.opentelemetry module documentation for configuration details.
 import random
 from typing import Optional
 
-from glide.glide import init_opentelemetry
-from glide_shared.exceptions import ConfigurationError
-from glide_shared.opentelemetry import (
+from glide.glide import (
     OpenTelemetryConfig,
     OpenTelemetryTracesConfig,
+    init_opentelemetry,
 )
+from glide_shared.exceptions import ConfigurationError
 
 from .logger import Level, Logger
 
@@ -66,7 +66,7 @@ class OpenTelemetry:
         if not cls._instance:
             cls._config = config
             # Initialize the underlying OpenTelemetry implementation
-            init_opentelemetry(config)  # type: ignore[arg-type]
+            init_opentelemetry(config)
             cls._instance = OpenTelemetry()
             Logger.log(
                 Level.INFO,

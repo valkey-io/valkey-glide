@@ -6,6 +6,9 @@ import warnings
 
 from glide.glide import (
     ClusterScanCursor,
+    OpenTelemetryConfig,
+    OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig,
     Script,
     get_min_compressed_size,
 )
@@ -100,9 +103,6 @@ from glide_shared import (
     ObjectType,
     OffsetOptions,
     OnlyIfEqual,
-    OpenTelemetryConfig,
-    OpenTelemetryMetricsConfig,
-    OpenTelemetryTracesConfig,
     OrderBy,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
