@@ -9382,6 +9382,177 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_keys_command(self, glide_sync_client: TGlideClient):
+        # Test with empty database
+        glide_sync_client.flushall()
+        result = glide_sync_client.keys("*")
+        assert result == []
+
+        # Set up test keys
+        test_keys = [
+            "key1",
+            "key2", 
+            "key3",
+            "prefix:key1",
+            "prefix:key2",
+            "different:key1",
+            "test_key",
+            "another_test"
+        ]
+        
+        # Add keys to database
+        for key in test_keys:
+            glide_sync_client.set(key, f"value_{key}")
+
+        # Test getting all keys
+        all_keys = glide_sync_client.keys("*")
+        assert len(all_keys) == len(test_keys)
+        # Convert bytes to strings for comparison
+        all_keys_str = [key.decode() for key in all_keys]
+        for key in test_keys:
+            assert key in all_keys_str
+
+        # Test pattern matching with prefix
+        prefix_keys = glide_sync_client.keys("prefix:*")
+        assert len(prefix_keys) == 2
+        prefix_keys_str = [key.decode() for key in prefix_keys]
+        assert "prefix:key1" in prefix_keys_str
+        assert "prefix:key2" in prefix_keys_str
+
+        # Test pattern matching with suffix
+        test_suffix_keys = glide_sync_client.keys("*test*")
+        assert len(test_suffix_keys) == 2
+        test_suffix_keys_str = [key.decode() for key in test_suffix_keys]
+        assert "test_key" in test_suffix_keys_str
+        assert "another_test" in test_suffix_keys_str
+
+        # Test exact key match
+        exact_key = glide_sync_client.keys("key1")
+        assert len(exact_key) == 1
+        assert exact_key[0] == b"key1"
+
+        # Test non-matching pattern
+        no_match = glide_sync_client.keys("nonexistent*")
+        assert no_match == []
+
+        # Test question mark wildcard
+        question_keys = glide_sync_client.keys("key?")
+        assert len(question_keys) == 3
+        question_keys_str = [key.decode() for key in question_keys]
+        assert "key1" in question_keys_str
+        assert "key2" in question_keys_str
+        assert "key3" in question_keys_str
+
+        # Test character class pattern
+        glide_sync_client.set("keya", "value")
+        glide_sync_client.set("keyb", "value")
+        glide_sync_client.set("keyc", "value")
+        
+        char_class_keys = glide_sync_client.keys("key[abc]")
+        assert len(char_class_keys) == 3
+        char_class_keys_str = [key.decode() for key in char_class_keys]
+        assert "keya" in char_class_keys_str
+        assert "keyb" in char_class_keys_str
+        assert "keyc" in char_class_keys_str
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_keys_command_return_type(self, glide_sync_client: TGlideClient):
+        """Test that KEYS returns List[bytes] as expected by redis-py compatibility."""
+        glide_sync_client.flushall()
+        
+        # Set a key
+        glide_sync_client.set("test_key", "test_value")
+        
+        # Get keys
+        keys = glide_sync_client.keys("*")
+        
+        # Verify return type
+        assert isinstance(keys, list)
+        assert len(keys) == 1
+        assert isinstance(keys[0], bytes)
+        assert keys[0] == b"test_key"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_keys_command_special_characters(self, glide_sync_client: TGlideClient):
+        """Test KEYS command with special characters and escaping."""
+        glide_sync_client.flushall()
+        
+        # Set keys with special characters
+        special_keys = [
+            "key*with*stars",
+            "key?with?question",
+            "key[with]brackets",
+            "key\\with\\backslash",
+            "normal_key"
+        ]
+        
+        for key in special_keys:
+            glide_sync_client.set(key, "value")
+        
+        # Test escaping special characters
+        # Note: Redis KEYS command uses glob patterns, so we need to escape
+        star_keys = glide_sync_client.keys("key\\*with\\*stars")
+        assert len(star_keys) == 1
+        assert star_keys[0] == b"key*with*stars"
+        
+        # Test normal wildcard still works
+        all_keys = glide_sync_client.keys("*")
+        assert len(all_keys) == len(special_keys)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_keys_command_empty_pattern(self, glide_sync_client: TGlideClient):
+        """Test KEYS command with empty and edge case patterns."""
+        glide_sync_client.flushall()
+        
+        # Set some keys
+        glide_sync_client.set("key1", "value1")
+        glide_sync_client.set("key2", "value2")
+        
+        # Test empty pattern (should match nothing)
+        empty_keys = glide_sync_client.keys("")
+        assert empty_keys == []
+        
+        # Test single character patterns
+        single_char_keys = glide_sync_client.keys("?")
+        assert single_char_keys == []  # No single character keys
+        
+        # Test very specific pattern
+        specific_keys = glide_sync_client.keys("key1")
+        assert len(specific_keys) == 1
+        assert specific_keys[0] == b"key1"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_keys_command_large_dataset(self, glide_sync_client: TGlideClient):
+        """Test KEYS command performance warning scenario with larger dataset."""
+        glide_sync_client.flushall()
+        
+        # Create a moderate number of keys to test pattern matching
+        key_count = 50  # Reduced for test performance
+        for i in range(key_count):
+            glide_sync_client.set(f"test_key_{i:03d}", f"value_{i}")
+        
+        # Test getting all keys
+        all_keys = glide_sync_client.keys("*")
+        assert len(all_keys) == key_count
+        
+        # Test pattern matching
+        pattern_keys = glide_sync_client.keys("test_key_0*")
+        # Should match test_key_000 through test_key_049 (all start with 0)
+        pattern_keys_str = [key.decode() for key in pattern_keys]
+        expected_matches = [f"test_key_{i:03d}" for i in range(key_count) if str(i).startswith("0")]
+        assert len(pattern_keys) == len(expected_matches)
+        
+        # Verify all returned keys match the pattern
+        for key in pattern_keys:
+            key_str = key.decode()
+            assert key_str.startswith("test_key_0")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_dump_restore(self, glide_sync_client: TGlideClient):
         key1 = f"{{key}}-1{get_random_string(10)}"
         key2 = f"{{key}}-2{get_random_string(10)}"

@@ -7244,6 +7244,48 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.Discard, []),
         )
 
+    def keys(self, pattern: TEncodable = "*") -> List[bytes]:
+        """
+        Returns all keys matching the given pattern.
+
+        See [valkey.io](https://valkey.io/commands/keys) for more details.
+
+        Warning:
+            This command is intended for debugging and special operations, such as changing
+            your keyspace layout. Don't use KEYS in your regular application code.
+            If you're looking for a way to find keys in a subset of your keyspace, consider
+            using SCAN or sets.
+
+        Args:
+            pattern (TEncodable): The pattern to match keys against. Defaults to "*" (all keys).
+                Supported glob-style patterns:
+                - h?llo matches hello, hallo and hxllo
+                - h*llo matches hllo and heeeello  
+                - h[ae]llo matches hello and hallo, but not hillo
+                - h[^e]llo matches hallo, hbllo, ... but not hello
+                - h[a-b]llo matches hallo and hbllo
+                Use \\ to escape special characters if you want to match them verbatim.
+
+        Returns:
+            List[bytes]: A list of keys matching the pattern.
+
+        Examples:
+            >>> client.set("key1", "value1")
+                'OK'
+            >>> client.set("key2", "value2")
+                'OK'
+            >>> client.keys("*")
+                [b'key1', b'key2']
+            >>> client.keys("key1")
+                [b'key1']
+            >>> client.keys("nonexistent*")
+                []
+        """
+        return cast(
+            List[bytes],
+            self._execute_command(RequestType.Keys, [pattern]),
+        )
+
     def lcs(
         self,
         key1: TEncodable,
