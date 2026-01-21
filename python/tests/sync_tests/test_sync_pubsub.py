@@ -146,7 +146,8 @@ def client_cleanup(
     Note that unsubscribing is not feasible in the current implementation since its unknown on which node the subs
     are configured
     """
-
+    # TODO: Once dynamic pubsub is implemented for the sync client
+    # fix the cleanup to mirror that of the async client
     if client is None:
         return
 
@@ -156,20 +157,20 @@ def client_cleanup(
             channel_patterns,
         ) in cluster_mode_subs.channels_and_patterns.items():
             if channel_type == GlideClusterClientConfiguration.PubSubChannelModes.Exact:
-                cmd = "UNSUBSCRIBE"
+                cmd = "UNSUBSCRIBE_BLOCKING"
             elif (
                 channel_type
                 == GlideClusterClientConfiguration.PubSubChannelModes.Pattern
             ):
-                cmd = "PUNSUBSCRIBE"
+                cmd = "PUNSUBSCRIBE_BLOCKING"
             elif not sync_check_if_server_version_lt(client, "7.0.0"):
-                cmd = "SUNSUBSCRIBE"
+                cmd = "SUNSUBSCRIBE_BLOCKING"
             else:
                 # disregard sharded config for versions < 7.0.0
                 continue
 
             for channel_patern in channel_patterns:
-                client.custom_command([cmd, channel_patern])
+                client.custom_command([cmd, channel_patern, "0"])
 
     client.close()
     del client
