@@ -16,6 +16,80 @@ from tests.utils.utils import get_first_result
 
 @pytest.mark.anyio
 # @pytest.mark.usefixtures("multiple_replicas_cluster")
+class TestReadFromStrategy:
+    async def _get_num_replicas(self, client: GlideClusterClient) -> int:
+        info_replicas = get_first_result(
+            await client.info([InfoSection.REPLICATION])
+        ).decode()
+        match = re.search(r"connected_slaves:(\d+)", info_replicas)
+        if match:
+            return int(match.group(1))
+        else:
+            raise ValueError(
+                "Could not find the number of replicas in the INFO REPLICATION response"
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_all_nodes_routes_to_primary_and_replicas(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+        """Test that ALL_NODES strategy distributes reads across BOTH primary and replicas"""
+        client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            read_from=ReadFrom.ALL_NODES,
+            request_timeout=2000,
+        )
+        assert type(client) is GlideClusterClient
+        assert await client.config_resetstat() == OK
+
+        # Perform multiple GET operations
+        GET_CALLS = 20
+        for _ in range(GET_CALLS):
+            await client.get("foo")
+
+        info_result = cast(
+            Mapping[bytes, bytes],
+            await client.info(
+                [InfoSection.COMMAND_STATS, InfoSection.REPLICATION], AllNodes()
+            ),
+        )
+
+        # Verify that both primary and replicas received GET calls
+        primary_with_gets = 0
+        replicas_with_gets = 0
+        total_get_calls = 0
+        
+        for value in info_result.values():
+            info_str = value.decode()
+            is_primary = "role:master" in info_str
+            get_calls_match = re.search(r"cmdstat_get:calls=(\d+)", info_str)
+            
+            if get_calls_match:
+                get_calls = int(get_calls_match.group(1))
+                total_get_calls += get_calls
+                
+                if get_calls > 0:
+                    if is_primary:
+                        primary_with_gets += 1
+                    else:
+                        replicas_with_gets += 1
+
+        # Verify ALL_NODES routes to BOTH primary and replicas
+        assert primary_with_gets >= 1, f"Primary should receive GET calls with ALL_NODES strategy. Primary calls: {primary_with_gets}, Replica calls: {replicas_with_gets}"
+        assert replicas_with_gets >= 1, f"At least one replica should receive GET calls with ALL_NODES strategy. Primary calls: {primary_with_gets}, Replica calls: {replicas_with_gets}"
+        assert total_get_calls == GET_CALLS, f"Expected {GET_CALLS} total calls, got {total_get_calls}"
+
+        await client.close()
+
+
+@pytest.mark.anyio
+# @pytest.mark.usefixtures("multiple_replicas_cluster")
 class TestAZAffinity:
     async def _get_num_replicas(self, client: GlideClusterClient) -> int:
         info_replicas = get_first_result(
