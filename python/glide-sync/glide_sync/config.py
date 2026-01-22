@@ -73,7 +73,7 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
             Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
 
         Note:
-            PubSub is not yet supported for the sync client.
+            Dynamic PubSub is not yet supported for the sync client.
     """
 
     def __init__(
@@ -179,7 +179,7 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
     Notes:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff
         with fixed values is used.
-        In addition, PubSub is not yet supported for the sync client.
+        In addition, Dynamic PubSub is not yet supported for the sync client.
     """
 
     def __init__(
