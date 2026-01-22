@@ -436,6 +436,44 @@ public class ConnectionTests {
 
     @SneakyThrows
     @Test
+    public void test_all_nodes_routes_to_primary_and_replicas() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
+
+        GlideClusterClient client =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig().readFrom(ReadFrom.ALL_NODES).requestTimeout(2000).build())
+                        .get();
+        assertEquals(client.configResetStat(ALL_NODES).get(), OK);
+
+        int nGetCalls = 100;
+        for (int i = 0; i < nGetCalls; i++) {
+            client.get("foo").get();
+        }
+
+        ClusterValue<String> infoResult =
+                client.info(new InfoOptions.Section[] {InfoOptions.Section.ALL}, ALL_NODES).get();
+        Map<String, String> infoData = infoResult.getMultiValue();
+
+        long nodesWithGets =
+                infoData.values().stream().filter(value -> value.contains("cmdstat_get:calls=")).count();
+        assertTrue(nodesWithGets > 1, "ALL_NODES should route to multiple nodes");
+
+        boolean primaryReceivedGets =
+                infoData.values().stream()
+                        .anyMatch(
+                                value -> value.contains("role:master") && value.contains("cmdstat_get:calls="));
+        assertTrue(primaryReceivedGets, "ALL_NODES should route to primary");
+
+        boolean replicaReceivedGets =
+                infoData.values().stream()
+                        .anyMatch(value -> value.contains("role:slave") && value.contains("cmdstat_get:calls="));
+        assertTrue(replicaReceivedGets, "ALL_NODES should route to replicas");
+
+        client.close();
+    }
+
+    @SneakyThrows
+    @Test
     public void test_az_affinity_replicas_and_primary_prioritizes_replicas_over_primary() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
 
