@@ -255,6 +255,8 @@ public class ConnectionManager {
                             requestBuilder.setReadFrom(ReadFrom.AZAffinity);
                         } else if ("AZ_AFFINITY_REPLICAS_AND_PRIMARY".equals(readFromName)) {
                             requestBuilder.setReadFrom(ReadFrom.AZAffinityReplicasAndPrimary);
+                        } else if ("ALL_NODES".equals(readFromName)) {
+                            requestBuilder.setReadFrom(ReadFrom.AllNodes);
                         }
 
                         // Set client metadata
