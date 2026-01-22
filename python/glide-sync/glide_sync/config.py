@@ -7,6 +7,7 @@ from glide_shared.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
+    CompressionConfiguration,
 )
 from glide_shared.config import (
     GlideClientConfiguration as SharedGlideClientConfiguration,
@@ -22,6 +23,7 @@ from glide_shared.config import (
     ReadFrom,
     ServerCredentials,
 )
+from glide_shared.exceptions import ConfigurationError
 
 
 class GlideClientConfiguration(SharedGlideClientConfiguration):
@@ -66,7 +68,7 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
             Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
 
         Note:
-            PubSub and inflight_requests_limit are not yet supported for the sync client.
+            Inflight_requests_limit are not yet supported for the sync client.
     """
 
     def __init__(
@@ -86,7 +88,18 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
         pubsub_subscriptions: Optional[
             GlideClientConfiguration.PubSubSubscriptions
         ] = None,
+        compression: Optional["CompressionConfiguration"] = None,
     ):
+        # TODO: remove this once dynamic pubsub is implemented for the sync python client
+        if (
+            advanced_config is not None
+            and advanced_config.pubsub_reconciliation_interval is not None
+        ):
+            raise ConfigurationError(
+                "pubsub_reconciliation_interval is not supported for the sync client. "
+                "Dynamic pubsub features are only available in the async client."
+            )
+
         super().__init__(
             addresses=addresses,
             use_tls=use_tls,
@@ -102,6 +115,7 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
             client_az=client_az,
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
+            compression=compression,
         )
 
 
@@ -177,7 +191,18 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
         pubsub_subscriptions: Optional[
             GlideClusterClientConfiguration.PubSubSubscriptions
         ] = None,
+        compression: Optional["CompressionConfiguration"] = None,
     ):
+        # TODO: remove this once dynamic pubsub is implemented for the sync python client
+        if (
+            advanced_config is not None
+            and advanced_config.pubsub_reconciliation_interval is not None
+        ):
+            raise ConfigurationError(
+                "pubsub_reconciliation_interval is not supported for the sync client. "
+                "Dynamic pubsub features are only available in the async client."
+            )
+
         super().__init__(
             addresses=addresses,
             use_tls=use_tls,
@@ -194,4 +219,5 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
             client_az=client_az,
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
+            compression=compression,
         )

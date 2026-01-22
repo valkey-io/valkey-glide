@@ -74,7 +74,16 @@ from glide_shared.commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
-from glide_shared.config import BackoffStrategy, ProtocolVersion, ServerCredentials
+from glide_shared.config import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
+    BackoffStrategy,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+    NodeAddress,
+    ProtocolVersion,
+    ServerCredentials,
+)
 from glide_shared.constants import (
     OK,
     TEncodable,
@@ -330,7 +339,15 @@ class TestGlideClients:
         assert isinstance(stats, dict)
         assert "total_connections" in stats
         assert "total_clients" in stats
-        assert len(stats) == 2
+        assert "total_values_compressed" in stats
+        assert "total_values_decompressed" in stats
+        assert "total_original_bytes" in stats
+        assert "total_bytes_compressed" in stats
+        assert "total_bytes_decompressed" in stats
+        assert "compression_skipped_count" in stats
+        assert "subscription_out_of_sync_count" in stats
+        assert "subscription_last_sync_timestamp" in stats
+        assert len(stats) == 10
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -391,7 +408,7 @@ class TestGlideClients:
                         1, 100, 2
                     ),  # needs to be configured so that we wont be connected within 7 seconds bc of default retries
                 )
-            assert "timed out" in str(e)
+            assert "timed out" in str(e).lower() or "timeout" in str(e).lower()
 
         async def connect_to_client():
             # Create a second client with a connection timeout of 7 seconds
@@ -421,6 +438,68 @@ class TestGlideClients:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_connection_timeout_on_unavailable_host(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+        """
+        Test that connection_timeout is respected when connecting to an unavailable host.
+
+        This test verifies the fix for issue #4991 where standalone mode would block
+        for ~10 seconds regardless of the configured connection_timeout, while cluster
+        mode correctly respected the timeout.
+
+        The fix wraps the retry loop in a timeout so total connection time is capped
+        at connection_timeout.
+        """
+        # Use an IP address that should be unreachable (TEST-NET-1, reserved for documentation)
+        # This avoids DNS resolution delays and ensures consistent timeout behavior
+        unavailable_address = NodeAddress("192.0.2.1", 6379)
+        connection_timeout_ms = 1000  # 1 second
+
+        start_time = time.time()
+
+        with pytest.raises(ClosingError) as exc_info:
+            if cluster_mode:
+                cluster_config = GlideClusterClientConfiguration(
+                    addresses=[unavailable_address],
+                    request_timeout=connection_timeout_ms,
+                    advanced_config=AdvancedGlideClusterClientConfiguration(
+                        connection_timeout=connection_timeout_ms
+                    ),
+                )
+                await GlideClusterClient.create(cluster_config)
+            else:
+                standalone_config = GlideClientConfiguration(
+                    addresses=[unavailable_address],
+                    request_timeout=connection_timeout_ms,
+                    advanced_config=AdvancedGlideClientConfiguration(
+                        connection_timeout=connection_timeout_ms
+                    ),
+                )
+                await GlideClient.create(standalone_config)
+
+        elapsed_time = time.time() - start_time
+
+        # Verify the connection failed with a timeout-related error
+        error_message = str(exc_info.value).lower()
+        assert any(
+            msg in error_message for msg in ["timed out", "timeout", "failed to create"]
+        ), f"Expected timeout error, got: {exc_info.value}"
+
+        # The key assertion: elapsed time should be close to connection_timeout
+        # Allow some tolerance (up to 2x the timeout) for system variations
+        # Before the fix, standalone mode would take ~10 seconds regardless of timeout
+        max_allowed_time = (connection_timeout_ms / 1000) * 2.5  # 2.5 seconds max
+        assert elapsed_time < max_allowed_time, (
+            f"Connection attempt took {elapsed_time:.2f}s, expected < {max_allowed_time:.2f}s. "
+            f"This suggests connection_timeout ({connection_timeout_ms}ms) is not being respected."
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_UDS_socket_connection_failure(self, glide_client: TGlideClient):
         """Test that the client's error handling during UDS socket connection failure"""
         assert await glide_client.set("test_key", "test_value") == OK
@@ -441,6 +520,78 @@ class TestGlideClients:
             match="Unable to execute requests; the client is closed. Please create a new client.",
         ):
             await glide_client.get("test_key")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_invalid_tls_config_fails_fast(self, cluster_mode: bool):
+        """
+        Test that InvalidClientConfig errors (like TLS misconfiguration) fail fast
+        without retrying until timeout.
+
+        This verifies that configuration errors are treated as permanent and don't
+        waste time retrying when the configuration itself is wrong.
+        """
+        from glide_shared.config import TlsAdvancedConfiguration, TlsMode
+
+        # Provide invalid TLS certificate data - this should fail fast
+        # The certificate parsing happens before any connection attempt
+        invalid_cert = b"-----BEGIN CERTIFICATE-----\ninvalid certificate data\n-----END CERTIFICATE-----"
+        connection_timeout_ms = 5000  # 5 seconds - we should fail much faster
+
+        start_time = time.time()
+
+        with pytest.raises(ClosingError) as exc_info:
+            tls_config = TlsAdvancedConfiguration(root_pem_cacerts=invalid_cert)
+
+            if cluster_mode:
+                cluster_config = GlideClusterClientConfiguration(
+                    addresses=[NodeAddress("localhost", 6379)],
+                    request_timeout=connection_timeout_ms,
+                    use_tls=TlsMode.SecureTls,
+                    advanced_config=AdvancedGlideClusterClientConfiguration(
+                        connection_timeout=connection_timeout_ms,
+                        tls_config=tls_config,
+                    ),
+                )
+                await GlideClusterClient.create(cluster_config)
+            else:
+                standalone_config = GlideClientConfiguration(
+                    addresses=[NodeAddress("localhost", 6379)],
+                    request_timeout=connection_timeout_ms,
+                    use_tls=TlsMode.SecureTls,
+                    advanced_config=AdvancedGlideClientConfiguration(
+                        connection_timeout=connection_timeout_ms,
+                        tls_config=tls_config,
+                    ),
+                )
+                await GlideClient.create(standalone_config)
+
+        elapsed_time = time.time() - start_time
+
+        # Verify we got a TLS/config error (not a generic timeout)
+        error_message = str(exc_info.value).lower()
+        assert any(
+            msg in error_message
+            for msg in ["tls", "certificate", "pem", "ssl", "config", "invalid"]
+        ), f"Expected TLS/config error, got: {exc_info.value}"
+
+        # The key assertion: should fail fast (< 2 seconds), not wait for full timeout
+        assert elapsed_time < 2.0, (
+            f"InvalidClientConfig error took {elapsed_time:.2f}s, expected < 2s. "
+            "Configuration errors should fail immediately without retrying."
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cancelled_request_handled_gracefully(
+        self, glide_client: TGlideClient
+    ):
+        """Assert that a cancelled request does not close the client."""
+        with pytest.raises(TimeoutError):
+            with anyio.fail_after(0.1):
+                await glide_client.blpop(["random_key"], timeout=2)
+
+        # Ensure client can still perform a simple operation
+        assert await glide_client.set(get_random_string(10), "value") == OK
 
 
 @pytest.mark.anyio
@@ -10271,7 +10422,9 @@ class TestClusterRoutes:
 
         # Test no_scores option
         if not await check_if_server_version_lt(glide_client, "8.0.0"):
-            result = await glide_client.zscan(key1, initial_cursor, no_scores=True)
+            result = await glide_client.zscan(
+                key1, initial_cursor, match="value*", no_scores=True
+            )
             assert result[result_cursor_index] != b"0"
             values_array = cast(List[bytes], result[result_collection_index])
             # Verify that scores are not included
@@ -10692,15 +10845,13 @@ class TestScripts:
         )
 
         # Add test for script_kill with writing script
-        writing_script = Script(
-            """
+        writing_script = Script("""
             redis.call('SET', KEYS[1], 'value')
             local start = redis.call('TIME')[1]
             while redis.call('TIME')[1] - start < 15 do
                 redis.call('SET', KEYS[1], 'value')
             end
-        """
-        )
+        """)
 
         async def run_writing_script():
             await test_client.invoke_script(writing_script, keys=[get_random_string(5)])
@@ -12074,3 +12225,51 @@ class TestScripts:
         # Verify all fields are now persistent
         ttl_results = await glide_client.httl(multi_key, field_names)
         assert ttl_results == [-1] * len(field_names)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("tcp_nodelay", [None, True, False])
+    async def test_tcp_nodelay_configuration(
+        self,
+        request,
+        cluster_mode: bool,
+        tcp_nodelay: Optional[bool],
+    ):
+        """Test TCP_NODELAY configuration option."""
+        valkey_cluster = (
+            pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
+        )
+
+        if cluster_mode:
+            cluster_config = GlideClusterClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                advanced_config=AdvancedGlideClusterClientConfiguration(
+                    tcp_nodelay=tcp_nodelay
+                ),
+            )
+            cluster_client = await GlideClusterClient.create(cluster_config)
+            try:
+                # Verify client can connect and execute commands
+                assert await cluster_client.ping() == b"PONG"
+                assert await cluster_client.set("key", "value") == "OK"
+                assert await cluster_client.get("key") == b"value"
+                # Clean up test key
+                await cluster_client.delete(["key"])
+            finally:
+                await cluster_client.close()
+        else:
+            standalone_config = GlideClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                advanced_config=AdvancedGlideClientConfiguration(
+                    tcp_nodelay=tcp_nodelay
+                ),
+            )
+            standalone_client = await GlideClient.create(standalone_config)
+            try:
+                # Verify client can connect and execute commands
+                assert await standalone_client.ping() == b"PONG"
+                assert await standalone_client.set("key", "value") == "OK"
+                assert await standalone_client.get("key") == b"value"
+                # Clean up test key
+                await standalone_client.delete(["key"])
+            finally:
+                await standalone_client.close()

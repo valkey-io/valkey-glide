@@ -59,11 +59,14 @@ def avoid_duplicate(app, what, name, obj, skip, options):
         "channel",
         "message",
         "pattern",
+        "enabled",
+        "backend",
+        "compression_level",
+        "min_compression_size",
     )
-    module = getattr(obj, "__module__", "")
-    formatted = f"{module}.{name}" if module else name
-    if formatted in exclusions:
-        return formatted
+    # Check if the attribute name itself is in exclusions
+    if name in exclusions:
+        return True
     return None
 
 

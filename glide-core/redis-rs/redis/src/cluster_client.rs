@@ -6,10 +6,11 @@ use crate::cluster_topology::{
 use crate::connection::{ConnectionAddr, ConnectionInfo, IntoConnectionInfo};
 use crate::types::{ErrorKind, ProtocolVersion, RedisError, RedisResult};
 use crate::{cluster, cluster::TlsMode};
-use crate::{PubSubSubscriptionInfo, PushInfo, RetryStrategy};
+use crate::{PushInfo, RetryStrategy};
 use rand::Rng;
 #[cfg(feature = "cluster-async")]
 use std::ops::Add;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::tls::TlsConnParams;
@@ -43,10 +44,10 @@ struct BuilderParams {
     lib_name: Option<String>,
     response_timeout: Option<Duration>,
     protocol: ProtocolVersion,
-    pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
     reconnect_retry_strategy: Option<RetryStrategy>,
     refresh_topology_from_initial_nodes: bool,
     database_id: i64,
+    tcp_nodelay: bool,
 }
 
 #[derive(Clone)]
@@ -146,10 +147,10 @@ pub struct ClusterParams {
     pub(crate) connection_timeout: Duration,
     pub(crate) response_timeout: Duration,
     pub(crate) protocol: ProtocolVersion,
-    pub(crate) pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
     pub(crate) reconnect_retry_strategy: Option<RetryStrategy>,
     pub(crate) refresh_topology_from_initial_nodes: bool,
     pub(crate) database_id: i64,
+    pub(crate) tcp_nodelay: bool,
 }
 
 impl ClusterParams {
@@ -178,10 +179,10 @@ impl ClusterParams {
             lib_name: value.lib_name,
             response_timeout: value.response_timeout.unwrap_or(Duration::MAX),
             protocol: value.protocol,
-            pubsub_subscriptions: value.pubsub_subscriptions,
             reconnect_retry_strategy: value.reconnect_retry_strategy,
             refresh_topology_from_initial_nodes: value.refresh_topology_from_initial_nodes,
             database_id: value.database_id,
+            tcp_nodelay: value.tcp_nodelay,
         })
     }
 }
@@ -495,6 +496,16 @@ impl ClusterClientBuilder {
         self
     }
 
+    /// Sets the TCP_NODELAY socket option.
+    ///
+    /// When true, disables Nagle's algorithm for lower latency.
+    /// When false, enables Nagle's algorithm to reduce network overhead.
+    /// Defaults to true if not set.
+    pub fn tcp_nodelay(mut self, tcp_nodelay: bool) -> ClusterClientBuilder {
+        self.builder_params.tcp_nodelay = tcp_nodelay;
+        self
+    }
+
     /// Enables timing out on slow connection time.
     ///
     /// If enabled, the cluster will only wait the given time on each connection attempt to each node.
@@ -540,15 +551,6 @@ impl ClusterClientBuilder {
         } else {
             ReadFromReplicaStrategy::AlwaysFromPrimary
         };
-        self
-    }
-
-    /// Sets the pubsub configuration for the new ClusterClient.
-    pub fn pubsub_subscriptions(
-        mut self,
-        pubsub_subscriptions: PubSubSubscriptionInfo,
-    ) -> ClusterClientBuilder {
-        self.builder_params.pubsub_subscriptions = Some(pubsub_subscriptions);
         self
     }
 }
@@ -610,11 +612,13 @@ impl ClusterClient {
     pub async fn get_async_connection(
         &self,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
     ) -> RedisResult<cluster_async::ClusterConnection> {
         cluster_async::ClusterConnection::new(
             &self.initial_nodes,
             self.cluster_params.clone(),
             push_sender,
+            pubsub_synchronizer,
         )
         .await
     }
@@ -651,6 +655,7 @@ impl ClusterClient {
         cluster_async::ClusterConnection::new(
             &self.initial_nodes,
             self.cluster_params.clone(),
+            None,
             None,
         )
         .await

@@ -3,12 +3,10 @@
 use super::get_valkey_connection_info;
 use super::reconnecting_connection::{ReconnectReason, ReconnectingConnection};
 use super::{ConnectionRequest, NodeAddress, TlsMode};
-use super::{DEFAULT_CONNECTION_TIMEOUT, to_duration};
 use crate::client::types::ReadFrom as ClientReadFrom;
 use futures::{StreamExt, future, stream};
 use logger_core::log_debug;
 use logger_core::log_warn;
-use rand::Rng;
 use redis::aio::ConnectionLike;
 use redis::cluster_routing::{self, ResponsePolicy, Routable, RoutingInfo, is_readonly_cmd};
 use redis::{PushInfo, RedisError, RedisResult, RetryStrategy, Value};
@@ -117,15 +115,14 @@ impl StandaloneClient {
         connection_request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
     ) -> Result<Self, StandaloneClientConnectionError> {
         if connection_request.addresses.is_empty() {
             return Err(StandaloneClientConnectionError::NoAddressesProvided);
         }
 
-        let mut valkey_connection_info =
+        let valkey_connection_info =
             get_valkey_connection_info(&connection_request, iam_token_manager).await;
-        let pubsub_connection_info = valkey_connection_info.clone();
-        valkey_connection_info.pubsub_subscriptions = None;
         let retry_strategy = match connection_request.connection_retry_strategy {
             Some(strategy) => RetryStrategy::new(
                 strategy.exponent_base,
@@ -138,37 +135,62 @@ impl StandaloneClient {
 
         let tls_mode = connection_request.tls_mode;
         let node_count = connection_request.addresses.len();
-        // randomize pubsub nodes, maybe a batter option is to always use the primary
-        let pubsub_node_index = rand::thread_rng().gen_range(0..node_count);
-        let pubsub_addr = connection_request.addresses[pubsub_node_index].clone();
         let discover_az = matches!(
             connection_request.read_from,
             Some(ClientReadFrom::AZAffinity(_))
                 | Some(ClientReadFrom::AZAffinityReplicasAndPrimary(_))
         );
 
-        let connection_timeout = to_duration(
-            connection_request.connection_timeout,
-            DEFAULT_CONNECTION_TIMEOUT,
-        );
+        let connection_timeout = connection_request.get_connection_timeout();
 
-        let tls_params = if !connection_request.root_certs.is_empty() {
+        let tcp_nodelay = connection_request.tcp_nodelay;
+
+        let has_root_certs = !connection_request.root_certs.is_empty();
+        let has_client_cert = !connection_request.client_cert.is_empty();
+        let has_client_key = !connection_request.client_key.is_empty();
+        if has_client_cert != has_client_key {
+            return Err(StandaloneClientConnectionError::FailedConnection(vec![(
+                None,
+                RedisError::from((
+                    redis::ErrorKind::InvalidClientConfig,
+                    "client_cert and client_key must both be provided or both be empty",
+                )),
+            )]));
+        }
+
+        let tls_params = if has_root_certs || has_client_cert || has_client_key {
             if tls_mode.unwrap_or(TlsMode::NoTls) == TlsMode::NoTls {
                 return Err(StandaloneClientConnectionError::FailedConnection(vec![(
                     None,
                     RedisError::from((
                         redis::ErrorKind::InvalidClientConfig,
-                        "Custom root certificates provided but TLS is disabled",
+                        "TLS certificates provided but TLS is disabled",
                     )),
                 )]));
             }
-            let mut combined_certs = Vec::new();
-            for cert in &connection_request.root_certs {
-                combined_certs.extend_from_slice(cert);
-            }
+
+            let root_cert = if has_root_certs {
+                let mut combined_certs = Vec::new();
+                for cert in &connection_request.root_certs {
+                    combined_certs.extend_from_slice(cert);
+                }
+                Some(combined_certs)
+            } else {
+                None
+            };
+
+            let client_tls = if has_client_cert && has_client_key {
+                Some(redis::ClientTlsConfig {
+                    client_cert: connection_request.client_cert.clone(),
+                    client_key: connection_request.client_key.clone(),
+                })
+            } else {
+                None
+            };
+
             let tls_certificates = redis::TlsCertificates {
-                client_tls: None,
-                root_cert: Some(combined_certs),
+                client_tls,
+                root_cert,
             };
             Some(
                 redis::retrieve_tls_certificates(tls_certificates).map_err(|err| {
@@ -181,20 +203,19 @@ impl StandaloneClient {
 
         let mut stream = stream::iter(connection_request.addresses.into_iter())
             .map(move |address| {
-                let info = if address.host != pubsub_addr.host || address.port != pubsub_addr.port {
-                    valkey_connection_info.clone()
-                } else {
-                    pubsub_connection_info.clone()
-                };
+                let info = valkey_connection_info.clone();
                 let retry = retry_strategy;
                 let sender = push_sender.clone();
                 let tls = tls_mode.unwrap_or(TlsMode::NoTls);
                 let discover = discover_az;
                 let timeout = connection_timeout;
                 let params = tls_params.clone();
+                let nodelay = tcp_nodelay;
+                let sync = pubsub_synchronizer.clone();
                 async move {
                     get_connection_and_replication_info(
-                        &address, &retry, &info, tls, &sender, discover, timeout, params,
+                        &address, &retry, &info, tls, &sender, discover, timeout, params, nodelay,
+                        &sync,
                     )
                     .await
                     .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -448,7 +469,7 @@ impl StandaloneClient {
         }
     }
 
-    async fn send_request_to_all_nodes(
+    pub(crate) async fn send_request_to_all_nodes(
         &mut self,
         cmd: &redis::Cmd,
         response_policy: Option<ResponsePolicy>,
@@ -692,6 +713,8 @@ async fn get_connection_and_replication_info(
     discover_az: bool,
     connection_timeout: Duration,
     tls_params: Option<redis::TlsConnParams>,
+    tcp_nodelay: bool,
+    pubsub_synchronizer: &Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
 ) -> Result<(ReconnectingConnection, Value), (ReconnectingConnection, RedisError)> {
     let reconnecting_connection = ReconnectingConnection::new(
         address,
@@ -702,6 +725,8 @@ async fn get_connection_and_replication_info(
         discover_az,
         connection_timeout,
         tls_params,
+        tcp_nodelay,
+        pubsub_synchronizer.clone(),
     )
     .await?;
 

@@ -3,6 +3,7 @@ package glide.api.commands;
 
 import glide.api.models.GlideString;
 import glide.api.models.Script;
+import glide.api.models.commands.ScriptDebugMode;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.configuration.ReadFrom;
@@ -246,4 +247,173 @@ public interface ScriptingAndFunctionsBaseCommands {
      * }</pre>
      */
     CompletableFuture<Object> invokeScript(Script script, ScriptOptionsGlideString options);
+
+    /**
+     * Executes a read-only Lua script.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/eval_ro/">valkey.io</a> for details.
+     * @param script The Lua script to execute.
+     * @return A value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * String script = "return 'Hello, World!'";
+     * String result = (String) client.evalReadOnly(script).get();
+     * assert result.equals("Hello, World!");
+     * }</pre>
+     */
+    CompletableFuture<Object> evalReadOnly(String script);
+
+    /**
+     * Executes a read-only Lua script with keys and arguments.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/eval_ro/">valkey.io</a> for details.
+     * @param script The Lua script to execute.
+     * @param keys An array of keys accessed by the script.
+     * @param args An array of script arguments.
+     * @return A value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * String script = "return {KEYS[1], ARGV[1]}";
+     * Object[] result = (Object[]) client.evalReadOnly(script, new String[]{"key1"}, new String[]{"arg1"}).get();
+     * assert result[0].equals("key1");
+     * assert result[1].equals("arg1");
+     * }</pre>
+     */
+    CompletableFuture<Object> evalReadOnly(String script, String[] keys, String[] args);
+
+    /**
+     * Executes a read-only Lua script.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/eval_ro/">valkey.io</a> for details.
+     * @param script The Lua script to execute.
+     * @return A value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * GlideString script = gs("return 'Hello, World!'");
+     * GlideString result = (GlideString) client.evalReadOnly(script).get();
+     * assert result.equals(gs("Hello, World!"));
+     * }</pre>
+     */
+    CompletableFuture<Object> evalReadOnly(GlideString script);
+
+    /**
+     * Executes a read-only Lua script with keys and arguments.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/eval_ro/">valkey.io</a> for details.
+     * @param script The Lua script to execute.
+     * @param keys An array of keys accessed by the script.
+     * @param args An array of script arguments.
+     * @return A value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * GlideString script = gs("return {KEYS[1], ARGV[1]}");
+     * Object[] result = (Object[]) client.evalReadOnly(script, new GlideString[]{gs("key1")}, new GlideString[]{gs("arg1")}).get();
+     * assert result[0].equals(gs("key1"));
+     * assert result[1].equals(gs("arg1"));
+     * }</pre>
+     */
+    CompletableFuture<Object> evalReadOnly(
+            GlideString script, GlideString[] keys, GlideString[] args);
+
+    /**
+     * Executes a read-only Lua script by its SHA1 digest.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/evalsha_ro/">valkey.io</a> for details.
+     * @param sha1 The SHA1 digest of the script to execute.
+     * @return A value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * String sha1 = client.scriptLoad("return 'Hello from SHA!'").get();
+     * String result = (String) client.evalshaReadOnly(sha1).get();
+     * assert result.equals("Hello from SHA!");
+     * }</pre>
+     */
+    CompletableFuture<Object> evalshaReadOnly(String sha1);
+
+    /**
+     * Executes a read-only Lua script by its SHA1 digest with keys and arguments.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/evalsha_ro/">valkey.io</a> for details.
+     * @param sha1 The SHA1 digest of the script to execute.
+     * @param keys An array of keys accessed by the script.
+     * @param args An array of script arguments.
+     * @return A value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * String sha1 = client.scriptLoad("return {KEYS[1], ARGV[1]}").get();
+     * Object[] result = (Object[]) client.evalshaReadOnly(sha1, new String[]{"key1"}, new String[]{"arg1"}).get();
+     * assert result[0].equals("key1");
+     * assert result[1].equals("arg1");
+     * }</pre>
+     */
+    CompletableFuture<Object> evalshaReadOnly(String sha1, String[] keys, String[] args);
+
+    /**
+     * Executes a read-only Lua script by its SHA1 digest.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/evalsha_ro/">valkey.io</a> for details.
+     * @param sha1 The SHA1 digest of the script to execute.
+     * @return A value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * GlideString sha1 = client.scriptLoad(gs("return 'Hello from SHA!'")).get();
+     * GlideString result = (GlideString) client.evalshaReadOnly(sha1).get();
+     * assert result.equals(gs("Hello from SHA!"));
+     * }</pre>
+     */
+    CompletableFuture<Object> evalshaReadOnly(GlideString sha1);
+
+    /**
+     * Executes a read-only Lua script by its SHA1 digest with keys and arguments.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/evalsha_ro/">valkey.io</a> for details.
+     * @param sha1 The SHA1 digest of the script to execute.
+     * @param keys An array of keys accessed by the script.
+     * @param args An array of script arguments.
+     * @return A value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * GlideString sha1 = client.scriptLoad(gs("return {KEYS[1], ARGV[1]}")).get();
+     * Object[] result = (Object[]) client.evalshaReadOnly(sha1, new GlideString[]{gs("key1")}, new GlideString[]{gs("arg1")}).get();
+     * assert result[0].equals(gs("key1"));
+     * assert result[1].equals(gs("arg1"));
+     * }</pre>
+     */
+    CompletableFuture<Object> evalshaReadOnly(
+            GlideString sha1, GlideString[] keys, GlideString[] args);
+
+    /**
+     * Sets the debugging mode for executed scripts.
+     *
+     * @since Redis 3.2 and above.
+     * @see <a href="https://valkey.io/commands/script-debug/">valkey.io</a> for details.
+     * @param mode The debugging mode to set.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.scriptDebug(ScriptDebugMode.YES).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> scriptDebug(ScriptDebugMode mode);
 }
