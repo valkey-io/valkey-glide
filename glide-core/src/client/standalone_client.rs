@@ -3,7 +3,6 @@
 use super::get_valkey_connection_info;
 use super::reconnecting_connection::{ReconnectReason, ReconnectingConnection};
 use super::{ConnectionRequest, NodeAddress, TlsMode};
-use super::{DEFAULT_CONNECTION_TIMEOUT, to_duration};
 use crate::client::types::ReadFrom as ClientReadFrom;
 use futures::{StreamExt, future, stream};
 use logger_core::log_debug;
@@ -142,10 +141,7 @@ impl StandaloneClient {
                 | Some(ClientReadFrom::AZAffinityReplicasAndPrimary(_))
         );
 
-        let connection_timeout = to_duration(
-            connection_request.connection_timeout,
-            DEFAULT_CONNECTION_TIMEOUT,
-        );
+        let connection_timeout = connection_request.get_connection_timeout();
 
         let tcp_nodelay = connection_request.tcp_nodelay;
 
