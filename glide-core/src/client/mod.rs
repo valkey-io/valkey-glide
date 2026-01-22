@@ -49,8 +49,6 @@ pub const DEFAULT_RETRIES: u32 = 3;
 /// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
-/// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
-pub const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(2000);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 
 /// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
@@ -1348,6 +1346,13 @@ async fn create_cluster_client(
     } else {
         (None, None)
     };
+    let periodic_topology_checks = match request.periodic_checks {
+        Some(PeriodicCheck::Disabled) => None,
+        Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
+        Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
+        None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
+    };
+    let connection_timeout = request.get_connection_timeout();
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
@@ -1361,13 +1366,6 @@ async fn create_cluster_client(
         })
         .collect();
 
-    let periodic_topology_checks = match request.periodic_checks {
-        Some(PeriodicCheck::Disabled) => None,
-        Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
-        Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
-        None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
-    };
-    let connection_timeout = to_duration(request.connection_timeout, DEFAULT_CONNECTION_TIMEOUT);
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
         .connection_timeout(connection_timeout)
         .retries(DEFAULT_RETRIES);
@@ -1552,9 +1550,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     );
     let connection_timeout = format!(
         "\nConnection timeout: {}",
-        request
-            .connection_timeout
-            .unwrap_or(DEFAULT_CONNECTION_TIMEOUT.as_millis() as u32)
+        request.get_connection_timeout().as_millis()
     );
     let database_id = format!("\ndatabase ID: {}", request.database_id);
     let rfr_strategy = request
@@ -1647,7 +1643,8 @@ impl Client {
         request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
-        const DEFAULT_CLIENT_CREATION_TIMEOUT: Duration = Duration::from_secs(10);
+        // Add buffer to connection_timeout to allow inner connection logic to fully execute before the outer timeout triggers
+        let client_creation_timeout = request.get_connection_timeout() + Duration::from_millis(500);
 
         log_info(
             "Connection configuration",
@@ -1669,7 +1666,7 @@ impl Client {
             _ => None,
         };
 
-        tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
+        tokio::time::timeout(client_creation_timeout, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
             let internal_client_arc =
