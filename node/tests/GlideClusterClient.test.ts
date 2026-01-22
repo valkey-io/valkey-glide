@@ -2351,7 +2351,7 @@ describe("GlideClusterClient", () => {
                             advancedConfiguration: { connectionTimeout: 100 }, // 100ms connection timeout
                             ...config, // Include the rest of the config
                         }),
-                    ).rejects.toThrowError(/timed out/i); // Ensure it throws a timeout error
+                    ).rejects.toThrowError(/timed?\s*out/i); // Ensure it throws a timeout error
                 };
 
                 // Function that verifies that a larger connection timeout allows connection
@@ -2379,6 +2379,54 @@ describe("GlideClusterClient", () => {
                 ]);
             } finally {
                 // Clean up the test client and ensure everything is flushed and closed
+                client.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "should respect connection timeout duration (protocol: %p)",
+        async (protocol) => {
+            // Create a client configuration
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                { requestTimeout: 20000 },
+            );
+
+            // Initialize the primary client to block the server
+            const client = await GlideClusterClient.createClient(config);
+
+            try {
+                // Run a long-running DEBUG SLEEP command on all nodes (7 seconds)
+                const debugCommandPromise = client.customCommand(
+                    ["DEBUG", "sleep", "7"],
+                    { route: "allNodes" },
+                );
+
+                // Wait a bit for the sleep to start
+                await new Promise((resolve) => setTimeout(resolve, 500));
+
+                // Try to connect with 3000ms timeout - should fail and take ~3 seconds
+                const startTime = Date.now();
+
+                await expect(
+                    GlideClusterClient.createClient({
+                        advancedConfiguration: { connectionTimeout: 3000 },
+                        ...config,
+                    }),
+                ).rejects.toThrowError(/timed?\s*out/i);
+
+                const elapsed = Date.now() - startTime;
+
+                // Verify the timeout was respected (should be around 3000ms, allow some buffer)
+                expect(elapsed).toBeGreaterThanOrEqual(2500); // At least 2.5s
+                expect(elapsed).toBeLessThan(6000); // Less than 6s (well before the 7s sleep ends)
+
+                // Wait for the debug command to complete
+                await debugCommandPromise;
+            } finally {
                 client.close();
             }
         },
@@ -2457,7 +2505,13 @@ describe("GlideClusterClient", () => {
                 expect(typeof stats).toBe("object");
                 expect(stats).toHaveProperty("total_connections");
                 expect(stats).toHaveProperty("total_clients");
-                expect(Object.keys(stats)).toHaveLength(2);
+                expect(stats).toHaveProperty("total_values_compressed");
+                expect(stats).toHaveProperty("total_values_decompressed");
+                expect(stats).toHaveProperty("total_original_bytes");
+                expect(stats).toHaveProperty("total_bytes_compressed");
+                expect(stats).toHaveProperty("total_bytes_decompressed");
+                expect(stats).toHaveProperty("compression_skipped_count");
+                expect(Object.keys(stats)).toHaveLength(8);
             } finally {
                 // Ensure the client is properly closed
                 glideClientForTesting?.close();
@@ -3100,6 +3154,44 @@ describe("GlideClusterClient", () => {
                 client_db0.close();
                 client_db1.close();
             }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "tcp nodelay configuration",
+        async () => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                ProtocolVersion.RESP3,
+            );
+
+            // Test default (undefined - not set)
+            const defaultClient = await GlideClusterClient.createClient(config);
+            expect(await defaultClient.ping()).toBe("PONG");
+            expect(await defaultClient.set("key", "value")).toBe("OK");
+            expect(await defaultClient.get("key")).toBe("value");
+            defaultClient.close();
+
+            // Test explicit true
+            const clientTrue = await GlideClusterClient.createClient({
+                ...config,
+                advancedConfiguration: { tcpNoDelay: true },
+            });
+            expect(await clientTrue.ping()).toBe("PONG");
+            expect(await clientTrue.set("key2", "value2")).toBe("OK");
+            expect(await clientTrue.get("key2")).toBe("value2");
+            clientTrue.close();
+
+            // Test explicit false
+            const clientFalse = await GlideClusterClient.createClient({
+                ...config,
+                advancedConfiguration: { tcpNoDelay: false },
+            });
+            expect(await clientFalse.ping()).toBe("PONG");
+            expect(await clientFalse.set("key3", "value3")).toBe("OK");
+            expect(await clientFalse.get("key3")).toBe("value3");
+            clientFalse.close();
         },
         TIMEOUT,
     );

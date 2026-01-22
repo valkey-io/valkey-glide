@@ -107,7 +107,7 @@
 //! fn do_something(con: &mut redis::Connection) -> redis::RedisResult<usize> {
 //!     // This will result in a server error: "unknown command `MEMORY USAGE`"
 //!     // because "USAGE" is technically a sub-command of "MEMORY".
-//!     redis::cmd("MEMORY USAGE").arg("my_key").query(con)?;
+//!     redis::cmd("MEMORY USAGE").arg("my_key").query::<()>(con)?;
 //!
 //!     // However, this will work as you'd expect
 //!     redis::cmd("MEMORY").arg("USAGE").arg("my_key").query(con)
@@ -312,9 +312,9 @@ use redis::AsyncCommands;
 let client = redis::Client::open("redis://127.0.0.1/").unwrap();
 let mut con = client.get_async_connection(None).await?;
 
-con.set("key1", b"foo").await?;
+con.set::<_, _, ()>("key1", b"foo").await?;
 
-redis::cmd("SET").arg(&["key2", "bar"]).query_async(&mut con).await?;
+redis::cmd("SET").arg(&["key2", "bar"]).query_async::<_, ()>(&mut con).await?;
 
 let result = redis::cmd("MGET")
  .arg(&["key1", "key2"])
@@ -338,7 +338,7 @@ assert_eq!(result, Ok(("foo".to_string(), b"bar".to_vec())));
 // public api
 pub use crate::client::Client;
 pub use crate::client::GlideConnectionOptions;
-pub use crate::cmd::{cmd, pack_command, pipe, Arg, Cmd, Iter};
+pub use crate::cmd::{cmd, fenced_cmd, pack_command, pipe, Arg, Cmd, Iter};
 pub use crate::commands::{
     Commands, ControlFlow, Direction, LposOptions, PubSubCommands, SetOptions,
 };
@@ -349,6 +349,7 @@ pub use crate::connection::{
 };
 pub use crate::parser::{parse_redis_value, Parser};
 pub use crate::pipeline::{Pipeline, PipelineRetryStrategy};
+pub use crate::pubsub_synchronizer::PubSubSynchronizer;
 pub use push_manager::{PushInfo, PushManager};
 pub use retry_strategies::RetryStrategy;
 
@@ -417,6 +418,9 @@ pub use crate::commands::ObjectType;
 pub use crate::commands::ClusterScanArgs;
 
 #[cfg(feature = "cluster")]
+pub use cluster_slotmap::SlotMap;
+
+#[cfg(feature = "cluster")]
 mod cluster_client;
 
 /// for testing purposes
@@ -451,6 +455,7 @@ mod cmd;
 mod commands;
 mod connection;
 mod parser;
+mod pubsub_synchronizer;
 mod push_manager;
 mod retry_strategies;
 mod types;

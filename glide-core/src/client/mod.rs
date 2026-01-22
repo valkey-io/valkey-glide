@@ -3,6 +3,10 @@
 mod types;
 
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
+use crate::compression::CompressionBackendType;
+use crate::compression::lz4_backend::Lz4Backend;
+use crate::compression::zstd_backend::ZstdBackend;
+use crate::compression::{CompressionConfig, CompressionManager};
 use crate::scripts_container::get_script;
 use futures::FutureExt;
 use logger_core::{log_debug, log_error, log_info, log_warn};
@@ -31,7 +35,11 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
+use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
+use crate::request_type::RequestType;
 use redis::InfoDict;
+use std::future::Future;
+use std::pin::Pin;
 use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock, mpsc, oneshot};
 use versions::Versioning;
@@ -41,8 +49,6 @@ pub const DEFAULT_RETRIES: u32 = 3;
 /// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
-/// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
-pub const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(2000);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 
 /// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
@@ -61,6 +67,20 @@ pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 /// A 3-second interval provides a reasonable balance between connection validation
 /// and performance overhead.
 pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
+
+/// Extract RequestType from a Redis command for decompression processing
+/// SIMPLIFIED VERSION: Only supports basic GET commands for decompression.
+fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
+    // Get the command name (first argument)
+    let command_name = cmd.command()?;
+    let command_str = String::from_utf8_lossy(&command_name).to_uppercase();
+
+    // Map command names to RequestType - only basic GET supported for decompression
+    match command_str.as_str() {
+        "GET" => Some(RequestType::Get),
+        _ => None, // Unknown command, no compression/decompression needed
+    }
+}
 
 /// A static Glide runtime instance
 static RUNTIME: OnceCell<GlideRt> = OnceCell::new();
@@ -146,7 +166,6 @@ pub async fn get_valkey_connection_info(
     let db = connection_request.database_id;
     let client_name = connection_request.client_name.clone();
     let lib_name = connection_request.lib_name.clone();
-    let pubsub_subscriptions = connection_request.pubsub_subscriptions.clone();
 
     match &connection_request.authentication_info {
         Some(info) => {
@@ -166,7 +185,6 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
-                    pubsub_subscriptions,
                 }
             } else {
                 // Regular password-based authentication
@@ -177,7 +195,6 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
-                    pubsub_subscriptions,
                 }
             }
         }
@@ -186,7 +203,6 @@ pub async fn get_valkey_connection_info(
             protocol,
             client_name,
             lib_name,
-            pubsub_subscriptions,
             ..Default::default()
         },
     }
@@ -240,6 +256,9 @@ pub struct Client {
     inflight_requests_allowed: Arc<AtomicIsize>,
     // IAM token manager for automatic credential refresh
     iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
+    // Optional compression manager for automatic compression/decompression
+    compression_manager: Option<Arc<CompressionManager>>,
+    pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
 }
 
 async fn run_with_timeout<T>(
@@ -523,19 +542,30 @@ impl Client {
             // Create the appropriate client based on configuration
             let real_client = if config.cluster_mode_enabled {
                 // Create cluster client
-                let client = create_cluster_client(config, push_sender, iam_manager_ref).await?;
+                let client = create_cluster_client(
+                    config,
+                    push_sender,
+                    iam_manager_ref,
+                    self.pubsub_synchronizer.clone(),
+                )
+                .await?;
                 ClientWrapper::Cluster { client }
             } else {
                 // Create standalone client
-                let client = StandaloneClient::create_client(config, push_sender, iam_manager_ref)
-                    .await
-                    .map_err(|e| {
-                        RedisError::from((
-                            ErrorKind::IoError,
-                            "Standalone connect failed",
-                            format!("{e:?}"),
-                        ))
-                    })?;
+                let client = StandaloneClient::create_client(
+                    config,
+                    push_sender,
+                    iam_manager_ref,
+                    Some(self.pubsub_synchronizer.clone()),
+                )
+                .await
+                .map_err(|e| {
+                    RedisError::from((
+                        ErrorKind::IoError,
+                        "Standalone connect failed",
+                        format!("{e:?}"),
+                    ))
+                })?;
                 ClientWrapper::Standalone(client)
             };
 
@@ -543,6 +573,23 @@ impl Client {
             *guard = real_client;
         }
 
+        // We must drop the guard so the pubsub synchronizer can acquire it when subscribing
+        // to channels provided via config. Keeping the guard would cause a deadlock. We wait
+        // for the subscription here to ensure the lazy client is subscribed immediately upon creation.
+        drop(guard);
+        if let Err(e) = self
+            .pubsub_synchronizer
+            .wait_for_sync(0, None, None, None)
+            .await
+        {
+            log_warn(
+                "Client::new",
+                format!("Failed to establish initial subscriptions within timeout: {e:?}"),
+            );
+        }
+
+        // Re-acquire for the return
+        let guard = self.internal_client.read().await;
         Ok(guard.clone()) // ✅ Return clone of the now-initialized wrapper
     }
 
@@ -550,20 +597,28 @@ impl Client {
     /// This function will route the command to the correct node, and retry if needed.
     pub fn send_command<'a>(
         &'a mut self,
-        cmd: &'a Cmd,
+        cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             let client = self.get_or_initialize_client().await?;
 
-            let expected_type = expected_type_for_cmd(cmd);
+            if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
+                return result;
+            }
+
+            // let expected_type = expected_type_for_cmd(cmd);
             let request_timeout = match get_request_timeout(cmd, self.request_timeout) {
                 Ok(request_timeout) => request_timeout,
                 Err(err) => return Err(err),
             };
 
+            // Clone compression_manager reference before moving into async block
+            let compression_manager = self.compression_manager.clone();
+
             let result = run_with_timeout(request_timeout, async move {
-                match client {
+                let expected_type = expected_type_for_cmd(cmd);
+                let value  = match client {
                     ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
                     ClientWrapper::Cluster {mut client } => {
                         let final_routing =
@@ -595,21 +650,47 @@ impl Client {
                     },
                     ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
                 }
-                .and_then(|value| convert_to_expected_type(value, expected_type))
+                .and_then(|value| {
+                    // Apply decompression if compression manager is available
+                    let processed_value = if let Some(ref compression_manager) = compression_manager {
+                        // Extract request type from command for decompression
+                        if let Some(request_type) = extract_request_type_from_cmd(cmd) {
+                            match crate::compression::process_response_for_decompression(
+                                value.clone(),
+                                request_type,
+                                Some(compression_manager.as_ref())
+                            ) {
+                                Ok(decompressed_value) => decompressed_value,
+                                Err(e) => {
+                                    log_warn(
+                                        "send_command_decompression",
+                                        format!("Failed to decompress response: {}", e),
+                                    );
+                                    value // Return original value on decompression failure
+                                }
+                            }
+                        } else {
+                            value // No request type found, return original value
+                        }
+                    } else {
+                        value // No compression manager, return original value
+                    };
+                    convert_to_expected_type(processed_value, expected_type)
+                })?;
+
+                // Intercept CLIENT SETNAME commands after regular processing
+                // Only handle CLIENT SETNAME commands if they executed successfully (no error)
+                if self.is_client_set_name_command(cmd) {
+                    self.handle_client_set_name_command(cmd).await?;
+                }
+                // Intercept SELECT commands after regular processing
+                // Only handle SELECT commands if they executed successfully (no error)
+                if self.is_select_command(cmd) {
+                    self.handle_select_command(cmd).await?;
+                }
+                Ok(value)
             })
             .await?;
-
-            // Intercept CLIENT SETNAME commands after regular processing
-            // Only handle CLIENT SETNAME commands if they executed successfully (no error)
-            if self.is_client_set_name_command(cmd) {
-                self.handle_client_set_name_command(cmd).await?;
-            }
-
-            // Intercept SELECT commands after regular processing
-            // Only handle SELECT commands if they executed successfully (no error)
-            if self.is_select_command(cmd) {
-                self.handle_select_command(cmd).await?;
-            }
 
             Ok(result)
         })
@@ -888,8 +969,8 @@ impl Client {
     ) -> redis::RedisResult<Value> {
         let _ = self.get_or_initialize_client().await?;
 
-        let eval = eval_cmd(hash, keys, args);
-        let result = self.send_command(&eval, routing.clone()).await;
+        let mut eval = eval_cmd(hash, keys, args);
+        let result = self.send_command(&mut eval, routing.clone()).await;
         let Err(err) = result else {
             return result;
         };
@@ -897,9 +978,9 @@ impl Client {
             let Some(code) = get_script(hash) else {
                 return Err(err);
             };
-            let load = load_cmd(&code);
-            self.send_command(&load, None).await?;
-            self.send_command(&eval, routing).await
+            let mut load = load_cmd(&code);
+            self.send_command(&mut load, None).await?;
+            self.send_command(&mut eval, routing).await
         } else {
             Err(err)
         }
@@ -1011,7 +1092,7 @@ impl Client {
             cmd.arg(&username);
         }
         cmd.arg(pass);
-        self.send_command(&cmd, Some(routing)).await
+        self.send_command(&mut cmd, Some(routing)).await
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
@@ -1129,6 +1210,55 @@ impl Client {
         Ok(())
     }
 }
+/// Trait for executing PubSub commands on the internal client wrapper
+pub trait PubSubCommandApplier: Send + Sync {
+    /// Send a subscription command (SUBSCRIBE, UNSUBSCRIBE, etc.)
+    /// If routing is provided, use it; otherwise use default routing logic
+    fn apply_pubsub_command<'a>(
+        &'a mut self,
+        cmd: &'a mut Cmd,
+        routing: Option<SingleNodeRoutingInfo>,
+    ) -> Pin<Box<dyn Future<Output = RedisResult<Value>> + Send + 'a>>;
+}
+
+/// Implement the trait for ClientWrapper
+impl PubSubCommandApplier for ClientWrapper {
+    fn apply_pubsub_command<'a>(
+        &'a mut self,
+        cmd: &'a mut Cmd,
+        routing: Option<SingleNodeRoutingInfo>,
+    ) -> Pin<Box<dyn Future<Output = RedisResult<Value>> + Send + 'a>> {
+        Box::pin(async move {
+            match self {
+                ClientWrapper::Standalone(client) => {
+                    // For standalone mode, send unsubscribe commands to all nodes.
+                    // This handles ElastiCache scenarios where DNS address could change
+                    // So we can't know which node we subscribed to
+                    if let Some(command) = cmd.command() {
+                        let cmd_upper = command.to_ascii_uppercase();
+                        if cmd_upper == b"UNSUBSCRIBE" || cmd_upper == b"PUNSUBSCRIBE" {
+                            return client
+                                .send_request_to_all_nodes(cmd, Some(ResponsePolicy::AllSucceeded))
+                                .await;
+                        }
+                    }
+                    client.send_command(cmd).await
+                }
+                ClientWrapper::Cluster { client } => {
+                    let final_routing = routing
+                        .map(RoutingInfo::SingleNode)
+                        .or_else(|| RoutingInfo::for_routable(cmd))
+                        .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random));
+                    client.route_command(cmd, final_routing).await
+                }
+                ClientWrapper::Lazy(_) => Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Client not initialized",
+                ))),
+            }
+        })
+    }
+}
 
 fn load_cmd(code: &[u8]) -> Cmd {
     let mut cmd = redis::cmd("SCRIPT");
@@ -1158,36 +1288,71 @@ async fn create_cluster_client(
     request: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
+    pubsub_synchronizer: Arc<dyn crate::pubsub::PubSubSynchronizer>,
 ) -> RedisResult<redis::cluster_async::ClusterConnection> {
     let tls_mode = request.tls_mode.unwrap_or_default();
 
     let valkey_connection_info = get_valkey_connection_info(&request, iam_token_manager).await;
-    let (tls_params, tls_certificates) = if !request.root_certs.is_empty() {
+
+    let has_root_certs = !request.root_certs.is_empty();
+    let has_client_cert = !request.client_cert.is_empty();
+    let has_client_key = !request.client_key.is_empty();
+    if has_client_cert != has_client_key {
+        return Err(RedisError::from((
+            ErrorKind::InvalidClientConfig,
+            "client_cert and client_key must both be provided or both be empty",
+        )));
+    }
+
+    let (tls_params, tls_certificates) = if has_root_certs || has_client_cert || has_client_key {
         if tls_mode == TlsMode::NoTls {
             return Err(RedisError::from((
                 ErrorKind::InvalidClientConfig,
-                "Custom root certificates provided but TLS is disabled",
+                "TLS certificates provided but TLS is disabled",
             )));
         }
-        let mut combined_certs = Vec::new();
-        for cert in &request.root_certs {
-            if cert.is_empty() {
-                return Err(RedisError::from((
-                    ErrorKind::InvalidClientConfig,
-                    "Root certificate cannot be empty byte string",
-                )));
+
+        let root_cert = if has_root_certs {
+            let mut combined_certs = Vec::new();
+            for cert in &request.root_certs {
+                if cert.is_empty() {
+                    return Err(RedisError::from((
+                        ErrorKind::InvalidClientConfig,
+                        "Root certificate cannot be empty byte string",
+                    )));
+                }
+                combined_certs.extend_from_slice(cert);
             }
-            combined_certs.extend_from_slice(cert);
-        }
+            Some(combined_certs)
+        } else {
+            None
+        };
+
+        let client_tls = if has_client_cert && has_client_key {
+            Some(redis::ClientTlsConfig {
+                client_cert: request.client_cert.clone(),
+                client_key: request.client_key.clone(),
+            })
+        } else {
+            None
+        };
+
         let tls_certs = TlsCertificates {
-            client_tls: None,
-            root_cert: Some(combined_certs),
+            client_tls,
+            root_cert,
         };
         let params = retrieve_tls_certificates(tls_certs.clone())?;
         (Some(params), Some(tls_certs))
     } else {
         (None, None)
     };
+    let periodic_topology_checks = match request.periodic_checks {
+        Some(PeriodicCheck::Disabled) => None,
+        Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
+        Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
+        None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
+    };
+    let connection_timeout = request.get_connection_timeout();
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
@@ -1201,13 +1366,6 @@ async fn create_cluster_client(
         })
         .collect();
 
-    let periodic_topology_checks = match request.periodic_checks {
-        Some(PeriodicCheck::Disabled) => None,
-        Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
-        Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
-        None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
-    };
-    let connection_timeout = to_duration(request.connection_timeout, DEFAULT_CONNECTION_TIMEOUT);
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
         .connection_timeout(connection_timeout)
         .retries(DEFAULT_RETRIES);
@@ -1242,9 +1400,6 @@ async fn create_cluster_client(
             builder = builder.certs(certs);
         }
     }
-    if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions.clone() {
-        builder = builder.pubsub_subscriptions(pubsub_subscriptions);
-    }
 
     let retry_strategy = match request.connection_retry_strategy {
         Some(strategy) => RetryStrategy::new(
@@ -1260,11 +1415,15 @@ async fn create_cluster_client(
     builder =
         builder.refresh_topology_from_initial_nodes(request.refresh_topology_from_initial_nodes);
 
+    builder = builder.tcp_nodelay(request.tcp_nodelay);
+
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
     let client = builder.build()?;
-    let mut con = client.get_async_connection(push_sender).await?;
+    let mut con = client
+        .get_async_connection(push_sender, Some(pubsub_synchronizer))
+        .await?;
 
     // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,
     // preventing scenarios where the client becomes inoperable or, worse, unaware that sharded pubsub messages are not being received.
@@ -1276,7 +1435,7 @@ async fn create_cluster_client(
     // However, this approach would leave the application unaware that the subscriptions were not applied, requiring the user to analyze logs to identify the issue.
     // Instead, we explicitly check the engine version here and fail the connection creation if it is incompatible with sharded subscriptions.
 
-    if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions
+    if let Some(pubsub_subscriptions) = &request.pubsub_subscriptions
         && pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded)
     {
         let info_res = con
@@ -1320,6 +1479,7 @@ pub enum ConnectionError {
     Cluster(redis::RedisError),
     Timeout,
     IoError(std::io::Error),
+    Configuration(String),
 }
 
 impl std::fmt::Debug for ConnectionError {
@@ -1329,6 +1489,7 @@ impl std::fmt::Debug for ConnectionError {
             Self::Cluster(arg0) => f.debug_tuple("Cluster").field(arg0).finish(),
             Self::IoError(arg0) => f.debug_tuple("IoError").field(arg0).finish(),
             Self::Timeout => write!(f, "Timeout"),
+            Self::Configuration(arg0) => f.debug_tuple("Configuration").field(arg0).finish(),
         }
     }
 }
@@ -1340,6 +1501,7 @@ impl std::fmt::Display for ConnectionError {
             ConnectionError::Cluster(err) => write!(f, "{err}"),
             ConnectionError::IoError(err) => write!(f, "{err}"),
             ConnectionError::Timeout => f.write_str("connection attempt timed out"),
+            ConnectionError::Configuration(msg) => write!(f, "configuration error: {msg}"),
         }
     }
 }
@@ -1388,9 +1550,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     );
     let connection_timeout = format!(
         "\nConnection timeout: {}",
-        request
-            .connection_timeout
-            .unwrap_or(DEFAULT_CONNECTION_TIMEOUT.as_millis() as u32)
+        request.get_connection_timeout().as_millis()
     );
     let database_id = format!("\ndatabase ID: {}", request.database_id);
     let rfr_strategy = request
@@ -1453,12 +1613,38 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     )
 }
 
+/// Create a compression manager from the given configuration
+/// Returns None if compression is disabled or not configured
+fn create_compression_manager(
+    compression_config: Option<CompressionConfig>,
+) -> Result<Option<Arc<CompressionManager>>, ConnectionError> {
+    let Some(config) = compression_config else {
+        return Ok(None);
+    };
+
+    if !config.enabled {
+        return Ok(None);
+    }
+
+    let backend: Box<dyn crate::compression::CompressionBackend> = match config.backend {
+        CompressionBackendType::Zstd => Box::new(ZstdBackend::new()),
+        CompressionBackendType::Lz4 => Box::new(Lz4Backend::new()),
+    };
+
+    let manager = CompressionManager::new(backend, config).map_err(|e| {
+        ConnectionError::Configuration(format!("Failed to create compression manager: {}", e))
+    })?;
+
+    Ok(Some(Arc::new(manager)))
+}
+
 impl Client {
     pub async fn new(
         request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
-        const DEFAULT_CLIENT_CREATION_TIMEOUT: Duration = Duration::from_secs(10);
+        // Add buffer to connection_timeout to allow inner connection logic to fully execute before the outer timeout triggers
+        let client_creation_timeout = request.get_connection_timeout() + Duration::from_millis(500);
 
         log_info(
             "Connection configuration",
@@ -1472,7 +1658,15 @@ impl Client {
             inflight_requests_limit.try_into().unwrap(),
         ));
 
-        tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
+        // Create compression manager from configuration
+        let compression_manager = create_compression_manager(request.compression_config.clone())?;
+
+        let reconciliation_interval = match request.pubsub_reconciliation_interval_ms {
+            Some(ms) if ms > 0 => Some(Duration::from_millis(ms as u64)),
+            _ => None,
+        };
+
+        tokio::time::timeout(client_creation_timeout, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
             let internal_client_arc =
@@ -1481,12 +1675,26 @@ impl Client {
                     push_sender: push_sender.clone(),
                 }))));
 
+            let initial_subscriptions = request.pubsub_subscriptions.clone();
+
+            let pubsub_synchronizer = create_pubsub_synchronizer(
+                push_sender.clone(),
+                initial_subscriptions,
+                request.cluster_mode_enabled,
+                Arc::downgrade(&internal_client_arc),
+                reconciliation_interval,
+                request_timeout,
+            )
+            .await;
+
             // Create the Client first without IAM token manager
             let client = Self {
                 internal_client: internal_client_arc.clone(),
                 request_timeout,
                 inflight_requests_allowed,
+                compression_manager: compression_manager.clone(),
                 iam_token_manager: None,
+                pubsub_synchronizer: pubsub_synchronizer.clone(),
             };
 
             let client_arc = Arc::new(RwLock::new(client));
@@ -1504,16 +1712,21 @@ impl Client {
                 client_guard.iam_token_manager = iam_token_manager.clone();
             }
 
-            let internal_client = if request.lazy_connect {
+            let is_lazy = request.lazy_connect;
+            let internal_client = if is_lazy {
                 ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request,
                     push_sender,
                 }))
             } else if request.cluster_mode_enabled {
-                let client =
-                    create_cluster_client(request, push_sender, iam_token_manager.as_ref())
-                        .await
-                        .map_err(ConnectionError::Cluster)?;
+                let client = create_cluster_client(
+                    request,
+                    push_sender,
+                    iam_token_manager.as_ref(),
+                    pubsub_synchronizer.clone(),
+                )
+                .await
+                .map_err(ConnectionError::Cluster)?;
                 ClientWrapper::Cluster { client }
             } else {
                 ClientWrapper::Standalone(
@@ -1521,6 +1734,7 @@ impl Client {
                         request,
                         push_sender,
                         iam_token_manager.as_ref(),
+                        Some(pubsub_synchronizer.clone()),
                     )
                     .await
                     .map_err(ConnectionError::Standalone)?,
@@ -1531,6 +1745,19 @@ impl Client {
             {
                 let mut guard = internal_client_arc.write().await;
                 *guard = internal_client;
+            }
+
+            if !is_lazy {
+                pubsub_synchronizer.trigger_reconciliation();
+                if let Err(e) = pubsub_synchronizer.wait_for_sync(0, None, None, None).await {
+                    log_error(
+                        "Client::new",
+                        format!(
+                            "Failed to establish initial subscriptions within timeout: {:?}",
+                            e
+                        ),
+                    );
+                }
             }
 
             // Return the client from the Arc
@@ -1544,12 +1771,33 @@ impl Client {
         .await
         .map_err(|_| ConnectionError::Timeout)?
     }
+
+    /// Get the compression manager if compression is enabled
+    ///
+    /// # Returns
+    /// * `Some(Arc<CompressionManager>)` - If compression is enabled and configured
+    /// * `None` - If compression is disabled or not configured
+    pub fn compression_manager(&self) -> Option<Arc<CompressionManager>> {
+        self.compression_manager.clone()
+    }
+
+    /// Check if compression is enabled for this client
+    ///
+    /// # Returns
+    /// * `true` if compression is enabled and configured
+    /// * `false` if compression is disabled or not configured
+    pub fn is_compression_enabled(&self) -> bool {
+        self.compression_manager
+            .as_ref()
+            .map(|manager| manager.is_enabled())
+            .unwrap_or(false)
+    }
 }
 
 pub trait GlideClientForTests {
     fn send_command<'a>(
         &'a mut self,
-        cmd: &'a Cmd,
+        cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value>;
 }
@@ -1557,7 +1805,7 @@ pub trait GlideClientForTests {
 impl GlideClientForTests for Client {
     fn send_command<'a>(
         &'a mut self,
-        cmd: &'a Cmd,
+        cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value> {
         self.send_command(cmd, routing)
@@ -1567,10 +1815,24 @@ impl GlideClientForTests for Client {
 impl GlideClientForTests for StandaloneClient {
     fn send_command<'a>(
         &'a mut self,
-        cmd: &'a Cmd,
+        cmd: &'a mut Cmd,
         _routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value> {
         self.send_command(cmd).boxed()
+    }
+}
+
+// This is used for pubsub tests
+impl GlideClientForTests for ClusterConnection {
+    fn send_command<'a>(
+        &'a mut self,
+        cmd: &'a mut redis::Cmd,
+        routing: Option<RoutingInfo>,
+    ) -> redis::RedisFuture<'a, Value> {
+        let final_routing =
+            routing.unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random));
+
+        async move { self.route_command(cmd, final_routing).await }.boxed()
     }
 }
 
@@ -1586,6 +1848,7 @@ mod tests {
     };
 
     use super::{Client, ClientWrapper, LazyClient, get_timeout_from_cmd_arg};
+    use std::sync::Weak;
 
     #[test]
     fn test_get_timeout_from_cmd_returns_correct_duration_int() {
@@ -1805,6 +2068,7 @@ mod tests {
 
     /// Helper function to create a test client for unit tests
     fn create_test_client() -> Client {
+        use crate::pubsub::create_pubsub_synchronizer;
         use std::sync::Arc;
         use std::sync::atomic::AtomicIsize;
         use tokio::sync::RwLock;
@@ -1825,11 +2089,25 @@ mod tests {
             push_sender: None,
         };
 
+        // Create runtime to initialize a stub pubsub synchronizer
+        // We do this in order to keep the pubsub_synchronizer in the client struct non-optional.
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let pubsub_synchronizer = rt.block_on(create_pubsub_synchronizer(
+            None,
+            None,
+            false,
+            Weak::new(),
+            None,
+            Duration::from_millis(250),
+        ));
+
         Client {
             internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),
             request_timeout: Duration::from_millis(250),
             inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
             iam_token_manager: None,
+            compression_manager: None,
+            pubsub_synchronizer,
         }
     }
 

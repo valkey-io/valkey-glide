@@ -38,6 +38,7 @@ jobs:
             INPUT_TARGET_BRANCH: ${{ github.event.inputs.branch_name }}
             EVENT_NAME: ${{ github.event_name }}
             HEAD_REF: ${{ github.head_ref }}
+            ORT_VERSION: "59.0.0"
 
         steps:
             - name: Setup target branch and commit
@@ -60,11 +61,11 @@ jobs:
               run: |
                   echo "TARGET_COMMIT=`git rev-parse HEAD`" >> $GITHUB_ENV
 
-            - name: Set up JDK 11 for the ORT package
+            - name: Set up JDK 21 for the ORT package
               uses: actions/setup-java@v4
               with:
                   distribution: "temurin"
-                  java-version: 11
+                  java-version: 21
 
             - name: Cache ORT and Gradle packages
               uses: actions/cache@v4
@@ -74,7 +75,7 @@ jobs:
                       ./ort
                       ~/.gradle/caches
                       ~/.gradle/wrapper
-                  key: ${{ runner.os }}-ort
+                  key: ${{ runner.os }}-ort-${{ env.ORT_VERSION }}
 
             - name: Checkout ORT Repository
               if: steps.cache-ort.outputs.cache-hit != 'true'
@@ -82,7 +83,7 @@ jobs:
               with:
                   repository: "oss-review-toolkit/ort"
                   path: "./ort"
-                  ref: "46.0.0"
+                  ref: ${{ env.ORT_VERSION }}
                   submodules: recursive
 
             - name: Install Rust toolchain

@@ -90,6 +90,12 @@ from glide_shared.routes import (
     SlotKeyRoute,
     SlotType,
 )
+from glide_sync import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+)
 from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide_sync.sync_commands.script import Script
 
@@ -405,7 +411,7 @@ class TestGlideClients:
                         1, 100, 2
                     ),  # needs to be configured so that we wont be connected within 7 seconds bc of default retries
                 )
-            assert "timed out" in str(e)
+            assert "timed out" in str(e).lower() or "timeout" in str(e).lower()
 
         def connect_to_client():
             # Create a second client with a connection timeout of 7 seconds
@@ -10217,7 +10223,9 @@ class TestClusterRoutes:
 
         # Test no_scores option
         if not sync_check_if_server_version_lt(glide_sync_client, "8.0.0"):
-            result = glide_sync_client.zscan(key1, initial_cursor, no_scores=True)
+            result = glide_sync_client.zscan(
+                key1, initial_cursor, match="value*", no_scores=True
+            )
             assert result[result_cursor_index] != b"0"
             values_array = cast(List[bytes], result[result_collection_index])
             # Verify that scores are not included
@@ -10638,15 +10646,13 @@ class TestSyncScripts:
         )
 
         # Add test for script_kill with writing script
-        writing_script = Script(
-            """
+        writing_script = Script("""
             redis.call('SET', KEYS[1], 'value')
             local start = redis.call('TIME')[1]
             while redis.call('TIME')[1] - start < 15 do
                 redis.call('SET', KEYS[1], 'value')
             end
-        """
-        )
+        """)
 
         def run_writing_script():
             test_client.invoke_script(writing_script, keys=[get_random_string(5)])
@@ -12019,3 +12025,51 @@ class TestSyncScripts:
         # Verify all fields are now persistent
         ttl_results = glide_sync_client.httl(multi_key, field_names)
         assert ttl_results == [-1] * len(field_names)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("tcp_nodelay", [None, True, False])
+    def test_tcp_nodelay_configuration(
+        self,
+        request,
+        cluster_mode: bool,
+        tcp_nodelay: Optional[bool],
+    ):
+        """Test TCP_NODELAY configuration option for sync client."""
+        valkey_cluster = (
+            pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
+        )
+
+        if cluster_mode:
+            cluster_config = GlideClusterClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                advanced_config=AdvancedGlideClusterClientConfiguration(
+                    tcp_nodelay=tcp_nodelay
+                ),
+            )
+            cluster_client = GlideClusterClient.create(cluster_config)
+            try:
+                # Verify client can connect and execute commands
+                assert cluster_client.ping() == b"PONG"
+                assert cluster_client.set("key", "value") == "OK"
+                assert cluster_client.get("key") == b"value"
+                # Clean up test key
+                cluster_client.delete(["key"])
+            finally:
+                cluster_client.close()
+        else:
+            standalone_config = GlideClientConfiguration(
+                addresses=valkey_cluster.nodes_addr,
+                advanced_config=AdvancedGlideClientConfiguration(
+                    tcp_nodelay=tcp_nodelay
+                ),
+            )
+            standalone_client = GlideClient.create(standalone_config)
+            try:
+                # Verify client can connect and execute commands
+                assert standalone_client.ping() == b"PONG"
+                assert standalone_client.set("key", "value") == "OK"
+                assert standalone_client.get("key") == b"value"
+                # Clean up test key
+                standalone_client.delete(["key"])
+            finally:
+                standalone_client.close()
