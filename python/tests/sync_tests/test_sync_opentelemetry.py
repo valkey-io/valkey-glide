@@ -398,7 +398,9 @@ class TestOpenTelemetryGlideSync:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_otel_global_config_not_reinitialize(self, request, protocol, cluster_mode):
+    def test_sync_otel_global_config_not_reinitialize(
+        self, request, protocol, cluster_mode
+    ):
         """Test that OpenTelemetry cannot be reinitialized"""
         # Try to reinitialize with invalid config
         opentelemetry_config = OpenTelemetryConfig(
@@ -553,7 +555,9 @@ class TestOpenTelemetryGlideSync:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_number_of_clients_with_same_config(self, request, protocol, cluster_mode):
+    def test_sync_number_of_clients_with_same_config(
+        self, request, protocol, cluster_mode
+    ):
         """Test that multiple clients with the same config work correctly with OpenTelemetry"""
         # Create two clients
         client1 = create_sync_client(
