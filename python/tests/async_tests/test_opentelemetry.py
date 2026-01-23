@@ -3,6 +3,7 @@
 import gc
 import os
 import time
+from typing import Optional
 
 import anyio
 import psutil  # type: ignore[import-untyped]
@@ -34,7 +35,7 @@ VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics"
 async def wait_for_spans_to_be_flushed(
     span_file_path: str,
     expected_span_names: list[str],
-    expected_span_counts: dict[str, int] | None = None,
+    expected_span_counts: Optional[dict[str, int]] = None,
     timeout: float = 15.0,
     check_interval: float = 0.5,
 ) -> None:
