@@ -28,7 +28,7 @@ VALID_FILE_ENDPOINT_TRACES = f"file://{VALID_ENDPOINT_TRACES}"
 VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics"
 
 
-def test_wrong_opentelemetry_config():
+def test_sync_wrong_opentelemetry_config():
     """Test various invalid OpenTelemetry configurations"""
     from glide_shared.exceptions import ConfigurationError
 
@@ -134,7 +134,7 @@ def test_wrong_opentelemetry_config():
         )
 
 
-def test_span_not_exported_before_init_otel(request):
+def test_sync_span_not_exported_before_init_otel(request):
     """Test that spans are not exported before OpenTelemetry is initialized"""
     # Clean up any existing files
     if os.path.exists(VALID_ENDPOINT_TRACES):
@@ -199,7 +199,7 @@ class TestOpenTelemetryGlideSync:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_span_memory_leak(self, request, protocol, cluster_mode):
+    def test_sync_span_memory_leak(self, request, protocol, cluster_mode):
         """Test that spans don't cause memory leaks"""
         # Force garbage collection
         gc.collect()
@@ -239,7 +239,7 @@ class TestOpenTelemetryGlideSync:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_percentage_requests_config(self, request, protocol, cluster_mode):
+    def test_sync_percentage_requests_config(self, request, protocol, cluster_mode):
         """Test that sample percentage configuration works correctly"""
         # Create client
         client = create_sync_client(
@@ -297,7 +297,7 @@ class TestOpenTelemetryGlideSync:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_otel_global_config_not_reinitialize(self, request, protocol, cluster_mode):
+    def test_sync_otel_global_config_not_reinitialize(self, request, protocol, cluster_mode):
         """Test that OpenTelemetry cannot be reinitialized"""
         # Try to reinitialize with invalid config
         opentelemetry_config = OpenTelemetryConfig(
@@ -330,7 +330,7 @@ class TestOpenTelemetryGlideSync:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_span_batch(self, request, protocol, cluster_mode):
+    def test_sync_span_batch(self, request, protocol, cluster_mode):
         """Test that batch operations create spans correctly"""
         # Force garbage collection
         gc.collect()
@@ -393,7 +393,7 @@ class TestOpenTelemetryGlideSync:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_batch_cluster_span_lifecycle(self, request, protocol, cluster_mode):
+    def test_sync_batch_cluster_span_lifecycle(self, request, protocol, cluster_mode):
         """Test that spans are properly handled with batch cluster operations"""
         # This test should not run in parallel with other tests due to the memory check
         # Force garbage collection
@@ -452,7 +452,7 @@ class TestOpenTelemetryGlideSync:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_number_of_clients_with_same_config(self, request, protocol, cluster_mode):
+    def test_sync_number_of_clients_with_same_config(self, request, protocol, cluster_mode):
         """Test that multiple clients with the same config work correctly with OpenTelemetry"""
         # Create two clients
         client1 = create_sync_client(
