@@ -10,13 +10,47 @@ import random
 from typing import Optional
 
 from glide.glide import (
-    OpenTelemetryConfig,
-    OpenTelemetryTracesConfig,
+    OpenTelemetryConfig as PyO3OpenTelemetryConfig,
+    OpenTelemetryMetricsConfig as PyO3OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig as PyO3OpenTelemetryTracesConfig,
     init_opentelemetry,
 )
 from glide_shared.exceptions import ConfigurationError
+from glide_shared.opentelemetry import (
+    OpenTelemetryConfig,
+    OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig,
+)
 
 from .logger import Level, Logger
+
+
+def _convert_to_pyo3_config(config: OpenTelemetryConfig) -> PyO3OpenTelemetryConfig:
+    """
+    Convert shared OpenTelemetryConfig to PyO3 OpenTelemetryConfig for Rust FFI.
+
+    Args:
+        config: Shared OpenTelemetryConfig instance
+
+    Returns:
+        PyO3OpenTelemetryConfig: PyO3-compatible config for Rust
+    """
+    pyo3_traces = None
+    if config.traces:
+        pyo3_traces = PyO3OpenTelemetryTracesConfig(
+            endpoint=config.traces.endpoint,
+            sample_percentage=config.traces.sample_percentage,
+        )
+
+    pyo3_metrics = None
+    if config.metrics:
+        pyo3_metrics = PyO3OpenTelemetryMetricsConfig(endpoint=config.metrics.endpoint)
+
+    return PyO3OpenTelemetryConfig(
+        traces=pyo3_traces,
+        metrics=pyo3_metrics,
+        flush_interval_ms=config.flush_interval_ms,
+    )
 
 
 class OpenTelemetry:
@@ -65,8 +99,9 @@ class OpenTelemetry:
         """
         if not cls._instance:
             cls._config = config
-            # Initialize the underlying OpenTelemetry implementation
-            init_opentelemetry(config)
+            # Convert shared config to PyO3 config and initialize
+            pyo3_config = _convert_to_pyo3_config(config)
+            init_opentelemetry(pyo3_config)
             cls._instance = OpenTelemetry()
             Logger.log(
                 Level.INFO,
@@ -100,10 +135,8 @@ class OpenTelemetry:
             Optional[int]: The sample percentage for traces only if OpenTelemetry is initialized
                 and the traces config is set, otherwise None.
         """
-        if cls._config:
-            traces_config = cls._config.get_traces()
-            if traces_config:
-                return traces_config.get_sample_percentage()
+        if cls._config and cls._config.traces:
+            return cls._config.traces.sample_percentage
         return None
 
     @classmethod
@@ -138,20 +171,11 @@ class OpenTelemetry:
             This method can be called at runtime to change the sampling percentage
             without reinitializing OpenTelemetry.
         """
-        if not cls._config or not cls._config.get_traces():
-            raise ConfigurationError("OpenTelemetry config traces not initialized")
+        if not cls._config or not cls._config.traces:
+            raise ConfigurationError("OpenTelemetry traces not initialized")
 
         if percentage < 0 or percentage > 100:
             raise ConfigurationError("Sample percentage must be between 0 and 100")
 
-        # Create a new traces config with the updated sample_percentage
-        # This is necessary because the PyO3 binding doesn't properly handle direct assignment to Option<u32>
-        traces_config = cls._config.get_traces()
-        if traces_config:
-            endpoint = traces_config.get_endpoint()
-            new_traces_config = OpenTelemetryTracesConfig(
-                endpoint=endpoint, sample_percentage=percentage
-            )
-
-            # Replace the traces config
-            cls._config.set_traces(new_traces_config)
+        # Update the shared config directly
+        cls._config.traces.sample_percentage = percentage
