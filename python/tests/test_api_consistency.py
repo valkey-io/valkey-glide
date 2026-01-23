@@ -65,7 +65,6 @@ EXCLUDED_API_FILENAMES = {
 
 EXCLUDED_TESTS = {
     "async_only": [
-        "test_inflight_request_limit",
         "test_statistics",
         "test_UDS_socket_connection_failure",
         "test_cancelled_request_handled_gracefully",
