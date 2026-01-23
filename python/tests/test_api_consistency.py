@@ -109,13 +109,11 @@ EXCLUDED_TESTS = {
 
 EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
-        "test_opentelemetry.py",
         "test_deprecation_warnings.py",
         # TODO: Remove when implementing dynamic pubsub for the sync client
         "test_pubsub.py",
     ],
     "sync_only": [
-        "test_sync_opentelemetry.py",
         # TODO: Remove when implementing dynamic pubsub for the sync client
         "test_sync_pubsub.py",
     ],
@@ -240,4 +238,33 @@ class TestConsistency:
             error_message_prefix="Tests missing",
             normalize_sync=remove_sync_prefix_from_test_name,
             filename_prefix="test",
+        )
+
+    def test_opentelemetry_tests_consistency(self):
+        """
+        Verify that for every test_* method in test_opentelemetry.py,
+        there is a corresponding test in test_sync_opentelemetry.py.
+        """
+        async_otel_tests = get_functions_from_file(
+            TESTS_ASYNC_DIR / "test_opentelemetry.py"
+        )
+        sync_otel_tests = get_functions_from_file(
+            TESTS_SYNC_DIR / "test_sync_opentelemetry.py"
+        )
+
+        # Filter to only test methods (start with "test_")
+        async_test_methods = {
+            name for name in async_otel_tests if name.startswith("test_")
+        }
+        sync_test_methods = {
+            name for name in sync_otel_tests if name.startswith("test_")
+        }
+
+        # Check if each async test has a corresponding sync test (same name)
+        missing_sync_tests = sorted(async_test_methods - sync_test_methods)
+
+        assert not missing_sync_tests, (
+            f"⚠️  OpenTelemetry tests missing in sync client:\n"
+            + "\n".join(f"  {test}" for test in missing_sync_tests)
+            + "\n\nPlease implement the corresponding sync test in test_sync_opentelemetry.py"
         )
