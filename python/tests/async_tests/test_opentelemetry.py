@@ -20,7 +20,6 @@ from glide_shared.config import ProtocolVersion
 from tests.async_tests.conftest import create_client
 from tests.otel_test_utils import (
     build_timeout_error,
-    check_span_counts,
     check_spans_ready,
     read_and_parse_span_file,
 )

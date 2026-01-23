@@ -6,7 +6,6 @@ Shared OpenTelemetry test utilities for both async and sync clients.
 
 import json
 import os
-import time
 from typing import Dict, List, Optional, Tuple
 
 

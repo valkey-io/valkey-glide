@@ -202,10 +202,10 @@ class TestOpenTelemetryGlideSync:
     @pytest.fixture(scope="class")
     def setup_class(self, request):
         # Test wrong OpenTelemetry config before initializing
-        test_wrong_opentelemetry_config()
+        test_sync_wrong_opentelemetry_config()
 
         # Test that spans are not exported before OpenTelemetry is initialized
-        test_span_not_exported_before_init_otel(request)
+        test_sync_span_not_exported_before_init_otel(request)
 
     @pytest.fixture(autouse=True)
     def setup_test(self, request, cluster_mode):

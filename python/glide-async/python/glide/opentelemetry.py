@@ -18,8 +18,8 @@ from glide.glide import (
 from glide_shared.exceptions import ConfigurationError
 from glide_shared.opentelemetry import (
     OpenTelemetryConfig,
-    OpenTelemetryMetricsConfig,
-    OpenTelemetryTracesConfig,
+    OpenTelemetryMetricsConfig,  # noqa: F401 - Re-exported for public API
+    OpenTelemetryTracesConfig,  # noqa: F401 - Re-exported for public API
 )
 
 from .logger import Level, Logger
