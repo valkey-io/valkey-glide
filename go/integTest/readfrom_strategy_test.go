@@ -295,3 +295,54 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 
 	clientForTestingAz.Close()
 }
+
+func (suite *GlideTestSuite) TestAllNodesRoutesToPrimaryAndReplicas() {
+	suite.SkipIfServerVersionLowerThan("8.0.0", suite.T())
+
+	const nGetCalls = 100
+
+	client, err := suite.clusterClient(config.NewClusterClientConfiguration().
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
+		WithRequestTimeout(2 * time.Second).
+		WithReadFrom(config.ReadFromAllNodes))
+	require.NoError(suite.T(), err)
+	defer client.Close()
+
+	suite.verifyOK(
+		client.ConfigResetStatWithOptions(context.Background(), options.RouteOption{Route: config.AllNodes}),
+	)
+
+	for i := 0; i < nGetCalls; i++ {
+		_, err = client.Get(context.Background(), "foo")
+		assert.NoError(suite.T(), err)
+	}
+
+	infoResult, err := client.InfoWithOptions(context.Background(),
+		options.ClusterInfoOptions{
+			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.All}},
+			RouteOption: &options.RouteOption{Route: config.AllNodes},
+		},
+	)
+	assert.NoError(suite.T(), err)
+
+	nodesWithGets := 0
+	primaryReceivedGets := false
+	replicaReceivedGets := false
+
+	for _, value := range infoResult.MultiValue() {
+		if strings.Contains(value, "cmdstat_get:calls=") {
+			nodesWithGets++
+			if strings.Contains(value, "role:master") {
+				primaryReceivedGets = true
+			}
+			if strings.Contains(value, "role:slave") {
+				replicaReceivedGets = true
+			}
+		}
+	}
+
+	assert.Greater(suite.T(), nodesWithGets, 1)
+	assert.True(suite.T(), primaryReceivedGets)
+	assert.True(suite.T(), replicaReceivedGets)
+}
