@@ -12073,3 +12073,48 @@ class TestSyncScripts:
                 standalone_client.delete(["key"])
             finally:
                 standalone_client.close()
+
+    # Testing the inflight_requests_limit parameter in sync client. Sending the allowed amount + 1 of requests
+    # to glide, using blocking commands, and checking the N+1 request returns immediately with error.
+    @pytest.mark.parametrize("cluster_mode", [False, True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("inflight_requests_limit", [5, 100, 1500])
+    def test_sync_inflight_request_limit(
+        self, cluster_mode, protocol, inflight_requests_limit, request
+    ):
+        key1 = f"{{nonexistinglist}}1-{get_random_string(10)}"
+        test_client = create_sync_client(
+            request=request,
+            protocol=protocol,
+            cluster_mode=cluster_mode,
+            inflight_requests_limit=inflight_requests_limit,
+        )
+
+        # Event to signal when a thread receives the inflight limit error
+        max_reached = threading.Event()
+
+        def _blpop():
+            try:
+                test_client.blpop(
+                    [key1], 1
+                )  # Use 1 second timeout instead of 0 (infinite)
+            except RequestError as e:
+                error_msg = str(e).lower()
+                if "maximum inflight requests" in error_msg:
+                    max_reached.set()
+                # Ignore timeout errors - these are expected for blocked threads
+
+        threads = []
+        for _ in range(inflight_requests_limit + 1):
+            thread = threading.Thread(target=_blpop, daemon=True)
+            thread.start()
+            threads.append(thread)
+
+        # Wait for the max inflight error to occur
+        assert max_reached.wait(timeout=10), "Expected inflight request limit error"
+
+        # Wait for threads to complete (they'll timeout after 1 second)
+        for thread in threads:
+            thread.join(timeout=2)
+
+        test_client.close()
