@@ -16,10 +16,10 @@ from glide.glide import (
     init_opentelemetry,
 )
 from glide_shared.exceptions import ConfigurationError
-from glide_shared.opentelemetry import (
+from glide_shared.opentelemetry import (  # noqa: F401 - Re-exported for public API
     OpenTelemetryConfig,
-    OpenTelemetryMetricsConfig,  # noqa: F401 - Re-exported for public API
-    OpenTelemetryTracesConfig,  # noqa: F401 - Re-exported for public API
+    OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig,
 )
 
 from .logger import Level, Logger
