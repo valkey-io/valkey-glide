@@ -57,10 +57,8 @@ EXCLUDED_API_FUNCTIONS = {
 }
 
 EXCLUDED_API_FILENAMES = {
-    "async_only": [
-        "opentelemetry.py",
-    ],
-    "sync_only": ["_glide_ffi.py", "opentelemetry.py"],
+    "async_only": [],
+    "sync_only": ["_glide_ffi.py"],
 }
 
 EXCLUDED_TESTS = {
@@ -103,7 +101,7 @@ EXCLUDED_TESTS = {
         "create_pubsub_subscription",
         "decode_pubsub_msg",
         "new_message",
-        # OpenTelemetry async helper (sync version is wait_for_spans_sync in otel_test_utils.py)
+        # OpenTelemetry async helper function
         "wait_for_spans_to_be_flushed",
     ],
     "sync_only": ["test_sync_fork"],
