@@ -135,6 +135,7 @@ def create_sync_client(
     tls_insecure: Optional[bool] = None,
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
+    inflight_requests_limit: Optional[int] = None,
 ) -> TSyncGlideClient:
     # Create sync client
     config = create_sync_client_config(
@@ -157,6 +158,7 @@ def create_sync_client(
         tls_insecure=tls_insecure,
         lazy_connect=lazy_connect,
         enable_compression=enable_compression,
+        inflight_requests_limit=inflight_requests_limit,
     )
     if cluster_mode:
         return SyncGlideClusterClient.create(config)
