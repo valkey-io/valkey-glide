@@ -2,6 +2,7 @@
 
 import gc
 import os
+import threading
 import time
 
 import psutil  # type: ignore[import-untyped]
@@ -16,14 +17,57 @@ from glide_sync import (
 from glide_sync.opentelemetry import OpenTelemetry
 
 from tests.sync_tests.conftest import create_sync_client
-from tests.otel_test_utils import read_and_parse_span_file
-from tests.otel_test_utils import wait_for_spans_sync as wait_for_spans_to_be_flushed
+from tests.otel_test_utils import (
+    build_timeout_error,
+    check_spans_ready,
+    read_and_parse_span_file,
+)
 
 # Constants
 TIMEOUT = 50  # seconds
 VALID_ENDPOINT_TRACES = "/tmp/spans_sync.json"
 VALID_FILE_ENDPOINT_TRACES = f"file://{VALID_ENDPOINT_TRACES}"
 VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics"
+
+
+def _wait_for_spans_to_be_flushed(
+    span_file_path: str,
+    expected_span_names: list[str],
+    expected_span_counts: dict[str, int] | None = None,
+    timeout: float = 15.0,
+    check_interval: float = 0.5,
+) -> None:
+    """
+    Wait for spans to be flushed to the span file (synchronous version).
+
+    Args:
+        span_file_path: Path to the span file
+        expected_span_names: List of expected span names to wait for
+        expected_span_counts: Optional dict mapping span names to expected counts
+        timeout: Maximum time to wait in seconds
+        check_interval: Interval between checks in seconds
+
+    Raises:
+        Exception: If timeout is reached or spans are not found
+    """
+    start_time = time.time()
+
+    while time.time() - start_time < timeout:
+        if os.path.exists(span_file_path) and os.path.getsize(span_file_path) > 0:
+            try:
+                _, _, span_names = read_and_parse_span_file(span_file_path)
+
+                if check_spans_ready(
+                    span_names, expected_span_names, expected_span_counts
+                ):
+                    return
+
+            except Exception:
+                pass
+
+        time.sleep(check_interval)
+
+    raise build_timeout_error(span_file_path, expected_span_names, expected_span_counts)
 
 
 def test_sync_wrong_opentelemetry_config():
@@ -237,6 +281,64 @@ class TestOpenTelemetryGlideSync:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_concurrent_commands_span_lifecycle(
+        self, request, protocol, cluster_mode
+    ):
+        """Test that spans are properly handled with concurrent commands"""
+        # Force garbage collection
+        gc.collect()
+
+        # Get initial memory usage
+        process = psutil.Process()
+        initial_memory = process.memory_info().rss
+
+        # Create client
+        client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+        )
+
+        # Execute multiple concurrent commands using threads
+        threads = []
+        commands = [
+            lambda: client.set("test_key1", "value1"),
+            lambda: client.get("test_key1"),
+            lambda: client.set("test_key2", "value2"),
+            lambda: client.get("test_key2"),
+            lambda: client.set("test_key3", "value3"),
+            lambda: client.get("test_key3"),
+        ]
+
+        for command in commands:
+            thread = threading.Thread(target=command)
+            threads.append(thread)
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        # Force garbage collection again
+        gc.collect()
+
+        # Wait for spans to be flushed
+        time.sleep(1)
+
+        # Get final memory usage
+        final_memory = process.memory_info().rss
+
+        # Calculate memory increase percentage
+        memory_increase = ((final_memory - initial_memory) / initial_memory) * 100
+
+        # Assert memory increase is not more than 10%
+        assert (
+            memory_increase < 10
+        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_percentage_requests_config(self, request, protocol, cluster_mode):
         """Test that sample percentage configuration works correctly"""
         # Create client
@@ -276,7 +378,7 @@ class TestOpenTelemetryGlideSync:
             client.get(key)
 
         # Wait for spans to be flushed
-        wait_for_spans_to_be_flushed(
+        _wait_for_spans_to_be_flushed(
             VALID_ENDPOINT_TRACES,
             expected_span_names=["Get"],
             expected_span_counts={"Get": 10},
@@ -362,7 +464,7 @@ class TestOpenTelemetryGlideSync:
             assert response[1] >= 1  # batch.object_refcount("test_key")
 
         # Wait for spans to be flushed
-        wait_for_spans_to_be_flushed(
+        _wait_for_spans_to_be_flushed(
             VALID_ENDPOINT_TRACES, expected_span_names=["Batch", "send_batch"]
         )
 
@@ -470,7 +572,7 @@ class TestOpenTelemetryGlideSync:
         client2.get("test_key")
 
         # Wait for spans to be flushed with retry mechanism
-        wait_for_spans_to_be_flushed(
+        _wait_for_spans_to_be_flushed(
             VALID_ENDPOINT_TRACES, expected_span_names=["Set", "Get"]
         )
 
