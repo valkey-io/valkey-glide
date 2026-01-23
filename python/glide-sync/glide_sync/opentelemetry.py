@@ -141,10 +141,8 @@ class OpenTelemetry:
             Optional[int]: The sample percentage for traces only if OpenTelemetry is initialized
                 and the traces config is set, otherwise None.
         """
-        if cls._config:
-            traces_config = cls._config.get_traces()
-            if traces_config:
-                return traces_config.get_sample_percentage()
+        if cls._config and cls._config.traces:
+            return cls._config.traces.sample_percentage
         return None
 
     @classmethod
@@ -179,16 +177,11 @@ class OpenTelemetry:
             This method can be called at runtime to change the sampling percentage
             without reinitializing OpenTelemetry.
         """
-        if not cls._config or not cls._config.get_traces():
-            raise ConfigurationError("OpenTelemetry config traces not initialized")
+        if not cls._config or not cls._config.traces:
+            raise ConfigurationError("OpenTelemetry traces not initialized")
 
         if percentage < 0 or percentage > 100:
             raise ConfigurationError("Sample percentage must be between 0 and 100")
 
-        traces_config = cls._config.get_traces()
-        if traces_config:
-            endpoint = traces_config.get_endpoint()
-            new_traces_config = OpenTelemetryTracesConfig(
-                endpoint=endpoint, sample_percentage=percentage
-            )
-            cls._config.set_traces(new_traces_config)
+        # Update the shared config directly
+        cls._config.traces.sample_percentage = percentage
