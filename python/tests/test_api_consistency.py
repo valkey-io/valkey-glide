@@ -103,8 +103,7 @@ EXCLUDED_TESTS = {
         "create_pubsub_subscription",
         "decode_pubsub_msg",
         "new_message",
-        # OpenTelemetry test helper functions (moved to shared test_otel_utils.py)
-        "read_and_parse_span_file",
+        # OpenTelemetry async helper (sync version is wait_for_spans_sync in otel_test_utils.py)
         "wait_for_spans_to_be_flushed",
     ],
     "sync_only": ["test_sync_fork"],
