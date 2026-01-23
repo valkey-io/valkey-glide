@@ -16,12 +16,12 @@ from glide_sync import (
 )
 from glide_sync.opentelemetry import OpenTelemetry
 
-from tests.sync_tests.conftest import create_sync_client
 from tests.otel_test_utils import (
     build_timeout_error,
     check_spans_ready,
     read_and_parse_span_file,
 )
+from tests.sync_tests.conftest import create_sync_client
 
 # Constants
 TIMEOUT = 50  # seconds

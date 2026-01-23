@@ -9,10 +9,10 @@ See glide_shared.opentelemetry module documentation for configuration details.
 import random
 from typing import Optional
 
+from glide.glide import OpenTelemetryConfig as PyO3OpenTelemetryConfig
+from glide.glide import OpenTelemetryMetricsConfig as PyO3OpenTelemetryMetricsConfig
+from glide.glide import OpenTelemetryTracesConfig as PyO3OpenTelemetryTracesConfig
 from glide.glide import (
-    OpenTelemetryConfig as PyO3OpenTelemetryConfig,
-    OpenTelemetryMetricsConfig as PyO3OpenTelemetryMetricsConfig,
-    OpenTelemetryTracesConfig as PyO3OpenTelemetryTracesConfig,
     init_opentelemetry,
 )
 from glide_shared.exceptions import ConfigurationError
