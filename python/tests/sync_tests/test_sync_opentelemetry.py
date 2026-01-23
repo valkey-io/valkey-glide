@@ -391,6 +391,65 @@ class TestOpenTelemetryGlideSync:
             memory_increase < 10
         ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
 
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_batch_cluster_span_lifecycle(self, request, protocol, cluster_mode):
+        """Test that spans are properly handled with batch cluster operations"""
+        # This test should not run in parallel with other tests due to the memory check
+        # Force garbage collection
+        gc.collect()
+
+        # Get initial memory usage
+        process = psutil.Process()
+        initial_memory = process.memory_info().rss  # Get resident set size in bytes
+
+        # Create cluster client
+        client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+        )
+
+        # Execute multiple batch operations using ClusterBatch
+        # Create first batch
+        batch1 = ClusterBatch(is_atomic=True)
+        batch1.set("{batch}key1", "value1")
+        batch1.get("{batch}key1")
+        batch1.strlen("{batch}key1")
+        client.exec(batch1, raise_on_error=True)
+
+        # Create second batch
+        batch2 = ClusterBatch(is_atomic=True)
+        batch2.set("{batch}key2", "value2")
+        batch2.object_refcount("{batch}key2")
+        client.exec(batch2, raise_on_error=True)
+
+        # Create third batch
+        batch3 = ClusterBatch(is_atomic=True)
+        batch3.set("{batch}key3", "value3")
+        batch3.get("{batch}key3")
+        batch3.delete(["{batch}key1", "{batch}key2", "{batch}key3"])
+        client.exec(batch3, raise_on_error=True)
+
+        # Force garbage collection again
+        gc.collect()
+
+        # Wait for spans to be flushed
+        time.sleep(1)
+
+        # Get final memory usage
+        final_memory = process.memory_info().rss
+
+        # Calculate memory increase percentage
+        memory_increase = ((final_memory - initial_memory) / initial_memory) * 100
+
+        # Assert memory increase is not more than 10%
+        assert (
+            memory_increase < 10
+        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
+
+        client.close()
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_number_of_clients_with_same_config(self, request, protocol, cluster_mode):
