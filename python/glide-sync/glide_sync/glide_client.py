@@ -401,23 +401,40 @@ class BaseClient(CoreCommands):
         if client_adapter_ptr == self._ffi.NULL:
             raise ValueError("Invalid client pointer.")
 
-        # Convert the arguments to C-compatible pointers
-        c_args, c_lengths, buffers = self._to_c_strings(args)
+        # Create span if OpenTelemetry is configured and sampling indicates we should trace
+        from .opentelemetry import OpenTelemetry
 
-        # Route bytes should be kept alive in the scope of the FFI call
-        route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
+        span = 0
+        span_name_cstr = None
+        if OpenTelemetry.should_sample():
+            from glide_shared.protobuf.command_request_pb2 import RequestType
 
-        result = self._lib.command(
-            client_adapter_ptr,  # Pointer to the ClientAdapter from create_client()
-            0,  # Request ID - placeholder for sync clients (used for async callbacks)
-            request_type,  # Request type (e.g., GET or SET)
-            len(args),  # Number of arguments
-            c_args,  # Array of argument pointers
-            c_lengths,  # Array of argument lengths
-            route_ptr,  # Pointer to protobuf-encoded routing information (NULL if no routing)
-            route_len,  # Length of the routing data in bytes (0 if no routing)
-            0,  # Span pointer (0 for no tracing)
-        )
+            command_name = RequestType.Name(request_type)
+            span_name_cstr = self._ffi.new("char[]", command_name.encode())
+            span = self._lib.create_named_otel_span(span_name_cstr)
+
+        try:
+            # Convert the arguments to C-compatible pointers
+            c_args, c_lengths, buffers = self._to_c_strings(args)
+
+            # Route bytes should be kept alive in the scope of the FFI call
+            route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
+
+            result = self._lib.command(
+                client_adapter_ptr,  # Pointer to the ClientAdapter from create_client()
+                0,  # Request ID - placeholder for sync clients (used for async callbacks)
+                request_type,  # Request type (e.g., GET or SET)
+                len(args),  # Number of arguments
+                c_args,  # Array of argument pointers
+                c_lengths,  # Array of argument lengths
+                route_ptr,  # Pointer to protobuf-encoded routing information (NULL if no routing)
+                route_len,  # Length of the routing data in bytes (0 if no routing)
+                span,  # Span pointer for tracing
+            )
+        finally:
+            # Drop span if it was created
+            if span != 0:
+                self._lib.drop_otel_span(span)
         return self._handle_cmd_result(result)
 
     def _update_connection_password(
@@ -498,29 +515,41 @@ class BaseClient(CoreCommands):
         if client_adapter_ptr == self._ffi.NULL:
             raise ValueError("Invalid client pointer.")
 
-        # Note: batch_refs and option_refs must remain in scope
-        # throughout this entire function call to prevent garbage collection of Python objects
-        # that have C pointers pointing to them via ffi.from_buffer().
+        # Create span if OpenTelemetry is configured and sampling indicates we should trace
+        from .opentelemetry import OpenTelemetry
 
-        # Convert commands + atomic flag to C BatchInfo
-        batch_info, batch_refs = self._convert_commands_to_c_batch_info(
-            commands, is_atomic
-        )
+        span = 0
+        if OpenTelemetry.should_sample():
+            span = self._lib.create_batch_otel_span()
 
-        # Create batch options from extracted parameters
-        batch_options, option_refs = self._create_c_batch_options_from_params(
-            retry_server_error, retry_connection_error, route, timeout
-        )
+        try:
+            # Note: batch_refs and option_refs must remain in scope
+            # throughout this entire function call to prevent garbage collection of Python objects
+            # that have C pointers pointing to them via ffi.from_buffer().
 
-        result = self._lib.batch(
-            client_adapter_ptr,
-            0,  # callback_index (0 for sync)
-            batch_info,
-            raise_on_error,
-            batch_options,
-            0,  # span_ptr (not yet implemented in sync)
-        )
-        return self._handle_cmd_result(result)
+            # Convert commands + atomic flag to C BatchInfo
+            batch_info, batch_refs = self._convert_commands_to_c_batch_info(
+                commands, is_atomic
+            )
+
+            # Create batch options from extracted parameters
+            batch_options, option_refs = self._create_c_batch_options_from_params(
+                retry_server_error, retry_connection_error, route, timeout
+            )
+
+            result = self._lib.batch(
+                client_adapter_ptr,
+                0,  # callback_index (0 for sync)
+                batch_info,
+                raise_on_error,
+                batch_options,
+                span,  # span_ptr for tracing
+            )
+            return self._handle_cmd_result(result)
+        finally:
+            # Drop span if it was created
+            if span != 0:
+                self._lib.drop_otel_span(span)
 
     def _convert_commands_to_c_batch_info(
         self,
