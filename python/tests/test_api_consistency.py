@@ -24,7 +24,6 @@ EXCLUDED_API_FUNCTIONS = {
         "drop_otel_span",
         "get_endpoint",
         "get_metrics",
-        "get_sample_percentage",
         "get_traces",
         "init_opentelemetry",
         "set_traces",
