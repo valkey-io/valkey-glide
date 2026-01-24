@@ -2612,8 +2612,6 @@ func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestScriptKillWithRoute() {
-	suite.T().Skip("Flaky Test: Wait until #2277 is resolved")
-
 	invokeClient, err := suite.clusterClient(suite.defaultClusterClientConfig())
 	require.NoError(suite.T(), err)
 	killClient := suite.defaultClusterClient()
@@ -2683,8 +2681,6 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestScriptKillUnkillableWithRoute() {
-	suite.T().Skip("Flaky Test: Wait until #2277 is resolved")
-
 	key := uuid.NewString()
 	invokeClient, err := suite.clusterClient(suite.defaultClusterClientConfig())
 	require.NoError(suite.T(), err)
