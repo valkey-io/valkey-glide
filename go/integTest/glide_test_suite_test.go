@@ -403,14 +403,19 @@ func (suite *GlideTestSuite) defaultClientConfig() *config.ClientConfiguration {
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(5 * time.Second)
 
+	// Set default connection timeout for tests
+	advancedConfig := config.NewAdvancedClientConfiguration().
+		WithConnectionTimeout(10 * time.Second)
+
 	// If TLS is enabled, try to load custom certificates
 	if suite.tls {
 		if certData, certErr := loadCaCertificateForTests(); certErr == nil {
 			tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-			advancedConfig := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
-			clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
+			advancedConfig = advancedConfig.WithTlsConfiguration(tlsConfig)
 		}
 	}
+
+	clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
 
 	return clientConfig
 }
@@ -441,14 +446,19 @@ func (suite *GlideTestSuite) defaultClusterClientConfig() *config.ClusterClientC
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(5 * time.Second)
 
+	// Set default connection timeout for tests
+	advancedConfig := config.NewAdvancedClusterClientConfiguration().
+		WithConnectionTimeout(10 * time.Second)
+
 	// If TLS is enabled, try to load custom certificates
 	if suite.tls {
 		if certData, certErr := loadCaCertificateForTests(); certErr == nil {
 			tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-			advancedConfig := config.NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
-			clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
+			advancedConfig = advancedConfig.WithTlsConfiguration(tlsConfig)
 		}
 	}
+
+	clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
 
 	return clientConfig
 }
