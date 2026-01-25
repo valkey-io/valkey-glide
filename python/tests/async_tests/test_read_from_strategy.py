@@ -81,9 +81,15 @@ class TestReadFromStrategy:
                         replicas_with_gets += 1
 
         # Verify ALL_NODES routes to BOTH primary and replicas
-        assert primary_with_gets >= 1, f"Primary should receive GET calls with ALL_NODES strategy. Primary calls: {primary_with_gets}, Replica calls: {replicas_with_gets}"
-        assert replicas_with_gets >= 1, f"At least one replica should receive GET calls with ALL_NODES strategy. Primary calls: {primary_with_gets}, Replica calls: {replicas_with_gets}"
-        assert total_get_calls == GET_CALLS, f"Expected {GET_CALLS} total calls, got {total_get_calls}"
+        assert (
+            primary_with_gets >= 1
+        ), f"Primary should receive GET calls with ALL_NODES strategy. Primary calls: {primary_with_gets}, Replica calls: {replicas_with_gets}"
+        assert (
+            replicas_with_gets >= 1
+        ), f"At least one replica should receive GET calls with ALL_NODES strategy. Primary calls: {primary_with_gets}, Replica calls: {replicas_with_gets}"
+        assert (
+            total_get_calls == GET_CALLS
+        ), f"Expected {GET_CALLS} total calls, got {total_get_calls}"
 
         await client.close()
 
