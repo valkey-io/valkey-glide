@@ -439,7 +439,10 @@ public class ConnectionTests {
 
         GlideClusterClient client =
                 GlideClusterClient.createClient(
-                                commonClusterClientConfig().readFrom(ReadFrom.ALL_NODES).requestTimeout(2000).build())
+                                commonClusterClientConfig()
+                                        .readFrom(ReadFrom.ALL_NODES)
+                                        .requestTimeout(2000)
+                                        .build())
                         .get();
         assertEquals(client.configResetStat(ALL_NODES).get(), OK);
 
@@ -464,7 +467,8 @@ public class ConnectionTests {
 
         boolean replicaReceivedGets =
                 infoData.values().stream()
-                        .anyMatch(value -> value.contains("role:slave") && value.contains("cmdstat_get:calls="));
+                        .anyMatch(
+                                value -> value.contains("role:slave") && value.contains("cmdstat_get:calls="));
         assertTrue(replicaReceivedGets, "ALL_NODES should route to replicas");
 
         client.close();
