@@ -3097,7 +3097,8 @@ where
         }
 
         // Preserve capacity
-        if let Ok(mut guard) = self.inner.pending_requests.lock() {
+        {
+            let mut guard = self.inner.pending_requests.lock().expect(MUTEX_WRITE_ERR);
             if guard.is_empty() {
                 *guard = pending_requests;
             }
