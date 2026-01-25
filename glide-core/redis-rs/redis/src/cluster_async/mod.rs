@@ -953,8 +953,10 @@ impl<C> Future for Request<C> {
                     let retry_method = err.retry_method();
                     let next = if err.kind() == ErrorKind::AllConnectionsUnavailable {
                         Next::ReconnectToInitialNodes { request: None }.into()
-                    } else if matches!(err.retry_method(), RetryMethod::MovedRedirect)
-                        || matches!(target, OperationTarget::NotFound)
+                    } else if matches!(
+                        err.retry_method(),
+                        RetryMethod::MovedRedirect | RetryMethod::RefreshSlotsAndRetry
+                    ) || matches!(target, OperationTarget::NotFound)
                     {
                         Next::RefreshSlots {
                             request: None,
@@ -1047,6 +1049,16 @@ impl<C> Future for Request<C> {
                             request: Some(request),
                             sleep_duration: None,
                             moved_redirect: RedirectNode::from_option_tuple(redirect_node),
+                        }
+                        .into()
+                    }
+                    RetryMethod::RefreshSlotsAndRetry => {
+                        let mut request = this.request.take().unwrap();
+                        request.info.reset_routing();
+                        Next::RefreshSlots {
+                            request: Some(request),
+                            sleep_duration: Some(sleep_duration),
+                            moved_redirect: None,
                         }
                         .into()
                     }
@@ -1367,7 +1379,20 @@ where
     // This function serves as a cheap alternative to slot_refresh() and thus can be used much more frequently.
     // The function does not discover the topology from the cluster and assumes the cached topology is valid.
     // In addition, the validation is done by peeking at the state of the underlying transport w/o overhead of additional commands to server.
+    // If we're during slot refresh, we skip the validation to avoid interfering with the slot refresh process.
     async fn validate_all_user_connections(inner: Arc<InnerCore<C>>) {
+        // If slot refresh is in progress, skip validation
+        // The reason is that during slot refresh, connections might be created before being assigned slots,
+        // and we don't want to drop those connections and interfere with that process.
+        //
+        // Note: This is a best-effort check due to a potential race condition - both tasks
+        // are spawned to tokio's multi-threaded runtime and can run in parallel, so
+        // `refresh_slots` could start right after this check returns false.
+        // TODO: Implement more robust synchronization - see https://github.com/valkey-io/valkey-glide/issues/5227
+        if inner.slot_refresh_state.in_progress.load(Ordering::Relaxed) {
+            return;
+        }
+
         let mut all_valid_conns = HashMap::new();
         // prep connections and clean out these w/o assigned slots, as we might have established connections to unwanted hosts
         let mut nodes_to_delete = Vec::new();
@@ -2271,7 +2296,8 @@ where
     ) -> RedisResult<()> {
         let num_of_nodes = inner.conn_lock.read().expect(MUTEX_READ_ERR).len();
         const MAX_REQUESTED_NODES: usize = 10;
-        let num_of_nodes_to_query = std::cmp::min(num_of_nodes, MAX_REQUESTED_NODES);
+        let num_of_nodes_to_query = num_of_nodes.min(MAX_REQUESTED_NODES);
+
         let (new_slots, topology_hash) = calculate_topology_from_random_nodes(
             &inner,
             num_of_nodes_to_query,
@@ -2280,75 +2306,87 @@ where
         )
         .await
         .topology_result?;
+
         // Create a new connection vector of the found nodes
         let nodes = new_slots.all_node_addresses();
         let nodes_len = nodes.len();
-        let addresses_and_connections_iter = stream::iter(nodes)
-            .fold(
-                Vec::with_capacity(nodes_len),
-                |mut addrs_and_conns, addr| {
-                    let inner = inner.clone();
-                    async move {
-                        let addr = addr.to_string();
-                        if let Some(node) = inner
-                            .conn_lock
-                            .read()
-                            .expect(MUTEX_READ_ERR)
-                            .node_for_address(addr.as_str())
-                        {
-                            addrs_and_conns.push((addr, Some(node)));
-                            return addrs_and_conns;
-                        }
-                        // If it's a DNS endpoint, it could have been stored in the existing connections vector using the resolved IP address instead of the DNS endpoint's name.
-                        // We shall check if a connection is already exists under the resolved IP name.
-                        let Some((host, port)) = get_host_and_port_from_addr(&addr) else {
-                            addrs_and_conns.push((addr, None));
-                            return addrs_and_conns;
-                        };
-                        let conn = get_socket_addrs(host, port)
-                            .await
-                            .ok()
-                            .map(|mut socket_addresses| {
-                                socket_addresses.find_map(|addr| {
-                                    inner
-                                        .conn_lock
-                                        .read()
-                                        .expect(MUTEX_READ_ERR)
-                                        .node_for_address(&addr.to_string())
-                                })
-                            })
-                            .unwrap_or(None);
-                        addrs_and_conns.push((addr, conn));
-                        addrs_and_conns
-                    }
-                },
-            )
-            .await;
-        let new_connections: ConnectionMap<C> = stream::iter(addresses_and_connections_iter)
-            .fold(
-                ConnectionsMap(DashMap::with_capacity(nodes_len)),
-                |connections, (addr, node)| async {
-                    let mut cluster_params = inner
-                        .get_cluster_param(|params| params.clone())
-                        .expect(MUTEX_READ_ERR);
-                    let subs_guard = inner.subscriptions_by_address.read().await;
-                    cluster_params.pubsub_subscriptions = subs_guard.get(&addr).cloned();
-                    drop(subs_guard);
-                    let node = get_or_create_conn(
-                        &addr,
-                        node,
-                        &cluster_params,
-                        RefreshConnectionType::AllConnections,
-                        inner.glide_connection_options.clone(),
-                    )
-                    .await;
-                    if let Ok(node) = node {
-                        connections.0.insert(addr, node);
-                    }
-                    connections
-                },
-            )
-            .await;
+
+        // Find existing connections or resolve DNS addresses
+        // TODO: optimize by parallelizing DNS lookups - DNS resolution may involve network I/O and is currently performed sequentially
+        // Issue link: https://github.com/valkey-io/valkey-glide/issues/5228
+        let mut addresses_and_connections = Vec::with_capacity(nodes_len);
+        for addr in nodes {
+            let addr = addr.to_string();
+
+            // Check for existing connection by address
+            if let Some(node) = inner
+                .conn_lock
+                .read()
+                .expect(MUTEX_READ_ERR)
+                .node_for_address(&addr)
+            {
+                addresses_and_connections.push((addr, Some(node)));
+                continue;
+            }
+
+            // If it's a DNS endpoint, it could have been stored in the existing connections vector using the resolved IP address instead of the DNS endpoint's name.
+            // We shall check if a connection is already exists under the resolved IP name.
+            let conn = if let Some((host, port)) = get_host_and_port_from_addr(&addr) {
+                get_socket_addrs(host, port)
+                    .await
+                    .ok()
+                    .and_then(|mut socket_addresses| {
+                        let conn_lock = inner.conn_lock.read().expect(MUTEX_READ_ERR);
+                        socket_addresses.find_map(|socket_addr| {
+                            conn_lock.node_for_address(&socket_addr.to_string())
+                        })
+                    })
+            } else {
+                None
+            };
+
+            addresses_and_connections.push((addr, conn));
+        }
+
+        let cluster_params = inner
+            .get_cluster_param(|params| params.clone())
+            .expect(MUTEX_READ_ERR);
+        let glide_connection_options = &inner.glide_connection_options;
+
+        let subs_guard = inner.subscriptions_by_address.read().await;
+        let subscriptions_snapshot: HashMap<_, _> = subs_guard.clone();
+        drop(subs_guard);
+
+        // Create/retrieve connections in for found nodes
+        let connection_futures = addresses_and_connections.into_iter().map(|(addr, node)| {
+            let mut cluster_params = cluster_params.clone();
+            let glide_connection_options = glide_connection_options.clone();
+            cluster_params.pubsub_subscriptions = subscriptions_snapshot.get(&addr).cloned();
+            async move {
+                let result = get_or_create_conn(
+                    &addr,
+                    node,
+                    &cluster_params,
+                    RefreshConnectionType::AllConnections,
+                    glide_connection_options,
+                )
+                .await;
+                (addr, result)
+            }
+        });
+
+        // Await all connection futures
+        // This is bounded by `connection_timeout` since `get_or_create_conn` uses it internally,
+        // so it is safe to await them all at once.
+        let results = futures::future::join_all(connection_futures).await;
+
+        // Collect successful connections
+        let new_connections = ConnectionsMap(DashMap::with_capacity(nodes_len));
+        for (addr, result) in results {
+            if let Ok(node) = result {
+                new_connections.0.insert(addr, node);
+            }
+        }
 
         info!("refresh_slots found nodes:\n{new_connections}");
         // Reset the current slot map and connection vector with the new ones
@@ -3451,7 +3489,30 @@ struct InitialNodeConnectionsResult<C> {
 }
 
 /// Returns connections found for randomly selected initial nodes, along with addresses
-/// that need refresh and a hint if topology change was detected.
+/// that needs to be refreshed.
+///
+/// # Lookup and Retry Logic
+///
+/// 1. **Resolve initial nodes**: Expand the configured initial nodes to their underlying addresses.
+///    A single initial node may resolve to multiple addresses (e.g., DNS hostnames resolving to
+///    multiple IP addresses).
+/// 2. **Random selection**: Pick `num_of_nodes_to_query` random nodes from the resolved list
+/// 3. **Connection lookup**: For each selected node, attempt to find an existing connection,
+///    preferring a management connection when available.
+///
+/// ## Retry Mechanism
+///
+/// If **no connections** are found in the initial lookup (all selected nodes need refresh),
+/// the function performs a single retry:
+///
+/// 1. Trigger connection refresh for all missing addresses
+/// 2. Wait for refresh to complete (with `connection_timeout`)
+/// 3. Retry the connection lookup for those addresses
+///
+/// # Returns
+///
+/// * `connections` - List of found connections (may be empty if all lookups failed)
+/// * `addresses_needing_refresh` - Addresses that needs to be refreshed
 async fn get_random_connections_from_initial_nodes<C>(
     inner: &Core<C>,
     num_of_nodes_to_query: usize,
@@ -3481,12 +3542,41 @@ where
     let mut addresses_needing_refresh = HashSet::new();
 
     for (original_addr, socket_addr) in selected_pairs {
-        match lookup_management_connection(inner, &original_addr, socket_addr.map(|s| s.ip())) {
+        match lookup_management_connection(inner, &original_addr, socket_addr) {
             ConnectionLookupResult::Found(conn) => connections.push(conn),
             ConnectionLookupResult::NeedsConnectionRefresh(addr) => {
                 addresses_needing_refresh.insert(addr);
             }
         }
+    }
+
+    // Only refresh and retry if we have no connections at all
+    if connections.is_empty() && !addresses_needing_refresh.is_empty() {
+        let connection_timeout = inner.get_cluster_param(|p| p.connection_timeout)?;
+
+        // Wait for connection refresh to complete (with timeout)
+        let _ = tokio::time::timeout(
+            connection_timeout,
+            ClusterConnInner::refresh_and_update_connections(
+                inner.clone(),
+                addresses_needing_refresh.clone(),
+                RefreshConnectionType::AllConnections,
+                true,
+            ),
+        )
+        .await;
+
+        let mut still_need_refresh = HashSet::new();
+        for addr in addresses_needing_refresh.drain() {
+            if let ConnectionLookupResult::Found(conn) =
+                lookup_management_connection(inner, &addr, None)
+            {
+                connections.push(conn);
+            } else {
+                still_need_refresh.insert(addr);
+            }
+        }
+        addresses_needing_refresh = still_need_refresh;
     }
 
     Ok(InitialNodeConnectionsResult {
@@ -3507,22 +3597,36 @@ enum ConnectionLookupResult<C> {
 /// Finds a management connection for a node or indicates it needs refresh.
 /// Returns the management connection if available, otherwise falls back to user connection.
 ///
+/// **Warning** ⚠️: This function may have O(n) time complexity. Where `n` is the number of nodes in the slot map.
+///
 /// # Arguments
-/// The `original_addr` may be provided by the user either as a hostname (DNS) or as a direct IP address.
-/// When a hostname is provided, we attempt to resolve it to an IP;
-/// if resolution succeeds, the result is passed as `resolved_ip`.
+///
+/// * `original_addr` - The address as provided by the user, either as a hostname (DNS)
+///   or as a direct IP address (e.g., `"cluster.example.com:6379"` or `"127.0.0.1:6379"`).
+/// * `socket_addr` - The resolved socket address if DNS resolution succeeded, or `None`
+///   if resolution failed.
 ///
 /// # Lookup Logic
-/// Resolve the node's canonical name from the slot map. The canonical name is the node's
-/// address as stored in the slot map (e.g., `my-cluster-001-001.xyz:6379`). The address may
-/// be provided as an IP but stored as a DNS name.
+/// Resolves the node's canonical address from the slot map. The canonical address is how
+/// the node is stored in the `slot_map`, which is our source of truth (e.g., `"my-cluster-001-001.xyz:6379"`).
+/// The caller may provide `original_addr` as an IP, but the slot map may store the same node with its DNS name.
 ///
-/// 1. Check if `original_addr` exists in the slot map as the canonical address (O(1))
-/// 2. If not, search if `resolved_ip` maps to a canonical address in the slot map (O(n))
-/// 3. If still not found, fall back to using `original_addr` as the canonical address
+/// The address resolution follows these steps:
 ///
-/// Then attempt to retrieve the connection for the canonical address from the connection map, or
-/// indicate that this address needs to be refreshed.
+/// 1. **Direct match**: If `original_addr` exists in the slot map, it is treated as
+///    the canonical address (O(1)).
+/// 2. **IP-based match**: Otherwise, if `socket_addr` is available, attempt to find
+///    a canonical address in the slot map that matches its IP (O(n)).
+/// 3. **Default address selection**: If no canonical address is found in the slot map,
+///    select an address to use for a potential new connection:
+///    - Prefer `socket_addr` if available
+///    - Otherwise, use `original_addr` as-is
+///
+/// # Connection Lookup
+/// After resolving the canonical address, the function attempts to retrieve a connection
+/// for that address, preferring the management connection but falling back to the
+/// user connection if the management connection is unavailable.
+/// If not found, it indicates that a new connection needs to be established.
 ///
 /// # Returns
 /// * `Found` - Connection was found
@@ -3530,7 +3634,7 @@ enum ConnectionLookupResult<C> {
 fn lookup_management_connection<C>(
     inner: &Core<C>,
     original_addr: &str,
-    resolved_ip: Option<IpAddr>,
+    socket_addr: Option<SocketAddr>,
 ) -> ConnectionLookupResult<C>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
@@ -3540,27 +3644,33 @@ where
     let (canonical_addr, conn_opt) = {
         let conn_lock = inner.conn_lock.read().expect(MUTEX_READ_ERR);
 
-        // Resolve canonical address: slot map lookup, fallback to original_addr
+        // Resolve canonical address using the lookup chain:
         let canonical_addr = if conn_lock
             .slot_map
             .nodes_map()
             .contains_key(&original_addr_key)
         {
+            // Step 1: Direct match
             original_addr.to_string()
         } else {
-            resolved_ip
-                .and_then(|ip| {
+            socket_addr
+                // Step 2: IP-based match
+                .and_then(|addr| {
                     conn_lock
                         .slot_map
-                        .node_address_for_ip(ip)
+                        .node_address_for_ip(addr.ip())
                         .map(|a| (*a).clone())
                 })
+                // Step 3: Use socket_addr if available
+                .or_else(|| socket_addr.map(|addr| addr.to_string()))
+                // Step 4: Last resort - use original_addr
                 .unwrap_or_else(|| original_addr.to_string())
         };
 
+        // Look up management connection, fall back to user connection if not available
         let conn_opt = conn_lock.management_connection_for_address(&canonical_addr);
         (canonical_addr, conn_opt)
-    }; // Lock released here
+    };
 
     match conn_opt {
         Some(conn) => ConnectionLookupResult::Found(conn),
