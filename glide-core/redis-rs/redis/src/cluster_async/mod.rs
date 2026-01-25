@@ -2353,10 +2353,15 @@ where
             .expect(MUTEX_READ_ERR);
         let glide_connection_options = &inner.glide_connection_options;
 
+        let subs_guard = inner.subscriptions_by_address.read().await;
+        let subscriptions_snapshot: HashMap<_, _> = subs_guard.clone(); // or collect what you need
+        drop(subs_guard);
+
         // Create/retrieve connections in for found nodes
         let connection_futures = addresses_and_connections.into_iter().map(|(addr, node)| {
-            let cluster_params = cluster_params.clone();
+            let mut cluster_params = cluster_params.clone();
             let glide_connection_options = glide_connection_options.clone();
+            cluster_params.pubsub_subscriptions = subscriptions_snapshot.get(&addr).cloned();
             async move {
                 let result = get_or_create_conn(
                     &addr,
