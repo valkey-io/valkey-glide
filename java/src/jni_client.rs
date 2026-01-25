@@ -1,7 +1,8 @@
 //! JNI client management infrastructure extracted from JNI-java implementation
 //! This module provides direct JNI calls to glide-core while preserving protobuf serialization
 
-mod dbb_marker {
+mod dbb {
+    // Type markers
     pub const NIL: u8 = b'_';
     pub const BOOL_TRUE: u8 = b't';
     pub const BOOL_FALSE: u8 = b'f';
@@ -12,6 +13,11 @@ mod dbb_marker {
     pub const ARRAY: u8 = b'*';
     pub const MAP: u8 = b'%';
     pub const SET: u8 = b'~';
+
+    // Sizes
+    pub const MARKER_SIZE: usize = 1;
+    pub const LEN_SIZE: usize = 4;
+    pub const THRESHOLD: usize = 16 * 1024;
 }
 
 use anyhow::Result;
@@ -394,7 +400,7 @@ fn process_callback_job(
                 let _ = env.push_local_frame(16);
 
                 let java_result = if !skip_dbb && should_use_direct_buffer(&server_value) {
-                    create_direct_byte_buffer(&mut env, server_value, !binary_mode)
+                    create_direct_byte_buffer(&mut env, server_value)
                 } else {
                     crate::resp_value_to_java(&mut env, server_value, !binary_mode)
                 };
@@ -509,124 +515,68 @@ pub fn complete_java_callback_with_error_code(
     Ok(())
 }
 
+/// Returns estimated size if serializable, None if contains unsupported types.
+/// Single traversal combining type-check and size estimation.
+#[inline]
+fn dbb_size(value: &ServerValue) -> Option<usize> {
+    match value {
+        redis::Value::Nil | redis::Value::Boolean(_) | redis::Value::Okay => Some(1),
+        redis::Value::Int(_) | redis::Value::Double(_) => Some(9),
+        redis::Value::SimpleString(s) => Some(dbb::MARKER_SIZE + dbb::LEN_SIZE + s.len()),
+        redis::Value::BulkString(data) => Some(dbb::MARKER_SIZE + dbb::LEN_SIZE + data.len()),
+        redis::Value::VerbatimString { text, .. } => {
+            Some(dbb::MARKER_SIZE + dbb::LEN_SIZE + text.len())
+        }
+        redis::Value::BigNumber(num) => {
+            Some(dbb::MARKER_SIZE + dbb::LEN_SIZE + num.to_string().len())
+        }
+        redis::Value::Array(arr) => {
+            let mut total = dbb::MARKER_SIZE + dbb::LEN_SIZE;
+            for v in arr {
+                total += dbb_size(v)?;
+            }
+            Some(total)
+        }
+        redis::Value::Map(map) => {
+            let mut total = dbb::MARKER_SIZE + dbb::LEN_SIZE;
+            for (k, v) in map {
+                total += dbb_size(k)? + dbb_size(v)?;
+            }
+            Some(total)
+        }
+        redis::Value::Set(set) => {
+            let mut total = dbb::MARKER_SIZE + dbb::LEN_SIZE;
+            for v in set {
+                total += dbb_size(v)?;
+            }
+            Some(total)
+        }
+        _ => None,
+    }
+}
+
+#[inline]
 fn should_use_direct_buffer(value: &ServerValue) -> bool {
-    const THRESHOLD: usize = 16 * 1024;
-
-    if !can_serialize_to_dbb(value) {
-        return false;
-    }
-
-    match value {
-        redis::Value::BulkString(data) => data.len() > THRESHOLD,
-        redis::Value::Array(arr) => {
-            let total_size: usize = arr.iter().map(estimate_value_size).sum();
-            total_size > THRESHOLD
-        }
-        redis::Value::Map(map) => {
-            let total_size: usize = map
-                .iter()
-                .map(|(k, v)| estimate_value_size(k) + estimate_value_size(v))
-                .sum();
-            total_size > THRESHOLD
-        }
-        redis::Value::Set(set) => {
-            let total_size: usize = set.iter().map(estimate_value_size).sum();
-            total_size > THRESHOLD
-        }
-        _ => false,
-    }
+    dbb_size(value).is_some_and(|size| size > dbb::THRESHOLD)
 }
 
-fn can_serialize_to_dbb(value: &ServerValue) -> bool {
-    match value {
-        redis::Value::Nil
-        | redis::Value::Boolean(_)
-        | redis::Value::Double(_)
-        | redis::Value::Int(_)
-        | redis::Value::BulkString(_)
-        | redis::Value::SimpleString(_)
-        | redis::Value::Okay
-        | redis::Value::VerbatimString { .. }
-        | redis::Value::BigNumber(_) => true,
-        redis::Value::Array(arr) => arr.iter().all(can_serialize_to_dbb),
-        redis::Value::Map(map) => map
-            .iter()
-            .all(|(k, v)| can_serialize_to_dbb(k) && can_serialize_to_dbb(v)),
-        redis::Value::Set(set) => set.iter().all(can_serialize_to_dbb),
-        _ => false,
-    }
-}
-
-fn estimate_value_size(value: &ServerValue) -> usize {
-    match value {
-        redis::Value::Nil => 0,
-        redis::Value::SimpleString(s) => s.len(),
-        redis::Value::BulkString(data) => data.len(),
-        redis::Value::Int(_) | redis::Value::Double(_) => 8,
-        redis::Value::Boolean(_) => 1,
-        redis::Value::Array(arr) => {
-            arr.iter().map(estimate_value_size).sum::<usize>() + (arr.len() * 8)
-        }
-        redis::Value::Map(map) => {
-            map.iter()
-                .map(|(k, v)| estimate_value_size(k) + estimate_value_size(v))
-                .sum::<usize>()
-                + (map.len() * 16)
-        }
-        redis::Value::Set(set) => {
-            set.iter().map(estimate_value_size).sum::<usize>() + (set.len() * 8)
-        }
-        redis::Value::VerbatimString { text, .. } => text.len(),
-        redis::Value::BigNumber(num) => num.to_string().len(),
-        redis::Value::Push { data, .. } => data.iter().map(estimate_value_size).sum::<usize>(),
-        redis::Value::ServerError(_) => 128,
-        redis::Value::Okay => 2,
-        redis::Value::Attribute { data, .. } => estimate_value_size(data.as_ref()),
-    }
-}
-
-/// Create DirectByteBuffer for large responses (>16KB) with zero-copy optimization
 fn create_direct_byte_buffer<'local>(
     env: &mut JNIEnv<'local>,
     value: ServerValue,
-    encoding_utf8: bool,
 ) -> Result<JObject<'local>, crate::errors::FFIError> {
-    match value {
-        redis::Value::BulkString(data) => {
-            let mut serialized = Vec::with_capacity(1 + 4 + data.len());
-            serialized.push(dbb_marker::BULK_STRING);
-            serialized.extend_from_slice(&(data.len() as u32).to_be_bytes());
-            serialized.extend_from_slice(&data);
-            let (id, ptr, len) = register_native_buffer(serialized);
-            let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
-            let obj: JObject = bb.into();
-            let out = env.new_local_ref(&obj)?;
-            register_buffer_cleaner(env, &out, id)?;
-            Ok(out)
-        }
-        redis::Value::Array(arr) => {
-            let serialized = serialize_array_to_bytes(arr, encoding_utf8)?;
-            let (id, ptr, len) = register_native_buffer(serialized);
-            let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
-            let obj: JObject = bb.into();
-            let out = env.new_local_ref(&obj)?;
-            register_buffer_cleaner(env, &out, id)?;
-            Ok(out)
-        }
-        redis::Value::Map(map) => {
-            let serialized = serialize_map_vec_to_bytes(map, encoding_utf8)?;
-            let (id, ptr, len) = register_native_buffer(serialized);
-            let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
-            let obj: JObject = bb.into();
-            let out = env.new_local_ref(&obj)?;
-            register_buffer_cleaner(env, &out, id)?;
-            Ok(out)
-        }
-        _ => {
-            // Fall back to regular conversion for other large types
-            crate::resp_value_to_java(env, value, encoding_utf8)
-        }
-    }
+    let serialized = serialize_to_dbb(value);
+    let (id, ptr, len) = register_native_buffer(serialized);
+    let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
+    let obj: JObject = bb.into();
+    let out = env.new_local_ref(&obj)?;
+    register_buffer_cleaner(env, &out, id)?;
+    Ok(out)
+}
+
+fn serialize_to_dbb(value: ServerValue) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    serialize_value(&value, &mut bytes);
+    bytes
 }
 
 fn register_buffer_cleaner<'local>(
@@ -653,100 +603,70 @@ fn register_buffer_cleaner<'local>(
     Ok(())
 }
 
-fn serialize_array_to_bytes(
-    arr: Vec<ServerValue>,
-    _encoding_utf8: bool,
-) -> Result<Vec<u8>, crate::errors::FFIError> {
-    let mut bytes = Vec::new();
-    bytes.push(dbb_marker::ARRAY);
-    bytes.extend_from_slice(&(arr.len() as u32).to_be_bytes());
-    for value in &arr {
-        serialize_value_recursive(value, &mut bytes);
-    }
-    Ok(bytes)
-}
-
-fn serialize_map_vec_to_bytes(
-    map: Vec<(ServerValue, ServerValue)>,
-    _encoding_utf8: bool,
-) -> Result<Vec<u8>, crate::errors::FFIError> {
-    let mut bytes = Vec::new();
-    bytes.push(dbb_marker::MAP);
-    bytes.extend_from_slice(&(map.len() as u32).to_be_bytes());
-    for (key, value) in map {
-        serialize_value_recursive(&key, &mut bytes);
-        serialize_value_recursive(&value, &mut bytes);
-    }
-    Ok(bytes)
-}
-
-fn serialize_value_recursive(value: &ServerValue, bytes: &mut Vec<u8>) {
+#[inline]
+fn serialize_value(value: &ServerValue, bytes: &mut Vec<u8>) {
     match value {
-        redis::Value::Nil => bytes.push(dbb_marker::NIL),
-        redis::Value::Boolean(b) => bytes.push(if *b {
-            dbb_marker::BOOL_TRUE
-        } else {
-            dbb_marker::BOOL_FALSE
-        }),
+        redis::Value::Nil => bytes.push(dbb::NIL),
+        redis::Value::Boolean(b) => bytes.push(if *b { dbb::BOOL_TRUE } else { dbb::BOOL_FALSE }),
         redis::Value::Double(d) => {
-            bytes.push(dbb_marker::DOUBLE);
+            bytes.push(dbb::DOUBLE);
             bytes.extend_from_slice(&d.to_bits().to_be_bytes());
         }
         redis::Value::Int(n) => {
-            bytes.push(dbb_marker::INT);
+            bytes.push(dbb::INT);
             bytes.extend_from_slice(&n.to_be_bytes());
         }
         redis::Value::BulkString(data) => {
-            bytes.push(dbb_marker::BULK_STRING);
+            bytes.push(dbb::BULK_STRING);
             bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
             bytes.extend_from_slice(data);
         }
         redis::Value::SimpleString(s) => {
-            bytes.push(dbb_marker::SIMPLE_STRING);
+            bytes.push(dbb::SIMPLE_STRING);
             let data = s.as_bytes();
             bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
             bytes.extend_from_slice(data);
         }
         redis::Value::Okay => {
-            bytes.push(dbb_marker::SIMPLE_STRING);
+            bytes.push(dbb::SIMPLE_STRING);
             bytes.extend_from_slice(&2u32.to_be_bytes());
             bytes.extend_from_slice(b"OK");
         }
         redis::Value::Array(arr) => {
-            bytes.push(dbb_marker::ARRAY);
+            bytes.push(dbb::ARRAY);
             bytes.extend_from_slice(&(arr.len() as u32).to_be_bytes());
             for elem in arr {
-                serialize_value_recursive(elem, bytes);
+                serialize_value(elem, bytes);
             }
         }
         redis::Value::Map(map) => {
-            bytes.push(dbb_marker::MAP);
+            bytes.push(dbb::MAP);
             bytes.extend_from_slice(&(map.len() as u32).to_be_bytes());
             for (k, v) in map {
-                serialize_value_recursive(k, bytes);
-                serialize_value_recursive(v, bytes);
+                serialize_value(k, bytes);
+                serialize_value(v, bytes);
             }
         }
         redis::Value::Set(set) => {
-            bytes.push(dbb_marker::SET);
+            bytes.push(dbb::SET);
             bytes.extend_from_slice(&(set.len() as u32).to_be_bytes());
             for elem in set {
-                serialize_value_recursive(elem, bytes);
+                serialize_value(elem, bytes);
             }
         }
         redis::Value::VerbatimString { text, .. } => {
-            bytes.push(dbb_marker::SIMPLE_STRING);
+            bytes.push(dbb::SIMPLE_STRING);
             let data = text.as_bytes();
             bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
             bytes.extend_from_slice(data);
         }
         redis::Value::BigNumber(num) => {
-            bytes.push(dbb_marker::SIMPLE_STRING);
+            bytes.push(dbb::SIMPLE_STRING);
             let data = num.to_string().into_bytes();
             bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
             bytes.extend_from_slice(&data);
         }
-        _ => unreachable!("can_serialize_to_dbb should filter unsupported types"),
+        _ => unreachable!("dbb_size should filter unsupported types"),
     }
 }
 
