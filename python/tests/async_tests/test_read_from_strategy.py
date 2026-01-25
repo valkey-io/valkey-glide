@@ -64,16 +64,16 @@ class TestReadFromStrategy:
         primary_with_gets = 0
         replicas_with_gets = 0
         total_get_calls = 0
-        
+
         for value in info_result.values():
             info_str = value.decode()
             is_primary = "role:master" in info_str
             get_calls_match = re.search(r"cmdstat_get:calls=(\d+)", info_str)
-            
+
             if get_calls_match:
                 get_calls = int(get_calls_match.group(1))
                 total_get_calls += get_calls
-                
+
                 if get_calls > 0:
                     if is_primary:
                         primary_with_gets += 1
