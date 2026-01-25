@@ -2354,7 +2354,7 @@ where
         let glide_connection_options = &inner.glide_connection_options;
 
         let subs_guard = inner.subscriptions_by_address.read().await;
-        let subscriptions_snapshot: HashMap<_, _> = subs_guard.clone(); // or collect what you need
+        let subscriptions_snapshot: HashMap<_, _> = subs_guard.clone();
         drop(subs_guard);
 
         // Create/retrieve connections in for found nodes
