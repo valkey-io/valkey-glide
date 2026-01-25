@@ -24,7 +24,6 @@ EXCLUDED_API_FUNCTIONS = {
         "drop_otel_span",
         "get_endpoint",
         "get_metrics",
-        "get_sample_percentage",
         "get_traces",
         "init_opentelemetry",
         "set_traces",
@@ -57,9 +56,7 @@ EXCLUDED_API_FUNCTIONS = {
 }
 
 EXCLUDED_API_FILENAMES = {
-    "async_only": [
-        "opentelemetry.py",
-    ],
+    "async_only": [],
     "sync_only": ["_glide_ffi.py"],
 }
 
@@ -103,20 +100,21 @@ EXCLUDED_TESTS = {
         "create_pubsub_subscription",
         "decode_pubsub_msg",
         "new_message",
+        # OpenTelemetry async helper function
+        "wait_for_spans_to_be_flushed",
     ],
     "sync_only": ["test_sync_fork"],
 }
 
 EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
-        "test_opentelemetry.py",
         "test_deprecation_warnings.py",
         # TODO: Remove when implementing dynamic pubsub for the sync client
         "test_pubsub.py",
     ],
     "sync_only": [
         # TODO: Remove when implementing dynamic pubsub for the sync client
-        "test_sync_pubsub.py"
+        "test_sync_pubsub.py",
     ],
 }
 
