@@ -21,8 +21,6 @@ public enum ReadFrom {
      * replica or the primary if needed.
      */
     AZ_AFFINITY_REPLICAS_AND_PRIMARY,
-    /**
-     * Spread the read requests between all nodes (primary and replicas) in a round-robin manner.
-     */
+    /** Spread the read requests between all nodes (primary and replicas) in a round-robin manner. */
     ALL_NODES,
 }
