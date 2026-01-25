@@ -4,10 +4,14 @@ package glide.managers;
 import static connection_request.ConnectionRequestOuterClass.*;
 
 import glide.api.models.configuration.AdvancedBaseClientConfiguration;
+import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.PeriodicChecksConfig;
+import glide.api.models.configuration.PeriodicChecksManualInterval;
+import glide.api.models.configuration.PeriodicChecksStatus;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
@@ -230,13 +234,37 @@ public class ConnectionManager {
                         // Set cluster mode
                         requestBuilder.setClusterModeEnabled(isCluster);
 
-                        // Set refresh topology from initial nodes for cluster mode
+                        // Set topology configs for cluster mode
                         if (isCluster) {
                             GlideClusterClientConfiguration clusterConfig =
                                     (GlideClusterClientConfiguration) configuration;
-                            if (clusterConfig.getAdvancedConfiguration() != null) {
+
+                            AdvancedGlideClusterClientConfiguration advancedConfig =
+                                    clusterConfig.getAdvancedConfiguration();
+
+                            if (advancedConfig != null) {
+                                // Set refresh topology from initial nodes
                                 requestBuilder.setRefreshTopologyFromInitialNodes(
-                                        clusterConfig.getAdvancedConfiguration().isRefreshTopologyFromInitialNodes());
+                                        advancedConfig.isRefreshTopologyFromInitialNodes());
+
+                                // Set periodic checks configuration
+                                PeriodicChecksConfig periodicChecks = advancedConfig.getPeriodicChecks();
+                                if (periodicChecks instanceof PeriodicChecksStatus) {
+                                    PeriodicChecksStatus status = (PeriodicChecksStatus) periodicChecks;
+                                    if (status == PeriodicChecksStatus.DISABLED) {
+                                        requestBuilder.setPeriodicChecksDisabled(
+                                                PeriodicChecksDisabled.newBuilder().build());
+                                    }
+                                    // ENABLED_DEFAULT_CONFIGS → use server default, don't set anything
+                                } else if (periodicChecks instanceof PeriodicChecksManualInterval) {
+                                    PeriodicChecksManualInterval manualInterval =
+                                            (PeriodicChecksManualInterval) periodicChecks;
+                                    requestBuilder.setPeriodicChecksManualInterval(
+                                            connection_request.ConnectionRequestOuterClass.PeriodicChecksManualInterval
+                                                    .newBuilder()
+                                                    .setDurationInSec(manualInterval.getDurationInSec())
+                                                    .build());
+                                }
                             }
                         }
 
