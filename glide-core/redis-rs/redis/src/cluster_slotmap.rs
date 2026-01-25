@@ -839,10 +839,15 @@ mod tests_cluster_slotmap {
         addresses.sort();
         assert_eq!(
             addresses,
-            vec!["node3:6379", "replica4:6379", "replica5:6379", "replica6:6379"]
-                .into_iter()
-                .map(|s| Arc::new(s.to_string()))
-                .collect::<Vec<_>>()
+            vec![
+                "node3:6379",
+                "replica4:6379",
+                "replica5:6379",
+                "replica6:6379"
+            ]
+            .into_iter()
+            .map(|s| Arc::new(s.to_string()))
+            .collect::<Vec<_>>()
         );
     }
 
