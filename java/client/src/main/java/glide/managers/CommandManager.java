@@ -782,7 +782,9 @@ public class CommandManager {
             int count = buffer.getInt();
             java.util.Map<Object, Object> map = new java.util.LinkedHashMap<>(count);
             for (int i = 0; i < count; i++) {
-                map.put(deserializeValue(buffer, expectUtf8Response), deserializeValue(buffer, expectUtf8Response));
+                map.put(
+                        deserializeValue(buffer, expectUtf8Response),
+                        deserializeValue(buffer, expectUtf8Response));
             }
             return map;
         } else if (m == DbbMarker.SET.value) {
