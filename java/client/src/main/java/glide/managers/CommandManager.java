@@ -28,6 +28,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNo
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.GlideException;
 import glide.api.models.exceptions.RequestException;
 import glide.ffi.resolvers.OpenTelemetryResolver;
 import glide.internal.GlideCoreClient;
@@ -600,7 +601,7 @@ public class CommandManager {
 
         byte marker = buffer.get();
         if (marker != DbbMarker.MAP.value) {
-            throw new IllegalArgumentException("Expected map marker, got: " + (char) marker);
+            throw new GlideException("Unexpected DBB marker: " + (char) marker);
         }
         int count = buffer.getInt();
         java.util.LinkedHashMap<Object, Object> map =
@@ -729,7 +730,7 @@ public class CommandManager {
         buffer.rewind();
         byte marker = buffer.get();
         if (marker != DbbMarker.ARRAY.value && marker != DbbMarker.SET.value) {
-            throw new IllegalArgumentException("Expected array/set marker, got: " + (char) marker);
+            throw new GlideException("Unexpected DBB marker: " + (char) marker);
         }
         int count = buffer.getInt();
         Object[] result = new Object[count];
@@ -792,7 +793,7 @@ public class CommandManager {
             }
             return set;
         }
-        throw new IllegalArgumentException("Unknown DBB marker: " + (char) m);
+        throw new GlideException("Unexpected DBB marker: " + (char) m);
     }
 
     /** Exception handler for future pipeline. */
