@@ -787,6 +787,9 @@ where
                                 }
                             }
                         }
+                        RetryMethod::RefreshSlotsAndRetry => {
+                            self.refresh_slots()?;
+                        }
                         RetryMethod::NoRetry => {
                             return Err(err);
                         }
