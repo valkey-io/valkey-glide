@@ -544,19 +544,31 @@ public class CommandManager {
 
     private Object normalizeDirectBuffer(ByteBuffer buffer, boolean expectUtf8Response) {
         ByteBuffer dup = buffer.duplicate();
+        dup.order(ByteOrder.BIG_ENDIAN);
         dup.rewind();
         if (dup.remaining() == 0) {
             return expectUtf8Response ? "" : glide.api.models.GlideString.gs(new byte[0]);
         }
         byte marker = dup.get();
         dup.rewind();
-        if (marker == '*') {
-            // Serialized array/map (custom wire format)
+        if (marker == '*' || marker == '~') {
+            // Serialized array or set (custom wire format)
             return deserializeByteBufferArray(dup, expectUtf8Response);
         } else if (marker == '%') {
             return deserializeByteBufferMap(dup, expectUtf8Response);
+        } else if (marker == '$') {
+            // Serialized bulk string: '$' + 4-byte length (BE) + data
+            dup.get(); // skip marker
+            int len = dup.getInt();
+            if (expectUtf8Response) {
+                return BufferUtils.decodeUtf8(dup, len);
+            } else {
+                byte[] bytes = new byte[len];
+                dup.get(bytes);
+                return glide.api.models.GlideString.gs(bytes);
+            }
         }
-        // Bulk string bytes
+        // Unrecognized format - treat as raw bulk string bytes (legacy fallback)
         if (expectUtf8Response) {
             // Decode UTF-8 directly from buffer
             return BufferUtils.decodeUtf8(dup);
@@ -569,7 +581,9 @@ public class CommandManager {
 
     /**
      * Deserialize a ByteBuffer containing a serialized map back to Map<?,?>. Format: '%' + count(u32
-     * BE) + repeated [keyLen(u32) + keyBytes + valLen(u32) + valBytes]
+     * BE) + repeated [serialize_value_recursive(key) + serialize_value_recursive(value)]
+     *
+     * <p>Uses recursive deserialization with type markers for proper nested structure handling.
      */
     private java.util.LinkedHashMap<Object, Object> deserializeByteBufferMap(
             ByteBuffer buffer, boolean expectUtf8) {
@@ -584,27 +598,9 @@ public class CommandManager {
         java.util.LinkedHashMap<Object, Object> map =
                 new java.util.LinkedHashMap<>(Math.max(16, count));
         for (int i = 0; i < count; i++) {
-            int klen = buffer.getInt();
-            Object key;
-            if (expectUtf8) {
-                // Decode UTF-8 directly from buffer
-                key = BufferUtils.decodeUtf8(buffer, klen);
-            } else {
-                byte[] kbytes = new byte[klen];
-                buffer.get(kbytes);
-                key = glide.api.models.GlideString.gs(kbytes);
-            }
-
-            int vlen = buffer.getInt();
-            Object val;
-            if (expectUtf8) {
-                // Decode UTF-8 directly from buffer
-                val = BufferUtils.decodeUtf8(buffer, vlen);
-            } else {
-                byte[] vbytes = new byte[vlen];
-                buffer.get(vbytes);
-                val = glide.api.models.GlideString.gs(vbytes);
-            }
+            // Use recursive deserialization for both keys and values
+            Object key = deserializeValue(buffer, expectUtf8);
+            Object val = deserializeValue(buffer, expectUtf8);
             map.put(key, val);
         }
         return map;
@@ -671,32 +667,8 @@ public class CommandManager {
             // OK constant response
             builder.setConstantResponse(ConstantResponse.OK);
         } else if (jniResult instanceof ByteBuffer) {
-            // DirectByteBuffer from JNI. Could be a serialized array/map or a large bulk string.
-            ByteBuffer buffer = (ByteBuffer) jniResult;
-            ByteBuffer dup = buffer.duplicate();
-            dup.rewind();
-            Object toStore;
-            if (dup.remaining() > 0) {
-                byte marker = dup.get();
-                if (marker == '*') {
-                    dup.rewind();
-                    toStore = deserializeByteBufferArray(dup, expectUtf8Response);
-                } else if (marker == '%') {
-                    dup.rewind();
-                    toStore = deserializeByteBufferMap(dup, expectUtf8Response);
-                } else {
-                    dup.rewind();
-                    if (expectUtf8Response) {
-                        toStore = BufferUtils.decodeUtf8(dup);
-                    } else {
-                        byte[] bytes = new byte[dup.remaining()];
-                        dup.get(bytes);
-                        toStore = glide.api.models.GlideString.gs(bytes);
-                    }
-                }
-            } else {
-                toStore = expectUtf8Response ? "" : glide.api.models.GlideString.gs(new byte[0]);
-            }
+            // DirectByteBuffer from JNI - use normalizeDirectBuffer for consistent handling
+            Object toStore = normalizeDirectBuffer((ByteBuffer) jniResult, expectUtf8Response);
             long objectId = JniResponseRegistry.storeObject(toStore);
             builder.setRespPointer(objectId);
         } else {
@@ -723,32 +695,8 @@ public class CommandManager {
             // OK constant response
             builder.setConstantResponse(ConstantResponse.OK);
         } else if (jniResult instanceof ByteBuffer) {
-            // DirectByteBuffer from JNI. Could be serialized array/map or large bulk string.
-            ByteBuffer buffer = (ByteBuffer) jniResult;
-            ByteBuffer dup = buffer.duplicate();
-            dup.rewind();
-            Object toStore;
-            if (dup.remaining() > 0) {
-                byte marker = dup.get();
-                if (marker == '*') {
-                    dup.rewind();
-                    toStore = deserializeByteBufferArray(dup, expectUtf8Response);
-                } else if (marker == '%') {
-                    dup.rewind();
-                    toStore = deserializeByteBufferMap(dup, expectUtf8Response);
-                } else {
-                    dup.rewind();
-                    if (expectUtf8Response) {
-                        toStore = BufferUtils.decodeUtf8(dup);
-                    } else {
-                        byte[] bytes = new byte[dup.remaining()];
-                        dup.get(bytes);
-                        toStore = glide.api.models.GlideString.gs(bytes);
-                    }
-                }
-            } else {
-                toStore = expectUtf8Response ? "" : glide.api.models.GlideString.gs(new byte[0]);
-            }
+            // DirectByteBuffer from JNI - use normalizeDirectBuffer for consistent handling
+            Object toStore = normalizeDirectBuffer((ByteBuffer) jniResult, expectUtf8Response);
             long objectId = JniResponseRegistry.storeObject(toStore);
             builder.setRespPointer(objectId);
         } else {
@@ -765,15 +713,18 @@ public class CommandManager {
      * Deserialize a ByteBuffer containing a serialized array back to Object[]. This handles
      * DirectByteBuffer responses for large data (>16KB). Format uses Redis-like protocol: '*' +
      * array_len(4 bytes BE) + elements Each element: type_marker + data
+     *
+     * <p>Supports recursive nested types (arrays, maps, sets).
      */
     private Object[] deserializeByteBufferArray(ByteBuffer buffer, boolean expectUtf8Response) {
         buffer.order(ByteOrder.BIG_ENDIAN); // Rust uses big-endian
         buffer.rewind();
 
-        // Read array marker ('*')
+        // Read array/set marker ('*' or '~')
         byte marker = buffer.get();
-        if (marker != '*') {
-            throw new IllegalArgumentException("Expected array marker '*', got: " + (char) marker);
+        if (marker != '*' && marker != '~') {
+            throw new IllegalArgumentException(
+                    "Expected array marker '*' or set marker '~', got: " + (char) marker);
         }
 
         // Read array element count (4 bytes, big-endian)
@@ -781,56 +732,125 @@ public class CommandManager {
         Object[] result = new Object[count];
 
         for (int i = 0; i < count; i++) {
-            // Read element type marker
-            byte typeMarker = buffer.get();
-
-            switch (typeMarker) {
-                case '$': // Bulk string
-                    int bulkLen = buffer.getInt();
-                    if (bulkLen == -1) {
-                        result[i] = null;
-                    } else {
-                        if (expectUtf8Response) {
-                            // Decode UTF-8 directly from buffer
-                            result[i] = BufferUtils.decodeUtf8(buffer, bulkLen);
-                        } else {
-                            byte[] data = new byte[bulkLen];
-                            buffer.get(data);
-                            result[i] = glide.api.models.GlideString.gs(data);
-                        }
-                    }
-                    break;
-
-                case '+': // Simple string (includes "OK")
-                    int simpleLen = buffer.getInt();
-                    // Simple strings are always UTF-8
-                    String simpleString = BufferUtils.decodeUtf8(buffer, simpleLen);
-                    result[i] = simpleString.equalsIgnoreCase("ok") ? "OK" : simpleString;
-                    break;
-
-                case ':': // Integer
-                    long intValue = buffer.getLong();
-                    result[i] = intValue;
-                    break;
-
-                case '#': // Complex type (serialized as string)
-                    int complexLen = buffer.getInt();
-                    if (expectUtf8Response) {
-                        // Decode UTF-8 directly from buffer
-                        result[i] = BufferUtils.decodeUtf8(buffer, complexLen);
-                    } else {
-                        byte[] complexData = new byte[complexLen];
-                        buffer.get(complexData);
-                        result[i] = glide.api.models.GlideString.gs(complexData);
-                    }
-                    break;
-
-                default:
-                    throw new IllegalArgumentException("Unknown type marker: " + (char) typeMarker);
-            }
+            result[i] = deserializeValue(buffer, expectUtf8Response);
         }
 
         return result;
+    }
+
+    /**
+     * Recursively deserialize a single value from the buffer.
+     *
+     * <p>Type markers:
+     *
+     * <ul>
+     *   <li>'_' : Nil (null)
+     *   <li>'t' : Boolean true
+     *   <li>'f' : Boolean false
+     *   <li>',' : Double (8 bytes, big-endian IEEE 754)
+     *   <li>':' : Integer (8 bytes, big-endian)
+     *   <li>'$' : BulkString (4-byte length + data)
+     *   <li>'+' : SimpleString (4-byte length + UTF-8 data)
+     *   <li>'*' : Array (4-byte count + recursive elements)
+     *   <li>'%' : Map (4-byte count + recursive key-value pairs)
+     *   <li>'~' : Set (4-byte count + recursive elements)
+     *   <li>'#' : Complex/fallback (4-byte length + debug string)
+     * </ul>
+     */
+    private Object deserializeValue(ByteBuffer buffer, boolean expectUtf8Response) {
+        byte typeMarker = buffer.get();
+
+        switch (typeMarker) {
+            case '_': // Nil
+                return null;
+
+            case 't': // Boolean true
+                return Boolean.TRUE;
+
+            case 'f': // Boolean false
+                return Boolean.FALSE;
+
+            case ',': // Double (8 bytes IEEE 754)
+                return Double.longBitsToDouble(buffer.getLong());
+
+            case ':': // Integer (8 bytes)
+                return buffer.getLong();
+
+            case '$': // Bulk string
+                {
+                    int bulkLen = buffer.getInt();
+                    if (bulkLen == -1) {
+                        return null;
+                    }
+                    if (expectUtf8Response) {
+                        return BufferUtils.decodeUtf8(buffer, bulkLen);
+                    } else {
+                        byte[] data = new byte[bulkLen];
+                        buffer.get(data);
+                        return glide.api.models.GlideString.gs(data);
+                    }
+                }
+
+            case '+': // Simple string
+                {
+                    int simpleLen = buffer.getInt();
+                    if (expectUtf8Response) {
+                        String simpleString = BufferUtils.decodeUtf8(buffer, simpleLen);
+                        return simpleString.equalsIgnoreCase("ok") ? "OK" : simpleString;
+                    } else {
+                        byte[] data = new byte[simpleLen];
+                        buffer.get(data);
+                        return glide.api.models.GlideString.gs(data);
+                    }
+                }
+
+            case '*': // Nested Array
+                {
+                    int count = buffer.getInt();
+                    Object[] arr = new Object[count];
+                    for (int i = 0; i < count; i++) {
+                        arr[i] = deserializeValue(buffer, expectUtf8Response);
+                    }
+                    return arr;
+                }
+
+            case '%': // Map
+                {
+                    int count = buffer.getInt();
+                    java.util.Map<Object, Object> map = new java.util.LinkedHashMap<>(count);
+                    for (int i = 0; i < count; i++) {
+                        Object key = deserializeValue(buffer, expectUtf8Response);
+                        Object value = deserializeValue(buffer, expectUtf8Response);
+                        map.put(key, value);
+                    }
+                    return map;
+                }
+
+            case '~': // Set
+                {
+                    int count = buffer.getInt();
+                    java.util.Set<Object> set = new java.util.LinkedHashSet<>(count);
+                    for (int i = 0; i < count; i++) {
+                        set.add(deserializeValue(buffer, expectUtf8Response));
+                    }
+                    return set;
+                }
+
+            case '#': // Complex type (serialized as string)
+                {
+                    int complexLen = buffer.getInt();
+                    if (expectUtf8Response) {
+                        return BufferUtils.decodeUtf8(buffer, complexLen);
+                    } else {
+                        byte[] complexData = new byte[complexLen];
+                        buffer.get(complexData);
+                        return glide.api.models.GlideString.gs(complexData);
+                    }
+                }
+
+            default:
+                throw new IllegalArgumentException("Unknown type marker: " + (char) typeMarker);
+        }
     }
 
     /** Exception handler for future pipeline. */

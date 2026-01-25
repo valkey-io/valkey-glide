@@ -320,7 +320,8 @@ pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
 }
 
 /// Callback job type handled by dedicated callback workers
-type CallbackJob = (Arc<JavaVM>, jlong, CallbackResult, bool);
+/// (jvm, callback_id, result, binary_mode, skip_dbb)
+type CallbackJob = (Arc<JavaVM>, jlong, CallbackResult, bool, bool);
 
 /// Global unbounded callback queue sender
 static CALLBACK_SENDER: std::sync::OnceLock<Sender<CallbackJob>> = std::sync::OnceLock::new();
@@ -351,12 +352,13 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
                             let guard = rx_clone.lock().unwrap();
                             guard.recv().ok()
                         };
-                        let Some((jvm, callback_id, result, binary_mode)) = job_opt else {
+                        let Some((jvm, callback_id, result, binary_mode, skip_dbb)) = job_opt
+                        else {
                             break;
                         };
 
                         // Process callback on this dedicated thread
-                        process_callback_job(jvm, callback_id, result, binary_mode);
+                        process_callback_job(jvm, callback_id, result, binary_mode, skip_dbb);
                     }
                 })
                 .expect("Failed to spawn callback worker thread");
@@ -371,6 +373,7 @@ fn process_callback_job(
     callback_id: jlong,
     result: CallbackResult,
     binary_mode: bool,
+    skip_dbb: bool,
 ) {
     match jvm.attach_current_thread_as_daemon() {
         Ok(mut env) => match result {
@@ -378,11 +381,12 @@ fn process_callback_job(
                 let _ = env.push_local_frame(16);
 
                 // Direct conversion with size-based routing
-                let java_result = if should_use_direct_buffer(&server_value) {
+                // skip_dbb=true forces regular JNI path (e.g., for cluster scan)
+                let java_result = if !skip_dbb && should_use_direct_buffer(&server_value) {
                     // For large data (>16KB): Use DirectByteBuffer
                     create_direct_byte_buffer(&mut env, server_value, !binary_mode)
                 } else {
-                    // For small data (<16KB): Regular JNI objects
+                    // For small data (<16KB) or skip_dbb: Regular JNI objects
                     crate::resp_value_to_java(&mut env, server_value, !binary_mode)
                 };
 
@@ -423,14 +427,26 @@ fn process_callback_job(
 }
 
 /// Enqueue callback job to dedicated workers.
+/// `skip_dbb` - if true, skip DirectByteBuffer optimization (e.g., for cluster scan)
 pub fn complete_callback(
     jvm: Arc<JavaVM>,
     callback_id: jlong,
     result: CallbackResult,
     binary_mode: bool,
 ) {
+    complete_callback_with_options(jvm, callback_id, result, binary_mode, false)
+}
+
+/// Enqueue callback job with explicit DBB control.
+pub fn complete_callback_with_options(
+    jvm: Arc<JavaVM>,
+    callback_id: jlong,
+    result: CallbackResult,
+    binary_mode: bool,
+    skip_dbb: bool,
+) {
     let sender = init_callback_workers();
-    if let Err(e) = sender.send((jvm, callback_id, result, binary_mode)) {
+    if let Err(e) = sender.send((jvm, callback_id, result, binary_mode, skip_dbb)) {
         log::error!("Callback queue send failed: {e}");
     }
 }
@@ -485,32 +501,24 @@ pub fn complete_java_callback_with_error_code(
 }
 
 /// Check if response should use DirectByteBuffer based on size threshold (16KB)
+/// Now supports nested types (arrays, maps, sets) via recursive serialization.
 fn should_use_direct_buffer(value: &ServerValue) -> bool {
     const THRESHOLD: usize = 16 * 1024; // 16KB threshold
+
+    // First check if value contains complex types that lose semantics in DBB
+    if contains_complex_types(value) {
+        return false;
+    }
 
     match value {
         redis::Value::BulkString(data) => data.len() > THRESHOLD,
         redis::Value::Array(arr) => {
-            // Only offload arrays composed of simple scalar types. Nested arrays/maps lose fidelity
-            if arr.iter().any(|elem| !is_simple_scalar(elem)) {
-                return false;
-            }
-
-            // Calculate total estimated size of array elements
+            // Calculate total estimated size (recursive for nested structures)
             let total_size: usize = arr.iter().map(estimate_value_size).sum();
             total_size > THRESHOLD
         }
         redis::Value::Map(map) => {
-            // Direct buffers are only safe when both keys and values are bulk strings; complex
-            // structures (arrays, integers, maps) need full decoding to preserve types.
-            if map.iter().any(|(k, v)| {
-                !matches!(k, redis::Value::BulkString(_))
-                    || !matches!(v, redis::Value::BulkString(_))
-            }) {
-                return false;
-            }
-
-            // Calculate total size of map (keys + values)
+            // Calculate total size of map (keys + values, recursive)
             let total_size: usize = map
                 .iter()
                 .map(|(k, v)| estimate_value_size(k) + estimate_value_size(v))
@@ -518,12 +526,7 @@ fn should_use_direct_buffer(value: &ServerValue) -> bool {
             total_size > THRESHOLD
         }
         redis::Value::Set(set) => {
-            // Sets must also contain only scalar elements to be safely serialized.
-            if set.iter().any(|elem| !is_simple_scalar(elem)) {
-                return false;
-            }
-
-            // Calculate total size of set elements
+            // Calculate total size of set elements (recursive)
             let total_size: usize = set.iter().map(estimate_value_size).sum();
             total_size > THRESHOLD
         }
@@ -531,18 +534,19 @@ fn should_use_direct_buffer(value: &ServerValue) -> bool {
     }
 }
 
-fn is_simple_scalar(value: &ServerValue) -> bool {
-    matches!(
-        value,
-        redis::Value::BulkString(_)
-            | redis::Value::SimpleString(_)
-            | redis::Value::Int(_)
-            | redis::Value::Boolean(_)
-            | redis::Value::Double(_)
-            | redis::Value::Nil
-            | redis::Value::Okay
-            | redis::Value::BigNumber(_)
-    )
+/// Check if value contains complex types (ServerError, Push, Attribute) that lose semantics in DBB
+fn contains_complex_types(value: &ServerValue) -> bool {
+    match value {
+        redis::Value::ServerError(_)
+        | redis::Value::Push { .. }
+        | redis::Value::Attribute { .. } => true,
+        redis::Value::Array(arr) => arr.iter().any(contains_complex_types),
+        redis::Value::Map(map) => map
+            .iter()
+            .any(|(k, v)| contains_complex_types(k) || contains_complex_types(v)),
+        redis::Value::Set(set) => set.iter().any(contains_complex_types),
+        _ => false,
+    }
 }
 
 /// Estimate the memory size of a ServerValue for threshold calculations
@@ -583,7 +587,13 @@ fn create_direct_byte_buffer<'local>(
 ) -> Result<JObject<'local>, crate::errors::FFIError> {
     match value {
         redis::Value::BulkString(data) => {
-            let (id, ptr, len) = register_native_buffer(data);
+            // Serialize with '$' marker to distinguish from Array/Map markers
+            // Format: '$' + 4-byte length (BE) + data
+            let mut serialized = Vec::with_capacity(1 + 4 + data.len());
+            serialized.push(b'$');
+            serialized.extend_from_slice(&(data.len() as u32).to_be_bytes());
+            serialized.extend_from_slice(&data);
+            let (id, ptr, len) = register_native_buffer(serialized);
             let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
             // Register Java-side cleaner to free native buffer when GC'd
             let obj: JObject = bb.into();
@@ -640,7 +650,7 @@ fn register_buffer_cleaner<'local>(
     Ok(())
 }
 
-/// Serialize array to bytes for DirectByteBuffer (simplified binary format)
+/// Serialize array to bytes for DirectByteBuffer using recursive serialization
 fn serialize_array_to_bytes(
     arr: Vec<ServerValue>,
     _encoding_utf8: bool,
@@ -651,50 +661,9 @@ fn serialize_array_to_bytes(
     bytes.push(b'*'); // Redis array prefix
     bytes.extend_from_slice(&(arr.len() as u32).to_be_bytes());
 
-    for value in arr {
-        match value {
-            redis::Value::BulkString(data) => {
-                bytes.push(b'$'); // Bulk string marker
-                bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
-                bytes.extend_from_slice(&data);
-            }
-            redis::Value::SimpleString(s) => {
-                // Normalize "ok" to "OK" while avoiding unnecessary allocations
-                if s == "OK" {
-                    let data = s.into_bytes();
-                    bytes.push(b'+'); // Simple string marker
-                    bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
-                    bytes.extend_from_slice(&data);
-                } else if s.eq_ignore_ascii_case("ok") {
-                    bytes.push(b'+');
-                    bytes.extend_from_slice(&2u32.to_be_bytes());
-                    bytes.extend_from_slice(b"OK");
-                } else {
-                    let data = s.into_bytes();
-                    bytes.push(b'+');
-                    bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
-                    bytes.extend_from_slice(&data);
-                }
-            }
-            redis::Value::Okay => {
-                let data = b"OK";
-                bytes.push(b'+');
-                bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
-                bytes.extend_from_slice(data);
-            }
-            redis::Value::Int(n) => {
-                bytes.push(b':'); // Integer marker
-                bytes.extend_from_slice(&n.to_be_bytes());
-            }
-            _ => {
-                // For complex nested types, store as serialized string representation
-                let repr = format!("{:?}", value);
-                let data = repr.into_bytes();
-                bytes.push(b'#'); // Complex type marker
-                bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
-                bytes.extend_from_slice(&data);
-            }
-        }
+    // Use recursive serialization for all elements (supports nested types)
+    for value in &arr {
+        serialize_value_recursive(value, &mut bytes);
     }
 
     Ok(bytes)
@@ -712,28 +681,103 @@ fn serialize_map_vec_to_bytes(
     bytes.extend_from_slice(&(map.len() as u32).to_be_bytes());
 
     for (key, value) in map {
-        // Serialize key
-        if let redis::Value::BulkString(key_data) = key {
-            bytes.extend_from_slice(&(key_data.len() as u32).to_be_bytes());
-            bytes.extend_from_slice(&key_data);
-        } else {
-            let key_repr = format!("{:?}", key).into_bytes();
-            bytes.extend_from_slice(&(key_repr.len() as u32).to_be_bytes());
-            bytes.extend_from_slice(&key_repr);
-        }
-
-        // Serialize value
-        if let redis::Value::BulkString(value_data) = value {
-            bytes.extend_from_slice(&(value_data.len() as u32).to_be_bytes());
-            bytes.extend_from_slice(&value_data);
-        } else {
-            let value_repr = format!("{:?}", value).into_bytes();
-            bytes.extend_from_slice(&(value_repr.len() as u32).to_be_bytes());
-            bytes.extend_from_slice(&value_repr);
-        }
+        // Use recursive serialization for both keys and values
+        serialize_value_recursive(&key, &mut bytes);
+        serialize_value_recursive(&value, &mut bytes);
     }
 
     Ok(bytes)
+}
+
+/// Recursively serialize any redis::Value to bytes with type markers.
+/// Type markers:
+/// - `_` : Nil (no data)
+/// - `t` : Boolean true (no data)
+/// - `f` : Boolean false (no data)
+/// - `,` : Double (8 bytes, big-endian IEEE 754)
+/// - `:` : Integer (8 bytes, big-endian)
+/// - `$` : BulkString (4-byte length + data)
+/// - `+` : SimpleString (4-byte length + UTF-8 data)
+/// - `*` : Array (4-byte count + recursive elements)
+/// - `%` : Map (4-byte count + recursive key-value pairs)
+/// - `~` : Set (4-byte count + recursive elements)
+/// - `#` : Complex/fallback (4-byte length + debug string)
+fn serialize_value_recursive(value: &ServerValue, bytes: &mut Vec<u8>) {
+    match value {
+        redis::Value::Nil => {
+            bytes.push(b'_');
+        }
+        redis::Value::Boolean(b) => {
+            bytes.push(if *b { b't' } else { b'f' });
+        }
+        redis::Value::Double(d) => {
+            bytes.push(b',');
+            bytes.extend_from_slice(&d.to_bits().to_be_bytes());
+        }
+        redis::Value::Int(n) => {
+            bytes.push(b':');
+            bytes.extend_from_slice(&n.to_be_bytes());
+        }
+        redis::Value::BulkString(data) => {
+            bytes.push(b'$');
+            bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
+            bytes.extend_from_slice(data);
+        }
+        redis::Value::SimpleString(s) => {
+            bytes.push(b'+');
+            let data = s.as_bytes();
+            bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
+            bytes.extend_from_slice(data);
+        }
+        redis::Value::Okay => {
+            bytes.push(b'+');
+            bytes.extend_from_slice(&2u32.to_be_bytes());
+            bytes.extend_from_slice(b"OK");
+        }
+        redis::Value::Array(arr) => {
+            bytes.push(b'*');
+            bytes.extend_from_slice(&(arr.len() as u32).to_be_bytes());
+            for elem in arr {
+                serialize_value_recursive(elem, bytes);
+            }
+        }
+        redis::Value::Map(map) => {
+            bytes.push(b'%');
+            bytes.extend_from_slice(&(map.len() as u32).to_be_bytes());
+            for (k, v) in map {
+                serialize_value_recursive(k, bytes);
+                serialize_value_recursive(v, bytes);
+            }
+        }
+        redis::Value::Set(set) => {
+            bytes.push(b'~');
+            bytes.extend_from_slice(&(set.len() as u32).to_be_bytes());
+            for elem in set {
+                serialize_value_recursive(elem, bytes);
+            }
+        }
+        redis::Value::VerbatimString { text, .. } => {
+            // Treat as simple string
+            bytes.push(b'+');
+            let data = text.as_bytes();
+            bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
+            bytes.extend_from_slice(data);
+        }
+        redis::Value::BigNumber(num) => {
+            // Serialize BigNumber as string representation
+            bytes.push(b'+');
+            let data = num.to_string().into_bytes();
+            bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
+            bytes.extend_from_slice(&data);
+        }
+        // Fallback for complex types (Push, ServerError, Attribute)
+        _ => {
+            let repr = format!("{:?}", value).into_bytes();
+            bytes.push(b'#');
+            bytes.extend_from_slice(&(repr.len() as u32).to_be_bytes());
+            bytes.extend_from_slice(&repr);
+        }
+    }
 }
 
 /// Extract optional string parameter from JNI.

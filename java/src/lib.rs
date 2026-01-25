@@ -2333,8 +2333,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                             });
 
                         // binary_mode = !expect_utf8
+                        // skip_dbb=true: cluster scan returns special format, don't use DBB
                         let binary_mode = expect_utf8 == 0;
-                        complete_callback(jvm, callback_id, result, binary_mode);
+                        complete_callback_with_options(jvm, callback_id, result, binary_mode, true);
                     }
                     Err(err) => {
                         let error = Err(redis::RedisError::from((
