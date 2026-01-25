@@ -3075,13 +3075,11 @@ where
             .get_cluster_param(|params| params.retry_params.clone())
             .expect(MUTEX_READ_ERR);
         let mut poll_flush_action = PollFlushAction::None;
-        // Take pending requests with minimal lock hold time to reduce contention
         let mut pending_requests = {
             let mut guard = self.inner.pending_requests.lock().expect(MUTEX_WRITE_ERR);
             mem::take(&mut *guard)
-        }; // Lock released here
+        };
 
-        // Process requests WITHOUT holding the lock
         for request in pending_requests.drain(..) {
             // Drop the request if none is waiting for a response to free up resources for
             // requests callers care about (load shedding). It will be ambiguous whether the
@@ -3098,13 +3096,11 @@ where
             }));
         }
 
-        // Put the drained vector back to preserve capacity for next poll
-        {
-            let mut guard = self.inner.pending_requests.lock().expect(MUTEX_WRITE_ERR);
+        // Preserve capacity
+        if let Ok(mut guard) = self.inner.pending_requests.lock() {
             if guard.is_empty() {
                 *guard = pending_requests;
             }
-            // If not empty, new requests arrived while processing - keep the new vec
         }
 
         loop {
