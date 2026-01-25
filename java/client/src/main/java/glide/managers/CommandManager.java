@@ -568,15 +568,7 @@ public class CommandManager {
                 return glide.api.models.GlideString.gs(bytes);
             }
         }
-        // Unrecognized format - treat as raw bulk string bytes (legacy fallback)
-        if (expectUtf8Response) {
-            // Decode UTF-8 directly from buffer
-            return BufferUtils.decodeUtf8(dup);
-        } else {
-            byte[] bytes = new byte[dup.remaining()];
-            dup.get(bytes);
-            return glide.api.models.GlideString.gs(bytes);
-        }
+        throw new IllegalStateException("Unrecognized DBB marker: " + (char) marker);
     }
 
     /**
