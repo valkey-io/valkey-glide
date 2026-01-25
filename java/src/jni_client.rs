@@ -1,6 +1,19 @@
 //! JNI client management infrastructure extracted from JNI-java implementation
 //! This module provides direct JNI calls to glide-core while preserving protobuf serialization
 
+mod dbb_marker {
+    pub const NIL: u8 = b'_';
+    pub const BOOL_TRUE: u8 = b't';
+    pub const BOOL_FALSE: u8 = b'f';
+    pub const DOUBLE: u8 = b',';
+    pub const INT: u8 = b':';
+    pub const BULK_STRING: u8 = b'$';
+    pub const SIMPLE_STRING: u8 = b'+';
+    pub const ARRAY: u8 = b'*';
+    pub const MAP: u8 = b'%';
+    pub const SET: u8 = b'~';
+}
+
 use anyhow::Result;
 use dashmap::DashMap;
 use glide_core::client::Client as GlideClient;
@@ -580,15 +593,12 @@ fn create_direct_byte_buffer<'local>(
 ) -> Result<JObject<'local>, crate::errors::FFIError> {
     match value {
         redis::Value::BulkString(data) => {
-            // Serialize with '$' marker to distinguish from Array/Map markers
-            // Format: '$' + 4-byte length (BE) + data
             let mut serialized = Vec::with_capacity(1 + 4 + data.len());
-            serialized.push(b'$');
+            serialized.push(dbb_marker::BULK_STRING);
             serialized.extend_from_slice(&(data.len() as u32).to_be_bytes());
             serialized.extend_from_slice(&data);
             let (id, ptr, len) = register_native_buffer(serialized);
             let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
-            // Register Java-side cleaner to free native buffer when GC'd
             let obj: JObject = bb.into();
             let out = env.new_local_ref(&obj)?;
             register_buffer_cleaner(env, &out, id)?;
@@ -648,19 +658,20 @@ fn serialize_array_to_bytes(
     _encoding_utf8: bool,
 ) -> Result<Vec<u8>, crate::errors::FFIError> {
     let mut bytes = Vec::new();
-    bytes.push(b'*');
+    bytes.push(dbb_marker::ARRAY);
     bytes.extend_from_slice(&(arr.len() as u32).to_be_bytes());
     for value in &arr {
         serialize_value_recursive(value, &mut bytes);
     }
     Ok(bytes)
 }
+
 fn serialize_map_vec_to_bytes(
     map: Vec<(ServerValue, ServerValue)>,
     _encoding_utf8: bool,
 ) -> Result<Vec<u8>, crate::errors::FFIError> {
     let mut bytes = Vec::new();
-    bytes.push(b'%');
+    bytes.push(dbb_marker::MAP);
     bytes.extend_from_slice(&(map.len() as u32).to_be_bytes());
     for (key, value) in map {
         serialize_value_recursive(&key, &mut bytes);
@@ -669,48 +680,47 @@ fn serialize_map_vec_to_bytes(
     Ok(bytes)
 }
 
-/// Type markers: _ Nil, t/f Bool, , Double, : Int, $ BulkString, + SimpleString, * Array, % Map, ~ Set.
 fn serialize_value_recursive(value: &ServerValue, bytes: &mut Vec<u8>) {
     match value {
-        redis::Value::Nil => {
-            bytes.push(b'_');
-        }
-        redis::Value::Boolean(b) => {
-            bytes.push(if *b { b't' } else { b'f' });
-        }
+        redis::Value::Nil => bytes.push(dbb_marker::NIL),
+        redis::Value::Boolean(b) => bytes.push(if *b {
+            dbb_marker::BOOL_TRUE
+        } else {
+            dbb_marker::BOOL_FALSE
+        }),
         redis::Value::Double(d) => {
-            bytes.push(b',');
+            bytes.push(dbb_marker::DOUBLE);
             bytes.extend_from_slice(&d.to_bits().to_be_bytes());
         }
         redis::Value::Int(n) => {
-            bytes.push(b':');
+            bytes.push(dbb_marker::INT);
             bytes.extend_from_slice(&n.to_be_bytes());
         }
         redis::Value::BulkString(data) => {
-            bytes.push(b'$');
+            bytes.push(dbb_marker::BULK_STRING);
             bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
             bytes.extend_from_slice(data);
         }
         redis::Value::SimpleString(s) => {
-            bytes.push(b'+');
+            bytes.push(dbb_marker::SIMPLE_STRING);
             let data = s.as_bytes();
             bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
             bytes.extend_from_slice(data);
         }
         redis::Value::Okay => {
-            bytes.push(b'+');
+            bytes.push(dbb_marker::SIMPLE_STRING);
             bytes.extend_from_slice(&2u32.to_be_bytes());
             bytes.extend_from_slice(b"OK");
         }
         redis::Value::Array(arr) => {
-            bytes.push(b'*');
+            bytes.push(dbb_marker::ARRAY);
             bytes.extend_from_slice(&(arr.len() as u32).to_be_bytes());
             for elem in arr {
                 serialize_value_recursive(elem, bytes);
             }
         }
         redis::Value::Map(map) => {
-            bytes.push(b'%');
+            bytes.push(dbb_marker::MAP);
             bytes.extend_from_slice(&(map.len() as u32).to_be_bytes());
             for (k, v) in map {
                 serialize_value_recursive(k, bytes);
@@ -718,20 +728,20 @@ fn serialize_value_recursive(value: &ServerValue, bytes: &mut Vec<u8>) {
             }
         }
         redis::Value::Set(set) => {
-            bytes.push(b'~');
+            bytes.push(dbb_marker::SET);
             bytes.extend_from_slice(&(set.len() as u32).to_be_bytes());
             for elem in set {
                 serialize_value_recursive(elem, bytes);
             }
         }
         redis::Value::VerbatimString { text, .. } => {
-            bytes.push(b'+');
+            bytes.push(dbb_marker::SIMPLE_STRING);
             let data = text.as_bytes();
             bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
             bytes.extend_from_slice(data);
         }
         redis::Value::BigNumber(num) => {
-            bytes.push(b'+');
+            bytes.push(dbb_marker::SIMPLE_STRING);
             let data = num.to_string().into_bytes();
             bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
             bytes.extend_from_slice(&data);

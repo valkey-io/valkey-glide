@@ -52,6 +52,26 @@ public class CommandManager {
     /** Core client connection. */
     private final GlideCoreClient coreClient;
 
+    /** Type markers for Direct Byte Buffer serialization format. */
+    private enum DbbMarker {
+        NIL('_'),
+        BOOL_TRUE('t'),
+        BOOL_FALSE('f'),
+        DOUBLE(','),
+        INT(':'),
+        BULK_STRING('$'),
+        SIMPLE_STRING('+'),
+        ARRAY('*'),
+        MAP('%'),
+        SET('~');
+
+        final byte value;
+
+        DbbMarker(char c) {
+            this.value = (byte) c;
+        }
+    }
+
     /** Internal interface for exposing implementation details about a ClusterScanCursor. */
     public interface ClusterScanCursorDetail extends ClusterScanCursor {
         /**
@@ -551,21 +571,19 @@ public class CommandManager {
         }
         byte marker = dup.get();
         dup.rewind();
-        switch (marker) {
-            case '*':
-            case '~':
-                return deserializeByteBufferArray(dup, expectUtf8Response);
-            case '%':
-                return deserializeByteBufferMap(dup, expectUtf8Response);
-            default:
-                dup.get();
-                int len = dup.getInt();
-                if (expectUtf8Response) {
-                    return BufferUtils.decodeUtf8(dup, len);
-                }
-                byte[] bytes = new byte[len];
-                dup.get(bytes);
-                return glide.api.models.GlideString.gs(bytes);
+        if (marker == DbbMarker.ARRAY.value || marker == DbbMarker.SET.value) {
+            return deserializeByteBufferArray(dup, expectUtf8Response);
+        } else if (marker == DbbMarker.MAP.value) {
+            return deserializeByteBufferMap(dup, expectUtf8Response);
+        } else {
+            dup.get();
+            int len = dup.getInt();
+            if (expectUtf8Response) {
+                return BufferUtils.decodeUtf8(dup, len);
+            }
+            byte[] bytes = new byte[len];
+            dup.get(bytes);
+            return glide.api.models.GlideString.gs(bytes);
         }
     }
 
@@ -581,8 +599,8 @@ public class CommandManager {
         buffer.rewind();
 
         byte marker = buffer.get();
-        if (marker != '%') {
-            throw new IllegalArgumentException("Expected map marker '%', got: " + (char) marker);
+        if (marker != DbbMarker.MAP.value) {
+            throw new IllegalArgumentException("Expected map marker, got: " + (char) marker);
         }
         int count = buffer.getInt();
         java.util.LinkedHashMap<Object, Object> map =
@@ -707,140 +725,74 @@ public class CommandManager {
      * <p>Supports recursive nested types (arrays, maps, sets).
      */
     private Object[] deserializeByteBufferArray(ByteBuffer buffer, boolean expectUtf8Response) {
-        buffer.order(ByteOrder.BIG_ENDIAN); // Rust uses big-endian
+        buffer.order(ByteOrder.BIG_ENDIAN);
         buffer.rewind();
-
-        // Read array/set marker ('*' or '~')
         byte marker = buffer.get();
-        if (marker != '*' && marker != '~') {
-            throw new IllegalArgumentException(
-                    "Expected array marker '*' or set marker '~', got: " + (char) marker);
+        if (marker != DbbMarker.ARRAY.value && marker != DbbMarker.SET.value) {
+            throw new IllegalArgumentException("Expected array/set marker, got: " + (char) marker);
         }
-
-        // Read array element count (4 bytes, big-endian)
         int count = buffer.getInt();
         Object[] result = new Object[count];
-
         for (int i = 0; i < count; i++) {
             result[i] = deserializeValue(buffer, expectUtf8Response);
         }
-
         return result;
     }
 
-    /**
-     * Recursively deserialize a single value from the buffer.
-     *
-     * <p>Type markers:
-     *
-     * <ul>
-     *   <li>'_' : Nil (null)
-     *   <li>'t' : Boolean true
-     *   <li>'f' : Boolean false
-     *   <li>',' : Double (8 bytes, big-endian IEEE 754)
-     *   <li>':' : Integer (8 bytes, big-endian)
-     *   <li>'$' : BulkString (4-byte length + data)
-     *   <li>'+' : SimpleString (4-byte length + UTF-8 data)
-     *   <li>'*' : Array (4-byte count + recursive elements)
-     *   <li>'%' : Map (4-byte count + recursive key-value pairs)
-     *   <li>'~' : Set (4-byte count + recursive elements)
-     *   <li>'#' : Complex/fallback (4-byte length + debug string)
-     * </ul>
-     */
     private Object deserializeValue(ByteBuffer buffer, boolean expectUtf8Response) {
-        byte typeMarker = buffer.get();
+        byte m = buffer.get();
 
-        switch (typeMarker) {
-            case '_': // Nil
-                return null;
-
-            case 't': // Boolean true
-                return Boolean.TRUE;
-
-            case 'f': // Boolean false
-                return Boolean.FALSE;
-
-            case ',': // Double (8 bytes IEEE 754)
-                return Double.longBitsToDouble(buffer.getLong());
-
-            case ':': // Integer (8 bytes)
-                return buffer.getLong();
-
-            case '$': // Bulk string
-                {
-                    int bulkLen = buffer.getInt();
-                    if (bulkLen == -1) {
-                        return null;
-                    }
-                    if (expectUtf8Response) {
-                        return BufferUtils.decodeUtf8(buffer, bulkLen);
-                    } else {
-                        byte[] data = new byte[bulkLen];
-                        buffer.get(data);
-                        return glide.api.models.GlideString.gs(data);
-                    }
-                }
-
-            case '+': // Simple string
-                {
-                    int simpleLen = buffer.getInt();
-                    if (expectUtf8Response) {
-                        String simpleString = BufferUtils.decodeUtf8(buffer, simpleLen);
-                        return simpleString.equalsIgnoreCase("ok") ? "OK" : simpleString;
-                    } else {
-                        byte[] data = new byte[simpleLen];
-                        buffer.get(data);
-                        return glide.api.models.GlideString.gs(data);
-                    }
-                }
-
-            case '*': // Nested Array
-                {
-                    int count = buffer.getInt();
-                    Object[] arr = new Object[count];
-                    for (int i = 0; i < count; i++) {
-                        arr[i] = deserializeValue(buffer, expectUtf8Response);
-                    }
-                    return arr;
-                }
-
-            case '%': // Map
-                {
-                    int count = buffer.getInt();
-                    java.util.Map<Object, Object> map = new java.util.LinkedHashMap<>(count);
-                    for (int i = 0; i < count; i++) {
-                        Object key = deserializeValue(buffer, expectUtf8Response);
-                        Object value = deserializeValue(buffer, expectUtf8Response);
-                        map.put(key, value);
-                    }
-                    return map;
-                }
-
-            case '~': // Set
-                {
-                    int count = buffer.getInt();
-                    java.util.Set<Object> set = new java.util.LinkedHashSet<>(count);
-                    for (int i = 0; i < count; i++) {
-                        set.add(deserializeValue(buffer, expectUtf8Response));
-                    }
-                    return set;
-                }
-
-            case '#': // Complex type (serialized as string)
-                {
-                    int complexLen = buffer.getInt();
-                    if (expectUtf8Response) {
-                        return BufferUtils.decodeUtf8(buffer, complexLen);
-                    } else {
-                        byte[] complexData = new byte[complexLen];
-                        buffer.get(complexData);
-                        return glide.api.models.GlideString.gs(complexData);
-                    }
-                }
-
-            default:
-                throw new IllegalArgumentException("Unknown type marker: " + (char) typeMarker);
+        if (m == DbbMarker.NIL.value) {
+            return null;
+        } else if (m == DbbMarker.BOOL_TRUE.value) {
+            return Boolean.TRUE;
+        } else if (m == DbbMarker.BOOL_FALSE.value) {
+            return Boolean.FALSE;
+        } else if (m == DbbMarker.DOUBLE.value) {
+            return Double.longBitsToDouble(buffer.getLong());
+        } else if (m == DbbMarker.INT.value) {
+            return buffer.getLong();
+        } else if (m == DbbMarker.BULK_STRING.value) {
+            int len = buffer.getInt();
+            if (len == -1) return null;
+            if (expectUtf8Response) {
+                return BufferUtils.decodeUtf8(buffer, len);
+            }
+            byte[] data = new byte[len];
+            buffer.get(data);
+            return glide.api.models.GlideString.gs(data);
+        } else if (m == DbbMarker.SIMPLE_STRING.value) {
+            int len = buffer.getInt();
+            if (expectUtf8Response) {
+                String s = BufferUtils.decodeUtf8(buffer, len);
+                return s.equalsIgnoreCase("ok") ? "OK" : s;
+            }
+            byte[] data = new byte[len];
+            buffer.get(data);
+            return glide.api.models.GlideString.gs(data);
+        } else if (m == DbbMarker.ARRAY.value) {
+            int count = buffer.getInt();
+            Object[] arr = new Object[count];
+            for (int i = 0; i < count; i++) {
+                arr[i] = deserializeValue(buffer, expectUtf8Response);
+            }
+            return arr;
+        } else if (m == DbbMarker.MAP.value) {
+            int count = buffer.getInt();
+            java.util.Map<Object, Object> map = new java.util.LinkedHashMap<>(count);
+            for (int i = 0; i < count; i++) {
+                map.put(deserializeValue(buffer, expectUtf8Response), deserializeValue(buffer, expectUtf8Response));
+            }
+            return map;
+        } else if (m == DbbMarker.SET.value) {
+            int count = buffer.getInt();
+            java.util.Set<Object> set = new java.util.LinkedHashSet<>(count);
+            for (int i = 0; i < count; i++) {
+                set.add(deserializeValue(buffer, expectUtf8Response));
+            }
+            return set;
         }
+        throw new IllegalArgumentException("Unknown DBB marker: " + (char) m);
     }
 
     /** Exception handler for future pipeline. */
