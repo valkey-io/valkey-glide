@@ -380,13 +380,9 @@ fn process_callback_job(
             Ok(server_value) => {
                 let _ = env.push_local_frame(16);
 
-                // Direct conversion with size-based routing
-                // skip_dbb=true forces regular JNI path (e.g., for cluster scan)
                 let java_result = if !skip_dbb && should_use_direct_buffer(&server_value) {
-                    // For large data (>16KB): Use DirectByteBuffer
                     create_direct_byte_buffer(&mut env, server_value, !binary_mode)
                 } else {
-                    // For small data (<16KB) or skip_dbb: Regular JNI objects
                     crate::resp_value_to_java(&mut env, server_value, !binary_mode)
                 };
 
@@ -500,12 +496,9 @@ pub fn complete_java_callback_with_error_code(
     Ok(())
 }
 
-/// Check if response should use DirectByteBuffer based on size threshold (16KB)
-/// Now supports nested types (arrays, maps, sets) via recursive serialization.
 fn should_use_direct_buffer(value: &ServerValue) -> bool {
-    const THRESHOLD: usize = 16 * 1024; // 16KB threshold
+    const THRESHOLD: usize = 16 * 1024;
 
-    // First check if value contains complex types that lose semantics in DBB
     if contains_complex_types(value) {
         return false;
     }
@@ -513,12 +506,10 @@ fn should_use_direct_buffer(value: &ServerValue) -> bool {
     match value {
         redis::Value::BulkString(data) => data.len() > THRESHOLD,
         redis::Value::Array(arr) => {
-            // Calculate total estimated size (recursive for nested structures)
             let total_size: usize = arr.iter().map(estimate_value_size).sum();
             total_size > THRESHOLD
         }
         redis::Value::Map(map) => {
-            // Calculate total size of map (keys + values, recursive)
             let total_size: usize = map
                 .iter()
                 .map(|(k, v)| estimate_value_size(k) + estimate_value_size(v))
@@ -526,15 +517,14 @@ fn should_use_direct_buffer(value: &ServerValue) -> bool {
             total_size > THRESHOLD
         }
         redis::Value::Set(set) => {
-            // Calculate total size of set elements (recursive)
             let total_size: usize = set.iter().map(estimate_value_size).sum();
             total_size > THRESHOLD
         }
-        _ => false, // Other types (Int, Double, Boolean, etc.) are typically small
+        _ => false,
     }
 }
 
-/// Check if value contains complex types (ServerError, Push, Attribute) that lose semantics in DBB
+/// ServerError, Push, Attribute lose semantics in DBB serialization
 fn contains_complex_types(value: &ServerValue) -> bool {
     match value {
         redis::Value::ServerError(_)
@@ -549,32 +539,30 @@ fn contains_complex_types(value: &ServerValue) -> bool {
     }
 }
 
-/// Estimate the memory size of a ServerValue for threshold calculations
 fn estimate_value_size(value: &ServerValue) -> usize {
     match value {
         redis::Value::Nil => 0,
         redis::Value::SimpleString(s) => s.len(),
         redis::Value::BulkString(data) => data.len(),
-        redis::Value::Int(_) => 8,    // 64-bit int
-        redis::Value::Double(_) => 8, // 64-bit double
+        redis::Value::Int(_) | redis::Value::Double(_) => 8,
         redis::Value::Boolean(_) => 1,
         redis::Value::Array(arr) => {
-            arr.iter().map(estimate_value_size).sum::<usize>() + (arr.len() * 8) // overhead
+            arr.iter().map(estimate_value_size).sum::<usize>() + (arr.len() * 8)
         }
         redis::Value::Map(map) => {
             map.iter()
                 .map(|(k, v)| estimate_value_size(k) + estimate_value_size(v))
                 .sum::<usize>()
-                + (map.len() * 16) // overhead for key-value pairs
+                + (map.len() * 16)
         }
         redis::Value::Set(set) => {
-            set.iter().map(estimate_value_size).sum::<usize>() + (set.len() * 8) // overhead
+            set.iter().map(estimate_value_size).sum::<usize>() + (set.len() * 8)
         }
         redis::Value::VerbatimString { text, .. } => text.len(),
-        redis::Value::BigNumber(num) => num.to_string().len(), // Estimate size as string representation
+        redis::Value::BigNumber(num) => num.to_string().len(),
         redis::Value::Push { data, .. } => data.iter().map(estimate_value_size).sum::<usize>(),
-        redis::Value::ServerError(_) => 128, // Estimate for error messages
-        redis::Value::Okay => 2,             // "OK"
+        redis::Value::ServerError(_) => 128,
+        redis::Value::Okay => 2,
         redis::Value::Attribute { data, .. } => estimate_value_size(data.as_ref()),
     }
 }
@@ -650,58 +638,34 @@ fn register_buffer_cleaner<'local>(
     Ok(())
 }
 
-/// Serialize array to bytes for DirectByteBuffer using recursive serialization
 fn serialize_array_to_bytes(
     arr: Vec<ServerValue>,
     _encoding_utf8: bool,
 ) -> Result<Vec<u8>, crate::errors::FFIError> {
     let mut bytes = Vec::new();
-
-    // Write array marker and length
-    bytes.push(b'*'); // Redis array prefix
+    bytes.push(b'*');
     bytes.extend_from_slice(&(arr.len() as u32).to_be_bytes());
-
-    // Use recursive serialization for all elements (supports nested types)
     for value in &arr {
         serialize_value_recursive(value, &mut bytes);
     }
-
     Ok(bytes)
 }
-
-/// Serialize map Vec<(K,V)> to bytes for DirectByteBuffer (simplified binary format)
 fn serialize_map_vec_to_bytes(
     map: Vec<(ServerValue, ServerValue)>,
     _encoding_utf8: bool,
 ) -> Result<Vec<u8>, crate::errors::FFIError> {
     let mut bytes = Vec::new();
-
-    // Write map marker and length
-    bytes.push(b'%'); // Map prefix
+    bytes.push(b'%');
     bytes.extend_from_slice(&(map.len() as u32).to_be_bytes());
-
     for (key, value) in map {
-        // Use recursive serialization for both keys and values
         serialize_value_recursive(&key, &mut bytes);
         serialize_value_recursive(&value, &mut bytes);
     }
-
     Ok(bytes)
 }
 
-/// Recursively serialize any redis::Value to bytes with type markers.
-/// Type markers:
-/// - `_` : Nil (no data)
-/// - `t` : Boolean true (no data)
-/// - `f` : Boolean false (no data)
-/// - `,` : Double (8 bytes, big-endian IEEE 754)
-/// - `:` : Integer (8 bytes, big-endian)
-/// - `$` : BulkString (4-byte length + data)
-/// - `+` : SimpleString (4-byte length + UTF-8 data)
-/// - `*` : Array (4-byte count + recursive elements)
-/// - `%` : Map (4-byte count + recursive key-value pairs)
-/// - `~` : Set (4-byte count + recursive elements)
-/// - `#` : Complex/fallback (4-byte length + debug string)
+/// Serialize redis::Value to bytes. Type markers: _ Nil, t/f Bool, , Double, : Int,
+/// $ BulkString, + SimpleString, * Array, % Map, ~ Set, # fallback (all with 4-byte length prefix except Nil/Bool).
 fn serialize_value_recursive(value: &ServerValue, bytes: &mut Vec<u8>) {
     match value {
         redis::Value::Nil => {
@@ -757,20 +721,17 @@ fn serialize_value_recursive(value: &ServerValue, bytes: &mut Vec<u8>) {
             }
         }
         redis::Value::VerbatimString { text, .. } => {
-            // Treat as simple string
             bytes.push(b'+');
             let data = text.as_bytes();
             bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
             bytes.extend_from_slice(data);
         }
         redis::Value::BigNumber(num) => {
-            // Serialize BigNumber as string representation
             bytes.push(b'+');
             let data = num.to_string().into_bytes();
             bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
             bytes.extend_from_slice(&data);
         }
-        // Fallback for complex types (Push, ServerError, Attribute)
         _ => {
             let repr = format!("{:?}", value).into_bytes();
             bytes.push(b'#');
@@ -780,7 +741,6 @@ fn serialize_value_recursive(value: &ServerValue, bytes: &mut Vec<u8>) {
     }
 }
 
-/// Extract optional string parameter from JNI.
 pub fn get_optional_string_param_raw(env: &mut JNIEnv, param: jstring) -> Option<String> {
     if param.is_null() {
         return None;
