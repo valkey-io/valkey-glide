@@ -499,7 +499,7 @@ pub fn complete_java_callback_with_error_code(
 fn should_use_direct_buffer(value: &ServerValue) -> bool {
     const THRESHOLD: usize = 16 * 1024;
 
-    if contains_complex_types(value) {
+    if !can_serialize_to_dbb(value) {
         return false;
     }
 
@@ -524,17 +524,22 @@ fn should_use_direct_buffer(value: &ServerValue) -> bool {
     }
 }
 
-/// ServerError, Push, Attribute lose semantics in DBB serialization
-fn contains_complex_types(value: &ServerValue) -> bool {
+fn can_serialize_to_dbb(value: &ServerValue) -> bool {
     match value {
-        redis::Value::ServerError(_)
-        | redis::Value::Push { .. }
-        | redis::Value::Attribute { .. } => true,
-        redis::Value::Array(arr) => arr.iter().any(contains_complex_types),
+        redis::Value::Nil
+        | redis::Value::Boolean(_)
+        | redis::Value::Double(_)
+        | redis::Value::Int(_)
+        | redis::Value::BulkString(_)
+        | redis::Value::SimpleString(_)
+        | redis::Value::Okay
+        | redis::Value::VerbatimString { .. }
+        | redis::Value::BigNumber(_) => true,
+        redis::Value::Array(arr) => arr.iter().all(can_serialize_to_dbb),
         redis::Value::Map(map) => map
             .iter()
-            .any(|(k, v)| contains_complex_types(k) || contains_complex_types(v)),
-        redis::Value::Set(set) => set.iter().any(contains_complex_types),
+            .all(|(k, v)| can_serialize_to_dbb(k) && can_serialize_to_dbb(v)),
+        redis::Value::Set(set) => set.iter().all(can_serialize_to_dbb),
         _ => false,
     }
 }
@@ -664,8 +669,7 @@ fn serialize_map_vec_to_bytes(
     Ok(bytes)
 }
 
-/// Serialize redis::Value to bytes. Type markers: _ Nil, t/f Bool, , Double, : Int,
-/// $ BulkString, + SimpleString, * Array, % Map, ~ Set, # fallback (all with 4-byte length prefix except Nil/Bool).
+/// Type markers: _ Nil, t/f Bool, , Double, : Int, $ BulkString, + SimpleString, * Array, % Map, ~ Set.
 fn serialize_value_recursive(value: &ServerValue, bytes: &mut Vec<u8>) {
     match value {
         redis::Value::Nil => {
@@ -732,12 +736,7 @@ fn serialize_value_recursive(value: &ServerValue, bytes: &mut Vec<u8>) {
             bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
             bytes.extend_from_slice(&data);
         }
-        _ => {
-            let repr = format!("{:?}", value).into_bytes();
-            bytes.push(b'#');
-            bytes.extend_from_slice(&(repr.len() as u32).to_be_bytes());
-            bytes.extend_from_slice(&repr);
-        }
+        _ => unreachable!("can_serialize_to_dbb should filter unsupported types"),
     }
 }
 
