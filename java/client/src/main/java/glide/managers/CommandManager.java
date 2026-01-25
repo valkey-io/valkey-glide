@@ -551,24 +551,22 @@ public class CommandManager {
         }
         byte marker = dup.get();
         dup.rewind();
-        if (marker == '*' || marker == '~') {
-            // Serialized array or set (custom wire format)
-            return deserializeByteBufferArray(dup, expectUtf8Response);
-        } else if (marker == '%') {
-            return deserializeByteBufferMap(dup, expectUtf8Response);
-        } else if (marker == '$') {
-            // Serialized bulk string: '$' + 4-byte length (BE) + data
-            dup.get(); // skip marker
-            int len = dup.getInt();
-            if (expectUtf8Response) {
-                return BufferUtils.decodeUtf8(dup, len);
-            } else {
+        switch (marker) {
+            case '*':
+            case '~':
+                return deserializeByteBufferArray(dup, expectUtf8Response);
+            case '%':
+                return deserializeByteBufferMap(dup, expectUtf8Response);
+            default:
+                dup.get();
+                int len = dup.getInt();
+                if (expectUtf8Response) {
+                    return BufferUtils.decodeUtf8(dup, len);
+                }
                 byte[] bytes = new byte[len];
                 dup.get(bytes);
                 return glide.api.models.GlideString.gs(bytes);
-            }
         }
-        throw new IllegalStateException("Unrecognized DBB marker: " + (char) marker);
     }
 
     /**
