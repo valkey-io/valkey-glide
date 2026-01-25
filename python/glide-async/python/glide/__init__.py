@@ -6,6 +6,9 @@ import warnings
 
 from glide.glide import (
     ClusterScanCursor,
+    OpenTelemetryConfig,
+    OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig,
     Script,
     get_min_compressed_size,
 )
@@ -100,9 +103,6 @@ from glide_shared import (
     ObjectType,
     OffsetOptions,
     OnlyIfEqual,
-    OpenTelemetryConfig,
-    OpenTelemetryMetricsConfig,
-    OpenTelemetryTracesConfig,
     OrderBy,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
@@ -167,7 +167,6 @@ from .async_commands import ft, glide_json
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger
-from .opentelemetry import OpenTelemetry
 
 _glide_module = sys.modules[__name__]
 
@@ -248,7 +247,6 @@ __all__ = [
     "ServiceType",
     "IamAuthConfig",
     "NodeAddress",
-    "OpenTelemetry",
     "OpenTelemetryConfig",
     "OpenTelemetryMetricsConfig",
     "OpenTelemetryTracesConfig",

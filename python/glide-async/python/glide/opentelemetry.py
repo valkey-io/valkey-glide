@@ -1,56 +1,50 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 """
-OpenTelemetry singleton for async client.
+⚠️ OpenTelemetry can only be initialized once per process. Calling `OpenTelemetry.init()` more than once will be ignored.
+If you need to change configuration, restart the process with new settings.
 
-See glide_shared.opentelemetry module documentation for configuration details.
+### OpenTelemetry
+
+- **openTelemetryConfig**: Use this object to configure OpenTelemetry exporters and options.
+  - **traces**: (optional) Configure trace exporting.
+    - **endpoint**: The collector endpoint for traces. Supported protocols:
+      - `http://` or `https://` for HTTP/HTTPS
+      - `grpc://` for gRPC
+      - `file://` for local file export (see below)
+    - **sample_percentage**: (optional) The percentage of requests to sample and create a span for, used to measure command duration. Must be between 0 and 100. Defaults to 1 if not specified.
+      Note: There is a tradeoff between sampling percentage and performance. Higher sampling percentages will provide more detailed telemetry data but will impact performance.
+      It is recommended to keep this number low (1-5%) in production environments unless you have specific needs for higher sampling rates.
+  - **metrics**: (optional) Configure metrics exporting.
+    - **endpoint**: The collector endpoint for metrics. Same protocol rules as above.
+  - **flush_interval_ms**: (optional) Interval in milliseconds for flushing data to the collector. Must be a positive integer. Defaults to 5000ms if not specified.
+
+#### File Exporter Details
+- For `file://` endpoints:
+  - The path must start with `file://` (e.g., `file:///tmp/otel` or `file:///tmp/otel/traces.json`).
+  - If the path is a directory or lacks a file extension, data is written to `signals.json` in that directory.
+  - If the path includes a filename with an extension, that file is used as-is.
+  - The parent directory must already exist; otherwise, initialization will fail with an InvalidInput error.
+  - If the target file exists, new data is appended (not overwritten).
+
+#### Validation Rules
+- `flush_interval_ms` must be a positive integer.
+- `sample_percentage` must be between 0 and 100.
+- File exporter paths must start with `file://` and have an existing parent directory.
+- Invalid configuration will throw an error synchronously when calling `OpenTelemetry.init()`.
 """
 
 import random
 from typing import Optional
 
-from glide.glide import OpenTelemetryConfig as PyO3OpenTelemetryConfig
-from glide.glide import OpenTelemetryMetricsConfig as PyO3OpenTelemetryMetricsConfig
-from glide.glide import OpenTelemetryTracesConfig as PyO3OpenTelemetryTracesConfig
 from glide.glide import (
+    OpenTelemetryConfig,
+    OpenTelemetryTracesConfig,
     init_opentelemetry,
 )
 from glide_shared.exceptions import ConfigurationError
-from glide_shared.opentelemetry import (  # noqa: F401 - Re-exported for public API
-    OpenTelemetryConfig,
-    OpenTelemetryMetricsConfig,
-    OpenTelemetryTracesConfig,
-)
 
 from .logger import Level, Logger
-
-
-def _convert_to_pyo3_config(config: OpenTelemetryConfig) -> PyO3OpenTelemetryConfig:
-    """
-    Convert shared OpenTelemetryConfig to PyO3 OpenTelemetryConfig for Rust FFI.
-
-    Args:
-        config: Shared OpenTelemetryConfig instance
-
-    Returns:
-        PyO3OpenTelemetryConfig: PyO3-compatible config for Rust
-    """
-    pyo3_traces = None
-    if config.traces:
-        pyo3_traces = PyO3OpenTelemetryTracesConfig(
-            endpoint=config.traces.endpoint,
-            sample_percentage=config.traces.sample_percentage,
-        )
-
-    pyo3_metrics = None
-    if config.metrics:
-        pyo3_metrics = PyO3OpenTelemetryMetricsConfig(endpoint=config.metrics.endpoint)
-
-    return PyO3OpenTelemetryConfig(
-        traces=pyo3_traces,
-        metrics=pyo3_metrics,
-        flush_interval_ms=config.flush_interval_ms,
-    )
 
 
 class OpenTelemetry:
@@ -99,9 +93,8 @@ class OpenTelemetry:
         """
         if not cls._instance:
             cls._config = config
-            # Convert shared config to PyO3 config and initialize
-            pyo3_config = _convert_to_pyo3_config(config)
-            init_opentelemetry(pyo3_config)
+            # Initialize the underlying OpenTelemetry implementation
+            init_opentelemetry(config)
             cls._instance = OpenTelemetry()
             Logger.log(
                 Level.INFO,
@@ -135,8 +128,10 @@ class OpenTelemetry:
             Optional[int]: The sample percentage for traces only if OpenTelemetry is initialized
                 and the traces config is set, otherwise None.
         """
-        if cls._config and cls._config.traces:
-            return cls._config.traces.sample_percentage
+        if cls._config:
+            traces_config = cls._config.get_traces()
+            if traces_config:
+                return traces_config.get_sample_percentage()
         return None
 
     @classmethod
@@ -171,11 +166,20 @@ class OpenTelemetry:
             This method can be called at runtime to change the sampling percentage
             without reinitializing OpenTelemetry.
         """
-        if not cls._config or not cls._config.traces:
-            raise ConfigurationError("OpenTelemetry traces not initialized")
+        if not cls._config or not cls._config.get_traces():
+            raise ConfigurationError("OpenTelemetry config traces not initialized")
 
         if percentage < 0 or percentage > 100:
             raise ConfigurationError("Sample percentage must be between 0 and 100")
 
-        # Update the shared config directly
-        cls._config.traces.sample_percentage = percentage
+        # Create a new traces config with the updated sample_percentage
+        # This is necessary because the PyO3 binding doesn't properly handle direct assignment to Option<u32>
+        traces_config = cls._config.get_traces()
+        if traces_config:
+            endpoint = traces_config.get_endpoint()
+            new_traces_config = OpenTelemetryTracesConfig(
+                endpoint=endpoint, sample_percentage=percentage
+            )
+
+            # Replace the traces config
+            cls._config.set_traces(new_traces_config)

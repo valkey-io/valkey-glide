@@ -67,8 +67,6 @@ excluded_sync_symbols = [
     "CURR_DIR",  # Assignment
     "LIB_FILE",  # Assignment
     "find_libglide_ffi",  # FunctionDef
-    # python/glide-sync/glide_sync/_glide_ffi.py
-    "GlideFFI",  # Assignment (singleton instance)
     # python/glide-sync/glide_sync/sync_commands/cluster_commands.py
     "ClusterCommands",  # ClassDef
     # python/glide-sync/glide_sync/sync_commands/core.py

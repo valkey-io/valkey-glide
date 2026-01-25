@@ -160,11 +160,6 @@ from .exceptions import (
     RequestError,
     TimeoutError,
 )
-from .opentelemetry import (
-    OpenTelemetryConfig,
-    OpenTelemetryMetricsConfig,
-    OpenTelemetryTracesConfig,
-)
 from .routes import (
     AllNodes,
     AllPrimaries,
@@ -336,8 +331,4 @@ __all__ = [
     "FtAggregateSortProperty",
     "FtProfileOptions",
     "QueryType",
-    # OpenTelemetry
-    "OpenTelemetryConfig",
-    "OpenTelemetryMetricsConfig",
-    "OpenTelemetryTracesConfig",
 ]
