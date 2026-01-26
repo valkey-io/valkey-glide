@@ -55,9 +55,7 @@ class TestReadFromStrategy:
 
         info_result = cast(
             Mapping[bytes, bytes],
-            await client.info(
-                [InfoSection.COMMAND_STATS, InfoSection.REPLICATION], AllNodes()
-            ),
+            await client.info([InfoSection.ALL], AllNodes()),
         )
 
         # Verify that both primary and replicas received GET calls
