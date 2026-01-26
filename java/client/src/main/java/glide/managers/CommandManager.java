@@ -572,8 +572,10 @@ public class CommandManager {
         }
         byte marker = dup.get();
         dup.rewind();
-        if (marker == DbbMarker.ARRAY.value || marker == DbbMarker.SET.value) {
+        if (marker == DbbMarker.ARRAY.value) {
             return deserializeByteBufferArray(dup, expectUtf8Response);
+        } else if (marker == DbbMarker.SET.value) {
+            return deserializeByteBufferSet(dup, expectUtf8Response);
         } else if (marker == DbbMarker.MAP.value) {
             return deserializeByteBufferMap(dup, expectUtf8Response);
         } else {
@@ -608,8 +610,8 @@ public class CommandManager {
                 new java.util.LinkedHashMap<>(Math.max(16, count));
         for (int i = 0; i < count; i++) {
             // Use recursive deserialization for both keys and values
-            Object key = deserializeValue(buffer, expectUtf8);
-            Object val = deserializeValue(buffer, expectUtf8);
+            Object key = deserializeValue(buffer, expectUtf8, 1);
+            Object val = deserializeValue(buffer, expectUtf8, 1);
             map.put(key, val);
         }
         return map;
@@ -718,6 +720,9 @@ public class CommandManager {
         return builder.build();
     }
 
+    /** Maximum recursion depth for nested structure deserialization to prevent stack overflow. */
+    private static final int MAX_RECURSION_DEPTH = 100;
+
     /**
      * Deserialize a ByteBuffer containing a serialized array back to Object[]. This handles
      * DirectByteBuffer responses for large data (>16KB). Format uses Redis-like protocol: '*' +
@@ -729,18 +734,45 @@ public class CommandManager {
         buffer.order(ByteOrder.BIG_ENDIAN);
         buffer.rewind();
         byte marker = buffer.get();
-        if (marker != DbbMarker.ARRAY.value && marker != DbbMarker.SET.value) {
-            throw new GlideException("Unexpected DBB marker: " + (char) marker);
+        if (marker != DbbMarker.ARRAY.value) {
+            throw new GlideException("Expected ARRAY marker, got: " + (char) marker);
         }
         int count = buffer.getInt();
         Object[] result = new Object[count];
         for (int i = 0; i < count; i++) {
-            result[i] = deserializeValue(buffer, expectUtf8Response);
+            result[i] = deserializeValue(buffer, expectUtf8Response, 1);
         }
         return result;
     }
 
-    private Object deserializeValue(ByteBuffer buffer, boolean expectUtf8Response) {
+    /**
+     * Deserialize a ByteBuffer containing a serialized set back to LinkedHashSet. Format: '~' +
+     * count(4 bytes BE) + elements
+     */
+    private java.util.Set<Object> deserializeByteBufferSet(
+            ByteBuffer buffer, boolean expectUtf8Response) {
+        buffer.order(ByteOrder.BIG_ENDIAN);
+        buffer.rewind();
+        byte marker = buffer.get();
+        if (marker != DbbMarker.SET.value) {
+            throw new GlideException("Expected SET marker, got: " + (char) marker);
+        }
+        int count = buffer.getInt();
+        java.util.Set<Object> result = new java.util.LinkedHashSet<>(count);
+        for (int i = 0; i < count; i++) {
+            result.add(deserializeValue(buffer, expectUtf8Response, 1));
+        }
+        return result;
+    }
+
+    private Object deserializeValue(ByteBuffer buffer, boolean expectUtf8Response, int depth) {
+        if (depth > MAX_RECURSION_DEPTH) {
+            throw new GlideException(
+                    "DBB deserialization exceeded max recursion depth: " + MAX_RECURSION_DEPTH);
+        }
+        if (buffer.remaining() < 1) {
+            throw new GlideException("DBB buffer underflow: no marker byte");
+        }
         byte m = buffer.get();
 
         if (m == DbbMarker.NIL.value) {
@@ -750,12 +782,25 @@ public class CommandManager {
         } else if (m == DbbMarker.BOOL_FALSE.value) {
             return Boolean.FALSE;
         } else if (m == DbbMarker.DOUBLE.value) {
+            if (buffer.remaining() < 8) {
+                throw new GlideException("DBB buffer underflow: expected 8 bytes for double");
+            }
             return Double.longBitsToDouble(buffer.getLong());
         } else if (m == DbbMarker.INT.value) {
+            if (buffer.remaining() < 8) {
+                throw new GlideException("DBB buffer underflow: expected 8 bytes for long");
+            }
             return buffer.getLong();
         } else if (m == DbbMarker.BULK_STRING.value) {
+            if (buffer.remaining() < 4) {
+                throw new GlideException("DBB buffer underflow: expected 4 bytes for length");
+            }
             int len = buffer.getInt();
             if (len == -1) return null;
+            if (buffer.remaining() < len) {
+                throw new GlideException(
+                        "DBB buffer underflow: expected " + len + " bytes, have " + buffer.remaining());
+            }
             if (expectUtf8Response) {
                 return BufferUtils.decodeUtf8(buffer, len);
             }
@@ -763,7 +808,14 @@ public class CommandManager {
             buffer.get(data);
             return glide.api.models.GlideString.gs(data);
         } else if (m == DbbMarker.SIMPLE_STRING.value) {
+            if (buffer.remaining() < 4) {
+                throw new GlideException("DBB buffer underflow: expected 4 bytes for length");
+            }
             int len = buffer.getInt();
+            if (buffer.remaining() < len) {
+                throw new GlideException(
+                        "DBB buffer underflow: expected " + len + " bytes, have " + buffer.remaining());
+            }
             if (expectUtf8Response) {
                 String s = BufferUtils.decodeUtf8(buffer, len);
                 return s.equalsIgnoreCase("ok") ? "OK" : s;
@@ -772,26 +824,35 @@ public class CommandManager {
             buffer.get(data);
             return glide.api.models.GlideString.gs(data);
         } else if (m == DbbMarker.ARRAY.value) {
+            if (buffer.remaining() < 4) {
+                throw new GlideException("DBB buffer underflow: expected 4 bytes for count");
+            }
             int count = buffer.getInt();
             Object[] arr = new Object[count];
             for (int i = 0; i < count; i++) {
-                arr[i] = deserializeValue(buffer, expectUtf8Response);
+                arr[i] = deserializeValue(buffer, expectUtf8Response, depth + 1);
             }
             return arr;
         } else if (m == DbbMarker.MAP.value) {
+            if (buffer.remaining() < 4) {
+                throw new GlideException("DBB buffer underflow: expected 4 bytes for count");
+            }
             int count = buffer.getInt();
             java.util.Map<Object, Object> map = new java.util.LinkedHashMap<>(count);
             for (int i = 0; i < count; i++) {
                 map.put(
-                        deserializeValue(buffer, expectUtf8Response),
-                        deserializeValue(buffer, expectUtf8Response));
+                        deserializeValue(buffer, expectUtf8Response, depth + 1),
+                        deserializeValue(buffer, expectUtf8Response, depth + 1));
             }
             return map;
         } else if (m == DbbMarker.SET.value) {
+            if (buffer.remaining() < 4) {
+                throw new GlideException("DBB buffer underflow: expected 4 bytes for count");
+            }
             int count = buffer.getInt();
             java.util.Set<Object> set = new java.util.LinkedHashSet<>(count);
             for (int i = 0; i < count; i++) {
-                set.add(deserializeValue(buffer, expectUtf8Response));
+                set.add(deserializeValue(buffer, expectUtf8Response, depth + 1));
             }
             return set;
         }
