@@ -9,6 +9,7 @@ pub enum FFIError {
     Utf8(FromUtf8Error),
     Logger(String),
     OpenTelemetry(String),
+    Serialization(String),
 }
 
 impl From<jni::errors::Error> for FFIError {
@@ -30,6 +31,7 @@ impl std::fmt::Display for FFIError {
             FFIError::Utf8(err) => write!(f, "{err}"),
             FFIError::Logger(err) => write!(f, "{err}"),
             FFIError::OpenTelemetry(err) => write!(f, "{err}"),
+            FFIError::Serialization(err) => write!(f, "{err}"),
         }
     }
 }

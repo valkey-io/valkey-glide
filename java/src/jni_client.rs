@@ -564,7 +564,7 @@ fn create_direct_byte_buffer<'local>(
     env: &mut JNIEnv<'local>,
     value: ServerValue,
 ) -> Result<JObject<'local>, crate::errors::FFIError> {
-    let serialized = serialize_to_dbb(value);
+    let serialized = serialize_to_dbb(value)?;
     let (id, ptr, len) = register_native_buffer(serialized);
     let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
     let obj: JObject = bb.into();
@@ -573,13 +573,14 @@ fn create_direct_byte_buffer<'local>(
     Ok(out)
 }
 
-/// Maximum recursion depth for DBB serialization to prevent stack overflow.
-const MAX_SERIALIZATION_DEPTH: usize = 100;
+/// Maximum recursion depth for DBB serialization.
+/// Real Valkey responses nest at most 4-5 levels; exceeding 16 indicates a bug.
+const MAX_SERIALIZATION_DEPTH: usize = 16;
 
-fn serialize_to_dbb(value: ServerValue) -> Vec<u8> {
+fn serialize_to_dbb(value: ServerValue) -> Result<Vec<u8>, crate::errors::FFIError> {
     let mut bytes = Vec::new();
-    serialize_value(&value, &mut bytes, 0);
-    bytes
+    serialize_value(&value, &mut bytes, 0)?;
+    Ok(bytes)
 }
 
 fn register_buffer_cleaner<'local>(
@@ -607,11 +608,16 @@ fn register_buffer_cleaner<'local>(
 }
 
 #[inline]
-fn serialize_value(value: &ServerValue, bytes: &mut Vec<u8>, depth: usize) {
-    assert!(
-        depth <= MAX_SERIALIZATION_DEPTH,
-        "DBB serialization exceeded max recursion depth: {MAX_SERIALIZATION_DEPTH}"
-    );
+fn serialize_value(
+    value: &ServerValue,
+    bytes: &mut Vec<u8>,
+    depth: usize,
+) -> Result<(), crate::errors::FFIError> {
+    if depth > MAX_SERIALIZATION_DEPTH {
+        return Err(crate::errors::FFIError::Serialization(format!(
+            "DBB serialization exceeded max depth {MAX_SERIALIZATION_DEPTH} - this indicates a bug"
+        )));
+    }
     match value {
         redis::Value::Nil => bytes.push(dbb::NIL),
         redis::Value::Boolean(b) => bytes.push(if *b { dbb::BOOL_TRUE } else { dbb::BOOL_FALSE }),
@@ -643,22 +649,22 @@ fn serialize_value(value: &ServerValue, bytes: &mut Vec<u8>, depth: usize) {
             bytes.push(dbb::ARRAY);
             bytes.extend_from_slice(&(arr.len() as u32).to_be_bytes());
             for elem in arr {
-                serialize_value(elem, bytes, depth + 1);
+                serialize_value(elem, bytes, depth + 1)?;
             }
         }
         redis::Value::Map(map) => {
             bytes.push(dbb::MAP);
             bytes.extend_from_slice(&(map.len() as u32).to_be_bytes());
             for (k, v) in map {
-                serialize_value(k, bytes, depth + 1);
-                serialize_value(v, bytes, depth + 1);
+                serialize_value(k, bytes, depth + 1)?;
+                serialize_value(v, bytes, depth + 1)?;
             }
         }
         redis::Value::Set(set) => {
             bytes.push(dbb::SET);
             bytes.extend_from_slice(&(set.len() as u32).to_be_bytes());
             for elem in set {
-                serialize_value(elem, bytes, depth + 1);
+                serialize_value(elem, bytes, depth + 1)?;
             }
         }
         redis::Value::VerbatimString { text, .. } => {
@@ -675,6 +681,7 @@ fn serialize_value(value: &ServerValue, bytes: &mut Vec<u8>, depth: usize) {
         }
         _ => unreachable!("dbb_size should filter unsupported types"),
     }
+    Ok(())
 }
 
 pub fn get_optional_string_param_raw(env: &mut JNIEnv, param: jstring) -> Option<String> {

@@ -720,8 +720,11 @@ public class CommandManager {
         return builder.build();
     }
 
-    /** Maximum recursion depth for nested structure deserialization to prevent stack overflow. */
-    private static final int MAX_RECURSION_DEPTH = 100;
+    /**
+     * Maximum recursion depth for DBB deserialization. Real Valkey responses nest at most 4-5 levels;
+     * exceeding 16 indicates a bug.
+     */
+    private static final int MAX_RECURSION_DEPTH = 16;
 
     /**
      * Deserialize a ByteBuffer containing a serialized array back to Object[]. This handles
@@ -768,7 +771,9 @@ public class CommandManager {
     private Object deserializeValue(ByteBuffer buffer, boolean expectUtf8Response, int depth) {
         if (depth > MAX_RECURSION_DEPTH) {
             throw new GlideException(
-                    "DBB deserialization exceeded max recursion depth: " + MAX_RECURSION_DEPTH);
+                    "DBB deserialization exceeded max depth "
+                            + MAX_RECURSION_DEPTH
+                            + " - this indicates a bug");
         }
         if (buffer.remaining() < 1) {
             throw new GlideException("DBB buffer underflow: no marker byte");
