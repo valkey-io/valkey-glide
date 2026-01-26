@@ -58,6 +58,12 @@ utils/TestUtils.js
 generated/
 protoc-*.zip
 
+# compiled binaries
+*.dylib
+*.so
+*.dll
+
+
 # docs
 docs/markdown/node/**
 docs/site/**
