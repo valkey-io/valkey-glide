@@ -12,6 +12,7 @@ on:
             - .github/workflows/install-engine/action.yml
             - .github/json_matrices/**
             - .github/workflows/create-test-matrices/action.yml
+            - python/glide-async/pyproject.toml
     push:
         tags:
             - "v*.*"
