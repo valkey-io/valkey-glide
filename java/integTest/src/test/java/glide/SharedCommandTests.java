@@ -5,6 +5,7 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
+import static glide.TestUtilities.isWindows;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
@@ -17606,8 +17607,14 @@ public class SharedCommandTests {
         long timeout = 1000L;
 
         // assert that wait returns 0 under standalone and 1 under cluster mode.
+        long clientReplicas = client instanceof GlideClient ? 0 : 1;
+        // TODO: Remove isWindows when replica issues is fixed
+        // https://github.com/valkey-io/valkey-glide/issues/5210
+        if (isWindows()) {
+            clientReplicas = 0;
+        }
         assertEquals(OK, client.set(key, "value").get());
-        assertTrue(client.wait(numreplicas, timeout).get() >= (client instanceof GlideClient ? 0 : 1));
+        assertTrue(client.wait(numreplicas, timeout).get() >= clientReplicas);
 
         // command should fail on a negative timeout value
         ExecutionException executionException =
@@ -17626,9 +17633,15 @@ public class SharedCommandTests {
                         ? GlideClient.createClient(commonClientConfig().build()).get()
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
+            long clientReplicas = client instanceof GlideClient ? 0 : 1;
+            // TODO: Remove isWindows when replica issues is fixed
+            // https://github.com/valkey-io/valkey-glide/issues/5210
+            if (isWindows()) {
+                clientReplicas = 0;
+            }
             // ensure that commands do not time out, even if timeout > request timeout
             assertEquals(OK, testClient.set(key, "value").get());
-            assertEquals((client instanceof GlideClient ? 0 : 1), testClient.wait(1L, 1000L).get());
+            assertEquals(clientReplicas, testClient.wait(1L, 1000L).get());
 
             // with 0 timeout (no timeout) wait should block indefinitely,
             // but we wrap the test with timeout to avoid test failing or being stuck forever
