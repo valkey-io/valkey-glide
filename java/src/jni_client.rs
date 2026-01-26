@@ -573,9 +573,12 @@ fn create_direct_byte_buffer<'local>(
     Ok(out)
 }
 
+/// Maximum recursion depth for DBB serialization to prevent stack overflow.
+const MAX_SERIALIZATION_DEPTH: usize = 100;
+
 fn serialize_to_dbb(value: ServerValue) -> Vec<u8> {
     let mut bytes = Vec::new();
-    serialize_value(&value, &mut bytes);
+    serialize_value(&value, &mut bytes, 0);
     bytes
 }
 
@@ -604,7 +607,11 @@ fn register_buffer_cleaner<'local>(
 }
 
 #[inline]
-fn serialize_value(value: &ServerValue, bytes: &mut Vec<u8>) {
+fn serialize_value(value: &ServerValue, bytes: &mut Vec<u8>, depth: usize) {
+    assert!(
+        depth <= MAX_SERIALIZATION_DEPTH,
+        "DBB serialization exceeded max recursion depth: {MAX_SERIALIZATION_DEPTH}"
+    );
     match value {
         redis::Value::Nil => bytes.push(dbb::NIL),
         redis::Value::Boolean(b) => bytes.push(if *b { dbb::BOOL_TRUE } else { dbb::BOOL_FALSE }),
@@ -636,22 +643,22 @@ fn serialize_value(value: &ServerValue, bytes: &mut Vec<u8>) {
             bytes.push(dbb::ARRAY);
             bytes.extend_from_slice(&(arr.len() as u32).to_be_bytes());
             for elem in arr {
-                serialize_value(elem, bytes);
+                serialize_value(elem, bytes, depth + 1);
             }
         }
         redis::Value::Map(map) => {
             bytes.push(dbb::MAP);
             bytes.extend_from_slice(&(map.len() as u32).to_be_bytes());
             for (k, v) in map {
-                serialize_value(k, bytes);
-                serialize_value(v, bytes);
+                serialize_value(k, bytes, depth + 1);
+                serialize_value(v, bytes, depth + 1);
             }
         }
         redis::Value::Set(set) => {
             bytes.push(dbb::SET);
             bytes.extend_from_slice(&(set.len() as u32).to_be_bytes());
             for elem in set {
-                serialize_value(elem, bytes);
+                serialize_value(elem, bytes, depth + 1);
             }
         }
         redis::Value::VerbatimString { text, .. } => {

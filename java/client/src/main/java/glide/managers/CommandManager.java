@@ -55,21 +55,21 @@ public class CommandManager {
 
     /** Type markers for Direct Byte Buffer serialization format. */
     private enum DbbMarker {
-        NIL('_'),
-        BOOL_TRUE('t'),
-        BOOL_FALSE('f'),
-        DOUBLE(','),
-        INT(':'),
-        BULK_STRING('$'),
-        SIMPLE_STRING('+'),
-        ARRAY('*'),
-        MAP('%'),
-        SET('~');
+        NIL((byte) '_'),
+        BOOL_TRUE((byte) 't'),
+        BOOL_FALSE((byte) 'f'),
+        DOUBLE((byte) ','),
+        INT((byte) ':'),
+        BULK_STRING((byte) '$'),
+        SIMPLE_STRING((byte) '+'),
+        ARRAY((byte) '*'),
+        MAP((byte) '%'),
+        SET((byte) '~');
 
         final byte value;
 
-        DbbMarker(char c) {
-            this.value = (byte) c;
+        DbbMarker(byte value) {
+            this.value = value;
         }
     }
 
@@ -816,13 +816,12 @@ public class CommandManager {
                 throw new GlideException(
                         "DBB buffer underflow: expected " + len + " bytes, have " + buffer.remaining());
             }
+            String s = BufferUtils.decodeUtf8(buffer, len);
+            String normalized = s.equalsIgnoreCase("ok") ? "OK" : s;
             if (expectUtf8Response) {
-                String s = BufferUtils.decodeUtf8(buffer, len);
-                return s.equalsIgnoreCase("ok") ? "OK" : s;
+                return normalized;
             }
-            byte[] data = new byte[len];
-            buffer.get(data);
-            return glide.api.models.GlideString.gs(data);
+            return glide.api.models.GlideString.gs(normalized);
         } else if (m == DbbMarker.ARRAY.value) {
             if (buffer.remaining() < 4) {
                 throw new GlideException("DBB buffer underflow: expected 4 bytes for count");
