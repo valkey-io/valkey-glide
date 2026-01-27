@@ -55,21 +55,21 @@ jobs:
               run: |
 
                   # For testing, Filter entries with pypi in PACKAGE_MANAGERS
+                  # AND exclude self-hosted runners (which become persistent)
                   export TESTS_PLATFORM_MATRIX=$(jq 'map(
-                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"])))
+                      select(
+                          .PACKAGE_MANAGERS != null and 
+                          (.PACKAGE_MANAGERS | contains(["pypi"])) and
+                          (
+                              (.RUNNER | type == "string") or
+                              ((.RUNNER | type == "array") and (.RUNNER | contains(["self-hosted"]) | not))
+                          )
+                      )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "TESTS_PLATFORM_MATRIX=${TESTS_PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
-                  # For building and publishing, replace "ephemeral" with "persistent" in RUNNER
-                  export PLATFORM_MATRIX=$(echo "${TESTS_PLATFORM_MATRIX}" | jq 'map(
-                      .RUNNER = (
-                          if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
-                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
-                          end
-                      )
-                  )' | jq -c .)
-                  echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+                  # For PR testing, just use the same matrix (no persistent runners needed)
+                  echo "PLATFORM_MATRIX=${TESTS_PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     start-self-hosted-runner:
         if: github.repository_owner == 'valkey-io'
@@ -188,6 +188,30 @@ jobs:
                   target: ${{ matrix.build.TARGET }}
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Install protoc 3.20.3
+              run: |
+                  PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+                  ARCH=$(uname -m)
+                  if [[ "$ARCH" == "x86_64" ]]; then
+                    PROTOC_ARCH="x86_64"
+                  elif [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
+                    PROTOC_ARCH="aarch_64"
+                  fi
+                  
+                  # Download and install protoc 3.20.3
+                  curl -LO "$PB_REL/download/v3.20.3/protoc-3.20.3-linux-${PROTOC_ARCH}.zip"
+                  sudo unzip -o protoc-3.20.3-linux-${PROTOC_ARCH}.zip -d /usr/local
+
+                  # Add to PATH (prepend so it takes priority)
+                  echo "/usr/local/bin" >> $GITHUB_PATH
+
+                  # Verify
+                  /usr/local/bin/protoc --version
+                  
+                  # Verify version
+                  which protoc
+                  protoc --version
 
             - name: Generate protobuf files
               working-directory: ./python
@@ -403,7 +427,6 @@ jobs:
             ### UPLOAD WHEELS ###
 
             - name: Upload Python Async client wheels
-              if: github.event_name != 'pull_request'
               uses: actions/upload-artifact@v4
               with:
                   name: wheels-${{ matrix.build.TARGET }}-async
