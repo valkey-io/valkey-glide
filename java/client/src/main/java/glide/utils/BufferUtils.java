@@ -28,17 +28,9 @@ public final class BufferUtils {
         if (length == 0) {
             return "";
         }
-
-        // Save current limit and set temporary limit for decoding
-        int savedLimit = buffer.limit();
-        try {
-            buffer.limit(buffer.position() + length);
-            // decode() automatically advances the position
-            return StandardCharsets.UTF_8.decode(buffer).toString();
-        } finally {
-            // Always restore the original limit
-            buffer.limit(savedLimit);
-        }
+        byte[] bytes = new byte[length];
+        buffer.get(bytes);
+        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     /**
@@ -49,9 +41,12 @@ public final class BufferUtils {
      * @throws java.nio.charset.CharacterCodingException if the bytes are not valid UTF-8
      */
     public static String decodeUtf8(ByteBuffer buffer) {
-        if (buffer.remaining() == 0) {
+        int length = buffer.remaining();
+        if (length == 0) {
             return "";
         }
-        return StandardCharsets.UTF_8.decode(buffer).toString();
+        byte[] bytes = new byte[length];
+        buffer.get(bytes);
+        return new String(bytes, StandardCharsets.UTF_8);
     }
 }
