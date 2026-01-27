@@ -14,8 +14,8 @@ crate-type = ["cdylib"]
 redis = { path = "../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 glide-core = { path = "../../glide-core", features = ["socket-layer"] }
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread"] }
-napi = { version = "2", default-features = false, features = ["napi8"] }
-napi-derive = "2"
+napi = { version = "3.5", default-features = false, features = ["napi8"] }
+napi-derive = "3.5"
 logger_core = { path = "../../logger_core" }
 byteorder = "1"
 bytes = "1"
