@@ -3357,7 +3357,13 @@ struct InitialNodeConnectionsResult<C> {
 }
 
 /// Returns connections found for randomly selected initial nodes, along with addresses
-/// that need refresh and a hint if topology change was detected.
+/// that need to be refreshed.
+///
+/// # Retry Logic
+/// If no connections are found, this function will:
+/// 1. Trigger a connection refresh for the missing addresses
+/// 2. Wait for the refresh to complete (with timeout)
+/// 3. Retry the lookup for the missing addresses
 async fn get_random_connections_from_initial_nodes<C>(
     inner: &Core<C>,
     num_of_nodes_to_query: usize,
@@ -3387,10 +3393,38 @@ where
     let mut addresses_needing_refresh = HashSet::new();
 
     for (original_addr, socket_addr) in selected_pairs {
-        match lookup_management_connection(inner, &original_addr, socket_addr.map(|s| s.ip())) {
+        match lookup_management_connection(inner, &original_addr, socket_addr) {
             ConnectionLookupResult::Found(conn) => connections.push(conn),
             ConnectionLookupResult::NeedsConnectionRefresh(addr) => {
                 addresses_needing_refresh.insert(addr);
+            }
+        }
+    }
+
+    // Only refresh and retry if we have no connections at all
+    if connections.is_empty() && !addresses_needing_refresh.is_empty() {
+        let connection_timeout = inner.get_cluster_param(|p| p.connection_timeout)?;
+
+        // Wait for connection refresh to complete (with timeout)
+        let _ = tokio::time::timeout(
+            connection_timeout,
+            ClusterConnInner::refresh_and_update_connections(
+                inner.clone(),
+                addresses_needing_refresh.clone(),
+                RefreshConnectionType::OnlyManagementConnection,
+                true,
+            ),
+        )
+        .await;
+
+        // Retry lookup for addresses that needed refresh
+        let addrs_to_retry: Vec<_> = addresses_needing_refresh.iter().cloned().collect();
+        for addr in addrs_to_retry {
+            if let ConnectionLookupResult::Found(conn) =
+                lookup_management_connection(inner, &addr, None)
+            {
+                connections.push(conn);
+                addresses_needing_refresh.remove(&addr);
             }
         }
     }
@@ -3413,10 +3447,9 @@ enum ConnectionLookupResult<C> {
 /// Finds a management connection for a node or indicates it needs refresh.
 /// Returns the management connection if available, otherwise falls back to user connection.
 ///
-/// # Arguments
 /// The `original_addr` may be provided by the user either as a hostname (DNS) or as a direct IP address.
 /// When a hostname is provided, we attempt to resolve it to an IP;
-/// if resolution succeeds, the result is passed as `resolved_ip`.
+/// if resolution succeeds, the result is passed as `socket_addr`.
 ///
 /// # Lookup Logic
 /// Resolve the node's canonical name from the slot map. The canonical name is the node's
@@ -3424,8 +3457,9 @@ enum ConnectionLookupResult<C> {
 /// be provided as an IP but stored as a DNS name.
 ///
 /// 1. Check if `original_addr` exists in the slot map as the canonical address (O(1))
-/// 2. If not, search if `resolved_ip` maps to a canonical address in the slot map (O(n))
-/// 3. If still not found, fall back to using `original_addr` as the canonical address
+/// 2. If not, search if `socket_addr` maps to a canonical address in the slot map (O(n))
+/// 3. If not found, fall back to using `socket_addr` as string (if available)
+/// 4. If still not found, fall back to using `original_addr` as the canonical address
 ///
 /// Then attempt to retrieve the connection for the canonical address from the connection map, or
 /// indicate that this address needs to be refreshed.
@@ -3436,7 +3470,7 @@ enum ConnectionLookupResult<C> {
 fn lookup_management_connection<C>(
     inner: &Core<C>,
     original_addr: &str,
-    resolved_ip: Option<IpAddr>,
+    socket_addr: Option<SocketAddr>,
 ) -> ConnectionLookupResult<C>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
@@ -3454,13 +3488,14 @@ where
         {
             original_addr.to_string()
         } else {
-            resolved_ip
+            socket_addr
                 .and_then(|ip| {
                     conn_lock
                         .slot_map
-                        .node_address_for_ip(ip)
+                        .node_address_for_ip(ip.ip())
                         .map(|a| (*a).clone())
                 })
+                .or_else(|| socket_addr.map(|ip| ip.to_string()))
                 .unwrap_or_else(|| original_addr.to_string())
         };
 
