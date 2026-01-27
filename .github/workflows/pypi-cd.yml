@@ -189,34 +189,56 @@ jobs:
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Install protoc 3.20.3
+            - name: Install protoc 3.20.0
               run: |
                   PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+                  
+                  OS=$(uname -s)
                   ARCH=$(uname -m)
+                  
+                  # Determine OS prefix
+                  if [[ "$OS" == "Linux" ]]; then
+                    OS_PREFIX="linux"
+                  elif [[ "$OS" == "Darwin" ]]; then
+                    OS_PREFIX="osx"
+                  else
+                    echo "Unsupported OS: $OS"
+                    exit 1
+                  fi
+                  
+                  # Determine architecture
                   if [[ "$ARCH" == "x86_64" ]]; then
                     PROTOC_ARCH="x86_64"
                   elif [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
                     PROTOC_ARCH="aarch_64"
+                  else
+                    echo "Unsupported architecture: $ARCH"
+                    exit 1
                   fi
                   
-                  # Download and install protoc 3.20.3
-                  curl -LO "$PB_REL/download/v3.20.3/protoc-3.20.3-linux-${PROTOC_ARCH}.zip"
-                  sudo unzip -o protoc-3.20.3-linux-${PROTOC_ARCH}.zip -d /usr/local
-
-                  # Add to PATH (prepend so it takes priority)
-                  echo "/usr/local/bin" >> $GITHUB_PATH
-
-                  # Verify
-                  /usr/local/bin/protoc --version
+                  # Use 3.20.0 (has all platform binaries including osx-aarch_64)
+                  PROTOC_ZIP="protoc-3.20.0-${OS_PREFIX}-${PROTOC_ARCH}.zip"
+                  echo "Downloading: $PROTOC_ZIP"
                   
-                  # Verify version
-                  which protoc
-                  protoc --version
+                  curl -LO "$PB_REL/download/v3.20.0/$PROTOC_ZIP"
+                  
+                  # Install to a custom directory, not /usr/local
+                  sudo mkdir -p /opt/protoc
+                  sudo unzip -o "$PROTOC_ZIP" -d /opt/protoc
+                  
+                  # Add only the protoc bin directory to PATH
+                  echo "/opt/protoc/bin" >> $GITHUB_PATH
+                  
+                  /opt/protoc/bin/protoc --version
 
             - name: Generate protobuf files
               working-directory: ./python
               run: |
-                  python3 dev.py protobuf
+                    # Verify correct protoc is used
+                    which protoc
+                    protoc --version
+                    
+                    python3 dev.py protobuf
 
             - name: Include protobuf files in the package
               working-directory: ./python
@@ -434,7 +456,6 @@ jobs:
                   if-no-files-found: error
 
             - name: Upload Python Sync client wheels
-              if: github.event_name != 'pull_request'
               uses: actions/upload-artifact@v4
               with:
                   name: wheels-${{ matrix.build.TARGET }}-sync
@@ -569,7 +590,7 @@ jobs:
             - name: Set up Python
               uses: actions/setup-python@v5
               with:
-                  python-version: 3.12
+                  python-version: 3.14
 
             - name: Install engine
               uses: ./.github/workflows/install-engine
