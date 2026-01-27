@@ -2258,7 +2258,7 @@ where
 
         // Create/retrieve connections in for found nodes
         let connection_futures = addresses_and_connections.into_iter().map(|(addr, node)| {
-            let mut cluster_params = cluster_params.clone();
+            let cluster_params = cluster_params.clone();
             let glide_connection_options = glide_connection_options.clone();
             async move {
                 let result = get_or_create_conn(
