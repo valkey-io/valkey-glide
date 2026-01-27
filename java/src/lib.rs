@@ -1532,16 +1532,18 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                 }
             };
 
-            // Extract the batch from the command request
-            let batch = match &command_request.command {
+            // Extract optional root span pointer from the request (if provided by Java)
+            let root_span_ptr_opt = command_request.root_span_ptr;
+            let route = command_request.route.0.map(|r| *r);
+
+            // Extract the batch from the command request (take ownership to avoid clone)
+            let batch = match command_request.command {
                 Some(command_request::Command::Batch(batch)) => batch,
                 _ => {
                     log::error!("Expected batch command in request");
                     return Some(());
                 }
             };
-            // Extract optional root span pointer from the request (if provided by Java)
-            let root_span_ptr_opt = command_request.root_span_ptr;
 
             let handle_id = client_ptr as u64;
             let jvm = match env.get_java_vm() {
@@ -1551,10 +1553,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                     return Some(());
                 }
             };
-
-            // Spawn async task for batch execution using existing glide-core patterns
-            let batch_clone = batch.clone();
-            let route = command_request.route.0.map(|r| *r);
             let runtime = get_runtime();
             runtime.spawn(async move {
                 let client_result = ensure_client_for_handle(handle_id).await;
@@ -1575,13 +1573,13 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             }
                             // Create pipeline using existing FFI approach
                             let mut pipeline =
-                                redis::Pipeline::with_capacity(batch_clone.commands.len());
-                            if batch_clone.is_atomic {
+                                redis::Pipeline::with_capacity(batch.commands.len());
+                            if batch.is_atomic {
                                 pipeline.atomic();
                             }
 
                             // Add commands to pipeline using existing bridge logic
-                            for cmd in &batch_clone.commands {
+                            for cmd in &batch.commands {
                                 match protobuf_bridge::create_valkey_command(cmd) {
                                     Ok(valkey_cmd) => pipeline.add_command(valkey_cmd),
                                     Err(e) => {
@@ -1605,13 +1603,13 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                 })?;
 
                             // Execute using existing client methods
-                            let exec_res = if batch_clone.is_atomic {
+                            let exec_res = if batch.is_atomic {
                                 client
                                     .send_transaction(
                                         &pipeline,
                                         routing,
-                                        batch_clone.timeout,
-                                        batch_clone.raise_on_error.unwrap_or(true),
+                                        batch.timeout,
+                                        batch.raise_on_error.unwrap_or(true),
                                     )
                                     .await
                             } else {
@@ -1619,13 +1617,13 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                     .send_pipeline(
                                         &pipeline,
                                         routing,
-                                        batch_clone.raise_on_error.unwrap_or(true),
-                                        batch_clone.timeout,
+                                        batch.raise_on_error.unwrap_or(true),
+                                        batch.timeout,
                                         redis::PipelineRetryStrategy {
-                                            retry_server_error: batch_clone
+                                            retry_server_error: batch
                                                 .retry_server_error
                                                 .unwrap_or(false),
-                                            retry_connection_error: batch_clone
+                                            retry_connection_error: batch
                                                 .retry_connection_error
                                                 .unwrap_or(false),
                                         },

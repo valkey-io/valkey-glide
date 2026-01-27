@@ -3207,27 +3207,34 @@ where
             .get_cluster_param(|params| params.retry_params.clone())
             .expect(MUTEX_READ_ERR);
         let mut poll_flush_action = PollFlushAction::None;
-        let mut pending_requests_guard = self.inner.pending_requests.lock().unwrap();
-        if !pending_requests_guard.is_empty() {
-            let mut pending_requests = mem::take(&mut *pending_requests_guard);
-            for request in pending_requests.drain(..) {
-                // Drop the request if none is waiting for a response to free up resources for
-                // requests callers care about (load shedding). It will be ambiguous whether the
-                // request actually goes through regardless.
-                if request.sender.is_closed() {
-                    continue;
-                }
+        let mut pending_requests = {
+            let mut guard = self.inner.pending_requests.lock().expect(MUTEX_WRITE_ERR);
+            mem::take(&mut *guard)
+        };
 
-                let future = Self::try_request(request.info.clone(), self.inner.clone()).boxed();
-                self.in_flight_requests.push(Box::pin(Request {
-                    retry_params: retry_params.clone(),
-                    request: Some(request),
-                    future: RequestState::Future { future },
-                }));
+        for request in pending_requests.drain(..) {
+            // Drop the request if none is waiting for a response to free up resources for
+            // requests callers care about (load shedding). It will be ambiguous whether the
+            // request actually goes through regardless.
+            if request.sender.is_closed() {
+                continue;
             }
-            *pending_requests_guard = pending_requests;
+
+            let future = Self::try_request(request.info.clone(), self.inner.clone()).boxed();
+            self.in_flight_requests.push(Box::pin(Request {
+                retry_params: retry_params.clone(),
+                request: Some(request),
+                future: RequestState::Future { future },
+            }));
         }
-        drop(pending_requests_guard);
+
+        // Preserve capacity
+        {
+            let mut guard = self.inner.pending_requests.lock().expect(MUTEX_WRITE_ERR);
+            if guard.is_empty() {
+                *guard = pending_requests;
+            }
+        }
 
         loop {
             let retry_params = retry_params.clone();
