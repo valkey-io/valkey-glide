@@ -120,7 +120,7 @@ def create_sync_client(
     client_name: Optional[str] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
     request_timeout: Optional[int] = 1000,
-    connection_timeout: Optional[int] = None,  # Defaults to 2000ms
+    connection_timeout: Optional[int] = 10000,  # 10 seconds for test client creation
     cluster_mode_pubsub: Optional[
         GlideClusterClientConfiguration.PubSubSubscriptions
     ] = None,

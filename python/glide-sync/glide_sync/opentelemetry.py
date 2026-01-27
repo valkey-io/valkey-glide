@@ -1,7 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 """
-OpenTelemetry singleton for async client.
+OpenTelemetry singleton for sync client.
 
 See glide_shared.opentelemetry module documentation for configuration details.
 """
@@ -9,48 +9,15 @@ See glide_shared.opentelemetry module documentation for configuration details.
 import random
 from typing import Optional
 
-from glide.glide import OpenTelemetryConfig as PyO3OpenTelemetryConfig
-from glide.glide import OpenTelemetryMetricsConfig as PyO3OpenTelemetryMetricsConfig
-from glide.glide import OpenTelemetryTracesConfig as PyO3OpenTelemetryTracesConfig
-from glide.glide import (
-    init_opentelemetry,
-)
 from glide_shared.exceptions import ConfigurationError
-from glide_shared.opentelemetry import (  # noqa: F401 - Re-exported for public API
+from glide_shared.opentelemetry import (  # noqa: F401
     OpenTelemetryConfig,
     OpenTelemetryMetricsConfig,
     OpenTelemetryTracesConfig,
 )
 
+from ._glide_ffi import GlideFFI
 from .logger import Level, Logger
-
-
-def _convert_to_pyo3_config(config: OpenTelemetryConfig) -> PyO3OpenTelemetryConfig:
-    """
-    Convert shared OpenTelemetryConfig to PyO3 OpenTelemetryConfig for Rust FFI.
-
-    Args:
-        config: Shared OpenTelemetryConfig instance
-
-    Returns:
-        PyO3OpenTelemetryConfig: PyO3-compatible config for Rust
-    """
-    pyo3_traces = None
-    if config.traces:
-        pyo3_traces = PyO3OpenTelemetryTracesConfig(
-            endpoint=config.traces.endpoint,
-            sample_percentage=config.traces.sample_percentage,
-        )
-
-    pyo3_metrics = None
-    if config.metrics:
-        pyo3_metrics = PyO3OpenTelemetryMetricsConfig(endpoint=config.metrics.endpoint)
-
-    return PyO3OpenTelemetryConfig(
-        traces=pyo3_traces,
-        metrics=pyo3_metrics,
-        flush_interval_ms=config.flush_interval_ms,
-    )
 
 
 class OpenTelemetry:
@@ -62,7 +29,7 @@ class OpenTelemetry:
 
     Example usage:
         ```python
-        from glide import OpenTelemetry, OpenTelemetryConfig, OpenTelemetryTracesConfig, OpenTelemetryMetricsConfig
+        from glide_sync import OpenTelemetry, OpenTelemetryConfig, OpenTelemetryTracesConfig, OpenTelemetryMetricsConfig
 
         OpenTelemetry.init(OpenTelemetryConfig(
             traces=OpenTelemetryTracesConfig(
@@ -99,9 +66,48 @@ class OpenTelemetry:
         """
         if not cls._instance:
             cls._config = config
-            # Convert shared config to PyO3 config and initialize
-            pyo3_config = _convert_to_pyo3_config(config)
-            init_opentelemetry(pyo3_config)
+            ffi = GlideFFI.ffi
+            lib = GlideFFI.lib
+
+            # Build FFI config struct - keep string references alive
+            traces_ptr = ffi.NULL
+            traces_endpoint_cstr = None
+            if config.traces:
+                traces_endpoint_cstr = ffi.new(
+                    "char[]", config.traces.endpoint.encode()
+                )
+                traces_config = ffi.new("OpenTelemetryTracesConfig*")
+                traces_config.endpoint = traces_endpoint_cstr
+                traces_config.has_sample_percentage = True
+                traces_config.sample_percentage = config.traces.sample_percentage
+                traces_ptr = traces_config
+
+            metrics_ptr = ffi.NULL
+            metrics_endpoint_cstr = None
+            if config.metrics:
+                metrics_endpoint_cstr = ffi.new(
+                    "char[]", config.metrics.endpoint.encode()
+                )
+                metrics_config = ffi.new("OpenTelemetryMetricsConfig*")
+                metrics_config.endpoint = metrics_endpoint_cstr
+                metrics_ptr = metrics_config
+
+            otel_config = ffi.new("OpenTelemetryConfig*")
+            otel_config.traces = traces_ptr
+            otel_config.metrics = metrics_ptr
+            otel_config.has_flush_interval_ms = config.flush_interval_ms is not None
+            otel_config.flush_interval_ms = (
+                config.flush_interval_ms if config.flush_interval_ms else 0
+            )
+
+            error = lib.init_open_telemetry(otel_config)
+            if error != ffi.NULL:
+                error_msg = ffi.string(error).decode()
+                lib.free_c_string(error)
+                raise ConfigurationError(
+                    f"Failed to initialize OpenTelemetry: {error_msg}"
+                )
+
             cls._instance = OpenTelemetry()
             Logger.log(
                 Level.INFO,
