@@ -3521,6 +3521,9 @@ public class CommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     public void scriptKill_unkillable(GlideClusterClient clusterClient) {
+        // Ensure no script is blocking the cluster from a previous test
+        waitForNotBusy(clusterClient::scriptKill);
+
         String key = UUID.randomUUID().toString();
         RequestRoutingConfiguration.Route route =
                 new RequestRoutingConfiguration.SlotKeyRoute(key, PRIMARY);
