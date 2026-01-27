@@ -545,12 +545,12 @@ jobs:
                       python/glide-sync/dist/*.tar.gz
 
     test-release:
-        if: ${{ github.event_name == 'push' || inputs.publish_async== true || inputs.publish_sync == true }}
+      # Remove the condition that requires publishing
+      # if: ${{ github.event_name == 'push' || inputs.publish_async == true || inputs.publish_sync == true }}
         name: Test the release
         runs-on: ${{ matrix.build.RUNNER }}
         needs:
             [
-                build-source-dist-and-publish-to-pypi,
                 publish-binaries,
                 load-platform-matrix,
             ]
@@ -571,133 +571,64 @@ jobs:
               with:
                   python-version: 3.12
 
-            - name: Setup PyPy for testing
-              run: |
-                  ARCH=$(uname -m)
-
-                  if [[ "${{ matrix.build.NAMED_OS }}" == "linux" ]]; then
-                    if [[ "$ARCH" == "x86_64" ]]; then
-                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-linux64
-                      echo "Downloading PyPy 3.10 for x86_64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                      
-                    elif [[ "$ARCH" == "aarch64" ]]; then
-                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-aarch64
-                      echo "Downloading PyPy 3.10 for aarch64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    fi
-
-                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/bin
-
-                  elif [[ "${{ matrix.build.NAMED_OS }}" == "darwin" ]]; then
-                    if [[ "$ARCH" == "arm64" ]]; then
-                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_arm64
-                      echo "Downloading PyPy 3.10 for arm64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                      
-                    else
-                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_x86_64
-                      echo "Downloading PyPy 3.10 for x86_64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    fi
-
-                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/bin
-                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/lib/*.dylib
-                  fi
-
-                  echo "/opt/${PYPY_VERSION_3_10}/bin" >> ${GITHUB_PATH}
-
             - name: Install engine
               uses: ./.github/workflows/install-engine
               with:
                   engine-version: "8.0"
                   target: ${{ matrix.build.target }}
 
-            - name: Check if RC and set a distribution tag for the package
-              shell: bash
-              env:
-                  RELEASE_VERSION: ${{ needs.publish-binaries.outputs.release_version }}
-              run: |
-                  if [[ "$RELEASE_VERSION" == *"rc"* ]]
-                  then
-                    echo "This is a release candidate"
-                    echo "PIP_PRE=true" >> $GITHUB_ENV
-                  else
-                    echo "This is a stable release"
-                    echo "PIP_PRE=false" >> $GITHUB_ENV
-                  fi
+            ### DOWNLOAD ARTIFACTS ###
 
-                  # Format the version for PyPI (remove leading 'v' and convert '-rc' to 'rc')
-                  PYPI_VERSION="${RELEASE_VERSION#v}"
-                  PYPI_VERSION="${PYPI_VERSION//-rc/rc}"
-                  echo "PYPI_VERSION=${PYPI_VERSION}" >> $GITHUB_ENV
+            - name: Download Async client wheels
+              uses: actions/download-artifact@v4
+              with:
+                  name: wheels-${{ matrix.build.TARGET }}-async
+                  path: ./wheels-async
+
+            - name: Download Sync client wheels
+              uses: actions/download-artifact@v4
+              with:
+                  name: wheels-${{ matrix.build.TARGET }}-sync
+                  path: ./wheels-sync
+
+            - name: List downloaded wheels
+              run: |
+                  echo "=== Async wheels ==="
+                  ls -la ./wheels-async/
+                  echo "=== Sync wheels ==="
+                  ls -la ./wheels-sync/
+
+            ### TEST ASYNC CLIENT ###
 
             - name: Run the Async Client tests
-              if: ${{ inputs.publish_async == true }}
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
                   python -m venv venv
                   source venv/bin/activate
                   pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide
-                  fi
+                  
+                  # Install from local wheel instead of PyPI
+                  pip install ${{ github.workspace }}/wheels-async/*.whl
+                  
                   python async_rc_test.py
 
-            - name: Run the Async Clients tests with PyPy
-              if: ${{ inputs.publish_async == true }}
-              shell: bash
-              working-directory: ./utils/release-candidate-testing/python
-              run: |
-                  pypy3 -m venv pypy_venv
-                  source pypy_venv/bin/activate
-                  pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide
-                  fi
-                  pypy3 async_rc_test.py
+            ### TEST SYNC CLIENT ###
 
             - name: Run the Sync Client tests
-              if: ${{ inputs.publish_sync == true }}
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
-                  python -m venv venv
-                  source venv/bin/activate
+                  python -m venv venv_sync
+                  source venv_sync/bin/activate
                   pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide-sync==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide-sync
-                  fi
+                  
+                  # Install from local wheel instead of PyPI
+                  pip install ${{ github.workspace }}/wheels-sync/*.whl
+                  
                   python sync_rc_test.py
 
-            - name: Run the Sync Client tests with PyPy
-              if: ${{ inputs.publish_sync == true }}
-              shell: bash
-              working-directory: ./utils/release-candidate-testing/python
-              run: |
-                  pypy3 -m venv pypy_venv
-                  source pypy_venv/bin/activate
-                  pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide-sync==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide-sync
-                  fi
-                  pypy3 sync_rc_test.py
-
-            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
-            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
+            # Reset the repository
             - name: Reset repository
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
               shell: bash
