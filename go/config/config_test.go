@@ -244,6 +244,30 @@ func TestServerCredentialsWithIamCustomRefresh(t *testing.T) {
 	assert.Equal(t, uint32(600), *authInfo.IamCredentials.RefreshIntervalSeconds)
 }
 
+func TestServerCredentialsWithIamServerless(t *testing.T) {
+	iamConfig := NewIamAuthConfig("my-serverless-cache", ElastiCache, "us-east-1").
+		WithServerless(true)
+	creds, err := NewServerCredentialsWithIam("myUser", iamConfig)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, creds)
+
+	authInfo := creds.toProtobuf()
+	assert.Equal(t, "my-serverless-cache", authInfo.IamCredentials.ClusterName)
+	assert.True(t, authInfo.IamCredentials.IsServerless)
+}
+
+func TestServerCredentialsWithIamServerlessDefaultsFalse(t *testing.T) {
+	iamConfig := NewIamAuthConfig("my-cluster", ElastiCache, "us-east-1")
+	creds, err := NewServerCredentialsWithIam("myUser", iamConfig)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, creds)
+
+	authInfo := creds.toProtobuf()
+	assert.False(t, authInfo.IamCredentials.IsServerless)
+}
+
 func TestServerCredentialsWithIamRequiresUsername(t *testing.T) {
 	iamConfig := NewIamAuthConfig("my-cluster", ElastiCache, "us-east-1")
 	creds, err := NewServerCredentialsWithIam("", iamConfig)

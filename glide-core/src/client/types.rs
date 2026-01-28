@@ -90,6 +90,10 @@ pub struct IamAuthenticationConfig {
 
     /// Token refresh interval in seconds (1 second to 12 hours, default 14 minutes)
     pub refresh_interval_seconds: Option<u32>,
+
+    /// When true, adds ResourceType=ServerlessCache to the IAM signing URL.
+    /// Required for ElastiCache Serverless authentication.
+    pub is_serverless: bool,
 }
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -204,12 +208,14 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                     _ => ServiceType::ElastiCache,
                 };
                 let refresh_interval_seconds = iam_creds.refresh_interval_seconds;
+                let is_serverless = iam_creds.is_serverless;
 
                 IamAuthenticationConfig {
                     cluster_name,
                     region,
                     service_type,
                     refresh_interval_seconds,
+                    is_serverless,
                 }
             });
 

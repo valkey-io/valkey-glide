@@ -151,6 +151,9 @@ struct IamTokenState {
     refresh_interval_seconds: u32,
     /// Cached AWS credentials used to sign tokens (resolved once in `new()`).
     credentials: aws_credential_types::Credentials,
+    /// When true, adds ResourceType=ServerlessCache to the IAM signing URL.
+    /// Required for ElastiCache Serverless authentication.
+    is_serverless: bool,
 }
 
 /// IAM-based token manager for ElastiCache/MemoryDB.
@@ -200,6 +203,8 @@ impl IAMTokenManager {
     /// * `refresh_interval_seconds` - Optional refresh interval in seconds. Defaults to 5 minutes (300 seconds).
     ///   Maximum allowed is 12 hours (43200 seconds). Values above 15 minutes (900 seconds) will log a warning
     ///   about potential performance consequences.
+    /// * `is_serverless` - When true, adds ResourceType=ServerlessCache to the IAM signing URL.
+    ///   Required for ElastiCache Serverless authentication.
     /// * `token_refresh_callback` - Optional callback to be called when the token is refreshed
     pub async fn new(
         cluster_name: String,
@@ -207,6 +212,7 @@ impl IAMTokenManager {
         region: String,
         service_type: ServiceType,
         refresh_interval_seconds: Option<u32>,
+        is_serverless: bool,
         token_refresh_callback: Option<Arc<dyn Fn(String) + Send + Sync>>,
     ) -> Result<Self, GlideIAMError> {
         let validated_refresh_interval = validate_refresh_interval(refresh_interval_seconds)?;
@@ -220,6 +226,7 @@ impl IAMTokenManager {
             refresh_interval_seconds: validated_refresh_interval
                 .unwrap_or(DEFAULT_REFRESH_INTERVAL_SECONDS),
             credentials: creds,
+            is_serverless,
         };
 
         // Generate initial token using the state
@@ -400,7 +407,7 @@ impl IAMTokenManager {
         let service_name: &'static str = state.service_type.into();
         let signing_time = SystemTime::now();
         let hostname = state.cluster_name.clone();
-        let base_url = build_base_url(&hostname, &state.username);
+        let base_url = build_base_url(&hostname, &state.username, state.is_serverless);
         let identity_value = state.credentials.clone().into();
 
         let mut signing_settings = SigningSettings::default();
@@ -465,11 +472,19 @@ impl Drop for IAMTokenManager {
 }
 
 /// Build the presign base URL for the target host and user.
-fn build_base_url(hostname: &str, username: &str) -> String {
+/// When `is_serverless` is true, adds `ResourceType=ServerlessCache` parameter
+/// required for ElastiCache Serverless authentication.
+fn build_base_url(hostname: &str, username: &str, is_serverless: bool) -> String {
+    let serverless_param = if is_serverless {
+        "&ResourceType=ServerlessCache"
+    } else {
+        ""
+    };
     format!(
-        "https://{}/?Action=connect&User={}",
+        "https://{}/?Action=connect&User={}{}",
         hostname,
-        urlencoding::encode(username)
+        urlencoding::encode(username),
+        serverless_param
     )
 }
 
@@ -567,7 +582,32 @@ mod tests {
             service_type,
             refresh_interval_seconds: DEFAULT_REFRESH_INTERVAL_SECONDS,
             credentials,
+            is_serverless: false,
         }
+    }
+
+    #[test]
+    fn test_build_base_url_standard() {
+        let url = build_base_url("my-cluster.cache.amazonaws.com", "my-user", false);
+        assert_eq!(
+            url,
+            "https://my-cluster.cache.amazonaws.com/?Action=connect&User=my-user"
+        );
+    }
+
+    #[test]
+    fn test_build_base_url_serverless() {
+        let url = build_base_url("my-serverless-cache.cache.amazonaws.com", "my-user", true);
+        assert_eq!(
+            url,
+            "https://my-serverless-cache.cache.amazonaws.com/?Action=connect&User=my-user&ResourceType=ServerlessCache"
+        );
+    }
+
+    #[test]
+    fn test_build_base_url_encodes_username() {
+        let url = build_base_url("cluster", "user@domain.com", false);
+        assert!(url.contains("User=user%40domain.com"));
     }
 
     /// Helper function to create a test callback that logs when invoked
@@ -605,6 +645,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             Some(2), // 2 second refresh interval for fast testing
+            false,
             Some(callback),
         )
         .await
@@ -661,6 +702,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             None,
+            false,
             Some(callback),
         )
         .await
@@ -699,6 +741,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
+            false,
             Some(callback),
         )
         .await;
@@ -743,6 +786,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             None,
+            false,
             Some(callback),
         )
         .await
@@ -777,6 +821,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
+            false,
             Some(callback),
         )
         .await
@@ -838,6 +883,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             Some(1), // 1 minute refresh interval for faster testing
+            false,
             Some(callback),
         )
         .await
@@ -884,6 +930,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 Some(interval),
+                false,
                 Some(create_test_callback()),
             )
             .await;
@@ -903,6 +950,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 Some(interval),
+                false,
                 Some(create_test_callback()),
             )
             .await;
@@ -946,6 +994,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             Some(REFRESH_TIME_SECONDS),
+            false,
             Some(create_test_callback()),
         )
         .await
@@ -1030,5 +1079,113 @@ mod tests {
         }
 
         // Stop the refresh task
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_serverless_token_contains_resource_type() {
+        initialize_test_environment();
+        setup_test_credentials();
+
+        let cluster_name = "my-serverless-cache".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+
+        let callback = Arc::new(move |_token: String| {
+            log_info("Serverless token callback invoked!", "");
+        });
+
+        // Create IAM token manager with is_serverless = true
+        let manager = IAMTokenManager::new(
+            cluster_name.clone(),
+            username.clone(),
+            region.clone(),
+            ServiceType::ElastiCache,
+            None,
+            true, // is_serverless = true
+            Some(callback),
+        )
+        .await
+        .unwrap();
+
+        let token = manager.get_token().await;
+
+        // Verify the token contains the ResourceType=ServerlessCache parameter
+        assert!(
+            token.contains("ResourceType=ServerlessCache"),
+            "Serverless token should contain ResourceType=ServerlessCache, got: {}",
+            token
+        );
+
+        // Verify other standard token components are present
+        assert!(
+            token.starts_with(&format!("{}/", cluster_name)),
+            "Token should start with cluster name"
+        );
+        assert!(
+            token.contains("Action=connect"),
+            "Token should contain Action=connect"
+        );
+        assert!(
+            token.contains("X-Amz-Signature="),
+            "Token should contain X-Amz-Signature parameter"
+        );
+
+        log_info(
+            "Serverless token test completed successfully!",
+            format!("Token contains ResourceType=ServerlessCache"),
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_standard_token_does_not_contain_resource_type() {
+        initialize_test_environment();
+        setup_test_credentials();
+
+        let cluster_name = "my-standard-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+
+        let callback = Arc::new(move |_token: String| {
+            log_info("Standard token callback invoked!", "");
+        });
+
+        // Create IAM token manager with is_serverless = false (default)
+        let manager = IAMTokenManager::new(
+            cluster_name.clone(),
+            username.clone(),
+            region.clone(),
+            ServiceType::ElastiCache,
+            None,
+            false, // is_serverless = false
+            Some(callback),
+        )
+        .await
+        .unwrap();
+
+        let token = manager.get_token().await;
+
+        // Verify the token does NOT contain the ResourceType=ServerlessCache parameter
+        assert!(
+            !token.contains("ResourceType=ServerlessCache"),
+            "Standard token should NOT contain ResourceType=ServerlessCache, got: {}",
+            token
+        );
+
+        // Verify other standard token components are present
+        assert!(
+            token.starts_with(&format!("{}/", cluster_name)),
+            "Token should start with cluster name"
+        );
+        assert!(
+            token.contains("Action=connect"),
+            "Token should contain Action=connect"
+        );
+
+        log_info(
+            "Standard token test completed successfully!",
+            "Token does not contain ResourceType=ServerlessCache",
+        );
     }
 }

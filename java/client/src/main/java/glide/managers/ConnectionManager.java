@@ -227,6 +227,9 @@ public class ConnectionManager {
                                     iamBuilder.setRefreshIntervalSeconds(iamConfig.getRefreshIntervalSeconds());
                                 }
 
+                                // Set serverless flag for ElastiCache Serverless
+                                iamBuilder.setIsServerless(iamConfig.isServerless());
+
                                 authBuilder.setIamCredentials(iamBuilder.build());
                             }
                             requestBuilder.setAuthenticationInfo(authBuilder.build());
