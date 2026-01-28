@@ -88,7 +88,7 @@
         "@jest/globals": "29",
         "@types/jest": "29",
         "@types/minimist": "1",
-        "@types/node": "24",
+        "@types/node": "25",
         "@types/semver": "7",
         "@types/uuid": "11",
         "find-free-port": "2",
