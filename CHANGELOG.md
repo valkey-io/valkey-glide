@@ -357,6 +357,7 @@
 
 #### Changes
 
+* Java: Cladded Client API for retrieving internal statistics ([#2672](https://github.com/valkey-io/valkey-glide/pull/2672))
 * Node: Client API for retrieving internal statistics ([#2727](https://github.com/valkey-io/valkey-glide/pull/2727))
 * Python: Client API for retrieving internal statistics ([#2707](https://github.com/valkey-io/valkey-glide/pull/2707))
 * Node, Python, Java: Adding support for replacing connection configured password ([#2651](https://github.com/valkey-io/valkey-glide/pull/2651), [#2659](https://github.com/valkey-io/valkey-glide/pull/2659), [#2677](https://github.com/valkey-io/valkey-glide/pull/2677))
