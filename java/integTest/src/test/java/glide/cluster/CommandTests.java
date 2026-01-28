@@ -16,6 +16,7 @@ import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getFirstKeyFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
+import static glide.TestUtilities.isWindows;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.TestUtilities.waitForNotBusy;
 import static glide.api.BaseClient.OK;
@@ -1235,14 +1236,21 @@ public class CommandTests {
             assertEquals(OK, clusterClient.flushall(route).get());
         } else {
             // command should fail on a replica, because it is read-only
-            ExecutionException executionException =
-                    assertThrows(ExecutionException.class, () -> clusterClient.flushall(replicaRoute).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(
-                    executionException
-                            .getMessage()
-                            .toLowerCase()
-                            .contains("can't write against a read only replica"));
+            // On Windows testing the replicas are being set to 0, for now we will skip this
+            // part of the test
+            // TODO: Remove isWindows when replica issues is fixed
+            // https://github.com/valkey-io/valkey-glide/issues/5210
+            if (!isWindows()) {
+                ExecutionException executionException =
+                        assertThrows(
+                                ExecutionException.class, () -> clusterClient.flushall(replicaRoute).get());
+                assertInstanceOf(RequestException.class, executionException.getCause());
+                assertTrue(
+                        executionException
+                                .getMessage()
+                                .toLowerCase()
+                                .contains("can't write against a read only replica"));
+            }
         }
     }
 
@@ -1829,6 +1837,9 @@ public class CommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     public void fcall_readonly_function(GlideClusterClient clusterClient) {
+        // TODO: Remove the skip after fixing Windows Replicas issues
+        // https://github.com/valkey-io/valkey-glide/issues/5210
+        assumeTrue(!isWindows(), "Skip on Windows");
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "fcall_readonly_function_" + UUID.randomUUID().toString().replace("-", "_");
@@ -3449,6 +3460,7 @@ public class CommandTests {
         // Test with ASYNC mode
         clusterClient.invokeScript(script, ALL_PRIMARIES).get();
         assertEquals(OK, clusterClient.scriptFlush(FlushMode.ASYNC, ALL_PRIMARIES).get());
+
         result = clusterClient.scriptExists(new String[] {script.getHash()}, ALL_PRIMARIES).get();
         assertArrayEquals(new Boolean[] {false}, result);
         script.close();
