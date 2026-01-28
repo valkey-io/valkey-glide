@@ -1165,6 +1165,7 @@ impl Client {
                     iam_config.region.clone(),
                     iam_config.service_type,
                     iam_config.refresh_interval_seconds,
+                    iam_config.is_serverless,
                     Some(std::sync::Arc::new(iam_callback)),
                 )
                 .await
