@@ -701,6 +701,60 @@ public class ConnectionTests {
     }
 
     @Test
+    public void testPeriodicChecksDefault() {
+        // Test that periodicChecks defaults to ENABLED_DEFAULT_CONFIGS when not specified
+        AdvancedGlideClusterClientConfiguration config =
+                AdvancedGlideClusterClientConfiguration.builder().build();
+        assertEquals(PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS, config.getPeriodicChecks());
+    }
+
+    @Test
+    public void testPeriodicChecksDisabled() {
+        // Test that periodicChecks can be set to DISABLED
+        AdvancedGlideClusterClientConfiguration config =
+                AdvancedGlideClusterClientConfiguration.builder()
+                        .periodicChecks(PeriodicChecksStatus.DISABLED)
+                        .build();
+        assertEquals(PeriodicChecksStatus.DISABLED, config.getPeriodicChecks());
+    }
+
+    @Test
+    public void testPeriodicChecksEnabledExplicitly() {
+        // Test that periodicChecks can be explicitly set to ENABLED_DEFAULT_CONFIGS
+        AdvancedGlideClusterClientConfiguration config =
+                AdvancedGlideClusterClientConfiguration.builder()
+                        .periodicChecks(PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS)
+                        .build();
+        assertEquals(PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS, config.getPeriodicChecks());
+    }
+
+    @Test
+    public void testPeriodicChecksManualInterval() {
+        // Test that periodicChecks can be set to a manual interval
+        int durationInSec = 30;
+        PeriodicChecksManualInterval manualInterval =
+                PeriodicChecksManualInterval.builder().durationInSec(durationInSec).build();
+
+        AdvancedGlideClusterClientConfiguration config =
+                AdvancedGlideClusterClientConfiguration.builder().periodicChecks(manualInterval).build();
+
+        assertInstanceOf(PeriodicChecksManualInterval.class, config.getPeriodicChecks());
+        assertEquals(
+                durationInSec,
+                ((PeriodicChecksManualInterval) config.getPeriodicChecks()).getDurationInSec());
+    }
+
+    @Test
+    public void testPeriodicChecksManualIntervalValue() {
+        // Test that PeriodicChecksManualInterval stores the correct duration value
+        int durationInSec = 60;
+        PeriodicChecksManualInterval manualInterval =
+                PeriodicChecksManualInterval.builder().durationInSec(durationInSec).build();
+
+        assertEquals(durationInSec, manualInterval.getDurationInSec());
+    }
+
+    @Test
     public void test_tcp_nodelay_default_value() {
         // Verify default is null (not set)
         var standaloneConfig = AdvancedGlideClientConfiguration.builder().build();
