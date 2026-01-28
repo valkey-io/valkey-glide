@@ -161,31 +161,28 @@ jobs:
                   # Determine gradle command based on OS
                   if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
                     GRADLE_CMD="./gradlew.bat"
-                    # TODO: Remove -x :integTest:test when Windows integration tests are implemented
-                    EXTRA_ARGS="-x :integTest:test"
                   else
                     GRADLE_CMD="./gradlew"
-                    EXTRA_ARGS=""
                   fi
 
                   if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
                     # Build and publish client first
                     $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
-                    -Ptarget=${{ matrix.host.TARGET }} $EXTRA_ARGS
+                    -Ptarget=${{ matrix.host.TARGET }}
                     
                     # Then build jedis-compatibility
                     $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
-                    -Ptarget=${{ matrix.host.TARGET }} $EXTRA_ARGS
+                    -Ptarget=${{ matrix.host.TARGET }}
                   else
                     # Build and publish client first
                     $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
-                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} $EXTRA_ARGS
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
                     
                     # Then build jedis-compatibility
                     $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
-                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} $EXTRA_ARGS
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
                   fi
 
             - name: Bundle JAR
@@ -317,9 +314,6 @@ jobs:
                 exclude:
                     - host:
                           TARGET: aarch64-unknown-linux-musl
-                    # TODO: Remove Windows exclusion when Windows integration tests are implemented
-                    - host:
-                          OS: windows
         runs-on: ${{ matrix.host.test-runner || matrix.host.runner }}
         container:
             image: ${{ matrix.host.IMAGE || ''}}

@@ -68,13 +68,14 @@ runs:
           run: |
               yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
-        - name: Install software dependencies for Windows
-          shell: pwsh
-          if: "${{ inputs.os == 'windows' }}"
-          run: |
-              # Verify Rust toolchain is available
-              rustc --version
-              cargo --version
+        - name: Setup WSL (Windows only)
+          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
+          uses: Vampire/setup-wsl@v6
+          with:
+              distribution: Ubuntu-22.04
+              use-cache: true
+              update: true
+              additional-packages: python3 python3-pip build-essential git pkg-config libssl-dev
 
         - name: Setup Python for Windows
           if: "${{ inputs.os == 'windows' }}"
@@ -90,8 +91,7 @@ runs:
               github-token: ${{ inputs.github-token }}
 
         - name: Install engine
-          # TODO: Remove Windows exclusion when Windows integration tests are implemented
-          if: "${{ inputs.engine-version && inputs.os != 'windows' }}"
+          if: "${{ inputs.engine-version }}"
           uses: ./.github/workflows/install-engine
           with:
               engine-version: ${{ inputs.engine-version }}

@@ -54,6 +54,15 @@ public class TestUtilities {
     private static final String REDIS_VERSION_KEY = "redis_version";
 
     /**
+     * Checks if the current operating system is Windows.
+     *
+     * @return true if running on Windows, false otherwise
+     */
+    public static boolean isWindows() {
+        return System.getProperty("os.name").toLowerCase().contains("windows");
+    }
+
+    /**
      * Creates a Glide client for testing purposes
      *
      * @param addresses Optional list of node addresses
@@ -221,7 +230,14 @@ public class TestUtilities {
             azClusterClientConfig() {
         var builder = GlideClusterClientConfiguration.builder();
         for (var host : AZ_CLUSTER_HOSTS) {
+            if (host.isEmpty()) {
+                continue;
+            }
             var parts = host.split(":");
+            if (parts.length < 2) {
+                throw new IllegalArgumentException(
+                        "Invalid host format: " + host + ". Expected format: host:port");
+            }
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }

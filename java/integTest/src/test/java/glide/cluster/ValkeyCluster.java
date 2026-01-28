@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
+import static glide.TestUtilities.isWindows;
+
 import glide.api.models.configuration.NodeAddress;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -19,6 +21,37 @@ public class ValkeyCluster implements AutoCloseable {
                     .getParent()
                     .resolve("utils")
                     .resolve("cluster_manager.py");
+
+    private static String getScriptPath() {
+        if (!isWindows()) {
+            return SCRIPT_FILE.toString();
+        }
+
+        // Use wslpath to convert Windows path to WSL format
+        try {
+            ProcessBuilder pb =
+                    new ProcessBuilder("wsl", "wslpath", "-u", "\"" + SCRIPT_FILE.toString() + "\"");
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader =
+                    new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line);
+                }
+            }
+
+            if (process.waitFor(5, TimeUnit.SECONDS) && process.exitValue() == 0) {
+                return output.toString().trim();
+            }
+        } catch (IOException | InterruptedException e) {
+            // Fall back to original path if wslpath fails
+        }
+
+        return SCRIPT_FILE.toString();
+    }
 
     private boolean tls = false;
     private String clusterFolder;
@@ -48,8 +81,11 @@ public class ValkeyCluster implements AutoCloseable {
         } else {
             this.tls = tls;
             List<String> command = new ArrayList<>();
+            if (isWindows()) {
+                command.add("wsl");
+            }
             command.add("python3");
-            command.add(SCRIPT_FILE.toString());
+            command.add(getScriptPath());
 
             if (tls) {
                 command.add("--tls");
@@ -173,8 +209,11 @@ public class ValkeyCluster implements AutoCloseable {
     public void close() throws IOException {
         if (clusterFolder != null && !clusterFolder.isEmpty()) {
             List<String> command = new ArrayList<>();
+            if (isWindows()) {
+                command.add("wsl");
+            }
             command.add("python3");
-            command.add(SCRIPT_FILE.toString());
+            command.add(getScriptPath());
 
             if (tls) {
                 command.add("--tls");
@@ -208,7 +247,7 @@ public class ValkeyCluster implements AutoCloseable {
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                throw new IOException("Interrupted while waiting for cluster shutdown", e);
+                throw new IOException("Interrupted while stopping cluster", e);
             }
         }
     }
