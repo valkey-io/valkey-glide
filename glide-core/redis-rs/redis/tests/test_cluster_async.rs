@@ -4307,10 +4307,9 @@ mod cluster_async {
             let completed = completed.clone();
             move |cmd: &[u8], _| {
                 respond_startup_two_nodes(name, cmd)?;
-                // Error twice with io-error, ensure connection is reestablished w/out calling
-                // other node (i.e., not doing a full slot rebuild)
+                // Use TypeError which has NoRetry behavior
                 completed.fetch_add(1, Ordering::SeqCst);
-                Err(Err((ErrorKind::ReadOnly, "").into()))
+                Err(Err((ErrorKind::TypeError, "").into()))
             }
         });
 
@@ -4323,11 +4322,94 @@ mod cluster_async {
         match value {
             Ok(_) => panic!("result should be an error"),
             Err(e) => match e.kind() {
-                ErrorKind::ReadOnly => {}
-                _ => panic!("Expected ReadOnly but got {:?}", e.kind()),
+                ErrorKind::TypeError => {}
+                _ => panic!("Expected TypeError but got {:?}", e.kind()),
             },
         }
         assert_eq!(completed.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_readonly_error_should_refresh_slots_and_retry() {
+        let name = "test_async_cluster_readonly_error_should_refresh_slots_and_retry";
+        let requests = Arc::new(AtomicI32::new(0));
+        let MockEnv {
+            async_connection: mut connection,
+            handler: _handler,
+            runtime,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            {
+                let requests = requests.clone();
+                move |cmd: &[u8], _| {
+                    respond_startup_two_nodes(name, cmd)?;
+                    let count = requests.fetch_add(1, Ordering::SeqCst);
+                    match count {
+                        // First request fails with ReadOnly (simulating failover)
+                        0 => Err(Err((
+                            ErrorKind::ReadOnly,
+                            "READONLY You can't write against a read only replica",
+                        )
+                            .into())),
+                        // After slot refresh, retry succeeds
+                        _ => Err(Ok(Value::BulkString(b"123".to_vec()))),
+                    }
+                }
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+
+        assert_eq!(value, Ok(Some(123)));
+        assert!(
+            requests.load(Ordering::SeqCst) >= 2,
+            "Should have retried after ReadOnly error"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_readonly_error_exhausts_retries() {
+        let name = "test_async_cluster_readonly_error_exhausts_retries";
+        let requests = Arc::new(AtomicI32::new(0));
+        let MockEnv {
+            async_connection: mut connection,
+            handler: _handler,
+            runtime,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(2),
+            name,
+            {
+                let requests = requests.clone();
+                move |cmd: &[u8], _| {
+                    respond_startup_two_nodes(name, cmd)?;
+                    requests.fetch_add(1, Ordering::SeqCst);
+                    // Always return ReadOnly to exhaust retries
+                    Err(Err((ErrorKind::ReadOnly, "READONLY").into()))
+                }
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+
+        match value {
+            Ok(_) => panic!("result should be an error"),
+            Err(e) => assert_eq!(e.kind(), ErrorKind::ReadOnly),
+        }
+        // Initial attempt + 2 retries = 3 total
+        assert_eq!(requests.load(Ordering::SeqCst), 3);
     }
 
     #[test]

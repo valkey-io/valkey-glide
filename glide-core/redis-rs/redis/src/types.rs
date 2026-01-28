@@ -879,6 +879,7 @@ pub(crate) enum RetryMethod {
     AskRedirect,
     MovedRedirect,
     WaitAndRetryOnPrimaryRedirectOnReplica,
+    RefreshSlotsAndRetry,
 }
 
 /// Indicates a general failure in the library.
@@ -1045,6 +1046,7 @@ impl RedisError {
             RetryMethod::AskRedirect => false,
             RetryMethod::MovedRedirect => false,
             RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica => false,
+            RetryMethod::RefreshSlotsAndRetry => false,
         }
     }
 
@@ -1124,7 +1126,7 @@ impl RedisError {
             ErrorKind::BusyLoadingError => RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica,
 
             ErrorKind::ResponseError => RetryMethod::NoRetry,
-            ErrorKind::ReadOnly => RetryMethod::NoRetry,
+            ErrorKind::ReadOnly => RetryMethod::RefreshSlotsAndRetry,
             ErrorKind::ExtensionError => RetryMethod::NoRetry,
             ErrorKind::ExecAbortError => RetryMethod::NoRetry,
             ErrorKind::TypeError => RetryMethod::NoRetry,
