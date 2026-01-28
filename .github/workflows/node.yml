@@ -120,11 +120,11 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            # Setup Node.js
-            - name: Setup Node
+            # Setup Node 20 for building (required by @napi-rs/cli v3 dependencies)
+            - name: Setup Node for Build
               uses: actions/setup-node@v5
               with:
-                  node-version: ${{ matrix.node }}
+                  node-version: 20.x
 
             - uses: actions/cache@v4
               with:
@@ -142,6 +142,12 @@ jobs:
               run: |
                   npm install
                   npm run build:release
+
+            # Switch to matrix Node version for testing
+            - name: Setup Node for Test
+              uses: actions/setup-node@v5
+              with:
+                  node-version: ${{ matrix.node }}
 
             - name: Test
               shell: bash
@@ -353,10 +359,11 @@ jobs:
                   which cargo || echo "Cargo still not found in PATH"
                   echo "Current PATH: $PATH"
 
-            - name: Setup Node
+            # Setup Node 20 for building (required by @napi-rs/cli v3 dependencies)
+            - name: Setup Node for Build
               uses: actions/setup-node@v5
               with:
-                  node-version: ${{ matrix.node }}
+                  node-version: 20.x
 
             - uses: actions/cache@v4
               with:
@@ -366,7 +373,7 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-node
                   restore-keys: ${{ matrix.host.IMAGE }}
 
-            - name: Build and Test
+            - name: Build
               working-directory: ./node
               env:
                   PATH: ${{ env.PATH }}:/root/.cargo/bin:/home/ubuntu/.cargo/bin
@@ -388,7 +395,16 @@ jobs:
                   rustc --version || echo "rustc command failed"
 
                   npm run build
-                  npm run test
+
+            # Switch to matrix Node version for testing
+            - name: Setup Node for Test
+              uses: actions/setup-node@v5
+              with:
+                  node-version: ${{ matrix.node }}
+
+            - name: Test
+              working-directory: ./node
+              run: npm run test
 
             - name: Sanitize IMAGE variable
               # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
