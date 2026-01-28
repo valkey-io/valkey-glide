@@ -1844,10 +1844,10 @@ public class CommandTests {
 
         // Wait for function to replicate to replica, retrying if needed
         ExecutionException fcallReplicaException = null;
-        for (int i = 0; i < 5 && fcallReplicaException == null; i++) {
+        for (int i = 0; i < 10 && fcallReplicaException == null; i++) {
             try {
                 clusterClient.fcall(funcName, replicaRoute).get();
-                Thread.sleep(500); // Function not yet on replica, wait and retry
+                Thread.sleep(100); // Function not yet on replica, wait and retry
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof RequestException
                         && e.getMessage().toLowerCase().contains("readonly")) {
@@ -1858,7 +1858,7 @@ public class CommandTests {
         assertNotNull(fcallReplicaException, "Expected readonly error from replica");
 
         // fcall_ro also fails on replica
-        var fcallReadOnlyReplicaException =
+        ExecutionException fcallReadOnlyReplicaException =
                 assertThrows(
                         ExecutionException.class,
                         () -> clusterClient.fcallReadOnly(funcName, replicaRoute).get());
@@ -1866,7 +1866,7 @@ public class CommandTests {
         assertTrue(fcallReadOnlyReplicaException.getMessage().toLowerCase().contains("readonly"));
 
         // fcall_ro also fails to run it even on primary - another error
-        var fcallReadOnlyPrimaryException =
+        ExecutionException fcallReadOnlyPrimaryException =
                 assertThrows(
                         ExecutionException.class,
                         () -> clusterClient.fcallReadOnly(funcName, primaryRoute).get());
