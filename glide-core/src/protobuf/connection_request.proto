@@ -36,6 +36,9 @@ message IamCredentials {
     string region = 2;
     ServiceType service_type = 3;
     optional uint32 refresh_interval_seconds = 4;
+    // When true, adds ResourceType=ServerlessCache to the IAM signing URL.
+    // Required for ElastiCache Serverless authentication.
+    bool is_serverless = 5;
 }
 
 enum ProtocolVersion {

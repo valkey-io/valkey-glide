@@ -551,6 +551,11 @@ export interface IamAuthConfig {
      * If not provided, defaults to 300 seconds (5 min).
      */
     refreshIntervalSeconds?: number;
+    /**
+     * When true, adds ResourceType=ServerlessCache to the IAM signing URL.
+     * Required for ElastiCache Serverless authentication. Defaults to false.
+     */
+    isServerless?: boolean;
 }
 
 /** Represents the credentials for connecting to a server. */
@@ -9159,6 +9164,7 @@ export class BaseClient {
                         // leave undefined if not provided (optional field)
                         refreshIntervalSeconds:
                             creds.iamConfig.refreshIntervalSeconds,
+                        isServerless: creds.iamConfig.isServerless ?? false,
                     },
                 );
 

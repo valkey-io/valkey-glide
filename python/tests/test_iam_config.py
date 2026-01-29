@@ -41,6 +41,28 @@ class TestIamAuthConfig:
 
         assert iam_config.refresh_interval_seconds == 600
 
+    def test_iam_auth_config_serverless(self):
+        """Test IAM config with serverless flag for ElastiCache Serverless."""
+        iam_config = IamAuthConfig(
+            cluster_name="my-serverless-cache",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            is_serverless=True,
+        )
+
+        assert iam_config.cluster_name == "my-serverless-cache"
+        assert iam_config.is_serverless is True
+
+    def test_iam_auth_config_serverless_defaults_to_false(self):
+        """Test that is_serverless defaults to False."""
+        iam_config = IamAuthConfig(
+            cluster_name="my-cluster",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+        )
+
+        assert iam_config.is_serverless is False
+
 
 class TestServerCredentialsWithIam:
     def test_server_credentials_with_iam(self):
