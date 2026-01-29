@@ -118,7 +118,7 @@
         "access": "public"
     },
     "engines": {
-        "node": ">=18"
+        "node": ">=16"
     },
     "napi": {
         "binaryName": "valkey-glide",

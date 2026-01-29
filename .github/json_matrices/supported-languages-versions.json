@@ -11,8 +11,8 @@
     },
     {
         "language": "node",
-        "versions": ["16.x", "20.x", "22.x", "23.x"],
-        "always-run-versions": ["20.x", "23.x"]
+        "versions": ["16.x", "20.x", "22.x", "24.x"],
+        "always-run-versions": ["20.x", "24.x"]
     },
     {
         "language": "go",
