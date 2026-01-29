@@ -163,7 +163,8 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         CommandRequest.Builder command = prepareCommandRequest(batch, raiseOnError, options);
         boolean expectUtf8Response = !batch.isBinaryOutput();
-        return submitBatchToJni(command, responseHandler, expectUtf8Response);
+        Integer timeoutOverride = options.map(BaseBatchOptions::getTimeout).orElse(null);
+        return submitBatchToJni(command, responseHandler, expectUtf8Response, timeoutOverride);
     }
 
     /** Build a Script (by hash) request to send to Valkey. */
@@ -302,7 +303,8 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         CommandRequest.Builder command = prepareCommandRequest(batch, raiseOnError, options);
         boolean expectUtf8Response = !batch.isBinaryOutput();
-        return submitBatchToJni(command, responseHandler, expectUtf8Response);
+        Integer timeoutOverride = options.map(BaseBatchOptions::getTimeout).orElse(null);
+        return submitBatchToJni(command, responseHandler, expectUtf8Response, timeoutOverride);
     }
 
     private static byte[][] toByteMatrix(List<GlideString> values) {
@@ -617,7 +619,8 @@ public class CommandManager {
     protected <T> CompletableFuture<T> submitBatchToJni(
             CommandRequest.Builder command,
             GlideExceptionCheckedFunction<Response, T> responseHandler,
-            boolean expectUtf8Response) {
+            boolean expectUtf8Response,
+            Integer timeoutOverrideMs) {
 
         if (!coreClient.isConnected()) {
             var errorFuture = new CompletableFuture<T>();
@@ -632,7 +635,7 @@ public class CommandManager {
 
             // Execute via JNI and convert response
             return coreClient
-                    .executeBatchAsync(requestBytes, expectUtf8Response)
+                    .executeBatchAsync(requestBytes, expectUtf8Response, timeoutOverrideMs)
                     .thenApply(result -> convertJniToProtobufResponse(result, expectUtf8Response))
                     .thenApply(responseHandler::apply)
                     .exceptionally(this::exceptionHandler);

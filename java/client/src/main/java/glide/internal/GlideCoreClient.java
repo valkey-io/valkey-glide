@@ -225,6 +225,11 @@ public class GlideCoreClient implements AutoCloseable {
      */
     public CompletableFuture<Object> executeBatchAsync(
             byte[] batchRequestBytes, boolean expectUtf8Response) {
+        return executeBatchAsync(batchRequestBytes, expectUtf8Response, null);
+    }
+
+    public CompletableFuture<Object> executeBatchAsync(
+            byte[] batchRequestBytes, boolean expectUtf8Response, Integer timeoutOverrideMs) {
         try {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
@@ -237,10 +242,12 @@ public class GlideCoreClient implements AutoCloseable {
             // Create future and register it with the async registry
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
+            long timeoutMs =
+                    timeoutOverrideMs != null && timeoutOverrideMs > 0
+                            ? timeoutOverrideMs
+                            : this.requestTimeoutMillis;
             try {
-                correlationId =
-                        AsyncRegistry.register(
-                                future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
+                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle, timeoutMs);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
