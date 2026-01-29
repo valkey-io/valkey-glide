@@ -116,21 +116,22 @@ public final class AsyncRegistry {
         // Store original future for completion by native code
         activeFutures.put(correlationId, originalFuture);
 
-        // Apply Java-side timeout if specified
-        // This allows immediate timeout detection without waiting for Rust callback
+        final long corrId = correlationId;
         if (timeoutMillis > 0) {
-            originalFuture.orTimeout(timeoutMillis, TimeUnit.MILLISECONDS);
+            CompletableFuture.delayedExecutor(timeoutMillis, TimeUnit.MILLISECONDS)
+                    .execute(
+                            () -> {
+                                if (originalFuture.completeExceptionally(
+                                        new glide.api.models.exceptions.TimeoutException("Request timed out"))) {
+                                    GlideNativeBridge.markTimedOut(corrId);
+                                }
+                            });
         }
 
         // Set up cleanup on the original future
         // This ensures proper resource cleanup when completed
-        final long corrId = correlationId;
         originalFuture.whenComplete(
                 (result, throwable) -> {
-                    if (throwable instanceof java.util.concurrent.TimeoutException) {
-                        GlideNativeBridge.markTimedOut(corrId);
-                    }
-
                     // Atomic cleanup - no race conditions
                     activeFutures.remove(corrId);
 
