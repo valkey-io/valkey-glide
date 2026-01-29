@@ -96,6 +96,7 @@ import static command_request.CommandRequestOuterClass.RequestType.LTrim;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
@@ -152,6 +153,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Touch;
 import static command_request.CommandRequestOuterClass.RequestType.Type;
 import static command_request.CommandRequestOuterClass.RequestType.Unlink;
 import static command_request.CommandRequestOuterClass.RequestType.Wait;
+import static command_request.CommandRequestOuterClass.RequestType.WaitAof;
 import static command_request.CommandRequestOuterClass.RequestType.Watch;
 import static command_request.CommandRequestOuterClass.RequestType.XAck;
 import static command_request.CommandRequestOuterClass.RequestType.XAdd;
@@ -254,6 +256,7 @@ import glide.api.models.commands.HashFieldExpirationConditionOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeQuery;
@@ -776,6 +779,30 @@ public abstract class BaseClient
     protected <V> Map<GlideString, V> handleBinaryStringMapOrNullResponse(Response response)
             throws GlideException {
         return handleValkeyResponse(Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+    }
+
+    /**
+     * @param response A Protobuf response
+     * @return A map of <code>String</code> to <code>String[]</code>
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<String, Object[]>
+    protected Map<String, String[]> handleMapOfArraysResponse(Response response)
+            throws GlideException {
+        Map<String, Object[]> mapResponse =
+                handleValkeyResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
+        return castMapOfArrays(mapResponse, String.class);
+    }
+
+    /**
+     * @param response A Protobuf response
+     * @return A map of <code>String</code> to <code>GlideString[]</code>
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<String, Object[]>
+    protected Map<String, GlideString[]> handleBinaryStringMapOfArraysResponse(Response response)
+            throws GlideException {
+        Map<String, Object[]> mapResponse =
+                handleValkeyResponse(Map.class, EnumSet.noneOf(ResponseFlags.class), response);
+        return castMapOfArrays(mapResponse, GlideString.class);
     }
 
     /**
@@ -6032,6 +6059,90 @@ public abstract class BaseClient
                 Wait,
                 new String[] {Long.toString(numreplicas), Long.toString(timeout)},
                 this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long[]> waitaof(long numlocal, long numreplicas, long timeout) {
+        return commandManager.submitNewCommand(
+                WaitAof,
+                new String[] {Long.toString(numlocal), Long.toString(numreplicas), Long.toString(timeout)},
+                response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost, long destinationPort, String key, long destinationDB, long timeout) {
+        return commandManager.submitNewCommand(
+                Migrate,
+                new String[] {
+                    destinationHost,
+                    Long.toString(destinationPort),
+                    key,
+                    Long.toString(destinationDB),
+                    Long.toString(timeout)
+                },
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            GlideString key,
+            long destinationDB,
+            long timeout) {
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(destinationPort)
+                        .add(key)
+                        .add(destinationDB)
+                        .add(timeout)
+                        .toArray(),
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            String key,
+            long destinationDB,
+            long timeout,
+            MigrateOptions migrateOptions) {
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(Long.toString(destinationPort))
+                        .add(key)
+                        .add(Long.toString(destinationDB))
+                        .add(Long.toString(timeout))
+                        .add(migrateOptions.toArgs())
+                        .toArray(),
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            GlideString key,
+            long destinationDB,
+            long timeout,
+            MigrateOptions migrateOptions) {
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(destinationPort)
+                        .add(key)
+                        .add(destinationDB)
+                        .add(timeout)
+                        .add(migrateOptions.toArgs())
+                        .toArray(),
+                this::handleStringResponse);
     }
 
     public CompletableFuture<String[]> aclCat() {
