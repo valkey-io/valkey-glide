@@ -19,6 +19,7 @@ import static command_request.CommandRequestOuterClass.RequestType.FunctionList;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
+import static command_request.CommandRequestOuterClass.RequestType.GetSubscriptions;
 import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
@@ -59,6 +60,7 @@ import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 import lombok.NonNull;
@@ -551,5 +553,51 @@ public class GlideClient extends BaseClient
             @NonNull GlideString cursor, @NonNull ScanOptions options) {
         GlideString[] arguments = new ArgsBuilder().add(cursor).add(options.toArgs()).toArray();
         return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponseBinary);
+    }
+
+    public CompletableFuture<StandaloneSubscriptionConfiguration.PubSubState> getSubscriptions() {
+        return commandManager.submitNewCommand(
+                GetSubscriptions,
+                new String[0],
+                response -> {
+                    Object[] parsed = (Object[]) parseSubscriptionState(response);
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object[]> desiredMap = (Map<String, Object[]>) parsed[0];
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object[]> actualMap = (Map<String, Object[]>) parsed[1];
+
+                    Map<StandaloneSubscriptionConfiguration.PubSubChannelMode, Set<String>> desired =
+                            new java.util.HashMap<>();
+                    Map<StandaloneSubscriptionConfiguration.PubSubChannelMode, Set<String>> actual =
+                            new java.util.HashMap<>();
+
+                    for (Map.Entry<String, Object[]> entry : desiredMap.entrySet()) {
+                        String key = entry.getKey();
+                        Set<String> values =
+                                java.util.Arrays.stream(entry.getValue())
+                                        .map(Object::toString)
+                                        .collect(java.util.stream.Collectors.toSet());
+                        if ("Exact".equals(key)) {
+                            desired.put(StandaloneSubscriptionConfiguration.PubSubChannelMode.EXACT, values);
+                        } else if ("Pattern".equals(key)) {
+                            desired.put(StandaloneSubscriptionConfiguration.PubSubChannelMode.PATTERN, values);
+                        }
+                    }
+
+                    for (Map.Entry<String, Object[]> entry : actualMap.entrySet()) {
+                        String key = entry.getKey();
+                        Set<String> values =
+                                java.util.Arrays.stream(entry.getValue())
+                                        .map(Object::toString)
+                                        .collect(java.util.stream.Collectors.toSet());
+                        if ("Exact".equals(key)) {
+                            actual.put(StandaloneSubscriptionConfiguration.PubSubChannelMode.EXACT, values);
+                        } else if ("Pattern".equals(key)) {
+                            actual.put(StandaloneSubscriptionConfiguration.PubSubChannelMode.PATTERN, values);
+                        }
+                    }
+
+                    return new StandaloneSubscriptionConfiguration.PubSubState(desired, actual);
+                });
     }
 }

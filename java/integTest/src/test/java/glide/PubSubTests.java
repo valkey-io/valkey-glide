@@ -1706,4 +1706,217 @@ public class PubSubTests {
                 listener,
                 MessageReadMethod.Callback);
     }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @SneakyThrows
+    public void dynamic_subscribe_lazy(boolean standalone) {
+        BaseClient listener = createClient(standalone);
+        BaseClient sender = createClient(standalone);
+
+        String channel = "test-channel-" + UUID.randomUUID();
+        String message = "test-message";
+
+        // Dynamic subscribe (lazy)
+        Set<String> channels = Set.of(channel);
+        if (standalone) {
+            ((GlideClient) listener).subscribe(channels).get();
+        } else {
+            ((GlideClusterClient) listener).subscribe(channels).get();
+        }
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Publish message
+        sender.publish(message, channel).get();
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Receive message
+        PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
+        assertEquals(message, msg.getMessage().getString());
+        assertEquals(channel, msg.getChannel().getString());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @SneakyThrows
+    public void dynamic_psubscribe_lazy(boolean standalone) {
+        BaseClient listener = createClient(standalone);
+        BaseClient sender = createClient(standalone);
+
+        String pattern = "test-pattern-*";
+        String channel = "test-pattern-" + UUID.randomUUID();
+        String message = "test-message";
+
+        // Dynamic psubscribe (lazy)
+        Set<String> patterns = Set.of(pattern);
+        if (standalone) {
+            ((GlideClient) listener).psubscribe(patterns).get();
+        } else {
+            ((GlideClusterClient) listener).psubscribe(patterns).get();
+        }
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Publish message
+        sender.publish(message, channel).get();
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Receive message
+        PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
+        assertEquals(message, msg.getMessage().getString());
+        assertEquals(channel, msg.getChannel().getString());
+        assertTrue(msg.getPattern().isPresent());
+        assertEquals(pattern, msg.getPattern().get().getString());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @SneakyThrows
+    public void dynamic_unsubscribe(boolean standalone) {
+        BaseClient listener = createClient(standalone);
+        BaseClient sender = createClient(standalone);
+
+        String channel = "test-channel-" + UUID.randomUUID();
+        String message = "test-message";
+
+        // Subscribe
+        Set<String> channels = Set.of(channel);
+        if (standalone) {
+            ((GlideClient) listener).subscribe(channels).get();
+        } else {
+            ((GlideClusterClient) listener).subscribe(channels).get();
+        }
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Unsubscribe
+        if (standalone) {
+            ((GlideClient) listener).unsubscribe(channels).get();
+        } else {
+            ((GlideClusterClient) listener).unsubscribe(channels).get();
+        }
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Publish message
+        sender.publish(message, channel).get();
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Should not receive message
+        PubSubMessage msg = listener.tryGetPubSubMessage();
+        assertNull(msg);
+    }
+
+    @Test
+    @SneakyThrows
+    public void dynamic_ssubscribe_lazy() {
+        GlideClusterClient listener = (GlideClusterClient) createClient(false);
+        GlideClusterClient sender = (GlideClusterClient) createClient(false);
+
+        String channel = "test-shard-channel-" + UUID.randomUUID();
+        String message = "test-message";
+
+        // Dynamic ssubscribe (lazy)
+        Set<String> channels = Set.of(channel);
+        listener.ssubscribe(channels).get();
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Publish message
+        sender.publish(message, channel, true).get();
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Receive message
+        PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
+        assertEquals(message, msg.getMessage().getString());
+        assertEquals(channel, msg.getChannel().getString());
+    }
+
+    @Test
+    @SneakyThrows
+    public void dynamic_sunsubscribe() {
+        GlideClusterClient listener = (GlideClusterClient) createClient(false);
+        GlideClusterClient sender = (GlideClusterClient) createClient(false);
+
+        String channel = "test-shard-channel-" + UUID.randomUUID();
+        String message = "test-message";
+
+        // Subscribe
+        Set<String> channels = Set.of(channel);
+        listener.ssubscribe(channels).get();
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Unsubscribe
+        listener.sunsubscribe(channels).get();
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Publish message
+        sender.publish(message, channel, true).get();
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Should not receive message
+        PubSubMessage msg = listener.tryGetPubSubMessage();
+        assertNull(msg);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @SneakyThrows
+    public void dynamic_unsubscribe_from_preconfigured(boolean standalone) {
+        String channel = "preconfigured-channel-" + UUID.randomUUID();
+        String message = "test-message";
+
+        // Create client with pre-configured subscription
+        BaseClient listener;
+        if (standalone) {
+            var subConfig =
+                    StandaloneSubscriptionConfiguration.builder()
+                            .subscription(PubSubChannelMode.EXACT, gs(channel))
+                            .build();
+            listener =
+                    GlideClient.createClient(
+                                    commonClientConfig()
+                                            .requestTimeout(5000)
+                                            .subscriptionConfiguration(subConfig)
+                                            .build())
+                            .get();
+        } else {
+            var subConfig =
+                    ClusterSubscriptionConfiguration.builder()
+                            .subscription(PubSubClusterChannelMode.EXACT, gs(channel))
+                            .build();
+            listener =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig()
+                                            .requestTimeout(5000)
+                                            .subscriptionConfiguration(subConfig)
+                                            .build())
+                            .get();
+        }
+
+        BaseClient sender = createClient(standalone);
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Verify subscription is active by receiving a message
+        sender.publish(message, channel).get();
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+        PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
+        assertEquals(message, msg.getMessage().getString());
+
+        // Now unsubscribe dynamically from the pre-configured subscription
+        Set<String> channels = Set.of(channel);
+        if (standalone) {
+            ((GlideClient) listener).unsubscribe(channels).get();
+        } else {
+            ((GlideClusterClient) listener).unsubscribe(channels).get();
+        }
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Publish another message
+        sender.publish(message + "-2", channel).get();
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Should not receive message
+        PubSubMessage msg2 = listener.tryGetPubSubMessage();
+        assertNull(msg2);
+
+        listener.close();
+        sender.close();
+    }
 }

@@ -21,6 +21,7 @@ import static command_request.CommandRequestOuterClass.RequestType.FunctionList;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
+import static command_request.CommandRequestOuterClass.RequestType.GetSubscriptions;
 import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
@@ -30,6 +31,10 @@ import static command_request.CommandRequestOuterClass.RequestType.PubSubShardCh
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
+import static command_request.CommandRequestOuterClass.RequestType.SSubscribe;
+import static command_request.CommandRequestOuterClass.RequestType.SSubscribeBlocking;
+import static command_request.CommandRequestOuterClass.RequestType.SUnsubscribe;
+import static command_request.CommandRequestOuterClass.RequestType.SUnsubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
@@ -84,6 +89,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -1464,5 +1470,96 @@ public class GlideClusterClient extends BaseClient
                 }
             }
         }
+    }
+
+    public CompletableFuture<Void> ssubscribe(Set<String> channels) {
+        return commandManager.submitNewCommand(
+                SSubscribe, channels.toArray(new String[0]), response -> null);
+    }
+
+    public CompletableFuture<Void> ssubscribe(Set<String> channels, int timeoutMs) {
+        String[] args = new String[channels.size() + 1];
+        int i = 0;
+        for (String channel : channels) {
+            args[i++] = channel;
+        }
+        args[i] = String.valueOf(timeoutMs);
+        return commandManager.submitNewCommand(SSubscribeBlocking, args, response -> null);
+    }
+
+    public CompletableFuture<Void> sunsubscribe() {
+        return commandManager.submitNewCommand(SUnsubscribe, new String[0], response -> null);
+    }
+
+    public CompletableFuture<Void> sunsubscribe(Set<String> channels) {
+        return commandManager.submitNewCommand(
+                SUnsubscribe, channels.toArray(new String[0]), response -> null);
+    }
+
+    public CompletableFuture<Void> sunsubscribe(Set<String> channels, int timeoutMs) {
+        String[] args = new String[channels.size() + 1];
+        int i = 0;
+        for (String channel : channels) {
+            args[i++] = channel;
+        }
+        args[i] = String.valueOf(timeoutMs);
+        return commandManager.submitNewCommand(SUnsubscribeBlocking, args, response -> null);
+    }
+
+    public CompletableFuture<Void> sunsubscribe(int timeoutMs) {
+        return commandManager.submitNewCommand(
+                SUnsubscribeBlocking, new String[] {String.valueOf(timeoutMs)}, response -> null);
+    }
+
+    public CompletableFuture<ClusterSubscriptionConfiguration.PubSubState> getSubscriptions() {
+        return commandManager.submitNewCommand(
+                GetSubscriptions,
+                new String[0],
+                response -> {
+                    Object[] parsed = (Object[]) parseSubscriptionState(response);
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object[]> desiredMap = (Map<String, Object[]>) parsed[0];
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object[]> actualMap = (Map<String, Object[]>) parsed[1];
+
+                    Map<ClusterSubscriptionConfiguration.PubSubClusterChannelMode, Set<String>> desired =
+                            new java.util.HashMap<>();
+                    Map<ClusterSubscriptionConfiguration.PubSubClusterChannelMode, Set<String>> actual =
+                            new java.util.HashMap<>();
+
+                    for (Map.Entry<String, Object[]> entry : desiredMap.entrySet()) {
+                        String key = entry.getKey();
+                        Set<String> values =
+                                java.util.Arrays.stream(entry.getValue())
+                                        .map(Object::toString)
+                                        .collect(java.util.stream.Collectors.toSet());
+                        if ("Exact".equals(key)) {
+                            desired.put(ClusterSubscriptionConfiguration.PubSubClusterChannelMode.EXACT, values);
+                        } else if ("Pattern".equals(key)) {
+                            desired.put(
+                                    ClusterSubscriptionConfiguration.PubSubClusterChannelMode.PATTERN, values);
+                        } else if ("Sharded".equals(key)) {
+                            desired.put(
+                                    ClusterSubscriptionConfiguration.PubSubClusterChannelMode.SHARDED, values);
+                        }
+                    }
+
+                    for (Map.Entry<String, Object[]> entry : actualMap.entrySet()) {
+                        String key = entry.getKey();
+                        Set<String> values =
+                                java.util.Arrays.stream(entry.getValue())
+                                        .map(Object::toString)
+                                        .collect(java.util.stream.Collectors.toSet());
+                        if ("Exact".equals(key)) {
+                            actual.put(ClusterSubscriptionConfiguration.PubSubClusterChannelMode.EXACT, values);
+                        } else if ("Pattern".equals(key)) {
+                            actual.put(ClusterSubscriptionConfiguration.PubSubClusterChannelMode.PATTERN, values);
+                        } else if ("Sharded".equals(key)) {
+                            actual.put(ClusterSubscriptionConfiguration.PubSubClusterChannelMode.SHARDED, values);
+                        }
+                    }
+
+                    return new ClusterSubscriptionConfiguration.PubSubState(desired, actual);
+                });
     }
 }
