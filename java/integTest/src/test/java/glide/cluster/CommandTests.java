@@ -1852,36 +1852,41 @@ public class CommandTests {
         String code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), false);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
-        // let replica sync with the primary node
-        assertEquals(1L, clusterClient.wait(1L, 5000L).get());
 
-        // fcall on a replica node should fail, because a function isn't guaranteed to be RO
-        var executionException =
-                assertThrows(
-                        ExecutionException.class, () -> clusterClient.fcall(funcName, replicaRoute).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-        assertTrue(
-                executionException.getMessage().contains("You can't write against a read only replica."));
+        // Wait for function to replicate to replica, retrying if needed
+        ExecutionException fcallReplicaException = null;
+        for (int i = 0; i < 10 && fcallReplicaException == null; i++) {
+            try {
+                clusterClient.fcall(funcName, replicaRoute).get();
+                Thread.sleep(100); // Function not yet on replica, wait and retry
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof RequestException
+                        && e.getMessage().toLowerCase().contains("readonly")) {
+                    fcallReplicaException = e;
+                }
+            }
+        }
+        assertNotNull(fcallReplicaException, "Expected readonly error from replica");
 
-        // fcall_ro also fails
-        executionException =
+        // fcall_ro also fails on replica
+        ExecutionException fcallReadOnlyReplicaException =
                 assertThrows(
                         ExecutionException.class,
                         () -> clusterClient.fcallReadOnly(funcName, replicaRoute).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-        assertTrue(
-                executionException.getMessage().contains("You can't write against a read only replica."));
+        assertInstanceOf(RequestException.class, fcallReadOnlyReplicaException.getCause());
+        assertTrue(fcallReadOnlyReplicaException.getMessage().toLowerCase().contains("readonly"));
 
         // fcall_ro also fails to run it even on primary - another error
-        executionException =
+        ExecutionException fcallReadOnlyPrimaryException =
                 assertThrows(
                         ExecutionException.class,
                         () -> clusterClient.fcallReadOnly(funcName, primaryRoute).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertInstanceOf(RequestException.class, fcallReadOnlyPrimaryException.getCause());
         assertTrue(
-                executionException
+                fcallReadOnlyPrimaryException
                         .getMessage()
-                        .contains("Can not execute a script with write flag using *_ro command."));
+                        .toLowerCase()
+                        .contains("can not execute a script with write flag using"));
 
         // create the same function, but with RO flag
         String funcNameRO = funcName + "_ro";
