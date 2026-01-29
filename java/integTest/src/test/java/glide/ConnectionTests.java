@@ -272,7 +272,14 @@ public class ConnectionTests {
         //  We expect the calls to be distributed evenly among the replicas
         long matchingEntries =
                 infoData.values().stream().filter(value -> value.contains(getCmdstat)).count();
-        assertEquals(4, matchingEntries);
+        // TODO: Remove the override after fixing Windows Replicas issues
+        // https://github.com/valkey-io/valkey-glide/issues/5210
+        long expectedReplicas = 4;
+        if (isWindows()) {
+            expectedReplicas = 0;
+        }
+
+        assertEquals(expectedReplicas, matchingEntries);
         azTestClient.close();
     }
 
@@ -438,6 +445,13 @@ public class ConnectionTests {
     @Test
     public void test_az_affinity_replicas_and_primary_prioritizes_replicas_over_primary() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
+        // Windows integration tests has replicas set to zero. This is set because of the resource
+        // limitation
+        // on Github Action using Windows runner with WSL, which is making the server with replicas hang
+        // and not be fully initialized
+        // TODO: Remove the skip after fixing Windows Replicas issues
+        // https://github.com/valkey-io/valkey-glide/issues/5210
+        assumeTrue(!isWindows(), "Skip on Windows");
 
         String clientAz = "us-east-1b"; // Client is in 1B
         String otherAz = "us-east-1a"; // Other nodes in 1A
@@ -698,6 +712,60 @@ public class ConnectionTests {
                         .refreshTopologyFromInitialNodes(false)
                         .build();
         assertFalse(config.isRefreshTopologyFromInitialNodes());
+    }
+
+    @Test
+    public void testPeriodicChecksDefault() {
+        // Test that periodicChecks defaults to ENABLED_DEFAULT_CONFIGS when not specified
+        AdvancedGlideClusterClientConfiguration config =
+                AdvancedGlideClusterClientConfiguration.builder().build();
+        assertEquals(PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS, config.getPeriodicChecks());
+    }
+
+    @Test
+    public void testPeriodicChecksDisabled() {
+        // Test that periodicChecks can be set to DISABLED
+        AdvancedGlideClusterClientConfiguration config =
+                AdvancedGlideClusterClientConfiguration.builder()
+                        .periodicChecks(PeriodicChecksStatus.DISABLED)
+                        .build();
+        assertEquals(PeriodicChecksStatus.DISABLED, config.getPeriodicChecks());
+    }
+
+    @Test
+    public void testPeriodicChecksEnabledExplicitly() {
+        // Test that periodicChecks can be explicitly set to ENABLED_DEFAULT_CONFIGS
+        AdvancedGlideClusterClientConfiguration config =
+                AdvancedGlideClusterClientConfiguration.builder()
+                        .periodicChecks(PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS)
+                        .build();
+        assertEquals(PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS, config.getPeriodicChecks());
+    }
+
+    @Test
+    public void testPeriodicChecksManualInterval() {
+        // Test that periodicChecks can be set to a manual interval
+        int durationInSec = 30;
+        PeriodicChecksManualInterval manualInterval =
+                PeriodicChecksManualInterval.builder().durationInSec(durationInSec).build();
+
+        AdvancedGlideClusterClientConfiguration config =
+                AdvancedGlideClusterClientConfiguration.builder().periodicChecks(manualInterval).build();
+
+        assertInstanceOf(PeriodicChecksManualInterval.class, config.getPeriodicChecks());
+        assertEquals(
+                durationInSec,
+                ((PeriodicChecksManualInterval) config.getPeriodicChecks()).getDurationInSec());
+    }
+
+    @Test
+    public void testPeriodicChecksManualIntervalValue() {
+        // Test that PeriodicChecksManualInterval stores the correct duration value
+        int durationInSec = 60;
+        PeriodicChecksManualInterval manualInterval =
+                PeriodicChecksManualInterval.builder().durationInSec(durationInSec).build();
+
+        assertEquals(durationInSec, manualInterval.getDurationInSec());
     }
 
     @Test

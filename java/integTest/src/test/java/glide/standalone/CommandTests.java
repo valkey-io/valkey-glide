@@ -1840,6 +1840,9 @@ public class CommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     public void scriptKill_unkillable(GlideClient regularClient) {
+        // Ensure no script is blocking the server from a previous test
+        waitForNotBusy(regularClient::scriptKill);
+
         String key = UUID.randomUUID().toString();
         String code = createLongRunningLuaScript(6, false);
         Script script = new Script(code, false);
