@@ -1805,6 +1805,8 @@ public class PubSubTests {
     @Test
     @SneakyThrows
     public void dynamic_ssubscribe_lazy() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+
         try (GlideClusterClient listener = (GlideClusterClient) createClient(false);
                 GlideClusterClient sender = (GlideClusterClient) createClient(false)) {
             String channel = "test-shard-channel-" + UUID.randomUUID();
@@ -1829,6 +1831,8 @@ public class PubSubTests {
     @Test
     @SneakyThrows
     public void dynamic_sunsubscribe() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+
         try (GlideClusterClient listener = (GlideClusterClient) createClient(false);
                 GlideClusterClient sender = (GlideClusterClient) createClient(false)) {
             String channel = "test-shard-channel-" + UUID.randomUUID();
