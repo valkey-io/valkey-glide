@@ -8,7 +8,7 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Represents advanced configuration settings for a Standalone {@link GlideClusterClient} used in
+ * Represents advanced configuration settings for a Cluster {@link GlideClusterClient} used in
  * {@link GlideClusterClientConfiguration}.
  *
  * @example
@@ -18,6 +18,8 @@ import lombok.experimental.SuperBuilder;
  *     .tlsAdvancedConfiguration(
  *        TlsAdvancedConfiguration.builder().useInsecureTLS(false).build())
  *     .refreshTopologyFromInitialNodes(true)
+ *     .periodicChecks(PeriodicChecksStatus.DISABLED)
+ *     // or: .periodicChecks(PeriodicChecksManualInterval.builder().durationInSec(30).build())
  *     .build();
  * }</pre>
  */
@@ -36,4 +38,16 @@ public class AdvancedGlideClusterClientConfiguration extends AdvancedBaseClientC
      * <p>If not set, defaults to {@code false} (uses internal cluster view for topology refresh).
      */
     @Builder.Default private final boolean refreshTopologyFromInitialNodes = false;
+
+    /**
+     * Configuration for the periodic topology checks. These checks evaluate changes in the cluster's
+     * topology, triggering a slot refresh when detected. Periodic checks ensure a quick and efficient
+     * process by querying a limited number of nodes.
+     *
+     * <p>Can be either a {@link PeriodicChecksStatus} or a {@link PeriodicChecksManualInterval}.
+     *
+     * <p>Defaults to {@link PeriodicChecksStatus#ENABLED_DEFAULT_CONFIGS}.
+     */
+    @Builder.Default
+    private final PeriodicChecksConfig periodicChecks = PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS;
 }

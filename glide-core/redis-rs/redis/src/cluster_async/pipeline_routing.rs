@@ -721,6 +721,10 @@ fn update_retry_map(
                 .or_default()
                 .push(((index, inner_index), address, error));
         }
+        RetryMethod::RefreshSlotsAndRetry => {
+            // TODO: Add support for refreshing slots and retrying in pipelines
+            // https://github.com/valkey-io/valkey-glide/issues/5226
+        }
         RetryMethod::RetryImmediately
         | RetryMethod::WaitAndRetry
         | RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica => {
@@ -866,6 +870,10 @@ where
         match retry_method {
             RetryMethod::NoRetry => {
                 // The server error was already added to the pipeline responses, so we can just continue.
+            }
+            RetryMethod::RefreshSlotsAndRetry => {
+                // TODO: Add support for refreshing slots and retrying in pipelines
+                // https://github.com/valkey-io/valkey-glide/issues/5226
             }
             RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
                 handle_reconnect_logic(

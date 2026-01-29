@@ -16,6 +16,7 @@ inputs:
             - aarch64-apple-darwin
             - aarch64-unknown-linux-musl
             - x86_64-unknown-linux-musl
+            - x86_64-pc-windows-msvc
 
 env:
     CARGO_TERM_COLOR: always
@@ -31,8 +32,12 @@ runs:
           run: |
               echo "ENGINE_VERSION=$ENGINE_VERSION" >> $GITHUB_ENV
 
+        # TODO: workflow improvements https://github.com/valkey-io/valkey-glide/issues/5211
         - name: Prepare Valkey sources
-          shell: bash
+          id: prepare-sources
+          shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
+          env:
+              WSLENV: ENGINE_VERSION/u:GITHUB_OUTPUT/p
           run: |
               echo "Cloning and checking out Valkey $ENGINE_VERSION"
               if [[ -d valkey ]]; then
@@ -46,7 +51,7 @@ runs:
               if [[ -z $SOURCES_VERSION ]]; then
                   SOURCES_VERSION=`grep ' REDIS_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]'`
               fi
-              echo "SOURCES_VERSION=$SOURCES_VERSION" >> $GITHUB_ENV
+              echo "SOURCES_VERSION=$SOURCES_VERSION" >> $GITHUB_OUTPUT
 
         - uses: actions/cache@v4
           id: cache-valkey
@@ -54,12 +59,14 @@ runs:
               path: |
                   valkey/src/valkey-server
                   valkey/src/valkey-cli
-              key: valkey-${{ env.SOURCES_VERSION }}-${{ inputs.target }}
+                  valkey/src/redis-server
+                  valkey/src/redis-cli
+              key: valkey-${{ steps.prepare-sources.outputs.SOURCES_VERSION }}-${{ inputs.target }}
 
         # Manual install, because makefile target rebuilds everything, we want to avoid that
         - name: Install cached engine
-          if: ${{ steps.cache-valkey.outputs.cache-hit == 'true' }}
-          shell: bash
+          if: ${{ steps.cache-valkey.outputs.cache-hit == 'true'}}
+          shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
           run: |
               cd valkey/src
               if command -v sudo &> /dev/null
@@ -81,11 +88,11 @@ runs:
               echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
         - name: Build and install engine
-          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
-          shell: bash
+          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true'}}
+          shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
           run: |
               cd valkey
-              make BUILD_TLS=yes
+              make BUILD_TLS=yes -j4
               if command -v sudo &> /dev/null
               then
                   echo "sudo command exists"
@@ -96,19 +103,31 @@ runs:
               fi
               echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
-        # TODO: This seems redundant to me. Is it necessary? Do we check that the Python we install is the correct version?
-        # Why here and not elsewhere? All Git git repos were created equal
+        - name: WSL configuration (Windows)
+          if: "${{ contains(inputs.target, 'windows') }}"
+          shell: wsl-bash {0}
+          run: |
+              echo "=== Configuring WSL ==="
+              # Fix system configuration for cluster mode
+              echo 'Configuring system for cluster mode...'
+              sudo sysctl vm.overcommit_memory=1 || echo 'Cannot set overcommit'
+              sudo bash -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' || echo 'Cannot disable hugepage'
+                
+              echo 'WSL Configuration complete'
+
         - name: Verify Valkey installation and symlinks
           if: ${{ !contains(inputs.engine-version, '-rc') }}
-          shell: bash
+          shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
+          env:
+              WSLENV: ENGINE_VERSION/u
           run: |
               # In Valkey releases, the engine is built with symlinks from valkey-server and valkey-cli
               # to redis-server and redis-cli. This step ensures that the engine is properly installed
               # with the expected version and that Valkey symlinks are correctly created.
-              INSTALLED_VER=$(redis-server -v) || INSTALLED_VER=$(valkey-server -v)
+              INSTALLED_VER=$(/usr/local/bin/redis-server -v) || INSTALLED_VER=$(/usr/local/bin/valkey-server -v)
               if [[ $INSTALLED_VER != *"${ENGINE_VERSION}"* ]]; then
-                  echo "Wrong version has been installed. Expected: $ENGINE_VERSION, Installed: $INSTALLED_VER"
-                  exit 1
+                echo "Wrong version has been installed. Expected: $ENGINE_VERSION, Installed: $INSTALLED_VER"
+                exit 1
               else
-                  echo "Successfully installed the server: $INSTALLED_VER"
+                echo "Successfully installed the server: $INSTALLED_VER"
               fi

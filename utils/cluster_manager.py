@@ -27,9 +27,23 @@ LOG_LEVELS = {
 }
 
 GLIDE_HOME_DIR = os.getenv("GLIDE_HOME_DIR") or f"{__file__}/.."
-CLUSTERS_FOLDER = os.getenv("CLUSTERS_FOLDER") or os.path.abspath(
-    f"{GLIDE_HOME_DIR}/clusters"
-)
+
+# Use /tmp/clusters for Windows WSL, otherwise use the default path
+def _get_clusters_folder():
+    if os.getenv("CLUSTERS_FOLDER"):
+        return os.getenv("CLUSTERS_FOLDER")
+    
+    # Check if running on Windows WSL
+    try:
+        with open("/proc/version", "r") as f:
+            if "microsoft" in f.read().lower():
+                return "/tmp/clusters"
+    except (FileNotFoundError, PermissionError):
+        pass
+    
+    return os.path.abspath(f"{GLIDE_HOME_DIR}/clusters")
+
+CLUSTERS_FOLDER = _get_clusters_folder()
 TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/tls_crts")
 CA_CRT = f"{TLS_FOLDER}/ca.crt"
 SERVER_CRT = f"{TLS_FOLDER}/server.crt"
