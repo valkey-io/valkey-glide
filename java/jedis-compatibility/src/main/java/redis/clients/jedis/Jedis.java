@@ -6985,6 +6985,60 @@ public final class Jedis implements Closeable {
         return blmove(source, destination, ListDirection.RIGHT, ListDirection.LEFT, timeout);
     }
 
+    /**
+     * Adds the specified members to the set stored at key.
+     *
+     * @param key the key of the set
+     * @param members the members to add
+     * @return the number of elements that were added to the set
+     */
+    public long sadd(String key, String... members) {
+        return executeCommandWithGlide("SADD", () -> glideClient.sadd(key, members).get());
+    }
+
+    /**
+     * Adds the specified members to the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param members the members to add
+     * @return the number of elements that were added to the set
+     */
+    public long sadd(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "SADD",
+                () -> {
+                    GlideString[] glideMembers = convertToGlideStringArray(members);
+                    return glideClient.sadd(GlideString.of(key), glideMembers).get();
+                });
+    }
+
+    /**
+     * Removes the specified members from the set stored at key.
+     *
+     * @param key the key of the set
+     * @param members the members to remove
+     * @return the number of elements that were removed from the set
+     */
+    public long srem(String key, String... members) {
+        return executeCommandWithGlide("SREM", () -> glideClient.srem(key, members).get());
+    }
+
+    /**
+     * Removes the specified members from the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param members the members to remove
+     * @return the number of elements that were removed from the set
+     */
+    public long srem(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "SREM",
+                () -> {
+                    GlideString[] glideMembers = convertToGlideStringArray(members);
+                    return glideClient.srem(GlideString.of(key), glideMembers).get();
+                });
+    }
+
     // Static initialization block for cleanup hooks
     static {
         // Add shutdown hook to cleanup temporary certificate files

@@ -83,6 +83,10 @@ public class JedisWrapperTest {
         assertNotNull(jedisClass.getMethod("del", String.class));
         assertNotNull(jedisClass.getMethod("del", String[].class));
         assertNotNull(jedisClass.getMethod("keys", String.class));
+        assertNotNull(jedisClass.getMethod("sadd", String.class, String[].class));
+        assertNotNull(jedisClass.getMethod("sadd", byte[].class, byte[][].class));
+        assertNotNull(jedisClass.getMethod("srem", String.class, String[].class));
+        assertNotNull(jedisClass.getMethod("srem", byte[].class, byte[][].class));
     }
 
     @Test
