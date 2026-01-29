@@ -1,0 +1,4 @@
+[env]
+# Disable CPU jitter entropy in aws-lc-rs to avoid ~3x connection latency regression
+# See: https://github.com/aws/aws-lc-rs/issues/899
+AWS_LC_SYS_NO_JITTER_ENTROPY = "1"
