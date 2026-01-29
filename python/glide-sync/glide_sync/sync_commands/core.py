@@ -7708,3 +7708,37 @@ class CoreCommands(Protocol):
         )
         result = self._execute_command(RequestType.Sort, args)
         return cast(int, result)
+
+    def subscribe(self, channels: Set[str], timeout_ms: int = 0) -> None:
+        """Subscribe to exact channels (blocking)."""
+        args: List[Union[str, bytes]] = cast(
+            List[Union[str, bytes]], list(channels) + [str(timeout_ms)]
+        )
+        self._execute_command(RequestType.SubscribeBlocking, args)
+
+    def psubscribe(self, patterns: Set[str], timeout_ms: int = 0) -> None:
+        """Subscribe to channel patterns (blocking)."""
+        args: List[Union[str, bytes]] = cast(
+            List[Union[str, bytes]], list(patterns) + [str(timeout_ms)]
+        )
+        self._execute_command(RequestType.PSubscribeBlocking, args)
+
+    def unsubscribe(
+        self, channels: Optional[Set[str]] = None, timeout_ms: int = 0
+    ) -> None:
+        """Unsubscribe from exact channels (blocking)."""
+        args: List[Union[str, bytes]] = cast(
+            List[Union[str, bytes]],
+            (list(channels) if channels else []) + [str(timeout_ms)],
+        )
+        self._execute_command(RequestType.UnsubscribeBlocking, args)
+
+    def punsubscribe(
+        self, patterns: Optional[Set[str]] = None, timeout_ms: int = 0
+    ) -> None:
+        """Unsubscribe from channel patterns (blocking)."""
+        args: List[Union[str, bytes]] = cast(
+            List[Union[str, bytes]],
+            (list(patterns) if patterns else []) + [str(timeout_ms)],
+        )
+        self._execute_command(RequestType.PUnsubscribeBlocking, args)

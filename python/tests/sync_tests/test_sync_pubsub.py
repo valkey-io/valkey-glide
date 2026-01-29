@@ -9,7 +9,12 @@ from typing import Any, List, Optional, Tuple, Union, cast
 import pytest
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.constants import OK
-from glide_shared.exceptions import ConfigurationError
+from glide_shared.exceptions import (
+    ConfigurationError,
+    RequestError,
+)
+from glide_shared.exceptions import TimeoutError as GlideTimeoutError
+from glide_shared.routes import AllNodes
 from glide_sync import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
@@ -2704,10 +2709,10 @@ class TestSyncPubSub:
             client_cleanup(client2, pub_sub2 if cluster_mode else None)
 
     # TODO: remove once dynamic pubsub is implemented for the sync client
-    def test_sync_clients_reject_pubsub_reconciliation_interval(self):
+    def test_sync_clients_support_pubsub_reconciliation_interval(self):
         """
-        Test that GlideClientConfiguration raises ConfigurationError when
-        pubsub_reconciliation_interval is configured in advanced_config.
+        Test that GlideClientConfiguration accepts pubsub_reconciliation_interval
+        now that dynamic pubsub is supported in sync clients.
         """
         addresses = [NodeAddress("localhost", 6379)]
 
@@ -2716,31 +2721,877 @@ class TestSyncPubSub:
             pubsub_reconciliation_interval=500,
         )
 
-        # Verify that creating the config raises ConfigurationError
-        with pytest.raises(ConfigurationError) as exc_info:
-            GlideClientConfiguration(
-                addresses=addresses,
-                advanced_config=advanced_config,
-            )
-
-        assert (
-            "pubsub_reconciliation_interval is not supported for the sync client"
-            in str(exc_info.value)
+        # Verify that creating the config succeeds
+        config = GlideClientConfiguration(
+            addresses=addresses,
+            advanced_config=advanced_config,
         )
+        assert config.advanced_config.pubsub_reconciliation_interval == 500
 
-        # Create advanced config with pubsub_reconciliation_interval
+        # Create advanced cluster config with pubsub_reconciliation_interval
         advanced_cluster_config = AdvancedGlideClusterClientConfiguration(
             pubsub_reconciliation_interval=500,
         )
 
-        # Verify that creating the config raises ConfigurationError
-        with pytest.raises(ConfigurationError) as exc_info:
-            GlideClusterClientConfiguration(
-                addresses=addresses,
-                advanced_config=advanced_cluster_config,
+        # Verify that creating the config succeeds
+        cluster_config = GlideClusterClientConfiguration(
+            addresses=addresses,
+            advanced_config=advanced_cluster_config,
+        )
+        assert cluster_config.advanced_config.pubsub_reconciliation_interval == 500
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_dynamic_subscribe_and_get_subscriptions(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test dynamic subscribe methods and get_subscriptions().
+        """
+        addresses = [NodeAddress("localhost", 6379)]
+        config = (
+            GlideClusterClientConfiguration(addresses=addresses)
+            if cluster_mode
+            else GlideClientConfiguration(addresses=addresses)
+        )
+
+        client = None
+        try:
+            client = (
+                GlideClusterClient.create(config)
+                if cluster_mode
+                else GlideClient.create(config)
             )
 
-        assert (
-            "pubsub_reconciliation_interval is not supported for the sync client"
-            in str(exc_info.value)
+            # Subscribe to channels
+            exact_channel = "test_exact_channel"
+            pattern = "test_pattern_*"
+
+            client.subscribe({exact_channel})
+            client.psubscribe({pattern})
+
+            if cluster_mode:
+                sharded_channel = "test_sharded_channel"
+                cast(GlideClusterClient, client).ssubscribe({sharded_channel})
+
+            # Get subscriptions
+            state = client.get_subscriptions()
+
+            # Verify subscriptions
+            modes = (
+                GlideClusterClientConfiguration.PubSubChannelModes
+                if cluster_mode
+                else GlideClientConfiguration.PubSubChannelModes
+            )
+
+            assert exact_channel in state.desired_subscriptions[modes.Exact]
+            assert pattern in state.desired_subscriptions[modes.Pattern]
+            assert exact_channel in state.actual_subscriptions[modes.Exact]
+            assert pattern in state.actual_subscriptions[modes.Pattern]
+
+            if cluster_mode:
+                assert sharded_channel in state.desired_subscriptions[modes.Sharded]
+                assert sharded_channel in state.actual_subscriptions[modes.Sharded]
+
+            # Unsubscribe
+            client.unsubscribe({exact_channel})
+            client.punsubscribe({pattern})
+            if cluster_mode:
+                cast(GlideClusterClient, client).sunsubscribe({sharded_channel})
+
+            # Verify unsubscribed
+            time.sleep(0.5)
+            state = client.get_subscriptions()
+            assert exact_channel not in state.actual_subscriptions[modes.Exact]
+            assert pattern not in state.actual_subscriptions[modes.Pattern]
+            if cluster_mode:
+                assert sharded_channel not in state.actual_subscriptions[modes.Sharded]
+
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_mixed_subscription_methods_all_types(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test mixing Config and Blocking subscriptions across all subscription types
+        (Exact, Pattern, and Sharded for cluster mode).
+
+        Note: Sync client doesn't support Lazy methods, so we only test Config and Blocking.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            # Create unique names for each combination
+            prefix = "mixed_sub_types_sync"
+
+            # Exact channels
+            exact_config = f"exact_config_{prefix}"
+            exact_blocking = f"exact_blocking_{prefix}"
+
+            # Pattern subscriptions
+            pattern_config = f"pattern_config_{prefix}_*"
+            pattern_blocking = f"pattern_blocking_{prefix}_*"
+
+            # Sharded channels (cluster only)
+            sharded_config = f"sharded_config_{prefix}" if cluster_mode else None
+            sharded_blocking = f"sharded_blocking_{prefix}" if cluster_mode else None
+
+            # Create client with Config subscriptions
+            addresses = [NodeAddress("localhost", 6379)]
+
+            pubsub_config = create_pubsub_subscription(
+                cluster_mode,
+                {exact_config},
+                {pattern_config},
+                {sharded_config} if sharded_config else None,
+            )
+
+            config = (
+                GlideClusterClientConfiguration(
+                    addresses=addresses,
+                    pubsub_subscriptions=pubsub_config,
+                )
+                if cluster_mode
+                else GlideClientConfiguration(
+                    addresses=addresses,
+                    pubsub_subscriptions=pubsub_config,
+                )
+            )
+
+            listening_client = (
+                GlideClusterClient.create(config)
+                if cluster_mode
+                else GlideClient.create(config)
+            )
+            publishing_client = create_sync_client(request, cluster_mode)
+
+            # Wait for config subscriptions
+            time.sleep(0.5)
+
+            # Add Blocking subscriptions
+            listening_client.subscribe({exact_blocking}, timeout_ms=5000)
+            listening_client.psubscribe({pattern_blocking}, timeout_ms=5000)
+            if cluster_mode and sharded_blocking:
+                cast(GlideClusterClient, listening_client).ssubscribe(
+                    {sharded_blocking}, timeout_ms=5000
+                )
+
+            # Wait for all subscriptions
+            time.sleep(0.5)
+
+            # Verify all subscriptions are active
+            state = listening_client.get_subscriptions()
+            modes = (
+                GlideClusterClientConfiguration.PubSubChannelModes
+                if cluster_mode
+                else GlideClientConfiguration.PubSubChannelModes
+            )
+
+            all_exact = {exact_config, exact_blocking}
+            all_patterns = {pattern_config, pattern_blocking}
+
+            assert all_exact.issubset(state.actual_subscriptions[modes.Exact])
+            assert all_patterns.issubset(state.actual_subscriptions[modes.Pattern])
+
+            if cluster_mode and sharded_config and sharded_blocking:
+                all_sharded = {sharded_config, sharded_blocking}
+                assert all_sharded.issubset(state.actual_subscriptions[modes.Sharded])
+
+            # Publish messages to all channels
+            message = "test_message"
+            publishing_client.publish(message, exact_config)
+            publishing_client.publish(message, exact_blocking)
+            publishing_client.publish(message, pattern_config.replace("*", "test"))
+            publishing_client.publish(message, pattern_blocking.replace("*", "test"))
+
+            if cluster_mode:
+                cast(GlideClusterClient, publishing_client).publish(
+                    message, sharded_config, sharded=True
+                )
+                cast(GlideClusterClient, publishing_client).publish(
+                    message, sharded_blocking, sharded=True
+                )
+
+            # Verify messages received
+            time.sleep(0.5)
+            received_count = 0
+            while True:
+                msg = listening_client.try_get_pubsub_message()
+                if msg is None:
+                    break
+                received_count += 1
+
+            expected_count = 4 if not cluster_mode else 6
+            assert received_count == expected_count
+
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_subscribe_with_timeout(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test subscribe with timeout parameter.
+        """
+        addresses = [NodeAddress("localhost", 6379)]
+        config = (
+            GlideClusterClientConfiguration(addresses=addresses)
+            if cluster_mode
+            else GlideClientConfiguration(addresses=addresses)
         )
+
+        client = None
+        try:
+            client = (
+                GlideClusterClient.create(config)
+                if cluster_mode
+                else GlideClient.create(config)
+            )
+
+            channel = "test_timeout_channel"
+
+            # Subscribe with timeout (should succeed)
+            client.subscribe({channel}, timeout_ms=5000)
+
+            # Verify subscription
+            state = client.get_subscriptions()
+            modes = (
+                GlideClusterClientConfiguration.PubSubChannelModes
+                if cluster_mode
+                else GlideClientConfiguration.PubSubChannelModes
+            )
+            assert channel in state.actual_subscriptions[modes.Exact]
+
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_subscribe_empty_set_raises_error(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that subscribing with an empty set raises an error.
+        """
+        addresses = [NodeAddress("localhost", 6379)]
+        config = (
+            GlideClusterClientConfiguration(addresses=addresses)
+            if cluster_mode
+            else GlideClientConfiguration(addresses=addresses)
+        )
+
+        client = None
+        try:
+            client = (
+                GlideClusterClient.create(config)
+                if cluster_mode
+                else GlideClient.create(config)
+            )
+
+            # Test subscribe with empty set
+            with pytest.raises(RequestError) as exc_info:
+                client.subscribe(set())
+            assert "No channels provided for subscription" in str(exc_info.value)
+
+            # Test psubscribe with empty set
+            with pytest.raises(RequestError) as exc_info:
+                client.psubscribe(set())
+            assert "No channels provided for subscription" in str(exc_info.value)
+
+            # Test ssubscribe with empty set (cluster only)
+            if cluster_mode:
+                with pytest.raises(RequestError) as exc_info:
+                    cast(GlideClusterClient, client).ssubscribe(set())
+                assert "No channels provided for subscription" in str(exc_info.value)
+
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_unsubscribe_all(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test unsubscribing from all channels using unsubscribe with no arguments.
+        """
+        addresses = [NodeAddress("localhost", 6379)]
+        config = (
+            GlideClusterClientConfiguration(addresses=addresses)
+            if cluster_mode
+            else GlideClientConfiguration(addresses=addresses)
+        )
+
+        client = None
+        try:
+            client = (
+                GlideClusterClient.create(config)
+                if cluster_mode
+                else GlideClient.create(config)
+            )
+
+            # Subscribe to multiple channels
+            channels = {"channel1", "channel2", "channel3"}
+            patterns = {"pattern1_*", "pattern2_*"}
+
+            client.subscribe(channels)
+            client.psubscribe(patterns)
+
+            if cluster_mode:
+                sharded = {"sharded1", "sharded2"}
+                cast(GlideClusterClient, client).ssubscribe(sharded)
+
+            # Verify subscriptions
+            time.sleep(0.5)
+            state = client.get_subscriptions()
+            modes = (
+                GlideClusterClientConfiguration.PubSubChannelModes
+                if cluster_mode
+                else GlideClientConfiguration.PubSubChannelModes
+            )
+
+            assert len(state.actual_subscriptions[modes.Exact]) == 3
+            assert len(state.actual_subscriptions[modes.Pattern]) == 2
+            if cluster_mode:
+                assert len(state.actual_subscriptions[modes.Sharded]) == 2
+
+            # Unsubscribe from all
+            client.unsubscribe()
+            client.punsubscribe()
+            if cluster_mode:
+                cast(GlideClusterClient, client).sunsubscribe()
+
+            # Verify all unsubscribed
+            time.sleep(0.5)
+            state = client.get_subscriptions()
+            assert len(state.actual_subscriptions[modes.Exact]) == 0
+            assert len(state.actual_subscriptions[modes.Pattern]) == 0
+            if cluster_mode:
+                assert len(state.actual_subscriptions[modes.Sharded]) == 0
+
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_subscription_metrics(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that subscription metrics are available in get_statistics().
+        """
+        advanced_config = (
+            AdvancedGlideClusterClientConfiguration(pubsub_reconciliation_interval=500)
+            if cluster_mode
+            else AdvancedGlideClientConfiguration(pubsub_reconciliation_interval=500)
+        )
+
+        addresses = [NodeAddress("localhost", 6379)]
+        config = (
+            GlideClusterClientConfiguration(
+                addresses=addresses, advanced_config=advanced_config
+            )
+            if cluster_mode
+            else GlideClientConfiguration(
+                addresses=addresses, advanced_config=advanced_config
+            )
+        )
+
+        client = None
+        try:
+            client = (
+                GlideClusterClient.create(config)
+                if cluster_mode
+                else GlideClient.create(config)
+            )
+
+            # Subscribe to a channel
+            client.subscribe({"test_metrics_channel"})
+
+            # Wait for reconciliation
+            time.sleep(1)
+
+            # Check metrics
+            stats = client.get_statistics()
+            assert "subscription_out_of_sync_count" in stats
+            assert "subscription_last_sync_timestamp" in stats
+
+            # Verify timestamp is recent (within last 5 seconds)
+            last_sync = int(stats["subscription_last_sync_timestamp"])
+            assert last_sync > 0
+            current_time_ms = int(time.time() * 1000)
+            assert current_time_ms - last_sync < 5000
+
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_resubscribe_after_connection_kill_exact_channels(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that exact channel subscriptions are automatically restored after connection kill.
+        """
+        listening_client, publishing_client, admin_client = None, None, None
+        try:
+            channel = "reconnect_exact_channel_test_sync"
+            message_before = "message_before_kill"
+            message_after = "message_after_kill"
+
+            # Create client with Config subscription
+            addresses = [NodeAddress("localhost", 6379)]
+            pubsub_config = create_pubsub_subscription(
+                cluster_mode,
+                {channel},
+                set(),
+                {channel} if cluster_mode else None,
+            )
+
+            config = (
+                GlideClusterClientConfiguration(
+                    addresses=addresses,
+                    pubsub_subscriptions=pubsub_config,
+                )
+                if cluster_mode
+                else GlideClientConfiguration(
+                    addresses=addresses,
+                    pubsub_subscriptions=pubsub_config,
+                )
+            )
+
+            listening_client = (
+                GlideClusterClient.create(config)
+                if cluster_mode
+                else GlideClient.create(config)
+            )
+            publishing_client = create_sync_client(request, cluster_mode)
+            admin_client = create_sync_client(request, cluster_mode)
+
+            # Wait for subscription
+            time.sleep(1)
+
+            # Verify subscription works before kill
+            publishing_client.publish(message_before, channel)
+            time.sleep(0.5)
+
+            msg_before = listening_client.try_get_pubsub_message()
+            assert msg_before is not None
+            assert decode_pubsub_msg(msg_before) == message_before
+
+            # Kill connections - this should trigger reconnection
+            if cluster_mode:
+                admin_client.custom_command(
+                    ["CLIENT", "KILL", "TYPE", "normal"], route=AllNodes()
+                )
+            else:
+                admin_client.custom_command(["CLIENT", "KILL", "TYPE", "normal"])
+
+            # Give time for reconnection and resubscription
+            time.sleep(3)
+
+            # Verify subscription still works after reconnection
+            publishing_client.publish(message_after, channel)
+            time.sleep(0.5)
+
+            msg_after = listening_client.try_get_pubsub_message()
+            assert msg_after is not None
+            assert decode_pubsub_msg(msg_after) == message_after
+
+            # Verify no extra messages
+            assert listening_client.try_get_pubsub_message() is None
+
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+            if admin_client:
+                admin_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_resubscribe_after_connection_kill_patterns(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that pattern subscriptions are automatically restored after connection kill.
+        """
+        listening_client, publishing_client, admin_client = None, None, None
+        try:
+            pattern = "reconnect_pattern_test_sync_*"
+            channel = "reconnect_pattern_test_sync_channel"
+            message_before = "message_before_kill"
+            message_after = "message_after_kill"
+
+            # Create client with Config subscription
+            addresses = [NodeAddress("localhost", 6379)]
+            pubsub_config = create_pubsub_subscription(
+                cluster_mode,
+                set(),
+                {pattern},
+                None,
+            )
+
+            config = (
+                GlideClusterClientConfiguration(
+                    addresses=addresses,
+                    pubsub_subscriptions=pubsub_config,
+                )
+                if cluster_mode
+                else GlideClientConfiguration(
+                    addresses=addresses,
+                    pubsub_subscriptions=pubsub_config,
+                )
+            )
+
+            listening_client = (
+                GlideClusterClient.create(config)
+                if cluster_mode
+                else GlideClient.create(config)
+            )
+            publishing_client = create_sync_client(request, cluster_mode)
+            admin_client = create_sync_client(request, cluster_mode)
+
+            # Wait for subscription
+            time.sleep(1)
+
+            # Verify subscription works before kill
+            publishing_client.publish(message_before, channel)
+            time.sleep(0.5)
+
+            msg_before = listening_client.try_get_pubsub_message()
+            assert msg_before is not None
+            assert decode_pubsub_msg(msg_before) == message_before
+
+            # Kill connections
+            if cluster_mode:
+                admin_client.custom_command(
+                    ["CLIENT", "KILL", "TYPE", "normal"], route=AllNodes()
+                )
+            else:
+                admin_client.custom_command(["CLIENT", "KILL", "TYPE", "normal"])
+
+            # Give time for reconnection and resubscription
+            time.sleep(3)
+
+            # Verify subscription still works after reconnection
+            publishing_client.publish(message_after, channel)
+            time.sleep(0.5)
+
+            msg_after = listening_client.try_get_pubsub_message()
+            assert msg_after is not None
+            assert decode_pubsub_msg(msg_after) == message_after
+
+            # Verify no extra messages
+            assert listening_client.try_get_pubsub_message() is None
+
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+            if admin_client:
+                admin_client.close()
+
+    @pytest.mark.skip_if_version_below("7.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    def test_sync_resubscribe_after_connection_kill_sharded(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that sharded channel subscriptions are automatically restored after connection kill.
+        """
+        listening_client, publishing_client, admin_client = None, None, None
+        try:
+            channel = "reconnect_sharded_test_sync"
+            message_before = "message_before_kill"
+            message_after = "message_after_kill"
+
+            # Create client with Config subscription
+            addresses = [NodeAddress("localhost", 6379)]
+            pubsub_config = create_pubsub_subscription(
+                cluster_mode,
+                set(),
+                set(),
+                {channel},
+            )
+
+            config = GlideClusterClientConfiguration(
+                addresses=addresses,
+                pubsub_subscriptions=pubsub_config,
+            )
+
+            listening_client = GlideClusterClient.create(config)
+            publishing_client = create_sync_client(request, cluster_mode)
+            admin_client = create_sync_client(request, cluster_mode)
+
+            # Wait for subscription
+            time.sleep(1)
+
+            # Verify subscription works before kill
+            cast(GlideClusterClient, publishing_client).publish(
+                message_before, channel, sharded=True
+            )
+            time.sleep(0.5)
+
+            msg_before = listening_client.try_get_pubsub_message()
+            assert msg_before is not None
+            assert decode_pubsub_msg(msg_before) == message_before
+
+            # Kill connections
+            admin_client.custom_command(
+                ["CLIENT", "KILL", "TYPE", "normal"], route=AllNodes()
+            )
+
+            # Give time for reconnection and resubscription
+            time.sleep(3)
+
+            # Verify subscription still works after reconnection
+            cast(GlideClusterClient, publishing_client).publish(
+                message_after, channel, sharded=True
+            )
+            time.sleep(0.5)
+
+            msg_after = listening_client.try_get_pubsub_message()
+            assert msg_after is not None
+            assert decode_pubsub_msg(msg_after) == message_after
+
+            # Verify no extra messages
+            assert listening_client.try_get_pubsub_message() is None
+
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+            if admin_client:
+                admin_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_resubscribe_after_connection_kill_many_exact_channels(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that 256 exact channel subscriptions are automatically restored after connection kill.
+        """
+        listening_client, publishing_client, admin_client = None, None, None
+        try:
+            NUM_CHANNELS = 256
+            channels = {
+                f"{{reconnect_exact_{i}}}channel_sync" for i in range(NUM_CHANNELS)
+            }
+            message_after = "message_after_kill"
+
+            # Create client with Config subscription
+            addresses = [NodeAddress("localhost", 6379)]
+            pubsub_config = create_pubsub_subscription(
+                cluster_mode,
+                channels,
+                set(),
+                None,
+            )
+
+            config = (
+                GlideClusterClientConfiguration(
+                    addresses=addresses,
+                    pubsub_subscriptions=pubsub_config,
+                )
+                if cluster_mode
+                else GlideClientConfiguration(
+                    addresses=addresses,
+                    pubsub_subscriptions=pubsub_config,
+                )
+            )
+
+            listening_client = (
+                GlideClusterClient.create(config)
+                if cluster_mode
+                else GlideClient.create(config)
+            )
+            publishing_client = create_sync_client(request, cluster_mode)
+            admin_client = create_sync_client(request, cluster_mode)
+
+            # Wait for subscriptions
+            time.sleep(2)
+
+            # Verify subscriptions are active
+            state = listening_client.get_subscriptions()
+            modes = (
+                GlideClusterClientConfiguration.PubSubChannelModes
+                if cluster_mode
+                else GlideClientConfiguration.PubSubChannelModes
+            )
+            assert len(state.actual_subscriptions[modes.Exact]) == NUM_CHANNELS
+
+            # Kill connections
+            if cluster_mode:
+                admin_client.custom_command(
+                    ["CLIENT", "KILL", "TYPE", "normal"], route=AllNodes()
+                )
+            else:
+                admin_client.custom_command(["CLIENT", "KILL", "TYPE", "normal"])
+
+            # Give time for reconnection and resubscription
+            time.sleep(5)
+
+            # Verify all subscriptions restored
+            state = listening_client.get_subscriptions()
+            assert len(state.actual_subscriptions[modes.Exact]) == NUM_CHANNELS
+
+            # Publish to one channel and verify message received
+            test_channel = list(channels)[0]
+            publishing_client.publish(message_after, test_channel)
+            time.sleep(0.5)
+
+            msg = listening_client.try_get_pubsub_message()
+            assert msg is not None
+            assert decode_pubsub_msg(msg) == message_after
+
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+            if admin_client:
+                admin_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_subscription_metrics_repeated_reconciliation_failures(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that out-of-sync metric increments on repeated reconciliation failures.
+        """
+        listening_client, admin_client = None, None
+        try:
+            channel1 = "channel1_repeated_failures_sync"
+            channel2 = "channel2_repeated_failures_sync"
+            username = "mock_test_user_repeated_sync"
+            password = "password_repeated_sync"
+
+            admin_client = create_sync_client(request, cluster_mode)
+
+            # Create user WITHOUT pubsub permissions
+            acl_create_command: List[Union[str, bytes]] = [
+                "ACL",
+                "SETUSER",
+                username,
+                "ON",
+                f">{password}",
+                "~*",
+                "resetchannels",
+                "+@all",
+                "-@pubsub",
+            ]
+
+            if cluster_mode:
+                cast(GlideClusterClient, admin_client).custom_command(
+                    acl_create_command, route=AllNodes()
+                )
+            else:
+                admin_client.custom_command(acl_create_command)
+
+            # Create client with pubsub_reconciliation_interval
+            advanced_config = (
+                AdvancedGlideClusterClientConfiguration(
+                    pubsub_reconciliation_interval=500
+                )
+                if cluster_mode
+                else AdvancedGlideClientConfiguration(
+                    pubsub_reconciliation_interval=500
+                )
+            )
+
+            addresses = [NodeAddress("localhost", 6379)]
+            config = (
+                GlideClusterClientConfiguration(
+                    addresses=addresses, advanced_config=advanced_config
+                )
+                if cluster_mode
+                else GlideClientConfiguration(
+                    addresses=addresses, advanced_config=advanced_config
+                )
+            )
+
+            listening_client = (
+                GlideClusterClient.create(config)
+                if cluster_mode
+                else GlideClient.create(config)
+            )
+
+            # Authenticate as restricted user
+            auth_cmd: List[Union[str, bytes]] = ["AUTH", username, password]
+            if cluster_mode:
+                cast(GlideClusterClient, listening_client).custom_command(
+                    auth_cmd, route=AllNodes()
+                )
+            else:
+                listening_client.custom_command(auth_cmd)
+
+            # Attempt to subscribe (will fail due to ACL)
+            with pytest.raises(GlideTimeoutError):
+                listening_client.subscribe({channel1}, timeout_ms=1000)
+
+            # Get initial out-of-sync count
+            time.sleep(1)
+            stats1 = listening_client.get_statistics()
+            out_of_sync_1 = int(stats1["subscription_out_of_sync_count"])
+            assert out_of_sync_1 > 0
+
+            # Attempt another subscription (will also fail)
+            with pytest.raises(GlideTimeoutError):
+                listening_client.subscribe({channel2}, timeout_ms=1000)
+
+            # Wait for more reconciliation attempts
+            time.sleep(2)
+
+            # Verify out-of-sync count increased
+            stats2 = listening_client.get_statistics()
+            out_of_sync_2 = int(stats2["subscription_out_of_sync_count"])
+            assert out_of_sync_2 > out_of_sync_1
+
+        finally:
+            # Cleanup ACL user
+            if admin_client:
+                acl_delete_command: List[Union[str, bytes]] = [
+                    "ACL",
+                    "DELUSER",
+                    username,
+                ]
+                if cluster_mode:
+                    cast(GlideClusterClient, admin_client).custom_command(
+                        acl_delete_command, route=AllNodes()
+                    )
+                else:
+                    admin_client.custom_command(acl_delete_command)
+                admin_client.close()
+
+            if listening_client:
+                listening_client.close()

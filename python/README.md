@@ -174,6 +174,58 @@ test_standalone_client()
 
 ---
 
+## PubSub Configuration
+
+Valkey GLIDE supports dynamic PubSub with automatic subscription reconciliation. Configure the reconciliation interval to ensure subscriptions remain synchronized:
+
+```python
+# Async client
+from glide import GlideClientConfiguration, NodeAddress, GlideClient, AdvancedGlideClientConfiguration
+
+config = GlideClientConfiguration(
+    addresses=[NodeAddress("localhost", 6379)],
+    advanced_config=AdvancedGlideClientConfiguration(
+        pubsub_reconciliation_interval=5000  # Reconcile every 5 seconds (in milliseconds)
+    )
+)
+client = await GlideClient.create(config)
+
+# Sync client
+from glide_sync import GlideClientConfiguration, NodeAddress, GlideClient, AdvancedGlideClientConfiguration
+
+config = GlideClientConfiguration(
+    addresses=[NodeAddress("localhost", 6379)],
+    advanced_config=AdvancedGlideClientConfiguration(
+        pubsub_reconciliation_interval=5000  # Reconcile every 5 seconds (in milliseconds)
+    )
+)
+client = GlideClient.create(config)
+```
+
+### Client Statistics
+
+Monitor client performance and subscription health using `get_statistics()`:
+
+```python
+stats = await client.get_statistics()  # Async
+# or
+stats = client.get_statistics()  # Sync
+
+# Available metrics:
+# - total_connections: Number of active connections
+# - total_clients: Number of client instances
+# - total_values_compressed: Count of compressed values
+# - total_values_decompressed: Count of decompressed values
+# - total_original_bytes: Original data size before compression
+# - total_bytes_compressed: Compressed data size
+# - total_bytes_decompressed: Decompressed data size
+# - compression_skipped_count: Times compression was skipped
+# - subscription_out_of_sync_count: Failed reconciliation attempts
+# - subscription_last_sync_timestamp: Last successful sync (milliseconds since epoch)
+```
+
+---
+
 ## OpenTelemetry Configuration
 
 Valkey GLIDE supports OpenTelemetry for distributed tracing and metrics collection. This allows you to monitor command execution, measure latency, and track performance across your application.
