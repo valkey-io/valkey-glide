@@ -61,6 +61,8 @@ import redis.clients.jedis.params.HSetExParams;
 import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.resps.AccessControlLogEntry;
+import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.ScanResult;
 import redis.clients.jedis.util.KeyValue;
 import redis.clients.jedis.util.Pool;
@@ -661,6 +663,317 @@ public final class Jedis implements Closeable {
         // In case of Glide, the auth is set in  ServerCredentials.
         // Will need to call the constructor again for this to work.
         return "OK";
+    }
+
+    /**
+     * Return the list of ACL rules in ACL configuration file format.
+     *
+     * @return list of user rule definitions
+     */
+    public List<String> aclList() {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> {
+                    String[] result = glideClient.aclList().get();
+                    return result == null ? Collections.emptyList() : Arrays.asList(result);
+                });
+    }
+
+    /**
+     * Return the ACL rules defined for the given user.
+     *
+     * @param name the username
+     * @return the user's ACL rules, or null if the user does not exist
+     */
+    public AccessControlUser aclGetUser(String name) {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> {
+                    Object result = glideClient.aclGetUser(name).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    return parseAclGetUserResponse(result);
+                });
+    }
+
+    /**
+     * Create or modify an ACL user with default (no) rules.
+     *
+     * @param name the username
+     * @return "OK" if successful
+     */
+    public String aclSetUser(String name) {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> glideClient.aclSetUser(name, new String[0]).get());
+    }
+
+    /**
+     * Create or modify an ACL user with the given rules.
+     *
+     * @param name the username
+     * @param rules the ACL rule strings (e.g. "on", "+@all", "~*")
+     * @return "OK" if successful
+     */
+    public String aclSetUser(String name, String... rules) {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> glideClient.aclSetUser(name, rules).get());
+    }
+
+    /**
+     * Delete the specified ACL users and terminate their connections.
+     *
+     * @param usernames the usernames to delete
+     * @return the number of users deleted
+     */
+    public long aclDelUser(String... usernames) {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> {
+                    Long result = glideClient.aclDelUser(usernames).get();
+                    return result != null ? result : 0L;
+                });
+    }
+
+    /**
+     * Return the list of ACL categories.
+     *
+     * @return list of category names
+     */
+    public List<String> aclCat() {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> {
+                    String[] result = glideClient.aclCat().get();
+                    return result == null ? Collections.emptyList() : Arrays.asList(result);
+                });
+    }
+
+    /**
+     * Return the list of commands in the given ACL category.
+     *
+     * @param category the category name (e.g. "string", "list")
+     * @return list of command names in the category
+     */
+    public List<String> aclCat(String category) {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> {
+                    String[] result = glideClient.aclCat(category).get();
+                    return result == null ? Collections.emptyList() : Arrays.asList(result);
+                });
+    }
+
+    /**
+     * Generate a random password for ACL users (default bit length).
+     *
+     * @return the generated password string
+     */
+    public String aclGenPass() {
+        return executeCommandWithGlide("ACL", () -> glideClient.aclGenPass().get());
+    }
+
+    /**
+     * Generate a random password with the specified number of bits for ACL users.
+     *
+     * @param bits the number of bits (e.g. 256 for default)
+     * @return the generated password string
+     */
+    public String aclGenPass(int bits) {
+        return executeCommandWithGlide(
+                "ACL",                 () -> glideClient.aclGenPass(bits).get());
+    }
+
+    /**
+     * Return recent ACL security events (failed auth, violated rules).
+     *
+     * @return list of ACL log entries
+     */
+    public List<AccessControlLogEntry> aclLog() {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> parseAclLogResponse(glideClient.aclLog().get()));
+    }
+
+    /**
+     * Return the specified number of recent ACL security events.
+     *
+     * @param count the maximum number of entries to return
+     * @return list of ACL log entries
+     */
+    public List<AccessControlLogEntry> aclLog(int count) {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> parseAclLogResponse(glideClient.aclLog(count).get()));
+    }
+
+    /**
+     * Clear the ACL security events log.
+     *
+     * @return "OK" if successful
+     */
+    public String aclLogReset() {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> {
+                    Object result =
+                            glideClient.customCommand(new String[] {"ACL", "LOG", "RESET"}).get();
+                    return result != null ? result.toString() : null;
+                });
+    }
+
+    /**
+     * Return the username the current connection is authenticated as.
+     *
+     * @return the username (e.g. "default")
+     */
+    public String aclWhoAmI() {
+        return executeCommandWithGlide("ACL", () -> glideClient.aclWhoami().get());
+    }
+
+    /**
+     * Return the list of ACL usernames.
+     *
+     * @return list of usernames
+     */
+    public List<String> aclUsers() {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> {
+                    String[] result = glideClient.aclUsers().get();
+                    return result == null ? Collections.emptyList() : Arrays.asList(result);
+                });
+    }
+
+    /**
+     * Save the current ACL rules to the configured ACL file.
+     *
+     * @return "OK" if successful
+     */
+    public String aclSave() {
+        return executeCommandWithGlide("ACL", () -> glideClient.aclSave().get());
+    }
+
+    /**
+     * Reload ACL rules from the configured ACL file.
+     *
+     * @return "OK" if successful
+     */
+    public String aclLoad() {
+        return executeCommandWithGlide("ACL", () -> glideClient.aclLoad().get());
+    }
+
+    /**
+     * Simulate execution of a command by a user without executing it.
+     *
+     * @param username the username to simulate
+     * @param command the command name
+     * @param args the command arguments
+     * @return "OK" if the user could execute the command, otherwise an error string
+     */
+    public String aclDryRun(String username, String command, String... args) {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> glideClient.aclDryRun(username, command, args).get());
+    }
+
+    private static AccessControlUser parseAclGetUserResponse(Object result) {
+        Object[] arr = (Object[]) result;
+        AccessControlUser user = new AccessControlUser();
+        for (int i = 0; i + 1 < arr.length; i += 2) {
+            String field = arr[i] != null ? arr[i].toString() : null;
+            Object value = arr[i + 1];
+            if (field == null) {
+                continue;
+            }
+            switch (field) {
+                case "flags":
+                    if (value instanceof Object[]) {
+                        for (Object f : (Object[]) value) {
+                            if (f != null) user.addFlag(f.toString());
+                        }
+                    } else if (value != null) {
+                        user.addFlag(value.toString());
+                    }
+                    break;
+                case "passwords":
+                    if (value instanceof Object[]) {
+                        for (Object p : (Object[]) value) {
+                            if (p != null) user.addPassword(p.toString());
+                        }
+                    } else if (value != null) {
+                        user.addPassword(value.toString());
+                    }
+                    break;
+                case "commands":
+                    if (value != null) user.setCommands(value.toString());
+                    break;
+                case "keys":
+                    if (value instanceof Object[]) {
+                        for (Object k : (Object[]) value) {
+                            if (k != null) user.addKey(k.toString());
+                        }
+                    } else if (value != null) {
+                        user.addKey(value.toString());
+                    }
+                    break;
+                case "channels":
+                    if (value instanceof Object[]) {
+                        for (Object c : (Object[]) value) {
+                            if (c != null) user.addChannel(c.toString());
+                        }
+                    } else if (value != null) {
+                        user.addChannel(value.toString());
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+        return user;
+    }
+
+    private static List<AccessControlLogEntry> parseAclLogResponse(Object result) {
+        if (result == null) {
+            return Collections.emptyList();
+        }
+        Object[] entries = (Object[]) result;
+        List<AccessControlLogEntry> list = new ArrayList<>(entries.length);
+        for (Object entryObj : entries) {
+            Map<String, Object> map = flatArrayToMap(entryObj);
+            map.putIfAbsent(AccessControlLogEntry.ENTRY_ID, 0L);
+            map.putIfAbsent(AccessControlLogEntry.TIMESTAMP_CREATED, 0L);
+            map.putIfAbsent(AccessControlLogEntry.TIMESTAMP_LAST_UPDATED, 0L);
+            Object clientInfo = map.get(AccessControlLogEntry.CLIENT_INFO);
+            if (clientInfo == null) {
+                map.put(AccessControlLogEntry.CLIENT_INFO, "");
+            }
+            list.add(new AccessControlLogEntry(map));
+        }
+        return list;
+    }
+
+    private static Map<String, Object> flatArrayToMap(Object entryObj) {
+        Map<String, Object> map = new HashMap<>();
+        if (!(entryObj instanceof Object[])) {
+            return map;
+        }
+        Object[] pairs = (Object[]) entryObj;
+        for (int i = 0; i + 1 < pairs.length; i += 2) {
+            String key = pairs[i] != null ? pairs[i].toString() : null;
+            Object value = pairs[i + 1];
+            if (key == null) {
+                continue;
+            }
+            if (value instanceof Number) {
+                map.put(key, ((Number) value).longValue());
+            } else {
+                map.put(key, value != null ? value.toString() : null);
+            }
+        }
+        return map;
     }
 
     /**
