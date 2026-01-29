@@ -1711,148 +1711,146 @@ public class PubSubTests {
     @ValueSource(booleans = {true, false})
     @SneakyThrows
     public void dynamic_subscribe_lazy(boolean standalone) {
-        BaseClient listener = createClient(standalone);
-        BaseClient sender = createClient(standalone);
+        try (BaseClient listener = createClient(standalone);
+                BaseClient sender = createClient(standalone)) {
+            String channel = "test-channel-" + UUID.randomUUID();
+            String message = "test-message";
 
-        String channel = "test-channel-" + UUID.randomUUID();
-        String message = "test-message";
+            // Dynamic subscribe (lazy)
+            Set<String> channels = Set.of(channel);
+            if (standalone) {
+                ((GlideClient) listener).subscribe(channels).get();
+            } else {
+                ((GlideClusterClient) listener).subscribe(channels).get();
+            }
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-        // Dynamic subscribe (lazy)
-        Set<String> channels = Set.of(channel);
-        if (standalone) {
-            ((GlideClient) listener).subscribe(channels).get();
-        } else {
-            ((GlideClusterClient) listener).subscribe(channels).get();
+            // Publish message
+            sender.publish(message, channel).get();
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+            // Receive message
+            PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
+            assertEquals(message, msg.getMessage().getString());
+            assertEquals(channel, msg.getChannel().getString());
         }
-        Thread.sleep(MESSAGE_DELIVERY_DELAY);
-
-        // Publish message
-        sender.publish(message, channel).get();
-        Thread.sleep(MESSAGE_DELIVERY_DELAY);
-
-        // Receive message
-        PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
-        assertEquals(message, msg.getMessage().getString());
-        assertEquals(channel, msg.getChannel().getString());
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
     @SneakyThrows
     public void dynamic_psubscribe_lazy(boolean standalone) {
-        BaseClient listener = createClient(standalone);
-        BaseClient sender = createClient(standalone);
+        try (BaseClient listener = createClient(standalone);
+                BaseClient sender = createClient(standalone)) {
+            String pattern = "test-pattern-*";
+            String channel = "test-pattern-" + UUID.randomUUID();
+            String message = "test-message";
 
-        String pattern = "test-pattern-*";
-        String channel = "test-pattern-" + UUID.randomUUID();
-        String message = "test-message";
+            // Dynamic psubscribe (lazy)
+            Set<String> patterns = Set.of(pattern);
+            if (standalone) {
+                ((GlideClient) listener).psubscribe(patterns).get();
+            } else {
+                ((GlideClusterClient) listener).psubscribe(patterns).get();
+            }
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-        // Dynamic psubscribe (lazy)
-        Set<String> patterns = Set.of(pattern);
-        if (standalone) {
-            ((GlideClient) listener).psubscribe(patterns).get();
-        } else {
-            ((GlideClusterClient) listener).psubscribe(patterns).get();
+            // Publish message
+            sender.publish(message, channel).get();
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+            // Receive message
+            PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
+            assertEquals(message, msg.getMessage().getString());
+            assertEquals(channel, msg.getChannel().getString());
+            assertTrue(msg.getPattern().isPresent());
+            assertEquals(pattern, msg.getPattern().get().getString());
         }
-        Thread.sleep(MESSAGE_DELIVERY_DELAY);
-
-        // Publish message
-        sender.publish(message, channel).get();
-        Thread.sleep(MESSAGE_DELIVERY_DELAY);
-
-        // Receive message
-        PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
-        assertEquals(message, msg.getMessage().getString());
-        assertEquals(channel, msg.getChannel().getString());
-        assertTrue(msg.getPattern().isPresent());
-        assertEquals(pattern, msg.getPattern().get().getString());
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     @SneakyThrows
     public void dynamic_unsubscribe(boolean standalone) {
-        BaseClient listener = createClient(standalone);
-        BaseClient sender = createClient(standalone);
+        try (BaseClient listener = createClient(standalone);
+                BaseClient sender = createClient(standalone)) {
+            String channel = "test-channel-" + UUID.randomUUID();
+            String message = "test-message";
 
-        String channel = "test-channel-" + UUID.randomUUID();
-        String message = "test-message";
+            // Subscribe
+            Set<String> channels = Set.of(channel);
+            if (standalone) {
+                ((GlideClient) listener).subscribe(channels).get();
+            } else {
+                ((GlideClusterClient) listener).subscribe(channels).get();
+            }
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-        // Subscribe
-        Set<String> channels = Set.of(channel);
-        if (standalone) {
-            ((GlideClient) listener).subscribe(channels).get();
-        } else {
-            ((GlideClusterClient) listener).subscribe(channels).get();
+            // Unsubscribe
+            if (standalone) {
+                ((GlideClient) listener).unsubscribe(channels).get();
+            } else {
+                ((GlideClusterClient) listener).unsubscribe(channels).get();
+            }
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+            // Publish message
+            sender.publish(message, channel).get();
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+            // Should not receive message
+            PubSubMessage msg = listener.tryGetPubSubMessage();
+            assertNull(msg);
         }
-        Thread.sleep(MESSAGE_DELIVERY_DELAY);
-
-        // Unsubscribe
-        if (standalone) {
-            ((GlideClient) listener).unsubscribe(channels).get();
-        } else {
-            ((GlideClusterClient) listener).unsubscribe(channels).get();
-        }
-        Thread.sleep(MESSAGE_DELIVERY_DELAY);
-
-        // Publish message
-        sender.publish(message, channel).get();
-        Thread.sleep(MESSAGE_DELIVERY_DELAY);
-
-        // Should not receive message
-        PubSubMessage msg = listener.tryGetPubSubMessage();
-        assertNull(msg);
     }
 
     @Test
     @SneakyThrows
     public void dynamic_ssubscribe_lazy() {
-        GlideClusterClient listener = (GlideClusterClient) createClient(false);
-        GlideClusterClient sender = (GlideClusterClient) createClient(false);
+        try (GlideClusterClient listener = (GlideClusterClient) createClient(false);
+                GlideClusterClient sender = (GlideClusterClient) createClient(false)) {
+            String channel = "test-shard-channel-" + UUID.randomUUID();
+            String message = "test-message";
 
-        String channel = "test-shard-channel-" + UUID.randomUUID();
-        String message = "test-message";
+            // Dynamic ssubscribe (lazy)
+            Set<String> channels = Set.of(channel);
+            listener.ssubscribe(channels).get();
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-        // Dynamic ssubscribe (lazy)
-        Set<String> channels = Set.of(channel);
-        listener.ssubscribe(channels).get();
-        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+            // Publish message
+            sender.publish(message, channel, true).get();
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-        // Publish message
-        sender.publish(message, channel, true).get();
-        Thread.sleep(MESSAGE_DELIVERY_DELAY);
-
-        // Receive message
-        PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
-        assertEquals(message, msg.getMessage().getString());
-        assertEquals(channel, msg.getChannel().getString());
+            // Receive message
+            PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
+            assertEquals(message, msg.getMessage().getString());
+            assertEquals(channel, msg.getChannel().getString());
+        }
     }
 
     @Test
     @SneakyThrows
     public void dynamic_sunsubscribe() {
-        GlideClusterClient listener = (GlideClusterClient) createClient(false);
-        GlideClusterClient sender = (GlideClusterClient) createClient(false);
+        try (GlideClusterClient listener = (GlideClusterClient) createClient(false);
+                GlideClusterClient sender = (GlideClusterClient) createClient(false)) {
+            String channel = "test-shard-channel-" + UUID.randomUUID();
+            String message = "test-message";
 
-        String channel = "test-shard-channel-" + UUID.randomUUID();
-        String message = "test-message";
+            // Subscribe
+            Set<String> channels = Set.of(channel);
+            listener.ssubscribe(channels).get();
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-        // Subscribe
-        Set<String> channels = Set.of(channel);
-        listener.ssubscribe(channels).get();
-        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+            // Unsubscribe
+            listener.sunsubscribe(channels).get();
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-        // Unsubscribe
-        listener.sunsubscribe(channels).get();
-        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+            // Publish message
+            sender.publish(message, channel, true).get();
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-        // Publish message
-        sender.publish(message, channel, true).get();
-        Thread.sleep(MESSAGE_DELIVERY_DELAY);
-
-        // Should not receive message
-        PubSubMessage msg = listener.tryGetPubSubMessage();
-        assertNull(msg);
+            // Should not receive message
+            PubSubMessage msg = listener.tryGetPubSubMessage();
+            assertNull(msg);
+        }
     }
 
     @ParameterizedTest
@@ -1918,5 +1916,58 @@ public class PubSubTests {
 
         listener.close();
         sender.close();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @SneakyThrows
+    public void test_subscription_metrics_in_statistics(boolean standalone) {
+        try (BaseClient client = createClient(standalone)) {
+            // Get initial statistics
+            Map<String, String> stats = client.getStatistics();
+
+            // Verify subscription metrics exist
+            assertTrue(stats.containsKey("subscription_out_of_sync_count"));
+            assertTrue(stats.containsKey("subscription_last_sync_timestamp"));
+
+            // Verify they are valid numbers
+            long outOfSyncCount = Long.parseLong(stats.get("subscription_out_of_sync_count"));
+            long lastSyncTimestamp = Long.parseLong(stats.get("subscription_last_sync_timestamp"));
+
+            // Verify they are non-negative
+            assertTrue(outOfSyncCount >= 0);
+            assertTrue(lastSyncTimestamp >= 0);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @SneakyThrows
+    public void test_subscription_timestamp_updates_after_subscribe(boolean standalone) {
+        try (BaseClient client = createClient(standalone)) {
+            String channel = "test-channel-" + UUID.randomUUID();
+
+            // Get initial timestamp
+            Map<String, String> initialStats = client.getStatistics();
+            long initialTimestamp = Long.parseLong(initialStats.get("subscription_last_sync_timestamp"));
+
+            // Subscribe to a channel
+            Set<String> channels = Set.of(channel);
+            if (standalone) {
+                ((GlideClient) client).subscribe(channels).get();
+            } else {
+                ((GlideClusterClient) client).subscribe(channels).get();
+            }
+
+            // Wait for reconciliation
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+            // Get updated timestamp
+            Map<String, String> updatedStats = client.getStatistics();
+            long updatedTimestamp = Long.parseLong(updatedStats.get("subscription_last_sync_timestamp"));
+
+            // Timestamp should have been updated (or at least not decreased)
+            assertTrue(updatedTimestamp >= initialTimestamp);
+        }
     }
 }

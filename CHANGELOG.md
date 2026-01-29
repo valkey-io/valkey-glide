@@ -11,7 +11,7 @@
 * Python: Add inflight request limit support to sync client
 * Python Sync: Add OpenTelemetry support with traces and metrics configuration
 * Python: Move OpenTelemetry config classes to glide_shared for code reuse between async and sync clients
-* JAVA: Add dynamic PubSub methods (subscribe, psubscribe, unsubscribe, punsubscribe, ssubscribe, sunsubscribe) and getSubscriptions() for subscription state tracking ([#5267](https://github.com/valkey-io/valkey-glide/issues/5267))
+* JAVA: Add dynamic PubSub methods (subscribe, psubscribe, unsubscribe, punsubscribe, ssubscribe, sunsubscribe), getSubscriptions() for subscription state tracking, pubsubReconciliationIntervalMs configuration option, and subscription_out_of_sync_count and subscription_last_sync_timestamp metrics ([#5267](https://github.com/valkey-io/valkey-glide/issues/5267))
 
 #### Fixes
 * Node: Fix to handle non-string types in toBuffersArray ([#4842](https://github.com/valkey-io/valkey-glide/issues/4842))

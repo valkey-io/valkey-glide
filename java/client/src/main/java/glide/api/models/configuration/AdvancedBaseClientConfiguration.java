@@ -46,4 +46,15 @@ public abstract class AdvancedBaseClientConfiguration {
      * <p>If not explicitly set, a default value of true will be used by the Rust core.
      */
     private final Boolean tcpNoDelay;
+
+    /**
+     * The interval in milliseconds between PubSub subscription reconciliation attempts.
+     *
+     * <p>The reconciliation process ensures that the client's desired subscriptions match the actual
+     * subscriptions on the server. This is useful when subscriptions may have been lost due to
+     * network issues or server restarts.
+     *
+     * <p>If not explicitly set, the Rust core will use its default reconciliation interval.
+     */
+    private final Integer pubsubReconciliationIntervalMs;
 }

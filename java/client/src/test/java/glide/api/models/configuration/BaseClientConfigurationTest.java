@@ -56,4 +56,44 @@ public class BaseClientConfigurationTest {
                 TestClientConfiguration.builder().databaseId(databaseId).build();
         assertEquals(databaseId, config.getDatabaseId());
     }
+
+    @Test
+    public void testPubsubReconciliationIntervalDefault() {
+        // Test that pubsubReconciliationIntervalMs defaults to null when not specified
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host("localhost").port(6379).build())
+                        .build();
+        assertNull(config.getAdvancedConfiguration().getPubsubReconciliationIntervalMs());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {100, 500, 1000, 5000, 10000})
+    public void testPubsubReconciliationIntervalValidRange(int intervalMs) {
+        // Test that pubsubReconciliationIntervalMs is properly set in advanced config
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host("localhost").port(6379).build())
+                        .advancedConfiguration(
+                                AdvancedGlideClientConfiguration.builder()
+                                        .pubsubReconciliationIntervalMs(intervalMs)
+                                        .build())
+                        .build();
+        assertEquals(intervalMs, config.getAdvancedConfiguration().getPubsubReconciliationIntervalMs());
+    }
+
+    @Test
+    public void testPubsubReconciliationIntervalCluster() {
+        // Test that pubsubReconciliationIntervalMs works for cluster configuration
+        int intervalMs = 2000;
+        GlideClusterClientConfiguration config =
+                GlideClusterClientConfiguration.builder()
+                        .address(NodeAddress.builder().host("localhost").port(7000).build())
+                        .advancedConfiguration(
+                                AdvancedGlideClusterClientConfiguration.builder()
+                                        .pubsubReconciliationIntervalMs(intervalMs)
+                                        .build())
+                        .build();
+        assertEquals(intervalMs, config.getAdvancedConfiguration().getPubsubReconciliationIntervalMs());
+    }
 }
