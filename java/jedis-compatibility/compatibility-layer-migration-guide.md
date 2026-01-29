@@ -70,6 +70,7 @@ blockingSocketTimeoutMillis
 - ⚠️ Sorted set operations (ZADD, ZREM, ZRANGE) - **Available via `sendCommand()` only**
 - ✅ Key operations (DEL, EXISTS, EXPIRE, TTL)
 - ✅ Connection commands (PING, SELECT)
+- ✅ ACL commands (ACL LIST, ACL GETUSER, ACL SETUSER, ACL DELUSER, ACL CAT, ACL GENPASS, ACL LOG, ACL WHOAMI, ACL USERS, ACL SAVE, ACL LOAD, ACL DRYRUN)
 - ✅ Generic commands via `sendCommand()` (Protocol.Command types only)
 
 ### Client Types
