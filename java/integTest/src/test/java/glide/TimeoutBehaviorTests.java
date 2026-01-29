@@ -1,3 +1,4 @@
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
 import static glide.TestUtilities.commonClientConfig;
@@ -25,8 +26,7 @@ public class TimeoutBehaviorTests {
 
     private static Stream<Arguments> timeoutClients() {
         return Stream.of(
-                Arguments.of(named("standalone", false)),
-                Arguments.of(named("cluster", true)));
+                Arguments.of(named("standalone", false)), Arguments.of(named("cluster", true)));
     }
 
     @SneakyThrows
@@ -39,9 +39,7 @@ public class TimeoutBehaviorTests {
         BaseClient client =
                 clusterMode
                         ? GlideClusterClient.createClient(
-                                        commonClusterClientConfig()
-                                                .requestTimeout(requestTimeoutMs)
-                                                .build())
+                                        commonClusterClientConfig().requestTimeout(requestTimeoutMs).build())
                                 .get()
                         : GlideClient.createClient(
                                         commonClientConfig().requestTimeout(requestTimeoutMs).build())
@@ -57,9 +55,7 @@ public class TimeoutBehaviorTests {
                             () -> client.blpop(new String[] {key}, serverTimeoutSeconds).get());
             long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
 
-            assertTrue(
-                    isTimeout(exception.getCause()),
-                    "Expected timeout, got: " + exception.getCause());
+            assertTrue(isTimeout(exception.getCause()), "Expected timeout, got: " + exception.getCause());
             assertTrue(
                     elapsedMs < (long) (serverTimeoutSeconds * 1000),
                     "Timeout should happen before server response. elapsedMs=" + elapsedMs);

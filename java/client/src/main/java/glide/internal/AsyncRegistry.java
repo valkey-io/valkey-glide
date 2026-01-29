@@ -82,10 +82,7 @@ public final class AsyncRegistry {
      * @return Correlation ID for native callback
      */
     public static <T> long register(
-            CompletableFuture<T> future,
-            int maxInflightRequests,
-            long clientHandle,
-            long timeoutMillis) {
+            CompletableFuture<T> future, int maxInflightRequests, long clientHandle, long timeoutMillis) {
         if (future == null) {
             throw new IllegalArgumentException("Future cannot be null");
         }

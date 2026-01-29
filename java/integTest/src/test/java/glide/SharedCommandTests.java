@@ -163,9 +163,7 @@ public class SharedCommandTests {
     private static BaseClient createBlockingTimeoutClient(BaseClient client) {
         return client instanceof GlideClient
                 ? GlideClient.createClient(
-                                commonClientConfig()
-                                        .requestTimeout(BLOCKING_COMMAND_REQUEST_TIMEOUT_MS)
-                                        .build())
+                                commonClientConfig().requestTimeout(BLOCKING_COMMAND_REQUEST_TIMEOUT_MS).build())
                         .get()
                 : GlideClusterClient.createClient(
                                 commonClusterClientConfig()

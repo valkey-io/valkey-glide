@@ -129,7 +129,8 @@ public class GlideCoreClient implements AutoCloseable {
 
         // Store the provided parameters
         this.maxInflightRequests = maxInflight > 0 ? maxInflight : 0; // 0 means use native defaults
-        this.requestTimeoutMillis = requestTimeoutMs > 0 ? requestTimeoutMs : 0; // 0 means no Java timeout
+        this.requestTimeoutMillis =
+                requestTimeoutMs > 0 ? requestTimeoutMs : 0; // 0 means no Java timeout
 
         // Use the existing native handle
         this.nativeClientHandle.set(existingHandle);
