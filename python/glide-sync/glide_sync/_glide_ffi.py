@@ -49,8 +49,7 @@ class _GlideFFI:
     def _init_ffi(self):
         self._ffi = FFI()
 
-        self._ffi.cdef(
-            """
+        self._ffi.cdef("""
             // ============== SCRIPT MANAGEMENT ==============
             typedef struct {
                 uint8_t* ptr;
@@ -310,8 +309,7 @@ class _GlideFFI:
             // ============== UTILITY FUNCTIONS ==============
             void free_c_string(char* s);
             unsigned long get_min_compressed_size();
-            """
-        )
+            """)
 
         # Load the shared library
         self._lib = self._ffi.dlopen(str(LIB_FILE.resolve()))
@@ -325,3 +323,7 @@ class _GlideFFI:
     def lib(self):
         """Access to the loaded library for calling functions."""
         return self._lib
+
+
+# Singleton instance accessor
+GlideFFI = _GlideFFI()

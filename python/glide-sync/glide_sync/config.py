@@ -23,6 +23,7 @@ from glide_shared.config import (
     ReadFrom,
     ServerCredentials,
 )
+from glide_shared.exceptions import ConfigurationError
 
 
 class GlideClientConfiguration(SharedGlideClientConfiguration):
@@ -55,6 +56,11 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
+        inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
+            (sent but not yet completed).
+            This limit is used to control the memory usage and prevent the client from overwhelming the server or getting
+            stuck in case of a queue backlog.
+            If not set, the default value of 1000 will be used.
         client_az (Optional[str]): Availability Zone of the client.
             If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
             the specified AZ if exits.
@@ -67,7 +73,7 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
             Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
 
         Note:
-            PubSub and inflight_requests_limit are not yet supported for the sync client.
+            Dynamic PubSub is not yet supported for the sync client.
     """
 
     def __init__(
@@ -81,6 +87,7 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
+        inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
@@ -89,6 +96,16 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
         ] = None,
         compression: Optional["CompressionConfiguration"] = None,
     ):
+        # TODO: remove this once dynamic pubsub is implemented for the sync python client
+        if (
+            advanced_config is not None
+            and advanced_config.pubsub_reconciliation_interval is not None
+        ):
+            raise ConfigurationError(
+                "pubsub_reconciliation_interval is not supported for the sync client. "
+                "Dynamic pubsub features are only available in the async client."
+            )
+
         super().__init__(
             addresses=addresses,
             use_tls=use_tls,
@@ -100,7 +117,7 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
             client_name=client_name,
             protocol=protocol,
             pubsub_subscriptions=pubsub_subscriptions,
-            inflight_requests_limit=None,
+            inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
@@ -138,6 +155,11 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
+        inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight
+            (sent but not yet completed).
+            This limit is used to control the memory usage and prevent the client from overwhelming the server or getting
+            stuck in case of a queue backlog.
+            If not set, the default value of 1000 will be used.
         periodic_checks (Union[PeriodicChecksStatus, PeriodicChecksManualInterval]): Configure the periodic topology checks.
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
             Periodic checks ensure a quick and efficient process by querying a limited number of nodes.
@@ -157,7 +179,7 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
     Notes:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff
         with fixed values is used.
-        In addition, PubSub and inflight_requests_limit are not yet supported for the sync client.
+        In addition, Dynamic PubSub is not yet supported for the sync client.
     """
 
     def __init__(
@@ -171,6 +193,7 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
+        inflight_requests_limit: Optional[int] = None,
         periodic_checks: Union[
             PeriodicChecksStatus, PeriodicChecksManualInterval
         ] = PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS,
@@ -182,6 +205,16 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
         ] = None,
         compression: Optional["CompressionConfiguration"] = None,
     ):
+        # TODO: remove this once dynamic pubsub is implemented for the sync python client
+        if (
+            advanced_config is not None
+            and advanced_config.pubsub_reconciliation_interval is not None
+        ):
+            raise ConfigurationError(
+                "pubsub_reconciliation_interval is not supported for the sync client. "
+                "Dynamic pubsub features are only available in the async client."
+            )
+
         super().__init__(
             addresses=addresses,
             use_tls=use_tls,
@@ -194,7 +227,7 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
             pubsub_subscriptions=pubsub_subscriptions,
             client_name=client_name,
             protocol=protocol,
-            inflight_requests_limit=None,
+            inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,

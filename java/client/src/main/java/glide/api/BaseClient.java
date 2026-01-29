@@ -1,6 +1,18 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static command_request.CommandRequestOuterClass.RequestType.AclCat;
+import static command_request.CommandRequestOuterClass.RequestType.AclDelUser;
+import static command_request.CommandRequestOuterClass.RequestType.AclDryRun;
+import static command_request.CommandRequestOuterClass.RequestType.AclGenPass;
+import static command_request.CommandRequestOuterClass.RequestType.AclGetUser;
+import static command_request.CommandRequestOuterClass.RequestType.AclList;
+import static command_request.CommandRequestOuterClass.RequestType.AclLoad;
+import static command_request.CommandRequestOuterClass.RequestType.AclLog;
+import static command_request.CommandRequestOuterClass.RequestType.AclSave;
+import static command_request.CommandRequestOuterClass.RequestType.AclSetUser;
+import static command_request.CommandRequestOuterClass.RequestType.AclUsers;
+import static command_request.CommandRequestOuterClass.RequestType.AclWhoami;
 import static command_request.CommandRequestOuterClass.RequestType.Append;
 import static command_request.CommandRequestOuterClass.RequestType.BLMPop;
 import static command_request.CommandRequestOuterClass.RequestType.BLMove;
@@ -19,6 +31,8 @@ import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
 import static command_request.CommandRequestOuterClass.RequestType.Del;
 import static command_request.CommandRequestOuterClass.RequestType.Dump;
+import static command_request.CommandRequestOuterClass.RequestType.EvalReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.EvalShaReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.Exists;
 import static command_request.CommandRequestOuterClass.RequestType.Expire;
 import static command_request.CommandRequestOuterClass.RequestType.ExpireAt;
@@ -122,6 +136,7 @@ import static command_request.CommandRequestOuterClass.RequestType.SRem;
 import static command_request.CommandRequestOuterClass.RequestType.SScan;
 import static command_request.CommandRequestOuterClass.RequestType.SUnion;
 import static command_request.CommandRequestOuterClass.RequestType.SUnionStore;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptDebug;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
@@ -246,6 +261,7 @@ import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScoreFilter;
+import glide.api.models.commands.ScriptDebugMode;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SetOptions;
@@ -534,12 +550,8 @@ public abstract class BaseClient
      * @return A message if any or <code>null</code> if there are no unread messages.
      */
     public PubSubMessage tryGetPubSubMessage() {
-        if (subscriptionConfiguration.isEmpty()) {
-            throw new ConfigurationError(
-                    "The operation will never complete since there was no pubsub subscriptions applied to the"
-                            + " client.");
-        }
-        if (subscriptionConfiguration.get().getCallback().isPresent()) {
+        if (subscriptionConfiguration.isPresent()
+                && subscriptionConfiguration.get().getCallback().isPresent()) {
             throw new ConfigurationError(
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
@@ -557,12 +569,8 @@ public abstract class BaseClient
      * @return A {@link CompletableFuture} which will asynchronously hold the next available message.
      */
     public CompletableFuture<PubSubMessage> getPubSubMessage() {
-        if (subscriptionConfiguration.isEmpty()) {
-            throw new ConfigurationError(
-                    "The operation will never complete since there was no pubsub subscriptions applied to the"
-                            + " client.");
-        }
-        if (subscriptionConfiguration.get().getCallback().isPresent()) {
+        if (subscriptionConfiguration.isPresent()
+                && subscriptionConfiguration.get().getCallback().isPresent()) {
             throw new ConfigurationError(
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
@@ -5017,6 +5025,68 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object> evalReadOnly(@NonNull String script) {
+        return evalReadOnly(script, EMPTY_STRING_ARRAY, EMPTY_STRING_ARRAY);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalReadOnly(
+            @NonNull String script, @NonNull String[] keys, @NonNull String[] args) {
+        String[] arguments =
+                concatenateArrays(new String[] {script, String.valueOf(keys.length)}, keys, args);
+        return commandManager.submitNewCommand(
+                EvalReadOnly, arguments, this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalReadOnly(@NonNull GlideString script) {
+        return evalReadOnly(script, EMPTY_GLIDE_STRING_ARRAY, EMPTY_GLIDE_STRING_ARRAY);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalReadOnly(
+            @NonNull GlideString script, @NonNull GlideString[] keys, @NonNull GlideString[] args) {
+        GlideString[] arguments =
+                concatenateArrays(new GlideString[] {script, gs(String.valueOf(keys.length))}, keys, args);
+        return commandManager.submitNewCommand(
+                EvalReadOnly, arguments, this::handleBinaryObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalshaReadOnly(@NonNull String sha1) {
+        return evalshaReadOnly(sha1, EMPTY_STRING_ARRAY, EMPTY_STRING_ARRAY);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalshaReadOnly(
+            @NonNull String sha1, @NonNull String[] keys, @NonNull String[] args) {
+        String[] arguments =
+                concatenateArrays(new String[] {sha1, String.valueOf(keys.length)}, keys, args);
+        return commandManager.submitNewCommand(
+                EvalShaReadOnly, arguments, this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalshaReadOnly(@NonNull GlideString sha1) {
+        return evalshaReadOnly(sha1, EMPTY_GLIDE_STRING_ARRAY, EMPTY_GLIDE_STRING_ARRAY);
+    }
+
+    @Override
+    public CompletableFuture<Object> evalshaReadOnly(
+            @NonNull GlideString sha1, @NonNull GlideString[] keys, @NonNull GlideString[] args) {
+        GlideString[] arguments =
+                concatenateArrays(new GlideString[] {sha1, gs(String.valueOf(keys.length))}, keys, args);
+        return commandManager.submitNewCommand(
+                EvalShaReadOnly, arguments, this::handleBinaryObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> scriptDebug(@NonNull ScriptDebugMode mode) {
+        return commandManager.submitNewCommand(
+                ScriptDebug, new String[] {mode.name()}, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> copy(
             @NonNull String source, @NonNull String destination, boolean replace) {
         String[] arguments = new String[] {source, destination};
@@ -5962,6 +6032,85 @@ public abstract class BaseClient
                 Wait,
                 new String[] {Long.toString(numreplicas), Long.toString(timeout)},
                 this::handleLongResponse);
+    }
+
+    public CompletableFuture<String[]> aclCat() {
+        return commandManager.submitNewCommand(
+                AclCat,
+                EMPTY_STRING_ARRAY,
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    public CompletableFuture<String[]> aclCat(String category) {
+        return commandManager.submitNewCommand(
+                AclCat,
+                new String[] {category},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    public CompletableFuture<Long> aclDelUser(String[] usernames) {
+        return commandManager.submitNewCommand(AclDelUser, usernames, this::handleLongResponse);
+    }
+
+    public CompletableFuture<String> aclDryRun(String username, String command, String[] args) {
+        String[] arguments = concatenateArrays(new String[] {username, command}, args);
+        return commandManager.submitNewCommand(AclDryRun, arguments, this::handleStringResponse);
+    }
+
+    public CompletableFuture<String> aclGenPass() {
+        return commandManager.submitNewCommand(
+                AclGenPass, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    public CompletableFuture<String> aclGenPass(int bits) {
+        return commandManager.submitNewCommand(
+                AclGenPass, new String[] {String.valueOf(bits)}, this::handleStringResponse);
+    }
+
+    public CompletableFuture<Object> aclGetUser(String username) {
+        return commandManager.submitNewCommand(
+                AclGetUser, new String[] {username}, this::handleObjectOrNullResponse);
+    }
+
+    public CompletableFuture<String[]> aclList() {
+        return commandManager.submitNewCommand(
+                AclList,
+                EMPTY_STRING_ARRAY,
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    public CompletableFuture<String> aclLoad() {
+        return commandManager.submitNewCommand(AclLoad, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    public CompletableFuture<Object[]> aclLog() {
+        return commandManager.submitNewCommand(AclLog, EMPTY_STRING_ARRAY, this::handleArrayResponse);
+    }
+
+    public CompletableFuture<Object[]> aclLog(int count) {
+        return commandManager.submitNewCommand(
+                AclLog, new String[] {String.valueOf(count)}, this::handleArrayResponse);
+    }
+
+    public CompletableFuture<String> aclSave() {
+        return commandManager.submitNewCommand(AclSave, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    public CompletableFuture<String> aclSetUser(String username, String[] rules) {
+        String[] arguments = concatenateArrays(new String[] {username}, rules);
+        return commandManager.submitNewCommand(AclSetUser, arguments, this::handleStringResponse);
+    }
+
+    public CompletableFuture<String[]> aclUsers() {
+        return commandManager.submitNewCommand(
+                AclUsers,
+                EMPTY_STRING_ARRAY,
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    public CompletableFuture<String> aclWhoami() {
+        return commandManager.submitNewCommand(
+                AclWhoami, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     /**

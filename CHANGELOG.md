@@ -2,17 +2,77 @@
 
 #### Changes
 
+* JAVA: Add EVAL_RO, EVALSHA_RO, and SCRIPT DEBUG commands ([#5125](https://github.com/valkey-io/valkey-glide/pull/5125))
+* CORE: Add client certificate and private key support for mTLS ([#5092](https://github.com/valkey-io/valkey-glide/issues/5092))
+* Python: Add client certificate and private key support for mTLS ([5123](https://github.com/valkey-io/valkey-glide/issues/5123))
+* JAVA: Add ACL server management commands (ACL CAT, ACL DELUSER, ACL DRYRUN, ACL GENPASS, ACL GETUSER, ACL LIST, ACL LOAD, ACL LOG, ACL SAVE, ACL SETUSER, ACL USERS, ACL WHOAMI)
+* CORE: Fix typo in ACL SETUSER command mapping (AclSetSser → AclSetUser)
+* Python: Add inflight request limit support to sync client
+* Python Sync: Add OpenTelemetry support with traces and metrics configuration
+* Python: Move OpenTelemetry config classes to glide_shared for code reuse between async and sync clients
+
 #### Fixes
+* Node: Fix to handle non-string types in toBuffersArray ([#4842](https://github.com/valkey-io/valkey-glide/issues/4842))
 * CORE: Enforce connection_timeout for initial standalone connection failures  ([#4991](https://github.com/valkey-io/valkey-glide/issues/4991))
 * Node: Fixed `Failed to convert napi value Undefined into rust type u32` error  ([#5128](https://github.com/valkey-io/valkey-glide/pull/5128))
+* Python: Fix Sphinx docs build failure with duplicate object warnings  ([#5163](https://github.com/valkey-io/valkey-glide/issues/5163))
+* Java: Restore shading and relocation of protobuf ([#5031](https://github.com/valkey-io/valkey-glide/pull/5031))
+* CORE: Remove DEFAULT_CLIENT_CREATION_TIMEOUT and honor user-provided connection timeout by centralizing timeout logic in ConnectionRequest ([#5183](https://github.com/valkey-io/valkey-glide/issues/5183))
 
 #### Operational Enhancements
+* Docs: Add missing references to windows-x86_64 classifier ([#5028](https://github.com/valkey-io/valkey-glide/pull/5028))
+* CI: Upgrade ORT from 46.0.0 to 59.0.0 to fix Synopsys repository 403 error ([#5169](https://github.com/valkey-io/valkey-glide/pull/5169))
+* Java: Enable Windows integration test in workflow through WSL([#5112](https://github.com/valkey-io/valkey-glide/pull/5112/))
+
+## 2.2.5
+
+#### Changes
+
+* All Clients: Add TCPNoDelay option ([#5100](https://github.com/valkey-io/valkey-glide/pull/5100))
+
+#### Fixes
+
+* Node: Fix `Failed to convert napi value Undefined into rust type u32` error ([#5128](https://github.com/valkey-io/valkey-glide/pull/5128))
+
+#### Operational Enhancements
+
+* Rust: Rust 2024 compatibility fix ([#5101](https://github.com/valkey-io/valkey-glide/pull/5101))
+* CI: Update NPM CD with Trusted Publishing ([#5110](https://github.com/valkey-io/valkey-glide/pull/5110))
+* Rust: Add RUSTSEC-2025-0141 to ignore list in deny.toml ([#5137](https://github.com/valkey-io/valkey-glide/pull/5137))
+
+## 2.2.3
+
+#### Changes
+
+* JAVA: Unshadow Apache Commons Lang3 to avoid failures due to dependency conflicts ([#5074](https://github.com/valkey-io/valkey-glide/pull/5074))
+
+#### Fixes
+
+* CORE: Rust Lint is failing due to unmaintained advisory detected (RUSTSEC-2025-0141)  ([#5136](https://github.com/valkey-io/valkey-glide/issues/5136))
+
+## 2.2.2
+
+#### Security Fixes
+
+* JAVA: Update Apache Commons Lang3 from 3.13.0 to 3.20.0 to address CVE-2025-48924 ([#5049](https://github.com/valkey-io/valkey-glide/pull/5049))
+
+#### Fixes
+
+* JAVA: Add protobuf shading to prevent version conflicts with user dependencies ([#5031](https://github.com/valkey-io/valkey-glide/pull/5031))
+* JAVA: Fix classloader issues in JNI method caching ([#5029](https://github.com/valkey-io/valkey-glide/pull/5029))
+* PYTHON: Update sniffio dependency ([#5044](https://github.com/valkey-io/valkey-glide/pull/5044))
+
+## 2.2.1
+
+#### Changes
+
+* JAVA: Windows Java binaries are now available ([#5049](https://github.com/valkey-io/valkey-glide/pull/5049))
 
 ## 2.2
 
 #### Changes
 
-* Added in documentation to how to use Lua scripts with Glide 
+* Added in documentation to how to use Lua scripts with Glide
 * JAVA: Add refreshTopologyFromInitialNodes Configuration Option ([#4870](https://github.com/valkey-io/valkey-glide/pull/4870))
 * GO: add RefreshTopologyFromInitialNodes configuration option ([#4871](https://github.com/valkey-io/valkey-glide/pull/4871))
 * Node: add refreshTopologyFromInitialNodes configuration option ([#4872](https://github.com/valkey-io/valkey-glide/pull/4872))
@@ -20,6 +80,7 @@
 * JAVA: Add IAM authentication support for ElastiCache/MemoryDB ([#4891](https://github.com/valkey-io/valkey-glide/pull/4891/))
 * FFI/GO: Add IAM authentication support with automatic token refresh ([#4892](https://github.com/valkey-io/valkey-glide/pull/4892))
 * GO: Add TLS Custom Root Certificate Support for Go Client ([#4921](https://github.com/valkey-io/valkey-glide/pull/4921))
+* GO: Enable `go mod vendor` support via CI-generated marker files ([#4721](https://github.com/valkey-io/valkey-glide/issues/4721))
 * Python: Add Custom Root Certificate Support for Python TLS Connections ([#4930](https://github.com/valkey-io/valkey-glide/pull/4930))
 * Python: Add Python 3.14 support ([#4897](https://github.com/valkey-io/valkey-glide/pull/4897))
 * JAVA: Implement TLS support for Java client ([#4905](https://github.com/valkey-io/valkey-glide/pull/4905))
@@ -38,6 +99,7 @@
 #### Operational Enhancements
 
 * Rust: Updates the `install-rust-and-protoc` action to explicitly include the `rustfmt` and `clippy` components. ([#4816](https://github.com/valkey-io/valkey-glide/issues/4816))
+
 ## 2.1.1
 
 #### Changes
@@ -55,7 +117,7 @@
 * PYTHON: Add MOVE command support for cluster clients ([#4751](https://github.com/valkey-io/valkey-glide/pull/4751))
 * JAVA: Add cluster support for Move command ([#4749])(https://github.com/valkey-io/valkey-glide/pull/4749)
 
-#### Fixes 
+#### Fixes
 
 * CORE: Fix SELECT Command Database Persistence Across Reconnections ([#4764](https://github.com/valkey-io/valkey-glide/issues/4764))
 * Rust: Updates the `install-rust-and-protoc` action to explicitly include the `rustfmt` and `clippy` components. ([#4816](https://github.com/valkey-io/valkey-glide/issues/4816))

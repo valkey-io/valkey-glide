@@ -92,4 +92,14 @@ impl Client {
     pub fn compression_manager(&self) -> Option<std::sync::Arc<crate::compression::CompressionManager>> {
         None
     }
+
+    /// Mock reserve_inflight_request method for Miri tests
+    pub fn reserve_inflight_request(&self) -> bool {
+        true // Always allow in mock
+    }
+
+    /// Mock release_inflight_request method for Miri tests
+    pub fn release_inflight_request(&self) -> isize {
+        0 // No-op in mock
+    }
 }

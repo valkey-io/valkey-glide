@@ -120,7 +120,7 @@ def create_sync_client(
     client_name: Optional[str] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
     request_timeout: Optional[int] = 1000,
-    connection_timeout: Optional[int] = 1000,
+    connection_timeout: Optional[int] = 10000,  # 10 seconds for test client creation
     cluster_mode_pubsub: Optional[
         GlideClusterClientConfiguration.PubSubSubscriptions
     ] = None,
@@ -135,6 +135,7 @@ def create_sync_client(
     tls_insecure: Optional[bool] = None,
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
+    inflight_requests_limit: Optional[int] = None,
 ) -> TSyncGlideClient:
     # Create sync client
     config = create_sync_client_config(
@@ -157,6 +158,7 @@ def create_sync_client(
         tls_insecure=tls_insecure,
         lazy_connect=lazy_connect,
         enable_compression=enable_compression,
+        inflight_requests_limit=inflight_requests_limit,
     )
     if cluster_mode:
         return SyncGlideClusterClient.create(config)

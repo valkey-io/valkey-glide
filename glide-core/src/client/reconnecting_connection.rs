@@ -20,7 +20,7 @@ use tokio::task;
 use tokio::time::timeout;
 use tokio_retry2::{Retry, RetryError};
 
-use super::{DEFAULT_CONNECTION_TIMEOUT, run_with_timeout};
+use super::{run_with_timeout, types::DEFAULT_CONNECTION_TIMEOUT};
 
 const WRITE_LOCK_ERR: &str = "Failed to acquire the write lock";
 const READ_LOCK_ERR: &str = "Failed to acquire the read lock";
@@ -124,6 +124,7 @@ async fn create_connection(
     discover_az: bool,
     connection_timeout: Duration,
     tcp_nodelay: bool,
+    pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
 ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
     let client = {
         let guard = connection_backend
@@ -142,6 +143,7 @@ async fn create_connection(
         connection_timeout: Some(connection_timeout),
         connection_retry_strategy: Some(retry_strategy),
         tcp_nodelay,
+        pubsub_synchronizer,
     };
 
     // Wrap retry loop in timeout so total time respects connection_timeout
@@ -156,7 +158,8 @@ async fn create_connection(
                     redis::ErrorKind::AuthenticationFailed
                         | redis::ErrorKind::InvalidClientConfig
                         | redis::ErrorKind::RESP3NotSupported
-                ) || e.to_string().contains("NOAUTH");
+                ) || e.to_string().contains("NOAUTH")
+                    || e.to_string().contains("WRONGPASS");
                 if is_permanent {
                     RetryError::permanent(e)
                 } else {
@@ -248,6 +251,7 @@ impl ReconnectingConnection {
         connection_timeout: Duration,
         tls_params: Option<redis::TlsConnParams>,
         tcp_nodelay: bool,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
@@ -267,6 +271,7 @@ impl ReconnectingConnection {
             discover_az,
             connection_timeout,
             tcp_nodelay,
+            pubsub_synchronizer,
         )
         .await
     }
@@ -386,6 +391,7 @@ impl ReconnectingConnection {
                                 .set();
                             *guard = ConnectionState::Connected(connection);
                         }
+
                         Telemetry::incr_total_connections(1);
                         return;
                     }

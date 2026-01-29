@@ -15,7 +15,7 @@
 //! async fn fetch_an_integer() -> String {
 //!     let nodes = vec!["redis://127.0.0.1/"];
 //!     let client = ClusterClient::new(nodes).unwrap();
-//!     let mut connection = client.get_async_connection(None).await.unwrap();
+//!     let mut connection = client.get_async_connection(None, None).await.unwrap();
 //!     let _: () = connection.set("test", "test_data").await.unwrap();
 //!     let rv: String = connection.get("test").await.unwrap();
 //!     return rv;
@@ -33,9 +33,11 @@ pub mod testing {
 use crate::{
     client::GlideConnectionOptions,
     cluster_routing::{Routable, RoutingInfo, ShardUpdateResult},
+    cluster_slotmap::SlotMap,
     cluster_topology::{
-        calculate_topology, get_slot, SlotRefreshState, DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES,
-        DEFAULT_REFRESH_SLOTS_RETRY_BASE_DURATION_MILLIS, DEFAULT_REFRESH_SLOTS_RETRY_BASE_FACTOR,
+        calculate_topology, SlotRefreshState, TopologyHash,
+        DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES, DEFAULT_REFRESH_SLOTS_RETRY_BASE_DURATION_MILLIS,
+        DEFAULT_REFRESH_SLOTS_RETRY_BASE_FACTOR,
     },
     cmd,
     commands::cluster_scan::{cluster_scan, ClusterScanArgs, ScanStateRC},
@@ -49,7 +51,7 @@ use pipeline_routing::{
     route_for_pipeline, PipelineResponses, ResponsePoliciesMap,
 };
 
-use logger_core::{log_error, log_warn};
+use logger_core::log_error;
 use rand::seq::IteratorRandom;
 
 use std::{
@@ -81,9 +83,7 @@ use crate::{
     cluster_client::{ClusterParams, RetryParams},
     cluster_routing::{
         self, MultipleNodeRoutingInfo, Redirect, ResponsePolicy, Route, SingleNodeRoutingInfo,
-        SlotAddr,
     },
-    connection::{PubSubSubscriptionInfo, PubSubSubscriptionKind},
     push_manager::PushInfo,
     Cmd, ConnectionInfo, ErrorKind, IntoConnectionInfo, RedisError, RedisFuture, RedisResult,
     Value,
@@ -111,7 +111,6 @@ use std::sync::RwLock as StdRwLock;
 use tokio::sync::{
     mpsc,
     oneshot::{self, Receiver},
-    RwLock as TokioRwLock,
 };
 use tracing::{debug, info, trace, warn};
 
@@ -137,21 +136,27 @@ where
         initial_nodes: &[ConnectionInfo],
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
     ) -> RedisResult<ClusterConnection<C>> {
-        ClusterConnInner::new(initial_nodes, cluster_params, push_sender)
-            .await
-            .map(|inner| {
-                let (tx, mut rx) = mpsc::channel::<Message<_>>(100);
-                let stream = async move {
-                    let _ = stream::poll_fn(move |cx| rx.poll_recv(cx))
-                        .map(Ok)
-                        .forward(inner)
-                        .await;
-                };
-                #[cfg(feature = "tokio-comp")]
-                tokio::spawn(stream);
-                ClusterConnection(tx)
-            })
+        ClusterConnInner::new(
+            initial_nodes,
+            cluster_params,
+            push_sender,
+            pubsub_synchronizer,
+        )
+        .await
+        .map(|inner| {
+            let (tx, mut rx) = mpsc::channel::<Message<_>>(100);
+            let stream = async move {
+                let _ = stream::poll_fn(move |cx| rx.poll_recv(cx))
+                    .map(Ok)
+                    .forward(inner)
+                    .await;
+            };
+            #[cfg(feature = "tokio-comp")]
+            tokio::spawn(stream);
+            ClusterConnection(tx)
+        })
     }
 
     /// Special handling for `SCAN` command, using `cluster_scan_with_pattern`.
@@ -183,7 +188,7 @@ where
     /// async fn scan_all_cluster() -> Vec<String> {
     ///     let nodes = vec!["redis://127.0.0.1/"];
     ///     let client = ClusterClient::new(nodes).unwrap();
-    ///     let mut connection = client.get_async_connection(None).await.unwrap();
+    ///     let mut connection = client.get_async_connection(None, None).await.unwrap();
     ///     let mut scan_state_rc = ScanStateRC::new();
     ///     let mut keys: Vec<String> = vec![];
     ///     let cluster_scan_args = ClusterScanArgs::builder().with_count(1000).with_object_type(ObjectType::String).build();
@@ -429,8 +434,6 @@ pub(crate) struct InnerCore<C> {
     pending_requests: Mutex<Vec<PendingRequest<C>>>,
     slot_refresh_state: SlotRefreshState,
     initial_nodes: Vec<ConnectionInfo>,
-    subscriptions_by_address: TokioRwLock<HashMap<String, PubSubSubscriptionInfo>>,
-    unassigned_subscriptions: TokioRwLock<PubSubSubscriptionInfo>,
     glide_connection_options: GlideConnectionOptions,
 }
 
@@ -577,6 +580,15 @@ pub(crate) enum RefreshPolicy {
     /// `NotThrottable` indicates that the refresh operation should not be throttled,
     /// meaning it should be executed immediately without any delay or rate-limiting.
     NotThrottable,
+}
+
+/// Indicates what triggered a slot refresh operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SlotRefreshTrigger {
+    /// Initial cluster connection setup - reuse existing connections to avoid double DNS lookup
+    InitialConnection,
+    /// Runtime refresh - periodic checks, topology changes, error recovery
+    RuntimeRefresh,
 }
 
 impl<C> From<cluster_routing::RoutingInfo> for InternalRoutingInfo<C> {
@@ -942,8 +954,10 @@ impl<C> Future for Request<C> {
                     let retry_method = err.retry_method();
                     let next = if err.kind() == ErrorKind::AllConnectionsUnavailable {
                         Next::ReconnectToInitialNodes { request: None }.into()
-                    } else if matches!(err.retry_method(), RetryMethod::MovedRedirect)
-                        || matches!(target, OperationTarget::NotFound)
+                    } else if matches!(
+                        err.retry_method(),
+                        RetryMethod::MovedRedirect | RetryMethod::RefreshSlotsAndRetry
+                    ) || matches!(target, OperationTarget::NotFound)
                     {
                         Next::RefreshSlots {
                             request: None,
@@ -1039,6 +1053,16 @@ impl<C> Future for Request<C> {
                         }
                         .into()
                     }
+                    RetryMethod::RefreshSlotsAndRetry => {
+                        let mut request = this.request.take().unwrap();
+                        request.info.reset_routing();
+                        Next::RefreshSlots {
+                            request: Some(request),
+                            sleep_duration: Some(sleep_duration),
+                            moved_redirect: None,
+                        }
+                        .into()
+                    }
                     RetryMethod::WaitAndRetry => {
                         let sleep_duration = this.retry_params.wait_time_for_retry(request.retry);
                         // Sleep and retry.
@@ -1108,6 +1132,7 @@ where
         initial_nodes: &[ConnectionInfo],
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
     ) -> RedisResult<Disposable<Self>> {
         let disconnect_notifier = {
             #[cfg(feature = "tokio-comp")]
@@ -1133,6 +1158,7 @@ where
             connection_timeout: Some(cluster_params.connection_timeout),
             connection_retry_strategy: Some(connection_retry_strategy),
             tcp_nodelay: cluster_params.tcp_nodelay,
+            pubsub_synchronizer,
         };
 
         let connections = Self::create_initial_connections(
@@ -1155,14 +1181,6 @@ where
             pending_requests: Mutex::new(Vec::new()),
             slot_refresh_state: SlotRefreshState::new(slots_refresh_rate_limiter),
             initial_nodes: initial_nodes.to_vec(),
-            unassigned_subscriptions: TokioRwLock::new(
-                if let Some(subs) = cluster_params.pubsub_subscriptions {
-                    subs.clone()
-                } else {
-                    PubSubSubscriptionInfo::new()
-                },
-            ),
-            subscriptions_by_address: TokioRwLock::new(Default::default()),
             glide_connection_options,
         });
         let mut connection = ClusterConnInner {
@@ -1173,9 +1191,11 @@ where
             periodic_checks_handler: None,
             connections_validation_handler: None,
         };
+        // Initial slots and subscriptions refresh
         Self::refresh_slots_and_subscriptions_with_retries(
             connection.inner.clone(),
             &RefreshPolicy::NotThrottable,
+            SlotRefreshTrigger::InitialConnection,
         )
         .await?;
 
@@ -1254,10 +1274,9 @@ where
             Self::try_to_expand_initial_nodes(initial_nodes).await;
         let connections = stream::iter(initial_nodes.iter().cloned())
             .map(|(node_addr, socket_addr)| {
-                let mut params: ClusterParams = params.clone();
+                let params: ClusterParams = params.clone();
                 let glide_connection_options = glide_connection_options.clone();
                 // set subscriptions to none, they will be applied upon the topology discovery
-                params.pubsub_subscriptions = None;
 
                 async move {
                     let result = connect_and_check(
@@ -1340,6 +1359,7 @@ where
             if let Err(err) = Self::refresh_slots_and_subscriptions_with_retries(
                 inner.clone(),
                 &RefreshPolicy::NotThrottable,
+                SlotRefreshTrigger::InitialConnection,
             )
             .await
             {
@@ -1353,7 +1373,20 @@ where
     // This function serves as a cheap alternative to slot_refresh() and thus can be used much more frequently.
     // The function does not discover the topology from the cluster and assumes the cached topology is valid.
     // In addition, the validation is done by peeking at the state of the underlying transport w/o overhead of additional commands to server.
+    // If we're during slot refresh, we skip the validation to avoid interfering with the slot refresh process.
     async fn validate_all_user_connections(inner: Arc<InnerCore<C>>) {
+        // If slot refresh is in progress, skip validation
+        // The reason is that during slot refresh, connections might be created before being assigned slots,
+        // and we don't want to drop those connections and interfere with that process.
+        //
+        // Note: This is a best-effort check due to a potential race condition - both tasks
+        // are spawned to tokio's multi-threaded runtime and can run in parallel, so
+        // `refresh_slots` could start right after this check returns false.
+        // TODO: Implement more robust synchronization - see https://github.com/valkey-io/valkey-glide/issues/5227
+        if inner.slot_refresh_state.in_progress.load(Ordering::Relaxed) {
+            return;
+        }
+
         let mut all_valid_conns = HashMap::new();
         // prep connections and clean out these w/o assigned slots, as we might have established connections to unwanted hosts
         let mut nodes_to_delete = Vec::new();
@@ -1498,15 +1531,11 @@ where
                 )));
                 let mut first_attempt = true;
                 for backoff_duration in infinite_backoff_iter {
-                    let mut cluster_params = inner_clone
+                    let cluster_params = inner_clone
                         .cluster_params
                         .read()
                         .expect(MUTEX_READ_ERR)
                         .clone();
-                    let subs_guard = inner_clone.subscriptions_by_address.read().await;
-                    cluster_params.pubsub_subscriptions =
-                        subs_guard.get(&address_clone_for_task).cloned();
-                    drop(subs_guard);
 
                     node_result = get_or_create_conn(
                         &address_clone_for_task,
@@ -1607,7 +1636,12 @@ where
 
         // Spawn the background task and return its handle
         tokio::spawn(async move {
-            Self::refresh_slots_and_subscriptions_with_retries(inner_clone, &policy_clone).await
+            Self::refresh_slots_and_subscriptions_with_retries(
+                inner_clone,
+                &policy_clone,
+                SlotRefreshTrigger::RuntimeRefresh,
+            )
+            .await
         })
     }
 
@@ -1965,6 +1999,7 @@ where
     async fn refresh_slots_and_subscriptions_with_retries(
         inner: Arc<InnerCore<C>>,
         policy: &RefreshPolicy,
+        trigger: SlotRefreshTrigger,
     ) -> RedisResult<()> {
         let SlotRefreshState {
             in_progress,
@@ -2013,7 +2048,7 @@ where
             let retries_counter = AtomicUsize::new(0);
             res = Retry::spawn(retry_strategy, || async {
                 let curr_retry = retries_counter.fetch_add(1, atomic::Ordering::Relaxed);
-                Self::refresh_slots(inner.clone(), curr_retry)
+                Self::refresh_slots(inner.clone(), curr_retry, trigger)
                     .await
                     .map_err(|err| {
                         if err.kind() == ErrorKind::AllConnectionsUnavailable {
@@ -2026,9 +2061,6 @@ where
             .await;
         }
         in_progress.store(false, Ordering::Relaxed);
-
-        Self::refresh_pubsub_subscriptions(inner).await;
-
         res
     }
 
@@ -2041,7 +2073,12 @@ where
     ) -> RedisResult<bool> {
         let topology_changed = Self::check_for_topology_diff(inner.clone()).await;
         if topology_changed {
-            Self::refresh_slots_and_subscriptions_with_retries(inner.clone(), policy).await?;
+            Self::refresh_slots_and_subscriptions_with_retries(
+                inner.clone(),
+                policy,
+                SlotRefreshTrigger::RuntimeRefresh,
+            )
+            .await?;
         }
         Ok(topology_changed)
     }
@@ -2050,7 +2087,7 @@ where
         loop {
             let _ = boxed_sleep(interval_duration).await;
             // Check and refresh topology if needed
-            let should_refresh_pubsub = match Self::check_topology_and_refresh_if_diff(
+            let _ = match Self::check_topology_and_refresh_if_diff(
                 inner.clone(),
                 &RefreshPolicy::Throttable,
             )
@@ -2065,15 +2102,6 @@ where
                     true
                 }
             };
-
-            // Refresh pubsub subscriptions if topology wasn't changed or an error occurred.
-            // This serves as a safety measure for validating pubsub subscriptions state in case it has drifted
-            // while topology stayed the same.
-            // For example, a failed attempt to refresh a connection which is triggered from refresh_pubsub_subscriptions(),
-            // might leave a node unconnected indefinitely in case topology is stable and no request are attempted to this node.
-            if should_refresh_pubsub {
-                Self::refresh_pubsub_subscriptions(inner.clone()).await;
-            }
         }
     }
 
@@ -2093,92 +2121,6 @@ where
         }
     }
 
-    async fn refresh_pubsub_subscriptions(inner: Arc<InnerCore<C>>) {
-        if inner.cluster_params.read().expect(MUTEX_READ_ERR).protocol
-            != crate::types::ProtocolVersion::RESP3
-        {
-            return;
-        }
-
-        let mut addrs_to_refresh: HashSet<String> = HashSet::new();
-        {
-            let mut subs_by_address_guard = inner.subscriptions_by_address.write().await;
-            let mut unassigned_subs_guard = inner.unassigned_subscriptions.write().await;
-            let conns_read_guard = inner.conn_lock.read().expect(MUTEX_READ_ERR);
-            // validate active subscriptions location
-            subs_by_address_guard.retain(|current_address, address_subs| {
-                address_subs.retain(|kind, channels_patterns| {
-                    channels_patterns.retain(|channel_pattern| {
-                        let new_slot = get_slot(channel_pattern);
-                        let valid = if let Some((new_address, _)) = conns_read_guard
-                            .connection_for_route(&Route::new(new_slot, SlotAddr::Master))
-                        {
-                            *new_address == *current_address
-                        } else {
-                            false
-                        };
-                        // no new address or new address differ - move to unassigned and store this address for connection reset
-                        if !valid {
-                            // need to drop the original connection for clearing the subscription in the server, avoiding possible double-receivers
-                            if conns_read_guard
-                                .connection_for_address(current_address)
-                                .is_some()
-                            {
-                                addrs_to_refresh.insert(current_address.clone());
-                            }
-
-                            unassigned_subs_guard
-                                .entry(*kind)
-                                .and_modify(|channels_patterns| {
-                                    channels_patterns.insert(channel_pattern.clone());
-                                })
-                                .or_insert(HashSet::from([channel_pattern.clone()]));
-                        }
-                        valid
-                    });
-                    !channels_patterns.is_empty()
-                });
-                !address_subs.is_empty()
-            });
-
-            // try to assign new addresses
-            unassigned_subs_guard.retain(|kind: &PubSubSubscriptionKind, channels_patterns| {
-                channels_patterns.retain(|channel_pattern| {
-                    let new_slot = get_slot(channel_pattern);
-                    if let Some((new_address, _)) = conns_read_guard
-                        .connection_for_route(&Route::new(new_slot, SlotAddr::Master))
-                    {
-                        // need to drop the new connection so the subscription will be picked up in setup_connection()
-                        addrs_to_refresh.insert(new_address.clone());
-
-                        let e = subs_by_address_guard
-                            .entry(new_address.clone())
-                            .or_insert(PubSubSubscriptionInfo::new());
-
-                        e.entry(*kind)
-                            .or_insert(HashSet::new())
-                            .insert(channel_pattern.clone());
-
-                        return false;
-                    }
-                    true
-                });
-                !channels_patterns.is_empty()
-            });
-        }
-
-        if !addrs_to_refresh.is_empty() {
-            // immediately trigger connection reestablishment
-            Self::refresh_and_update_connections(
-                inner.clone(),
-                addrs_to_refresh,
-                RefreshConnectionType::AllConnections,
-                false,
-            )
-            .await;
-        }
-    }
-
     /// Queries log2n nodes (where n represents the number of cluster nodes) to determine whether their
     /// topology view differs from the one currently stored in the connection manager.
     /// Returns true if change was detected, otherwise false.
@@ -2186,14 +2128,18 @@ where
         let num_of_nodes = inner.conn_lock.read().expect(MUTEX_READ_ERR).len();
         let num_of_nodes_to_query =
             std::cmp::max(num_of_nodes.checked_ilog2().unwrap_or(0) as usize, 1);
-        let (res, failed_connections) = calculate_topology_from_random_nodes(
+        let TopologyQueryResult {
+            topology_result,
+            failed_connections,
+        } = calculate_topology_from_random_nodes(
             &inner,
             num_of_nodes_to_query,
             DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES,
+            SlotRefreshTrigger::RuntimeRefresh,
         )
         .await;
 
-        if let Ok((_, found_topology_hash)) = res {
+        if let Ok((_, found_topology_hash)) = topology_result {
             if inner
                 .conn_lock
                 .read()
@@ -2205,107 +2151,140 @@ where
             }
         }
 
-        if !failed_connections.is_empty() {
-            trace!("check_for_topology_diff: calling trigger_refresh_connection_tasks");
-            Self::trigger_refresh_connection_tasks(
-                inner,
-                failed_connections,
-                RefreshConnectionType::OnlyManagementConnection,
-                true,
-            )
-            .await;
+        if let Some(failed) = failed_connections {
+            if !failed.is_empty() {
+                trace!("check_for_topology_diff: calling trigger_refresh_connection_tasks");
+                Self::trigger_refresh_connection_tasks(
+                    inner,
+                    failed,
+                    RefreshConnectionType::OnlyManagementConnection,
+                    true,
+                )
+                .await;
+            }
         }
 
         false
     }
 
-    async fn refresh_slots(inner: Arc<InnerCore<C>>, curr_retry: usize) -> RedisResult<()> {
+    async fn refresh_slots(
+        inner: Arc<InnerCore<C>>,
+        curr_retry: usize,
+        trigger: SlotRefreshTrigger,
+    ) -> RedisResult<()> {
         // Update the slot refresh last run timestamp
         let now = SystemTime::now();
         let mut last_run_wlock = inner.slot_refresh_state.last_run.write().await;
         *last_run_wlock = Some(now);
         drop(last_run_wlock);
-        Self::refresh_slots_inner(inner, curr_retry).await
+        Self::refresh_slots_inner(inner, curr_retry, trigger).await
     }
 
     // Query a node to discover slot-> master mappings
-    async fn refresh_slots_inner(inner: Arc<InnerCore<C>>, curr_retry: usize) -> RedisResult<()> {
+    async fn refresh_slots_inner(
+        inner: Arc<InnerCore<C>>,
+        curr_retry: usize,
+        trigger: SlotRefreshTrigger,
+    ) -> RedisResult<()> {
         let num_of_nodes = inner.conn_lock.read().expect(MUTEX_READ_ERR).len();
         const MAX_REQUESTED_NODES: usize = 10;
-        let num_of_nodes_to_query = std::cmp::min(num_of_nodes, MAX_REQUESTED_NODES);
-        let (new_slots, topology_hash) =
-            calculate_topology_from_random_nodes(&inner, num_of_nodes_to_query, curr_retry)
-                .await
-                .0?;
+        let num_of_nodes_to_query = num_of_nodes.min(MAX_REQUESTED_NODES);
+
+        let (new_slots, topology_hash) = calculate_topology_from_random_nodes(
+            &inner,
+            num_of_nodes_to_query,
+            curr_retry,
+            trigger,
+        )
+        .await
+        .topology_result?;
+
         // Create a new connection vector of the found nodes
         let nodes = new_slots.all_node_addresses();
         let nodes_len = nodes.len();
-        let addresses_and_connections_iter = stream::iter(nodes)
-            .fold(
-                Vec::with_capacity(nodes_len),
-                |mut addrs_and_conns, addr| {
-                    let inner = inner.clone();
-                    async move {
-                        let addr = addr.to_string();
-                        if let Some(node) = inner
-                            .conn_lock
-                            .read()
-                            .expect(MUTEX_READ_ERR)
-                            .node_for_address(addr.as_str())
-                        {
-                            addrs_and_conns.push((addr, Some(node)));
-                            return addrs_and_conns;
-                        }
-                        // If it's a DNS endpoint, it could have been stored in the existing connections vector using the resolved IP address instead of the DNS endpoint's name.
-                        // We shall check if a connection is already exists under the resolved IP name.
-                        let Some((host, port)) = get_host_and_port_from_addr(&addr) else {
-                            addrs_and_conns.push((addr, None));
-                            return addrs_and_conns;
-                        };
-                        let conn = get_socket_addrs(host, port)
-                            .await
-                            .ok()
-                            .map(|mut socket_addresses| {
-                                socket_addresses.find_map(|addr| {
-                                    inner
-                                        .conn_lock
-                                        .read()
-                                        .expect(MUTEX_READ_ERR)
-                                        .node_for_address(&addr.to_string())
-                                })
-                            })
-                            .unwrap_or(None);
-                        addrs_and_conns.push((addr, conn));
-                        addrs_and_conns
-                    }
-                },
-            )
-            .await;
-        let new_connections: ConnectionMap<C> = stream::iter(addresses_and_connections_iter)
-            .fold(
-                ConnectionsMap(DashMap::with_capacity(nodes_len)),
-                |connections, (addr, node)| async {
-                    let mut cluster_params = inner
-                        .get_cluster_param(|params| params.clone())
-                        .expect(MUTEX_READ_ERR);
-                    let subs_guard = inner.subscriptions_by_address.read().await;
-                    cluster_params.pubsub_subscriptions = subs_guard.get(&addr).cloned();
-                    drop(subs_guard);
-                    let node = get_or_create_conn(
-                        &addr,
-                        node,
-                        &cluster_params,
-                        RefreshConnectionType::AllConnections,
-                        inner.glide_connection_options.clone(),
-                    )
-                    .await;
-                    if let Ok(node) = node {
-                        connections.0.insert(addr, node);
-                    }
-                    connections
-                },
-            )
-            .await;
+
+        // Find existing connections or resolve DNS addresses
+        // TODO: optimize by parallelizing DNS lookups - DNS resolution may involve network I/O and is currently performed sequentially
+        // Issue link: https://github.com/valkey-io/valkey-glide/issues/5228
+        let mut addresses_and_connections = Vec::with_capacity(nodes_len);
+        for addr in nodes {
+            let addr = addr.to_string();
+
+            // Check for existing connection by address
+            if let Some(node) = inner
+                .conn_lock
+                .read()
+                .expect(MUTEX_READ_ERR)
+                .node_for_address(&addr)
+            {
+                addresses_and_connections.push((addr, Some(node)));
+                continue;
+            }
+
+            // If it's a DNS endpoint, it could have been stored in the existing connections vector using the resolved IP address instead of the DNS endpoint's name.
+            // We shall check if a connection is already exists under the resolved IP name.
+            let conn = if let Some((host, port)) = get_host_and_port_from_addr(&addr) {
+                get_socket_addrs(host, port)
+                    .await
+                    .ok()
+                    .and_then(|mut socket_addresses| {
+                        let conn_lock = inner.conn_lock.read().expect(MUTEX_READ_ERR);
+                        socket_addresses.find_map(|socket_addr| {
+                            conn_lock.node_for_address(&socket_addr.to_string())
+                        })
+                    })
+            } else {
+                None
+            };
+
+            // If we found a connection by IP lookup, update the PushManager. This ensures the PushManager
+            // stores the DNS address (which matches the connection_map key) instead of the old IP
+            // or config endpoint address, which is needed for pubsub tracking
+            if let Some(ref node) = conn {
+                node.user_connection
+                    .conn
+                    .clone()
+                    .await
+                    .update_push_manager_node_address(addr.clone());
+            }
+
+            addresses_and_connections.push((addr, conn));
+        }
+
+        let cluster_params = inner
+            .get_cluster_param(|params| params.clone())
+            .expect(MUTEX_READ_ERR);
+        let glide_connection_options = &inner.glide_connection_options;
+
+        // Create/retrieve connections in for found nodes
+        let connection_futures = addresses_and_connections.into_iter().map(|(addr, node)| {
+            let cluster_params = cluster_params.clone();
+            let glide_connection_options = glide_connection_options.clone();
+            async move {
+                let result = get_or_create_conn(
+                    &addr,
+                    node,
+                    &cluster_params,
+                    RefreshConnectionType::AllConnections,
+                    glide_connection_options,
+                )
+                .await;
+                (addr, result)
+            }
+        });
+
+        // Await all connection futures
+        // This is bounded by `connection_timeout` since `get_or_create_conn` uses it internally,
+        // so it is safe to await them all at once.
+        let results = futures::future::join_all(connection_futures).await;
+
+        // Collect successful connections
+        let new_connections = ConnectionsMap(DashMap::with_capacity(nodes_len));
+        for (addr, result) in results {
+            if let Ok(node) = result {
+                new_connections.0.insert(addr, node);
+            }
+        }
 
         info!("refresh_slots found nodes:\n{new_connections}");
         // Reset the current slot map and connection vector with the new ones
@@ -2322,6 +2301,14 @@ where
             read_from_replicas,
             topology_hash,
         );
+
+        // Notify the PubSub synchronizer about the new topology (using same lock)
+        // Since handle_topology_refresh is sync, no other task can benefit from us
+        // holding a read lock instead - hence, we continue with the write lock.
+        if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
+            sync.handle_topology_refresh(&write_guard.slot_map);
+        }
+
         Ok(())
     }
 
@@ -2372,7 +2359,7 @@ where
 
         let mut wlock_conn_container = inner.conn_lock.write().expect(MUTEX_READ_ERR);
         let mut nodes_iter = wlock_conn_container.slot_map_nodes();
-        for (node_addr, shard_addrs_arc) in &mut nodes_iter {
+        for (node_addr, (ip_addr, shard_addrs_arc)) in &mut nodes_iter {
             if node_addr == new_primary {
                 let is_existing_primary = shard_addrs_arc.primary().eq(&new_primary);
                 if is_existing_primary {
@@ -2387,9 +2374,11 @@ where
                     // Remove the replica from its existing shard and treat it as a new node in a new shard.
                     shard_addrs_arc.remove_replica(new_primary.clone())?;
                     drop(nodes_iter);
-                    return wlock_conn_container
-                        .slot_map
-                        .add_new_primary(slot, new_primary);
+                    return wlock_conn_container.slot_map.add_new_primary(
+                        slot,
+                        new_primary,
+                        ip_addr,
+                    );
                 }
             }
         }
@@ -2398,7 +2387,7 @@ where
         // Scenario 5: New Node - The new primary is not present in the current slots map, add it as a primary of a new shard.
         wlock_conn_container
             .slot_map
-            .add_new_primary(slot, new_primary)
+            .add_new_primary(slot, new_primary, None)
     }
 
     async fn execute_on_multiple_nodes<'a>(
@@ -3124,27 +3113,34 @@ where
             .get_cluster_param(|params| params.retry_params.clone())
             .expect(MUTEX_READ_ERR);
         let mut poll_flush_action = PollFlushAction::None;
-        let mut pending_requests_guard = self.inner.pending_requests.lock().unwrap();
-        if !pending_requests_guard.is_empty() {
-            let mut pending_requests = mem::take(&mut *pending_requests_guard);
-            for request in pending_requests.drain(..) {
-                // Drop the request if none is waiting for a response to free up resources for
-                // requests callers care about (load shedding). It will be ambiguous whether the
-                // request actually goes through regardless.
-                if request.sender.is_closed() {
-                    continue;
-                }
+        let mut pending_requests = {
+            let mut guard = self.inner.pending_requests.lock().expect(MUTEX_WRITE_ERR);
+            mem::take(&mut *guard)
+        };
 
-                let future = Self::try_request(request.info.clone(), self.inner.clone()).boxed();
-                self.in_flight_requests.push(Box::pin(Request {
-                    retry_params: retry_params.clone(),
-                    request: Some(request),
-                    future: RequestState::Future { future },
-                }));
+        for request in pending_requests.drain(..) {
+            // Drop the request if none is waiting for a response to free up resources for
+            // requests callers care about (load shedding). It will be ambiguous whether the
+            // request actually goes through regardless.
+            if request.sender.is_closed() {
+                continue;
             }
-            *pending_requests_guard = pending_requests;
+
+            let future = Self::try_request(request.info.clone(), self.inner.clone()).boxed();
+            self.in_flight_requests.push(Box::pin(Request {
+                retry_params: retry_params.clone(),
+                request: Some(request),
+                future: RequestState::Future { future },
+            }));
         }
-        drop(pending_requests_guard);
+
+        // Preserve capacity
+        {
+            let mut guard = self.inner.pending_requests.lock().expect(MUTEX_WRITE_ERR);
+            if guard.is_empty() {
+                *guard = pending_requests;
+            }
+        }
 
         loop {
             let retry_params = retry_params.clone();
@@ -3396,88 +3392,227 @@ where
     }
 }
 
-// Retrieves random connections from initial seed nodes after resolving their addresses.
+/// Result of attempting to get connections from initial seed nodes.
+struct InitialNodeConnectionsResult<C> {
+    /// Successfully found connections with their addresses
+    #[allow(clippy::type_complexity)]
+    connections: Vec<(String, Shared<Pin<Box<dyn Future<Output = C> + Send>>>)>,
+    /// Addresses that need connection refresh (exists in slot map but not in connection map)
+    addresses_needing_refresh: HashSet<String>,
+}
+
+/// Returns connections found for randomly selected initial nodes, along with addresses
+/// that needs to be refreshed.
+///
+/// # Lookup and Retry Logic
+///
+/// 1. **Resolve initial nodes**: Expand the configured initial nodes to their underlying addresses.
+///    A single initial node may resolve to multiple addresses (e.g., DNS hostnames resolving to
+///    multiple IP addresses).
+/// 2. **Random selection**: Pick `num_of_nodes_to_query` random nodes from the resolved list
+/// 3. **Connection lookup**: For each selected node, attempt to find an existing connection,
+///    preferring a management connection when available.
+///
+/// ## Retry Mechanism
+///
+/// If **no connections** are found in the initial lookup (all selected nodes need refresh),
+/// the function performs a single retry:
+///
+/// 1. Trigger connection refresh for all missing addresses
+/// 2. Wait for refresh to complete (with `connection_timeout`)
+/// 3. Retry the connection lookup for those addresses
+///
+/// # Returns
+///
+/// * `connections` - List of found connections (may be empty if all lookups failed)
+/// * `addresses_needing_refresh` - Addresses that needs to be refreshed
 async fn get_random_connections_from_initial_nodes<C>(
     inner: &Core<C>,
     num_of_nodes_to_query: usize,
-) -> RedisResult<Vec<(String, Shared<Pin<Box<dyn Future<Output = C> + Send>>>)>>
+) -> RedisResult<InitialNodeConnectionsResult<C>>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    // Resolve initial nodes to get their addresses.
-    // The resolved addresses are tuples of (host, Option<IpAddr>).
-    // Representing the host and its resolved IP address (if available).
-    let resolved_addresses =
-        ClusterConnInner::<C>::try_to_expand_initial_nodes(&inner.initial_nodes).await;
-
-    // Filter the resolved addresses to keep only those with valid IP addresses.
-    let valid_addresses: Vec<String> = resolved_addresses
-        .into_iter()
-        .filter_map(|(host, socket_addr)| match socket_addr {
-            Some(addr) => Some(addr.to_string()),
-            None => {
-                log_warn("No valid IP address found for host: {}", host);
-                None
-            }
-        })
-        .collect();
-
-    if valid_addresses.is_empty() {
+    if inner.initial_nodes.is_empty() {
         return Err(RedisError::from((
-            ErrorKind::AllConnectionsUnavailable,
-            "No valid addresses found",
+            ErrorKind::InvalidClientConfig,
+            "Cannot refresh topology from initial nodes: no initial nodes configured",
         )));
     }
 
-    let selected_addresses: Vec<String> = {
+    // Resolve initial nodes and select random addresses for topology query.
+    let selected_pairs = {
+        let resolved =
+            ClusterConnInner::<C>::try_to_expand_initial_nodes(&inner.initial_nodes).await;
         let mut rng = rand::rng();
-        valid_addresses
-            .clone()
+        resolved
             .into_iter()
             .choose_multiple(&mut rng, num_of_nodes_to_query)
     };
 
-    // Run refresh_and_update_connections with a timeout of connection timeout
-    // If selected hosts do not have active connections, this will initiate connections to them and will add them to the connection map.
-    // If they already have active connections, it will return those connections.
-    let _ = tokio::time::timeout(
-        inner.get_cluster_param(|p| p.connection_timeout)?,
-        ClusterConnInner::refresh_and_update_connections(
-            inner.clone(),
-            selected_addresses.iter().cloned().collect(),
-            RefreshConnectionType::OnlyManagementConnection,
-            true,
-        ),
-    )
-    .await;
+    // Find existing connections for selected addresses
+    let mut connections = Vec::with_capacity(selected_pairs.len());
+    let mut addresses_needing_refresh = HashSet::new();
 
-    // Create a future for each selected address to establish a connection.
-    let connections = selected_addresses
-        .into_iter()
-        .filter_map(|address| {
-            let conn = inner
-                .conn_lock
-                .read()
-                .expect(MUTEX_READ_ERR)
-                .management_connection_for_address(&address);
-            conn
-        })
-        .collect::<Vec<_>>();
+    for (original_addr, socket_addr) in selected_pairs {
+        match lookup_management_connection(inner, &original_addr, socket_addr) {
+            ConnectionLookupResult::Found(conn) => connections.push(conn),
+            ConnectionLookupResult::NeedsConnectionRefresh(addr) => {
+                addresses_needing_refresh.insert(addr);
+            }
+        }
+    }
 
-    Ok(connections)
+    // Only refresh and retry if we have no connections at all
+    if connections.is_empty() && !addresses_needing_refresh.is_empty() {
+        let connection_timeout = inner.get_cluster_param(|p| p.connection_timeout)?;
+
+        // Wait for connection refresh to complete (with timeout)
+        let _ = tokio::time::timeout(
+            connection_timeout,
+            ClusterConnInner::refresh_and_update_connections(
+                inner.clone(),
+                addresses_needing_refresh.clone(),
+                RefreshConnectionType::AllConnections,
+                true,
+            ),
+        )
+        .await;
+
+        let mut still_need_refresh = HashSet::new();
+        for addr in addresses_needing_refresh.drain() {
+            if let ConnectionLookupResult::Found(conn) =
+                lookup_management_connection(inner, &addr, None)
+            {
+                connections.push(conn);
+            } else {
+                still_need_refresh.insert(addr);
+            }
+        }
+        addresses_needing_refresh = still_need_refresh;
+    }
+
+    Ok(InitialNodeConnectionsResult {
+        connections,
+        addresses_needing_refresh,
+    })
 }
 
+/// Result of attempting to find a connection for a node
+#[allow(clippy::type_complexity)]
+enum ConnectionLookupResult<C> {
+    /// Connection found - returns the node address as stored in the connection map and the connection future
+    Found((String, Shared<Pin<Box<dyn Future<Output = C> + Send>>>)),
+    /// Connection not found - needs refresh for the given address
+    NeedsConnectionRefresh(String),
+}
+
+/// Finds a management connection for a node or indicates it needs refresh.
+/// Returns the management connection if available, otherwise falls back to user connection.
+///
+/// **Warning** ⚠️: This function may have O(n) time complexity. Where `n` is the number of nodes in the slot map.
+///
+/// # Arguments
+///
+/// * `original_addr` - The address as provided by the user, either as a hostname (DNS)
+///   or as a direct IP address (e.g., `"cluster.example.com:6379"` or `"127.0.0.1:6379"`).
+/// * `socket_addr` - The resolved socket address if DNS resolution succeeded, or `None`
+///   if resolution failed.
+///
+/// # Lookup Logic
+/// Resolves the node's canonical address from the slot map. The canonical address is how
+/// the node is stored in the `slot_map`, which is our source of truth (e.g., `"my-cluster-001-001.xyz:6379"`).
+/// The caller may provide `original_addr` as an IP, but the slot map may store the same node with its DNS name.
+///
+/// The address resolution follows these steps:
+///
+/// 1. **Direct match**: If `original_addr` exists in the slot map, it is treated as
+///    the canonical address (O(1)).
+/// 2. **IP-based match**: Otherwise, if `socket_addr` is available, attempt to find
+///    a canonical address in the slot map that matches its IP (O(n)).
+/// 3. **Default address selection**: If no canonical address is found in the slot map,
+///    select an address to use for a potential new connection:
+///    - Prefer `socket_addr` if available
+///    - Otherwise, use `original_addr` as-is
+///
+/// # Connection Lookup
+/// After resolving the canonical address, the function attempts to retrieve a connection
+/// for that address, preferring the management connection but falling back to the
+/// user connection if the management connection is unavailable.
+/// If not found, it indicates that a new connection needs to be established.
+///
+/// # Returns
+/// * `Found` - Connection was found
+/// * `NeedsConnectionRefresh` - Connection is missing and needs to be refreshed
+fn lookup_management_connection<C>(
+    inner: &Core<C>,
+    original_addr: &str,
+    socket_addr: Option<SocketAddr>,
+) -> ConnectionLookupResult<C>
+where
+    C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
+{
+    let original_addr_key = Arc::new(original_addr.to_string());
+
+    let (canonical_addr, conn_opt) = {
+        let conn_lock = inner.conn_lock.read().expect(MUTEX_READ_ERR);
+
+        // Resolve canonical address using the lookup chain:
+        let canonical_addr = if conn_lock
+            .slot_map
+            .nodes_map()
+            .contains_key(&original_addr_key)
+        {
+            // Step 1: Direct match
+            original_addr.to_string()
+        } else {
+            socket_addr
+                // Step 2: IP-based match
+                .and_then(|addr| {
+                    conn_lock
+                        .slot_map
+                        .node_address_for_ip(addr.ip())
+                        .map(|a| (*a).clone())
+                })
+                // Step 3: Use socket_addr if available
+                .or_else(|| socket_addr.map(|addr| addr.to_string()))
+                // Step 4: Last resort - use original_addr
+                .unwrap_or_else(|| original_addr.to_string())
+        };
+
+        // Look up management connection, fall back to user connection if not available
+        let conn_opt = conn_lock.management_connection_for_address(&canonical_addr);
+        (canonical_addr, conn_opt)
+    };
+
+    match conn_opt {
+        Some(conn) => ConnectionLookupResult::Found(conn),
+        None => ConnectionLookupResult::NeedsConnectionRefresh(canonical_addr),
+    }
+}
+/// Result of querying random cluster nodes for topology calculation.
+struct TopologyQueryResult {
+    /// The calculated topology (slot map and hash), or an error if calculation failed
+    topology_result: RedisResult<(SlotMap, TopologyHash)>,
+    /// Optionally addresses of connections that failed during the query and need refresh
+    failed_connections: Option<HashSet<String>>,
+}
+
+/// Queries random cluster nodes to calculate the current topology.
+///
+/// Selects up to `num_of_nodes_to_query` random nodes and queries them for their
+/// view of the cluster topology. The results are aggregated to determine the
+/// most common topology view.
+///
+/// When `trigger` is `SlotRefreshTrigger::RuntimeRefresh` and `refresh_topology_from_initial_nodes`
+/// is enabled, connections are obtained from initial seed nodes rather than
+/// existing cluster connections.
 async fn calculate_topology_from_random_nodes<C>(
     inner: &Core<C>,
     num_of_nodes_to_query: usize,
     curr_retry: usize,
-) -> (
-    RedisResult<(
-        crate::cluster_slotmap::SlotMap,
-        crate::cluster_topology::TopologyHash,
-    )>,
-    std::collections::HashSet<String>,
-)
+    trigger: SlotRefreshTrigger,
+) -> TopologyQueryResult
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
@@ -3485,33 +3620,39 @@ where
         .get_cluster_param(|p| p.refresh_topology_from_initial_nodes)
         .unwrap_or(false);
 
+    // During initial connection, use existing connections to avoid double DNS lookup
+    let use_initial_nodes_lookup = refresh_topology_from_initial_nodes
+        && !matches!(trigger, SlotRefreshTrigger::InitialConnection);
+
     // Get connections either from seed nodes or random existing connections.
-    let requested_nodes = match refresh_topology_from_initial_nodes {
-        true => match get_random_connections_from_initial_nodes(inner, num_of_nodes_to_query).await
-        {
-            Ok(connections_futures) => connections_futures,
+    let (requested_nodes, mut failed_addresses) = if use_initial_nodes_lookup {
+        match get_random_connections_from_initial_nodes(inner, num_of_nodes_to_query).await {
+            Ok(InitialNodeConnectionsResult {
+                connections,
+                addresses_needing_refresh,
+            }) => (connections, addresses_needing_refresh),
             Err(err) => {
-                return (Err(err), std::collections::HashSet::new());
-            }
-        },
-        false => {
-            if let Some(random_conns) = inner
-                .conn_lock
-                .read()
-                .expect(MUTEX_READ_ERR)
-                .random_connections(num_of_nodes_to_query, ConnectionType::PreferManagement)
-            {
-                random_conns
-            } else {
-                return (
-                    Err(RedisError::from((
-                        ErrorKind::AllConnectionsUnavailable,
-                        "No available connections to refresh slots from",
-                    ))),
-                    std::collections::HashSet::new(),
-                );
+                return TopologyQueryResult {
+                    topology_result: Err(err),
+                    failed_connections: None,
+                };
             }
         }
+    } else if let Some(random_conns) = inner
+        .conn_lock
+        .read()
+        .expect(MUTEX_READ_ERR)
+        .random_connections(num_of_nodes_to_query, ConnectionType::PreferManagement)
+    {
+        (random_conns, HashSet::new())
+    } else {
+        return TopologyQueryResult {
+            topology_result: Err(RedisError::from((
+                ErrorKind::AllConnectionsUnavailable,
+                "No available connections to refresh slots from",
+            ))),
+            failed_connections: None,
+        };
     };
 
     let topology_join_results =
@@ -3523,13 +3664,14 @@ where
         .await;
 
     // Add topology command failures (with unrecoverable errors) to the existing connection failures set.
-    let failed_addresses = topology_join_results
-        .iter()
-        .filter_map(|(address, res)| match res {
-            Err(err) if err.is_unrecoverable_error() => Some(address.clone()),
-            _ => None,
-        })
-        .collect::<std::collections::HashSet<String>>();
+    failed_addresses.extend(
+        topology_join_results
+            .iter()
+            .filter_map(|(address, res)| match res {
+                Err(err) if err.is_unrecoverable_error() => Some(address.clone()),
+                _ => None,
+            }),
+    );
 
     let topology_values = topology_join_results.iter().filter_map(|(addr, res)| {
         res.as_ref()
@@ -3543,16 +3685,16 @@ where
     let read_from_replicas = inner
         .get_cluster_param(|params| params.read_from_replicas.clone())
         .expect(MUTEX_READ_ERR);
-    (
-        calculate_topology(
+    TopologyQueryResult {
+        topology_result: calculate_topology(
             topology_values,
             curr_retry,
             tls_mode,
             num_of_nodes_to_query,
             read_from_replicas,
         ),
-        failed_addresses,
-    )
+        failed_connections: Some(failed_addresses),
+    }
 }
 
 impl<C> ConnectionLike for ClusterConnection<C>

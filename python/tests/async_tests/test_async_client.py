@@ -345,7 +345,9 @@ class TestGlideClients:
         assert "total_bytes_compressed" in stats
         assert "total_bytes_decompressed" in stats
         assert "compression_skipped_count" in stats
-        assert len(stats) == 8
+        assert "subscription_out_of_sync_count" in stats
+        assert "subscription_last_sync_timestamp" in stats
+        assert len(stats) == 10
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -406,7 +408,7 @@ class TestGlideClients:
                         1, 100, 2
                     ),  # needs to be configured so that we wont be connected within 7 seconds bc of default retries
                 )
-            assert "timed out" in str(e)
+            assert "timed out" in str(e).lower() or "timeout" in str(e).lower()
 
         async def connect_to_client():
             # Create a second client with a connection timeout of 7 seconds
@@ -10420,7 +10422,9 @@ class TestClusterRoutes:
 
         # Test no_scores option
         if not await check_if_server_version_lt(glide_client, "8.0.0"):
-            result = await glide_client.zscan(key1, initial_cursor, no_scores=True)
+            result = await glide_client.zscan(
+                key1, initial_cursor, match="value*", no_scores=True
+            )
             assert result[result_cursor_index] != b"0"
             values_array = cast(List[bytes], result[result_collection_index])
             # Verify that scores are not included
@@ -10841,15 +10845,13 @@ class TestScripts:
         )
 
         # Add test for script_kill with writing script
-        writing_script = Script(
-            """
+        writing_script = Script("""
             redis.call('SET', KEYS[1], 'value')
             local start = redis.call('TIME')[1]
             while redis.call('TIME')[1] - start < 15 do
                 redis.call('SET', KEYS[1], 'value')
             end
-        """
-        )
+        """)
 
         async def run_writing_script():
             await test_client.invoke_script(writing_script, keys=[get_random_string(5)])

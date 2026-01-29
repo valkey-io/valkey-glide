@@ -648,9 +648,8 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"RANDOMKEY"
         | b"WAITAOF" => RouteBy::AllPrimaries,
 
-        b"MGET" | b"DEL" | b"EXISTS" | b"UNLINK" | b"TOUCH" | b"WATCH" => {
-            RouteBy::MultiShard(MultiSlotArgPattern::KeysOnly)
-        }
+        b"MGET" | b"DEL" | b"EXISTS" | b"UNLINK" | b"TOUCH" | b"WATCH" | b"SUBSCRIBE"
+        | b"PSUBSCRIBE" | b"SSUBSCRIBE" => RouteBy::MultiShard(MultiSlotArgPattern::KeysOnly),
 
         b"MSET" => RouteBy::MultiShard(MultiSlotArgPattern::KeyValuePairs),
         b"JSON.MGET" => RouteBy::MultiShard(MultiSlotArgPattern::KeysAndLastArg),
@@ -701,6 +700,7 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"CLIENT ID"
         | b"CLIENT INFO"
         | b"CLIENT KILL"
+        | b"CLIENT LIST"
         | b"CLIENT PAUSE"
         | b"CLIENT REPLY"
         | b"CLIENT TRACKINGINFO"
@@ -1247,7 +1247,7 @@ const WRITE_LK_ERR_SHARDADDRS: &str = "Failed to acquire write lock for ShardAdd
 /// to avoid the need to choose a replica each time
 /// a command is executed
 #[derive(Debug)]
-pub(crate) struct ShardAddrs {
+pub struct ShardAddrs {
     primary: RwLock<Arc<String>>,
     replicas: RwLock<Vec<Arc<String>>>,
 }
@@ -1299,7 +1299,8 @@ impl ShardAddrs {
         Self::new(primary, Vec::default())
     }
 
-    pub(crate) fn primary(&self) -> Arc<String> {
+    /// Returns the address of the primary node for this shard.
+    pub fn primary(&self) -> Arc<String> {
         self.primary.read().expect(READ_LK_ERR_SHARDADDRS).clone()
     }
 
@@ -2026,5 +2027,17 @@ mod tests_routing {
         let shard_addrs = create_shard_addrs("node1:6379", vec!["node2:6379", "node3:6379"]);
         let result = shard_addrs.attempt_shard_role_update(Arc::new("node4:6379".to_string()));
         assert_eq!(result, ShardUpdateResult::NodeNotFound);
+    }
+
+    #[test]
+    fn test_client_list_routing() {
+        let mut cmd = cmd("CLIENT");
+        cmd.arg("LIST");
+        let routing = RoutingInfo::for_routable(&cmd);
+        assert_eq!(
+            routing,
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
+            "CLIENT LIST should be routed to a random node"
+        );
     }
 }
