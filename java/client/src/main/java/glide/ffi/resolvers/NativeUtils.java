@@ -29,7 +29,7 @@ public class NativeUtils {
     public static final String NATIVE_FOLDER_PATH_PREFIX = "nativeutils";
 
     /** Temporary directory which will contain the dynamic library files. */
-    private static File temporaryDir;
+    private static volatile File temporaryDir;
 
     /** Track if the Glide library has already been loaded */
     private static volatile boolean glideLibLoaded = false;
@@ -95,12 +95,17 @@ public class NativeUtils {
         }
 
         // Prepare temporary file
-        if (temporaryDir == null) {
-            temporaryDir = createTempDirectory(NATIVE_FOLDER_PATH_PREFIX);
-            temporaryDir.deleteOnExit();
+        File localTempDir;
+        synchronized (NativeUtils.class) {
+            if (temporaryDir == null) {
+                File createdDir = createTempDirectory(NATIVE_FOLDER_PATH_PREFIX);
+                createdDir.deleteOnExit();
+                temporaryDir = createdDir;
+            }
+            localTempDir = temporaryDir;
         }
 
-        File temp = new File(temporaryDir, filename);
+        File temp = new File(localTempDir, filename);
 
         try (InputStream is = NativeUtils.class.getResourceAsStream(path)) {
             if (is == null) {

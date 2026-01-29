@@ -91,8 +91,15 @@ public class GlideCoreClient implements AutoCloseable {
     /** Maximum number of inflight requests allowed for this client. */
     private final int maxInflightRequests;
 
+    /** Request timeout in milliseconds for Java-side timeout detection. */
+    private final long requestTimeoutMillis;
+
     public int getMaxInflightRequests() {
         return maxInflightRequests;
+    }
+
+    public long getRequestTimeoutMillis() {
+        return requestTimeoutMillis;
     }
 
     /** Cleanup coordination flag. */
@@ -107,17 +114,22 @@ public class GlideCoreClient implements AutoCloseable {
     /**
      * Constructor that wraps an existing native client handle (for BaseClient integration). This is
      * the ONLY constructor - GlideCoreClient does not create connections.
+     *
+     * @param existingHandle Native client handle from ConnectionManager
+     * @param maxInflight Maximum inflight requests (0 = use native defaults)
+     * @param requestTimeoutMs Request timeout in milliseconds for Java-side timeout detection
      */
     @SuppressFBWarnings(
             value = "CT_CONSTRUCTOR_THROW",
             justification = "Constructor fails fast on invalid handles prior to registering resources")
-    public GlideCoreClient(long existingHandle, int maxInflight) {
+    public GlideCoreClient(long existingHandle, int maxInflight, long requestTimeoutMs) {
         if (existingHandle == 0) {
             throw new IllegalArgumentException("Native handle cannot be zero");
         }
 
         // Store the provided parameters
         this.maxInflightRequests = maxInflight > 0 ? maxInflight : 0; // 0 means use native defaults
+        this.requestTimeoutMillis = requestTimeoutMs > 0 ? requestTimeoutMs : 0; // 0 means no Java timeout
 
         // Use the existing native handle
         this.nativeClientHandle.set(existingHandle);
@@ -150,8 +162,9 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                // Rust handles all timeout logic - Java just waits for response
-                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
+                correlationId =
+                        AsyncRegistry.register(
+                                future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -186,8 +199,9 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                // Rust handles all timeout logic - Java just waits for response
-                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
+                correlationId =
+                        AsyncRegistry.register(
+                                future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -223,7 +237,9 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
+                correlationId =
+                        AsyncRegistry.register(
+                                future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -262,7 +278,9 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
+                correlationId =
+                        AsyncRegistry.register(
+                                future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -294,7 +312,9 @@ public class GlideCoreClient implements AutoCloseable {
         CompletableFuture<String> future = new CompletableFuture<>();
         long correlationId;
         try {
-            correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
+            correlationId =
+                    AsyncRegistry.register(
+                            future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
         } catch (glide.api.models.exceptions.RequestException e) {
             future.completeExceptionally(e);
             return future;
@@ -317,7 +337,9 @@ public class GlideCoreClient implements AutoCloseable {
 
         long correlationId;
         try {
-            correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
+            correlationId =
+                    AsyncRegistry.register(
+                            future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
         } catch (glide.api.models.exceptions.RequestException e) {
             future.completeExceptionally(e);
             return future;
@@ -348,7 +370,9 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
+                correlationId =
+                        AsyncRegistry.register(
+                                future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;

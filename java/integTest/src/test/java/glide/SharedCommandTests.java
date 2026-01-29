@@ -157,6 +157,22 @@ public class SharedCommandTests {
     private static final String KEY_NAME = "key";
     private static final String INITIAL_VALUE = "VALUE";
     private static final String ANOTHER_VALUE = "VALUE2";
+    private static final int BLOCKING_COMMAND_REQUEST_TIMEOUT_MS = 5000;
+
+    @SneakyThrows
+    private static BaseClient createBlockingTimeoutClient(BaseClient client) {
+        return client instanceof GlideClient
+                ? GlideClient.createClient(
+                                commonClientConfig()
+                                        .requestTimeout(BLOCKING_COMMAND_REQUEST_TIMEOUT_MS)
+                                        .build())
+                        .get()
+                : GlideClusterClient.createClient(
+                                commonClusterClientConfig()
+                                        .requestTimeout(BLOCKING_COMMAND_REQUEST_TIMEOUT_MS)
+                                        .build())
+                        .get();
+    }
 
     @BeforeAll
     @SneakyThrows
@@ -5804,11 +5820,7 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void bzpopmin_timeout_check(BaseClient client) {
         String key = UUID.randomUUID().toString();
-        // create new client with default request timeout (250 millis)
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.bzpopmin(new String[] {key}, 1).get());
@@ -5826,11 +5838,7 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void bzpopmin_binary_timeout_check(BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
-        // create new client with default request timeout (250 millis)
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.bzpopmin(new GlideString[] {key}, 1).get());
@@ -5965,11 +5973,7 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void bzpopmax_timeout_check(BaseClient client) {
         String key = UUID.randomUUID().toString();
-        // create new client with default request timeout (250 millis)
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.bzpopmax(new String[] {key}, 1).get());
@@ -5987,11 +5991,7 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void bzpopmax_binary_timeout_check(BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
-        // create new client with default request timeout (250 millis)
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.bzpopmax(new GlideString[] {key}, 1).get());
@@ -7915,11 +7915,7 @@ public class SharedCommandTests {
     public void bzmpop_timeout_check(BaseClient client) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         String key = UUID.randomUUID().toString();
-        // create new client with default request timeout (250 millis)
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.bzmpop(new String[] {key}, MAX, 1).get());
@@ -7939,11 +7935,7 @@ public class SharedCommandTests {
     public void bzmpop_binary_timeout_check(BaseClient client) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         GlideString key = gs(UUID.randomUUID().toString());
-        // create new client with default request timeout (250 millis)
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.bzmpop(new GlideString[] {key}, MAX, 1).get());
@@ -8387,10 +8379,7 @@ public class SharedCommandTests {
                         () -> client.xread(Map.of(key1, timestamp_1_1, nonStreamKey, timestamp_1_1)).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             long oneSecondInMS = 1000L;
@@ -8445,10 +8434,7 @@ public class SharedCommandTests {
                                 client.xreadBinary(Map.of(key1, timestamp_1_1, nonStreamKey, timestamp_1_1)).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             long oneSecondInMS = 1000L;
@@ -9680,10 +9666,7 @@ public class SharedCommandTests {
         // no available pending messages
         assertEquals(0, emptyResult.get(key).size());
 
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
             String timeoutKey = "{key}:2" + UUID.randomUUID();
             String timeoutGroupName = "group" + UUID.randomUUID();
             String timeoutConsumerName = "consumer" + UUID.randomUUID();
@@ -9816,10 +9799,7 @@ public class SharedCommandTests {
         // no available pending messages
         assertEquals(0, emptyResult.get(key).size());
 
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
             GlideString timeoutKey = gs("{key}:2" + UUID.randomUUID());
             GlideString timeoutGroupName = gs("group" + UUID.randomUUID());
             GlideString timeoutConsumerName = gs("consumer" + UUID.randomUUID());
@@ -12920,11 +12900,7 @@ public class SharedCommandTests {
     public void blmpop_timeout_check(BaseClient client) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         String key = UUID.randomUUID().toString();
-        // create new client with default request timeout (250 millis)
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.blmpop(new String[] {key}, ListDirection.LEFT, 1).get());
@@ -12946,11 +12922,7 @@ public class SharedCommandTests {
     public void blmpop_binary_timeout_check(BaseClient client) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         GlideString key = gs(UUID.randomUUID().toString());
-        // create new client with default request timeout (250 millis)
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.blmpop(new GlideString[] {key}, ListDirection.LEFT, 1).get());
@@ -13294,13 +13266,7 @@ public class SharedCommandTests {
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
-        // create new client with extended request timeout (2000 millis) to allow for blocking commands
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().requestTimeout(2000).build()).get()
-                        : GlideClusterClient.createClient(
-                                        commonClusterClientConfig().requestTimeout(2000).build())
-                                .get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
@@ -13324,13 +13290,7 @@ public class SharedCommandTests {
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
-        // create new client with extended request timeout (2000 millis) to allow for blocking commands
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().requestTimeout(2000).build()).get()
-                        : GlideClusterClient.createClient(
-                                        commonClusterClientConfig().requestTimeout(2000).build())
-                                .get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
@@ -17631,11 +17591,7 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void wait_timeout_check(BaseClient client) {
         String key = UUID.randomUUID().toString();
-        // create new client with default request timeout (250 millis)
-        try (var testClient =
-                client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+        try (var testClient = createBlockingTimeoutClient(client)) {
 
             long clientReplicas = client instanceof GlideClient ? 0 : 1;
             // TODO: Remove isWindows when replica issues is fixed

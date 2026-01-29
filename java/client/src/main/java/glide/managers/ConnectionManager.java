@@ -33,7 +33,7 @@ public class ConnectionManager {
     private static final String DEFAULT_LIB_NAME = "GlideJava";
 
     /** Native client handle for operations */
-    private long nativeClientHandle = 0;
+    private volatile long nativeClientHandle = 0;
 
     private int maxInflightRequests = 0;
     private int requestTimeoutMs = 5000;
@@ -389,7 +389,7 @@ public class ConnectionManager {
                         }
 
                         return null; // Success
-                    } catch (Exception e) {
+                    } catch (RuntimeException e) {
                         if (e instanceof ClosingException) {
                             throw e;
                         }

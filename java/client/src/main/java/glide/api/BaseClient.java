@@ -519,7 +519,9 @@ public abstract class BaseClient
         // We'll update this once the connection provides the native handle
         GlideCoreClient core =
                 new GlideCoreClient(
-                        connectionManager.getNativeClientHandle(), connectionManager.getMaxInflightRequests());
+                        connectionManager.getNativeClientHandle(),
+                        connectionManager.getMaxInflightRequests(),
+                        connectionManager.getRequestTimeoutMs());
         // Register for PubSub push delivery
         try {
             GlideCoreClient.registerClient(connectionManager.getNativeClientHandle(), null);

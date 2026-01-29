@@ -3,6 +3,7 @@ package glide.internal;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -17,7 +18,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li>Provide batched completion helpers to reduce native call overhead
  * </ul>
  *
- * <p>Timeouts, backpressure defaults, and concurrency tuning are handled by the Rust core.
+ * <p>Timeouts can be enforced in Java for immediate completion; Rust timeouts remain the fallback.
  */
 public final class AsyncRegistry {
 
@@ -63,10 +64,28 @@ public final class AsyncRegistry {
     }
 
     /**
-     * Register future with client-specific inflight limit and client handle for per-client tracking
+     * Register future with client-specific inflight limit and client handle for per-client tracking.
+     * Uses no Java-side timeout (delegates timeout handling to Rust core).
      */
     public static <T> long register(
             CompletableFuture<T> future, int maxInflightRequests, long clientHandle) {
+        return register(future, maxInflightRequests, clientHandle, 0);
+    }
+
+    /**
+     * Register future with client-specific inflight limit, client handle, and Java-side timeout.
+     *
+     * @param future The CompletableFuture to register
+     * @param maxInflightRequests Maximum inflight requests per client (0 = no limit)
+     * @param clientHandle Native client handle for per-client tracking
+     * @param timeoutMillis Java-side timeout in milliseconds (0 = no timeout, use Rust default)
+     * @return Correlation ID for native callback
+     */
+    public static <T> long register(
+            CompletableFuture<T> future,
+            int maxInflightRequests,
+            long clientHandle,
+            long timeoutMillis) {
         if (future == null) {
             throw new IllegalArgumentException("Future cannot be null");
         }
@@ -100,12 +119,23 @@ public final class AsyncRegistry {
         // Store original future for completion by native code
         activeFutures.put(correlationId, originalFuture);
 
+        // Apply Java-side timeout if specified
+        // This allows immediate timeout detection without waiting for Rust callback
+        if (timeoutMillis > 0) {
+            originalFuture.orTimeout(timeoutMillis, TimeUnit.MILLISECONDS);
+        }
+
         // Set up cleanup on the original future
         // This ensures proper resource cleanup when completed
+        final long corrId = correlationId;
         originalFuture.whenComplete(
                 (result, throwable) -> {
+                    if (throwable instanceof java.util.concurrent.TimeoutException) {
+                        GlideNativeBridge.markTimedOut(corrId);
+                    }
+
                     // Atomic cleanup - no race conditions
-                    activeFutures.remove(correlationId);
+                    activeFutures.remove(corrId);
 
                     // Decrement per-client counter if applicable
                     if (maxInflightRequests > 0) {
