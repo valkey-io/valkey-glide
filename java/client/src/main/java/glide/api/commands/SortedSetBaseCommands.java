@@ -1725,7 +1725,7 @@ public interface SortedSetBaseCommands {
      * @return The number of elements in the resulting sorted set stored at <code>destination</code>.
      * @example
      *     <pre>{@code
-     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 1.0), Pair.of("mySortedSet2", 2.0)));
+     * WeightedKeys weightedKeys = new WeightedKeys(Arrays.asList(Pair.of("mySortedSet1", 1.0), Pair.of("mySortedSet2", 2.0)));
      * Long payload = client.zunionstore("newSortedSet", weightedKeys, Aggregate.MAX).get()
      * assert payload == 3L; // Indicates the new sorted set contains three members from the union of "mySortedSet1" and "mySortedSet2".
      * }</pre>
@@ -1753,7 +1753,7 @@ public interface SortedSetBaseCommands {
      * @return The number of elements in the resulting sorted set stored at <code>destination</code>.
      * @example
      *     <pre>{@code
-     * WeightedKeysBinary weightedKeys = new WeightedKeys(List.of(Pair.of(gs("mySortedSet1"), 1.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * WeightedKeysBinary weightedKeys = new WeightedKeys(Arrays.asList(Pair.of(gs("mySortedSet1"), 1.0), Pair.of(gs("mySortedSet2"), 2.0)));
      * Long payload = client.zunionstore(gs("newSortedSet"), weightedKeys, Aggregate.MAX).get()
      * assert payload == 3L; // Indicates the new sorted set contains three members from the union of gs("mySortedSet1") and gs("mySortedSet2").
      * }</pre>
@@ -1832,7 +1832,7 @@ public interface SortedSetBaseCommands {
      * @return The number of elements in the resulting sorted set stored at <code>destination</code>.
      * @example
      *     <pre>{@code
-     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 1.0), Pair.of("mySortedSet2", 2.0)));
+     * WeightedKeys weightedKeys = new WeightedKeys(Arrays.asList(Pair.of("mySortedSet1", 1.0), Pair.of("mySortedSet2", 2.0)));
      * Long payload = client.zinterstore("newSortedSet", weightedKeys, Aggregate.MAX).get()
      * assert payload == 3L; // Indicates the new sorted set contains three members from the intersection of "mySortedSet1" and "mySortedSet2".
      * }</pre>
@@ -1860,7 +1860,7 @@ public interface SortedSetBaseCommands {
      * @return The number of elements in the resulting sorted set stored at <code>destination</code>.
      * @example
      *     <pre>{@code
-     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(List.of(Pair.of(gs("mySortedSet1"), 1.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(Arrays.asList(Pair.of(gs("mySortedSet1"), 1.0), Pair.of(gs("mySortedSet2"), 2.0)));
      * Long payload = client.zinterstore(gs("newSortedSet"), weightedKeys, Aggregate.MAX).get()
      * assert payload == 3L; // Indicates the new sorted set contains three members from the intersection of "mySortedSet1" and "mySortedSet2".
      * }</pre>
@@ -2173,7 +2173,7 @@ public interface SortedSetBaseCommands {
      * String[] payload1 = client.zunion(keyArray).get()
      * assert Arrays.equals(payload1, new String[] {"elem1", "elem2", "elem3"});
      *
-     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
+     * WeightedKeys weightedKeys = new WeightedKeys(Arrays.asList(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
      * String[] payload2 = client.zunion(weightedKeys).get()
      * assert Arrays.equals(payload2, new String[] {"elem1", "elem2", "elem3"});
      * }</pre>
@@ -2195,7 +2195,7 @@ public interface SortedSetBaseCommands {
      * GlideString[] payload1 = client.zunion(keyArray).get()
      * assert Arrays.equals(payload1, new GlideString[] {gs("elem1"), gs("elem2"), gs("elem3")});
      *
-     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(List.of(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(Arrays.asList(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
      * GlideString[] payload2 = client.zunion(weightedKeys).get()
      * assert Arrays.equals(payload2, new GlideString[] {gs("elem1"), gs("elem2"), gs("elem3")});
      * }</pre>
@@ -2225,7 +2225,7 @@ public interface SortedSetBaseCommands {
      * Map<String, Double> payload1 = client.zunionWithScores(keyArray, Aggregate.MAX).get();
      * assert Arrays.equals(payload1, Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
      *
-     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
+     * WeightedKeys weightedKeys = new WeightedKeys(Arrays.asList(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
      * Map<String, Double> payload2 = client.zunionWithScores(keyArray, Aggregate.SUM).get();
      * assert Arrays.equals(payload2, Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
      * }</pre>
@@ -2256,7 +2256,7 @@ public interface SortedSetBaseCommands {
      * Map<GlideString, Double> payload1 = client.zunionWithScores(keyArray, Aggregate.MAX).get();
      * assert Arrays.equals(payload1, Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0, gs("elem3"), 3.0));
      *
-     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(List.of(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(Arrays.asList(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
      * Map<GlideString, Double> payload2 = client.zunionWithScores(weightedKeys, Aggregate.SUM).get();
      * assert Arrays.equals(payload2, Map.of(gs("elem1"), 2.0, gs("elem2"), 4.0, gs("elem3"), 6.0));
      * }</pre>
@@ -2287,7 +2287,7 @@ public interface SortedSetBaseCommands {
      * Map<String, Double> payload1 = client.zunionWithScores(keyArray).get();
      * assert Arrays.equals(payload1, Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
      *
-     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
+     * WeightedKeys weightedKeys = new WeightedKeys(Arrays.asList(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
      * Map<String, Double> payload2 = client.zunionWithScores(keyArray).get();
      * assert Arrays.equals(payload2, Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
      * }</pre>
@@ -2317,7 +2317,7 @@ public interface SortedSetBaseCommands {
      * Map<GlideString, Double> payload1 = client.zunionWithScores(keyArray).get();
      * assert Arrays.equals(payload1, Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0, gs("elem3"), 3.0));
      *
-     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(List.of(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(Arrays.asList(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
      * Map<GlideString, Double> payload2 = client.zunionWithScores(keyArray).get();
      * assert Arrays.equals(payload2, Map.of(gs("elem1"), 2.0, gs("elem2"), 4.0, gs("elem3"), 6.0));
      * }</pre>

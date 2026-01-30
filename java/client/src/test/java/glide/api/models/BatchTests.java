@@ -318,6 +318,7 @@ import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -378,10 +379,10 @@ public class BatchTests {
         batch.info(new Section[] {EVERYTHING});
         results.add(Pair.of(Info, buildArgs(EVERYTHING.toString())));
 
-        batch.mset(Map.of("key", "value"));
+        batch.mset(Collections.singletonMap("key", "value"));
         results.add(Pair.of(MSet, buildArgs("key", "value")));
 
-        batch.msetnx(Map.of("key", "value"));
+        batch.msetnx(Collections.singletonMap("key", "value"));
         results.add(Pair.of(MSetNX, buildArgs("key", "value")));
 
         batch.mget(new String[] {"key"});
@@ -411,12 +412,12 @@ public class BatchTests {
         batch.getrange("key", 42, 54);
         results.add(Pair.of(GetRange, buildArgs("key", "42", "54")));
 
-        batch.hset("key", Map.of("field", "value"));
+        batch.hset("key", Collections.singletonMap("field", "value"));
         results.add(Pair.of(HSet, buildArgs("key", "field", "value")));
 
         batch.hsetex(
                 "key",
-                Map.of("field", "value"),
+                Collections.singletonMap("field", "value"),
                 HSetExOptions.builder().expiry(ExpirySet.Seconds(10L)).build());
         results.add(Pair.of(HSetEx, buildArgs("key", "EX", "10", "FIELDS", "1", "field", "value")));
 
@@ -709,7 +710,7 @@ public class BatchTests {
         batch.configGet(new String[] {"maxmemory", "hash-max-listpack-entries"});
         results.add(Pair.of(ConfigGet, buildArgs("maxmemory", "hash-max-listpack-entries")));
 
-        var configSetMap = new LinkedHashMap<String, String>();
+        LinkedHashMap<String, String> configSetMap = new LinkedHashMap<String, String>();
         configSetMap.put("maxmemory", "100mb");
         configSetMap.put("save", "60");
 
@@ -910,10 +911,10 @@ public class BatchTests {
                                 Aggregate.MAX.toString(),
                                 WITH_SCORES_VALKEY_API)));
 
-        batch.xadd("key", Map.of("field1", "foo1"));
+        batch.xadd("key", Collections.singletonMap("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
 
-        batch.xadd("key", Map.of("field1", "foo1"), StreamAddOptions.builder().id("id").build());
+        batch.xadd("key", Collections.singletonMap("field1", "foo1"), StreamAddOptions.builder().id("id").build());
         results.add(Pair.of(XAdd, buildArgs("key", "id", "field1", "foo1")));
 
         batch.xadd("key", new String[][] {new String[] {"field1", "foo1"}});
@@ -929,10 +930,10 @@ public class BatchTests {
         results.add(
                 Pair.of(XTrim, buildArgs("key", TRIM_MINID_VALKEY_API, TRIM_EXACT_VALKEY_API, "id")));
 
-        batch.xread(Map.of("key", "id"));
+        batch.xread(Collections.singletonMap("key", "id"));
         results.add(Pair.of(XRead, buildArgs(READ_STREAMS_VALKEY_API, "key", "id")));
 
-        batch.xread(Map.of("key", "id"), StreamReadOptions.builder().block(1L).count(2L).build());
+        batch.xread(Collections.singletonMap("key", "id"), StreamReadOptions.builder().block(1L).count(2L).build());
         results.add(
                 Pair.of(
                         XRead,
@@ -1001,7 +1002,7 @@ public class BatchTests {
         batch.xgroupDelConsumer("key", "group", "consumer");
         results.add(Pair.of(XGroupDelConsumer, buildArgs("key", "group", "consumer")));
 
-        batch.xreadgroup(Map.of("key", "id"), "group", "consumer");
+        batch.xreadgroup(Collections.singletonMap("key", "id"), "group", "consumer");
         results.add(
                 Pair.of(
                         XReadGroup,
@@ -1015,7 +1016,7 @@ public class BatchTests {
         results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id", "ENTRIESREAD", "1")));
 
         batch.xreadgroup(
-                Map.of("key", "id"),
+                Collections.singletonMap("key", "id"),
                 "group",
                 "consumer",
                 StreamReadGroupOptions.builder().block(1L).count(2L).noack().build());
@@ -1255,7 +1256,7 @@ public class BatchTests {
         batch.touch(new String[] {"key1", "key2"});
         results.add(Pair.of(Touch, buildArgs("key1", "key2")));
 
-        batch.geoadd("key", Map.of("Place", new GeospatialData(10.0, 20.0)));
+        batch.geoadd("key", Collections.singletonMap("Place", new GeospatialData(10.0, 20.0)));
         results.add(Pair.of(GeoAdd, buildArgs("key", "10.0", "20.0", "Place")));
 
         batch.getbit("key", 1);
@@ -1263,7 +1264,7 @@ public class BatchTests {
 
         batch.geoadd(
                 "key",
-                Map.of("Place", new GeospatialData(10.0, 20.0)),
+                Collections.singletonMap("Place", new GeospatialData(10.0, 20.0)),
                 new GeoAddOptions(ConditionalChange.ONLY_IF_EXISTS, true));
         results.add(
                 Pair.of(
@@ -1683,7 +1684,7 @@ public class BatchTests {
         batch.wait(1L, 1000L);
         results.add(Pair.of(Wait, buildArgs("1", "1000")));
 
-        var protobufbatch = batch.getProtobufBatch().build();
+        command_request.CommandRequestOuterClass.Batch protobufbatch = batch.getProtobufBatch().build();
 
         for (int idx = 0; idx < protobufbatch.getCommandsCount(); idx++) {
             Command protobuf = protobufbatch.getCommands(idx);
@@ -1696,8 +1697,8 @@ public class BatchTests {
     }
 
     static ArgsArray buildArgs(String... args) {
-        var builder = ArgsArray.newBuilder();
-        for (var arg : args) {
+        ArgsArray.Builder builder = ArgsArray.newBuilder();
+        for (String arg : args) {
             builder.addArgs(ByteString.copyFromUtf8(arg));
         }
         return builder.build();

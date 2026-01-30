@@ -65,10 +65,12 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
             Optional<Object> context,
             Map<PubSubChannelMode, Set<GlideString>> subscriptions) {
         super(callback, context);
-        this.subscriptions =
-                subscriptions.entrySet().stream()
-                        .collect(
-                                Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> Set.copyOf(e.getValue())));
+        // Java 8 compatible: manually create unmodifiable map
+        Map<PubSubChannelMode, Set<GlideString>> unmodifiableMap = new LinkedHashMap<>();
+        for (Map.Entry<PubSubChannelMode, Set<GlideString>> entry : subscriptions.entrySet()) {
+            unmodifiableMap.put(entry.getKey(), java.util.Collections.unmodifiableSet(new java.util.HashSet<>(entry.getValue())));
+        }
+        this.subscriptions = java.util.Collections.unmodifiableMap(unmodifiableMap);
     }
 
     public static StandaloneSubscriptionConfigurationBuilder builder() {
@@ -113,7 +115,7 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
          */
         public StandaloneSubscriptionConfigurationBuilder subscriptions(
                 PubSubChannelMode mode, Set<GlideString> subscriptions) {
-            this.subscriptions.put(mode, Set.copyOf(subscriptions));
+            this.subscriptions.put(mode, java.util.Collections.unmodifiableSet(new java.util.HashSet<>(subscriptions)));
             return this;
         }
 

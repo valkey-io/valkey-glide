@@ -66,13 +66,13 @@ public class LeakSmokeTest {
             int largeSize = 32 * 1024; // 32KB - DirectByteBuffer path
             int veryLargeSize = Integer.getInteger("LEAK_VALUE_SIZE", 128 * 1024); // 128KB default
 
-            String smallValue = "x".repeat(smallSize);
-            String mediumValue = "y".repeat(mediumSize);
-            String largeValue = "z".repeat(largeSize);
-            String veryLargeValue = "w".repeat(veryLargeSize);
+            String smallValue = repeatString("x", smallSize);
+            String mediumValue = repeatString("y", mediumSize);
+            String largeValue = repeatString("z", largeSize);
+            String veryLargeValue = repeatString("w", veryLargeSize);
 
             // Also test with non-ASCII to stress UTF-8 encoding with large data
-            String unicodeLarge = "测试数据🔥".repeat(largeSize / 10); // >16KB in UTF-8
+            String unicodeLarge = repeatString("测试数据🔥", largeSize / 10); // >16KB in UTF-8
 
             Logger.log(
                     Logger.Level.INFO,
@@ -150,7 +150,7 @@ public class LeakSmokeTest {
                     client.get(key).get(10, TimeUnit.SECONDS);
                 } else {
                     // 10% - Extremely large value (512KB) - Really stress DirectByteBuffer
-                    String extremeLarge = "E".repeat(512 * 1024);
+                    String extremeLarge = repeatString("E", 512 * 1024);
                     client.set(key, extremeLarge).get(10, TimeUnit.SECONDS);
                     client.get(key).get(10, TimeUnit.SECONDS);
                 }
@@ -212,6 +212,24 @@ public class LeakSmokeTest {
         return used / (1024 * 1024);
     }
 
+    private static String repeatString(String str, int count) {
+        StringBuilder sb = new StringBuilder(str.length() * count);
+        for (int i = 0; i < count; i++) {
+            sb.append(str);
+        }
+        return sb.toString();
+    }
+
+    private static byte[] readAllBytes(java.io.InputStream is) throws java.io.IOException {
+        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+        int nRead;
+        byte[] data = new byte[1024];
+        while ((nRead = is.read(data, 0, data.length)) != -1) {
+            buffer.write(data, 0, nRead);
+        }
+        return buffer.toByteArray();
+    }
+
     private static boolean cliPing(String host, int port, boolean tls, Duration timeout) {
         try {
             ProcessBuilder pb = new ProcessBuilder();
@@ -227,7 +245,7 @@ public class LeakSmokeTest {
                 p.destroyForcibly();
                 return false;
             }
-            String out = new String(p.getInputStream().readAllBytes());
+            String out = new String(readAllBytes(p.getInputStream()));
             return p.exitValue() == 0 && out.trim().toUpperCase().contains("PONG");
         } catch (Exception e) {
             return false;

@@ -4,14 +4,27 @@ package glide.benchmarks.utils;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
 
 public class JsonWriter {
+
+    private static byte[] readAllBytes(InputStream inputStream) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        int nRead;
+        byte[] data = new byte[8192];
+        while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
+            buffer.write(data, 0, nRead);
+        }
+        return buffer.toByteArray();
+    }
 
     public static void Write(
             Map<ChosenAction, LatencyResults> calculatedResults,
@@ -27,13 +40,14 @@ public class JsonWriter {
             Gson gson = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
             Collection<Measurements> recordings = new ArrayList<>();
 
-            Path path = Path.of(resultsFile);
+            Path path = Paths.get(resultsFile);
             if (Files.exists(path)) {
-                TypeToken<Collection<Measurements>> collectionType = new TypeToken<>() {};
-                var json = new String(Files.readAllBytes(path));
-                recordings = gson.fromJson(json, collectionType);
+                TypeToken<Collection<Measurements>> collectionType = new TypeToken<Collection<Measurements>>() {};
+                byte[] fileBytes = readAllBytes(Files.newInputStream(path));
+                String json = new String(fileBytes);
+                recordings = gson.fromJson(json, collectionType.getType());
             }
-            var data =
+            Measurements data =
                     new Measurements(
                             client,
                             clientCount,

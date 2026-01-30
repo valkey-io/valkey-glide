@@ -162,7 +162,7 @@ public final class AsyncRegistry {
         }
 
         String msg =
-                (errorMessage == null || errorMessage.isBlank())
+                (errorMessage == null || errorMessage.trim().isEmpty())
                         ? "Unknown error from native code"
                         : errorMessage;
 

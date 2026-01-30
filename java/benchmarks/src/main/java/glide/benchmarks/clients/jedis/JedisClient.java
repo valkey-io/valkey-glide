@@ -3,7 +3,7 @@ package glide.benchmarks.clients.jedis;
 
 import glide.benchmarks.clients.SyncClient;
 import glide.benchmarks.utils.ConnectionSettings;
-import java.util.Set;
+import java.util.Collections;
 import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
@@ -37,7 +37,7 @@ public class JedisClient implements SyncClient {
         if (isClusterMode) {
             jedisCluster =
                     new JedisCluster(
-                            Set.of(new HostAndPort(connectionSettings.host, connectionSettings.port)),
+                            Collections.singleton(new HostAndPort(connectionSettings.host, connectionSettings.port)),
                             DefaultJedisClientConfig.builder().ssl(connectionSettings.useSsl).build());
         } else {
             jedisStandalonePool =

@@ -9,6 +9,7 @@ import glide.api.BaseClient;
 import glide.api.commands.servermodules.FT;
 import glide.api.models.GlideString;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,14 +34,14 @@ public class FTAggregateOptions {
 
     /** Convert to module API. */
     public GlideString[] toArgs() {
-        var args = new ArrayList<GlideString>();
+        ArrayList<GlideString> args = new ArrayList<GlideString>();
         if (loadAll) {
             args.add(gs("LOAD"));
             args.add(gs("*"));
         } else if (loadFields != null) {
             args.add(gs("LOAD"));
             args.add(gs(Integer.toString(loadFields.length)));
-            args.addAll(List.of(loadFields));
+            args.addAll(Arrays.asList(loadFields));
         }
         if (timeout != null) {
             args.add(gs("TIMEOUT"));
@@ -56,11 +57,11 @@ public class FTAggregateOptions {
                     });
         }
         if (clauses != null) {
-            for (var expression : clauses) {
-                args.addAll(List.of(expression.toArgs()));
+            for (FTAggregateClause expression : clauses) {
+                args.addAll(Arrays.asList(expression.toArgs()));
             }
         }
-        return args.toArray(GlideString[]::new);
+        return args.toArray(new GlideString[0]);
     }
 
     /**
@@ -224,7 +225,7 @@ public class FTAggregateOptions {
                         gs(ClauseType.GROUPBY.toString()), gs(Integer.toString(properties.length))
                     },
                     properties,
-                    Stream.of(reducers).map(Reducer::toArgs).flatMap(Stream::of).toArray(GlideString[]::new));
+                    Stream.of(reducers).map(Reducer::toArgs).flatMap(Stream::of).toArray(size -> new GlideString[size]));
         }
 
         /**
@@ -334,7 +335,7 @@ public class FTAggregateOptions {
                     Stream.of(properties)
                             .map(SortProperty::toArgs)
                             .flatMap(Stream::of)
-                            .toArray(GlideString[]::new),
+                            .toArray(size -> new GlideString[size]),
                     max == null ? new GlideString[0] : new GlideString[] {gs("MAX"), gs(max.toString())});
         }
 

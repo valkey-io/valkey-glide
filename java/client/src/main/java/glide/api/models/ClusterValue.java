@@ -3,6 +3,8 @@ package glide.api.models;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -51,7 +53,7 @@ public class ClusterValue<T> {
     @SuppressWarnings("unchecked")
     public static <T> ClusterValue<T> of(Object data) {
         if (data instanceof Map) {
-            var map = (Map<?, T>) data;
+            Map<?, T> map = (Map<?, T>) data;
             if (map.isEmpty() || map.keySet().toArray()[0] instanceof String) {
                 return ofMultiValue((Map<String, T>) data);
             } else { // GlideString
@@ -64,24 +66,24 @@ public class ClusterValue<T> {
 
     /** A constructor for the value. */
     public static <T> ClusterValue<T> ofSingleValue(T data) {
-        var res = new ClusterValue<T>();
+        ClusterValue<T> res = new ClusterValue<T>();
         res.singleValue = data;
         return res;
     }
 
     /** A constructor for the value. */
     public static <T> ClusterValue<T> ofMultiValue(Map<String, T> data) {
-        var res = new ClusterValue<T>();
-        res.multiValue = Map.copyOf(data);
+        ClusterValue<T> res = new ClusterValue<T>();
+        res.multiValue = Collections.unmodifiableMap(new LinkedHashMap<>(data));
         return res;
     }
 
     /** A constructor for the value. */
     public static <T> ClusterValue<T> ofMultiValueBinary(Map<GlideString, T> data) {
-        var res = new ClusterValue<T>();
+        ClusterValue<T> res = new ClusterValue<T>();
         // the map node address can be converted to a string
         res.multiValue =
-                Map.copyOf(
+                Collections.unmodifiableMap(
                         data.entrySet().stream()
                                 .collect(Collectors.toMap(e -> e.getKey().getString(), Map.Entry::getValue)));
         return res;

@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'java-library'
-    id 'io.freefair.lombok' version '8.6'
+    id 'io.freefair.lombok' version '6.6.3'
     id 'com.diffplug.spotless' version '7.2.1'
     id 'jacoco'
 }
@@ -64,6 +64,8 @@ subprojects {
     }
     tasks.withType(JavaCompile) {
         options.encoding = 'UTF-8'
+        // Compile with JDK 11 but target Java 8 bytecode
+        options.release = 8
     }
 
     tasks.withType(Test) {

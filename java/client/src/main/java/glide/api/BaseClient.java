@@ -317,6 +317,7 @@ import glide.managers.ConnectionManager;
 import glide.utils.ArgsBuilder;
 import glide.utils.BufferUtils;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -486,7 +487,7 @@ public abstract class BaseClient
                             });
         } catch (Exception e) {
             // Something bad happened during initial setup
-            var future = new CompletableFuture<T>();
+            CompletableFuture<T> future = new CompletableFuture<>();
             future.completeExceptionally(e);
             return future;
         }
@@ -679,7 +680,7 @@ public abstract class BaseClient
     }
 
     protected byte[] handleBytesOrNullResponse(Response response) throws GlideException {
-        var result =
+        GlideString result =
                 handleValkeyResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
         if (result == null) return null;
 
@@ -830,7 +831,7 @@ public abstract class BaseClient
         Map<String, Object>[] data = castArray(response, Map.class);
         for (Map<String, Object> libraryInfo : data) {
             Object[] functions = (Object[]) libraryInfo.get("functions");
-            var functionInfo = castArray(functions, Map.class);
+            Map<String, Object>[] functionInfo = castArray(functions, Map.class);
             libraryInfo.put("functions", functionInfo);
         }
         return data;
@@ -842,7 +843,7 @@ public abstract class BaseClient
         Map<GlideString, Object>[] data = castArray(response, Map.class);
         for (Map<GlideString, Object> libraryInfo : data) {
             Object[] functions = (Object[]) libraryInfo.get(gs("functions"));
-            var functionInfo = castArray(functions, Map.class);
+            Map<String, Object>[] functionInfo = castArray(functions, Map.class);
             libraryInfo.put(gs("functions"), functionInfo);
         }
         return data;
@@ -877,7 +878,7 @@ public abstract class BaseClient
             return ClusterValue.ofSingleValue(handleFunctionStatsResponse(handleMapResponse(response)));
         } else {
             Map<String, Map<String, Map<String, Object>>> data = handleMapResponse(response);
-            for (var nodeInfo : data.entrySet()) {
+            for (Map.Entry<String, Map<String, Map<String, Object>>> nodeInfo : data.entrySet()) {
                 nodeInfo.setValue(handleFunctionStatsResponse(nodeInfo.getValue()));
             }
             return ClusterValue.ofMultiValue(data);
@@ -893,7 +894,7 @@ public abstract class BaseClient
         } else {
             Map<GlideString, Map<GlideString, Map<GlideString, Object>>> data =
                     handleBinaryStringMapResponse(response);
-            for (var nodeInfo : data.entrySet()) {
+            for (Map.Entry<GlideString, Map<GlideString, Map<GlideString, Object>>> nodeInfo : data.entrySet()) {
                 nodeInfo.setValue(handleFunctionStatsBinaryResponse(nodeInfo.getValue()));
             }
             return ClusterValue.ofMultiValueBinary(data);
@@ -2429,10 +2430,10 @@ public abstract class BaseClient
     public CompletableFuture<Object> invokeScript(@NonNull Script script) {
         if (script.getBinaryOutput()) {
             return commandManager.submitScript(
-                    script, List.of(), List.of(), this::handleBinaryObjectOrNullResponse);
+                    script, Collections.emptyList(), Collections.emptyList(), this::handleBinaryObjectOrNullResponse);
         } else {
             return commandManager.submitScript(
-                    script, List.of(), List.of(), this::handleObjectOrNullResponse);
+                    script, Collections.emptyList(), Collections.emptyList(), this::handleObjectOrNullResponse);
         }
     }
 
@@ -5405,15 +5406,15 @@ public abstract class BaseClient
         if (o instanceof byte[]) {
             o = GlideString.of((byte[]) o);
         } else if (o.getClass().isArray()) {
-            var array = (Object[]) o;
-            for (var i = 0; i < array.length; i++) {
+            Object[] array = (Object[]) o;
+            for (int i = 0; i < array.length; i++) {
                 array[i] = convertByteArrayToGlideString(array[i]);
             }
         } else if (o instanceof Set) {
-            var set = (Set<?>) o;
+            Set<?> set = (Set<?>) o;
             o = set.stream().map(this::convertByteArrayToGlideString).collect(Collectors.toSet());
         } else if (o instanceof Map) {
-            var map = (Map<?, ?>) o;
+            Map<?, ?> map = (Map<?, ?>) o;
             o =
                     map.entrySet().stream()
                             .collect(

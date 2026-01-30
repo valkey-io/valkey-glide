@@ -221,6 +221,8 @@ import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE;
+
+import glide.api.models.commands.LInsertOptions.InsertPosition;
 import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EQUAL;
@@ -368,6 +370,8 @@ import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -836,7 +840,7 @@ public class GlideClientTest {
     }
 
     private static List<Arguments> getGetExOptions() {
-        return List.of(
+        return Arrays.asList(
                 Arguments.of(
                         // seconds
                         "test_with_seconds", GetExOptions.Seconds(10L), new String[] {"EX", "10"}),
@@ -859,7 +863,7 @@ public class GlideClientTest {
     }
 
     private static List<Arguments> getGetExOptionsBinary() {
-        return List.of(
+        return Arrays.asList(
                 Arguments.of(
                         // seconds
                         "test_with_seconds", GetExOptions.Seconds(10L), new GlideString[] {gs("EX"), gs("10")}),
@@ -1729,7 +1733,7 @@ public class GlideClientTest {
         testResponse.complete(payload);
 
         // match on protobuf request
-        when(commandManager.submitScript(eq(script), eq(List.of()), eq(List.of()), any()))
+        when(commandManager.submitScript(eq(script), eq(Arrays.asList()), eq(Arrays.asList()), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -1758,8 +1762,8 @@ public class GlideClientTest {
         // match on protobuf request
         when(commandManager.submitScript(
                         eq(script),
-                        eq(List.of(gs("key1"), gs("key2"))),
-                        eq(List.of(gs("arg1"), gs("arg2"))),
+                        eq(Arrays.asList(gs("key1"), gs("key2"))),
+                        eq(Arrays.asList(gs("arg1"), gs("arg2"))),
                         any()))
                 .thenReturn(testResponse);
 
@@ -1794,8 +1798,8 @@ public class GlideClientTest {
         // match on protobuf request
         when(commandManager.submitScript(
                         eq(script),
-                        eq(List.of(gs("key1"), gs("key2"))),
-                        eq(List.of(gs("arg1"), gs("arg2"))),
+                        eq(Arrays.asList(gs("key1"), gs("key2"))),
+                        eq(Arrays.asList(gs("arg1"), gs("arg2"))),
                         any()))
                 .thenReturn(testResponse);
 
@@ -4031,7 +4035,7 @@ public class GlideClientTest {
     public void smembers_returns_success() {
         // setup
         String key = "testKey";
-        Set<String> value = Set.of("testMember");
+        Set<String> value = Collections.singleton("testMember");
 
         CompletableFuture<Set<String>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -4100,7 +4104,7 @@ public class GlideClientTest {
     public void sdiff_returns_success() {
         // setup
         String[] keys = new String[] {"key1", "key2"};
-        Set<String> value = Set.of("1", "2");
+        Set<String> value = createSet("1", "2");
 
         CompletableFuture<Set<String>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -4123,7 +4127,7 @@ public class GlideClientTest {
     public void sdiff_binary_returns_success() {
         // setup
         GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
-        Set<GlideString> value = Set.of(gs("1"), gs("2"));
+        Set<GlideString> value = createSet(gs("1"), gs("2"));
 
         CompletableFuture<Set<GlideString>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -4298,7 +4302,7 @@ public class GlideClientTest {
     public void sinter_returns_success() {
         // setup
         String[] keys = new String[] {"key1", "key2"};
-        Set<String> value = Set.of("1", "2");
+        Set<String> value = createSet("1", "2");
 
         CompletableFuture<Set<String>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -4321,7 +4325,7 @@ public class GlideClientTest {
     public void sinter_binary_returns_success() {
         // setup
         GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
-        Set<GlideString> value = Set.of(gs("1"), gs("2"));
+        Set<GlideString> value = createSet(gs("1"), gs("2"));
 
         CompletableFuture<Set<GlideString>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -4731,7 +4735,7 @@ public class GlideClientTest {
         String[] keys = new String[] {"key1", "key2"};
         ScoreFilter modifier = MAX;
         String[] arguments = {"2", "key1", "key2", "MAX"};
-        Map<String, Object> value = Map.of("key1", "elem");
+        Map<String, Object> value = Collections.singletonMap("key1", "elem");
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -4756,7 +4760,7 @@ public class GlideClientTest {
         GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
         ScoreFilter modifier = MAX;
         GlideString[] arguments = {gs("2"), gs("key1"), gs("key2"), gs("MAX")};
-        Map<GlideString, Object> value = Map.of(gs("key1"), "elem");
+        Map<GlideString, Object> value = Collections.singletonMap(gs("key1"), "elem");
 
         CompletableFuture<Map<GlideString, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -4782,7 +4786,7 @@ public class GlideClientTest {
         ScoreFilter modifier = MAX;
         long count = 42;
         String[] arguments = {"2", "key1", "key2", "MAX", "COUNT", "42"};
-        Map<String, Object> value = Map.of("key1", "elem");
+        Map<String, Object> value = Collections.singletonMap("key1", "elem");
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -4808,7 +4812,7 @@ public class GlideClientTest {
         ScoreFilter modifier = MAX;
         long count = 42;
         GlideString[] arguments = {gs("2"), gs("key1"), gs("key2"), gs("MAX"), gs("COUNT"), gs("42")};
-        Map<GlideString, Object> value = Map.of(gs("key1"), "elem");
+        Map<GlideString, Object> value = Collections.singletonMap(gs("key1"), "elem");
 
         CompletableFuture<Map<GlideString, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -4834,7 +4838,7 @@ public class GlideClientTest {
         String[] keys = new String[] {"key1", "key2"};
         ScoreFilter modifier = MAX;
         String[] arguments = {"0.5", "2", "key1", "key2", "MAX"};
-        Map<String, Object> value = Map.of("key1", "elem");
+        Map<String, Object> value = Collections.singletonMap("key1", "elem");
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -4860,7 +4864,7 @@ public class GlideClientTest {
         GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
         ScoreFilter modifier = MAX;
         GlideString[] arguments = {gs("0.5"), gs("2"), gs("key1"), gs("key2"), gs("MAX")};
-        Map<GlideString, Object> value = Map.of(gs("key1"), "elem");
+        Map<GlideString, Object> value = Collections.singletonMap(gs("key1"), "elem");
 
         CompletableFuture<Map<GlideString, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -4888,7 +4892,7 @@ public class GlideClientTest {
         ScoreFilter modifier = MAX;
         long count = 42;
         String[] arguments = {"0.5", "2", "key1", "key2", "MAX", "COUNT", "42"};
-        Map<String, Object> value = Map.of("key1", "elem");
+        Map<String, Object> value = Collections.singletonMap("key1", "elem");
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -4918,7 +4922,7 @@ public class GlideClientTest {
         GlideString[] arguments = {
             gs("0.5"), gs("2"), gs("key1"), gs("key2"), gs("MAX"), gs("COUNT"), gs("42")
         };
-        Map<GlideString, Object> value = Map.of(gs("key1"), "elem");
+        Map<GlideString, Object> value = Collections.singletonMap(gs("key1"), "elem");
 
         CompletableFuture<Map<GlideString, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -5020,7 +5024,7 @@ public class GlideClientTest {
     @Test
     public void configGet_returns_success() {
         // setup
-        Map<String, String> testPayload = Map.of("timeout", "1000");
+        Map<String, String> testPayload = Collections.singletonMap("timeout", "1000");
         CompletableFuture<Map<String, String>> testResponse = new CompletableFuture<>();
         testResponse.complete(testPayload);
 
@@ -5051,7 +5055,7 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.configSet(Map.of("timeout", "1000"));
+        CompletableFuture<String> response = service.configSet(Collections.singletonMap("timeout", "1000"));
 
         // verify
         assertEquals(testResponse, response);
@@ -5162,7 +5166,7 @@ public class GlideClientTest {
         // setup
         String key = "testKey";
         String[] arguments = new String[] {key};
-        Map<String, Double> value = Map.of("member1", 2.5);
+        Map<String, Double> value = Collections.singletonMap("member1", 2.5);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -5186,7 +5190,7 @@ public class GlideClientTest {
         // setup
         GlideString key = gs("testKey");
         GlideString[] arguments = new GlideString[] {key};
-        Map<GlideString, Double> value = Map.of(gs("member1"), 2.5);
+        Map<GlideString, Double> value = Collections.singletonMap(gs("member1"), 2.5);
 
         CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -5212,7 +5216,7 @@ public class GlideClientTest {
         String key = "testKey";
         long count = 2L;
         String[] arguments = new String[] {key, Long.toString(count)};
-        Map<String, Double> value = Map.of("member1", 2.0, "member2", 3.0);
+        Map<String, Double> value = createMap("member1", 2.0, "member2", 3.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -5237,7 +5241,7 @@ public class GlideClientTest {
         GlideString key = gs("testKey");
         long count = 2L;
         GlideString[] arguments = new GlideString[] {key, gs(Long.toString(count))};
-        Map<GlideString, Double> value = Map.of(gs("member1"), 2.0, gs("member2"), 3.0);
+        Map<GlideString, Double> value = createMap(gs("member1"), 2.0, gs("member2"), 3.0);
 
         CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -5312,7 +5316,7 @@ public class GlideClientTest {
         // setup
         String key = "testKey";
         String[] arguments = new String[] {key};
-        Map<String, Double> value = Map.of("member1", 2.5);
+        Map<String, Double> value = Collections.singletonMap("member1", 2.5);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -5336,7 +5340,7 @@ public class GlideClientTest {
         // setup
         GlideString key = gs("testKey");
         GlideString[] arguments = new GlideString[] {key};
-        Map<GlideString, Double> value = Map.of(gs("member1"), 2.5);
+        Map<GlideString, Double> value = Collections.singletonMap(gs("member1"), 2.5);
 
         CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -5412,7 +5416,7 @@ public class GlideClientTest {
         String key = "testKey";
         long count = 2L;
         String[] arguments = new String[] {key, Long.toString(count)};
-        Map<String, Double> value = Map.of("member1", 3.0, "member2", 1.0);
+        Map<String, Double> value = createMap("member1", 3.0, "member2", 1.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -5437,7 +5441,7 @@ public class GlideClientTest {
         GlideString key = gs("testKey");
         long count = 2L;
         GlideString[] arguments = new GlideString[] {key, gs(Long.toString(count))};
-        Map<GlideString, Double> value = Map.of(gs("member1"), 3.0, gs("member2"), 1.0);
+        Map<GlideString, Double> value = createMap(gs("member1"), 3.0, gs("member2"), 1.0);
 
         CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -5674,7 +5678,7 @@ public class GlideClientTest {
         RangeByIndex rangeByIndex = new RangeByIndex(0, 4);
         String[] arguments =
                 new String[] {key, rangeByIndex.getStart(), rangeByIndex.getEnd(), WITH_SCORES_VALKEY_API};
-        Map<String, Double> value = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        Map<String, Double> value = createMap("one", 1.0, "two", 2.0, "three", 3.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -5702,7 +5706,7 @@ public class GlideClientTest {
                 new GlideString[] {
                     key, gs(rangeByIndex.getStart()), gs(rangeByIndex.getEnd()), gs(WITH_SCORES_VALKEY_API)
                 };
-        Map<GlideString, Double> value = Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0);
+        Map<GlideString, Double> value = createMap(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0);
 
         CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -5743,7 +5747,7 @@ public class GlideClientTest {
                     "2",
                     WITH_SCORES_VALKEY_API
                 };
-        Map<String, Double> value = Map.of("two", 2.0, "three", 3.0);
+        Map<String, Double> value = createMap("two", 2.0, "three", 3.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -5783,7 +5787,7 @@ public class GlideClientTest {
                     gs("2"),
                     gs(WITH_SCORES_VALKEY_API)
                 };
-        Map<GlideString, Double> value = Map.of(gs("two"), 2.0, gs("three"), 3.0);
+        Map<GlideString, Double> value = createMap(gs("two"), 2.0, gs("three"), 3.0);
 
         CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -6113,7 +6117,7 @@ public class GlideClientTest {
         String key1 = "testKey1";
         String key2 = "testKey2";
         String[] arguments = new String[] {"2", key1, key2, WITH_SCORES_VALKEY_API};
-        Map<String, Double> value = Map.of("element1", 2.0);
+        Map<String, Double> value = Collections.singletonMap("element1", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -6139,7 +6143,7 @@ public class GlideClientTest {
         GlideString key1 = gs("testKey1");
         GlideString key2 = gs("testKey2");
         GlideString[] arguments = new GlideString[] {gs("2"), key1, key2, gs(WITH_SCORES_VALKEY_API)};
-        Map<GlideString, Double> value = Map.of(gs("element1"), 2.0);
+        Map<GlideString, Double> value = Collections.singletonMap(gs("element1"), 2.0);
 
         CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -6772,7 +6776,7 @@ public class GlideClientTest {
         KeyArray keyArray = new KeyArray(keys);
         String[] arguments =
                 concatenateArrays(keyArray.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
-        Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
+        Map<String, Double> value = createMap("elem1", 1.0, "elem2", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -6798,7 +6802,7 @@ public class GlideClientTest {
         KeyArrayBinary keyArray = new KeyArrayBinary(keys);
         GlideString[] arguments =
                 concatenateArrays(keyArray.toArgs(), new GlideString[] {gs(WITH_SCORES_VALKEY_API)});
-        Map<GlideString, Double> value = Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0);
+        Map<GlideString, Double> value = createMap(gs("elem1"), 1.0, gs("elem2"), 2.0);
 
         CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -6829,7 +6833,7 @@ public class GlideClientTest {
         String[] arguments =
                 concatenateArrays(
                         weightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
-        Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
+        Map<String, Double> value = createMap("elem1", 1.0, "elem2", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -6863,7 +6867,7 @@ public class GlideClientTest {
                         .add(aggregate.toArgs())
                         .add(WITH_SCORES_VALKEY_API)
                         .toArray();
-        Map<GlideString, Double> value = Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0);
+        Map<GlideString, Double> value = createMap(gs("elem1"), 1.0, gs("elem2"), 2.0);
 
         CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -6941,7 +6945,7 @@ public class GlideClientTest {
         KeyArray keyArray = new KeyArray(keys);
         String[] arguments =
                 concatenateArrays(keyArray.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
-        Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
+        Map<String, Double> value = createMap("elem1", 1.0, "elem2", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -6967,7 +6971,7 @@ public class GlideClientTest {
         KeyArrayBinary keyArray = new KeyArrayBinary(keys);
         GlideString[] arguments =
                 concatenateArrays(keyArray.toArgs(), new GlideString[] {gs(WITH_SCORES_VALKEY_API)});
-        Map<GlideString, Double> value = Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0);
+        Map<GlideString, Double> value = createMap(gs("elem1"), 1.0, gs("elem2"), 2.0);
 
         CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -6998,7 +7002,7 @@ public class GlideClientTest {
         String[] arguments =
                 concatenateArrays(
                         weightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
-        Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
+        Map<String, Double> value = createMap("elem1", 1.0, "elem2", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -7032,7 +7036,7 @@ public class GlideClientTest {
                         .add(aggregate.toArgs())
                         .add(WITH_SCORES_VALKEY_API)
                         .toArray();
-        Map<GlideString, Double> value = Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0);
+        Map<GlideString, Double> value = createMap(gs("elem1"), 1.0, gs("elem2"), 2.0);
 
         CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -7635,7 +7639,7 @@ public class GlideClientTest {
     }
 
     private static List<Arguments> getStreamAddOptions() {
-        return List.of(
+        return Arrays.asList(
                 Arguments.of(
                         // no TRIM option
                         "test_xadd_no_trim",
@@ -7846,7 +7850,7 @@ public class GlideClientTest {
     }
 
     private static List<Arguments> getStreamTrimOptions() {
-        return List.of(
+        return Arrays.asList(
                 Arguments.of(
                         // MAXLEN just THRESHOLD
                         "test_xtrim_maxlen", new MaxLen(5L), new String[] {TRIM_MAXLEN_VALKEY_API, "5"}),
@@ -7880,7 +7884,7 @@ public class GlideClientTest {
     }
 
     private static List<Arguments> getStreamTrimOptionsBinary() {
-        return List.of(
+        return Arrays.asList(
                 Arguments.of(
                         // MAXLEN just THRESHOLD
                         "test_xtrim_maxlen",
@@ -7974,8 +7978,8 @@ public class GlideClientTest {
         String streamIdTwo = "id-two";
         String[][] fieldValues = {{"field", "value"}};
         Map<String, Map<String, String[][]>> completedResult = new LinkedHashMap<>();
-        completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
-        completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
+        completedResult.put(keyOne, Collections.singletonMap(streamIdOne, fieldValues));
+        completedResult.put(keyTwo, Collections.singletonMap(streamIdTwo, fieldValues));
         String[] arguments = {READ_STREAMS_VALKEY_API, keyOne, keyTwo, streamIdOne, streamIdTwo};
 
         CompletableFuture<Map<String, Map<String, String[][]>>> testResponse =
@@ -8009,8 +8013,8 @@ public class GlideClientTest {
         GlideString streamIdTwo = gs("id-two");
         GlideString[][] fieldValues = {{gs("field"), gs("value")}};
         Map<GlideString, Map<GlideString, GlideString[][]>> completedResult = new LinkedHashMap<>();
-        completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
-        completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
+        completedResult.put(keyOne, Collections.singletonMap(streamIdOne, fieldValues));
+        completedResult.put(keyTwo, Collections.singletonMap(streamIdTwo, fieldValues));
         GlideString[] arguments = {
             gs(READ_STREAMS_VALKEY_API), keyOne, keyTwo, streamIdOne, streamIdTwo
         };
@@ -8047,7 +8051,7 @@ public class GlideClientTest {
         Long count = 10L;
         String[][] fieldValues = {{"field", "value"}};
         Map<String, Map<String, String[][]>> completedResult =
-                Map.of(keyOne, Map.of(streamIdOne, fieldValues));
+                Collections.singletonMap(keyOne, Collections.singletonMap(streamIdOne, fieldValues));
         String[] arguments = {
             READ_COUNT_VALKEY_API,
             count.toString(),
@@ -8070,7 +8074,7 @@ public class GlideClientTest {
         // exercise
         CompletableFuture<Map<String, Map<String, String[][]>>> response =
                 service.xread(
-                        Map.of(keyOne, streamIdOne),
+                        Collections.singletonMap(keyOne, streamIdOne),
                         StreamReadOptions.builder().block(block).count(count).build());
         Map<String, Map<String, String[][]>> payload = response.get();
 
@@ -8089,7 +8093,7 @@ public class GlideClientTest {
         Long count = 10L;
         GlideString[][] fieldValues = {{gs("field"), gs("value")}};
         Map<GlideString, Map<GlideString, GlideString[][]>> completedResult =
-                Map.of(keyOne, Map.of(streamIdOne, fieldValues));
+                Collections.singletonMap(keyOne, Collections.singletonMap(streamIdOne, fieldValues));
         GlideString[] arguments = {
             gs(READ_COUNT_VALKEY_API),
             gs(count.toString()),
@@ -8112,7 +8116,7 @@ public class GlideClientTest {
         // exercise
         CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> response =
                 service.xreadBinary(
-                        Map.of(keyOne, streamIdOne),
+                        Collections.singletonMap(keyOne, streamIdOne),
                         StreamReadOptions.builder().block(block).count(count).build());
         Map<GlideString, Map<GlideString, GlideString[][]>> payload = response.get();
 
@@ -8179,7 +8183,7 @@ public class GlideClientTest {
         StreamRange start = IdBound.of(9999L);
         StreamRange end = IdBound.ofExclusive("696969-10");
         String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
-        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<String, String[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
@@ -8208,7 +8212,7 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         CompletableFuture<Map<GlideString, GlideString[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
@@ -8236,7 +8240,7 @@ public class GlideClientTest {
         StreamRange end = InfRangeBound.MAX;
         long count = 99L;
         String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
-        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<String, String[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
@@ -8275,7 +8279,7 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         CompletableFuture<Map<GlideString, GlideString[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
@@ -8312,7 +8316,7 @@ public class GlideClientTest {
         StreamRange end = IdBound.of(9999L);
         StreamRange start = IdBound.ofExclusive("696969-10");
         String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
-        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<String, String[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
@@ -8341,7 +8345,7 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         CompletableFuture<Map<GlideString, GlideString[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
@@ -8370,7 +8374,7 @@ public class GlideClientTest {
         StreamRange start = InfRangeBound.MIN;
         long count = 99L;
         String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
-        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<String, String[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
@@ -8409,7 +8413,7 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         CompletableFuture<Map<GlideString, GlideString[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
@@ -8834,8 +8838,8 @@ public class GlideClientTest {
         String consumerName = "consumerGroup";
         String[][] fieldValues = {{"field", "value"}};
         Map<String, Map<String, String[][]>> completedResult = new LinkedHashMap<>();
-        completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
-        completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
+        completedResult.put(keyOne, Collections.singletonMap(streamIdOne, fieldValues));
+        completedResult.put(keyTwo, Collections.singletonMap(streamIdTwo, fieldValues));
         String[] arguments = {
             READ_GROUP_VALKEY_API,
             groupName,
@@ -8881,8 +8885,8 @@ public class GlideClientTest {
         GlideString consumerName = gs("consumerGroup");
         GlideString[][] fieldValues = {{gs("field"), gs("value")}};
         Map<GlideString, Map<GlideString, GlideString[][]>> completedResult = new LinkedHashMap<>();
-        completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
-        completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
+        completedResult.put(keyOne, Collections.singletonMap(streamIdOne, fieldValues));
+        completedResult.put(keyTwo, Collections.singletonMap(streamIdTwo, fieldValues));
         GlideString[] arguments = {
             gs(READ_GROUP_VALKEY_API),
             groupName,
@@ -8928,7 +8932,7 @@ public class GlideClientTest {
         String consumerName = "consumerGroup";
         String[][] fieldValues = {{"field", "value"}};
         Map<String, Map<String, String[][]>> completedResult =
-                Map.of(keyOne, Map.of(streamIdOne, fieldValues));
+                Collections.singletonMap(keyOne, Collections.singletonMap(streamIdOne, fieldValues));
         String[] arguments = {
             READ_GROUP_VALKEY_API,
             groupName,
@@ -8955,7 +8959,7 @@ public class GlideClientTest {
         // exercise
         CompletableFuture<Map<String, Map<String, String[][]>>> response =
                 service.xreadgroup(
-                        Map.of(keyOne, streamIdOne),
+                        Collections.singletonMap(keyOne, streamIdOne),
                         groupName,
                         consumerName,
                         StreamReadGroupOptions.builder().block(block).count(count).noack().build());
@@ -8978,7 +8982,7 @@ public class GlideClientTest {
         GlideString consumerName = gs("consumerGroup");
         GlideString[][] fieldValues = {{gs("field"), gs("value")}};
         Map<GlideString, Map<GlideString, GlideString[][]>> completedResult =
-                Map.of(keyOne, Map.of(streamIdOne, fieldValues));
+                Collections.singletonMap(keyOne, Collections.singletonMap(streamIdOne, fieldValues));
         GlideString[] arguments = {
             gs(READ_GROUP_VALKEY_API),
             groupName,
@@ -9005,7 +9009,7 @@ public class GlideClientTest {
         // exercise
         CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> response =
                 service.xreadgroup(
-                        Map.of(keyOne, streamIdOne),
+                        Collections.singletonMap(keyOne, streamIdOne),
                         groupName,
                         consumerName,
                         StreamReadGroupOptions.builder().block(block).count(count).noack().build());
@@ -9052,7 +9056,7 @@ public class GlideClientTest {
         Long minIdleTime = 18L;
         String[] ids = new String[] {"testId"};
         String[] arguments = concatenateArrays(new String[] {key, groupName, consumer, "18"}, ids);
-        Map<String, String[][]> mockResult = Map.of("1234-0", new String[][] {{"message", "log"}});
+        Map<String, String[][]> mockResult = Collections.singletonMap("1234-0", new String[][] {{"message", "log"}});
 
         CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(mockResult);
@@ -9083,7 +9087,7 @@ public class GlideClientTest {
         GlideString[] arguments =
                 concatenateArrays(new GlideString[] {key, groupName, consumer, gs("18")}, ids);
         Map<GlideString, GlideString[][]> mockResult =
-                Map.of(gs("1234-0"), new GlideString[][] {{gs("message"), gs("log")}});
+                Collections.singletonMap(gs("1234-0"), new GlideString[][] {{gs("message"), gs("log")}});
 
         CompletableFuture<Map<GlideString, GlideString[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(mockResult);
@@ -9129,7 +9133,7 @@ public class GlideClientTest {
                     "5",
                     FORCE_VALKEY_API
                 };
-        Map<String, String[][]> mockResult = Map.of("1234-0", new String[][] {{"message", "log"}});
+        Map<String, String[][]> mockResult = Collections.singletonMap("1234-0", new String[][] {{"message", "log"}});
 
         CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(mockResult);
@@ -9175,7 +9179,7 @@ public class GlideClientTest {
                     gs(FORCE_VALKEY_API)
                 };
         Map<GlideString, GlideString[][]> mockResult =
-                Map.of(gs("1234-0"), new GlideString[][] {{gs("message"), gs("log")}});
+                Collections.singletonMap(gs("1234-0"), new GlideString[][] {{gs("message"), gs("log")}});
 
         CompletableFuture<Map<GlideString, GlideString[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(mockResult);
@@ -9360,7 +9364,7 @@ public class GlideClientTest {
         String start = "0-0";
 
         String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
-        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<String, String[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         String[] deletedMessageIds = new String[] {"13-1", "46-2", "89-3"};
 
@@ -9397,7 +9401,7 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         GlideString[] deletedMessageIds = new GlideString[] {gs("13-1"), gs("46-2"), gs("89-3")};
 
@@ -9434,7 +9438,7 @@ public class GlideClientTest {
         long count = 1234;
 
         String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
-        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<String, String[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         String[] deletedMessageIds = new String[] {"13-1", "46-2", "89-3"};
 
@@ -9474,7 +9478,7 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         GlideString[] deletedMessageIds = new GlideString[] {gs("13-1"), gs("46-2"), gs("89-3")};
 
@@ -9513,7 +9517,7 @@ public class GlideClientTest {
         String start = "0-0";
 
         String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
-        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<String, String[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         String[] deletedMessageIds = new String[] {"13-1", "46-2", "89-3"};
 
@@ -9551,7 +9555,7 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         GlideString[] deletedMessageIds = new GlideString[] {gs("13-1"), gs("46-2"), gs("89-3")};
 
@@ -9589,7 +9593,7 @@ public class GlideClientTest {
         long count = 1234;
 
         String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
-        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<String, String[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         String[] deletedMessageIds = new String[] {"13-1", "46-2", "89-3"};
 
@@ -9638,7 +9642,7 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Map.of(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
 
         GlideString[] deletedMessageIds = new GlideString[] {gs("13-1"), gs("46-2"), gs("89-3")};
 
@@ -10300,7 +10304,7 @@ public class GlideClientTest {
     public void linsert_returns_success() {
         // setup
         String key = "testKey";
-        var position = BEFORE;
+        InsertPosition position = BEFORE;
         String pivot = "pivot";
         String elem = "elem";
         String[] arguments = new String[] {key, position.toString(), pivot, elem};
@@ -10327,7 +10331,7 @@ public class GlideClientTest {
     public void linsert_binary_returns_success() {
         // setup
         GlideString key = gs("testKey");
-        var position = BEFORE;
+        InsertPosition position = BEFORE;
         GlideString pivot = gs("pivot");
         GlideString elem = gs("elem");
         GlideString[] arguments = new GlideString[] {key, gs(position.toString()), pivot, elem};
@@ -11778,7 +11782,7 @@ public class GlideClientTest {
         // setup
         String[] args = new String[0];
         Map<String, Map<String, Map<String, Object>>> value =
-                Map.of("::1", Map.of("1", Map.of("2", 2)));
+                Collections.singletonMap("::1", Collections.singletonMap("1", Collections.singletonMap("2", 2)));
         CompletableFuture<Map<String, Map<String, Map<String, Object>>>> testResponse =
                 new CompletableFuture<>();
         testResponse.complete(value);
@@ -11804,7 +11808,7 @@ public class GlideClientTest {
         // setup
         GlideString[] args = new GlideString[0];
         Map<String, Map<GlideString, Map<GlideString, Object>>> value =
-                Map.of("::1", Map.of(gs("1"), Map.of(gs("2"), 2)));
+                Collections.singletonMap("::1", Collections.singletonMap(gs("1"), Collections.singletonMap(gs("2"), 2)));
         CompletableFuture<Map<String, Map<GlideString, Map<GlideString, Object>>>> testResponse =
                 new CompletableFuture<>();
         testResponse.complete(value);
@@ -12128,7 +12132,7 @@ public class GlideClientTest {
         double timeout = 0.1;
         String[] arguments =
                 new String[] {Double.toString(timeout), "2", key, key2, listDirection.toString()};
-        Map<String, String[]> value = Map.of(key, new String[] {"five"});
+        Map<String, String[]> value = Collections.singletonMap(key, new String[] {"five"});
 
         CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -12160,7 +12164,7 @@ public class GlideClientTest {
                 new GlideString[] {
                     gs(Double.toString(timeout)), gs("2"), key, key2, gs(listDirection.toString())
                 };
-        Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
+        Map<GlideString, GlideString[]> value = Collections.singletonMap(key, new GlideString[] {gs("five")});
 
         CompletableFuture<Map<GlideString, GlideString[]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -12200,7 +12204,7 @@ public class GlideClientTest {
                     COUNT_FOR_LIST_VALKEY_API,
                     Long.toString(count)
                 };
-        Map<String, String[]> value = Map.of(key, new String[] {"five"});
+        Map<String, String[]> value = Collections.singletonMap(key, new String[] {"five"});
 
         CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -12239,7 +12243,7 @@ public class GlideClientTest {
                     gs(COUNT_FOR_LIST_VALKEY_API),
                     gs(Long.toString(count))
                 };
-        Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
+        Map<GlideString, GlideString[]> value = Collections.singletonMap(key, new GlideString[] {gs("five")});
 
         CompletableFuture<Map<GlideString, GlideString[]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -12506,7 +12510,7 @@ public class GlideClientTest {
         String[] keys = {key, key2};
         ListDirection listDirection = ListDirection.LEFT;
         String[] arguments = new String[] {"2", key, key2, listDirection.toString()};
-        Map<String, String[]> value = Map.of(key, new String[] {"five"});
+        Map<String, String[]> value = Collections.singletonMap(key, new String[] {"five"});
 
         CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -12533,7 +12537,7 @@ public class GlideClientTest {
         GlideString[] keys = {key, key2};
         ListDirection listDirection = ListDirection.LEFT;
         GlideString[] arguments = new GlideString[] {gs("2"), key, key2, gs(listDirection.toString())};
-        Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
+        Map<GlideString, GlideString[]> value = Collections.singletonMap(key, new GlideString[] {gs("five")});
 
         CompletableFuture<Map<GlideString, GlideString[]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -12566,7 +12570,7 @@ public class GlideClientTest {
                 new String[] {
                     "2", key, key2, listDirection.toString(), COUNT_FOR_LIST_VALKEY_API, Long.toString(count)
                 };
-        Map<String, String[]> value = Map.of(key, new String[] {"five"});
+        Map<String, String[]> value = Collections.singletonMap(key, new String[] {"five"});
 
         CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -12602,7 +12606,7 @@ public class GlideClientTest {
                     gs(COUNT_FOR_LIST_VALKEY_API),
                     gs(Long.toString(count))
                 };
-        Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
+        Map<GlideString, GlideString[]> value = Collections.singletonMap(key, new GlideString[] {gs("five")});
 
         CompletableFuture<Map<GlideString, GlideString[]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13034,7 +13038,7 @@ public class GlideClientTest {
         String key = "testKey";
         long count = 2;
         String[] arguments = new String[] {key, Long.toString(count)};
-        Set<String> value = Set.of("one", "two");
+        Set<String> value = createSet("one", "two");
 
         CompletableFuture<Set<String>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13059,7 +13063,7 @@ public class GlideClientTest {
         GlideString key = gs("testKey");
         long count = 2;
         GlideString[] arguments = new GlideString[] {key, gs(Long.toString(count))};
-        Set<GlideString> value = Set.of(gs("one"), gs("two"));
+        Set<GlideString> value = createSet(gs("one"), gs("two"));
 
         CompletableFuture<Set<GlideString>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13513,7 +13517,7 @@ public class GlideClientTest {
         String key1 = "testKey1";
         String key2 = "testKey2";
         String[] arguments = new String[] {key1, key2, IDX_COMMAND_STRING};
-        Map<String, Object> value = Map.of("matches", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
+        Map<String, Object> value = createMap("matches", new Long[][][]{{{1L, 3L}, {0L, 2L}}}, "len", 3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13538,7 +13542,7 @@ public class GlideClientTest {
         GlideString key1 = gs("testKey1");
         GlideString key2 = gs("testKey2");
         GlideString[] arguments = new GlideString[] {key1, key2, gs(IDX_COMMAND_STRING)};
-        Map<String, Object> value = Map.of("matches", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
+        Map<String, Object> value = createMap("matches", new Long[][][]{{{1L, 3L}, {0L, 2L}}}, "len", 3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13560,7 +13564,7 @@ public class GlideClientTest {
     @Test
     public void lcsIdx_throws_NullPointerException() {
         // setup
-        Map<String, Object> value = Map.of("missing", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
+        Map<String, Object> value = createMap("missing", new Long[][][]{{{1L, 3L}, {0L, 2L}}}, "len", 3L);
 
         // exception
         RuntimeException runtimeException =
@@ -13580,11 +13584,7 @@ public class GlideClientTest {
         String[] arguments =
                 new String[] {key1, key2, IDX_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, "2"};
         Map<String, Object> value =
-                Map.of(
-                        "matches",
-                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
-                        "len",
-                        3L);
+                createMap("matches", new Object[]{new Object[]{new Long[]{1L, 3L}, new Long[]{0L, 2L}, 3L}}, "len", 3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13613,11 +13613,7 @@ public class GlideClientTest {
                     key1, key2, gs(IDX_COMMAND_STRING), gs(MINMATCHLEN_COMMAND_STRING), gs("2")
                 };
         Map<String, Object> value =
-                Map.of(
-                        "matches",
-                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
-                        "len",
-                        3L);
+                createMap("matches", new Object[]{new Object[]{new Long[]{1L, 3L}, new Long[]{0L, 2L}, 3L}}, "len", 3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13643,11 +13639,7 @@ public class GlideClientTest {
         String key2 = "testKey2";
         String[] arguments = new String[] {key1, key2, IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING};
         Map<String, Object> value =
-                Map.of(
-                        "matches",
-                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
-                        "len",
-                        3L);
+                createMap("matches", new Object[]{new Object[]{new Long[]{1L, 3L}, new Long[]{0L, 2L}, 3L}}, "len", 3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13674,11 +13666,7 @@ public class GlideClientTest {
         GlideString[] arguments =
                 new GlideString[] {key1, key2, gs(IDX_COMMAND_STRING), gs(WITHMATCHLEN_COMMAND_STRING)};
         Map<String, Object> value =
-                Map.of(
-                        "matches",
-                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
-                        "len",
-                        3L);
+                createMap("matches", new Object[]{new Object[]{new Long[]{1L, 3L}, new Long[]{0L, 2L}, 3L}}, "len", 3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13712,11 +13700,7 @@ public class GlideClientTest {
                     WITHMATCHLEN_COMMAND_STRING
                 };
         Map<String, Object> value =
-                Map.of(
-                        "matches",
-                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
-                        "len",
-                        3L);
+                createMap("matches", new Object[]{new Object[]{new Long[]{1L, 3L}, new Long[]{0L, 2L}, 3L}}, "len", 3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13750,11 +13734,7 @@ public class GlideClientTest {
                     gs(WITHMATCHLEN_COMMAND_STRING)
                 };
         Map<String, Object> value =
-                Map.of(
-                        "matches",
-                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
-                        "len",
-                        3L);
+                createMap("matches", new Object[]{new Object[]{new Long[]{1L, 3L}, new Long[]{0L, 2L}, 3L}}, "len", 3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13984,7 +13964,7 @@ public class GlideClientTest {
     public void pubsubNumSub_returns_success() {
         // setup
         String[] arguments = new String[] {"ch1", "ch2"};
-        Map<String, Long> value = Map.of();
+        Map<String, Long> value = Collections.emptyMap();
 
         CompletableFuture<Map<String, Long>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -14007,7 +13987,7 @@ public class GlideClientTest {
     public void pubsubNumSubBinary_returns_success() {
         // setup
         GlideString[] arguments = new GlideString[] {gs("ch1"), gs("ch2")};
-        Map<GlideString, Long> value = Map.of();
+        Map<GlideString, Long> value = Collections.emptyMap();
 
         CompletableFuture<Map<GlideString, Long>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -14031,7 +14011,7 @@ public class GlideClientTest {
     public void sunion_returns_success() {
         // setup
         String[] keys = new String[] {"key1", "key2"};
-        Set<String> value = Set.of("1", "2");
+        Set<String> value = createSet("1", "2");
         CompletableFuture<Set<String>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
@@ -14053,7 +14033,7 @@ public class GlideClientTest {
     public void sunion_binary_returns_success() {
         // setup
         GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
-        Set<GlideString> value = Set.of(gs("1"), gs("2"));
+        Set<GlideString> value = createSet(gs("1"), gs("2"));
         CompletableFuture<Set<GlideString>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
@@ -14920,7 +14900,7 @@ public class GlideClientTest {
     }
 
     private static List<Arguments> getGeoSearchArguments() {
-        return List.of(
+        return Arrays.asList(
                 Arguments.of(
                         "geosearch_from_member_no_options",
                         new GeoSearchOrigin.MemberOrigin("member"),
@@ -14986,7 +14966,7 @@ public class GlideClientTest {
     }
 
     private static List<Arguments> getGeoSearchArgumentsBinary() {
-        return List.of(
+        return Arrays.asList(
                 Arguments.of(
                         "geosearch_from_member_no_options",
                         new GeoSearchOrigin.MemberOriginBinary(gs("member")),
@@ -15117,7 +15097,7 @@ public class GlideClientTest {
     }
 
     private static List<Arguments> getGeoSearchWithOptionsArguments() {
-        return List.of(
+        return Arrays.asList(
                 Arguments.of(
                         "geosearch_from_member_with_options",
                         new GeoSearchOrigin.MemberOrigin("member"),
@@ -15182,7 +15162,7 @@ public class GlideClientTest {
     }
 
     private static List<Arguments> getGeoSearchWithOptionsArgumentsBinary() {
-        return List.of(
+        return Arrays.asList(
                 Arguments.of(
                         "geosearch_from_member_with_options",
                         new GeoSearchOrigin.MemberOriginBinary(gs("member")),
@@ -15309,7 +15289,7 @@ public class GlideClientTest {
     }
 
     private static List<Arguments> getGeoSearchStoreArguments() {
-        return List.of(
+        return Arrays.asList(
                 Arguments.of(
                         "geosearchstore_from_member_no_options",
                         new GeoSearchOrigin.MemberOrigin("member"),
@@ -15384,7 +15364,7 @@ public class GlideClientTest {
     }
 
     private static List<Arguments> getGeoSearchStoreArgumentsBinary() {
-        return List.of(
+        return Arrays.asList(
                 Arguments.of(
                         "geosearchstore_from_member_no_options",
                         new GeoSearchOrigin.MemberOriginBinary(gs("member")),
@@ -15520,7 +15500,7 @@ public class GlideClientTest {
     }
 
     private static List<Arguments> getGeoSearchStoreWithOptionsArguments() {
-        return List.of(
+        return Arrays.asList(
                 Arguments.of(
                         "geosearchstore_from_member_with_options",
                         new GeoSearchOrigin.MemberOrigin("member"),
@@ -15562,7 +15542,7 @@ public class GlideClientTest {
     }
 
     private static List<Arguments> getGeoSearchStoreWithOptionsArgumentsBinary() {
-        return List.of(
+        return Arrays.asList(
                 Arguments.of(
                         "geosearchstore_from_member_with_options",
                         new GeoSearchOrigin.MemberOriginBinary(gs("member")),
@@ -15676,19 +15656,7 @@ public class GlideClientTest {
         String[] arguments = {key};
         Map<String, Object>[] mockResult =
                 new Map[] {
-                    Map.of(
-                            "name",
-                            "groupName",
-                            "consumers",
-                            2,
-                            "pending",
-                            2,
-                            "last-delivered-id",
-                            "1638126030001-0",
-                            "entries-read",
-                            2,
-                            "lag",
-                            2)
+                    createMap("name", "groupName", "consumers", 2, "pending", 2, "last-delivered-id", "1638126030001-0", "entries-read", 2, "lag", 2)
                 };
 
         CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
@@ -15716,19 +15684,7 @@ public class GlideClientTest {
         GlideString[] arguments = {key};
         Map<GlideString, Object>[] mockResult =
                 new Map[] {
-                    Map.of(
-                            gs("name"),
-                            gs("groupName"),
-                            gs("consumers"),
-                            2,
-                            gs("pending"),
-                            2,
-                            gs("last-delivered-id"),
-                            gs("1638126030001-0"),
-                            gs("entries-read"),
-                            2,
-                            gs("lag"),
-                            2)
+                    createMap(gs("name"), gs("groupName"), gs("consumers"), 2, gs("pending"), 2, gs("last-delivered-id"), gs("1638126030001-0"), gs("entries-read"), 2, gs("lag"), 2)
                 };
 
         CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
@@ -15757,7 +15713,7 @@ public class GlideClientTest {
         String[] arguments = {key, groupName};
         Map<String, Object>[] mockResult =
                 new Map[] {
-                    Map.of("name", "groupName", "pending", 2, "idle", 9104628, "inactive", 18104698)
+                    createMap("name", "groupName", "pending", 2, "idle", 9104628, "inactive", 18104698)
                 };
 
         CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
@@ -15786,15 +15742,7 @@ public class GlideClientTest {
         GlideString[] arguments = {key, groupName};
         Map<GlideString, Object>[] mockResult =
                 new Map[] {
-                    Map.of(
-                            gs("name"),
-                            gs("groupName"),
-                            gs("pending"),
-                            2,
-                            gs("idle"),
-                            9104628,
-                            gs("inactive"),
-                            18104698)
+                    createMap(gs("name"), gs("groupName"), gs("pending"), 2, gs("idle"), 9104628, gs("inactive"), 18104698)
                 };
 
         CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
@@ -15820,7 +15768,7 @@ public class GlideClientTest {
         // setup
         String key = "testKey";
         String[] arguments = {key};
-        Map<String, Object> summary = Map.of("some", "data");
+        Map<String, Object> summary = Collections.singletonMap("some", "data");
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(summary);
@@ -15845,7 +15793,7 @@ public class GlideClientTest {
         // setup
         String key = "testKey";
         String[] arguments = {key, FULL};
-        Map<String, Object> summary = Map.of("some", "data");
+        Map<String, Object> summary = Collections.singletonMap("some", "data");
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(summary);
@@ -15871,7 +15819,7 @@ public class GlideClientTest {
         String key = "testKey";
         int count = 42;
         String[] arguments = {key, FULL, COUNT, "42"};
-        Map<String, Object> summary = Map.of("some", "data");
+        Map<String, Object> summary = Collections.singletonMap("some", "data");
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(summary);
@@ -15896,7 +15844,7 @@ public class GlideClientTest {
         // setup
         GlideString key = gs("testKey");
         GlideString[] arguments = {key};
-        Map<GlideString, Object> summary = Map.of(gs("some"), gs("data"));
+        Map<GlideString, Object> summary = Collections.singletonMap(gs("some"), gs("data"));
 
         CompletableFuture<Map<GlideString, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(summary);
@@ -15921,7 +15869,7 @@ public class GlideClientTest {
         // setup
         GlideString key = gs("testKey");
         GlideString[] arguments = {key, gs(FULL)};
-        Map<GlideString, Object> summary = Map.of(gs("some"), gs("data"));
+        Map<GlideString, Object> summary = Collections.singletonMap(gs("some"), gs("data"));
 
         CompletableFuture<Map<GlideString, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(summary);
@@ -15947,7 +15895,7 @@ public class GlideClientTest {
         GlideString key = gs("testKey");
         int count = 42;
         GlideString[] arguments = {key, gs(FULL), gs(COUNT), gs("42")};
-        Map<GlideString, Object> summary = Map.of(gs("some"), gs("data"));
+        Map<GlideString, Object> summary = Collections.singletonMap(gs("some"), gs("data"));
 
         CompletableFuture<Map<GlideString, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(summary);
@@ -16073,5 +16021,48 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    private static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2) {
+        Map<K, V> map = new LinkedHashMap<>();
+        map.put(k1, v1);
+        map.put(k2, v2);
+        return map;
+    }
+
+    private static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3) {
+        Map<K, V> map = new LinkedHashMap<>();
+        map.put(k1, v1);
+        map.put(k2, v2);
+        map.put(k3, v3);
+        return map;
+    }
+
+    private static <T> Set<T> createSet(T... elements) {
+        Set<T> set = new java.util.LinkedHashSet<>();
+        for (T element : elements) {
+            set.add(element);
+        }
+        return set;
+    }
+
+    private static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4) {
+        Map<K, V> map = new LinkedHashMap<>();
+        map.put(k1, v1);
+        map.put(k2, v2);
+        map.put(k3, v3);
+        map.put(k4, v4);
+        return map;
+    }
+
+    private static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6) {
+        Map<K, V> map = new LinkedHashMap<>();
+        map.put(k1, v1);
+        map.put(k2, v2);
+        map.put(k3, v3);
+        map.put(k4, v4);
+        map.put(k5, v5);
+        map.put(k6, v6);
+        return map;
     }
 }

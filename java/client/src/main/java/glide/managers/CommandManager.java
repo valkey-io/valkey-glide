@@ -173,7 +173,7 @@ public class CommandManager {
             List<GlideString> args,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit script."));
             return errorFuture;
@@ -201,7 +201,7 @@ public class CommandManager {
                     .thenApply(responseHandler::apply)
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -214,7 +214,7 @@ public class CommandManager {
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit script."));
             return errorFuture;
@@ -244,7 +244,7 @@ public class CommandManager {
                     .thenApply(responseHandler::apply)
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -333,7 +333,7 @@ public class CommandManager {
             boolean expectUtf8Response) {
 
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit cluster scan."));
             return errorFuture;
@@ -393,7 +393,7 @@ public class CommandManager {
                             })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -498,7 +498,7 @@ public class CommandManager {
             boolean expectUtf8Response) {
 
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit command."));
             return errorFuture;
@@ -536,7 +536,7 @@ public class CommandManager {
                             })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -620,7 +620,7 @@ public class CommandManager {
             boolean expectUtf8Response) {
 
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit batch."));
             return errorFuture;
@@ -637,7 +637,7 @@ public class CommandManager {
                     .thenApply(responseHandler::apply)
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -860,7 +860,7 @@ public class CommandManager {
             spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
         }
 
-        var builder =
+        CommandRequest.Builder builder =
                 CommandRequest.newBuilder()
                         .setSingleCommand(commandBuilder.setRequestType(requestType).build());
 
@@ -882,7 +882,7 @@ public class CommandManager {
             spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
         }
 
-        var builder =
+        CommandRequest.Builder builder =
                 CommandRequest.newBuilder()
                         .setSingleCommand(commandBuilder.setRequestType(requestType).build());
 
@@ -909,7 +909,7 @@ public class CommandManager {
 
         if (options.isPresent()) {
             BatchOptions opts = options.get();
-            var batchBuilder = prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
+            CommandRequestOuterClass.Batch.Builder batchBuilder = prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
             builder.setBatch(batchBuilder.setRaiseOnError(raiseOnError).build());
         } else {
             builder.setBatch(batch.getProtobufBatch().setRaiseOnError(raiseOnError).build());

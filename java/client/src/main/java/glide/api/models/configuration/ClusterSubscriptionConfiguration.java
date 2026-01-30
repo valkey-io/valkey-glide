@@ -74,10 +74,12 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
             Optional<Object> context,
             Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions) {
         super(callback, context);
-        this.subscriptions =
-                subscriptions.entrySet().stream()
-                        .collect(
-                                Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> Set.copyOf(e.getValue())));
+        // Java 8 compatible: manually create unmodifiable map
+        Map<PubSubClusterChannelMode, Set<GlideString>> unmodifiableMap = new HashMap<>();
+        for (Map.Entry<PubSubClusterChannelMode, Set<GlideString>> entry : subscriptions.entrySet()) {
+            unmodifiableMap.put(entry.getKey(), java.util.Collections.unmodifiableSet(new java.util.HashSet<>(entry.getValue())));
+        }
+        this.subscriptions = java.util.Collections.unmodifiableMap(unmodifiableMap);
     }
 
     public static ClusterSubscriptionConfigurationBuilder builder() {
@@ -132,7 +134,7 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
          */
         public ClusterSubscriptionConfigurationBuilder subscriptions(
                 PubSubClusterChannelMode mode, Set<GlideString> subscriptions) {
-            this.subscriptions.put(mode, Set.copyOf(subscriptions));
+            this.subscriptions.put(mode, java.util.Collections.unmodifiableSet(new java.util.HashSet<>(subscriptions)));
             return this;
         }
 

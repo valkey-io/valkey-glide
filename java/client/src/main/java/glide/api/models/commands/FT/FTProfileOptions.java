@@ -7,6 +7,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import glide.api.commands.servermodules.FT;
 import glide.api.models.GlideString;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import lombok.NonNull;
 
@@ -116,11 +117,11 @@ public class FTProfileOptions {
 
     /** Convert to module API. */
     public GlideString[] toArgs() {
-        var args = new ArrayList<GlideString>();
+        ArrayList<GlideString> args = new ArrayList<GlideString>();
         args.add(gs(queryType.toString()));
         if (limited) args.add(gs("LIMITED"));
         args.add(gs("QUERY"));
-        args.addAll(List.of(commandLine));
-        return args.toArray(GlideString[]::new);
+        args.addAll(Arrays.asList(commandLine));
+        return args.toArray(new GlideString[0]);
     }
 }
