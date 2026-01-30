@@ -2871,11 +2871,12 @@ class TestSyncPubSub:
             )
 
             # Create client with Config subscriptions
+            sharded_set = {sharded_config} if sharded_config else None
             pubsub_config = create_simple_pubsub_config(
                 cluster_mode,
                 channels={exact_config},
                 patterns={pattern_config},
-                sharded={sharded_config} if sharded_config else None,
+                sharded=sharded_set,
             )
 
             listening_client = create_sync_client(
