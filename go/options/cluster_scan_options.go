@@ -9,8 +9,8 @@ import (
 // The options used for performing a Cluster scan.
 type ClusterScanOptions struct {
 	BaseScanOptions
-	ScanType               constants.ObjectType
-	AllowNonCoveredSlots   bool
+	ScanType             constants.ObjectType
+	AllowNonCoveredSlots bool
 }
 
 // Creates a options struct to be used in the Cluster Scan.

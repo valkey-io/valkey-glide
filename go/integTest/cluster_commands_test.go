@@ -2784,7 +2784,6 @@ func (suite *GlideTestSuite) TestBatchWithSingleNodeRoute() {
 	}
 }
 
-
 func (suite *GlideTestSuite) TestClusterScanEarlyTermination() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
