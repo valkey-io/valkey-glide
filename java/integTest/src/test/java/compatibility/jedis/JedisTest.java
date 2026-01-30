@@ -10,6 +10,7 @@ import glide.api.GlideClient;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import java.lang.reflect.Constructor;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1626,6 +1627,39 @@ public class JedisTest {
         assertTrue(resultSet.contains(member1), "SMEMBERS result should contain member1");
         assertTrue(resultSet.contains(member2), "SMEMBERS result should contain member2");
         assertTrue(resultSet.contains(member3), "SMEMBERS result should contain member3");
+    }
+
+    @Test
+    void publish_pubsub_command() {
+        String channel = "ch:" + UUID.randomUUID();
+        String message = "msg";
+
+        long received = jedis.publish(channel, message);
+        assertTrue(received >= 0, "PUBLISH should return non-negative subscriber count");
+
+        Set<String> channels = jedis.pubsubChannels();
+        assertNotNull(channels, "PUBSUB CHANNELS should return a set");
+
+        Set<String> channelsWithPattern = jedis.pubsubChannels(channel);
+        assertNotNull(channelsWithPattern, "PUBSUB CHANNELS pattern should return a set");
+
+        long numPat = jedis.pubsubNumPat();
+        assertTrue(numPat >= 0, "PUBSUB NUMPAT should return non-negative");
+
+        Map<String, Long> numSub = jedis.pubsubNumSub(channel);
+        assertNotNull(numSub, "PUBSUB NUMSUB should return a map");
+        assertTrue(numSub.containsKey(channel) || numSub.isEmpty(), "PUBSUB NUMSUB should contain channel or be empty");
+
+        byte[] channelBytes = channel.getBytes(StandardCharsets.UTF_8);
+        byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+        long receivedBinary = jedis.publish(channelBytes, messageBytes);
+        assertTrue(receivedBinary >= 0, "PUBLISH binary should return non-negative subscriber count");
+
+        Set<byte[]> channelsBinary = jedis.pubsubChannels(channelBytes);
+        assertNotNull(channelsBinary, "PUBSUB CHANNELS binary should return a set");
+
+        Map<byte[], Long> numSubBinary = jedis.pubsubNumSub(channelBytes);
+        assertNotNull(numSubBinary, "PUBSUB NUMSUB binary should return a map");
     }
 
     @Test

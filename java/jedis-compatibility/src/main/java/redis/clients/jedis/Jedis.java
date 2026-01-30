@@ -6985,6 +6985,151 @@ public final class Jedis implements Closeable {
         return blmove(source, destination, ListDirection.RIGHT, ListDirection.LEFT, timeout);
     }
 
+    /**
+     * Publishes a message to a channel.
+     *
+     * @param channel the channel to publish to
+     * @param message the message to publish
+     * @return the number of clients that received the message
+     */
+    public long publish(String channel, String message) {
+        return executeCommandWithGlide(
+                "PUBLISH",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(new String[] {"PUBLISH", channel, message})
+                                    .get();
+                    if (result instanceof Number) {
+                        return ((Number) result).longValue();
+                    }
+                    return result != null ? Long.parseLong(result.toString()) : 0L;
+                });
+    }
+
+    /**
+     * Publishes a message to a channel (binary version).
+     *
+     * @param channel the channel to publish to
+     * @param message the message to publish
+     * @return the number of clients that received the message
+     */
+    public long publish(final byte[] channel, final byte[] message) {
+        return executeCommandWithGlide(
+                "PUBLISH",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(
+                                            new GlideString[] {
+                                                GlideString.of("PUBLISH"),
+                                                GlideString.of(channel),
+                                                GlideString.of(message)
+                                            })
+                                    .get();
+                    if (result instanceof Number) {
+                        return ((Number) result).longValue();
+                    }
+                    return result != null ? Long.parseLong(result.toString()) : 0L;
+                });
+    }
+
+    /**
+     * Returns the list of currently active channels.
+     *
+     * @return set of channel names
+     */
+    public Set<String> pubsubChannels() {
+        return executeCommandWithGlide(
+                "PUBSUB CHANNELS",
+                () -> {
+                    String[] arr = glideClient.pubsubChannels().get();
+                    return arr != null ? new HashSet<>(Arrays.asList(arr)) : new HashSet<>();
+                });
+    }
+
+    /**
+     * Returns the list of currently active channels matching the given pattern.
+     *
+     * @param pattern glob-style pattern
+     * @return set of channel names
+     */
+    public Set<String> pubsubChannels(String pattern) {
+        return executeCommandWithGlide(
+                "PUBSUB CHANNELS",
+                () -> {
+                    String[] arr = glideClient.pubsubChannels(pattern).get();
+                    return arr != null ? new HashSet<>(Arrays.asList(arr)) : new HashSet<>();
+                });
+    }
+
+    /**
+     * Returns the list of currently active channels (binary version).
+     *
+     * @return set of channel names
+     */
+    public Set<byte[]> pubsubChannels(final byte[] pattern) {
+        return executeCommandWithGlide(
+                "PUBSUB CHANNELS",
+                () -> {
+                    GlideString[] arr =
+                            pattern == null || pattern.length == 0
+                                    ? glideClient.pubsubChannelsBinary().get()
+                                    : glideClient.pubsubChannels(GlideString.of(pattern)).get();
+                    Set<byte[]> out = new HashSet<>();
+                    if (arr != null) {
+                        for (GlideString gs : arr) {
+                            out.add(gs.getBytes());
+                        }
+                    }
+                    return out;
+                });
+    }
+
+    /**
+     * Returns the number of unique patterns that are subscribed to by clients.
+     *
+     * @return the number of unique patterns
+     */
+    public long pubsubNumPat() {
+        return executeCommandWithGlide(
+                "PUBSUB NUMPAT", () -> glideClient.pubsubNumPat().get());
+    }
+
+    /**
+     * Returns the number of subscribers for the specified channels.
+     *
+     * @param channels channel names
+     * @return map of channel name to subscriber count
+     */
+    public Map<String, Long> pubsubNumSub(String... channels) {
+        return executeCommandWithGlide(
+                "PUBSUB NUMSUB", () -> glideClient.pubsubNumSub(channels).get());
+    }
+
+    /**
+     * Returns the number of subscribers for the specified channels (binary version).
+     *
+     * @param channels channel names
+     * @return map of channel name to subscriber count
+     */
+    public Map<byte[], Long> pubsubNumSub(final byte[]... channels) {
+        return executeCommandWithGlide(
+                "PUBSUB NUMSUB",
+                () -> {
+                    GlideString[] glideChannels = convertToGlideStringArray(channels);
+                    Map<GlideString, Long> result =
+                            glideClient.pubsubNumSub(glideChannels).get();
+                    Map<byte[], Long> out = new HashMap<>();
+                    if (result != null) {
+                        for (Map.Entry<GlideString, Long> e : result.entrySet()) {
+                            out.put(e.getKey().getBytes(), e.getValue());
+                        }
+                    }
+                    return out;
+                });
+    }
+
     // Static initialization block for cleanup hooks
     static {
         // Add shutdown hook to cleanup temporary certificate files

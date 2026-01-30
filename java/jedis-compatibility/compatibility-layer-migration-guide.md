@@ -70,6 +70,7 @@ blockingSocketTimeoutMillis
 - ⚠️ Sorted set operations (ZADD, ZREM, ZRANGE) - **Available via `sendCommand()` only**
 - ✅ Key operations (DEL, EXISTS, EXPIRE, TTL)
 - ✅ Connection commands (PING, SELECT)
+- ✅ Pub/Sub (PUBLISH, PUBSUB CHANNELS, PUBSUB NUMSUB, PUBSUB NUMPAT via `publish()`, `pubsubChannels()`, `pubsubNumSub()`, `pubsubNumPat()`)
 - ✅ Generic commands via `sendCommand()` (Protocol.Command types only)
 
 ### Client Types
@@ -96,7 +97,7 @@ blockingSocketTimeoutMillis
 ### Advanced Features
 - **Transactions**: MULTI/EXEC transaction blocks not supported
 - **Pipelining**: Jedis pipelining functionality unavailable
-- **Pub/Sub**: Redis publish/subscribe not implemented
+- **Pub/Sub subscribe mode**: SUBSCRIBE/PSUBSCRIBE/UNSUBSCRIBE/PUNSUBSCRIBE not implemented; use `sendCommand()` or native GLIDE. PUBLISH and PUBSUB CHANNELS/NUMSUB/NUMPAT are supported via typed methods.
 - **Lua scripting**: EVAL/EVALSHA commands not supported
 - **Modules**: Redis module commands not available
 - **Typed set/sorted set methods**: No dedicated methods like `sadd()`, `zadd()` - use `sendCommand()` instead
