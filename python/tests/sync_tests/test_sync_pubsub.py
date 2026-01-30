@@ -2866,7 +2866,9 @@ class TestSyncPubSub:
             temp_client.close()
 
             sharded_config = f"sharded_config_{prefix}" if supports_sharded else None
-            sharded_blocking = f"sharded_blocking_{prefix}" if supports_sharded else None
+            sharded_blocking = (
+                f"sharded_blocking_{prefix}" if supports_sharded else None
+            )
 
             # Create client with Config subscriptions
             pubsub_config = create_simple_pubsub_config(
