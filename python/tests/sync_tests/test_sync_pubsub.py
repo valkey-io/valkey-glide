@@ -2734,7 +2734,6 @@ class TestSyncPubSub:
             client_cleanup(client1, pub_sub1 if cluster_mode else None)
             client_cleanup(client2, pub_sub2 if cluster_mode else None)
 
-    # TODO: remove once dynamic pubsub is implemented for the sync client
     def test_sync_clients_support_pubsub_reconciliation_interval(self):
         """
         Test that GlideClientConfiguration accepts pubsub_reconciliation_interval
@@ -2785,7 +2784,9 @@ class TestSyncPubSub:
             client.subscribe({exact_channel})
             client.psubscribe({pattern})
 
-            if cluster_mode:
+            # Sharded pubsub requires Redis 7.0+
+            sharded_channel = None
+            if cluster_mode and not sync_check_if_server_version_lt(client, "7.0.0"):
                 sharded_channel = "test_sharded_channel"
                 cast(GlideClusterClient, client).ssubscribe({sharded_channel})
 
@@ -2807,14 +2808,14 @@ class TestSyncPubSub:
             assert exact_channel in state.actual_subscriptions[modes.Exact]
             assert pattern in state.actual_subscriptions[modes.Pattern]
 
-            if cluster_mode:
+            if sharded_channel:
                 assert sharded_channel in state.desired_subscriptions[modes.Sharded]  # type: ignore[union-attr,arg-type]
                 assert sharded_channel in state.actual_subscriptions[modes.Sharded]  # type: ignore[union-attr,arg-type]
 
             # Unsubscribe
             client.unsubscribe({exact_channel}, timeout_ms=5000)
             client.punsubscribe({pattern}, timeout_ms=5000)
-            if cluster_mode:
+            if sharded_channel:
                 cast(GlideClusterClient, client).sunsubscribe(
                     {sharded_channel}, timeout_ms=5000
                 )
@@ -2824,7 +2825,7 @@ class TestSyncPubSub:
             state = client.get_subscriptions()
             assert exact_channel not in state.actual_subscriptions[modes.Exact]
             assert pattern not in state.actual_subscriptions[modes.Pattern]
-            if cluster_mode:
+            if sharded_channel:
                 assert sharded_channel not in state.actual_subscriptions[modes.Sharded]  # type: ignore[union-attr,arg-type]
 
         finally:
@@ -2856,9 +2857,16 @@ class TestSyncPubSub:
             pattern_config = f"pattern_config_{prefix}_*"
             pattern_blocking = f"pattern_blocking_{prefix}_*"
 
-            # Sharded channels (cluster only)
-            sharded_config = f"sharded_config_{prefix}" if cluster_mode else None
-            sharded_blocking = f"sharded_blocking_{prefix}" if cluster_mode else None
+            # Sharded channels (cluster only, Redis 7.0+)
+            # Create a temporary client to check version
+            temp_client = create_sync_client(request, cluster_mode)
+            supports_sharded = cluster_mode and not sync_check_if_server_version_lt(
+                temp_client, "7.0.0"
+            )
+            temp_client.close()
+
+            sharded_config = f"sharded_config_{prefix}" if supports_sharded else None
+            sharded_blocking = f"sharded_blocking_{prefix}" if supports_sharded else None
 
             # Create client with Config subscriptions
             pubsub_config = create_simple_pubsub_config(
@@ -3021,7 +3029,11 @@ class TestSyncPubSub:
             client.subscribe(channels)
             client.psubscribe(patterns)
 
-            if cluster_mode:
+            # Sharded pubsub requires Redis 7.0+
+            supports_sharded = cluster_mode and not sync_check_if_server_version_lt(
+                client, "7.0.0"
+            )
+            if supports_sharded:
                 sharded = {"sharded1", "sharded2"}
                 cast(GlideClusterClient, client).ssubscribe(sharded)
 
@@ -3036,13 +3048,13 @@ class TestSyncPubSub:
 
             assert len(state.actual_subscriptions[modes.Exact]) == 3
             assert len(state.actual_subscriptions[modes.Pattern]) == 2
-            if cluster_mode:
+            if supports_sharded:
                 assert len(state.actual_subscriptions[modes.Sharded]) == 2  # type: ignore[union-attr,arg-type]
 
             # Unsubscribe from all
             client.unsubscribe()
             client.punsubscribe()
-            if cluster_mode:
+            if supports_sharded:
                 cast(GlideClusterClient, client).sunsubscribe()
 
             # Verify all unsubscribed
@@ -3050,6 +3062,8 @@ class TestSyncPubSub:
             state = client.get_subscriptions()
             assert len(state.actual_subscriptions[modes.Exact]) == 0
             assert len(state.actual_subscriptions[modes.Pattern]) == 0
+            if supports_sharded:
+                assert len(state.actual_subscriptions[modes.Sharded]) == 0  # type: ignore[union-attr,arg-type]
             if cluster_mode:
                 assert len(state.actual_subscriptions[modes.Sharded]) == 0  # type: ignore[union-attr,arg-type]
 

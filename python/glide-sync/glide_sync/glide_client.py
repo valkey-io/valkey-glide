@@ -105,13 +105,16 @@ class BaseClient(CoreCommands):
             },
         )
 
-        # Always create callback to support dynamic subscriptions
-        # The callback handles push notifications by either calling user callback
-        # or appending to _pubsub_queue for blocking subscribe() calls
-        python_callback = self._create_push_handle_callback()
-        pubsub_callback = self._ffi.callback("PubSubCallback", python_callback)
-        # Store reference to prevent garbage collection
-        self._pubsub_callback_ref = pubsub_callback
+        if self._config._is_pubsub_configured():
+            # If in subscribed mode, create a callback that will be called by the FFI layer
+            # for handling push notifications. This callback would either call the user callback (if provided),
+            # or append the messaged to the the `_pubsub_queue`
+            python_callback = self._create_push_handle_callback()
+            pubsub_callback = self._ffi.callback("PubSubCallback", python_callback)
+            # Store reference to prevent garbage collection
+            self._pubsub_callback_ref = pubsub_callback
+        else:
+            pubsub_callback = self._ffi.cast("PubSubCallback", 0)
 
         client_response_ptr = self._lib.create_client(
             conn_req_bytes,
