@@ -7039,6 +7039,35 @@ public final class Jedis implements Closeable {
                 });
     }
 
+    /**
+     * Returns all the members of the set value stored at key.
+     *
+     * @param key the key of the set
+     * @return all members of the set, or an empty set when key does not exist
+     */
+    public Set<String> smembers(String key) {
+        return executeCommandWithGlide("SMEMBERS", () -> glideClient.smembers(key).get());
+    }
+
+    /**
+     * Returns all the members of the set value stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @return all members of the set, or an empty set when key does not exist
+     */
+    public Set<byte[]> smembers(final byte[] key) {
+        return executeCommandWithGlide(
+                "SMEMBERS",
+                () -> {
+                    Set<GlideString> result = glideClient.smembers(GlideString.of(key)).get();
+                    Set<byte[]> out = new HashSet<>();
+                    for (GlideString gs : result) {
+                        out.add(gs.getBytes());
+                    }
+                    return out;
+                });
+    }
+
     // Static initialization block for cleanup hooks
     static {
         // Add shutdown hook to cleanup temporary certificate files

@@ -4,9 +4,10 @@ package redis.clients.jedis;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.reflect.Method;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
-/** Unit tests for Jedis set commands (sadd, srem). */
+/** Unit tests for Jedis set commands (sadd, srem, smembers). */
 public class JedisSetCommandsTest {
 
     @Test
@@ -46,11 +47,29 @@ public class JedisSetCommandsTest {
     }
 
     @Test
-    public void saddAndSremMethodsExist() throws NoSuchMethodException {
+    public void smembersStringSignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("smembers", String.class);
+        assertEquals(Set.class, m.getReturnType());
+        assertEquals(1, m.getParameterCount());
+        assertEquals(String.class, m.getParameterTypes()[0]);
+    }
+
+    @Test
+    public void smembersBinarySignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("smembers", byte[].class);
+        assertEquals(Set.class, m.getReturnType());
+        assertEquals(1, m.getParameterCount());
+        assertEquals(byte[].class, m.getParameterTypes()[0]);
+    }
+
+    @Test
+    public void saddSremSmembersMethodsExist() throws NoSuchMethodException {
         Class<Jedis> c = Jedis.class;
         assertNotNull(c.getMethod("sadd", String.class, String[].class));
         assertNotNull(c.getMethod("sadd", byte[].class, byte[][].class));
         assertNotNull(c.getMethod("srem", String.class, String[].class));
         assertNotNull(c.getMethod("srem", byte[].class, byte[][].class));
+        assertNotNull(c.getMethod("smembers", String.class));
+        assertNotNull(c.getMethod("smembers", byte[].class));
     }
 }

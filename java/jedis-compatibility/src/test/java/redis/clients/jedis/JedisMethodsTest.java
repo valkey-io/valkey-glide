@@ -141,5 +141,11 @@ public class JedisMethodsTest {
 
         Method sremBinary = jedisClass.getMethod("srem", byte[].class, byte[][].class);
         assertEquals(long.class, sremBinary.getReturnType());
+
+        Method smembersString = jedisClass.getMethod("smembers", String.class);
+        assertEquals(Set.class, smembersString.getReturnType());
+
+        Method smembersBinary = jedisClass.getMethod("smembers", byte[].class);
+        assertEquals(Set.class, smembersBinary.getReturnType());
     }
 }

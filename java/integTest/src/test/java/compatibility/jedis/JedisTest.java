@@ -10,6 +10,7 @@ import glide.api.GlideClient;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import java.lang.reflect.Constructor;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1626,6 +1627,37 @@ public class JedisTest {
         assertTrue(resultSet.contains(member1), "SMEMBERS result should contain member1");
         assertTrue(resultSet.contains(member2), "SMEMBERS result should contain member2");
         assertTrue(resultSet.contains(member3), "SMEMBERS result should contain member3");
+    }
+
+    @Test
+    void sadd_srem_smembers_command() {
+        String key = UUID.randomUUID().toString();
+        String member1 = "member1";
+        String member2 = "member2";
+        String member3 = "member3";
+
+        long added = jedis.sadd(key, member1, member2, member3);
+        assertEquals(3L, added, "SADD should return 3 for three new members");
+
+        Set<String> members = jedis.smembers(key);
+        assertEquals(3, members.size(), "SMEMBERS should return 3 members");
+        assertTrue(members.contains(member1));
+        assertTrue(members.contains(member2));
+        assertTrue(members.contains(member3));
+
+        long removed = jedis.srem(key, member1);
+        assertEquals(1L, removed, "SREM should return 1 for one removed member");
+
+        members = jedis.smembers(key);
+        assertEquals(2, members.size(), "SMEMBERS should return 2 members after srem");
+
+        String keyBinary = UUID.randomUUID().toString();
+        byte[] keyBytes = keyBinary.getBytes(StandardCharsets.UTF_8);
+        byte[] m1 = "m1".getBytes(StandardCharsets.UTF_8);
+        byte[] m2 = "m2".getBytes(StandardCharsets.UTF_8);
+        jedis.sadd(keyBytes, m1, m2);
+        Set<byte[]> binaryMembers = jedis.smembers(keyBytes);
+        assertEquals(2, binaryMembers.size(), "SMEMBERS binary should return 2 members");
     }
 
     @Test
