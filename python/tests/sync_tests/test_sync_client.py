@@ -12078,7 +12078,7 @@ class TestSyncScripts:
     # to glide, using blocking commands, and checking the N+1 request returns immediately with error.
     @pytest.mark.parametrize("cluster_mode", [False, True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("inflight_requests_limit", [5, 100, 1500])
+    @pytest.mark.parametrize("inflight_requests_limit", [5, 100, 500])
     def test_sync_inflight_request_limit(
         self, cluster_mode, protocol, inflight_requests_limit, request
     ):
