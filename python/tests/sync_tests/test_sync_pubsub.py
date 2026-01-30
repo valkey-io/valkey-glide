@@ -2775,20 +2775,8 @@ class TestSyncPubSub:
         """
         Test dynamic subscribe methods and get_subscriptions().
         """
-        addresses = [NodeAddress("localhost", 6379)]
-        config = (
-            GlideClusterClientConfiguration(addresses=addresses)
-            if cluster_mode
-            else GlideClientConfiguration(addresses=addresses)
-        )
-
-        client = None
+        client = create_sync_client(request, cluster_mode)
         try:
-            client = (
-                GlideClusterClient.create(config)
-                if cluster_mode
-                else GlideClient.create(config)
-            )
 
             # Subscribe to channels
             exact_channel = "test_exact_channel"
@@ -2868,8 +2856,6 @@ class TestSyncPubSub:
             sharded_blocking = f"sharded_blocking_{prefix}" if cluster_mode else None
 
             # Create client with Config subscriptions
-            addresses = [NodeAddress("localhost", 6379)]
-
             pubsub_config = create_simple_pubsub_config(
                 cluster_mode,
                 channels={exact_config},
@@ -2877,22 +2863,11 @@ class TestSyncPubSub:
                 sharded={sharded_config} if sharded_config else None,
             )
 
-            config = (
-                GlideClusterClientConfiguration(
-                    addresses=addresses,
-                    pubsub_subscriptions=pubsub_config,
-                )
-                if cluster_mode
-                else GlideClientConfiguration(
-                    addresses=addresses,
-                    pubsub_subscriptions=pubsub_config,
-                )
-            )
-
-            listening_client = (
-                GlideClusterClient.create(config)
-                if cluster_mode
-                else GlideClient.create(config)
+            listening_client = create_sync_client(
+                request,
+                cluster_mode,
+                cluster_mode_pubsub=pubsub_config if cluster_mode else None,
+                standalone_mode_pubsub=pubsub_config if not cluster_mode else None,
             )
             publishing_client = create_sync_client(request, cluster_mode)
 
@@ -2970,20 +2945,8 @@ class TestSyncPubSub:
         """
         Test subscribe with timeout parameter.
         """
-        addresses = [NodeAddress("localhost", 6379)]
-        config = (
-            GlideClusterClientConfiguration(addresses=addresses)
-            if cluster_mode
-            else GlideClientConfiguration(addresses=addresses)
-        )
-
-        client = None
+        client = create_sync_client(request, cluster_mode)
         try:
-            client = (
-                GlideClusterClient.create(config)
-                if cluster_mode
-                else GlideClient.create(config)
-            )
 
             channel = "test_timeout_channel"
 
@@ -3000,8 +2963,7 @@ class TestSyncPubSub:
             assert channel in state.actual_subscriptions[modes.Exact]
 
         finally:
-            if client:
-                client.close()
+            client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_subscribe_empty_set_raises_error(
@@ -3012,20 +2974,8 @@ class TestSyncPubSub:
         """
         Test that subscribing with an empty set raises an error.
         """
-        addresses = [NodeAddress("localhost", 6379)]
-        config = (
-            GlideClusterClientConfiguration(addresses=addresses)
-            if cluster_mode
-            else GlideClientConfiguration(addresses=addresses)
-        )
-
-        client = None
+        client = create_sync_client(request, cluster_mode)
         try:
-            client = (
-                GlideClusterClient.create(config)
-                if cluster_mode
-                else GlideClient.create(config)
-            )
 
             # Test subscribe with empty set
             with pytest.raises(RequestError) as exc_info:
@@ -3056,20 +3006,8 @@ class TestSyncPubSub:
         """
         Test unsubscribing from all channels using unsubscribe with no arguments.
         """
-        addresses = [NodeAddress("localhost", 6379)]
-        config = (
-            GlideClusterClientConfiguration(addresses=addresses)
-            if cluster_mode
-            else GlideClientConfiguration(addresses=addresses)
-        )
-
-        client = None
+        client = create_sync_client(request, cluster_mode)
         try:
-            client = (
-                GlideClusterClient.create(config)
-                if cluster_mode
-                else GlideClient.create(config)
-            )
 
             # Subscribe to multiple channels
             channels = {"channel1", "channel2", "channel3"}
@@ -3111,8 +3049,7 @@ class TestSyncPubSub:
                 assert len(state.actual_subscriptions[modes.Sharded]) == 0  # type: ignore[union-attr,arg-type]
 
         finally:
-            if client:
-                client.close()
+            client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_subscription_metrics(
@@ -3123,26 +3060,11 @@ class TestSyncPubSub:
         """
         Test that subscription metrics are available in get_statistics().
         """
-        addresses = [NodeAddress("localhost", 6379)]
-
-        client: Union[GlideClient, GlideClusterClient]
-        if cluster_mode:
-            cluster_config = GlideClusterClientConfiguration(
-                addresses=addresses,
-                advanced_config=AdvancedGlideClusterClientConfiguration(
-                    pubsub_reconciliation_interval=500
-                ),
-            )
-            client = GlideClusterClient.create(cluster_config)
-        else:
-            standalone_config = GlideClientConfiguration(
-                addresses=addresses,
-                advanced_config=AdvancedGlideClientConfiguration(
-                    pubsub_reconciliation_interval=500
-                ),
-            )
-            client = GlideClient.create(standalone_config)
-
+        client = create_sync_client(
+            request,
+            cluster_mode,
+            connection_timeout=20000,
+        )
         try:
             # Subscribe to a channel
             client.subscribe({"test_metrics_channel"})
