@@ -1661,6 +1661,90 @@ public class JedisTest {
     }
 
     @Test
+    void set_commands_scard_sismember_smismember_spop_srandmember_smove() {
+        String key = UUID.randomUUID().toString();
+        jedis.sadd(key, "a", "b", "c");
+        assertEquals(3L, jedis.scard(key), "SCARD should return 3");
+        assertTrue(jedis.sismember(key, "a"), "SISMEMBER a should be true");
+        assertFalse(jedis.sismember(key, "z"), "SISMEMBER z should be false");
+
+        List<Boolean> smismember = jedis.smismember(key, "a", "b", "z");
+        assertEquals(
+                Arrays.asList(true, true, false),
+                smismember,
+                "SMISMEMBER should return [true, true, false]");
+
+        String popped = jedis.spop(key);
+        assertNotNull(popped, "SPOP should return a member");
+        assertTrue(Set.of("a", "b", "c").contains(popped), "SPOP should return one of a,b,c");
+        assertEquals(2L, jedis.scard(key), "SCARD should be 2 after spop");
+
+        String rand = jedis.srandmember(key);
+        assertNotNull(rand, "SRANDMEMBER should return a member");
+        List<String> randList = jedis.srandmember(key, 2);
+        assertEquals(2, randList.size(), "SRANDMEMBER count 2 should return 2");
+
+        String srcKey = UUID.randomUUID().toString();
+        String dstKey = UUID.randomUUID().toString();
+        jedis.sadd(srcKey, "x", "y");
+        jedis.sadd(dstKey, "z");
+        long moved = jedis.smove(srcKey, dstKey, "x");
+        assertEquals(1L, moved, "SMOVE should return 1");
+        assertFalse(jedis.sismember(srcKey, "x"), "x should be removed from source");
+        assertTrue(jedis.sismember(dstKey, "x"), "x should be in destination");
+    }
+
+    @Test
+    void set_commands_sinter_sintercard_sinterstore_sunion_sunionstore_sdiff_sdiffstore() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String dest = UUID.randomUUID().toString();
+        jedis.sadd(key1, "a", "b", "c");
+        jedis.sadd(key2, "b", "c", "d");
+
+        Set<String> inter = jedis.sinter(key1, key2);
+        assertEquals(Set.of("b", "c"), inter, "SINTER should return b,c");
+
+        long interCard = jedis.sintercard(key1, key2);
+        assertEquals(2L, interCard, "SINTERCARD should return 2");
+
+        long interStoreLen = jedis.sinterstore(dest, key1, key2);
+        assertEquals(2L, interStoreLen, "SINTERSTORE should store 2 elements");
+        assertEquals(Set.of("b", "c"), jedis.smembers(dest), "SINTERSTORE result should be b,c");
+
+        Set<String> union = jedis.sunion(key1, key2);
+        assertEquals(Set.of("a", "b", "c", "d"), union, "SUNION should return a,b,c,d");
+
+        String destUnion = UUID.randomUUID().toString();
+        long unionStoreLen = jedis.sunionstore(destUnion, key1, key2);
+        assertEquals(4L, unionStoreLen, "SUNIONSTORE should store 4 elements");
+
+        Set<String> diff = jedis.sdiff(key1, key2);
+        assertEquals(Set.of("a"), diff, "SDIFF key1-key2 should return a");
+
+        String destDiff = UUID.randomUUID().toString();
+        long diffStoreLen = jedis.sdiffstore(destDiff, key1, key2);
+        assertEquals(1L, diffStoreLen, "SDIFFSTORE should store 1 element");
+        assertEquals(Set.of("a"), jedis.smembers(destDiff), "SDIFFSTORE result should be a");
+    }
+
+    @Test
+    void set_commands_sscan() {
+        String key = UUID.randomUUID().toString();
+        jedis.sadd(key, "m1", "m2", "m3");
+        ScanResult<String> result = jedis.sscan(key, "0");
+        assertNotNull(result, "SSCAN result should not be null");
+        assertNotNull(result.getCursor(), "SSCAN cursor should not be null");
+        assertNotNull(result.getResult(), "SSCAN result list should not be null");
+        assertTrue(
+                result.getResult().size() >= 1 && result.getResult().size() <= 3,
+                "SSCAN should return 1-3 members in first iteration");
+
+        ScanResult<String> withParams = jedis.sscan(key, "0", new ScanParams().count(10));
+        assertNotNull(withParams.getResult(), "SSCAN with params should return result");
+    }
+
+    @Test
     void send_command_binary_data() {
         String key = UUID.randomUUID().toString();
         byte[] binaryValue = {0x00, 0x01, 0x02, 0x03, (byte) 0xFF};

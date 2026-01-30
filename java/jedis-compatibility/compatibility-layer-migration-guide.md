@@ -66,7 +66,7 @@ blockingSocketTimeoutMillis
 - ✅ Basic string operations (GET, SET, MGET, MSET)
 - ✅ Hash operations (HGET, HSET, HMGET, HMSET)
 - ✅ List operations (LPUSH, RPUSH, LPOP, RPOP)
-- ✅ Set operations (SADD, SREM, SMEMBERS via `sadd()`, `srem()`, `smembers()`; others via `sendCommand()`)
+- ✅ Set operations (SADD, SREM, SMEMBERS, SCARD, SISMEMBER, SMISMEMBER, SPOP, SRANDMEMBER, SMOVE, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SSCAN) via type-safe methods
 - ⚠️ Sorted set operations (ZADD, ZREM, ZRANGE) - **Available via `sendCommand()` only**
 - ✅ Key operations (DEL, EXISTS, EXPIRE, TTL)
 - ✅ Connection commands (PING, SELECT)
