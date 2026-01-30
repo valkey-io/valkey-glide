@@ -157,20 +157,6 @@ public class SharedCommandTests {
     private static final String KEY_NAME = "key";
     private static final String INITIAL_VALUE = "VALUE";
     private static final String ANOTHER_VALUE = "VALUE2";
-    private static final int BLOCKING_COMMAND_REQUEST_TIMEOUT_MS = 5000;
-
-    @SneakyThrows
-    private static BaseClient createBlockingTimeoutClient(BaseClient client) {
-        return client instanceof GlideClient
-                ? GlideClient.createClient(
-                                commonClientConfig().requestTimeout(BLOCKING_COMMAND_REQUEST_TIMEOUT_MS).build())
-                        .get()
-                : GlideClusterClient.createClient(
-                                commonClusterClientConfig()
-                                        .requestTimeout(BLOCKING_COMMAND_REQUEST_TIMEOUT_MS)
-                                        .build())
-                        .get();
-    }
 
     @BeforeAll
     @SneakyThrows
@@ -200,6 +186,21 @@ public class SharedCommandTests {
         for (var client : clients) {
             ((Named<BaseClient>) client.get()[0]).getPayload().close();
         }
+    }
+
+    private static final int BLOCKING_COMMAND_REQUEST_TIMEOUT_MS = 5000;
+
+    @SneakyThrows
+    private static BaseClient createBlockingTimeoutClient(BaseClient client) {
+        return client instanceof GlideClient
+                ? GlideClient.createClient(
+                                commonClientConfig().requestTimeout(BLOCKING_COMMAND_REQUEST_TIMEOUT_MS).build())
+                        .get()
+                : GlideClusterClient.createClient(
+                                commonClusterClientConfig()
+                                        .requestTimeout(BLOCKING_COMMAND_REQUEST_TIMEOUT_MS)
+                                        .build())
+                        .get();
     }
 
     @SneakyThrows

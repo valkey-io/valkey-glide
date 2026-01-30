@@ -16,6 +16,7 @@ import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConfigurationError;
+import glide.api.models.exceptions.GlideException;
 import glide.internal.AsyncRegistry;
 import glide.internal.GlideNativeBridge;
 import java.util.concurrent.CompletableFuture;
@@ -390,7 +391,7 @@ public class ConnectionManager {
 
                         return null; // Success
                     } catch (RuntimeException e) {
-                        if (e instanceof ClosingException) {
+                        if (e instanceof GlideException) {
                             throw e;
                         }
                         throw new RuntimeException("Failed to create client", e);

@@ -116,14 +116,13 @@ public final class AsyncRegistry {
         // Store original future for completion by native code
         activeFutures.put(correlationId, originalFuture);
 
-        final long corrId = correlationId;
         if (timeoutMillis > 0) {
             CompletableFuture.delayedExecutor(timeoutMillis, TimeUnit.MILLISECONDS)
                     .execute(
                             () -> {
                                 if (originalFuture.completeExceptionally(
                                         new glide.api.models.exceptions.TimeoutException("Request timed out"))) {
-                                    GlideNativeBridge.markTimedOut(corrId);
+                                    GlideNativeBridge.markTimedOut(correlationId);
                                 }
                             });
         }
@@ -133,7 +132,7 @@ public final class AsyncRegistry {
         originalFuture.whenComplete(
                 (result, throwable) -> {
                     // Atomic cleanup - no race conditions
-                    activeFutures.remove(corrId);
+                    activeFutures.remove(correlationId);
 
                     // Decrement per-client counter if applicable
                     if (maxInflightRequests > 0) {
