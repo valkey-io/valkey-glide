@@ -10,6 +10,7 @@
 * Python: Add inflight request limit support to sync client
 * Python Sync: Add OpenTelemetry support with traces and metrics configuration
 * Python: Move OpenTelemetry config classes to glide_shared for code reuse between async and sync clients
+* Go: Add ALLOW_NON_COVERED_SLOTS flag support for cluster scan ([#4895](https://github.com/valkey-io/valkey-glide/issues/4895))
 
 #### Fixes
 * Node: Fix to handle non-string types in toBuffersArray ([#4842](https://github.com/valkey-io/valkey-glide/issues/4842))
