@@ -2926,7 +2926,7 @@ class TestSyncPubSub:
             publishing_client.publish(message, pattern_config.replace("*", "test"))
             publishing_client.publish(message, pattern_blocking.replace("*", "test"))
 
-            if cluster_mode:
+            if cluster_mode and sharded_config and sharded_blocking:
                 cast(GlideClusterClient, publishing_client).publish(
                     message, sharded_config, sharded=True  # type: ignore[union-attr,arg-type]
                 )
@@ -2943,7 +2943,10 @@ class TestSyncPubSub:
                     break
                 received_count += 1
 
-            expected_count = 4 if not cluster_mode else 6
+            # Expected count: 4 for exact+pattern, +2 if sharded is supported
+            expected_count = 4
+            if cluster_mode and sharded_config and sharded_blocking:
+                expected_count = 6
             assert received_count == expected_count
 
         finally:
