@@ -61,6 +61,7 @@ type CallbackResult = Result<ServerValue, RedisError>;
 
 // Runtime and JVM statics
 pub static JVM: std::sync::OnceLock<Arc<JavaVM>> = std::sync::OnceLock::new();
+static APPLICATION_CLASSLOADER: std::sync::OnceLock<Arc<Mutex<Option<GlobalRef>>>> = std::sync::OnceLock::new();
 static RUNTIME: std::sync::OnceLock<Runtime> = std::sync::OnceLock::new();
 
 // Defaults for runtime and callback workers
@@ -366,6 +367,105 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
     })
 }
 
+/// Get the current thread object
+fn get_current_thread<'local>(env: &mut JNIEnv<'local>) -> std::result::Result<JObject<'local>, jni::errors::Error> {
+    let thread_class = env.find_class("java/lang/Thread")?;
+    let current_thread_method = env.get_static_method_id(
+        &thread_class,
+        "currentThread",
+        "()Ljava/lang/Thread;",
+    )?;
+    let current_thread = unsafe {
+        env.call_static_method_unchecked(
+            &thread_class,
+            current_thread_method,
+            jni::signature::ReturnType::Object,
+            &[],
+        )?
+    };
+    current_thread.l()
+}
+
+/// Get the context classloader from the current thread
+fn get_thread_context_classloader<'local>(env: &mut JNIEnv<'local>) -> std::result::Result<JObject<'local>, jni::errors::Error> {
+    let current_thread_obj = get_current_thread(env)?;
+    let thread_class = env.find_class("java/lang/Thread")?;
+    let get_context_classloader_method = env.get_method_id(
+        &thread_class,
+        "getContextClassLoader",
+        "()Ljava/lang/ClassLoader;",
+    )?;
+    let classloader = unsafe {
+        env.call_method_unchecked(
+            &current_thread_obj,
+            get_context_classloader_method,
+            jni::signature::ReturnType::Object,
+            &[],
+        )?
+    };
+    classloader.l()
+}
+
+/// Get the system classloader
+fn get_system_classloader<'local>(env: &mut JNIEnv<'local>) -> std::result::Result<JObject<'local>, jni::errors::Error> {
+    let classloader_class = env.find_class("java/lang/ClassLoader")?;
+    let get_system_classloader_method = env.get_static_method_id(
+        &classloader_class,
+        "getSystemClassLoader",
+        "()Ljava/lang/ClassLoader;",
+    )?;
+    let system_classloader = unsafe {
+        env.call_static_method_unchecked(
+            &classloader_class,
+            get_system_classloader_method,
+            jni::signature::ReturnType::Object,
+            &[],
+        )?
+    };
+    system_classloader.l()
+}
+
+/// Set the context classloader for the current thread
+/// This is necessary for native threads in Lambda RIE to be able to load application classes
+fn set_thread_context_classloader(env: &mut JNIEnv) -> std::result::Result<(), jni::errors::Error> {
+    let current_thread_obj = get_current_thread(env)?;
+    let thread_class = env.find_class("java/lang/Thread")?;
+    let set_context_classloader_method = env.get_method_id(
+        &thread_class,
+        "setContextClassLoader",
+        "(Ljava/lang/ClassLoader;)V",
+    )?;
+    
+    // Try to use cached application classloader first
+    if let Some(cache) = APPLICATION_CLASSLOADER.get() {
+        let guard = cache.lock();
+        if let Some(ref global_ref) = *guard {
+            unsafe {
+                env.call_method_unchecked(
+                    &current_thread_obj,
+                    set_context_classloader_method,
+                    jni::signature::ReturnType::Primitive(jni::signature::Primitive::Void),
+                    &[jni::objects::JValue::Object(global_ref.as_obj()).as_jni()],
+                )?;
+            }
+            return Ok(());
+        }
+    }
+    
+    // Fallback to system classloader
+    let system_classloader_obj = get_system_classloader(env)?;
+    unsafe {
+        env.call_method_unchecked(
+            &current_thread_obj,
+            set_context_classloader_method,
+            jni::signature::ReturnType::Primitive(jni::signature::Primitive::Void),
+            &[jni::objects::JValue::Object(&system_classloader_obj).as_jni()],
+        )?;
+    }
+    
+    Ok(())
+}
+
 fn process_callback_job(
     jvm: Arc<JavaVM>,
     callback_id: jlong,
@@ -373,7 +473,11 @@ fn process_callback_job(
     binary_mode: bool,
 ) {
     match jvm.attach_current_thread_as_daemon() {
-        Ok(mut env) => match result {
+        Ok(mut env) => {
+            if let Err(e) = set_thread_context_classloader(&mut env) {
+                log::warn!("Failed to set context classloader: {e}");
+            }
+            match result {
             Ok(server_value) => {
                 let _ = env.push_local_frame(16);
 
@@ -415,11 +519,47 @@ fn process_callback_job(
                     &error_msg,
                 );
             }
-        },
+            }
+        }
         Err(e) => {
             log::error!("JNI environment attachment failed: {e}");
         }
     }
+}
+
+/// Cache the application classloader for later use by native threads
+/// This should be called during client initialization when we have access to the correct classloader
+pub fn cache_application_classloader(env: &mut JNIEnv) -> std::result::Result<(), jni::errors::Error> {
+    let classloader_obj = match env.find_class("glide/internal/GlideNativeBridge") {
+        Ok(bridge_class) => {
+            // Get classloader from GlideNativeBridge class
+            let class_class = env.find_class("java/lang/Class")?;
+            let get_classloader_method = env.get_method_id(
+                &class_class,
+                "getClassLoader",
+                "()Ljava/lang/ClassLoader;",
+            )?;
+            let classloader = unsafe {
+                env.call_method_unchecked(
+                    &bridge_class,
+                    get_classloader_method,
+                    jni::signature::ReturnType::Object,
+                    &[],
+                )?
+            };
+            classloader.l()?
+        }
+        Err(_) => {
+            // Fallback to context classloader
+            get_thread_context_classloader(env)?
+        }
+    };
+    
+    let global_ref = env.new_global_ref(classloader_obj)?;
+    let cache = APPLICATION_CLASSLOADER.get_or_init(|| Arc::new(Mutex::new(None)));
+    *cache.lock() = Some(global_ref);
+    
+    Ok(())
 }
 
 /// Enqueue callback job to dedicated workers.
@@ -801,7 +941,18 @@ fn get_glide_core_client_cache(env: &mut JNIEnv) -> Result<GlideCoreClientCache>
             return Ok(c.clone());
         }
     }
-    let class = env.find_class("glide/internal/GlideCoreClient")?;
+    
+    // Try to find class using context classloader first (for Lambda RIE compatibility)
+    let class = if let Some(cache) = APPLICATION_CLASSLOADER.get()
+        && let Some(ref classloader_ref) = *cache.lock()
+    {
+        // Use ClassLoader.loadClass() with the cached application classloader
+        load_class_with_classloader(env, classloader_ref.as_obj(), "glide.internal.GlideCoreClient")
+            .or_else(|_| env.find_class("glide/internal/GlideCoreClient"))?
+    } else {
+        env.find_class("glide/internal/GlideCoreClient")?
+    };
+    
     let global = env.new_global_ref(&class)?;
     let on_native_push = env.get_static_method_id(&class, "onNativePush", "(J[B[B[B)V")?;
     let register_native_buffer_cleaner = env.get_static_method_id(
@@ -819,4 +970,31 @@ fn get_glide_core_client_cache(env: &mut JNIEnv) -> Result<GlideCoreClientCache>
         *guard = Some(cache.clone());
     }
     Ok(cache)
+}
+
+/// Load a class using a specific classloader
+fn load_class_with_classloader<'local>(
+    env: &mut JNIEnv<'local>,
+    classloader: &JObject,
+    class_name: &str,
+) -> std::result::Result<JClass<'local>, jni::errors::Error> {
+    let classloader_class = env.find_class("java/lang/ClassLoader")?;
+    let load_class_method = env.get_method_id(
+        &classloader_class,
+        "loadClass",
+        "(Ljava/lang/String;)Ljava/lang/Class;",
+    )?;
+    
+    let class_name_jstring = env.new_string(class_name)?;
+    let loaded_class = unsafe {
+        env.call_method_unchecked(
+            classloader,
+            load_class_method,
+            jni::signature::ReturnType::Object,
+            &[jni::objects::JValue::Object(&class_name_jstring).as_jni()],
+        )
+    }?;
+    
+    let class_obj = loaded_class.l()?;
+    Ok(JClass::from(class_obj))
 }
