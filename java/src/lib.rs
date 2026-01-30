@@ -1288,7 +1288,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
             if let Err(e) = jni_client::cache_application_classloader(&mut env) {
                 log::warn!("Failed to cache application classloader: {e}");
             }
-            
+
             // Convert Java byte array to Rust bytes
             let request_bytes = match env.convert_byte_array(&connection_request_bytes) {
                 Ok(bytes) => bytes,
