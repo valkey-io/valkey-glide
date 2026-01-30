@@ -58,6 +58,8 @@ jobs:
                   languages: ${{ matrix.language }}
                   build-mode: ${{ matrix.build-mode }}
                   config-file: .github/codeql/codeql-config.yml
+                  # Pin to 2.23.9 due to hang in 2.24.0 Rust analyzer
+                  tools: https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.23.9/codeql-bundle-linux64.tar.gz
 
             # C++ Build
             - name: Build C++ components

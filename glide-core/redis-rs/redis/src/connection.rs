@@ -979,10 +979,10 @@ fn setup_connection(
         }
     }
 
-    if connection_info.client_name.is_some() {
+    if let Some(client_name) = &connection_info.client_name {
         match cmd("CLIENT")
             .arg("SETNAME")
-            .arg(connection_info.client_name.as_ref().unwrap())
+            .arg(client_name)
             .query::<Value>(&mut rv)
         {
             Ok(Value::Okay) => {}

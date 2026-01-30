@@ -323,3 +323,7 @@ class _GlideFFI:
     def lib(self):
         """Access to the loaded library for calling functions."""
         return self._lib
+
+
+# Singleton instance accessor
+GlideFFI = _GlideFFI()

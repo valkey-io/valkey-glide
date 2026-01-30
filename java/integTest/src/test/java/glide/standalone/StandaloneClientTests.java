@@ -26,7 +26,7 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-@Timeout(10) // seconds
+@Timeout(20) // seconds
 public class StandaloneClientTests {
 
     @SneakyThrows

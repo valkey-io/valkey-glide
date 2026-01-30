@@ -3,6 +3,17 @@ plugins {
     id "com.google.osdetector" version "1.7.3"
 }
 
+// Platform-specific Python executable
+project.ext.isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+
+def getClusterCommand(args) {
+    if (isWindows) {
+        return ['wsl'] + args
+    } else {
+        return args
+    }
+}
+
 repositories {
     mavenCentral()
     mavenLocal()
@@ -68,12 +79,12 @@ tasks.register('stopAllAfterTests') {
     doLast {
         exec {
             workingDir "${project.rootDir}/../utils"
-            commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
+            commandLine getClusterCommand(['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'])
             ignoreExitValue true // ignore fail if servers are stopped before
         }
         exec {
             workingDir "${project.rootDir}/../utils"
-            commandLine 'python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster', '--keep-folder'
+            commandLine getClusterCommand(['python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster', '--keep-folder'])
             ignoreExitValue true
         }
     }
@@ -86,12 +97,12 @@ tasks.register('stopAllBeforeTests') {
     doLast {
         exec {
             workingDir "${project.rootDir}/../utils"
-            commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'
+            commandLine getClusterCommand(['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'])
             ignoreExitValue true // ignore fail if servers are stopped before
         }
         exec {
             workingDir "${project.rootDir}/../utils"
-            commandLine 'python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster'
+            commandLine getClusterCommand(['python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster'])
             ignoreExitValue true
         }
     }
@@ -110,7 +121,12 @@ tasks.register('startCluster') {
                     workingDir "${project.rootDir}/../utils"
                     def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode']
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
-                    commandLine args
+                    // Use no replicas for Windows to avoid replica sync issues in CI
+                    if (isWindows) {
+                        args.add('-r')
+                        args.add('0')
+                    }
+                    commandLine getClusterCommand(args)
                     standardOutput = os
                 }
                 clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
@@ -127,9 +143,15 @@ tasks.register('startClusterForAz') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4']
+                    def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode']
+                    // Use different replica counts based on environment
+                    if (isWindows) {
+                        args.addAll(['-r', '0'])  // No replicas for Windows CI
+                    } else {
+                        args.addAll(['-r', '4'])  // 4 replicas for other environments
+                    }
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
-                    commandLine args
+                    commandLine getClusterCommand(args)
                     standardOutput = os
                 }
                 azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
@@ -150,7 +172,7 @@ tasks.register('startStandalone') {
                     workingDir "${project.rootDir}/../utils"
                     def args = ['python3', 'cluster_manager.py', 'start', '-r', '0']
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
-                    commandLine args
+                    commandLine getClusterCommand(args)
                     standardOutput = os
                 }
                 standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
@@ -166,7 +188,7 @@ tasks.register('startStandaloneTls') {
         new ByteArrayOutputStream().withStream { os ->
             exec {
                 workingDir "${project.rootDir}/../utils"
-                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '-r', '0'
+                commandLine getClusterCommand(['python3', 'cluster_manager.py', '--tls', 'start', '-r', '0'])
                 standardOutput = os
             }
             standaloneTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
@@ -179,7 +201,13 @@ tasks.register('startClusterTls') {
         new ByteArrayOutputStream().withStream { os ->
             exec {
                 workingDir "${project.rootDir}/../utils"
-                commandLine 'python3', 'cluster_manager.py', '--tls', 'start', '--cluster-mode'
+                def args = ['python3', 'cluster_manager.py', '--tls', 'start', '--cluster-mode']
+                // Use no replicas for Windows to avoid replica sync issues in CI
+                if (isWindows) {
+                    args.add('-r')
+                    args.add('0')
+                }
+                commandLine getClusterCommand(args)
                 standardOutput = os
             }
             clusterTlsHosts = extractAddressesFromClusterManagerOutput(os.toString())
@@ -194,7 +222,57 @@ clearDirs.finalizedBy 'startStandaloneTls'
 clearDirs.finalizedBy 'startCluster'
 clearDirs.finalizedBy 'startClusterTls'
 clearDirs.finalizedBy 'startClusterForAz'
-afterTests.finalizedBy 'stopAllAfterTests'
+// Run comprehensive cleanup after entire build finishes
+gradle.buildFinished {
+    println "Finding and stopping all running Valkey processes..."
+    
+    // OS detection
+    def isWindowsRuntime = System.getProperty('os.name').toLowerCase().contains('windows')
+    
+    // Find and kill all Valkey processes
+    try {
+        exec {
+            if (isWindowsRuntime) {
+                commandLine 'wsl', 'pkill', '-f', 'valkey-server'
+            } else {
+                commandLine 'pkill', '-f', 'valkey-server'
+            }
+            ignoreExitValue true
+        }
+    } catch (Exception e) {
+        println "Failed to kill valkey-server processes: ${e.message}"
+    }
+    
+    // Also try redis-server processes
+    try {
+        exec {
+            if (isWindowsRuntime) {
+                commandLine 'wsl', 'pkill', '-f', 'redis-server'
+            } else {
+                commandLine 'pkill', '-f', 'redis-server'
+            }
+            ignoreExitValue true
+        }
+    } catch (Exception e) {
+        println "Failed to kill redis-server processes: ${e.message}"
+    }
+    
+    // Clean up cluster folders
+    try {
+        exec {
+            workingDir "${project.rootDir}/../utils"
+            def cleanupArgs = ['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder']
+            if (isWindowsRuntime) {
+                commandLine(['wsl'] + cleanupArgs)
+            } else {
+                commandLine cleanupArgs
+            }
+            ignoreExitValue true
+        }
+    } catch (Exception e) {
+        println "Failed to clean up cluster folders: ${e.message}"
+    }
+}
 compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
 
 tasks.withType(Test) {

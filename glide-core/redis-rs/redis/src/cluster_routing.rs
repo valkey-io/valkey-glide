@@ -700,6 +700,7 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"CLIENT ID"
         | b"CLIENT INFO"
         | b"CLIENT KILL"
+        | b"CLIENT LIST"
         | b"CLIENT PAUSE"
         | b"CLIENT REPLY"
         | b"CLIENT TRACKINGINFO"
@@ -2026,5 +2027,17 @@ mod tests_routing {
         let shard_addrs = create_shard_addrs("node1:6379", vec!["node2:6379", "node3:6379"]);
         let result = shard_addrs.attempt_shard_role_update(Arc::new("node4:6379".to_string()));
         assert_eq!(result, ShardUpdateResult::NodeNotFound);
+    }
+
+    #[test]
+    fn test_client_list_routing() {
+        let mut cmd = cmd("CLIENT");
+        cmd.arg("LIST");
+        let routing = RoutingInfo::for_routable(&cmd);
+        assert_eq!(
+            routing,
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
+            "CLIENT LIST should be routed to a random node"
+        );
     }
 }
