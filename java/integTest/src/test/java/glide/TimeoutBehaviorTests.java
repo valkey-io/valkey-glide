@@ -32,7 +32,7 @@ public class TimeoutBehaviorTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("timeoutClients")
-    public void request_timeout_fires_before_server_timeout(boolean clusterMode) {
+    public void requestTimeoutFiresBeforeServerTimeout(boolean clusterMode) {
         int requestTimeoutMs = 200;
         double serverTimeoutSeconds = 5.0;
 
