@@ -2775,7 +2775,23 @@ class TestSyncPubSub:
         """
         Test dynamic subscribe methods and get_subscriptions().
         """
-        client = create_sync_client(request, cluster_mode)
+        # Create client with empty PubSub config to enable dynamic subscriptions
+        if cluster_mode:
+            cluster_pubsub = cast(
+                GlideClusterClientConfiguration.PubSubSubscriptions,
+                create_pubsub_subscription(True, {}, {}),
+            )
+            client = create_sync_client(
+                request, cluster_mode, cluster_mode_pubsub=cluster_pubsub
+            )
+        else:
+            standalone_pubsub = cast(
+                GlideClientConfiguration.PubSubSubscriptions,
+                create_pubsub_subscription(False, {}, {}),
+            )
+            client = create_sync_client(
+                request, cluster_mode, standalone_mode_pubsub=standalone_pubsub
+            )
         try:
 
             # Subscribe to channels
@@ -2788,6 +2804,9 @@ class TestSyncPubSub:
             if cluster_mode:
                 sharded_channel = "test_sharded_channel"
                 cast(GlideClusterClient, client).ssubscribe({sharded_channel})
+
+            # Wait for subscriptions to be registered
+            time.sleep(0.1)
 
             # Get subscriptions
             state = client.get_subscriptions()
@@ -2809,10 +2828,12 @@ class TestSyncPubSub:
                 assert sharded_channel in state.actual_subscriptions[modes.Sharded]  # type: ignore[union-attr,arg-type]
 
             # Unsubscribe
-            client.unsubscribe({exact_channel})
-            client.punsubscribe({pattern})
+            client.unsubscribe({exact_channel}, timeout_ms=5000)
+            client.punsubscribe({pattern}, timeout_ms=5000)
             if cluster_mode:
-                cast(GlideClusterClient, client).sunsubscribe({sharded_channel})
+                cast(GlideClusterClient, client).sunsubscribe(
+                    {sharded_channel}, timeout_ms=5000
+                )
 
             # Verify unsubscribed
             time.sleep(0.5)
@@ -3067,7 +3088,7 @@ class TestSyncPubSub:
         )
         try:
             # Subscribe to a channel
-            client.subscribe({"test_metrics_channel"})
+            client.subscribe({"test_metrics_channel"}, timeout_ms=5000)
 
             # Wait for reconciliation
             time.sleep(1)
