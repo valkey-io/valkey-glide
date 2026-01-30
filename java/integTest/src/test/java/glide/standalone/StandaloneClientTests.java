@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
+import java.util.Collections;
+
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.deleteAclUser;
@@ -52,7 +54,7 @@ public class StandaloneClientTests {
         GlideClient client = GlideClient.createClient(commonClientConfig().build()).get();
 
         String password = "TEST_AUTH";
-        client.configSet(Map.of("requirepass", password)).get();
+        client.configSet(Collections.singletonMap("requirepass", password)).get();
 
         // Creation of a new client without a password should fail
         ExecutionException exception =
@@ -76,7 +78,7 @@ public class StandaloneClientTests {
         assertEquals(value, auth_client.get(key).get());
 
         // Reset password
-        client.configSet(Map.of("requirepass", "")).get();
+        client.configSet(Collections.singletonMap("requirepass", "")).get();
 
         auth_client.close();
         client.close();
@@ -171,13 +173,13 @@ public class StandaloneClientTests {
     @Test
     public void update_connection_password_auth_non_valid_pass() {
         // Test Client fails on call to updateConnectionPassword with invalid parameters
-        try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
-            var emptyPasswordException =
+        try (GlideClient testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+            ExecutionException emptyPasswordException =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword("", true).get());
             assertInstanceOf(RequestException.class, emptyPasswordException.getCause());
 
-            var noPasswordException =
+            ExecutionException noPasswordException =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword(true).get());
             assertInstanceOf(RequestException.class, noPasswordException.getCause());
@@ -187,14 +189,14 @@ public class StandaloneClientTests {
     @SneakyThrows
     @Test
     public void update_connection_password_no_server_auth() {
-        var pwd = UUID.randomUUID().toString();
+        String pwd = UUID.randomUUID().toString();
 
-        try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+        try (GlideClient testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
             // validate that we can use the client
             assertNotNull(testClient.info().get());
 
             // Test that immediate re-authentication fails when no server password is set.
-            var exception =
+            ExecutionException exception =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword(pwd, true).get());
             assertInstanceOf(RequestException.class, exception.getCause());
@@ -204,9 +206,9 @@ public class StandaloneClientTests {
     @SneakyThrows
     @Test
     public void update_connection_password_long() {
-        var pwd = RandomStringUtils.randomAlphabetic(1000);
+        String pwd = RandomStringUtils.randomAlphabetic(1000);
 
-        try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+        try (GlideClient testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
             // validate that we can use the client
             assertNotNull(testClient.info().get());
 
@@ -219,19 +221,19 @@ public class StandaloneClientTests {
     @SneakyThrows
     @Test
     public void replace_password_immediateAuth_wrong_password() {
-        var pwd = UUID.randomUUID().toString();
-        var notThePwd = UUID.randomUUID().toString();
+        String pwd = UUID.randomUUID().toString();
+        String notThePwd = UUID.randomUUID().toString();
 
         GlideClient adminClient = GlideClient.createClient(commonClientConfig().build()).get();
-        try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+        try (GlideClient testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
             // validate that we can use the client
             assertNotNull(testClient.info().get());
 
             // set the password to something else
-            adminClient.configSet(Map.of("requirepass", notThePwd)).get();
+            adminClient.configSet(Collections.singletonMap("requirepass", notThePwd)).get();
 
             // Test that re-authentication fails when using wrong password.
-            var exception =
+            ExecutionException exception =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword(pwd, true).get());
             assertInstanceOf(RequestException.class, exception.getCause());
@@ -239,7 +241,7 @@ public class StandaloneClientTests {
             // But using something else password returns OK
             assertEquals(OK, testClient.updateConnectionPassword(notThePwd, true).get());
         } finally {
-            adminClient.configSet(Map.of("requirepass", "")).get();
+            adminClient.configSet(Collections.singletonMap("requirepass", "")).get();
             adminClient.close();
         }
     }
@@ -248,9 +250,9 @@ public class StandaloneClientTests {
     @SneakyThrows
     @Test
     public void test_update_connection_password_acl_user() {
-        var username = "username";
-        var pwd = UUID.randomUUID().toString();
-        var newPwd = UUID.randomUUID().toString();
+        String username = "username";
+        String pwd = UUID.randomUUID().toString();
+        String newPwd = UUID.randomUUID().toString();
 
         GlideClient adminClient = GlideClient.createClient(commonClientConfig().build()).get();
 
@@ -299,9 +301,9 @@ public class StandaloneClientTests {
     @SneakyThrows
     @Test
     public void test_update_connection_password_connection_lost_before_password_update_acl_user() {
-        var username = "username";
-        var pwd = UUID.randomUUID().toString();
-        var newPwd = UUID.randomUUID().toString();
+        String username = "username";
+        String pwd = UUID.randomUUID().toString();
+        String newPwd = UUID.randomUUID().toString();
 
         GlideClient adminClient = GlideClient.createClient(commonClientConfig().build()).get();
 
@@ -334,7 +336,7 @@ public class StandaloneClientTests {
 
             // Check that the client is unable to perform operations that require server connection,
             // as it is still trying to reconnect with the old password
-            var timeoutException =
+            ExecutionException timeoutException =
                     assertThrows(
                             ExecutionException.class,
                             () -> testClient.updateConnectionPassword(newPwd, true).get());
@@ -349,9 +351,9 @@ public class StandaloneClientTests {
     @SneakyThrows
     @Test
     public void test_update_connection_password_replace_password_immediateAuth_acl_user() {
-        var username = "username";
-        var pwd = UUID.randomUUID().toString();
-        var newPwd = UUID.randomUUID().toString();
+        String username = "username";
+        String pwd = UUID.randomUUID().toString();
+        String newPwd = UUID.randomUUID().toString();
 
         GlideClient adminClient = GlideClient.createClient(commonClientConfig().build()).get();
 
@@ -386,9 +388,9 @@ public class StandaloneClientTests {
     @SneakyThrows
     @Test
     public void test_update_connection_password_non_valid_auth_acl_user() {
-        var username = "username";
-        var pwd = UUID.randomUUID().toString();
-        var newPwd = UUID.randomUUID().toString();
+        String username = "username";
+        String pwd = UUID.randomUUID().toString();
+        String newPwd = UUID.randomUUID().toString();
 
         GlideClient adminClient = GlideClient.createClient(commonClientConfig().build()).get();
 
@@ -404,12 +406,12 @@ public class StandaloneClientTests {
                                             .build())
                             .get();
 
-            var emptyPasswordException =
+            ExecutionException emptyPasswordException =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword("", true).get());
             assertInstanceOf(RequestException.class, emptyPasswordException.getCause());
 
-            var noPasswordException =
+            ExecutionException noPasswordException =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword(true).get());
             assertInstanceOf(RequestException.class, noPasswordException.getCause());

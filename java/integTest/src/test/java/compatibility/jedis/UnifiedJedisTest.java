@@ -805,7 +805,9 @@ public class UnifiedJedisTest {
         assertEquals(0, strlenResult, "STRLEN should return 0 for empty string");
 
         // Test very long key names
-        String longKey = "a".repeat(1000);
+        StringBuilder sb = new StringBuilder(1000);
+        for (int i = 0; i < 1000; i++) sb.append("a");
+        String longKey = sb.toString();
         setResult = unifiedJedis.set(longKey, "long_key_value");
         assertEquals("OK", setResult, "SET should work with long key names");
 

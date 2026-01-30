@@ -58,6 +58,7 @@ import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -68,6 +69,88 @@ import java.util.stream.Stream;
 import org.junit.jupiter.params.provider.Arguments;
 
 public class BatchTestUtilities {
+
+    public static <K, V> Map<K, V> createMap() {
+        return new HashMap<>();
+    }
+
+    public static <K, V> Map<K, V> createMap(K k1, V v1) {
+        Map<K, V> map = new HashMap<>();
+        map.put(k1, v1);
+        return map;
+    }
+
+    public static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2) {
+        Map<K, V> map = new HashMap<>();
+        map.put(k1, v1);
+        map.put(k2, v2);
+        return map;
+    }
+
+    public static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3) {
+        Map<K, V> map = new HashMap<>();
+        map.put(k1, v1);
+        map.put(k2, v2);
+        map.put(k3, v3);
+        return map;
+    }
+
+    public static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4) {
+        Map<K, V> map = new HashMap<>();
+        map.put(k1, v1);
+        map.put(k2, v2);
+        map.put(k3, v3);
+        map.put(k4, v4);
+        return map;
+    }
+
+    public static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5) {
+        Map<K, V> map = new HashMap<>();
+        map.put(k1, v1);
+        map.put(k2, v2);
+        map.put(k3, v3);
+        map.put(k4, v4);
+        map.put(k5, v5);
+        return map;
+    }
+
+    public static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6) {
+        Map<K, V> map = new HashMap<>();
+        map.put(k1, v1);
+        map.put(k2, v2);
+        map.put(k3, v3);
+        map.put(k4, v4);
+        map.put(k5, v5);
+        map.put(k6, v6);
+        return map;
+    }
+
+    public static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6, K k7, V v7) {
+        Map<K, V> map = new HashMap<>();
+        map.put(k1, v1);
+        map.put(k2, v2);
+        map.put(k3, v3);
+        map.put(k4, v4);
+        map.put(k5, v5);
+        map.put(k6, v6);
+        map.put(k7, v7);
+        return map;
+    }
+
+    public static <T> Set<T> createSet(T v1, T v2) {
+        Set<T> set = new java.util.HashSet<>();
+        set.add(v1);
+        set.add(v2);
+        return set;
+    }
+
+    public static <T> Set<T> createSet(T v1, T v2, T v3) {
+        Set<T> set = new java.util.HashSet<>();
+        set.add(v1);
+        set.add(v2);
+        set.add(v3);
+        return set;
+    }
 
     private static final int KEY_SUFFIX_LENGTH = 6;
     private static final String value1 = "value1-" + generateRandomNumericSuffix();
@@ -223,7 +306,7 @@ public class BatchTestUtilities {
             batch.set(genericKey5, "value").move(genericKey5, 1);
         }
 
-        var expectedResults =
+        Object[] expectedResults =
                 new Object[] {
                     OK, // set(genericKey1, value1)
                     new String[] {value1, null}, // customCommand("MGET", genericKey1, genericKey2)
@@ -307,10 +390,10 @@ public class BatchTestUtilities {
         String stringKey9 = generateKey("StringKey", isAtomic);
 
         Map<String, Object> expectedLcsIdxObject =
-                Map.of("matches", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
+                createMap("matches", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
 
         Map<String, Object> expectedLcsIdxWithMatchLenObject =
-                Map.of(
+                createMap(
                         "matches",
                         new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
                         "len",
@@ -325,7 +408,7 @@ public class BatchTestUtilities {
                 .set(stringKey2, value2, SetOptions.builder().returnOldValue(true).build())
                 .strlen(stringKey2)
                 .append(stringKey2, value2)
-                .mset(Map.of(stringKey1, value2, stringKey2, value1))
+                .mset(createMap(stringKey1, value2, stringKey2, value1))
                 .mget(new String[] {stringKey1, stringKey2})
                 .incr(stringKey3)
                 .incrBy(stringKey3, 2)
@@ -334,10 +417,10 @@ public class BatchTestUtilities {
                 .incrByFloat(stringKey3, 0.5)
                 .setrange(stringKey3, 0, "GLIDE")
                 .getrange(stringKey3, 0, 5)
-                .msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+                .msetnx(createMap(stringKey4, "foo", stringKey5, "bar"))
                 .mget(new String[] {stringKey4, stringKey5})
                 .del(new String[] {stringKey5})
-                .msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+                .msetnx(createMap(stringKey4, "foo", stringKey5, "bar"))
                 .mget(new String[] {stringKey4, stringKey5});
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -359,7 +442,7 @@ public class BatchTestUtilities {
             batch.set(stringKey9, value1).getex(stringKey9).getex(stringKey9, GetExOptions.Seconds(20L));
         }
 
-        var expectedResults =
+        Object[] expectedResults =
                 new Object[] {
                     OK, // flushall()
                     OK, // set(stringKey1, value1)
@@ -369,7 +452,7 @@ public class BatchTestUtilities {
                     null, // set(stringKey2, value2, returnOldValue(true))
                     (long) value1.length(), // strlen(key2)
                     Long.valueOf(value2.length() * 2), // append(key2, value2)
-                    OK, // mset(Map.of(stringKey1, value2, stringKey2, value1))
+                    OK, // mset(createMap(stringKey1, value2, stringKey2, value1))
                     new String[] {value2, value1}, // mget(new String[] {stringKey1, stringKey2})
                     1L, // incr(stringKey3)
                     3L, // incrBy(stringKey3, 2)
@@ -378,10 +461,10 @@ public class BatchTestUtilities {
                     0.5, // incrByFloat(stringKey3, 0.5)
                     5L, // setrange(stringKey3, 0, "GLIDE")
                     "GLIDE", // getrange(stringKey3, 0, 5)
-                    true, // msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+                    true, // msetnx(createMap(stringKey4, "foo", stringKey5, "bar"))
                     new String[] {"foo", "bar"}, // mget({stringKey4, stringKey5})
                     1L, // del(stringKey5)
-                    false, // msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+                    false, // msetnx(createMap(stringKey4, "foo", stringKey5, "bar"))
                     new String[] {"foo", null}, // mget({stringKey4, stringKey5})
                 };
 
@@ -426,7 +509,7 @@ public class BatchTestUtilities {
         String hashKey2 = generateKey("HashKey", isAtomic);
 
         batch
-                .hset(hashKey1, Map.of(field1, value1, field2, value2))
+                .hset(hashKey1, createMap(field1, value1, field2, value2))
                 .hget(hashKey1, field1)
                 .hlen(hashKey1)
                 .hexists(hashKey1, field2)
@@ -444,7 +527,7 @@ public class BatchTestUtilities {
                 .hincrByFloat(hashKey1, field3, 5.5)
                 .hkeys(hashKey1)
                 .hstrlen(hashKey1, field2)
-                .hset(hashKey2, Map.of(field1, value1))
+                .hset(hashKey2, createMap(field1, value1))
                 .hscan(hashKey2, "0")
                 .hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
 
@@ -460,7 +543,7 @@ public class BatchTestUtilities {
 
             // Hash field expiration commands (Valkey 9.0.0+)
             batch
-                    .hsetex(hashKey3, Map.of(field1, value1, field2, value2), hsetexOptions)
+                    .hsetex(hashKey3, createMap(field1, value1, field2, value2), hsetexOptions)
                     .hgetex(hashKey3, new String[] {field1, field2}, hgetexOptions)
                     .hexpire(
                             hashKey3,
@@ -495,15 +578,15 @@ public class BatchTestUtilities {
                     .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(true).build());
         }
 
-        var result =
+        Object[] result =
                 new Object[] {
-                    2L, // hset(hashKey1, Map.of(field1, value1, field2, value2))
+                    2L, // hset(hashKey1, createMap(field1, value1, field2, value2))
                     value1, // hget(hashKey1, field1)
                     2L, // hlen(hashKey1)
                     true, // hexists(hashKey1, field2)
                     false, // hsetnx(hashKey1, field1, value1)
                     new String[] {value1, null, value2}, // hmget(hashKey1, new String[] {...})
-                    Map.of(field1, value1, field2, value2), // hgetall(hashKey1)
+                    createMap(field1, value1, field2, value2), // hgetall(hashKey1)
                     1L, // hdel(hashKey1, new String[] {field1})
                     new String[] {value2}, // hvals(hashKey1)
                     field2, // hrandfield(hashKey1)
@@ -517,7 +600,7 @@ public class BatchTestUtilities {
                     10.5, // hincrByFloat(hashKey1, field3, 5.5)
                     new String[] {field2, field3}, // hkeys(hashKey1)
                     (long) value2.length(), // hstrlen(hashKey1, field2)
-                    1L, // hset(hashKey2, Map.of(field1, value1))
+                    1L, // hset(hashKey2, createMap(field1, value1))
                     new Object[] {"0", new Object[] {field1, value1}}, // hscan(hashKey2, "0")
                     new Object[] {
                         "0", new Object[] {field1, value1}
@@ -531,7 +614,7 @@ public class BatchTestUtilities {
                     concatenateArrays(
                             result,
                             new Object[] {
-                                1L, // hsetex(hashKey3, Map.of(field1, value1, field2, value2), expiryOptions) -
+                                1L, // hsetex(hashKey3, createMap(field1, value1, field2, value2), expiryOptions) -
                                 // returns 1 for success
                                 new Object[] {
                                     value1, value2
@@ -641,7 +724,7 @@ public class BatchTestUtilities {
                     .lrange(listKey7, 0, -1);
         }
 
-        var expectedResults =
+        Object[] expectedResults =
                 new Object[] {
                     5L, // lpush(listKey1, new String[] {value1, value1, value2, value3, value3})
                     5L, // llen(listKey1)
@@ -676,10 +759,10 @@ public class BatchTestUtilities {
                             expectedResults,
                             new Object[] {
                                 6L, // lpush(listKey4, {value1, value2, value3})
-                                Map.of(listKey4, new String[] {value3}), // lmpop({listKey4}, LEFT)
-                                Map.of(listKey4, new String[] {value2, value1}), // lmpop({listKey4}, LEFT, 1L)
-                                Map.of(listKey4, new String[] {value3}), // blmpop({listKey4}, LEFT, 0.1)
-                                Map.of(listKey4, new String[] {value2, value1}), // blmpop(listKey4}, LEFT, 1L, 0.1)
+                                createMap(listKey4, new String[] {value3}), // lmpop({listKey4}, LEFT)
+                                createMap(listKey4, new String[] {value2, value1}), // lmpop({listKey4}, LEFT, 1L)
+                                createMap(listKey4, new String[] {value3}), // blmpop({listKey4}, LEFT, 0.1)
+                                createMap(listKey4, new String[] {value2, value1}), // blmpop(listKey4}, LEFT, 1L, 0.1)
                             });
         }
 
@@ -744,7 +827,7 @@ public class BatchTestUtilities {
                     .sintercard(new String[] {setKey5, setKey6}, 2);
         }
 
-        var expectedResults =
+        Object[] expectedResults =
                 new Object[] {
                     2L, // sadd(setKey1, new String[] {"baz", "foo"});
                     1L, // srem(setKey1, new String[] {"foo"});
@@ -752,22 +835,22 @@ public class BatchTestUtilities {
                     new Object[] {"0", new String[] {"baz"}}, // sscan(key1, "0", match "*", count(10L))
                     1L, // scard(setKey1);
                     true, // sismember(setKey1, "baz")
-                    Set.of("baz"), // smembers(setKey1);
+                    Collections.singleton("baz"), // smembers(setKey1);
                     new Boolean[] {true, false}, // smismembmer(setKey1, new String[] {"baz", "foo"})
-                    Set.of("baz"), // sinter(new String[] { setKey1, setKey1 })
+                    Collections.singleton("baz"), // sinter(new String[] { setKey1, setKey1 })
                     2L, // sadd(setKey2, new String[] { "a", "b" })
-                    Set.of("a", "b", "baz"), // sunion(new String[] {setKey2, setKey1})
+                    createSet("a", "b", "baz"), // sunion(new String[] {setKey2, setKey1})
                     3L, // sunionstore(setKey3, new String[] { setKey2, setKey1 })
                     2L, // sdiffstore(setKey3, new String[] { setKey2, setKey1 })
                     0L, // sinterstore(setKey3, new String[] { setKey2, setKey1 })
-                    Set.of("a", "b"), // sdiff(new String[] {setKey2, setKey3})
+                    createSet("a", "b"), // sdiff(new String[] {setKey2, setKey3})
                     true, // smove(setKey1, setKey2, "baz")
                     1L, // sadd(setKey4, {"foo})
                     "foo", // srandmember(setKey4)
                     new String[] {"foo"}, // srandmember(setKey4, 2)
                     new String[] {"foo", "foo"}, // srandmember(setKey4, -2)};
                     "foo", // spop(setKey4)
-                    Set.of(), // spopCount(setKey4, 3)
+                    Collections.emptySet(), // spopCount(setKey4, 3)
                 };
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResults =
@@ -793,7 +876,7 @@ public class BatchTestUtilities {
         String zSetKey6 = generateKeySameSlot(zSetKey5);
 
         batch
-                .zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
+                .zadd(zSetKey1, createMap("one", 1.0, "two", 2.0, "three", 3.0))
                 .zrank(zSetKey1, "one")
                 .zrevrank(zSetKey1, "one")
                 .zaddIncr(zSetKey1, "one", 3)
@@ -813,7 +896,7 @@ public class BatchTestUtilities {
                 .zremrangebyrank(zSetKey1, 5, 10)
                 .zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
                 .zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
-                .zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
+                .zadd(zSetKey2, createMap("one", 1.0, "two", 2.0))
                 .bzpopmax(new String[] {zSetKey2}, .1)
                 .zrandmember(zSetKey2)
                 .zrandmemberWithCount(zSetKey2, 1)
@@ -831,7 +914,7 @@ public class BatchTestUtilities {
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             batch
-                    .zadd(zSetKey5, Map.of("one", 1.0, "two", 2.0))
+                    .zadd(zSetKey5, createMap("one", 1.0, "two", 2.0))
                     // zSetKey6 is empty
                     .zdiffstore(zSetKey6, new String[] {zSetKey6, zSetKey6})
                     .zdiff(new String[] {zSetKey5, zSetKey6})
@@ -848,20 +931,20 @@ public class BatchTestUtilities {
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             batch
-                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
-                    .zadd(zSetKey4, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
+                    .zadd(zSetKey3, createMap("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
+                    .zadd(zSetKey4, createMap("a", 1., "b", 2., "c", 3., "d", 4.))
                     .zmpop(new String[] {zSetKey3}, MAX)
                     .zmpop(new String[] {zSetKey3}, MIN, 2)
                     .bzmpop(new String[] {zSetKey3}, MAX, .1)
                     .bzmpop(new String[] {zSetKey3}, MIN, .1, 2)
-                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
+                    .zadd(zSetKey3, createMap("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
                     .zintercard(new String[] {zSetKey4, zSetKey3})
                     .zintercard(new String[] {zSetKey4, zSetKey3}, 2);
         }
 
-        var expectedResults =
+        Object[] expectedResults =
                 new Object[] {
-                    3L, // zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
+                    3L, // zadd(zSetKey1, createMap("one", 1.0, "two", 2.0, "three", 3.0))
                     0L, // zrank(zSetKey1, "one")
                     2L, // zrevrank(zSetKey1, "one")
                     4.0, // zaddIncr(zSetKey1, "one", 3)
@@ -870,17 +953,17 @@ public class BatchTestUtilities {
                     2L, // zcard(zSetKey1)
                     new Double[] {2.0, 3.0}, // zmscore(zSetKey1, new String[] {"two", "three"})
                     new String[] {"two", "three"}, // zrange(zSetKey1, new RangeByIndex(0, 1))
-                    Map.of("two", 2.0, "three", 3.0), // zrangeWithScores(zSetKey1, new RangeByIndex(0, 1))
+                    createMap("two", 2.0, "three", 3.0), // zrangeWithScores(zSetKey1, new RangeByIndex(0, 1))
                     2L, // zrangestore(zSetKey1, zSetKey1, new RangeByIndex(0, -1))
                     2.0, // zscore(zSetKey1, "two")
                     2L, // zcount(zSetKey1, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
                     2L, // zlexcount(zSetKey1, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)
-                    Map.of("two", 2.0), // zpopmin(zSetKey1)
-                    Map.of("three", 3.0), // zpopmax(zSetKey1)
+                    createMap("two", 2.0), // zpopmin(zSetKey1)
+                    createMap("three", 3.0), // zpopmax(zSetKey1)
                     0L, // zremrangebyrank(zSetKey1, 5, 10)
                     0L, // zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
                     0L, // zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
-                    2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
+                    2L, // zadd(zSetKey2, createMap("one", 1.0, "two", 2.0))
                     new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
                     "one", // zrandmember(zSetKey2)
                     new String[] {"one"}, // .zrandmemberWithCount(zSetKey2, 1)
@@ -916,18 +999,18 @@ public class BatchTestUtilities {
                     concatenateArrays(
                             expectedResults,
                             new Object[] {
-                                2L, // zadd(zSetKey5, Map.of("one", 1.0, "two", 2.0))
+                                2L, // zadd(zSetKey5, createMap("one", 1.0, "two", 2.0))
                                 0L, // zdiffstore(zSetKey6, new String[] {zSetKey6, zSetKey6})
                                 new String[] {"one", "two"}, // zdiff(new String[] {zSetKey5, zSetKey6})
-                                Map.of("one", 1.0, "two", 2.0), // zdiffWithScores({zSetKey5, zSetKey6})
+                                createMap("one", 1.0, "two", 2.0), // zdiffWithScores({zSetKey5, zSetKey6})
                                 2L, // zunionstore(zSetKey5, new KeyArray(new String[] {zSetKey5, zSetKey6}))
                                 new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey5, zSetKey6}))
-                                Map.of("one", 1.0, "two", 2.0), // zunionWithScores({zSetKey5, zSetKey6})
-                                Map.of("one", 1.0, "two", 2.0), // zunionWithScores({zSetKey5, zSetKey6}, MAX)
+                                createMap("one", 1.0, "two", 2.0), // zunionWithScores({zSetKey5, zSetKey6})
+                                createMap("one", 1.0, "two", 2.0), // zunionWithScores({zSetKey5, zSetKey6}, MAX)
                                 0L, // zinterstore(zSetKey6, new String[] {zSetKey5, zSetKey6})
                                 new String[0], // zinter(new KeyArray({zSetKey5, zSetKey6}))
-                                Map.of(), // zinterWithScores(new KeyArray({zSetKey5, zSetKey6}))
-                                Map.of(), // zinterWithScores(new KeyArray({zSetKey5, zSetKey6}), Aggregate.MAX)
+                                createMap(), // zinterWithScores(new KeyArray({zSetKey5, zSetKey6}))
+                                createMap(), // zinterWithScores(new KeyArray({zSetKey5, zSetKey6}), Aggregate.MAX)
                             });
         }
 
@@ -937,11 +1020,11 @@ public class BatchTestUtilities {
                             expectedResults,
                             new Object[] {
                                 7L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
-                                4L, // zadd(zSetKey4, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
-                                new Object[] {zSetKey3, Map.of("g", 7.)}, // zmpop(zSetKey3, MAX)
-                                new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // zmpop(zSetKey3, MIN, 2)
-                                new Object[] {zSetKey3, Map.of("f", 6.)}, // bzmpop(zSetKey3, MAX, .1)
-                                new Object[] {zSetKey3, Map.of("c", 3., "d", 4.)}, // bzmpop(zSetKey3, MIN, .1, 2)
+                                4L, // zadd(zSetKey4, createMap("a", 1., "b", 2., "c", 3., "d", 4.))
+                                new Object[] {zSetKey3, createMap("g", 7.)}, // zmpop(zSetKey3, MAX)
+                                new Object[] {zSetKey3, createMap("a", 1., "b", 2.)}, // zmpop(zSetKey3, MIN, 2)
+                                new Object[] {zSetKey3, createMap("f", 6.)}, // bzmpop(zSetKey3, MAX, .1)
+                                new Object[] {zSetKey3, createMap("c", 3., "d", 4.)}, // bzmpop(zSetKey3, MIN, .1, 2)
                                 6L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
                                 4L, // zintercard(new String[] {zSetKey4, zSetKey3})
                                 2L, // zintercard(new String[] {zSetKey4, zSetKey3}, 2)
@@ -953,7 +1036,7 @@ public class BatchTestUtilities {
 
     private static Object[] serverManagementCommands(BaseBatch<?> batch, boolean isAtomic) {
         batch
-                .configSet(Map.of("timeout", "1000"))
+                .configSet(createMap("timeout", "1000"))
                 .configGet(new String[] {"timeout"})
                 .configResetStat()
                 .lolwut(1)
@@ -965,14 +1048,14 @@ public class BatchTestUtilities {
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             batch
-                    .configSet(Map.of("timeout", "2000", "rdb-save-incremental-fsync", "no"))
+                    .configSet(createMap("timeout", "2000", "rdb-save-incremental-fsync", "no"))
                     .configGet(new String[] {"timeout", "rdb-save-incremental-fsync"});
         }
 
-        var expectedResults =
+        Object[] expectedResults =
                 new Object[] {
-                    OK, // configSet(Map.of("timeout", "1000"))
-                    Map.of("timeout", "1000"), // configGet(new String[] {"timeout"})
+                    OK, // configSet(createMap("timeout", "1000"))
+                    createMap("timeout", "1000"), // configGet(new String[] {"timeout"})
                     OK, // configResetStat()
                     new Object() {
                         @Override
@@ -1001,8 +1084,8 @@ public class BatchTestUtilities {
                     concatenateArrays(
                             expectedResults,
                             new Object[] {
-                                OK, // configSet(Map.of("timeout", "2000", "rdb-save-incremental-fsync", "no"))
-                                Map.of(
+                                OK, // configSet(createMap("timeout", "2000", "rdb-save-incremental-fsync", "no"))
+                                createMap(
                                         "timeout",
                                         "2000",
                                         "rdb-save-incremental-fsync",
@@ -1056,16 +1139,16 @@ public class BatchTestUtilities {
         final String consumer1 = "{consumer}-1-" + generateRandomNumericSuffix();
 
         batch
-                .xadd(streamKey1, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
-                .xadd(streamKey1, Map.of("field2", "value2"), StreamAddOptions.builder().id("0-2").build())
-                .xadd(streamKey1, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build())
+                .xadd(streamKey1, createMap("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
+                .xadd(streamKey1, createMap("field2", "value2"), StreamAddOptions.builder().id("0-2").build())
+                .xadd(streamKey1, createMap("field3", "value3"), StreamAddOptions.builder().id("0-3").build())
                 .xadd(
                         streamKey4,
                         new String[][] {{"field4", "value4"}, {"field4", "value5"}},
                         StreamAddOptions.builder().id("0-4").build())
                 .xlen(streamKey1)
-                .xread(Map.of(streamKey1, "0-2"))
-                .xread(Map.of(streamKey1, "0-2"), StreamReadOptions.builder().count(1L).build())
+                .xread(createMap(streamKey1, "0-2"))
+                .xread(createMap(streamKey1, "0-2"), StreamReadOptions.builder().count(1L).build())
                 .xrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"))
                 .xrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"), 1L)
                 .xrevrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"))
@@ -1077,9 +1160,9 @@ public class BatchTestUtilities {
                         streamKey1, groupName2, "0-0", StreamGroupOptions.builder().makeStream().build())
                 .xgroupCreateConsumer(streamKey1, groupName1, consumer1)
                 .xgroupSetId(streamKey1, groupName1, "0-2")
-                .xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1)
+                .xreadgroup(createMap(streamKey1, ">"), groupName1, consumer1)
                 .xreadgroup(
-                        Map.of(streamKey1, "0-3"),
+                        createMap(streamKey1, "0-3"),
                         groupName1,
                         consumer1,
                         StreamReadGroupOptions.builder().count(2L).build())
@@ -1119,40 +1202,40 @@ public class BatchTestUtilities {
                 .xgroupDestroy(streamKey1, groupName1)
                 .xgroupDestroy(streamKey1, groupName2)
                 .xdel(streamKey1, new String[] {"0-3", "0-5"})
-                .xadd(streamKey3, Map.of("f0", "v0"), StreamAddOptions.builder().id("1-0").build())
+                .xadd(streamKey3, createMap("f0", "v0"), StreamAddOptions.builder().id("1-0").build())
                 .xgroupCreate(streamKey3, groupName3, "0")
                 .xinfoGroups(streamKey1);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             batch
-                    .xadd(streamKey2, Map.of("f0", "v0"), StreamAddOptions.builder().id("1-0").build())
+                    .xadd(streamKey2, createMap("f0", "v0"), StreamAddOptions.builder().id("1-0").build())
                     .xgroupCreate(streamKey2, groupName3, "0")
                     .xgroupSetId(streamKey2, groupName3, "1-0", 1);
         }
 
-        var result =
+        Object[] result =
                 new Object[] {
-                    "0-1", // xadd(streamKey1, Map.of("field1", "value1"), ... .id("0-1").build());
-                    "0-2", // xadd(streamKey1, Map.of("field2", "value2"), ... .id("0-2").build());
-                    "0-3", // xadd(streamKey1, Map.of("field3", "value3"), ... .id("0-3").build());
+                    "0-1", // xadd(streamKey1, createMap("field1", "value1"), ... .id("0-1").build());
+                    "0-2", // xadd(streamKey1, createMap("field2", "value2"), ... .id("0-2").build());
+                    "0-3", // xadd(streamKey1, createMap("field3", "value3"), ... .id("0-3").build());
                     "0-4", // xadd(streamKey4, new String[][] {{"field4", "value4"}, {"field4", "value5"}}),
                     // ... .id("0-4").build());
                     3L, // xlen(streamKey1)
-                    Map.of(
+                    createMap(
                             streamKey1,
-                            Map.of("0-3", new String[][] {{"field3", "value3"}})), // xread(Map.of(key9, "0-2"));
-                    Map.of(
+                            createMap("0-3", new String[][] {{"field3", "value3"}})), // xread(createMap(key9, "0-2"));
+                    createMap(
                             streamKey1,
-                            Map.of(
+                            createMap(
                                     "0-3",
-                                    new String[][] {{"field3", "value3"}})), // xread(Map.of(key9, "0-2"), options);
-                    Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1")
-                    Map.of(
+                                    new String[][] {{"field3", "value3"}})), // xread(createMap(key9, "0-2"), options);
+                    createMap("0-1", new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1")
+                    createMap(
                             "0-1",
                             new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1", 1l)
-                    Map.of(
+                    createMap(
                             "0-1", new String[][] {{"field1", "value1"}}), // .xrevrange(streamKey1, "0-1", "0-1")
-                    Map.of(
+                    createMap(
                             "0-1",
                             new String[][] {{"field1", "value1"}}), // .xrevrange(streamKey1, "0-1", "0-1", 1l)
                     1L, // xtrim(streamKey1, new MinId(true, "0-2"))
@@ -1161,18 +1244,18 @@ public class BatchTestUtilities {
                     OK, // xgroupCreate(streamKey1, groupName1, "0-0", options)
                     true, // xgroupCreateConsumer(streamKey1, groupName1, consumer1)
                     OK, // xgroupSetId(streamKey1, groupName1, "0-2")
-                    Map.of(
+                    createMap(
                             streamKey1,
-                            Map.of(
+                            createMap(
                                     "0-3",
                                     new String[][] {
                                         {"field3", "value3"}
-                                    })), // xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1);
-                    Map.of(
+                                    })), // xreadgroup(createMap(streamKey1, ">"), groupName1, consumer1);
+                    createMap(
                             streamKey1,
-                            Map.of()), // xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1, options);
-                    Map.of(), // xclaim(streamKey1, groupName1, consumer1, 0L, new String[] {"0-1"})
-                    Map.of(
+                            createMap()), // xreadgroup(createMap(streamKey1, ">"), groupName1, consumer1, options);
+                    createMap(), // xclaim(streamKey1, groupName1, consumer1, 0L, new String[] {"0-1"})
+                    createMap(
                             "0-3",
                             new String[][] {{"field3", "value3"}}), // xclaim(streamKey1, ..., {"0-3"}, options)
                     new String[] {"0-3"}, // xclaimJustId(streamKey1, ..., new String[] {"0-3"})
@@ -1188,7 +1271,7 @@ public class BatchTestUtilities {
                             new Object[] {
                                 new Object[] {
                                     "0-0",
-                                    Map.of("0-3", new String[][] {{"field3", "value3"}}),
+                                    createMap("0-3", new String[][] {{"field3", "value3"}}),
                                     new Object[] {} // one more array is returned here for version >= 7.0.0
                                 }, // xautoclaim(streamKey1, groupName1, consumer1, 0L, "0-0")
                                 new Object[] {
@@ -1203,7 +1286,7 @@ public class BatchTestUtilities {
                             result,
                             new Object[] {
                                 new Object[] {
-                                    "0-0", Map.of("0-3", new String[][] {{"field3", "value3"}})
+                                    "0-0", createMap("0-3", new String[][] {{"field3", "value3"}})
                                 }, // xautoclaim(streamKey1, groupName1, consumer1, 0L, "0-0")
                                 new Object[] {
                                     "0-0", new String[] {"0-3"}
@@ -1220,7 +1303,7 @@ public class BatchTestUtilities {
                             true, // xgroupDestroy(streamKey1, groupName1)
                             true, // xgroupDestroy(streamKey1, groupName2)
                             1L, // .xdel(streamKey1, new String[] {"0-1", "0-5"})
-                            "1-0", // xadd(streamKey3, Map.of("f0", "v0"), id("1-0"))
+                            "1-0", // xadd(streamKey3, createMap("f0", "v0"), id("1-0"))
                             OK, // xgroupCreate(streamKey3, groupName3, "0")
                             new Map[] {} // xinfoGroups(streamKey3)
                         });
@@ -1230,7 +1313,7 @@ public class BatchTestUtilities {
                     concatenateArrays(
                             result,
                             new Object[] {
-                                "1-0", // xadd(streamKey2, Map.of("f0", "v0"),
+                                "1-0", // xadd(streamKey2, createMap("f0", "v0"),
                                 // StreamAddOptions.builder().id("1-0").build())
                                 OK, // xgroupCreate(streamKey2, groupName3, "0")
                                 OK, // xgroupSetId(streamKey2, groupName3, "1-0", "0");
@@ -1247,7 +1330,7 @@ public class BatchTestUtilities {
         batch
                 .geoadd(
                         geoKey1,
-                        Map.of(
+                        createMap(
                                 "Palermo",
                                 new GeospatialData(13.361389, 38.115556),
                                 "Catania",
@@ -1295,9 +1378,9 @@ public class BatchTestUtilities {
                             new GeoSearchResultOptions(SortOrder.ASC, 2));
         }
 
-        var expectedResults =
+        Object[] expectedResults =
                 new Object[] {
-                    2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
+                    2L, // geoadd(geoKey1, createMap("Palermo", ..., "Catania", ...))
                     new Double[][] {
                         {13.36138933897018433, 38.11555639549629859},
                         {15.08726745843887329, 37.50266842333162032},
@@ -1371,42 +1454,39 @@ public class BatchTestUtilities {
         final String funcName = "myfunc1T";
 
         // function $funcName returns first argument
-        final String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
+        final String code = generateLuaLibCode(libName, createMap(funcName, "return args[1]"), true);
 
-        var expectedFuncData =
+        HashMap<String, Object> expectedFuncData =
                 new HashMap<String, Object>() {
                     {
                         put("name", funcName);
                         put("description", null);
-                        put("flags", Set.of("no-writes"));
+                        put("flags", Collections.singleton("no-writes"));
                     }
                 };
 
-        var expectedLibData =
+        Map[] expectedLibData =
                 new Map[] {
-                    Map.<String, Object>of(
-                            "library_name",
-                            libName,
-                            "engine",
-                            "LUA",
-                            "functions",
-                            new Object[] {expectedFuncData},
-                            "library_code",
-                            code)
+                    new HashMap<String, Object>() {{
+                        put("library_name", libName);
+                        put("engine", "LUA");
+                        put("functions", new Object[] {expectedFuncData});
+                        put("library_code", code);
+                    }}
                 };
 
-        var expectedFunctionStatsNonEmpty =
+        HashMap<String, Map<String, Object>> expectedFunctionStatsNonEmpty =
                 new HashMap<String, Map<String, Object>>() {
                     {
                         put("running_script", null);
-                        put("engines", Map.of("LUA", Map.of("libraries_count", 1L, "functions_count", 1L)));
+                        put("engines", createMap("LUA", createMap("libraries_count", 1L, "functions_count", 1L)));
                     }
                 };
-        var expectedFunctionStatsEmpty =
+        HashMap<String, Map<String, Object>> expectedFunctionStatsEmpty =
                 new HashMap<String, Map<String, Object>>() {
                     {
                         put("running_script", null);
-                        put("engines", Map.of("LUA", Map.of("libraries_count", 0L, "functions_count", 0L)));
+                        put("engines", createMap("LUA", createMap("libraries_count", 0L, "functions_count", 0L)));
                     }
                 };
 
@@ -1479,7 +1559,7 @@ public class BatchTestUtilities {
             batch.set(key4, "foobar").bitcount(key4, 0);
         }
 
-        var expectedResults =
+        Object[] expectedResults =
                 new Object[] {
                     OK, // set(key1, "foobar")
                     26L, // bitcount(key1)

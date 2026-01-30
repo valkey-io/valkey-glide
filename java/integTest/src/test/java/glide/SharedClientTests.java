@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static glide.Java8Compat.repeat;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.getRandomString;
@@ -17,6 +18,7 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -61,7 +63,7 @@ public class SharedClientTests {
         clusterClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get();
-        clients = List.of(Arguments.of(standaloneClient), Arguments.of(clusterClient));
+        clients = Arrays.asList(Arguments.of(standaloneClient), Arguments.of(clusterClient));
     }
 
     @SneakyThrows
@@ -100,8 +102,8 @@ public class SharedClientTests {
         }
 
         int length = 1 << 25; // 33mb
-        String key = "0".repeat(length);
-        String value = "0".repeat(length);
+        String key = repeat("0", length);
+        String value = repeat("0", length);
 
         assertEquals(length, key.length());
         assertEquals(length, value.length());
