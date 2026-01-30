@@ -2775,23 +2775,7 @@ class TestSyncPubSub:
         """
         Test dynamic subscribe methods and get_subscriptions().
         """
-        # Create client with empty PubSub config to enable dynamic subscriptions
-        if cluster_mode:
-            cluster_pubsub = cast(
-                GlideClusterClientConfiguration.PubSubSubscriptions,
-                create_pubsub_subscription(True, {}, {}),
-            )
-            client = create_sync_client(
-                request, cluster_mode, cluster_mode_pubsub=cluster_pubsub
-            )
-        else:
-            standalone_pubsub = cast(
-                GlideClientConfiguration.PubSubSubscriptions,
-                create_pubsub_subscription(False, {}, {}),
-            )
-            client = create_sync_client(
-                request, cluster_mode, standalone_mode_pubsub=standalone_pubsub
-            )
+        client = create_sync_client(request, cluster_mode)
         try:
 
             # Subscribe to channels
