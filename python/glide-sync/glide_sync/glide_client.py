@@ -824,6 +824,8 @@ class BaseClient(CoreCommands):
                 - total_bytes_compressed: Total bytes after compression
                 - total_bytes_decompressed: Total bytes after decompression
                 - compression_skipped_count: Number of times compression was skipped
+                - subscription_out_of_sync_count: Failed reconciliation attempts
+                - subscription_last_sync_timestamp: Last successful sync (milliseconds since epoch)
         """
         # Call the C FFI get_statistics function (returns by value, no manual free needed)
         stats = self._lib.get_statistics()
@@ -838,6 +840,8 @@ class BaseClient(CoreCommands):
             "total_bytes_compressed": stats.total_bytes_compressed,
             "total_bytes_decompressed": stats.total_bytes_decompressed,
             "compression_skipped_count": stats.compression_skipped_count,
+            "subscription_out_of_sync_count": stats.subscription_out_of_sync_count,
+            "subscription_last_sync_timestamp": stats.subscription_last_sync_timestamp,
         }
 
     def get_subscriptions(self):
