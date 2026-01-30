@@ -72,6 +72,8 @@
 
 #### Changes
 
+* Added in documentation to how to use Lua scripts with Glide 
+* JAVA: Implement all CLUSTER management commands support ([#5106](https://github.com/valkey-io/valkey-glide/pull/5105))
 * Added in documentation to how to use Lua scripts with Glide
 * JAVA: Add refreshTopologyFromInitialNodes Configuration Option ([#4870](https://github.com/valkey-io/valkey-glide/pull/4870))
 * GO: add RefreshTopologyFromInitialNodes configuration option ([#4871](https://github.com/valkey-io/valkey-glide/pull/4871))
