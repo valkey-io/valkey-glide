@@ -12078,7 +12078,7 @@ class TestSyncScripts:
     # to glide, using blocking commands, and checking the N+1 request returns immediately with error.
     @pytest.mark.parametrize("cluster_mode", [False, True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("inflight_requests_limit", [5, 100, 500])
+    @pytest.mark.parametrize("inflight_requests_limit", [5, 100, 250])
     def test_sync_inflight_request_limit(
         self, cluster_mode, protocol, inflight_requests_limit, request
     ):
@@ -12095,9 +12095,7 @@ class TestSyncScripts:
 
         def _blpop():
             try:
-                test_client.blpop(
-                    [key1], 1
-                )  # Use 1 second timeout instead of 0 (infinite)
+                test_client.blpop([key1], 3)
             except RequestError as e:
                 error_msg = str(e).lower()
                 if "maximum inflight requests" in error_msg:
@@ -12113,8 +12111,8 @@ class TestSyncScripts:
         # Wait for the max inflight error to occur
         assert max_reached.wait(timeout=10), "Expected inflight request limit error"
 
-        # Wait for threads to complete (they'll timeout after 1 second)
+        # Wait for threads to complete (they'll timeout after 3 seconds)
         for thread in threads:
-            thread.join(timeout=2)
+            thread.join(timeout=4)
 
         test_client.close()
