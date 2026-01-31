@@ -3,6 +3,7 @@ package glide.api.commands;
 
 import glide.api.models.GlideString;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
@@ -1620,4 +1621,144 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> wait(long numreplicas, long timeout);
+
+    /**
+     * Blocks the current client until all previous write commands are successfully transferred and
+     * acknowledged by at least <code>numlocal</code> and <code>numreplicas</code> of replicas. If
+     * <code>timeout</code> is reached, the command returns even if the specified number of replicas
+     * were not yet reached.
+     *
+     * @since Valkey 7.2 and above.
+     * @see <a href="https://valkey.io/commands/waitaof/">valkey.io</a> for details.
+     * @param numlocal The number of local replicas to reach.
+     * @param numreplicas The number of replicas to reach.
+     * @param timeout The timeout value specified in milliseconds. A value of <code>0</code> will
+     *     block indefinitely.
+     * @return An <code>array</code> of two <code>Long</code> values: the number of local replicas
+     *     reached and the number of replicas reached.
+     * @example
+     *     <pre>{@code
+     * client.set("key", "value").get();
+     * Long[] result = client.waitaof(1L, 1L, 1000L).get();
+     * assert result[0] >= 1L; // At least 1 local replica reached
+     * assert result[1] >= 1L; // At least 1 replica reached
+     * }</pre>
+     */
+    CompletableFuture<Long[]> waitaof(long numlocal, long numreplicas, long timeout);
+
+    /**
+     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance. Once
+     * the key is successfully transferred, it is deleted from the source instance and is guaranteed
+     * to exist in the destination instance.
+     *
+     * @see <a href="https://valkey.io/commands/migrate/">valkey.io</a> for details.
+     * @param destinationHost The destination host.
+     * @param destinationPort The destination port.
+     * @param key The key to migrate.
+     * @param destinationDB The destination database index.
+     * @param timeout The timeout in milliseconds.
+     * @return <code>"OK"</code> on success, or <code>"NOKEY"</code> if no keys were found in the
+     *     source instance.
+     * @example
+     *     <pre>{@code
+     * client.set("key", "value").get();
+     * String result = client.migrate("destination.example.com", 6379, "key", 0, 5000).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> migrate(
+            String destinationHost, long destinationPort, String key, long destinationDB, long timeout);
+
+    /**
+     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance. Once
+     * the key is successfully transferred, it is deleted from the source instance and is guaranteed
+     * to exist in the destination instance.
+     *
+     * <p>Note: The host and port are String/long types because they represent network addresses,
+     * while the key can be GlideString to support binary-safe key names.
+     *
+     * @see <a href="https://valkey.io/commands/migrate/">valkey.io</a> for details.
+     * @param destinationHost The destination host.
+     * @param destinationPort The destination port.
+     * @param key The key to migrate (binary-safe).
+     * @param destinationDB The destination database index.
+     * @param timeout The timeout in milliseconds.
+     * @return <code>"OK"</code> on success, or <code>"NOKEY"</code> if no keys were found in the
+     *     source instance.
+     * @example
+     *     <pre>{@code
+     * client.set(gs("key"), gs("value")).get();
+     * String result = client.migrate("destination.example.com", 6379, gs("key"), 0, 5000).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            GlideString key,
+            long destinationDB,
+            long timeout);
+
+    /**
+     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance. Once
+     * the key is successfully transferred, it is deleted from the source instance (unless COPY is
+     * specified) and is guaranteed to exist in the destination instance.
+     *
+     * @see <a href="https://valkey.io/commands/migrate/">valkey.io</a> for details.
+     * @param destinationHost The destination host.
+     * @param destinationPort The destination port.
+     * @param key The key to migrate.
+     * @param destinationDB The destination database index.
+     * @param timeout The timeout in milliseconds.
+     * @param migrateOptions Additional options for the MIGRATE command.
+     * @return <code>"OK"</code> on success, or <code>"NOKEY"</code> if no keys were found in the
+     *     source instance.
+     * @example
+     *     <pre>{@code
+     * client.set("key", "value").get();
+     * MigrateOptions options = MigrateOptions.builder().copy(true).replace(true).build();
+     * String result = client.migrate("destination.example.com", 6379, "key", 0, 5000, options).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            String key,
+            long destinationDB,
+            long timeout,
+            MigrateOptions migrateOptions);
+
+    /**
+     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance. Once
+     * the key is successfully transferred, it is deleted from the source instance (unless COPY is
+     * specified) and is guaranteed to exist in the destination instance.
+     *
+     * <p>Note: The host and port are String/long types because they represent network addresses,
+     * while the key can be GlideString to support binary-safe key names.
+     *
+     * @see <a href="https://valkey.io/commands/migrate/">valkey.io</a> for details.
+     * @param destinationHost The destination host.
+     * @param destinationPort The destination port.
+     * @param key The key to migrate (binary-safe).
+     * @param destinationDB The destination database index.
+     * @param timeout The timeout in milliseconds.
+     * @param migrateOptions Additional options for the MIGRATE command.
+     * @return <code>"OK"</code> on success, or <code>"NOKEY"</code> if no keys were found in the
+     *     source instance.
+     * @example
+     *     <pre>{@code
+     * client.set(gs("key"), gs("value")).get();
+     * MigrateOptions options = MigrateOptions.builder().copy(true).replace(true).build();
+     * String result = client.migrate("destination.example.com", 6379, gs("key"), 0, 5000, options).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            GlideString key,
+            long destinationDB,
+            long timeout,
+            MigrateOptions migrateOptions);
 }

@@ -23,6 +23,7 @@ import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
 import static command_request.CommandRequestOuterClass.RequestType.Info;
+import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
@@ -37,6 +38,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static command_request.CommandRequestOuterClass.RequestType.Wait;
+import static command_request.CommandRequestOuterClass.RequestType.WaitAof;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
@@ -1305,10 +1307,63 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<ClusterValue<String[]>> keys(String pattern) {
+        return commandManager.submitNewCommand(
+                Keys,
+                new String[] {pattern},
+                response ->
+                        ClusterValue.ofSingleValue(castArray(handleArrayResponse(response), String.class)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<GlideString[]>> keys(GlideString pattern) {
+        return commandManager.submitNewCommand(
+                Keys,
+                new GlideString[] {pattern},
+                response ->
+                        ClusterValue.ofSingleValue(
+                                castArray(handleArrayResponseBinary(response), GlideString.class)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String[]>> keys(String pattern, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                Keys,
+                new String[] {pattern},
+                route,
+                response ->
+                        ClusterValue.ofSingleValue(castArray(handleArrayResponse(response), String.class)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<GlideString[]>> keys(
+            GlideString pattern, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                Keys,
+                new GlideString[] {pattern},
+                route,
+                response ->
+                        ClusterValue.ofSingleValue(
+                                castArray(handleArrayResponseBinary(response), GlideString.class)));
+    }
+
+    @Override
     public CompletableFuture<Long> wait(long numreplicas, long timeout) {
         String[] arguments = new String[] {Long.toString(numreplicas), Long.toString(timeout)};
         return commandManager.submitNewCommand(
                 Wait, arguments, SimpleSingleNodeRoute.RANDOM, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long[]> waitaof(
+            long numlocal, long numreplicas, long timeout, @NonNull Route route) {
+        String[] arguments =
+                new String[] {Long.toString(numlocal), Long.toString(numreplicas), Long.toString(timeout)};
+        return commandManager.submitNewCommand(
+                WaitAof,
+                arguments,
+                route,
+                response -> castArray(handleArrayResponse(response), Long.class));
     }
 
     /**

@@ -37,6 +37,7 @@ import glide.api.GlideClusterClient;
 import glide.api.models.BaseBatch;
 import glide.api.models.Batch;
 import glide.api.models.ClusterBatch;
+import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
@@ -49,6 +50,7 @@ import glide.api.models.commands.HSetExOptions;
 import glide.api.models.commands.HashFieldExpirationConditionOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -116,6 +118,8 @@ import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.api.models.configuration.ProtocolVersion;
+import glide.api.models.configuration.RequestRoutingConfiguration;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -17876,6 +17880,38 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void keys_with_pattern(BaseClient client) {
+        String key1 = "{key}:test1:" + UUID.randomUUID();
+        String key2 = "{key}:test2:" + UUID.randomUUID();
+        String key3 = "{key}:other:" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        // Set up test keys
+        assertEquals(OK, client.set(key1, value).get());
+        assertEquals(OK, client.set(key2, value).get());
+        assertEquals(OK, client.set(key3, value).get());
+
+        // Test pattern matching
+        if (client instanceof GlideClusterClient) {
+            ClusterValue<String[]> result = ((GlideClusterClient) client).keys("{key}:test*").get();
+            String[] allKeys = result.getSingleValue();
+            assertTrue(allKeys.length >= 2);
+            assertTrue(Arrays.asList(allKeys).contains(key1));
+            assertTrue(Arrays.asList(allKeys).contains(key2));
+        } else {
+            String[] keys = ((GlideClient) client).keys("{key}:test*").get();
+            assertTrue(keys.length >= 2);
+            assertTrue(Arrays.asList(keys).contains(key1));
+            assertTrue(Arrays.asList(keys).contains(key2));
+        }
+
+        // Clean up
+        client.del(new String[] {key1, key2, key3}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void acl_cat_without_category(BaseClient client) {
         // Test ACL CAT without category - should return all categories
         String[] categories = client.aclCat().get();
@@ -17884,6 +17920,39 @@ public class SharedCommandTests {
         assertTrue(Arrays.asList(categories).contains("string"));
         assertTrue(Arrays.asList(categories).contains("list"));
         assertTrue(Arrays.asList(categories).contains("hash"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void keys_with_pattern_binary(BaseClient client) {
+        GlideString key1 = gs("{key}:test1:" + UUID.randomUUID());
+        GlideString key2 = gs("{key}:test2:" + UUID.randomUUID());
+        GlideString key3 = gs("{key}:other:" + UUID.randomUUID());
+        GlideString value = gs(UUID.randomUUID().toString());
+
+        // Set up test keys
+        assertEquals(OK, client.set(key1, value).get());
+        assertEquals(OK, client.set(key2, value).get());
+        assertEquals(OK, client.set(key3, value).get());
+
+        // Test pattern matching
+        if (client instanceof GlideClusterClient) {
+            ClusterValue<GlideString[]> result =
+                    ((GlideClusterClient) client).keys(gs("{key}:test*")).get();
+            GlideString[] allKeys = result.getSingleValue();
+            assertTrue(allKeys.length >= 2);
+            assertTrue(Arrays.asList(allKeys).contains(key1));
+            assertTrue(Arrays.asList(allKeys).contains(key2));
+        } else {
+            GlideString[] keys = ((GlideClient) client).keys(gs("{key}:test*")).get();
+            assertTrue(keys.length >= 2);
+            assertTrue(Arrays.asList(keys).contains(key1));
+            assertTrue(Arrays.asList(keys).contains(key2));
+        }
+
+        // Clean up
+        client.del(new GlideString[] {key1, key2, key3}).get();
     }
 
     @SneakyThrows
@@ -17920,6 +17989,24 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void keys_with_no_match(BaseClient client) {
+        if (client instanceof GlideClusterClient) {
+            ClusterValue<String[]> result =
+                    ((GlideClusterClient) client)
+                            .keys("non_existent_pattern_" + UUID.randomUUID() + "*")
+                            .get();
+            String[] keys = result.getSingleValue();
+            assertEquals(0, keys.length);
+        } else {
+            String[] keys =
+                    ((GlideClient) client).keys("non_existent_pattern_" + UUID.randomUUID() + "*").get();
+            assertEquals(0, keys.length);
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void acl_setuser_and_deluser(BaseClient client) {
         String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
 
@@ -17946,6 +18033,37 @@ public class SharedCommandTests {
             } catch (Exception ignored) {
             }
         }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void waitaof_basic(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"), "WAITAOF requires Valkey 7.2+");
+
+        String key = "{key}:" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        // Set a key
+        assertEquals(OK, client.set(key, value).get());
+
+        // Wait for AOF acknowledgment
+        Long[] result;
+        if (client instanceof GlideClusterClient) {
+            // Cluster mode: must specify route to the primary that handled the write
+            SlotKeyRoute route = new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
+            result = ((GlideClusterClient) client).waitaof(0, 0, 1000, route).get();
+        } else {
+            // Standalone mode
+            result = client.waitaof(0, 0, 1000).get();
+        }
+        assertNotNull(result);
+        assertEquals(2, result.length);
+        assertTrue(result[0] >= 0); // local acks
+        assertTrue(result[1] >= 0); // replica acks
+
+        // Clean up
+        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -17980,6 +18098,35 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void waitaof_with_timeout(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"), "WAITAOF requires Valkey 7.2+");
+
+        String key = "{key}:" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        // Set a key
+        assertEquals(OK, client.set(key, value).get());
+
+        // Wait with a short timeout
+        Long[] result;
+        if (client instanceof GlideClusterClient) {
+            // Cluster mode: must specify route to the primary that handled the write
+            SlotKeyRoute route = new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
+            result = ((GlideClusterClient) client).waitaof(0, 0, 100, route).get();
+        } else {
+            // Standalone mode
+            result = client.waitaof(0, 0, 100).get();
+        }
+        assertNotNull(result);
+        assertEquals(2, result.length);
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void acl_getuser(BaseClient client) {
         String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
 
@@ -18006,6 +18153,30 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void waitaof_without_route(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"), "WAITAOF requires Valkey 7.2+");
+
+        String key = "{key}:" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        // Set a key
+        assertEquals(OK, client.set(key, value).get());
+
+        // Wait for AOF acknowledgment without specifying route
+        // In cluster mode, this uses the default AllPrimaries routing
+        Long[] result = client.waitaof(0, 0, 1000).get();
+        assertNotNull(result);
+        assertEquals(2, result.length);
+        assertTrue(result[0] >= 0); // local acks
+        assertTrue(result[1] >= 0); // replica acks
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void acl_list(BaseClient client) {
         // Test ACL LIST - should return ACL rules for all users
         String[] aclList = client.aclList().get();
@@ -18021,6 +18192,37 @@ public class SharedCommandTests {
             }
         }
         assertTrue(hasDefaultUser);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void migrate_basic(BaseClient client) {
+        // Note: Full MIGRATE testing requires a second server instance
+        // This test verifies the command is properly implemented
+        String key = "{key}:" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        // Set a key
+        assertEquals(OK, client.set(key, value).get());
+
+        // Attempt to migrate to a non-existent destination
+        // This will fail but verifies the command is properly implemented
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.migrate("nonexistent.host", 6379, key, 0, 5000).get());
+
+        // The error should be about connection, not about the command being unsupported
+        assertTrue(
+                exception.getCause().getMessage().contains("Connection refused")
+                        || exception.getCause().getMessage().contains("Name or service not known")
+                        || exception.getCause().getMessage().contains("nodename nor servname provided")
+                        || exception.getCause().getMessage().contains("Temporary failure")
+                        || exception.getCause().getMessage().contains("IOERR"));
+
+        // Clean up
+        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -18091,6 +18293,34 @@ public class SharedCommandTests {
         assertEquals(64, password.length());
         // Should be hexadecimal
         assertTrue(password.matches("[0-9a-f]+"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void migrate_binary(BaseClient client) {
+        GlideString key = gs("{key}:" + UUID.randomUUID());
+        GlideString value = gs(UUID.randomUUID().toString());
+
+        // Set a key
+        assertEquals(OK, client.set(key, value).get());
+
+        // Attempt to migrate to a non-existent destination
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.migrate("nonexistent.host", 6379, key, 0, 5000).get());
+
+        // The error should be about connection, not about the command being unsupported
+        assertTrue(
+                exception.getCause().getMessage().contains("Connection refused")
+                        || exception.getCause().getMessage().contains("Name or service not known")
+                        || exception.getCause().getMessage().contains("nodename nor servname provided")
+                        || exception.getCause().getMessage().contains("Temporary failure")
+                        || exception.getCause().getMessage().contains("IOERR"));
+
+        // Clean up
+        client.del(new GlideString[] {key}).get();
     }
 
     @SneakyThrows
@@ -18168,6 +18398,37 @@ public class SharedCommandTests {
             } catch (Exception ignored) {
             }
         }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void migrate_with_options(BaseClient client) {
+        String key = "{key}:" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        // Set a key
+        assertEquals(OK, client.set(key, value).get());
+
+        // Test with MigrateOptions
+        MigrateOptions options = MigrateOptions.builder().copy(true).replace(true).build();
+
+        // Attempt to migrate to a non-existent destination with options
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.migrate("nonexistent.host", 6379, key, 0, 5000, options).get());
+
+        // The error should be about connection, not about the command being unsupported
+        assertTrue(
+                exception.getCause().getMessage().contains("Connection refused")
+                        || exception.getCause().getMessage().contains("Name or service not known")
+                        || exception.getCause().getMessage().contains("nodename nor servname provided")
+                        || exception.getCause().getMessage().contains("Temporary failure")
+                        || exception.getCause().getMessage().contains("IOERR"));
+
+        // Clean up
+        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
