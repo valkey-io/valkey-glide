@@ -9739,3 +9739,34 @@ func (client *baseClient) Watch(ctx context.Context, keys []string) (string, err
 	}
 	return handleOkResponse(result)
 }
+
+// GetStatistics retrieves compression, connection, and PubSub statistics for this client.
+//
+// Return value:
+//
+//	A map[string]uint64 containing statistics:
+//	  - total_connections: Total number of connections opened to Valkey
+//	  - total_clients: Total number of GLIDE clients
+//	  - total_values_compressed: Number of values successfully compressed
+//	  - total_values_decompressed: Number of values successfully decompressed
+//	  - total_original_bytes: Total bytes of original data before compression
+//	  - total_bytes_compressed: Total bytes after compression
+//	  - total_bytes_decompressed: Total bytes after decompression
+//	  - compression_skipped_count: Number of times compression was skipped
+//	  - subscription_out_of_sync_count: Number of times subscriptions were out of sync during reconciliation
+//	  - subscription_last_sync_timestamp: Timestamp of last successful subscription sync (milliseconds since epoch)
+func (client *baseClient) GetStatistics() map[string]uint64 {
+	stats := C.get_statistics()
+	return map[string]uint64{
+		"total_connections":                uint64(stats.total_connections),
+		"total_clients":                    uint64(stats.total_clients),
+		"total_values_compressed":          uint64(stats.total_values_compressed),
+		"total_values_decompressed":        uint64(stats.total_values_decompressed),
+		"total_original_bytes":             uint64(stats.total_original_bytes),
+		"total_bytes_compressed":           uint64(stats.total_bytes_compressed),
+		"total_bytes_decompressed":         uint64(stats.total_bytes_decompressed),
+		"compression_skipped_count":        uint64(stats.compression_skipped_count),
+		"subscription_out_of_sync_count":   uint64(stats.subscription_out_of_sync_count),
+		"subscription_last_sync_timestamp": uint64(stats.subscription_last_sync_timestamp),
+	}
+}

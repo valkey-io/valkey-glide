@@ -5,9 +5,12 @@ package glide
 // #cgo LDFLAGS: -lglide_ffi
 // #include "lib.h"
 import "C"
+
 import (
 	"context"
 	"fmt"
+
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
 // Subscribe subscribes the client to the specified channels (lazy, non-blocking).
@@ -18,14 +21,17 @@ import (
 // Note: Use GetSubscriptions() to verify the actual server-side subscription state.
 //
 // Parameters:
-//   ctx - The context for the operation.
-//   channels - A slice of channel names to subscribe to.
+//
+//	ctx - The context for the operation.
+//	channels - A slice of channel names to subscribe to.
 //
 // Return value:
-//   An error if the operation fails.
+//
+//	An error if the operation fails.
 //
 // Example:
-//   err := client.Subscribe(ctx, []string{"channel1", "channel2"})
+//
+//	err := client.Subscribe(ctx, []string{"channel1", "channel2"})
 func (client *baseClient) Subscribe(ctx context.Context, channels []string) error {
 	_, err := client.executeCommand(ctx, C.Subscribe, channels)
 	return err
@@ -36,16 +42,19 @@ func (client *baseClient) Subscribe(ctx context.Context, channels []string) erro
 // for server confirmation.
 //
 // Parameters:
-//   ctx - The context for the operation.
-//   channels - A slice of channel names to subscribe to.
-//   timeoutMs - Maximum time in milliseconds to wait for server confirmation.
-//               A value of 0 blocks indefinitely until confirmation.
+//
+//	ctx - The context for the operation.
+//	channels - A slice of channel names to subscribe to.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
 //
 // Return value:
-//   An error if the operation fails or times out.
+//
+//	An error if the operation fails or times out.
 //
 // Example:
-//   err := client.SubscribeBlocking(ctx, []string{"channel1"}, 5000)
+//
+//	err := client.SubscribeBlocking(ctx, []string{"channel1"}, 5000)
 func (client *baseClient) SubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
 	args := append(channels, fmt.Sprintf("%d", timeoutMs))
 	_, err := client.executeCommand(ctx, C.SubscribeBlocking, args)
@@ -57,14 +66,17 @@ func (client *baseClient) SubscribeBlocking(ctx context.Context, channels []stri
 // for server confirmation. It returns immediately after updating the local state.
 //
 // Parameters:
-//   ctx - The context for the operation.
-//   patterns - A slice of patterns to subscribe to (e.g., []string{"news.*"}).
+//
+//	ctx - The context for the operation.
+//	patterns - A slice of patterns to subscribe to (e.g., []string{"news.*"}).
 //
 // Return value:
-//   An error if the operation fails.
+//
+//	An error if the operation fails.
 //
 // Example:
-//   err := client.PSubscribe(ctx, []string{"news.*", "updates.*"})
+//
+//	err := client.PSubscribe(ctx, []string{"news.*", "updates.*"})
 func (client *baseClient) PSubscribe(ctx context.Context, patterns []string) error {
 	_, err := client.executeCommand(ctx, C.PSubscribe, patterns)
 	return err
@@ -75,15 +87,18 @@ func (client *baseClient) PSubscribe(ctx context.Context, patterns []string) err
 // for server confirmation.
 //
 // Parameters:
-//   ctx - The context for the operation.
-//   patterns - A slice of patterns to subscribe to.
-//   timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//
+//	ctx - The context for the operation.
+//	patterns - A slice of patterns to subscribe to.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
 //
 // Return value:
-//   An error if the operation fails or times out.
+//
+//	An error if the operation fails or times out.
 //
 // Example:
-//   err := client.PSubscribeBlocking(ctx, []string{"news.*"}, 5000)
+//
+//	err := client.PSubscribeBlocking(ctx, []string{"news.*"}, 5000)
 func (client *baseClient) PSubscribeBlocking(ctx context.Context, patterns []string, timeoutMs int) error {
 	args := append(patterns, fmt.Sprintf("%d", timeoutMs))
 	_, err := client.executeCommand(ctx, C.PSubscribeBlocking, args)
@@ -94,15 +109,18 @@ func (client *baseClient) PSubscribeBlocking(ctx context.Context, patterns []str
 // If no channels are specified, unsubscribes from all exact channels.
 //
 // Parameters:
-//   ctx - The context for the operation.
-//   channels - A slice of channel names to unsubscribe from. Empty slice unsubscribes from all.
+//
+//	ctx - The context for the operation.
+//	channels - A slice of channel names to unsubscribe from. Empty slice unsubscribes from all.
 //
 // Return value:
-//   An error if the operation fails.
+//
+//	An error if the operation fails.
 //
 // Example:
-//   err := client.Unsubscribe(ctx, []string{"channel1"})
-//   err := client.Unsubscribe(ctx, []string{}) // Unsubscribe from all
+//
+//	err := client.Unsubscribe(ctx, []string{"channel1"})
+//	err := client.Unsubscribe(ctx, []string{}) // Unsubscribe from all
 func (client *baseClient) Unsubscribe(ctx context.Context, channels []string) error {
 	_, err := client.executeCommand(ctx, C.Unsubscribe, channels)
 	return err
@@ -112,15 +130,18 @@ func (client *baseClient) Unsubscribe(ctx context.Context, channels []string) er
 // If no channels are specified, unsubscribes from all exact channels.
 //
 // Parameters:
-//   ctx - The context for the operation.
-//   channels - A slice of channel names to unsubscribe from.
-//   timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//
+//	ctx - The context for the operation.
+//	channels - A slice of channel names to unsubscribe from.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
 //
 // Return value:
-//   An error if the operation fails or times out.
+//
+//	An error if the operation fails or times out.
 //
 // Example:
-//   err := client.UnsubscribeBlocking(ctx, []string{"channel1"}, 5000)
+//
+//	err := client.UnsubscribeBlocking(ctx, []string{"channel1"}, 5000)
 func (client *baseClient) UnsubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
 	args := append(channels, fmt.Sprintf("%d", timeoutMs))
 	_, err := client.executeCommand(ctx, C.UnsubscribeBlocking, args)
@@ -131,14 +152,17 @@ func (client *baseClient) UnsubscribeBlocking(ctx context.Context, channels []st
 // If no patterns are specified, unsubscribes from all patterns.
 //
 // Parameters:
-//   ctx - The context for the operation.
-//   patterns - A slice of patterns to unsubscribe from. Empty slice unsubscribes from all.
+//
+//	ctx - The context for the operation.
+//	patterns - A slice of patterns to unsubscribe from. Empty slice unsubscribes from all.
 //
 // Return value:
-//   An error if the operation fails.
+//
+//	An error if the operation fails.
 //
 // Example:
-//   err := client.PUnsubscribe(ctx, []string{"news.*"})
+//
+//	err := client.PUnsubscribe(ctx, []string{"news.*"})
 func (client *baseClient) PUnsubscribe(ctx context.Context, patterns []string) error {
 	_, err := client.executeCommand(ctx, C.PUnsubscribe, patterns)
 	return err
@@ -148,17 +172,50 @@ func (client *baseClient) PUnsubscribe(ctx context.Context, patterns []string) e
 // If no patterns are specified, unsubscribes from all patterns.
 //
 // Parameters:
-//   ctx - The context for the operation.
-//   patterns - A slice of patterns to unsubscribe from.
-//   timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//
+//	ctx - The context for the operation.
+//	patterns - A slice of patterns to unsubscribe from.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
 //
 // Return value:
-//   An error if the operation fails or times out.
+//
+//	An error if the operation fails or times out.
 //
 // Example:
-//   err := client.PUnsubscribeBlocking(ctx, []string{"news.*"}, 5000)
+//
+//	err := client.PUnsubscribeBlocking(ctx, []string{"news.*"}, 5000)
 func (client *baseClient) PUnsubscribeBlocking(ctx context.Context, patterns []string, timeoutMs int) error {
 	args := append(patterns, fmt.Sprintf("%d", timeoutMs))
 	_, err := client.executeCommand(ctx, C.PUnsubscribeBlocking, args)
 	return err
+}
+
+// GetSubscriptions retrieves both the desired and current subscription states.
+// This allows verification of synchronization between what the client intends to be
+// subscribed to (desired) and what it is actually subscribed to on the server (actual).
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//
+// Return value:
+//
+//	A PubSubState containing desired and actual subscriptions, or an error.
+//
+// Example:
+//
+//	state, err := client.GetSubscriptions(ctx)
+//	if err != nil {
+//	    return err
+//	}
+//	// Check if subscribed to a channel
+//	if _, ok := state.ActualSubscriptions[models.Exact]["channel1"]; ok {
+//	    fmt.Println("Subscribed to channel1")
+//	}
+func (client *baseClient) GetSubscriptions(ctx context.Context) (*models.PubSubState, error) {
+	response, err := client.executeCommand(ctx, C.GetSubscriptions, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handlePubSubStateResponse(response)
 }

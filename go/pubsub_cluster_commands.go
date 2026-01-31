@@ -5,6 +5,7 @@ package glide
 // #cgo LDFLAGS: -lglide_ffi
 // #include "lib.h"
 import "C"
+
 import (
 	"context"
 	"fmt"
@@ -17,14 +18,17 @@ import (
 // Sharded pubsub is only available in cluster mode and requires Redis 7.0+.
 //
 // Parameters:
-//   ctx - The context for the operation.
-//   channels - A slice of sharded channel names to subscribe to.
+//
+//	ctx - The context for the operation.
+//	channels - A slice of sharded channel names to subscribe to.
 //
 // Return value:
-//   An error if the operation fails.
+//
+//	An error if the operation fails.
 //
 // Example:
-//   err := client.SSubscribe(ctx, []string{"shard_channel1"})
+//
+//	err := client.SSubscribe(ctx, []string{"shard_channel1"})
 func (client *ClusterClient) SSubscribe(ctx context.Context, channels []string) error {
 	_, err := client.executeCommand(ctx, C.SSubscribe, channels)
 	return err
@@ -37,15 +41,18 @@ func (client *ClusterClient) SSubscribe(ctx context.Context, channels []string) 
 // Sharded pubsub is only available in cluster mode and requires Redis 7.0+.
 //
 // Parameters:
-//   ctx - The context for the operation.
-//   channels - A slice of sharded channel names to subscribe to.
-//   timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//
+//	ctx - The context for the operation.
+//	channels - A slice of sharded channel names to subscribe to.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
 //
 // Return value:
-//   An error if the operation fails or times out.
+//
+//	An error if the operation fails or times out.
 //
 // Example:
-//   err := client.SSubscribeBlocking(ctx, []string{"shard_channel1"}, 5000)
+//
+//	err := client.SSubscribeBlocking(ctx, []string{"shard_channel1"}, 5000)
 func (client *ClusterClient) SSubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
 	args := append(channels, fmt.Sprintf("%d", timeoutMs))
 	_, err := client.executeCommand(ctx, C.SSubscribeBlocking, args)
@@ -56,14 +63,17 @@ func (client *ClusterClient) SSubscribeBlocking(ctx context.Context, channels []
 // If no channels are specified, unsubscribes from all sharded channels.
 //
 // Parameters:
-//   ctx - The context for the operation.
-//   channels - A slice of sharded channel names to unsubscribe from. Empty slice unsubscribes from all.
+//
+//	ctx - The context for the operation.
+//	channels - A slice of sharded channel names to unsubscribe from. Empty slice unsubscribes from all.
 //
 // Return value:
-//   An error if the operation fails.
+//
+//	An error if the operation fails.
 //
 // Example:
-//   err := client.SUnsubscribe(ctx, []string{"shard_channel1"})
+//
+//	err := client.SUnsubscribe(ctx, []string{"shard_channel1"})
 func (client *ClusterClient) SUnsubscribe(ctx context.Context, channels []string) error {
 	_, err := client.executeCommand(ctx, C.SUnsubscribe, channels)
 	return err
@@ -73,15 +83,18 @@ func (client *ClusterClient) SUnsubscribe(ctx context.Context, channels []string
 // If no channels are specified, unsubscribes from all sharded channels.
 //
 // Parameters:
-//   ctx - The context for the operation.
-//   channels - A slice of sharded channel names to unsubscribe from.
-//   timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//
+//	ctx - The context for the operation.
+//	channels - A slice of sharded channel names to unsubscribe from.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
 //
 // Return value:
-//   An error if the operation fails or times out.
+//
+//	An error if the operation fails or times out.
 //
 // Example:
-//   err := client.SUnsubscribeBlocking(ctx, []string{"shard_channel1"}, 5000)
+//
+//	err := client.SUnsubscribeBlocking(ctx, []string{"shard_channel1"}, 5000)
 func (client *ClusterClient) SUnsubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
 	args := append(channels, fmt.Sprintf("%d", timeoutMs))
 	_, err := client.executeCommand(ctx, C.SUnsubscribeBlocking, args)
