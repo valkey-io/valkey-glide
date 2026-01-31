@@ -69,6 +69,8 @@ func (suite *GlideTestSuite) TestPubSubMaxSizeMessageCallback() {
 
 // TestShardedMaxSizeMessage tests large sharded message
 func (suite *GlideTestSuite) TestShardedMaxSizeMessage() {
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
+
 	channel := "max_size_sharded"
 	largeMsg := strings.Repeat("c", 1024*1024)
 

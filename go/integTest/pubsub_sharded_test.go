@@ -12,6 +12,8 @@ import (
 
 // TestShardedPubSubManyChannels tests sharded pubsub with multiple channels
 func (suite *GlideTestSuite) TestShardedPubSubManyChannels() {
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
+
 	numChannels := 5
 	channels := make([]ChannelDefn, numChannels)
 	for i := 0; i < numChannels; i++ {
@@ -52,6 +54,8 @@ func (suite *GlideTestSuite) TestShardedPubSubManyChannels() {
 
 // TestShardedPubSubCoexistence tests sharded with WaitForMessage and Pop
 func (suite *GlideTestSuite) TestShardedPubSubCoexistence() {
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
+
 	channel := "sharded_coexist"
 
 	channels := []ChannelDefn{{Channel: channel, Mode: ShardedMode}}
@@ -81,6 +85,8 @@ func (suite *GlideTestSuite) TestShardedPubSubCoexistence() {
 
 // TestSUnsubscribeShardedChannel tests unsubscribing from sharded channel
 func (suite *GlideTestSuite) TestSUnsubscribeShardedChannel() {
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
+
 	channel := "sunsubscribe_test"
 
 	channels := []ChannelDefn{{Channel: channel, Mode: ShardedMode}}
