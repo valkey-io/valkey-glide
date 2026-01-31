@@ -30,6 +30,9 @@ The Valkey GLIDE Java wrapper consists of both Java and Rust code. Rust bindings
 
 See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
 
+> [!NOTE]
+> **Windows users:** Valkey must be installed in WSL (Windows Subsystem for Linux) as the integration tests run Valkey server instances through WSL. See the **Dependencies installation for Windows** section below for detailed WSL and Valkey installation instructions.
+
 **Dependencies installation for Ubuntu**
 
 ```bash
@@ -67,6 +70,83 @@ source "$HOME/.cargo/env"
 Continue with **Install protobuf compiler** below.
 It is not necessary to **Install `ziglang` and `zigbuild`** for MacOS.
 
+**Dependencies installation for Windows**
+
+> [!IMPORTANT]
+> Windows users must install WSL (Windows Subsystem for Linux) to run integration tests, as the test suite uses WSL to run Valkey server instances.
+
+**Step 1: Install WSL**
+
+
+See the [How to install Linux on Windows with WSL](https://learn.microsoft.com/en-us/windows/wsl/install) for instructions how to install WSL.
+
+**Step 2: Install Valkey in WSL**
+
+Open your WSL terminal (Ubuntu in this example) and install Valkey:
+
+```bash
+# Update package list
+sudo apt update
+
+# Install dependencies
+sudo apt install -y build-essential tcl
+
+# Download and build Valkey
+cd /tmp
+wget https://github.com/valkey-io/valkey/archive/refs/tags/8.0.1.tar.gz
+tar xzf 8.0.1.tar.gz
+cd valkey-8.0.1
+make
+sudo make install
+
+# Verify installation
+valkey-server --version
+valkey-cli --version
+```
+
+**Step 3: Install Windows Dependencies**
+
+Option 1: Using winget (Windows Package Manager)
+
+```powershell
+# Install dependencies using winget
+winget install --id Microsoft.OpenJDK.11
+winget install --id Git.Git
+winget install --id Kitware.CMake
+winget install --id OpenSSL.OpenSSL
+
+# Install Rust
+# Download and run rustup-init.exe from https://rustup.rs/
+# Or use winget:
+winget install --id Rustlang.Rustup
+
+# Verify Rust installation
+rustc --version
+```
+
+Option 2: Using Chocolatey
+
+```powershell
+# Install Chocolatey if not already installed
+# Run PowerShell as Administrator and execute:
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+
+# Install dependencies using Chocolatey
+choco install openjdk11 -y
+choco install git -y
+choco install cmake -y
+choco install openssl -y
+
+# Install Rust
+choco install rustup.install -y
+
+# Verify Rust installation
+rustc --version
+```
+
+Continue with **Install protobuf compiler** below.
+It is not necessary to **Install `ziglang` and `zigbuild`** for Windows.
+
 **Install protobuf compiler**
 
 Only protobuf v29.1 is supported. Other versions are not supported and may cause build issues.
@@ -74,6 +154,7 @@ Only protobuf v29.1 is supported. Other versions are not supported and may cause
 Various platform-specific zips can be found [here](https://github.com/protocolbuffers/protobuf/releases/tag/v29.1).
 Choose the appropriate zip for your system and run the commands below, adjusting for the zip you chose:
 
+For Linux-x86_64:
 ```bash
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
 curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
@@ -83,8 +164,28 @@ export PATH="$PATH:$HOME/.local/bin"
 protoc --version
 ```
 
+For Windows (PowerShell):
+```powershell
+# Download protoc for Windows
+$PB_REL = "https://github.com/protocolbuffers/protobuf/releases"
+Invoke-WebRequest -Uri "$PB_REL/download/v29.1/protoc-29.1-win64.zip" -OutFile "protoc-29.1-win64.zip"
+
+# Extract to a directory (e.g., C:\protoc)
+Expand-Archive -Path "protoc-29.1-win64.zip" -DestinationPath "C:\protoc" -Force
+
+# Add to PATH (for current session)
+$env:PATH += ";C:\protoc\bin"
+
+# To persist PATH, add it to system environment variables:
+[Environment]::SetEnvironmentVariable("Path", $env:PATH + ";C:\protoc\bin", [EnvironmentVariableTarget]::User)
+
+# Check that the protobuf compiler version 29.1 or higher is installed
+protoc --version
+```
+
 > [!NOTE]
-> You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
+> For Linux/MacOS: You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
+> For Windows: The PATH is automatically persisted when using the `SetEnvironmentVariable` command above.
 
 **Install `ziglang` and `zigbuild`**
 
