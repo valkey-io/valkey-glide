@@ -71,12 +71,6 @@ public final class AsyncRegistry {
         return 2000; // Default with margin over core's 1000
     }
 
-    /** Register a future without Java-side timeout (delegates to Rust core). */
-    public static <T> long register(
-            CompletableFuture<T> future, int maxInflightRequests, long clientHandle) {
-        return register(future, maxInflightRequests, clientHandle, 0);
-    }
-
     /**
      * Register a future with optional Java-side timeout.
      *

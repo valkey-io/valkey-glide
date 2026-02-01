@@ -242,14 +242,7 @@ public class GlideCoreClient implements AutoCloseable {
         }
     }
 
-    /**
-     * Execute batch asynchronously using raw protobuf bytes (for compatibility with CommandManager)
-     */
-    public CompletableFuture<Object> executeBatchAsync(
-            byte[] batchRequestBytes, boolean expectUtf8Response) {
-        return executeBatchAsync(batchRequestBytes, expectUtf8Response, null);
-    }
-
+    /** Execute batch asynchronously using raw protobuf bytes. */
     public CompletableFuture<Object> executeBatchAsync(
             byte[] batchRequestBytes, boolean expectUtf8Response, Integer timeoutOverrideMs) {
         try {
