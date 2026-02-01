@@ -188,7 +188,7 @@ public class SharedCommandTests {
         }
     }
 
-    private static final int BLOCKING_COMMAND_REQUEST_TIMEOUT_MS = 5000;
+    private static final int BLOCKING_COMMAND_REQUEST_TIMEOUT_MS = 2000;
 
     @SneakyThrows
     private static BaseClient createBlockingTimeoutClient(BaseClient client) {

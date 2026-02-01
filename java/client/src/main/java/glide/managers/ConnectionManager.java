@@ -390,11 +390,11 @@ public class ConnectionManager {
                         }
 
                         return null; // Success
-                    } catch (RuntimeException e) {
+                    } catch (Exception e) {
                         if (e instanceof GlideException) {
-                            throw e;
+                            throw (GlideException) e;
                         }
-                        throw new RuntimeException("Failed to create client", e);
+                        throw new ClosingException("Failed to create client: " + e.getMessage());
                     }
                 });
     }
@@ -440,7 +440,10 @@ public class ConnectionManager {
                 nativeClientHandle = 0;
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to close client", e);
+            if (e instanceof GlideException) {
+                throw (GlideException) e;
+            }
+            throw new ClosingException("Failed to close client: " + e.getMessage());
         }
     }
 
