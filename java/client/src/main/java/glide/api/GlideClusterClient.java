@@ -1347,7 +1347,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Long> wait(long numreplicas, long timeout) {
         String[] arguments = new String[] {Long.toString(numreplicas), Long.toString(timeout)};
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 Wait, arguments, SimpleSingleNodeRoute.RANDOM, this::handleLongResponse);
     }
 
@@ -1356,7 +1356,7 @@ public class GlideClusterClient extends BaseClient
             long numlocal, long numreplicas, long timeout, @NonNull Route route) {
         String[] arguments =
                 new String[] {Long.toString(numlocal), Long.toString(numreplicas), Long.toString(timeout)};
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 WaitAof,
                 arguments,
                 route,
