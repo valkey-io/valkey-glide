@@ -37,6 +37,16 @@ public class StreamReadOptions {
     protected Long count;
 
     /**
+     * Returns true if this options object specifies a BLOCK timeout, making the command a blocking
+     * command.
+     *
+     * @return true if BLOCK option is set
+     */
+    public boolean isBlocking() {
+        return this.block != null;
+    }
+
+    /**
      * Converts options and the key-to-id input for {@link StreamBaseCommands#xread(Map,
      * StreamReadOptions)} into a String[].
      *

@@ -150,6 +150,19 @@ public class GlideCoreClient implements AutoCloseable {
      * CommandManager)
      */
     public CompletableFuture<Object> executeBinaryCommandAsync(byte[] requestBytes) {
+        return executeBinaryCommandAsyncInternal(requestBytes, this.requestTimeoutMillis);
+    }
+
+    /**
+     * Execute binary command asynchronously without Java-side timeout. Used for blocking commands
+     * (BLPOP, BRPOP, etc.) where the command has its own timeout that Rust handles.
+     */
+    public CompletableFuture<Object> executeBinaryCommandAsyncNoTimeout(byte[] requestBytes) {
+        return executeBinaryCommandAsyncInternal(requestBytes, 0);
+    }
+
+    private CompletableFuture<Object> executeBinaryCommandAsyncInternal(
+            byte[] requestBytes, long timeoutMs) {
         try {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
@@ -163,9 +176,7 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId =
-                        AsyncRegistry.register(
-                                future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
+                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle, timeoutMs);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -187,6 +198,19 @@ public class GlideCoreClient implements AutoCloseable {
      * Execute command asynchronously using raw protobuf bytes (for compatibility with CommandManager)
      */
     public CompletableFuture<Object> executeCommandAsync(byte[] requestBytes) {
+        return executeCommandAsyncInternal(requestBytes, this.requestTimeoutMillis);
+    }
+
+    /**
+     * Execute command asynchronously without Java-side timeout. Used for blocking commands (BLPOP,
+     * BRPOP, etc.) where the command has its own timeout that Rust handles.
+     */
+    public CompletableFuture<Object> executeCommandAsyncNoTimeout(byte[] requestBytes) {
+        return executeCommandAsyncInternal(requestBytes, 0);
+    }
+
+    private CompletableFuture<Object> executeCommandAsyncInternal(
+            byte[] requestBytes, long timeoutMs) {
         try {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
@@ -200,9 +224,7 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId =
-                        AsyncRegistry.register(
-                                future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
+                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle, timeoutMs);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
