@@ -3,6 +3,7 @@ package glide.api.commands;
 
 import glide.api.models.GlideString;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -161,4 +162,202 @@ public interface PubSubBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<GlideString, Long>> pubsubNumSub(GlideString[] channels);
+
+    /**
+     * Subscribes the client to the specified channels.
+     *
+     * <p>This is a non-blocking operation that adds the channels to the desired subscription state.
+     * Messages published to these channels will be received via the configured callback or message queue.
+     *
+     * @param channels A set of channel names to subscribe to
+     * @return A {@link CompletableFuture} that completes when the subscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.subscribe(Set.of("news", "updates")).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/subscribe/">valkey.io</a> for details
+     */
+    CompletableFuture<Void> subscribe(Set<String> channels);
+
+    /**
+     * Subscribes the client to the specified channels with a timeout.
+     *
+     * <p>This is a blocking operation that waits up to {@code timeoutMs} for the subscription
+     * to be confirmed by the server.
+     *
+     * @param channels A set of channel names to subscribe to
+     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation
+     * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.subscribe(Set.of("news", "updates"), 5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/subscribe/">valkey.io</a> for details
+     */
+    CompletableFuture<Void> subscribe(Set<String> channels, int timeoutMs);
+
+    /**
+     * Subscribes the client to channels matching the specified patterns.
+     *
+     * <p>Patterns use glob-style matching:
+     * <ul>
+     *   <li>{@code *} matches any sequence of characters
+     *   <li>{@code ?} matches any single character
+     *   <li>{@code [abc]} matches one character from the set
+     * </ul>
+     *
+     * @param patterns A set of glob patterns to subscribe to
+     * @return A {@link CompletableFuture} that completes when the subscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.psubscribe(Set.of("news.*", "updates.*")).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/psubscribe/">valkey.io</a> for details
+     */
+    CompletableFuture<Void> psubscribe(Set<String> patterns);
+
+    /**
+     * Subscribes the client to channels matching the specified patterns with a timeout.
+     *
+     * <p>This is a blocking operation that waits up to {@code timeoutMs} for the subscription
+     * to be confirmed by the server.
+     *
+     * @param patterns A set of glob patterns to subscribe to
+     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation
+     * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.psubscribe(Set.of("news.*", "updates.*"), 5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/psubscribe/">valkey.io</a> for details
+     */
+    CompletableFuture<Void> psubscribe(Set<String> patterns, int timeoutMs);
+
+    /**
+     * Unsubscribes the client from all currently subscribed channels.
+     *
+     * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.unsubscribe().get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details
+     */
+    CompletableFuture<Void> unsubscribe();
+
+    /**
+     * Unsubscribes the client from the specified channels.
+     *
+     * @param channels A set of channel names to unsubscribe from
+     * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.unsubscribe(Set.of("news", "updates")).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details
+     */
+    CompletableFuture<Void> unsubscribe(Set<String> channels);
+
+    /**
+     * Unsubscribes the client from the specified channels with a timeout.
+     *
+     * @param channels A set of channel names to unsubscribe from
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.unsubscribe(Set.of("news", "updates"), 5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details
+     */
+    CompletableFuture<Void> unsubscribe(Set<String> channels, int timeoutMs);
+
+    /**
+     * Unsubscribes the client from all currently subscribed channels with a timeout.
+     *
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.unsubscribe(5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details
+     */
+    CompletableFuture<Void> unsubscribe(int timeoutMs);
+
+    /**
+     * Unsubscribes the client from all currently subscribed patterns.
+     *
+     * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.punsubscribe().get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details
+     */
+    CompletableFuture<Void> punsubscribe();
+
+    /**
+     * Unsubscribes the client from the specified patterns.
+     *
+     * @param patterns A set of glob patterns to unsubscribe from
+     * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.punsubscribe(Set.of("news.*", "updates.*")).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details
+     */
+    CompletableFuture<Void> punsubscribe(Set<String> patterns);
+
+    /**
+     * Unsubscribes the client from the specified patterns with a timeout.
+     *
+     * @param patterns A set of glob patterns to unsubscribe from
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.punsubscribe(Set.of("news.*", "updates.*"), 5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details
+     */
+    CompletableFuture<Void> punsubscribe(Set<String> patterns, int timeoutMs);
+
+    /**
+     * Unsubscribes the client from all currently subscribed patterns with a timeout.
+     *
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.punsubscribe(5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details
+     */
+    CompletableFuture<Void> punsubscribe(int timeoutMs);
 }
