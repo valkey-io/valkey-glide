@@ -12273,3 +12273,257 @@ class TestScripts:
                 await standalone_client.delete(["key"])
             finally:
                 await standalone_client.close()
+
+    @pytest.mark.skip_if_version_below("6.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_acl_cat(self, glide_client: TGlideClient):
+        # Test ACL CAT without category - should return list of categories
+        categories = await glide_client.acl_cat()
+        assert isinstance(categories, list)
+        assert len(categories) > 0
+        assert all(isinstance(cat, bytes) for cat in categories)
+
+        # Common categories that should exist
+        categories_str = [cat.decode() for cat in categories]
+        assert "read" in categories_str
+        assert "write" in categories_str
+
+        # Test ACL CAT with specific category
+        read_commands = await glide_client.acl_cat("read")
+        assert isinstance(read_commands, list)
+        assert len(read_commands) > 0
+        assert all(isinstance(cmd, bytes) for cmd in read_commands)
+
+        # GET should be in read commands
+        read_commands_str = [cmd.decode() for cmd in read_commands]
+        assert "get" in read_commands_str
+
+    @pytest.mark.skip_if_version_below("6.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_acl_users_and_whoami(self, glide_client: TGlideClient):
+        # Test ACL USERS - should return list of users
+        users = await glide_client.acl_users()
+        assert isinstance(users, list)
+        assert len(users) >= 1  # At least 'default' user should exist
+        assert all(isinstance(user, bytes) for user in users)
+
+        # Default user should exist
+        users_str = [user.decode() for user in users]
+        assert "default" in users_str
+
+        # Test ACL WHOAMI - should return current user
+        current_user = await glide_client.acl_whoami()
+        assert isinstance(current_user, bytes)
+        assert current_user.decode() in users_str
+
+    @pytest.mark.skip_if_version_below("6.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_acl_list(self, glide_client: TGlideClient):
+        # Test ACL LIST - should return list of ACL rules
+        acl_rules = await glide_client.acl_list()
+        assert isinstance(acl_rules, list)
+        assert len(acl_rules) >= 1  # At least default user rule should exist
+        assert all(isinstance(rule, bytes) for rule in acl_rules)
+
+        # Should contain default user rule
+        rules_str = [rule.decode() for rule in acl_rules]
+        default_rule_found = any("user default" in rule for rule in rules_str)
+        assert default_rule_found
+
+    @pytest.mark.skip_if_version_below("6.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_acl_getuser(self, glide_client: TGlideClient):
+        # Test ACL GETUSER for default user
+        user_info = await glide_client.acl_getuser("default")
+        assert isinstance(user_info, list)
+        assert len(user_info) > 0
+
+        # Should contain key-value pairs
+        assert len(user_info) % 2 == 0  # Should be even number (key-value pairs)
+
+        # Test ACL GETUSER for non-existent user
+        non_existent_user = await glide_client.acl_getuser("nonexistent_user_12345")
+        assert non_existent_user is None
+
+    @pytest.mark.skip_if_version_below("6.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_acl_genpass(self, glide_client: TGlideClient):
+        # Test ACL GENPASS without bits parameter
+        password1 = await glide_client.acl_genpass()
+        assert isinstance(password1, bytes)
+        assert len(password1) > 0
+
+        # Test ACL GENPASS with bits parameter
+        password2 = await glide_client.acl_genpass(32)
+        assert isinstance(password2, bytes)
+        assert len(password2) == 8  # 32 bits = 8 hex characters
+
+        # Passwords should be different
+        assert password1 != password2
+
+    @pytest.mark.skip_if_version_below("6.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_acl_setuser_and_deluser(self, glide_client: TGlideClient):
+        test_username = f"testuser_{get_random_string(8)}"
+
+        try:
+            # Test ACL SETUSER - create a new user
+            result = await glide_client.acl_setuser(
+                test_username, "on", "nopass", "~*", "+@read"
+            )
+            assert result == b"OK"
+
+            # Verify user was created
+            users = await glide_client.acl_users()
+            users_str = [user.decode() for user in users]
+            assert test_username in users_str
+
+            # Test ACL GETUSER for the new user
+            user_info = await glide_client.acl_getuser(test_username)
+            assert user_info is not None
+            assert isinstance(user_info, list)
+
+            # Test ACL DELUSER
+            deleted_count = await glide_client.acl_deluser(test_username)
+            assert deleted_count == 1
+
+            # Verify user was deleted
+            users_after = await glide_client.acl_users()
+            users_after_str = [user.decode() for user in users_after]
+            assert test_username not in users_after_str
+
+        except Exception:
+            # Cleanup in case of test failure
+            try:
+                await glide_client.acl_deluser(test_username)
+            except:
+                pass
+            raise
+
+    @pytest.mark.skip_if_version_below("6.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_acl_dryrun(self, glide_client: TGlideClient):
+        # Test ACL DRYRUN with default user and GET command
+        result = await glide_client.acl_dryrun("default", "GET", "somekey")
+        assert isinstance(result, bytes)
+        # Default user should be able to execute GET
+        assert result == b"OK"
+
+        # Create a limited user for testing
+        test_username = f"limiteduser_{get_random_string(8)}"
+
+        try:
+            # Create user with only GET permission
+            await glide_client.acl_setuser(
+                test_username, "on", "nopass", "~*", "+get", "-@all"
+            )
+
+            # Test allowed command
+            result_allowed = await glide_client.acl_dryrun(test_username, "GET", "key")
+            assert result_allowed == b"OK"
+
+            # Test disallowed command
+            result_denied = await glide_client.acl_dryrun(
+                test_username, "SET", "key", "value"
+            )
+            assert isinstance(result_denied, bytes)
+            assert (
+                b"permission" in result_denied.lower()
+                or b"denied" in result_denied.lower()
+            )
+
+        finally:
+            # Cleanup
+            try:
+                await glide_client.acl_deluser(test_username)
+            except:
+                pass
+
+    @pytest.mark.skip_if_version_below("6.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_acl_log(self, glide_client: TGlideClient):
+        # Clear the log first
+        reset_result = await glide_client.acl_log_reset()
+        assert reset_result == b"OK"
+
+        # Test ACL LOG without count
+        log_entries = await glide_client.acl_log()
+        assert isinstance(log_entries, list)
+        # After reset, should be empty or have minimal entries
+
+        # Test ACL LOG with count
+        log_entries_limited = await glide_client.acl_log(5)
+        assert isinstance(log_entries_limited, list)
+        assert len(log_entries_limited) <= 5
+
+    @pytest.mark.skip_if_version_below("6.0.0")
+    @pytest.mark.parametrize(
+        "cluster_mode", [False]
+    )  # ACL LOAD/SAVE typically work in standalone mode
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_acl_save_load(self, glide_client: GlideClient):
+        # Note: These commands require server to be configured with aclfile
+        # They may fail if not configured, which is expected
+
+        try:
+            # Test ACL SAVE
+            save_result = await glide_client.acl_save()
+            assert save_result == b"OK"
+
+            # Test ACL LOAD
+            load_result = await glide_client.acl_load()
+            assert load_result == b"OK"
+
+        except RequestError as e:
+            # Expected if server is not configured with aclfile
+            assert "aclfile" in str(e).lower() or "config" in str(e).lower()
+
+    @pytest.mark.skip_if_version_below("6.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_acl_commands_return_types(self, glide_client: TGlideClient):
+        """Test that ACL commands return the expected types (redis-py compatibility)."""
+
+        # ACL CAT returns List[bytes]
+        categories = await glide_client.acl_cat()
+        assert isinstance(categories, list)
+        assert all(isinstance(item, bytes) for item in categories)
+
+        # ACL USERS returns List[bytes]
+        users = await glide_client.acl_users()
+        assert isinstance(users, list)
+        assert all(isinstance(item, bytes) for item in users)
+
+        # ACL WHOAMI returns bytes
+        whoami = await glide_client.acl_whoami()
+        assert isinstance(whoami, bytes)
+
+        # ACL LIST returns List[bytes]
+        acl_list = await glide_client.acl_list()
+        assert isinstance(acl_list, list)
+        assert all(isinstance(item, bytes) for item in acl_list)
+
+        # ACL GENPASS returns bytes
+        password = await glide_client.acl_genpass()
+        assert isinstance(password, bytes)
+
+        # ACL GETUSER returns Optional[List[bytes]]
+        user_info = await glide_client.acl_getuser("default")
+        assert user_info is None or isinstance(user_info, list)
+        if user_info is not None:
+            assert all(isinstance(item, bytes) for item in user_info)
+
+        # ACL LOG returns List[List[bytes]]
+        log_entries = await glide_client.acl_log()
+        assert isinstance(log_entries, list)
+        assert all(isinstance(entry, list) for entry in log_entries)
+        for entry in log_entries:
+            assert all(isinstance(item, bytes) for item in entry)

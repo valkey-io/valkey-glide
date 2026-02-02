@@ -7230,6 +7230,270 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.Watch, keys),
         )
 
+    async def acl_cat(self, category: Optional[TEncodable] = None) -> List[bytes]:
+        """
+        Returns a list of categories or commands within a category.
+
+        See [valkey.io](https://valkey.io/commands/acl-cat) for more details.
+
+        Args:
+            category (Optional[TEncodable]): The category to list commands for.
+                If not provided, returns a list of all categories.
+
+        Returns:
+            List[bytes]: A list of ACL categories or commands within a category.
+
+        Examples:
+            >>> await client.acl_cat()
+                [b'keyspace', b'read', b'write', b'set', b'sortedset', ...]
+            >>> await client.acl_cat("read")
+                [b'get', b'mget', b'hget', b'hgetall', ...]
+        """
+        args: List[TEncodable] = []
+        if category is not None:
+            args.append(category)
+        return cast(List[bytes], await self._execute_command(RequestType.AclCat, args))
+
+    async def acl_deluser(self, *usernames: TEncodable) -> int:
+        """
+        Delete the ACL for the specified usernames.
+
+        See [valkey.io](https://valkey.io/commands/acl-deluser) for more details.
+
+        Args:
+            *usernames (TEncodable): The usernames to delete.
+
+        Returns:
+            int: The number of users that were deleted.
+
+        Examples:
+            >>> await client.acl_deluser("user1", "user2")
+                2  # Both users were deleted
+        """
+        return cast(
+            int, await self._execute_command(RequestType.AclDelUser, list(usernames))
+        )
+
+    async def acl_dryrun(self, username: TEncodable, *command: TEncodable) -> bytes:
+        """
+        Simulate the execution of a given command by a given username.
+
+        See [valkey.io](https://valkey.io/commands/acl-dryrun) for more details.
+
+        Args:
+            username (TEncodable): The username to simulate the command execution for.
+            *command (TEncodable): The command and its arguments to simulate.
+
+        Returns:
+            bytes: "OK" if the user can execute the command, otherwise an error description.
+
+        Examples:
+            >>> await client.acl_dryrun("alice", "GET", "key1")
+                b'OK'
+            >>> await client.acl_dryrun("bob", "SET", "key1", "value")
+                b'This user has no permissions to run the \'set\' command'
+        """
+        args = [username] + list(command)
+        return cast(bytes, await self._execute_command(RequestType.AclDryRun, args))
+
+    async def acl_genpass(self, bits: Optional[int] = None) -> bytes:
+        """
+        Generate a random password value.
+
+        See [valkey.io](https://valkey.io/commands/acl-genpass) for more details.
+
+        Args:
+            bits (Optional[int]): The number of bits for the password.
+                If provided, must be a multiple of 4. Defaults to 256 bits.
+
+        Returns:
+            bytes: A random password string.
+
+        Examples:
+            >>> await client.acl_genpass()
+                b'dd721260bfe1b3d9601e7fbab36de6d04e2e67b0ef1c53de59d45950db0dd3cc'
+            >>> await client.acl_genpass(32)
+                b'355ef3dd'
+        """
+        args: List[TEncodable] = []
+        if bits is not None:
+            args.append(str(bits))
+        return cast(bytes, await self._execute_command(RequestType.AclGenPass, args))
+
+    async def acl_getuser(self, username: TEncodable) -> Optional[List[bytes]]:
+        """
+        Get the ACL details for the specified username.
+
+        See [valkey.io](https://valkey.io/commands/acl-getuser) for more details.
+
+        Args:
+            username (TEncodable): The username to get ACL details for.
+
+        Returns:
+            Optional[List[bytes]]: A list of ACL details for the user, or None if the user doesn't exist.
+                The list contains key-value pairs describing the user's ACL configuration.
+
+        Examples:
+            >>> await client.acl_getuser("alice")
+                [b'flags', [b'on', b'allkeys', b'allcommands'], b'passwords', [...], ...]
+            >>> await client.acl_getuser("nonexistent")
+                None
+        """
+        return cast(
+            Optional[List[bytes]],
+            await self._execute_command(RequestType.AclGetUser, [username]),
+        )
+
+    async def acl_list(self) -> List[bytes]:
+        """
+        Return a list of all ACL rules on the server.
+
+        See [valkey.io](https://valkey.io/commands/acl-list) for more details.
+
+        Returns:
+            List[bytes]: A list of ACL rule strings for all users.
+
+        Examples:
+            >>> await client.acl_list()
+                [b'user default on nopass ~* &* +@all', b'user alice on >password ~cached:* +get']
+        """
+        return cast(List[bytes], await self._execute_command(RequestType.AclList, []))
+
+    async def acl_load(self) -> bytes:
+        """
+        Load ACL rules from the configured ACL file.
+
+        See [valkey.io](https://valkey.io/commands/acl-load) for more details.
+
+        Note:
+            The server must be configured with the aclfile directive to use this command.
+
+        Returns:
+            bytes: "OK" if the ACL rules were loaded successfully.
+
+        Examples:
+            >>> await client.acl_load()
+                b'OK'
+        """
+        return cast(bytes, await self._execute_command(RequestType.AclLoad, []))
+
+    async def acl_log(self, count: Optional[int] = None) -> List[List[bytes]]:
+        """
+        Get ACL security events logged by the server.
+
+        See [valkey.io](https://valkey.io/commands/acl-log) for more details.
+
+        Args:
+            count (Optional[int]): The maximum number of entries to return.
+                If not provided, returns up to 10 entries by default.
+
+        Returns:
+            List[List[bytes]]: A list of ACL log entries. Each entry is a list of key-value pairs
+                describing the security event.
+
+        Examples:
+            >>> await client.acl_log(5)
+                [[b'count', b'1', b'reason', b'auth', b'context', b'toplevel', ...], ...]
+            >>> await client.acl_log()  # Default count
+                [[b'count', b'2', b'reason', b'command', ...], ...]
+        """
+        args: List[TEncodable] = []
+        if count is not None:
+            args.append(str(count))
+        return cast(
+            List[List[bytes]], await self._execute_command(RequestType.AclLog, args)
+        )
+
+    async def acl_log_reset(self) -> bytes:
+        """
+        Reset the ACL security events log.
+
+        See [valkey.io](https://valkey.io/commands/acl-log) for more details.
+
+        Returns:
+            bytes: "OK" if the log was reset successfully.
+
+        Examples:
+            >>> await client.acl_log_reset()
+                b'OK'
+        """
+        return cast(bytes, await self._execute_command(RequestType.AclLog, ["RESET"]))
+
+    async def acl_save(self) -> bytes:
+        """
+        Save ACL rules to the configured ACL file.
+
+        See [valkey.io](https://valkey.io/commands/acl-save) for more details.
+
+        Note:
+            The server must be configured with the aclfile directive to use this command.
+
+        Returns:
+            bytes: "OK" if the ACL rules were saved successfully.
+
+        Examples:
+            >>> await client.acl_save()
+                b'OK'
+        """
+        return cast(bytes, await self._execute_command(RequestType.AclSave, []))
+
+    async def acl_setuser(
+        self,
+        username: TEncodable,
+        *rules: TEncodable,
+    ) -> bytes:
+        """
+        Create or modify an ACL user and its associated rules.
+
+        See [valkey.io](https://valkey.io/commands/acl-setuser) for more details.
+
+        Args:
+            username (TEncodable): The username to create or modify.
+            *rules (TEncodable): ACL rules to apply to the user.
+                Rules can include: on/off, >password, ~pattern, &pattern, +command, -command, +@category, -@category, etc.
+
+        Returns:
+            bytes: "OK" if the user was created or modified successfully.
+
+        Examples:
+            >>> await client.acl_setuser("alice", "on", ">mypassword", "~cached:*", "+get", "+set")
+                b'OK'
+            >>> await client.acl_setuser("bob", "on", "nopass", "~*", "+@read")
+                b'OK'
+        """
+        args = [username] + list(rules)
+        return cast(bytes, await self._execute_command(RequestType.AclSetSser, args))
+
+    async def acl_users(self) -> List[bytes]:
+        """
+        Return a list of all registered users on the server.
+
+        See [valkey.io](https://valkey.io/commands/acl-users) for more details.
+
+        Returns:
+            List[bytes]: A list of usernames.
+
+        Examples:
+            >>> await client.acl_users()
+                [b'default', b'alice', b'bob']
+        """
+        return cast(List[bytes], await self._execute_command(RequestType.AclUsers, []))
+
+    async def acl_whoami(self) -> bytes:
+        """
+        Return the username associated with the current connection.
+
+        See [valkey.io](https://valkey.io/commands/acl-whoami) for more details.
+
+        Returns:
+            bytes: The username of the current connection.
+
+        Examples:
+            >>> await client.acl_whoami()
+                b'default'
+        """
+        return cast(bytes, await self._execute_command(RequestType.AclWhoami, []))
+
     async def get_pubsub_message(self) -> PubSubMsg:
         """
         Returns the next pubsub message.
