@@ -55,6 +55,31 @@ public abstract class AdvancedBaseClientConfiguration {
      * network issues or server restarts.
      *
      * <p>If not explicitly set, the Rust core will use its default reconciliation interval.
+     *
+     * <p>Must be a positive integer if set.
      */
     private final Integer pubsubReconciliationIntervalMs;
+
+    /** Abstract builder class for {@link AdvancedBaseClientConfiguration}. */
+    public abstract static class AdvancedBaseClientConfigurationBuilder<
+            C extends AdvancedBaseClientConfiguration,
+            B extends AdvancedBaseClientConfigurationBuilder<C, B>> {
+
+        /**
+         * Sets the PubSub reconciliation interval in milliseconds.
+         *
+         * @param pubsubReconciliationIntervalMs The interval in milliseconds (must be positive)
+         * @return This builder
+         * @throws IllegalArgumentException if the value is not positive
+         */
+        public B pubsubReconciliationIntervalMs(Integer pubsubReconciliationIntervalMs) {
+            if (pubsubReconciliationIntervalMs != null && pubsubReconciliationIntervalMs <= 0) {
+                throw new IllegalArgumentException(
+                        "pubsubReconciliationIntervalMs must be positive, got: "
+                                + pubsubReconciliationIntervalMs);
+            }
+            this.pubsubReconciliationIntervalMs = pubsubReconciliationIntervalMs;
+            return self();
+        }
+    }
 }

@@ -3,6 +3,7 @@ package glide.api.models.configuration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -95,5 +96,25 @@ public class BaseClientConfigurationTest {
                                         .build())
                         .build();
         assertEquals(intervalMs, config.getAdvancedConfiguration().getPubsubReconciliationIntervalMs());
+    }
+
+    @Test
+    public void testPubsubReconciliationIntervalMs_zero_throws() {
+        var builder = AdvancedGlideClientConfiguration.builder();
+        var exception =
+                assertThrows(
+                        IllegalArgumentException.class, () -> builder.pubsubReconciliationIntervalMs(0));
+        assertEquals(
+                "pubsubReconciliationIntervalMs must be positive, got: 0", exception.getMessage());
+    }
+
+    @Test
+    public void testPubsubReconciliationIntervalMs_negative_throws() {
+        var builder = AdvancedGlideClientConfiguration.builder();
+        var exception =
+                assertThrows(
+                        IllegalArgumentException.class, () -> builder.pubsubReconciliationIntervalMs(-1));
+        assertEquals(
+                "pubsubReconciliationIntervalMs must be positive, got: -1", exception.getMessage());
     }
 }
