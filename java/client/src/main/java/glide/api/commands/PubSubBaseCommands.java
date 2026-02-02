@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.GlideString;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -12,6 +13,30 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://valkey.io/commands/?group=pubsub">Pub/Sub Commands</a>
  */
 public interface PubSubBaseCommands {
+
+    /**
+     * Constant representing "unsubscribe from all channels". Pass this to {@link #unsubscribe(Set)}
+     * or {@link #unsubscribe(Set, int)} to unsubscribe from all channels.
+     *
+     * @example
+     *     <pre>{@code
+     * // Unsubscribe from all channels
+     * client.unsubscribe(PubSubBaseCommands.ALL_CHANNELS).get();
+     * }</pre>
+     */
+    Set<String> ALL_CHANNELS = Collections.emptySet();
+
+    /**
+     * Constant representing "unsubscribe from all patterns". Pass this to {@link #punsubscribe(Set)}
+     * or {@link #punsubscribe(Set, int)} to unsubscribe from all patterns.
+     *
+     * @example
+     *     <pre>{@code
+     * // Unsubscribe from all patterns
+     * client.punsubscribe(PubSubBaseCommands.ALL_PATTERNS).get();
+     * }</pre>
+     */
+    Set<String> ALL_PATTERNS = Collections.emptySet();
 
     /**
      * Publishes message on pubsub channel.

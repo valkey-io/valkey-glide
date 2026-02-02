@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.GlideString;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -12,6 +13,19 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://valkey.io/commands/publish/">Pub/Sub Commands</a>
  */
 public interface PubSubClusterCommands {
+
+    /**
+     * Constant representing "unsubscribe from all sharded channels". Pass this to {@link
+     * #sunsubscribe(Set)} or {@link #sunsubscribe(Set, int)} to unsubscribe from all sharded
+     * channels.
+     *
+     * @example
+     *     <pre>{@code
+     * // Unsubscribe from all sharded channels
+     * client.sunsubscribe(PubSubClusterCommands.ALL_SHARDED_CHANNELS).get();
+     * }</pre>
+     */
+    Set<String> ALL_SHARDED_CHANNELS = Collections.emptySet();
 
     /**
      * Publishes message on pubsub channel.
