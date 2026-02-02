@@ -12,7 +12,7 @@ use jni::objects::{GlobalRef, JClass, JObject, JStaticMethodID, JValue};
 use jni::signature;
 use jni::sys::{JNI_VERSION_1_8, jint, jlong, jstring};
 use parking_lot::Mutex;
-use redis::{RedisError, Value as ServerValue};
+use redis::{RedisError as ServerError, Value as ServerValue};
 use std::ffi::c_void;
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, channel};
@@ -57,7 +57,7 @@ pub extern "system" fn JNI_OnUnload(_vm: *const JavaVM, _reserved: *const c_void
 
 // Type aliases for complex types
 type PushMessageTuple = (Vec<u8>, Vec<u8>, Option<Vec<u8>>);
-type CallbackResult = Result<ServerValue, RedisError>;
+type CallbackResult = Result<ServerValue, ServerError>;
 
 // Runtime and JVM statics
 pub static JVM: std::sync::OnceLock<Arc<JavaVM>> = std::sync::OnceLock::new();
@@ -73,6 +73,8 @@ const DEFAULT_CALLBACK_WORKER_THREADS: usize = 2;
 static NATIVE_BUFFER_REGISTRY: std::sync::OnceLock<dashmap::DashMap<u64, Vec<u8>>> =
     std::sync::OnceLock::new();
 static NEXT_NATIVE_BUFFER_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+static TIMED_OUT_CALLBACKS: std::sync::OnceLock<dashmap::DashMap<jlong, ()>> =
+    std::sync::OnceLock::new();
 
 fn get_native_buffer_registry() -> &'static dashmap::DashMap<u64, Vec<u8>> {
     NATIVE_BUFFER_REGISTRY.get_or_init(dashmap::DashMap::new)
@@ -92,6 +94,20 @@ pub fn register_native_buffer(bytes: Vec<u8>) -> (u64, *mut u8, usize) {
 pub fn free_native_buffer(id: u64) -> bool {
     let registry = get_native_buffer_registry();
     registry.remove(&id).is_some()
+}
+
+fn get_timed_out_callbacks() -> &'static dashmap::DashMap<jlong, ()> {
+    TIMED_OUT_CALLBACKS.get_or_init(dashmap::DashMap::new)
+}
+
+pub fn mark_callback_timed_out(callback_id: jlong) {
+    let registry = get_timed_out_callbacks();
+    registry.insert(callback_id, ());
+}
+
+fn take_timed_out_callback(callback_id: jlong) -> bool {
+    let registry = get_timed_out_callbacks();
+    registry.remove(&callback_id).is_some()
 }
 
 /// Initialize or return the shared Tokio runtime.
@@ -366,33 +382,39 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
     })
 }
 
+/// Drop callbacks that already timed out on the Java side.
 fn process_callback_job(
     jvm: Arc<JavaVM>,
     callback_id: jlong,
     result: CallbackResult,
     binary_mode: bool,
 ) {
+    if take_timed_out_callback(callback_id) {
+        return;
+    }
+
     match jvm.attach_current_thread_as_daemon() {
         Ok(mut env) => match result {
             Ok(server_value) => {
                 let _ = env.push_local_frame(16);
 
-                // Direct conversion with size-based routing
                 let java_result = if should_use_direct_buffer(&server_value) {
-                    // For large data (>16KB): Use DirectByteBuffer
                     create_direct_byte_buffer(&mut env, server_value, !binary_mode)
                 } else {
-                    // For small data (<16KB): Regular JNI objects
                     crate::resp_value_to_java(&mut env, server_value, !binary_mode)
                 };
+
+                if take_timed_out_callback(callback_id) {
+                    let _ = unsafe { env.pop_local_frame(&JObject::null()) };
+                    return;
+                }
 
                 match java_result {
                     Ok(java_result) => {
                         let _ = complete_java_callback(&mut env, callback_id, &java_result);
                     }
                     Err(e) => {
-                        // Use ClientError for conversion failures
-                        let error_code = 0; // UNSPECIFIED error type
+                        let error_code = 0;
                         let error_msg = format!("Response conversion failed: {e}");
                         let _ = complete_java_callback_with_error_code(
                             &mut env,
@@ -404,10 +426,13 @@ fn process_callback_job(
                 }
                 let _ = unsafe { env.pop_local_frame(&JObject::null()) };
             }
-            Err(redis_err) => {
-                // Always use error codes for consistent error handling
-                let error_code = error_type(&redis_err) as i32;
-                let error_msg = error_message(&redis_err);
+            Err(server_err) => {
+                if take_timed_out_callback(callback_id) {
+                    return;
+                }
+
+                let error_code = error_type(&server_err) as i32;
+                let error_msg = error_message(&server_err);
                 let _ = complete_java_callback_with_error_code(
                     &mut env,
                     callback_id,
@@ -648,7 +673,7 @@ fn serialize_array_to_bytes(
     let mut bytes = Vec::new();
 
     // Write array marker and length
-    bytes.push(b'*'); // Redis array prefix
+    bytes.push(b'*'); // RESP array prefix
     bytes.extend_from_slice(&(arr.len() as u32).to_be_bytes());
 
     for value in arr {
