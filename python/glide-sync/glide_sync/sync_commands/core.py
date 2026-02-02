@@ -63,6 +63,25 @@ from glide_shared.routes import Route
 
 from .cluster_scan_cursor import ClusterScanCursor
 
+# PubSub constants for unsubscribing from all channels/patterns
+ALL_CHANNELS: Optional[Set[str]] = None
+"""
+Constant representing 'unsubscribe from all channels'.
+Pass this to unsubscribe() to unsubscribe from all channels.
+"""
+
+ALL_PATTERNS: Optional[Set[str]] = None
+"""
+Constant representing 'unsubscribe from all patterns'.
+Pass this to punsubscribe() to unsubscribe from all patterns.
+"""
+
+ALL_SHARDED_CHANNELS: Optional[Set[str]] = None
+"""
+Constant representing 'unsubscribe from all sharded channels'.
+Pass this to sunsubscribe() to unsubscribe from all sharded channels.
+"""
+
 
 class CoreCommands(Protocol):
     def _execute_command(
@@ -7711,6 +7730,8 @@ class CoreCommands(Protocol):
 
     def subscribe(self, channels: Set[str], timeout_ms: int = 0) -> None:
         """Subscribe to exact channels (blocking)."""
+        if timeout_ms < 0:
+            raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args: List[Union[str, bytes]] = cast(
             List[Union[str, bytes]], list(channels) + [str(timeout_ms)]
         )
@@ -7718,6 +7739,8 @@ class CoreCommands(Protocol):
 
     def psubscribe(self, patterns: Set[str], timeout_ms: int = 0) -> None:
         """Subscribe to channel patterns (blocking)."""
+        if timeout_ms < 0:
+            raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args: List[Union[str, bytes]] = cast(
             List[Union[str, bytes]], list(patterns) + [str(timeout_ms)]
         )
@@ -7726,7 +7749,18 @@ class CoreCommands(Protocol):
     def unsubscribe(
         self, channels: Optional[Set[str]] = None, timeout_ms: int = 0
     ) -> None:
-        """Unsubscribe from exact channels (blocking)."""
+        """
+        Unsubscribe from exact channels (blocking).
+
+        Args:
+            channels: A set of channel names to unsubscribe from.
+                    If None or ALL_CHANNELS, unsubscribes from all exact
+                    channels.
+            timeout_ms: Maximum time in milliseconds to wait for server
+                    confirmation. A value of 0 blocks indefinitely.
+        """
+        if timeout_ms < 0:
+            raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args: List[Union[str, bytes]] = cast(
             List[Union[str, bytes]],
             (list(channels) if channels else []) + [str(timeout_ms)],
@@ -7736,7 +7770,17 @@ class CoreCommands(Protocol):
     def punsubscribe(
         self, patterns: Optional[Set[str]] = None, timeout_ms: int = 0
     ) -> None:
-        """Unsubscribe from channel patterns (blocking)."""
+        """
+        Unsubscribe from channel patterns (blocking).
+
+        Args:
+            patterns: A set of patterns to unsubscribe from.
+                    If None or ALL_PATTERNS, unsubscribes from all patterns.
+            timeout_ms: Maximum time in milliseconds to wait for server
+                    confirmation. A value of 0 blocks indefinitely.
+        """
+        if timeout_ms < 0:
+            raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args: List[Union[str, bytes]] = cast(
             List[Union[str, bytes]],
             (list(patterns) if patterns else []) + [str(timeout_ms)],

@@ -61,7 +61,7 @@ EXCLUDED_TESTS = {
         "test_connection_timeout_on_unavailable_host",
         "test_invalid_tls_config_fails_fast",
         # Async-specific PubSub tests (use lazy subscription methods which sync doesn't support)
-        "test_lazy_client_multiple_subscription_types",  # Tests SubscriptionMethod.Lazy
+        "test_lazy_client_multiple_subscription_types",  # Tests with a lazy (deferred) connection.
         "test_lazy_vs_blocking_timeout",  # Tests subscribe_lazy() method
         # Async-specific PubSub tests (use callbacks or async patterns)
         "test_config_subscription_with_empty_set_is_allowed",

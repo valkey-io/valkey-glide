@@ -202,6 +202,84 @@ config = GlideClientConfiguration(
 client = GlideClient.create(config)
 ```
 
+### Pre-configured Subscriptions
+
+You can configure subscriptions at client creation time. The client will automatically establish these subscriptions during connection:
+
+```python
+# Async client with pre-configured subscriptions
+from glide import (
+    GlideClientConfiguration,
+    NodeAddress,
+    GlideClient,
+)
+
+def message_callback(msg, context):
+    print(f"Received message on {msg.channel}: {msg.message}")
+
+config = GlideClientConfiguration(
+    addresses=[NodeAddress("localhost", 6379)],
+    pubsub_subscriptions=GlideClientConfiguration.PubSubSubscriptions(
+        channels_and_patterns={
+            GlideClientConfiguration.PubSubChannelModes.Exact: {"news", "updates"},
+            GlideClientConfiguration.PubSubChannelModes.Pattern: {"events.*", "logs.*"},
+        },
+        callback=message_callback,
+        context=None  # Optional context passed to callback
+    )
+)
+client = await GlideClient.create(config)
+
+# Cluster client with sharded pubsub
+from glide import GlideClusterClientConfiguration, GlideClusterClient
+
+config = GlideClusterClientConfiguration(
+    addresses=[NodeAddress("localhost", 6379)],
+    pubsub_subscriptions=GlideClusterClientConfiguration.PubSubSubscriptions(
+        channels_and_patterns={
+            GlideClusterClientConfiguration.PubSubChannelModes.Exact: {"channel1"},
+            GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {"pattern*"},
+            GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {"shard_channel"},
+        },
+        callback=message_callback,
+        context=None
+    )
+)
+cluster_client = await GlideClusterClient.create(config)
+```
+
+### Dynamic Subscription Management
+
+Subscribe and unsubscribe at runtime:
+
+```python
+# Subscribe to channels
+await client.subscribe({"channel1", "channel2"}, timeout_ms=5000)
+
+# Subscribe to patterns
+await client.psubscribe({"news.*", "events.*"}, timeout_ms=5000)
+
+# Unsubscribe from specific channels
+await client.unsubscribe({"channel1"}, timeout_ms=5000)
+
+# Unsubscribe from all channels
+from glide.async_commands.core import ALL_CHANNELS
+await client.unsubscribe(ALL_CHANNELS, timeout_ms=5000)
+
+# Unsubscribe from all patterns
+from glide.async_commands.core import ALL_PATTERNS
+await client.punsubscribe(ALL_PATTERNS, timeout_ms=5000)
+
+# Cluster: sharded pubsub
+await cluster_client.ssubscribe({"shard_channel"}, timeout_ms=5000)
+await cluster_client.sunsubscribe({"shard_channel"}, timeout_ms=5000)
+
+# Check subscription state
+state = await client.get_subscriptions()
+print(f"Desired: {state.desired_subscriptions}")
+print(f"Actual: {state.actual_subscriptions}")
+```
+
 ### Client Statistics
 
 Monitor client performance and subscription health using `get_statistics()`:

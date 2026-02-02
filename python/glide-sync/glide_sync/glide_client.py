@@ -864,36 +864,35 @@ class BaseClient(CoreCommands):
 
             PubSubChannelModes = GlideClusterClientConfiguration.PubSubChannelModes
             StateClass = GlideClusterClientConfiguration.PubSubState
+            mode_map = {
+                "Exact": PubSubChannelModes.Exact,
+                "Pattern": PubSubChannelModes.Pattern,
+                "Sharded": PubSubChannelModes.Sharded,
+            }
         else:
             from glide_shared.config import GlideClientConfiguration
 
             PubSubChannelModes = GlideClientConfiguration.PubSubChannelModes
             StateClass = GlideClientConfiguration.PubSubState
+            mode_map = {
+                "Exact": PubSubChannelModes.Exact,
+                "Pattern": PubSubChannelModes.Pattern,
+            }
 
         desired_subscriptions = {}
         actual_subscriptions = {}
 
         for key_bytes, value_list in desired_dict.items():
             key = key_bytes.decode() if isinstance(key_bytes, bytes) else key_bytes
-            values = {v.decode() if isinstance(v, bytes) else v for v in value_list}
-
-            if key == "Exact":
-                desired_subscriptions[PubSubChannelModes.Exact] = values
-            elif key == "Pattern":
-                desired_subscriptions[PubSubChannelModes.Pattern] = values
-            elif key == "Sharded" and is_cluster:
-                desired_subscriptions[PubSubChannelModes.Sharded] = values
+            if key in mode_map:
+                values = {v.decode() if isinstance(v, bytes) else v for v in value_list}
+                desired_subscriptions[mode_map[key]] = values
 
         for key_bytes, value_list in actual_dict.items():
             key = key_bytes.decode() if isinstance(key_bytes, bytes) else key_bytes
-            values = {v.decode() if isinstance(v, bytes) else v for v in value_list}
-
-            if key == "Exact":
-                actual_subscriptions[PubSubChannelModes.Exact] = values
-            elif key == "Pattern":
-                actual_subscriptions[PubSubChannelModes.Pattern] = values
-            elif key == "Sharded" and is_cluster:
-                actual_subscriptions[PubSubChannelModes.Sharded] = values
+            if key in mode_map:
+                values = {v.decode() if isinstance(v, bytes) else v for v in value_list}
+                actual_subscriptions[mode_map[key]] = values
 
         return StateClass(
             desired_subscriptions=desired_subscriptions,

@@ -803,9 +803,18 @@ class BaseClient(CoreCommands):
         if is_cluster:
             PubSubChannelModes: Any = GlideClusterClientConfiguration.PubSubChannelModes
             StateClass: Any = GlideClusterClientConfiguration.PubSubState
+            mode_map = {
+                "Exact": PubSubChannelModes.Exact,
+                "Pattern": PubSubChannelModes.Pattern,
+                "Sharded": PubSubChannelModes.Sharded,
+            }
         else:
             PubSubChannelModes = GlideClientConfiguration.PubSubChannelModes
             StateClass = GlideClientConfiguration.PubSubState
+            mode_map = {
+                "Exact": PubSubChannelModes.Exact,
+                "Pattern": PubSubChannelModes.Pattern,
+            }
 
         # Convert bytes keys/values to strings and map to enums
         desired_subscriptions = {}
@@ -813,25 +822,15 @@ class BaseClient(CoreCommands):
 
         for key_bytes, value_list in desired_dict.items():
             key = key_bytes.decode()
-            values = {v.decode() for v in value_list}
-
-            if key == "Exact":
-                desired_subscriptions[PubSubChannelModes.Exact] = values
-            elif key == "Pattern":
-                desired_subscriptions[PubSubChannelModes.Pattern] = values
-            elif key == "Sharded" and is_cluster:
-                desired_subscriptions[PubSubChannelModes.Sharded] = values
+            if key in mode_map:
+                values = {v.decode() for v in value_list}
+                desired_subscriptions[mode_map[key]] = values
 
         for key_bytes, value_list in actual_dict.items():
             key = key_bytes.decode()
-            values = {v.decode() for v in value_list}
-
-            if key == "Exact":
-                actual_subscriptions[PubSubChannelModes.Exact] = values
-            elif key == "Pattern":
-                actual_subscriptions[PubSubChannelModes.Pattern] = values
-            elif key == "Sharded" and is_cluster:
-                actual_subscriptions[PubSubChannelModes.Sharded] = values
+            if key in mode_map:
+                values = {v.decode() for v in value_list}
+                actual_subscriptions[mode_map[key]] = values
 
         return StateClass(
             desired_subscriptions=desired_subscriptions,
