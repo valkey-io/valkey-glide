@@ -1510,6 +1510,9 @@ public class GlideClusterClient extends BaseClient
      * @see <a href="https://valkey.io/commands/ssubscribe/">valkey.io</a> for details
      */
     public CompletableFuture<Void> ssubscribe(Set<String> channels, int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
         String[] args = new String[channels.size() + 1];
         int i = 0;
         for (String channel : channels) {
@@ -1568,6 +1571,9 @@ public class GlideClusterClient extends BaseClient
      * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details
      */
     public CompletableFuture<Void> sunsubscribe(Set<String> channels, int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
         String[] args = new String[channels.size() + 1];
         int i = 0;
         for (String channel : channels) {
@@ -1591,6 +1597,9 @@ public class GlideClusterClient extends BaseClient
      * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details
      */
     public CompletableFuture<Void> sunsubscribe(int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
         return commandManager.submitNewCommand(
                 SUnsubscribeBlocking, new String[] {String.valueOf(timeoutMs)}, response -> null);
     }

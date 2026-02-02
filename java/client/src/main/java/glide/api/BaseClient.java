@@ -6257,6 +6257,9 @@ public abstract class BaseClient
     }
 
     public CompletableFuture<Void> subscribe(Set<String> channels, int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
         String[] args = new String[channels.size() + 1];
         int i = 0;
         for (String channel : channels) {
@@ -6272,6 +6275,9 @@ public abstract class BaseClient
     }
 
     public CompletableFuture<Void> psubscribe(Set<String> patterns, int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
         String[] args = new String[patterns.size() + 1];
         int i = 0;
         for (String pattern : patterns) {
@@ -6291,6 +6297,9 @@ public abstract class BaseClient
     }
 
     public CompletableFuture<Void> unsubscribe(Set<String> channels, int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
         String[] args = new String[channels.size() + 1];
         int i = 0;
         for (String channel : channels) {
@@ -6301,6 +6310,9 @@ public abstract class BaseClient
     }
 
     public CompletableFuture<Void> unsubscribe(int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
         return commandManager.submitNewCommand(
                 UnsubscribeBlocking, new String[] {String.valueOf(timeoutMs)}, response -> null);
     }
@@ -6315,6 +6327,9 @@ public abstract class BaseClient
     }
 
     public CompletableFuture<Void> punsubscribe(Set<String> patterns, int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
         String[] args = new String[patterns.size() + 1];
         int i = 0;
         for (String pattern : patterns) {
@@ -6325,6 +6340,9 @@ public abstract class BaseClient
     }
 
     public CompletableFuture<Void> punsubscribe(int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
         return commandManager.submitNewCommand(
                 PUnsubscribeBlocking, new String[] {String.valueOf(timeoutMs)}, response -> null);
     }
