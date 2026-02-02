@@ -7,7 +7,6 @@ import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
-import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
 import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
 import static command_request.CommandRequestOuterClass.RequestType.FCall;
@@ -165,31 +164,29 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(@NonNull String[] args) {
         // TODO if a command returns a map as a single value, ClusterValue misleads user
-        return commandManager.submitNewCommand(
-                CustomCommand, args, response -> ClusterValue.of(handleObjectOrNullResponse(response)));
+        return commandManager.submitCustomCommand(
+                args, response -> ClusterValue.of(handleObjectOrNullResponse(response)));
     }
 
     @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(@NonNull GlideString[] args) {
         // TODO if a command returns a map as a single value, ClusterValue misleads user
-        return commandManager.submitNewCommand(
-                CustomCommand,
-                args,
-                response -> ClusterValue.of(handleBinaryObjectOrNullResponse(response)));
+        return commandManager.submitCustomCommand(
+                args, response -> ClusterValue.of(handleBinaryObjectOrNullResponse(response)));
     }
 
     @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(
             @NonNull String[] args, @NonNull Route route) {
-        return commandManager.submitNewCommand(
-                CustomCommand, args, route, response -> handleCustomCommandResponse(route, response));
+        return commandManager.submitCustomCommand(
+                args, route, response -> handleCustomCommandResponse(route, response));
     }
 
     @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(
             @NonNull GlideString[] args, @NonNull Route route) {
-        return commandManager.submitNewCommand(
-                CustomCommand, args, route, response -> handleCustomCommandBinaryResponse(route, response));
+        return commandManager.submitCustomCommand(
+                args, route, response -> handleCustomCommandBinaryResponse(route, response));
     }
 
     @SuppressWarnings("unchecked")
@@ -1307,7 +1304,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Long> wait(long numreplicas, long timeout) {
         String[] arguments = new String[] {Long.toString(numreplicas), Long.toString(timeout)};
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 Wait, arguments, SimpleSingleNodeRoute.RANDOM, this::handleLongResponse);
     }
 
