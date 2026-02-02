@@ -40,7 +40,11 @@ public class StreamReadOptions {
      * Returns true if this options object specifies a BLOCK timeout, making the command a blocking
      * command.
      *
-     * @return true if BLOCK option is set
+     * <p>Note: We check {@code block != null} rather than {@code block != null && block != 0} because
+     * {@code BLOCK 0} means "block indefinitely" in Valkey/Redis, which is still a blocking command
+     * that should skip Java-side timeout enforcement.
+     *
+     * @return true if BLOCK option is set (including BLOCK 0 for indefinite blocking)
      */
     public boolean isBlocking() {
         return this.block != null;
