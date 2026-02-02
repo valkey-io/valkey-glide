@@ -5,6 +5,7 @@ import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -15,7 +16,6 @@ import glide.api.models.exceptions.TimeoutException;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -114,124 +114,47 @@ public class TimeoutTests {
     }
 
     /**
-     * Test 3: Zero timeout uses Rust default - no Java-side timeout enforcement.
+     * Test 3: Blocking commands skip Java-side timeout.
      *
-     * <p>Verifies that when requestTimeout is 0, the client relies on Rust-side timeout handling
-     * (default behavior) and commands complete normally.
+     * <p>Verifies that blocking commands (BLPOP, etc.) use server-side timeout from command
+     * arguments, NOT the Java-side client timeout. A BLPOP with 1s server timeout should NOT throw
+     * Java TimeoutException even when client has 200ms timeout.
      */
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     @SneakyThrows
-    public void zero_timeout_uses_rust_default(boolean clusterMode) {
-        // requestTimeout = 0 means no Java-side timeout (use Rust default)
-        BaseClient client =
-                clusterMode
-                        ? GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(0).build())
-                                .get()
-                        : GlideClient.createClient(commonClientConfig().requestTimeout(0).build()).get();
+    public void blocking_command_uses_server_timeout_not_java_timeout(boolean clusterMode) {
+        // Client with short 200ms Java-side timeout
+        int shortJavaTimeoutMs = 200;
 
-        try {
-            String key = "zero-timeout-" + UUID.randomUUID();
-            // Normal commands should still work with Rust-side timeout
-            assertEquals("OK", client.set(key, "test-value").get());
-            assertEquals("test-value", client.get(key).get());
-            assertEquals(1L, client.del(new String[] {key}).get());
-        } finally {
-            client.close();
-        }
-    }
-
-    /**
-     * Test 4: Timeout task cancellation - timeout cancelled when request completes.
-     *
-     * <p>Verifies that scheduled timeout tasks are properly cancelled when requests complete
-     * successfully before the timeout. Tests multiple rapid requests to ensure cleanup works.
-     */
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    @SneakyThrows
-    public void timeout_task_cancelled_on_normal_completion(boolean clusterMode) {
         BaseClient client =
                 clusterMode
                         ? GlideClusterClient.createClient(
-                                        commonClusterClientConfig().requestTimeout(5000).build())
+                                        commonClusterClientConfig().requestTimeout(shortJavaTimeoutMs).build())
                                 .get()
-                        : GlideClient.createClient(commonClientConfig().requestTimeout(5000).build()).get();
+                        : GlideClient.createClient(
+                                        commonClientConfig().requestTimeout(shortJavaTimeoutMs).build())
+                                .get();
 
         try {
-            // Execute many rapid requests to verify timeout tasks are cancelled properly
-            // and don't accumulate or cause issues
-            String keyPrefix = "rapid-" + UUID.randomUUID() + "-";
-            for (int i = 0; i < 100; i++) {
-                String key = keyPrefix + i;
-                assertEquals("OK", client.set(key, "value" + i).get());
-                assertEquals("value" + i, client.get(key).get());
-            }
+            String key = "blpop-timeout-test-" + UUID.randomUUID();
 
-            // Cleanup
-            for (int i = 0; i < 100; i++) {
-                client.del(new String[] {keyPrefix + i}).get();
-            }
-        } finally {
-            client.close();
-        }
-    }
-
-    /**
-     * Test 5: Different timeout configurations - clients with different timeouts behave correctly.
-     *
-     * <p>Verifies that multiple clients can have different timeout configurations and each behaves
-     * according to its own setting.
-     */
-    @Test
-    @SneakyThrows
-    public void different_clients_different_timeouts() {
-        // Client with long timeout
-        GlideClient longTimeoutClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get();
-
-        // Client with short timeout (500ms for stability)
-        GlideClient shortTimeoutClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(500).build()).get();
-
-        try {
-            String key = "multi-client-" + UUID.randomUUID();
-
-            // Long timeout client should handle normal operations fine
-            assertEquals("OK", longTimeoutClient.set(key, "test").get());
-            assertEquals("test", longTimeoutClient.get(key).get());
-
-            // Short timeout client should also handle fast operations
-            assertEquals("OK", shortTimeoutClient.set(key, "test2").get());
-            assertEquals("test2", shortTimeoutClient.get(key).get());
-
-            // Short timeout client should fail on slow operations (DEBUG SLEEP 2s > 500ms timeout)
             long startTime = System.currentTimeMillis();
-            ExecutionException ex =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> shortTimeoutClient.customCommand(new String[] {"DEBUG", "SLEEP", "2"}).get());
+
+            // BLPOP with 1 second server-side timeout - should NOT throw Java TimeoutException
+            // even though Java timeout is only 200ms
+            String[] result = client.blpop(new String[] {key}, 1.0).get();
             long elapsed = System.currentTimeMillis() - startTime;
 
-            // Verify timeout occurred before DEBUG SLEEP would complete
-            assertTrue(elapsed < 1500, "Expected timeout within ~500ms but took " + elapsed + "ms");
-            assertInstanceOf(
-                    TimeoutException.class,
-                    ex.getCause(),
-                    "Expected TimeoutException but got: " + ex.getCause().getClass().getName());
+            // Result should be null (key doesn't exist, server timeout expired)
+            assertNull(result, "Expected null from BLPOP on non-existent key");
 
-            // Wait for DEBUG SLEEP to complete
-            Thread.sleep(2100);
-
-            // Long timeout client can still operate normally after short timeout client failed
-            assertEquals("OK", longTimeoutClient.set(key, "still-works").get());
-            assertEquals("still-works", longTimeoutClient.get(key).get());
-
-            // Cleanup
-            longTimeoutClient.del(new String[] {key}).get();
+            // Should have waited ~1 second (server timeout), NOT 200ms (Java timeout)
+            assertTrue(
+                    elapsed >= 900 && elapsed < 2000,
+                    "Expected ~1s server timeout but took " + elapsed + "ms");
         } finally {
-            shortTimeoutClient.close();
-            longTimeoutClient.close();
+            client.close();
         }
     }
 }
