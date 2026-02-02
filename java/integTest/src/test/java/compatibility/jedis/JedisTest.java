@@ -1635,7 +1635,10 @@ public class JedisTest {
         String message = "msg";
 
         long received = jedis.publish(channel, message);
-        assertEquals(0L, received, "PUBLISH via Jedis compatibility uses GLIDE and returns 0 (subscriber count not provided)");
+        assertEquals(
+                0L,
+                received,
+                "PUBLISH via Jedis compatibility uses GLIDE and returns 0 (subscriber count not provided)");
 
         Set<String> channels = jedis.pubsubChannels();
         assertNotNull(channels, "PUBSUB CHANNELS should return a set");
@@ -1648,12 +1651,18 @@ public class JedisTest {
 
         Map<String, Long> numSub = jedis.pubsubNumSub(channel);
         assertNotNull(numSub, "PUBSUB NUMSUB should return a map");
-        assertTrue(numSub.containsKey(channel) || numSub.isEmpty(), "PUBSUB NUMSUB should contain channel or be empty");
+        assertTrue(
+                numSub.containsKey(channel) || numSub.isEmpty(),
+                "PUBSUB NUMSUB should contain channel or be empty");
 
         byte[] channelBytes = channel.getBytes(StandardCharsets.UTF_8);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
         long receivedBinary = jedis.publish(channelBytes, messageBytes);
-        assertEquals(0L, receivedBinary, "PUBLISH binary via Jedis compatibility uses GLIDE and returns 0 (subscriber count not provided)");
+        assertEquals(
+                0L,
+                receivedBinary,
+                "PUBLISH binary via Jedis compatibility uses GLIDE and returns 0 (subscriber count not"
+                        + " provided)");
 
         Set<byte[]> channelsBinary = jedis.pubsubChannels(channelBytes);
         assertNotNull(channelsBinary, "PUBSUB CHANNELS binary should return a set");

@@ -76,4 +76,95 @@ public class JedisPubSubCommandsTest {
         assertNotNull(c.getMethod("pubsubNumSub", String[].class));
         assertNotNull(c.getMethod("pubsubNumSub", byte[][].class));
     }
+
+    @Test
+    public void subscribeStringSignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("subscribe", String[].class);
+        assertEquals(void.class, m.getReturnType());
+    }
+
+    @Test
+    public void subscribeBinarySignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("subscribe", byte[][].class);
+        assertEquals(void.class, m.getReturnType());
+    }
+
+    @Test
+    public void psubscribeStringSignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("psubscribe", String[].class);
+        assertEquals(void.class, m.getReturnType());
+    }
+
+    @Test
+    public void psubscribeBinarySignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("psubscribe", byte[][].class);
+        assertEquals(void.class, m.getReturnType());
+    }
+
+    @Test
+    public void ssubscribeStringSignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("ssubscribe", String[].class);
+        assertEquals(void.class, m.getReturnType());
+    }
+
+    @Test
+    public void ssubscribeBinarySignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("ssubscribe", byte[][].class);
+        assertEquals(void.class, m.getReturnType());
+    }
+
+    @Test
+    public void unsubscribeStringSignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("unsubscribe", String[].class);
+        assertEquals(void.class, m.getReturnType());
+    }
+
+    @Test
+    public void unsubscribeBinarySignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("unsubscribe", byte[][].class);
+        assertEquals(void.class, m.getReturnType());
+    }
+
+    @Test
+    public void punsubscribeStringSignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("punsubscribe", String[].class);
+        assertEquals(void.class, m.getReturnType());
+    }
+
+    @Test
+    public void punsubscribeBinarySignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("punsubscribe", byte[][].class);
+        assertEquals(void.class, m.getReturnType());
+    }
+
+    @Test
+    public void sunsubscribeStringSignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("sunsubscribe", String[].class);
+        assertEquals(void.class, m.getReturnType());
+    }
+
+    @Test
+    public void sunsubscribeBinarySignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("sunsubscribe", byte[][].class);
+        assertEquals(void.class, m.getReturnType());
+    }
+
+    @Test
+    public void subscribeUnsubscribeMethodsExist() throws NoSuchMethodException {
+        Class<Jedis> c = Jedis.class;
+        // Subscribe methods
+        assertNotNull(c.getMethod("subscribe", String[].class));
+        assertNotNull(c.getMethod("subscribe", byte[][].class));
+        assertNotNull(c.getMethod("psubscribe", String[].class));
+        assertNotNull(c.getMethod("psubscribe", byte[][].class));
+        assertNotNull(c.getMethod("ssubscribe", String[].class));
+        assertNotNull(c.getMethod("ssubscribe", byte[][].class));
+        // Unsubscribe methods
+        assertNotNull(c.getMethod("unsubscribe", String[].class));
+        assertNotNull(c.getMethod("unsubscribe", byte[][].class));
+        assertNotNull(c.getMethod("punsubscribe", String[].class));
+        assertNotNull(c.getMethod("punsubscribe", byte[][].class));
+        assertNotNull(c.getMethod("sunsubscribe", String[].class));
+        assertNotNull(c.getMethod("sunsubscribe", byte[][].class));
+    }
 }
