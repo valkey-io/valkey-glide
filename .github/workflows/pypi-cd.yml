@@ -55,21 +55,21 @@ jobs:
               run: |
 
                   # For testing, Filter entries with pypi in PACKAGE_MANAGERS
-                  # AND exclude self-hosted runners (which become persistent)
                   export TESTS_PLATFORM_MATRIX=$(jq 'map(
-                      select(
-                          .PACKAGE_MANAGERS != null and 
-                          (.PACKAGE_MANAGERS | contains(["pypi"])) and
-                          (
-                              (.RUNNER | type == "string") or
-                              ((.RUNNER | type == "array") and (.RUNNER | contains(["self-hosted"]) | not))
-                          )
-                      )
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"])))
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "TESTS_PLATFORM_MATRIX=${TESTS_PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
-                  # For PR testing, just use the same matrix (no persistent runners needed)
-                  echo "PLATFORM_MATRIX=${TESTS_PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+                  # For building and publishing, replace "ephemeral" with "persistent" in RUNNER
+                  export PLATFORM_MATRIX=$(echo "${TESTS_PLATFORM_MATRIX}" | jq 'map(
+                      .RUNNER = (
+                          if (.RUNNER | type == "array") 
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
+                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
+                          end
+                      )
+                  )' | jq -c .)
+                  echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     start-self-hosted-runner:
         if: github.repository_owner == 'valkey-io'
@@ -234,11 +234,11 @@ jobs:
             - name: Generate protobuf files
               working-directory: ./python
               run: |
-                    # Verify correct protoc is used
-                    which protoc
-                    protoc --version
-                    
-                    python3 dev.py protobuf
+                  # Verify correct protoc is used
+                  which protoc
+                  protoc --version
+                  
+                  python3 dev.py protobuf
 
             - name: Include protobuf files in the package
               working-directory: ./python
@@ -566,8 +566,6 @@ jobs:
                       python/glide-sync/dist/*.tar.gz
 
     test-release:
-      # Remove the condition that requires publishing
-      # if: ${{ github.event_name == 'push' || inputs.publish_async == true || inputs.publish_sync == true }}
         name: Test the release
         runs-on: ${{ matrix.build.RUNNER }}
         needs:
@@ -591,6 +589,46 @@ jobs:
               uses: actions/setup-python@v5
               with:
                   python-version: 3.14
+
+            - name: Setup PyPy for testing
+              run: |
+                  ARCH=$(uname -m)
+
+                  if [[ "${{ matrix.build.NAMED_OS }}" == "linux" ]]; then
+                    if [[ "$ARCH" == "x86_64" ]]; then
+                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-linux64
+                      echo "Downloading PyPy 3.10 for x86_64"
+                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
+                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      
+                    elif [[ "$ARCH" == "aarch64" ]]; then
+                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-aarch64
+                      echo "Downloading PyPy 3.10 for aarch64"
+                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
+                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                    fi
+
+                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/bin
+
+                  elif [[ "${{ matrix.build.NAMED_OS }}" == "darwin" ]]; then
+                    if [[ "$ARCH" == "arm64" ]]; then
+                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_arm64
+                      echo "Downloading PyPy 3.10 for arm64"
+                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
+                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      
+                    else
+                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_x86_64
+                      echo "Downloading PyPy 3.10 for x86_64"
+                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
+                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                    fi
+
+                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/bin
+                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/lib/*.dylib
+                  fi
+
+                  echo "/opt/${PYPY_VERSION_3_10}/bin" >> ${GITHUB_PATH}
 
             - name: Install engine
               uses: ./.github/workflows/install-engine
@@ -629,10 +667,23 @@ jobs:
                   source venv/bin/activate
                   pip install -U pip
                   
-                  # Install from local wheel instead of PyPI
-                  pip install ${{ github.workspace }}/wheels-async/*.whl
+                  # Install CPython wheel only
+                  pip install ${{ github.workspace }}/wheels-async/*cp312*.whl
                   
                   python async_rc_test.py
+
+            - name: Run the Async Client tests with PyPy
+              shell: bash
+              working-directory: ./utils/release-candidate-testing/python
+              run: |
+                  pypy3 -m venv pypy_venv_async
+                  source pypy_venv_async/bin/activate
+                  pip install -U pip
+                  
+                  # Install PyPy wheel only
+                  pip install ${{ github.workspace }}/wheels-async/*pp310*.whl
+                  
+                  pypy3 async_rc_test.py
 
             ### TEST SYNC CLIENT ###
 
@@ -644,10 +695,23 @@ jobs:
                   source venv_sync/bin/activate
                   pip install -U pip
                   
-                  # Install from local wheel instead of PyPI
-                  pip install ${{ github.workspace }}/wheels-sync/*.whl
+                  # Install CPython wheel only
+                  pip install ${{ github.workspace }}/wheels-sync/*cp312*.whl
                   
                   python sync_rc_test.py
+
+            - name: Run the Sync Client tests with PyPy
+              shell: bash
+              working-directory: ./utils/release-candidate-testing/python
+              run: |
+                  pypy3 -m venv pypy_venv_sync
+                  source pypy_venv_sync/bin/activate
+                  pip install -U pip
+                  
+                  # Install PyPy wheel only
+                  pip install ${{ github.workspace }}/wheels-sync/*pp310*.whl
+                  
+                  pypy3 sync_rc_test.py
 
             # Reset the repository
             - name: Reset repository
