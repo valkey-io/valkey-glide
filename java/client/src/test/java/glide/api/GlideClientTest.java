@@ -21,7 +21,6 @@ import static command_request.CommandRequestOuterClass.RequestType.ConfigResetSt
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
 import static command_request.CommandRequestOuterClass.RequestType.Copy;
-import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
 import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
@@ -418,8 +417,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.submitNewCommand(eq(CustomCommand), eq(arguments), any()))
-                .thenReturn(testResponse);
+        when(commandManager.submitCustomCommand(eq(arguments), any())).thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object> response = service.customCommand(arguments);
@@ -442,8 +440,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.submitNewCommand(eq(CustomCommand), eq(arguments), any()))
-                .thenReturn(testResponse);
+        when(commandManager.submitCustomCommand(eq(arguments), any())).thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object> response = service.customCommand(arguments);
@@ -4743,7 +4740,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Object>>submitNewCommand(eq(BZMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, Object>>submitBlockingCommand(
+                        eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -4769,7 +4767,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Object>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Object>>submitBlockingCommand(
                         eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -4797,7 +4795,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Object>>submitNewCommand(eq(BZMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, Object>>submitBlockingCommand(
+                        eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -4827,7 +4826,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Object>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Object>>submitBlockingCommand(
                         eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -5172,7 +5171,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMin), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMin), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5197,7 +5196,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMin), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMin), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5271,7 +5270,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMax), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMax), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5296,7 +5295,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMax), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMax), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -7966,7 +7965,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Map<String, String[][]>>>submitNewCommand(
+        when(commandManager.<Map<String, Map<String, String[][]>>>submitBlockingCommand(
                         eq(XRead), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -8008,7 +8007,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitBlockingCommand(
                         eq(XRead), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -8851,7 +8850,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Map<String, String[][]>>>submitNewCommand(
+        when(commandManager.<Map<String, Map<String, String[][]>>>submitBlockingCommand(
                         eq(XReadGroup), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -8901,7 +8900,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitBlockingCommand(
                         eq(XReadGroup), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -10265,7 +10264,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(BLPop), eq(arguments), any()))
+        when(commandManager.<String[]>submitBlockingCommand(eq(BLPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -10290,7 +10289,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString[]>submitNewCommand(eq(BLPop), eq(arguments), any()))
+        when(commandManager.<GlideString[]>submitBlockingCommand(eq(BLPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -10415,7 +10414,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(BRPop), eq(arguments), any()))
+        when(commandManager.<String[]>submitBlockingCommand(eq(BRPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -10440,7 +10439,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString[]>submitNewCommand(eq(BRPop), eq(arguments), any()))
+        when(commandManager.<GlideString[]>submitBlockingCommand(eq(BRPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12037,7 +12036,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, String[]>>submitNewCommand(eq(BLMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, String[]>>submitBlockingCommand(
+                        eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12069,7 +12069,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+        when(commandManager.<Map<GlideString, GlideString[]>>submitBlockingCommand(
                         eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -12109,7 +12109,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, String[]>>submitNewCommand(eq(BLMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, String[]>>submitBlockingCommand(
+                        eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12148,7 +12149,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+        when(commandManager.<Map<GlideString, GlideString[]>>submitBlockingCommand(
                         eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -12641,7 +12642,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(BLMove), eq(arguments), any()))
+        when(commandManager.<String>submitBlockingCommand(eq(BLMove), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12669,7 +12670,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString>submitNewCommand(eq(BLMove), eq(arguments), any()))
+        when(commandManager.<GlideString>submitBlockingCommand(eq(BLMove), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -14540,7 +14541,8 @@ public class GlideClientTest {
         testResponse.complete(result);
 
         // match on protobuf request
-        when(commandManager.<Long>submitNewCommand(eq(Wait), eq(args), any())).thenReturn(testResponse);
+        when(commandManager.<Long>submitBlockingCommand(eq(Wait), eq(args), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Long> response = service.wait(numreplicas, timeout);
