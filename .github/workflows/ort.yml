@@ -87,7 +87,7 @@ jobs:
                   submodules: recursive
 
             - name: Install Rust toolchain
-              uses: dtolnay/rust-toolchain@1.85
+              uses: dtolnay/rust-toolchain@1.100
 
             - name: Build and install ORT
               if: steps.cache-ort.outputs.cache-hit != 'true'
