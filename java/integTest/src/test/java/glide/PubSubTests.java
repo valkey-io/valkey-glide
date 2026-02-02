@@ -1718,11 +1718,7 @@ public class PubSubTests {
 
             // Dynamic subscribe (lazy)
             Set<String> channels = Set.of(channel);
-            if (standalone) {
-                ((GlideClient) listener).subscribe(channels).get();
-            } else {
-                ((GlideClusterClient) listener).subscribe(channels).get();
-            }
+            listener.subscribe(channels).get();
             Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
             // Publish message
@@ -1737,6 +1733,8 @@ public class PubSubTests {
     }
 
     @SneakyThrows
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
     public void dynamic_psubscribe_lazy(boolean standalone) {
         try (BaseClient listener = createClient(standalone);
                 BaseClient sender = createClient(standalone)) {
@@ -1746,11 +1744,7 @@ public class PubSubTests {
 
             // Dynamic psubscribe (lazy)
             Set<String> patterns = Set.of(pattern);
-            if (standalone) {
-                ((GlideClient) listener).psubscribe(patterns).get();
-            } else {
-                ((GlideClusterClient) listener).psubscribe(patterns).get();
-            }
+            listener.psubscribe(patterns).get();
             Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
             // Publish message
@@ -1777,19 +1771,12 @@ public class PubSubTests {
 
             // Subscribe
             Set<String> channels = Set.of(channel);
-            if (standalone) {
-                ((GlideClient) listener).subscribe(channels).get();
-            } else {
-                ((GlideClusterClient) listener).subscribe(channels).get();
-            }
+            listener.subscribe(channels).get();
+
             Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
             // Unsubscribe
-            if (standalone) {
-                ((GlideClient) listener).unsubscribe(channels).get();
-            } else {
-                ((GlideClusterClient) listener).unsubscribe(channels).get();
-            }
+            listener.unsubscribe(channels).get();
             Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
             // Publish message
@@ -1903,11 +1890,7 @@ public class PubSubTests {
 
         // Now unsubscribe dynamically from the pre-configured subscription
         Set<String> channels = Set.of(channel);
-        if (standalone) {
-            ((GlideClient) listener).unsubscribe(channels).get();
-        } else {
-            ((GlideClusterClient) listener).unsubscribe(channels).get();
-        }
+        listener.unsubscribe(channels).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
         // Publish another message
@@ -1957,11 +1940,7 @@ public class PubSubTests {
 
             // Subscribe to a channel
             Set<String> channels = Set.of(channel);
-            if (standalone) {
-                ((GlideClient) client).subscribe(channels).get();
-            } else {
-                ((GlideClusterClient) client).subscribe(channels).get();
-            }
+            client.subscribe(channels).get();
 
             // Wait for reconciliation
             Thread.sleep(MESSAGE_DELIVERY_DELAY);
