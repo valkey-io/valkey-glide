@@ -6990,20 +6990,15 @@ public final class Jedis implements Closeable {
      *
      * @param channel the channel to publish to
      * @param message the message to publish
-     * @return the number of clients that received the message
+     * @return the number of clients that received the message, or 0 when using the GLIDE client
+     *     (subscriber count not provided by the underlying API)
      */
     public long publish(String channel, String message) {
         return executeCommandWithGlide(
                 "PUBLISH",
                 () -> {
-                    Object result =
-                            glideClient
-                                    .customCommand(new String[] {"PUBLISH", channel, message})
-                                    .get();
-                    if (result instanceof Number) {
-                        return ((Number) result).longValue();
-                    }
-                    return result != null ? Long.parseLong(result.toString()) : 0L;
+                    glideClient.publish(message, channel).get();
+                    return 0L;
                 });
     }
 
@@ -7012,25 +7007,15 @@ public final class Jedis implements Closeable {
      *
      * @param channel the channel to publish to
      * @param message the message to publish
-     * @return the number of clients that received the message
+     * @return the number of clients that received the message, or 0 when using the GLIDE client
+     *     (subscriber count not provided by the underlying API)
      */
     public long publish(final byte[] channel, final byte[] message) {
         return executeCommandWithGlide(
                 "PUBLISH",
                 () -> {
-                    Object result =
-                            glideClient
-                                    .customCommand(
-                                            new GlideString[] {
-                                                GlideString.of("PUBLISH"),
-                                                GlideString.of(channel),
-                                                GlideString.of(message)
-                                            })
-                                    .get();
-                    if (result instanceof Number) {
-                        return ((Number) result).longValue();
-                    }
-                    return result != null ? Long.parseLong(result.toString()) : 0L;
+                    glideClient.publish(GlideString.of(message), GlideString.of(channel)).get();
+                    return 0L;
                 });
     }
 

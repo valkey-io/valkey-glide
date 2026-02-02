@@ -1635,7 +1635,7 @@ public class JedisTest {
         String message = "msg";
 
         long received = jedis.publish(channel, message);
-        assertTrue(received >= 0, "PUBLISH should return non-negative subscriber count");
+        assertEquals(0L, received, "PUBLISH via Jedis compatibility uses GLIDE and returns 0 (subscriber count not provided)");
 
         Set<String> channels = jedis.pubsubChannels();
         assertNotNull(channels, "PUBSUB CHANNELS should return a set");
@@ -1653,7 +1653,7 @@ public class JedisTest {
         byte[] channelBytes = channel.getBytes(StandardCharsets.UTF_8);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
         long receivedBinary = jedis.publish(channelBytes, messageBytes);
-        assertTrue(receivedBinary >= 0, "PUBLISH binary should return non-negative subscriber count");
+        assertEquals(0L, receivedBinary, "PUBLISH binary via Jedis compatibility uses GLIDE and returns 0 (subscriber count not provided)");
 
         Set<byte[]> channelsBinary = jedis.pubsubChannels(channelBytes);
         assertNotNull(channelsBinary, "PUBSUB CHANNELS binary should return a set");

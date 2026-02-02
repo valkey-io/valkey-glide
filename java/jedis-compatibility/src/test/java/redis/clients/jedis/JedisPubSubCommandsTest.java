@@ -8,7 +8,12 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
-/** Unit tests for Jedis Pub/Sub commands (publish, pubsubChannels, pubsubNumPat, pubsubNumSub). */
+/**
+ * Unit tests for Jedis Pub/Sub commands (publish, pubsubChannels, pubsubNumPat, pubsubNumSub).
+ *
+ * <p>{@code publish()} delegates to the GLIDE Java client and returns {@code 0} (subscriber count
+ * is not provided by the underlying API).
+ */
 public class JedisPubSubCommandsTest {
 
     @Test

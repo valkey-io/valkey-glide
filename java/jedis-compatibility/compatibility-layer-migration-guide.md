@@ -70,7 +70,7 @@ blockingSocketTimeoutMillis
 - ⚠️ Sorted set operations (ZADD, ZREM, ZRANGE) - **Available via `sendCommand()` only**
 - ✅ Key operations (DEL, EXISTS, EXPIRE, TTL)
 - ✅ Connection commands (PING, SELECT)
-- ✅ Pub/Sub (PUBLISH, PUBSUB CHANNELS, PUBSUB NUMSUB, PUBSUB NUMPAT via `publish()`, `pubsubChannels()`, `pubsubNumSub()`, `pubsubNumPat()`)
+- ✅ Pub/Sub (PUBLISH, PUBSUB CHANNELS, PUBSUB NUMSUB, PUBSUB NUMPAT via `publish()`, `pubsubChannels()`, `pubsubNumSub()`, `pubsubNumPat()`). `publish()` uses the GLIDE Java API and returns `0` (subscriber count is not provided by the underlying API).
 - ✅ Generic commands via `sendCommand()` (Protocol.Command types only)
 
 ### Client Types
@@ -97,7 +97,7 @@ blockingSocketTimeoutMillis
 ### Advanced Features
 - **Transactions**: MULTI/EXEC transaction blocks not supported
 - **Pipelining**: Jedis pipelining functionality unavailable
-- **Pub/Sub subscribe mode**: SUBSCRIBE/PSUBSCRIBE/UNSUBSCRIBE/PUNSUBSCRIBE not implemented; use `sendCommand()` or native GLIDE. PUBLISH and PUBSUB CHANNELS/NUMSUB/NUMPAT are supported via typed methods.
+- **Pub/Sub subscribe mode**: SUBSCRIBE/PSUBSCRIBE/UNSUBSCRIBE/PUNSUBSCRIBE not implemented; use `sendCommand()` or native GLIDE. PUBLISH and PUBSUB CHANNELS/NUMSUB/NUMPAT are supported via typed methods. `publish()` delegates to the GLIDE Java client and returns `0` (subscriber count not available).
 - **Lua scripting**: EVAL/EVALSHA commands not supported
 - **Modules**: Redis module commands not available
 - **Typed set/sorted set methods**: No dedicated methods like `sadd()`, `zadd()` - use `sendCommand()` instead
