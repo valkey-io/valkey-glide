@@ -68,6 +68,7 @@ blockingSocketTimeoutMillis
 - ✅ List operations (LPUSH, RPUSH, LPOP, RPOP)
 - ⚠️ Set operations (SADD, SREM, SMEMBERS) - **Available via `sendCommand()` only**
 - ⚠️ Sorted set operations (ZADD, ZREM, ZRANGE) - **Available via `sendCommand()` only**
+- ✅ Stream operations (XADD, XLEN, XDEL, XRANGE, XREVRANGE, XREAD, XTRIM, XGROUP CREATE/DESTROY/SETID, XREADGROUP, XACK, XPENDING, XCLAIM, XAUTOCLAIM, XINFO STREAM/GROUPS/CONSUMERS)
 - ✅ Key operations (DEL, EXISTS, EXPIRE, TTL)
 - ✅ Connection commands (PING, SELECT)
 - ✅ Generic commands via `sendCommand()` (Protocol.Command types only)
