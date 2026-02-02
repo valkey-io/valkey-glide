@@ -140,14 +140,13 @@ public interface PubSubClusterCommands {
     /**
      * Subscribes the client to the specified sharded channels.
      *
-     * <p>Sharded pubsub (available in Redis 7.0+) allows messages to be published to specific
-     * cluster shards, reducing overhead compared to cluster-wide pubsub.
+     * <p>Sharded pubsub (available in Redis 7.0+) allows messages to be published to specific cluster
+     * shards, reducing overhead compared to cluster-wide pubsub.
      *
      * @param channels A set of sharded channel names to subscribe to
      * @return A {@link CompletableFuture} that completes when the subscription request is processed
-     *
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.ssubscribe(Set.of("shard-news", "shard-updates")).get();
      * }</pre>
      *
@@ -160,10 +159,10 @@ public interface PubSubClusterCommands {
      *
      * @param channels A set of sharded channel names to subscribe to
      * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation
-     * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times out
-     *
+     * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times
+     *     out
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.ssubscribe(Set.of("shard-news", "shard-updates"), 5000).get();
      * }</pre>
      *
@@ -175,9 +174,8 @@ public interface PubSubClusterCommands {
      * Unsubscribes the client from all currently subscribed sharded channels.
      *
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
-     *
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.sunsubscribe().get();
      * }</pre>
      *
@@ -190,9 +188,8 @@ public interface PubSubClusterCommands {
      *
      * @param channels A set of sharded channel names to unsubscribe from
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
-     *
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.sunsubscribe(Set.of("shard-news", "shard-updates")).get();
      * }</pre>
      *
@@ -205,10 +202,10 @@ public interface PubSubClusterCommands {
      *
      * @param channels A set of sharded channel names to unsubscribe from
      * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
-     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
-     *
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or
+     *     times out
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.sunsubscribe(Set.of("shard-news", "shard-updates"), 5000).get();
      * }</pre>
      *
@@ -220,10 +217,10 @@ public interface PubSubClusterCommands {
      * Unsubscribes the client from all currently subscribed sharded channels with a timeout.
      *
      * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
-     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
-     *
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or
+     *     times out
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.sunsubscribe(5000).get();
      * }</pre>
      *

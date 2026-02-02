@@ -100,7 +100,9 @@ import static command_request.CommandRequestOuterClass.RequestType.ObjectRefCoun
 import static command_request.CommandRequestOuterClass.RequestType.PExpire;
 import static command_request.CommandRequestOuterClass.RequestType.PExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.PExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.PSubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.PTTL;
+import static command_request.CommandRequestOuterClass.RequestType.PUnsubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.Persist;
 import static command_request.CommandRequestOuterClass.RequestType.PfAdd;
 import static command_request.CommandRequestOuterClass.RequestType.PfCount;
@@ -145,12 +147,14 @@ import static command_request.CommandRequestOuterClass.RequestType.SetRange;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
 import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.Strlen;
+import static command_request.CommandRequestOuterClass.RequestType.SubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.TTL;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.Touch;
 import static command_request.CommandRequestOuterClass.RequestType.Type;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static command_request.CommandRequestOuterClass.RequestType.Unlink;
+import static command_request.CommandRequestOuterClass.RequestType.UnsubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.Wait;
 import static command_request.CommandRequestOuterClass.RequestType.Watch;
 import static command_request.CommandRequestOuterClass.RequestType.XAck;
@@ -16075,5 +16079,81 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void subscribe_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+        String[] arguments = new String[] {"channel1", "channel2", "5000"};
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(eq(SubscribeBlocking), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.subscribe(Set.of("channel1", "channel2"), 5000);
+
+        // verify
+        assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void unsubscribe_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+        String[] arguments = new String[] {"channel1", "1000"};
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(eq(UnsubscribeBlocking), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.unsubscribe(Set.of("channel1"), 1000);
+
+        // verify
+        assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void psubscribe_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+        String[] arguments = new String[] {"pattern*", "3000"};
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(eq(PSubscribeBlocking), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.psubscribe(Set.of("pattern*"), 3000);
+
+        // verify
+        assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void punsubscribe_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+        String[] arguments = new String[] {"pattern*", "2000"};
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(eq(PUnsubscribeBlocking), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.punsubscribe(Set.of("pattern*"), 2000);
+
+        // verify
+        assertNull(response.get());
     }
 }

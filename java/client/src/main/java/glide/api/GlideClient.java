@@ -564,21 +564,25 @@ public class GlideClient extends BaseClient
      * being reconciled after a connection loss.
      *
      * <p>The returned {@link PubSubState} contains:
+     *
      * <ul>
-     *   <li><b>Desired subscriptions</b>: The channels/patterns the client intends to be subscribed to
+     *   <li><b>Desired subscriptions</b>: The channels/patterns the client intends to be subscribed
+     *       to
      *   <li><b>Actual subscriptions</b>: The channels/patterns currently subscribed on the server
      * </ul>
      *
      * @return A {@link CompletableFuture} that completes with a {@link PubSubState} containing:
      *     <ul>
-     *       <li>{@link glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode#EXACT EXACT}
-     *           - Set of exact channel names
-     *       <li>{@link glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode#PATTERN PATTERN}
-     *           - Set of pattern subscriptions
+     *       <li>{@link
+     *           glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode#EXACT
+     *           EXACT} - Set of exact channel names
+     *       <li>{@link
+     *           glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode#PATTERN
+     *           PATTERN} - Set of pattern subscriptions
      *     </ul>
      *
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * // Get current subscription state
      * PubSubState<PubSubChannelMode> state = client.getSubscriptions().get();
      *
@@ -596,7 +600,8 @@ public class GlideClient extends BaseClient
      * @see <a href="https://valkey.io/commands/pubsub-channels/">valkey.io</a> for PUBSUB CHANNELS
      * @see <a href="https://valkey.io/commands/pubsub-numpat/">valkey.io</a> for PUBSUB NUMPAT
      */
-    public CompletableFuture<PubSubState<StandaloneSubscriptionConfiguration.PubSubChannelMode>> getSubscriptions() {
+    public CompletableFuture<PubSubState<StandaloneSubscriptionConfiguration.PubSubChannelMode>>
+            getSubscriptions() {
         return commandManager.submitNewCommand(
                 GetSubscriptions,
                 EMPTY_STRING_ARRAY,

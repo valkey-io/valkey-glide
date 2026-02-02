@@ -104,8 +104,7 @@ public class BaseClientConfigurationTest {
         var exception =
                 assertThrows(
                         IllegalArgumentException.class, () -> builder.pubsubReconciliationIntervalMs(0));
-        assertEquals(
-                "pubsubReconciliationIntervalMs must be positive, got: 0", exception.getMessage());
+        assertEquals("pubsubReconciliationIntervalMs must be positive, got: 0", exception.getMessage());
     }
 
     @Test

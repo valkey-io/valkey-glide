@@ -167,13 +167,13 @@ public interface PubSubBaseCommands {
      * Subscribes the client to the specified channels.
      *
      * <p>This is a non-blocking operation that adds the channels to the desired subscription state.
-     * Messages published to these channels will be received via the configured callback or message queue.
+     * Messages published to these channels will be received via the configured callback or message
+     * queue.
      *
      * @param channels A set of channel names to subscribe to
      * @return A {@link CompletableFuture} that completes when the subscription request is processed
-     *
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.subscribe(Set.of("news", "updates")).get();
      * }</pre>
      *
@@ -184,15 +184,15 @@ public interface PubSubBaseCommands {
     /**
      * Subscribes the client to the specified channels with a timeout.
      *
-     * <p>This is a blocking operation that waits up to {@code timeoutMs} for the subscription
-     * to be confirmed by the server.
+     * <p>This is a blocking operation that waits up to {@code timeoutMs} for the subscription to be
+     * confirmed by the server.
      *
      * @param channels A set of channel names to subscribe to
      * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation
-     * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times out
-     *
+     * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times
+     *     out
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.subscribe(Set.of("news", "updates"), 5000).get();
      * }</pre>
      *
@@ -204,6 +204,7 @@ public interface PubSubBaseCommands {
      * Subscribes the client to channels matching the specified patterns.
      *
      * <p>Patterns use glob-style matching:
+     *
      * <ul>
      *   <li>{@code *} matches any sequence of characters
      *   <li>{@code ?} matches any single character
@@ -212,9 +213,8 @@ public interface PubSubBaseCommands {
      *
      * @param patterns A set of glob patterns to subscribe to
      * @return A {@link CompletableFuture} that completes when the subscription request is processed
-     *
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.psubscribe(Set.of("news.*", "updates.*")).get();
      * }</pre>
      *
@@ -225,15 +225,15 @@ public interface PubSubBaseCommands {
     /**
      * Subscribes the client to channels matching the specified patterns with a timeout.
      *
-     * <p>This is a blocking operation that waits up to {@code timeoutMs} for the subscription
-     * to be confirmed by the server.
+     * <p>This is a blocking operation that waits up to {@code timeoutMs} for the subscription to be
+     * confirmed by the server.
      *
      * @param patterns A set of glob patterns to subscribe to
      * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation
-     * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times out
-     *
+     * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times
+     *     out
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.psubscribe(Set.of("news.*", "updates.*"), 5000).get();
      * }</pre>
      *
@@ -245,9 +245,8 @@ public interface PubSubBaseCommands {
      * Unsubscribes the client from all currently subscribed channels.
      *
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
-     *
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.unsubscribe().get();
      * }</pre>
      *
@@ -260,9 +259,8 @@ public interface PubSubBaseCommands {
      *
      * @param channels A set of channel names to unsubscribe from
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
-     *
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.unsubscribe(Set.of("news", "updates")).get();
      * }</pre>
      *
@@ -275,10 +273,10 @@ public interface PubSubBaseCommands {
      *
      * @param channels A set of channel names to unsubscribe from
      * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
-     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
-     *
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or
+     *     times out
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.unsubscribe(Set.of("news", "updates"), 5000).get();
      * }</pre>
      *
@@ -290,10 +288,10 @@ public interface PubSubBaseCommands {
      * Unsubscribes the client from all currently subscribed channels with a timeout.
      *
      * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
-     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
-     *
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or
+     *     times out
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.unsubscribe(5000).get();
      * }</pre>
      *
@@ -305,9 +303,8 @@ public interface PubSubBaseCommands {
      * Unsubscribes the client from all currently subscribed patterns.
      *
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
-     *
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.punsubscribe().get();
      * }</pre>
      *
@@ -320,9 +317,8 @@ public interface PubSubBaseCommands {
      *
      * @param patterns A set of glob patterns to unsubscribe from
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
-     *
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.punsubscribe(Set.of("news.*", "updates.*")).get();
      * }</pre>
      *
@@ -335,10 +331,10 @@ public interface PubSubBaseCommands {
      *
      * @param patterns A set of glob patterns to unsubscribe from
      * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
-     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
-     *
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or
+     *     times out
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.punsubscribe(Set.of("news.*", "updates.*"), 5000).get();
      * }</pre>
      *
@@ -350,10 +346,10 @@ public interface PubSubBaseCommands {
      * Unsubscribes the client from all currently subscribed patterns with a timeout.
      *
      * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
-     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
-     *
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or
+     *     times out
      * @example
-     * <pre>{@code
+     *     <pre>{@code
      * client.punsubscribe(5000).get();
      * }</pre>
      *
