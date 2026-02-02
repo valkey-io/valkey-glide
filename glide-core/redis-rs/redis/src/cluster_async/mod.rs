@@ -2233,10 +2233,12 @@ where
                     .expect(MUTEX_READ_ERR)
                     .node_for_address(&addr);
 
-                // If not found, try DNS resolution - the address might be stored under resolved IP
                 let node = match node {
                     Some(n) => Some(n),
                     None => {
+                        // If it's a DNS endpoint, it could have been stored in the existing connections vector
+                        // using the resolved IP address instead of the DNS endpoint's name.
+                        // We shall check if a connection already exists under the resolved IP name.
                         if let Some((host, port)) = get_host_and_port_from_addr(&addr) {
                             let conn = get_socket_addrs(host, port).await.ok().and_then(
                                 |mut socket_addresses| {
@@ -2247,7 +2249,9 @@ where
                                 },
                             );
 
-                            // Update PushManager to use DNS address instead of IP
+                            // If we found a connection by IP lookup, update the PushManager. This ensures
+                            // the PushManager stores the DNS address (which matches the connection_map key)
+                            // instead of the old IP or config endpoint address, which is needed for pubsub tracking.
                             if let Some(ref node) = conn {
                                 node.user_connection
                                     .conn
@@ -2305,6 +2309,8 @@ where
         );
 
         // Notify the PubSub synchronizer about the new topology (using same lock)
+        // Since handle_topology_refresh is sync, no other task can benefit from us
+        // holding a read lock instead - hence, we continue with the write lock.
         if let Some(sync) = &inner.glide_connection_options.pubsub_synchronizer {
             sync.handle_topology_refresh(&write_guard.slot_map);
         }
