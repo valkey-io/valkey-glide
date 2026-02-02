@@ -8,6 +8,11 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.resps.AccessControlUser;
+import java.util.Map;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import redis.clients.jedis.resps.StreamInfo;
+import redis.clients.jedis.resps.StreamPendingSummary;
 
 /**
  * Unit tests for Jedis method signatures and API contracts. Tests that required methods exist with
@@ -183,5 +188,145 @@ public class JedisMethodsTest {
         Method aclDryRun =
                 jedisClass.getMethod("aclDryRun", String.class, String.class, String[].class);
         assertEquals(String.class, aclDryRun.getReturnType());
+    public void testStreamMethodSignaturesExist() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // XADD
+        assertNotNull(jedisClass.getMethod("xadd", String.class, Map.class));
+        assertNotNull(jedisClass.getMethod("xadd", String.class, StreamEntryID.class, Map.class));
+        assertNotNull(
+                jedisClass.getMethod("xadd", String.class, Map.class, boolean.class));
+
+        // XLEN, XDEL
+        assertNotNull(jedisClass.getMethod("xlen", String.class));
+        assertNotNull(jedisClass.getMethod("xdel", String.class, String[].class));
+        assertNotNull(jedisClass.getMethod("xdel", String.class, StreamEntryID[].class));
+
+        // XRANGE, XREVRANGE
+        assertNotNull(jedisClass.getMethod("xrange", String.class, String.class, String.class));
+        assertNotNull(
+                jedisClass.getMethod("xrange", String.class, String.class, String.class, long.class));
+        assertNotNull(
+                jedisClass.getMethod("xrevrange", String.class, String.class, String.class));
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xrevrange", String.class, String.class, String.class, long.class));
+
+        // XREAD
+        assertNotNull(jedisClass.getMethod("xread", Map.class));
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xread", Long.class, Long.class, Map.class));
+
+        // XTRIM
+        assertNotNull(jedisClass.getMethod("xtrim", String.class, long.class));
+        assertNotNull(jedisClass.getMethod("xtrim", String.class, long.class, boolean.class));
+        assertNotNull(jedisClass.getMethod("xtrim", String.class, String.class));
+
+        // XGROUP
+        assertNotNull(
+                jedisClass.getMethod("xgroupCreate", String.class, String.class, String.class));
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xgroupCreate", String.class, String.class, String.class, boolean.class));
+        assertNotNull(
+                jedisClass.getMethod("xgroupDestroy", String.class, String.class));
+        assertNotNull(
+                jedisClass.getMethod("xgroupSetId", String.class, String.class, String.class));
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xgroupCreateConsumer", String.class, String.class, String.class));
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xgroupDelConsumer", String.class, String.class, String.class));
+
+        // XREADGROUP, XACK
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xreadgroup", String.class, String.class, Map.class));
+        assertNotNull(jedisClass.getMethod("xack", String.class, String.class, String[].class));
+        assertNotNull(
+                jedisClass.getMethod("xack", String.class, String.class, StreamEntryID[].class));
+
+        // XPENDING
+        assertNotNull(jedisClass.getMethod("xpending", String.class, String.class));
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xpending",
+                        String.class,
+                        String.class,
+                        glide.api.models.commands.stream.StreamRange.class,
+                        glide.api.models.commands.stream.StreamRange.class,
+                        long.class));
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xpending", String.class, String.class, String.class, String.class, long.class));
+
+        // XCLAIM, XAUTOCLAIM
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xclaim",
+                        String.class,
+                        String.class,
+                        String.class,
+                        long.class,
+                        String[].class));
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xautoclaim",
+                        String.class,
+                        String.class,
+                        String.class,
+                        long.class,
+                        String.class));
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xautoclaim",
+                        String.class,
+                        String.class,
+                        String.class,
+                        long.class,
+                        String.class,
+                        long.class));
+
+        // XINFO
+        assertNotNull(jedisClass.getMethod("xinfoStream", String.class));
+        assertNotNull(jedisClass.getMethod("xinfoStreamAsInfo", String.class));
+        assertNotNull(jedisClass.getMethod("xinfoGroups", String.class));
+        assertNotNull(jedisClass.getMethod("xinfoConsumers", String.class, String.class));
+    }
+
+    @Test
+    public void testStreamMethodReturnTypes() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        Method xadd = jedisClass.getMethod("xadd", String.class, Map.class);
+        assertEquals(StreamEntryID.class, xadd.getReturnType());
+
+        Method xlen = jedisClass.getMethod("xlen", String.class);
+        assertEquals(long.class, xlen.getReturnType());
+
+        Method xrange =
+                jedisClass.getMethod("xrange", String.class, String.class, String.class);
+        assertEquals(List.class, xrange.getReturnType());
+
+        Method xread = jedisClass.getMethod("xread", Map.class);
+        assertEquals(Map.class, xread.getReturnType());
+
+        Method xpendingSummary = jedisClass.getMethod("xpending", String.class, String.class);
+        assertEquals(StreamPendingSummary.class, xpendingSummary.getReturnType());
+
+        Method xinfoStream = jedisClass.getMethod("xinfoStream", String.class);
+        assertEquals(Map.class, xinfoStream.getReturnType());
+
+        Method xinfoStreamAsInfo = jedisClass.getMethod("xinfoStreamAsInfo", String.class);
+        assertEquals(StreamInfo.class, xinfoStreamAsInfo.getReturnType());
+
+        Method xinfoGroups = jedisClass.getMethod("xinfoGroups", String.class);
+        assertEquals(List.class, xinfoGroups.getReturnType());
+
+        Method xinfoConsumers =
+                jedisClass.getMethod("xinfoConsumers", String.class, String.class);
+        assertEquals(List.class, xinfoConsumers.getReturnType());
     }
 }
