@@ -3614,11 +3614,11 @@ public class CommandTests {
                 }
                 assertTrue(foundUnkillable);
             } finally {
-                // If script wasn't killed, and it didn't time out - it blocks the server and cause rest
-                // test to fail.
-                // wait for the script to complete (we cannot kill it)
+                // Wait for the script to complete. Since promise may have been reassigned during retries,
+                // we need to wait for the current/latest script invocation to finish.
+                // The script runs for 6 seconds and is unkillable, so we must let it complete naturally.
                 try {
-                    promise.get();
+                    promise.get(6, java.util.concurrent.TimeUnit.SECONDS);
                 } catch (Exception ignored) {
                 }
                 script.close();
