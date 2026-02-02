@@ -76,6 +76,8 @@ import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.PubSubState;
+import glide.api.models.configuration.PubSubStateImpl;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -1472,11 +1474,41 @@ public class GlideClusterClient extends BaseClient
         }
     }
 
+    /**
+     * Subscribes the client to the specified sharded channels.
+     *
+     * <p>Sharded pubsub (available in Redis 7.0+) allows messages to be published to specific
+     * cluster shards, reducing overhead compared to cluster-wide pubsub.
+     *
+     * @param channels A set of sharded channel names to subscribe to
+     * @return A {@link CompletableFuture} that completes when the subscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.ssubscribe(Set.of("shard-news", "shard-updates")).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/ssubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> ssubscribe(Set<String> channels) {
         return commandManager.submitNewCommand(
-                SSubscribe, channels.toArray(new String[0]), response -> null);
+                SSubscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
 
+    /**
+     * Subscribes the client to the specified sharded channels with a timeout.
+     *
+     * @param channels A set of sharded channel names to subscribe to
+     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation
+     * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.ssubscribe(Set.of("shard-news", "shard-updates"), 5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/ssubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> ssubscribe(Set<String> channels, int timeoutMs) {
         String[] args = new String[channels.size() + 1];
         int i = 0;
@@ -1487,15 +1519,54 @@ public class GlideClusterClient extends BaseClient
         return commandManager.submitNewCommand(SSubscribeBlocking, args, response -> null);
     }
 
+    /**
+     * Unsubscribes the client from all currently subscribed sharded channels.
+     *
+     * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.sunsubscribe().get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> sunsubscribe() {
-        return commandManager.submitNewCommand(SUnsubscribe, new String[0], response -> null);
+        return commandManager.submitNewCommand(SUnsubscribe, EMPTY_STRING_ARRAY, response -> null);
     }
 
+    /**
+     * Unsubscribes the client from the specified sharded channels.
+     *
+     * @param channels A set of sharded channel names to unsubscribe from
+     * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.sunsubscribe(Set.of("shard-news", "shard-updates")).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> sunsubscribe(Set<String> channels) {
         return commandManager.submitNewCommand(
-                SUnsubscribe, channels.toArray(new String[0]), response -> null);
+                SUnsubscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
 
+    /**
+     * Unsubscribes the client from the specified sharded channels with a timeout.
+     *
+     * @param channels A set of sharded channel names to unsubscribe from
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.sunsubscribe(Set.of("shard-news", "shard-updates"), 5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> sunsubscribe(Set<String> channels, int timeoutMs) {
         String[] args = new String[channels.size() + 1];
         int i = 0;
@@ -1506,15 +1577,70 @@ public class GlideClusterClient extends BaseClient
         return commandManager.submitNewCommand(SUnsubscribeBlocking, args, response -> null);
     }
 
+    /**
+     * Unsubscribes the client from all currently subscribed sharded channels with a timeout.
+     *
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.sunsubscribe(5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> sunsubscribe(int timeoutMs) {
         return commandManager.submitNewCommand(
                 SUnsubscribeBlocking, new String[] {String.valueOf(timeoutMs)}, response -> null);
     }
 
-    public CompletableFuture<ClusterSubscriptionConfiguration.PubSubState> getSubscriptions() {
+    /**
+     * Gets the current subscription state for this cluster client.
+     *
+     * <p>Returns the desired and actual subscription states, which may differ if subscriptions are
+     * being reconciled after a connection loss.
+     *
+     * <p>The returned {@link PubSubState} contains:
+     * <ul>
+     *   <li><b>Desired subscriptions</b>: The channels/patterns the client intends to be subscribed to
+     *   <li><b>Actual subscriptions</b>: The channels/patterns currently subscribed on the server
+     * </ul>
+     *
+     * @return A {@link CompletableFuture} that completes with a {@link PubSubState} containing:
+     *     <ul>
+     *       <li>{@link glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode#EXACT EXACT}
+     *           - Set of exact channel names
+     *       <li>{@link glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode#PATTERN PATTERN}
+     *           - Set of pattern subscriptions
+     *       <li>{@link glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode#SHARDED SHARDED}
+     *           - Set of sharded channel subscriptions
+     *     </ul>
+     *
+     * @example
+     * <pre>{@code
+     * // Get current subscription state
+     * PubSubState<PubSubClusterChannelMode> state = client.getSubscriptions().get();
+     *
+     * // Check desired subscriptions
+     * Set<String> desiredChannels = state.getDesiredSubscriptions()
+     *     .getOrDefault(PubSubClusterChannelMode.EXACT, Set.of());
+     * Set<String> desiredSharded = state.getDesiredSubscriptions()
+     *     .getOrDefault(PubSubClusterChannelMode.SHARDED, Set.of());
+     *
+     * // Check actual subscriptions
+     * Set<String> actualChannels = state.getActualSubscriptions()
+     *     .getOrDefault(PubSubClusterChannelMode.EXACT, Set.of());
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/pubsub-channels/">valkey.io</a> for PUBSUB CHANNELS
+     * @see <a href="https://valkey.io/commands/pubsub-numpat/">valkey.io</a> for PUBSUB NUMPAT
+     * @see <a href="https://valkey.io/commands/pubsub-shardchannels/">valkey.io</a> for PUBSUB SHARDCHANNELS
+     */
+    public CompletableFuture<PubSubState<ClusterSubscriptionConfiguration.PubSubClusterChannelMode>> getSubscriptions() {
         return commandManager.submitNewCommand(
                 GetSubscriptions,
-                new String[0],
+                EMPTY_STRING_ARRAY,
                 response -> {
                     Object[] parsed = (Object[]) parseSubscriptionState(response);
                     @SuppressWarnings("unchecked")
@@ -1559,7 +1685,7 @@ public class GlideClusterClient extends BaseClient
                         }
                     }
 
-                    return new ClusterSubscriptionConfiguration.PubSubState(desired, actual);
+                    return new PubSubStateImpl<>(desired, actual);
                 });
     }
 }

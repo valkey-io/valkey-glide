@@ -146,18 +146,4 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
             return new ClusterSubscriptionConfiguration(callback, context, subscriptions);
         }
     }
-
-    /** Represents the subscription state for a cluster client. */
-    @Getter
-    public static final class PubSubState {
-        private final Map<PubSubClusterChannelMode, Set<String>> desiredSubscriptions;
-        private final Map<PubSubClusterChannelMode, Set<String>> actualSubscriptions;
-
-        public PubSubState(
-                Map<PubSubClusterChannelMode, Set<String>> desiredSubscriptions,
-                Map<PubSubClusterChannelMode, Set<String>> actualSubscriptions) {
-            this.desiredSubscriptions = Map.copyOf(desiredSubscriptions);
-            this.actualSubscriptions = Map.copyOf(actualSubscriptions);
-        }
-    }
 }

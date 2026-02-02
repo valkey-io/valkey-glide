@@ -127,18 +127,4 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
             return new StandaloneSubscriptionConfiguration(callback, context, subscriptions);
         }
     }
-
-    /** Represents the subscription state for a standalone client. */
-    @Getter
-    public static final class PubSubState {
-        private final Map<PubSubChannelMode, Set<String>> desiredSubscriptions;
-        private final Map<PubSubChannelMode, Set<String>> actualSubscriptions;
-
-        public PubSubState(
-                Map<PubSubChannelMode, Set<String>> desiredSubscriptions,
-                Map<PubSubChannelMode, Set<String>> actualSubscriptions) {
-            this.desiredSubscriptions = Map.copyOf(desiredSubscriptions);
-            this.actualSubscriptions = Map.copyOf(actualSubscriptions);
-        }
-    }
 }

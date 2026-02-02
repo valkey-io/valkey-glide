@@ -386,7 +386,7 @@ public abstract class BaseClient
     public static final String LCS_MATCHES_RESULT_KEY = "matches";
 
     // Constant empty arrays to reduce allocations
-    private static final String[] EMPTY_STRING_ARRAY = new String[0];
+    protected static final String[] EMPTY_STRING_ARRAY = new String[0];
     protected static final GlideString[] EMPTY_GLIDE_STRING_ARRAY = new GlideString[0];
 
     // Client components
@@ -6251,11 +6251,44 @@ public abstract class BaseClient
                 AclWhoami, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
+    /**
+     * Subscribes the client to the specified channels.
+     *
+     * <p>This is a non-blocking operation that adds the channels to the desired subscription state.
+     * Messages published to these channels will be received via the configured callback or message queue.
+     *
+     * @param channels A set of channel names to subscribe to
+     * @return A {@link CompletableFuture} that completes when the subscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.subscribe(Set.of("news", "updates")).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/subscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> subscribe(Set<String> channels) {
         return commandManager.submitNewCommand(
-                Subscribe, channels.toArray(new String[0]), response -> null);
+                Subscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
 
+    /**
+     * Subscribes the client to the specified channels with a timeout.
+     *
+     * <p>This is a blocking operation that waits up to {@code timeoutMs} for the subscription
+     * to be confirmed by the server.
+     *
+     * @param channels A set of channel names to subscribe to
+     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation
+     * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.subscribe(Set.of("news", "updates"), 5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/subscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> subscribe(Set<String> channels, int timeoutMs) {
         String[] args = new String[channels.size() + 1];
         int i = 0;
@@ -6266,11 +6299,48 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(SubscribeBlocking, args, response -> null);
     }
 
+    /**
+     * Subscribes the client to channels matching the specified patterns.
+     *
+     * <p>Patterns use glob-style matching:
+     * <ul>
+     *   <li>{@code *} matches any sequence of characters
+     *   <li>{@code ?} matches any single character
+     *   <li>{@code [abc]} matches one character from the set
+     * </ul>
+     *
+     * @param patterns A set of glob patterns to subscribe to
+     * @return A {@link CompletableFuture} that completes when the subscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.psubscribe(Set.of("news.*", "updates.*")).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/psubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> psubscribe(Set<String> patterns) {
         return commandManager.submitNewCommand(
-                PSubscribe, patterns.toArray(new String[0]), response -> null);
+                PSubscribe, patterns.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
 
+    /**
+     * Subscribes the client to channels matching the specified patterns with a timeout.
+     *
+     * <p>This is a blocking operation that waits up to {@code timeoutMs} for the subscription
+     * to be confirmed by the server.
+     *
+     * @param patterns A set of glob patterns to subscribe to
+     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation
+     * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.psubscribe(Set.of("news.*", "updates.*"), 5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/psubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> psubscribe(Set<String> patterns, int timeoutMs) {
         String[] args = new String[patterns.size() + 1];
         int i = 0;
@@ -6281,15 +6351,54 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(PSubscribeBlocking, args, response -> null);
     }
 
+    /**
+     * Unsubscribes the client from all currently subscribed channels.
+     *
+     * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.unsubscribe().get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> unsubscribe() {
         return commandManager.submitNewCommand(Unsubscribe, EMPTY_STRING_ARRAY, response -> null);
     }
 
+    /**
+     * Unsubscribes the client from the specified channels.
+     *
+     * @param channels A set of channel names to unsubscribe from
+     * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.unsubscribe(Set.of("news", "updates")).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> unsubscribe(Set<String> channels) {
         return commandManager.submitNewCommand(
-                Unsubscribe, channels.toArray(new String[0]), response -> null);
+                Unsubscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
 
+    /**
+     * Unsubscribes the client from the specified channels with a timeout.
+     *
+     * @param channels A set of channel names to unsubscribe from
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.unsubscribe(Set.of("news", "updates"), 5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> unsubscribe(Set<String> channels, int timeoutMs) {
         String[] args = new String[channels.size() + 1];
         int i = 0;
@@ -6300,20 +6409,72 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(UnsubscribeBlocking, args, response -> null);
     }
 
+    /**
+     * Unsubscribes the client from all currently subscribed channels with a timeout.
+     *
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.unsubscribe(5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> unsubscribe(int timeoutMs) {
         return commandManager.submitNewCommand(
                 UnsubscribeBlocking, new String[] {String.valueOf(timeoutMs)}, response -> null);
     }
 
+    /**
+     * Unsubscribes the client from all currently subscribed patterns.
+     *
+     * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.punsubscribe().get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> punsubscribe() {
         return commandManager.submitNewCommand(PUnsubscribe, EMPTY_STRING_ARRAY, response -> null);
     }
 
+    /**
+     * Unsubscribes the client from the specified patterns.
+     *
+     * @param patterns A set of glob patterns to unsubscribe from
+     * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
+     *
+     * @example
+     * <pre>{@code
+     * client.punsubscribe(Set.of("news.*", "updates.*")).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> punsubscribe(Set<String> patterns) {
         return commandManager.submitNewCommand(
-                PUnsubscribe, patterns.toArray(new String[0]), response -> null);
+                PUnsubscribe, patterns.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
 
+    /**
+     * Unsubscribes the client from the specified patterns with a timeout.
+     *
+     * @param patterns A set of glob patterns to unsubscribe from
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.punsubscribe(Set.of("news.*", "updates.*"), 5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> punsubscribe(Set<String> patterns, int timeoutMs) {
         String[] args = new String[patterns.size() + 1];
         int i = 0;
@@ -6324,6 +6485,19 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(PUnsubscribeBlocking, args, response -> null);
     }
 
+    /**
+     * Unsubscribes the client from all currently subscribed patterns with a timeout.
+     *
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
+     * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or times out
+     *
+     * @example
+     * <pre>{@code
+     * client.punsubscribe(5000).get();
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details
+     */
     public CompletableFuture<Void> punsubscribe(int timeoutMs) {
         return commandManager.submitNewCommand(
                 PUnsubscribeBlocking, new String[] {String.valueOf(timeoutMs)}, response -> null);

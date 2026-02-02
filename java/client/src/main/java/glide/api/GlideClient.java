@@ -54,6 +54,8 @@ import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.PubSubState;
+import glide.api.models.configuration.PubSubStateImpl;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.utils.ArgsBuilder;
@@ -555,10 +557,49 @@ public class GlideClient extends BaseClient
         return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponseBinary);
     }
 
-    public CompletableFuture<StandaloneSubscriptionConfiguration.PubSubState> getSubscriptions() {
+    /**
+     * Gets the current subscription state for this client.
+     *
+     * <p>Returns the desired and actual subscription states, which may differ if subscriptions are
+     * being reconciled after a connection loss.
+     *
+     * <p>The returned {@link PubSubState} contains:
+     * <ul>
+     *   <li><b>Desired subscriptions</b>: The channels/patterns the client intends to be subscribed to
+     *   <li><b>Actual subscriptions</b>: The channels/patterns currently subscribed on the server
+     * </ul>
+     *
+     * @return A {@link CompletableFuture} that completes with a {@link PubSubState} containing:
+     *     <ul>
+     *       <li>{@link glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode#EXACT EXACT}
+     *           - Set of exact channel names
+     *       <li>{@link glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode#PATTERN PATTERN}
+     *           - Set of pattern subscriptions
+     *     </ul>
+     *
+     * @example
+     * <pre>{@code
+     * // Get current subscription state
+     * PubSubState<PubSubChannelMode> state = client.getSubscriptions().get();
+     *
+     * // Check desired subscriptions
+     * Set<String> desiredChannels = state.getDesiredSubscriptions()
+     *     .getOrDefault(PubSubChannelMode.EXACT, Set.of());
+     * System.out.println("Desired channels: " + desiredChannels);
+     *
+     * // Check actual subscriptions
+     * Set<String> actualChannels = state.getActualSubscriptions()
+     *     .getOrDefault(PubSubChannelMode.EXACT, Set.of());
+     * System.out.println("Actual channels: " + actualChannels);
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/pubsub-channels/">valkey.io</a> for PUBSUB CHANNELS
+     * @see <a href="https://valkey.io/commands/pubsub-numpat/">valkey.io</a> for PUBSUB NUMPAT
+     */
+    public CompletableFuture<PubSubState<StandaloneSubscriptionConfiguration.PubSubChannelMode>> getSubscriptions() {
         return commandManager.submitNewCommand(
                 GetSubscriptions,
-                new String[0],
+                EMPTY_STRING_ARRAY,
                 response -> {
                     Object[] parsed = (Object[]) parseSubscriptionState(response);
                     @SuppressWarnings("unchecked")
@@ -597,7 +638,7 @@ public class GlideClient extends BaseClient
                         }
                     }
 
-                    return new StandaloneSubscriptionConfiguration.PubSubState(desired, actual);
+                    return new PubSubStateImpl<>(desired, actual);
                 });
     }
 }
