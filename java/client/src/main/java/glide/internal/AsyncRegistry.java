@@ -302,6 +302,26 @@ public final class AsyncRegistry {
     }
 
     /**
+     * Returns the count of pending timeout tasks. Intended for testing to verify timeout tasks are
+     * cancelled properly and don't accumulate.
+     *
+     * @return number of active timeout tasks
+     */
+    public static int getPendingTimeoutCount() {
+        return timeoutTasks.size();
+    }
+
+    /**
+     * Returns the count of active futures. Intended for testing to verify futures are cleaned up
+     * properly.
+     *
+     * @return number of active futures
+     */
+    public static int getActiveFutureCount() {
+        return activeFutures.size();
+    }
+
+    /**
      * Remove the automatic shutdown hook, allowing users to manage shutdown manually. Call this if
      * you want to control shutdown behavior yourself.
      */

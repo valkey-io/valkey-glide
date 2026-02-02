@@ -13,6 +13,7 @@ import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.exceptions.TimeoutException;
+import glide.internal.AsyncRegistry;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
@@ -153,6 +154,60 @@ public class TimeoutTests {
             assertTrue(
                     elapsed >= 900 && elapsed < 2000,
                     "Expected ~1s server timeout but took " + elapsed + "ms");
+        } finally {
+            client.close();
+        }
+    }
+
+    /**
+     * Test 4: Timeout tasks are cleaned up after request completion.
+     *
+     * <p>Verifies that scheduled timeout tasks are cancelled and removed from the registry when
+     * requests complete. Uses AsyncRegistry.getPendingTimeoutCount() to assert cleanup.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @SneakyThrows
+    public void timeout_tasks_cleaned_up_after_completion(boolean clusterMode) {
+        BaseClient client =
+                clusterMode
+                        ? GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(5000).build())
+                                .get()
+                        : GlideClient.createClient(commonClientConfig().requestTimeout(5000).build()).get();
+
+        try {
+            // Record initial state
+            int initialTimeouts = AsyncRegistry.getPendingTimeoutCount();
+            int initialFutures = AsyncRegistry.getActiveFutureCount();
+
+            // Execute multiple requests that each schedule a timeout task
+            String keyPrefix = "cleanup-test-" + UUID.randomUUID() + "-";
+            for (int i = 0; i < 50; i++) {
+                String key = keyPrefix + i;
+                assertEquals("OK", client.set(key, "value" + i).get());
+                assertEquals("value" + i, client.get(key).get());
+            }
+
+            // Allow brief time for async cleanup to complete
+            Thread.sleep(100);
+
+            // After all requests complete, timeout tasks should be cleaned up
+            int finalTimeouts = AsyncRegistry.getPendingTimeoutCount();
+            int finalFutures = AsyncRegistry.getActiveFutureCount();
+
+            assertEquals(
+                    initialTimeouts,
+                    finalTimeouts,
+                    "Timeout tasks should be cleaned up after completion, but found "
+                            + (finalTimeouts - initialTimeouts)
+                            + " leaked");
+            assertEquals(
+                    initialFutures,
+                    finalFutures,
+                    "Active futures should be cleaned up after completion, but found "
+                            + (finalFutures - initialFutures)
+                            + " leaked");
         } finally {
             client.close();
         }
