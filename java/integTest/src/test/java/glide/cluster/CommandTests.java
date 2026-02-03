@@ -3588,9 +3588,9 @@ public class CommandTests {
             }
         }
 
-        // Verify the server is responsive before exiting.
-        // This ping will block until the script completes on the server.
-        clusterClient.ping().get();
+        // Ensure the cluster is fully ready before the next test iteration.
+        // This is critical for parameterized tests (RESP2/RESP3) running back-to-back.
+        waitForNotBusy(clusterClient::scriptKill);
     }
 
     /**

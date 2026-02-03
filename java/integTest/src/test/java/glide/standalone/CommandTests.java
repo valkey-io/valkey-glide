@@ -1921,6 +1921,8 @@ public class CommandTests {
                 } catch (Exception ignored) {
                 }
                 script.close();
+                // Ensure the server is fully ready before the next test iteration
+                waitForNotBusy(regularClient::scriptKill);
             }
         }
     }
