@@ -7858,6 +7858,7 @@ class CoreCommands(Protocol):
 
         Raises:
             TimeoutError: If timeout > 0 and server confirmation not received within timeout.
+            ValueError: If timeout_ms is negative.
 
         Examples:
             >>> await client.subscribe({"channel1"})
@@ -7867,6 +7868,8 @@ class CoreCommands(Protocol):
             >>> await client.subscribe({"channel1", "channel2"}, timeout=5.0)
             >>> print("Subscribed successfully within 5 seconds")
         """
+        if timeout_ms < 0:
+            raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args = list(channels) + [str(timeout_ms)]
         await self._execute_command(RequestType.SubscribeBlocking, list(args))
 
@@ -7911,6 +7914,7 @@ class CoreCommands(Protocol):
 
         Raises:
             TimeoutError: If timeout > 0 and server confirmation not received within timeout.
+            ValueError: If timeout_ms is negative.
 
         Examples:
             >>> await client.psubscribe({"news.*"})
@@ -7920,6 +7924,8 @@ class CoreCommands(Protocol):
             >>> await client.psubscribe({"news.*", "updates.*"}, timeout=10.0)
             >>> print("Subscribed to patterns successfully within 10 seconds")
         """
+        if timeout_ms < 0:
+            raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args = list(patterns) + [str(timeout_ms)]
         await self._execute_command(RequestType.PSubscribeBlocking, list(args))
 
@@ -7970,6 +7976,7 @@ class CoreCommands(Protocol):
 
         Raises:
             TimeoutError: If timeout > 0 and server confirmation not received within timeout.
+            ValueError: If timeout_ms is negative.
 
         Examples:
             >>> await client.unsubscribe({"channel1"})
@@ -7982,6 +7989,8 @@ class CoreCommands(Protocol):
             >>> # Unsubscribe from all exact channels with timeout
             >>> await client.unsubscribe(timeout=10.0)
         """
+        if timeout_ms < 0:
+            raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args = (list(channels) if channels else []) + [str(timeout_ms)]
         await self._execute_command(RequestType.UnsubscribeBlocking, list(args))
 
@@ -8043,5 +8052,7 @@ class CoreCommands(Protocol):
             >>> # Unsubscribe from all patterns with timeout
             >>> await client.punsubscribe(timeout=10.0)
         """
+        if timeout_ms < 0:
+            raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args = (list(patterns) if patterns else []) + [str(timeout_ms)]
         await self._execute_command(RequestType.PUnsubscribeBlocking, list(args))

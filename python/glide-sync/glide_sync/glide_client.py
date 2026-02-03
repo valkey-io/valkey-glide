@@ -7,7 +7,11 @@ from typing import Any, List, Optional, Tuple, Union
 
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import PubSubMsg
-from glide_shared.config import BaseClientConfiguration
+from glide_shared.config import (
+    BaseClientConfiguration,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+)
 from glide_shared.constants import OK, TEncodable, TResult
 from glide_shared.exceptions import (
     ClosingError,
@@ -29,7 +33,6 @@ from glide_shared.routes import (
 )
 
 from ._glide_ffi import _GlideFFI
-from .config import GlideClientConfiguration, GlideClusterClientConfiguration
 from .logger import Level, Logger
 from .sync_commands.cluster_commands import ClusterCommands
 from .sync_commands.cluster_scan_cursor import ClusterScanCursor
@@ -821,6 +824,8 @@ class BaseClient(CoreCommands):
                 - total_bytes_compressed: Total bytes after compression
                 - total_bytes_decompressed: Total bytes after decompression
                 - compression_skipped_count: Number of times compression was skipped
+                - subscription_out_of_sync_count: Failed reconciliation attempts
+                - subscription_last_sync_timestamp: Last successful sync (milliseconds since epoch)
         """
         # Call the C FFI get_statistics function (returns by value, no manual free needed)
         stats = self._lib.get_statistics()
@@ -835,7 +840,64 @@ class BaseClient(CoreCommands):
             "total_bytes_compressed": stats.total_bytes_compressed,
             "total_bytes_decompressed": stats.total_bytes_decompressed,
             "compression_skipped_count": stats.compression_skipped_count,
+            "subscription_out_of_sync_count": stats.subscription_out_of_sync_count,
+            "subscription_last_sync_timestamp": stats.subscription_last_sync_timestamp,
         }
+
+    def get_subscriptions(self):
+        """Get subscription state (desired vs actual)."""
+        result = self._execute_command(RequestType.GetSubscriptions, [])
+        return self._parse_pubsub_state(
+            result, is_cluster=isinstance(self, GlideClusterClient)
+        )
+
+    def _parse_pubsub_state(self, result, is_cluster):
+        """Parse subscription state from Rust response."""
+        if not isinstance(result, list) or len(result) != 4:
+            raise RequestError("Invalid response format from GetSubscriptions")
+
+        desired_dict = result[1]
+        actual_dict = result[3]
+
+        if is_cluster:
+            from glide_shared.config import GlideClusterClientConfiguration
+
+            PubSubChannelModes = GlideClusterClientConfiguration.PubSubChannelModes
+            StateClass = GlideClusterClientConfiguration.PubSubState
+            mode_map = {
+                "Exact": PubSubChannelModes.Exact,
+                "Pattern": PubSubChannelModes.Pattern,
+                "Sharded": PubSubChannelModes.Sharded,
+            }
+        else:
+            from glide_shared.config import GlideClientConfiguration
+
+            PubSubChannelModes = GlideClientConfiguration.PubSubChannelModes
+            StateClass = GlideClientConfiguration.PubSubState
+            mode_map = {
+                "Exact": PubSubChannelModes.Exact,
+                "Pattern": PubSubChannelModes.Pattern,
+            }
+
+        desired_subscriptions = {}
+        actual_subscriptions = {}
+
+        for key_bytes, value_list in desired_dict.items():
+            key = key_bytes.decode() if isinstance(key_bytes, bytes) else key_bytes
+            if key in mode_map:
+                values = {v.decode() if isinstance(v, bytes) else v for v in value_list}
+                desired_subscriptions[mode_map[key]] = values
+
+        for key_bytes, value_list in actual_dict.items():
+            key = key_bytes.decode() if isinstance(key_bytes, bytes) else key_bytes
+            if key in mode_map:
+                values = {v.decode() if isinstance(v, bytes) else v for v in value_list}
+                actual_subscriptions[mode_map[key]] = values
+
+        return StateClass(
+            desired_subscriptions=desired_subscriptions,
+            actual_subscriptions=actual_subscriptions,
+        )
 
     def close(self):
         if not self._is_closed:
