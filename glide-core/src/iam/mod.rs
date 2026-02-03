@@ -131,7 +131,7 @@ async fn get_signing_identity(
         creds.access_key_id(),
         creds.secret_access_key(),
         creds.session_token().map(|s| s.to_string()),
-        None,
+        creds.expiry(),
         service_name,
     ))
 }
