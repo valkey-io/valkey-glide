@@ -58,7 +58,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -3813,8 +3812,7 @@ public class GlideClusterClientTest {
         testResponse.complete(null);
 
         // match on protobuf request
-        when(commandManager.<Void>submitNewCommand(
-                        eq(SSubscribeBlocking), any(String[].class), any()))
+        when(commandManager.<Void>submitNewCommand(eq(SSubscribeBlocking), any(String[].class), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -3842,5 +3840,4 @@ public class GlideClusterClientTest {
         // verify
         assertNull(response.get());
     }
-
 }

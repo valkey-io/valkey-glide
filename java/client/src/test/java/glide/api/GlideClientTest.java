@@ -286,7 +286,6 @@ import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueGlideS
 import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueStringArray;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -16090,8 +16089,7 @@ public class GlideClientTest {
         testResponse.complete(null);
 
         // match on protobuf request
-        when(commandManager.<Void>submitNewCommand(
-                        eq(SubscribeBlocking), any(String[].class), any()))
+        when(commandManager.<Void>submitNewCommand(eq(SubscribeBlocking), any(String[].class), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -16109,8 +16107,7 @@ public class GlideClientTest {
         testResponse.complete(null);
 
         // match on protobuf request
-        when(commandManager.<Void>submitNewCommand(
-                        eq(UnsubscribeBlocking), any(String[].class), any()))
+        when(commandManager.<Void>submitNewCommand(eq(UnsubscribeBlocking), any(String[].class), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -16128,8 +16125,7 @@ public class GlideClientTest {
         testResponse.complete(null);
 
         // match on protobuf request
-        when(commandManager.<Void>submitNewCommand(
-                        eq(PSubscribeBlocking), any(String[].class), any()))
+        when(commandManager.<Void>submitNewCommand(eq(PSubscribeBlocking), any(String[].class), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -16157,5 +16153,4 @@ public class GlideClientTest {
         // verify
         assertNull(response.get());
     }
-
 }
