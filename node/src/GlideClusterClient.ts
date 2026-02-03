@@ -53,6 +53,7 @@ import {
     createFunctionLoad,
     createFunctionRestore,
     createFunctionStats,
+    createGetSubscriptions,
     createInfo,
     createLastSave,
     createLolwut,
@@ -64,6 +65,10 @@ import {
     createScriptExists,
     createScriptFlush,
     createScriptKill,
+    createSSubscribe,
+    createSSubscribeBlocking,
+    createSUnsubscribe,
+    createSUnsubscribeBlocking,
     createTime,
     createUnWatch,
 } from "./Commands";
@@ -147,6 +152,51 @@ export namespace GlideClusterClientConfiguration {
         context?: any;
     }
 }
+
+/**
+ * Represents the subscription state for a cluster client.
+ *
+ * @remarks
+ * This interface provides information about the current PubSub subscriptions for a cluster client.
+ * It includes both the desired subscriptions (what the client wants to maintain) and the actual
+ * subscriptions (what is currently established on the server).
+ *
+ * The subscriptions are organized by channel mode:
+ * - {@link GlideClusterClientConfiguration.PubSubChannelModes.Exact | Exact}: Exact channel names
+ * - {@link GlideClusterClientConfiguration.PubSubChannelModes.Pattern | Pattern}: Channel patterns using glob-style matching
+ * - {@link GlideClusterClientConfiguration.PubSubChannelModes.Sharded | Sharded}: Sharded channels (available since Valkey 7.0)
+ *
+ * @example
+ * ```typescript
+ * const state = await clusterClient.getSubscriptions();
+ * console.log("Desired exact channels:", state.desiredSubscriptions[GlideClusterClientConfiguration.PubSubChannelModes.Exact]);
+ * console.log("Actual sharded channels:", state.actualSubscriptions[GlideClusterClientConfiguration.PubSubChannelModes.Sharded]);
+ * ```
+ */
+export interface ClusterPubSubState {
+    /**
+     * Desired subscriptions organized by channel mode.
+     * These are the subscriptions the client wants to maintain.
+     */
+    desiredSubscriptions: Partial<
+        Record<
+            GlideClusterClientConfiguration.PubSubChannelModes,
+            Set<GlideString>
+        >
+    >;
+
+    /**
+     * Actual subscriptions currently active on the server.
+     * These are the subscriptions that are actually established.
+     */
+    actualSubscriptions: Partial<
+        Record<
+            GlideClusterClientConfiguration.PubSubChannelModes,
+            Set<GlideString>
+        >
+    >;
+}
+
 /**
  * Configuration options for creating a {@link GlideClusterClient | GlideClusterClient}.
  *
@@ -1970,5 +2020,108 @@ export class GlideClusterClient extends BaseClient {
             decoder: Decoder.String,
             ...options,
         });
+    }
+
+    /**
+     * Subscribes the client to the specified sharded channels.
+     * Available since Valkey 7.0.
+     *
+     * @see {@link https://valkey.io/commands/ssubscribe/|valkey.io} for details.
+     *
+     * @param channels - A set of sharded channel names to subscribe to.
+     * @param options - (Optional) Additional parameters:
+     *   - timeout: Maximum time in milliseconds to wait for subscription confirmation.
+     *   - decoder: See {@link DecoderOption}.
+     * @returns A promise that resolves when the subscription is complete.
+     *
+     * @example
+     * ```typescript
+     * await clusterClient.ssubscribe(new Set(["shard-channel-1"]));
+     * ```
+     */
+    public async ssubscribe(
+        channels: Set<GlideString>,
+        options?: { timeout?: number } & DecoderOption,
+    ): Promise<void> {
+        const channelsArray = Array.from(channels);
+
+        if (options?.timeout !== undefined) {
+            return this.createWritePromise(
+                createSSubscribeBlocking(channelsArray, options.timeout),
+                options,
+            );
+        } else {
+            return this.createWritePromise(
+                createSSubscribe(channelsArray),
+                options,
+            );
+        }
+    }
+
+    /**
+     * Unsubscribes the client from the specified sharded channels.
+     * If no channels are provided, unsubscribes from all sharded channels.
+     * Available since Valkey 7.0.
+     *
+     * @see {@link https://valkey.io/commands/sunsubscribe/|valkey.io} for details.
+     *
+     * @param channels - (Optional) A set of sharded channel names to unsubscribe from.
+     * @param options - (Optional) Additional parameters:
+     *   - timeout: Maximum time in milliseconds to wait for unsubscription confirmation.
+     *   - decoder: See {@link DecoderOption}.
+     * @returns A promise that resolves when the unsubscription is complete.
+     *
+     * @example
+     * ```typescript
+     * await clusterClient.sunsubscribe(new Set(["shard-channel-1"]));
+     * // Unsubscribe from all sharded channels
+     * await clusterClient.sunsubscribe();
+     * ```
+     */
+    public async sunsubscribe(
+        channels?: Set<GlideString>,
+        options?: { timeout?: number } & DecoderOption,
+    ): Promise<void> {
+        const channelsArray = channels ? Array.from(channels) : undefined;
+
+        if (options?.timeout !== undefined) {
+            // For blocking sunsubscribe, we need to provide channels (empty array if none)
+            return this.createWritePromise(
+                createSUnsubscribeBlocking(
+                    channelsArray ?? [],
+                    options.timeout,
+                ),
+                options,
+            );
+        } else {
+            return this.createWritePromise(
+                createSUnsubscribe(channelsArray),
+                options,
+            );
+        }
+    }
+
+    /**
+     * Returns the current subscription state for the cluster client.
+     *
+     * @see {@link https://valkey.io/commands/pubsub/|valkey.io} for details.
+     *
+     * @returns A promise that resolves to the subscription state containing
+     *          desired and actual subscriptions organized by channel mode.
+     *
+     * @example
+     * ```typescript
+     * const state = await clusterClient.getSubscriptions();
+     * console.log("Desired exact channels:", state.desiredSubscriptions[GlideClusterClientConfiguration.PubSubChannelModes.Exact]);
+     * console.log("Actual sharded channels:", state.actualSubscriptions[GlideClusterClientConfiguration.PubSubChannelModes.Sharded]);
+     * ```
+     */
+    public async getSubscriptions(): Promise<ClusterPubSubState> {
+        const response = await this.createWritePromise<unknown[]>(
+            createGetSubscriptions(),
+        );
+        return this.parseGetSubscriptionsResponse<GlideClusterClientConfiguration.PubSubChannelModes>(
+            response,
+        );
     }
 }
