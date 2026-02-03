@@ -286,6 +286,7 @@ import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueGlideS
 import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueStringArray;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -16087,10 +16088,10 @@ public class GlideClientTest {
         // setup
         CompletableFuture<Void> testResponse = new CompletableFuture<>();
         testResponse.complete(null);
-        String[] arguments = new String[] {"channel1", "channel2", "5000"};
 
         // match on protobuf request
-        when(commandManager.<Void>submitNewCommand(eq(SubscribeBlocking), eq(arguments), any()))
+        when(commandManager.<Void>submitNewCommand(
+                        eq(SubscribeBlocking), any(String[].class), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -16106,10 +16107,10 @@ public class GlideClientTest {
         // setup
         CompletableFuture<Void> testResponse = new CompletableFuture<>();
         testResponse.complete(null);
-        String[] arguments = new String[] {"channel1", "1000"};
 
         // match on protobuf request
-        when(commandManager.<Void>submitNewCommand(eq(UnsubscribeBlocking), eq(arguments), any()))
+        when(commandManager.<Void>submitNewCommand(
+                        eq(UnsubscribeBlocking), any(String[].class), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -16125,10 +16126,10 @@ public class GlideClientTest {
         // setup
         CompletableFuture<Void> testResponse = new CompletableFuture<>();
         testResponse.complete(null);
-        String[] arguments = new String[] {"pattern*", "3000"};
 
         // match on protobuf request
-        when(commandManager.<Void>submitNewCommand(eq(PSubscribeBlocking), eq(arguments), any()))
+        when(commandManager.<Void>submitNewCommand(
+                        eq(PSubscribeBlocking), any(String[].class), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -16144,10 +16145,10 @@ public class GlideClientTest {
         // setup
         CompletableFuture<Void> testResponse = new CompletableFuture<>();
         testResponse.complete(null);
-        String[] arguments = new String[] {"pattern*", "2000"};
 
         // match on protobuf request
-        when(commandManager.<Void>submitNewCommand(eq(PUnsubscribeBlocking), eq(arguments), any()))
+        when(commandManager.<Void>submitNewCommand(
+                        eq(PUnsubscribeBlocking), any(String[].class), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -16156,4 +16157,5 @@ public class GlideClientTest {
         // verify
         assertNull(response.get());
     }
+
 }

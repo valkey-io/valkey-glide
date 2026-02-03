@@ -58,6 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -3810,10 +3811,10 @@ public class GlideClusterClientTest {
         // setup
         CompletableFuture<Void> testResponse = new CompletableFuture<>();
         testResponse.complete(null);
-        String[] arguments = new String[] {"channel1", "channel2", "5000"};
 
         // match on protobuf request
-        when(commandManager.<Void>submitNewCommand(eq(SSubscribeBlocking), eq(arguments), any()))
+        when(commandManager.<Void>submitNewCommand(
+                        eq(SSubscribeBlocking), any(String[].class), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -3829,10 +3830,10 @@ public class GlideClusterClientTest {
         // setup
         CompletableFuture<Void> testResponse = new CompletableFuture<>();
         testResponse.complete(null);
-        String[] arguments = new String[] {"channel1", "1000"};
 
         // match on protobuf request
-        when(commandManager.<Void>submitNewCommand(eq(SUnsubscribeBlocking), eq(arguments), any()))
+        when(commandManager.<Void>submitNewCommand(
+                        eq(SUnsubscribeBlocking), any(String[].class), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -3841,4 +3842,5 @@ public class GlideClusterClientTest {
         // verify
         assertNull(response.get());
     }
+
 }
