@@ -38,6 +38,7 @@ import {
     createFunctionLoad,
     createFunctionRestore,
     createFunctionStats,
+    createGetSubscriptions,
     createInfo,
     createLastSave,
     createLolwut,
@@ -96,6 +97,43 @@ export namespace GlideClientConfiguration {
         /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
         context?: any;
     }
+}
+
+/**
+ * Represents the subscription state for a standalone client.
+ *
+ * @remarks
+ * This interface provides information about the current PubSub subscriptions for a standalone client.
+ * It includes both the desired subscriptions (what the client wants to maintain) and the actual
+ * subscriptions (what is currently established on the server).
+ *
+ * The subscriptions are organized by channel mode:
+ * - {@link GlideClientConfiguration.PubSubChannelModes.Exact | Exact}: Exact channel names
+ * - {@link GlideClientConfiguration.PubSubChannelModes.Pattern | Pattern}: Channel patterns using glob-style matching
+ *
+ * @example
+ * ```typescript
+ * const state = await client.getSubscriptions();
+ * console.log("Desired exact channels:", state.desiredSubscriptions[GlideClientConfiguration.PubSubChannelModes.Exact]);
+ * console.log("Actual exact channels:", state.actualSubscriptions[GlideClientConfiguration.PubSubChannelModes.Exact]);
+ * ```
+ */
+export interface StandalonePubSubState {
+    /**
+     * Desired subscriptions organized by channel mode.
+     * These are the subscriptions the client wants to maintain.
+     */
+    desiredSubscriptions: Partial<
+        Record<GlideClientConfiguration.PubSubChannelModes, Set<GlideString>>
+    >;
+
+    /**
+     * Actual subscriptions currently active on the server.
+     * These are the subscriptions that are actually established.
+     */
+    actualSubscriptions: Partial<
+        Record<GlideClientConfiguration.PubSubChannelModes, Set<GlideString>>
+    >;
 }
 
 /**
@@ -1066,5 +1104,29 @@ export class GlideClient extends BaseClient {
         options?: ScanOptions & DecoderOption,
     ): Promise<[GlideString, GlideString[]]> {
         return this.createWritePromise(createScan(cursor, options), options);
+    }
+
+    /**
+     * Returns the current subscription state for the client.
+     *
+     * @see {@link https://valkey.io/commands/pubsub/|valkey.io} for details.
+     *
+     * @returns A promise that resolves to the subscription state containing
+     *          desired and actual subscriptions organized by channel mode.
+     *
+     * @example
+     * ```typescript
+     * const state = await client.getSubscriptions();
+     * console.log("Desired exact channels:", state.desiredSubscriptions[GlideClientConfiguration.PubSubChannelModes.Exact]);
+     * console.log("Actual exact channels:", state.actualSubscriptions[GlideClientConfiguration.PubSubChannelModes.Exact]);
+     * ```
+     */
+    public async getSubscriptions(): Promise<StandalonePubSubState> {
+        const response = await this.createWritePromise<unknown[]>(
+            createGetSubscriptions(),
+        );
+        return this.parseGetSubscriptionsResponse<GlideClientConfiguration.PubSubChannelModes>(
+            response,
+        );
     }
 }

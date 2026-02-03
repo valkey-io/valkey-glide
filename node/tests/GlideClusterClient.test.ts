@@ -2511,7 +2511,11 @@ describe("GlideClusterClient", () => {
                 expect(stats).toHaveProperty("total_bytes_compressed");
                 expect(stats).toHaveProperty("total_bytes_decompressed");
                 expect(stats).toHaveProperty("compression_skipped_count");
-                expect(Object.keys(stats)).toHaveLength(8);
+                expect(stats).toHaveProperty("subscription_out_of_sync_count");
+                expect(stats).toHaveProperty(
+                    "subscription_last_sync_timestamp",
+                );
+                expect(Object.keys(stats)).toHaveLength(10);
             } finally {
                 // Ensure the client is properly closed
                 glideClientForTesting?.close();
