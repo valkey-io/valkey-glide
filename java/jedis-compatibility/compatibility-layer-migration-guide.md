@@ -97,7 +97,7 @@ blockingSocketTimeoutMillis
 - **Transactions**: MULTI/EXEC transaction blocks not supported
 - **Pipelining**: Jedis pipelining functionality unavailable
 - **Pub/Sub**: Redis publish/subscribe not implemented
-- **Lua scripting**: EVAL/EVALSHA commands not supported
+- ✅ **Lua scripting**: Full support for EVAL/EVALSHA, SCRIPT management, and Valkey Functions (FCALL/FUNCTION *)
 - **Modules**: Redis module commands not available
 - **Typed set/sorted set methods**: No dedicated methods like `sadd()`, `zadd()` - use `sendCommand()` instead
 
