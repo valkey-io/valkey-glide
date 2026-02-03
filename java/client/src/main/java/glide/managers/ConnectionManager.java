@@ -378,6 +378,12 @@ public class ConnectionManager {
                             requestBuilder.setTcpNodelay(advanced.getTcpNoDelay());
                         }
 
+                        // Set PubSub reconciliation interval (only if explicitly configured)
+                        if (advanced != null && advanced.getPubsubReconciliationIntervalMs() != null) {
+                            requestBuilder.setPubsubReconciliationIntervalMs(
+                                    advanced.getPubsubReconciliationIntervalMs());
+                        }
+
                         // Build and serialize to bytes
                         ConnectionRequest request = requestBuilder.build();
                         byte[] requestBytes = request.toByteArray();

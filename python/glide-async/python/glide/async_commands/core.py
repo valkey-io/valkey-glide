@@ -63,6 +63,25 @@ from glide_shared.exceptions import RequestError
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
 
+# PubSub constants for unsubscribing from all channels/patterns
+ALL_CHANNELS: Optional[Set[str]] = None
+"""
+Constant representing 'unsubscribe from all channels'.
+Pass this to unsubscribe() to unsubscribe from all channels.
+"""
+
+ALL_PATTERNS: Optional[Set[str]] = None
+"""
+Constant representing 'unsubscribe from all patterns'.
+Pass this to punsubscribe() to unsubscribe from all patterns.
+"""
+
+ALL_SHARDED_CHANNELS: Optional[Set[str]] = None
+"""
+Constant representing 'unsubscribe from all sharded channels'.
+Pass this to sunsubscribe() to unsubscribe from all sharded channels.
+"""
+
 
 class CoreCommands(Protocol):
     async def _execute_command(
@@ -7963,14 +7982,16 @@ class CoreCommands(Protocol):
         """
         Unsubscribe from exact channels (blocking).
 
-        This command updates the client's internal desired subscription state and waits
-        for server confirmation.
+        This command updates the client's internal desired subscription state
+        and waits for server confirmation.
 
         Args:
             channels: A set of channel names to unsubscribe from.
-                    If None, unsubscribes from all exact channels.
-            timeout_ms: Maximum time in milliseconds to wait for server confirmation.
-                    A value of 0 blocks indefinitely until confirmation.
+                    If None or ALL_CHANNELS, unsubscribes from all exact
+                    channels.
+            timeout_ms: Maximum time in milliseconds to wait for server
+                    confirmation. A value of 0 blocks indefinitely until
+                    confirmation.
 
         Return: None
 
@@ -7983,8 +8004,12 @@ class CoreCommands(Protocol):
             >>> print("Unsubscribed successfully (waited indefinitely)")
             >>>
             >>> # With timeout
-            >>> await client.unsubscribe({"channel1"}, timeout=5.0)
+            >>> await client.unsubscribe({"channel1"}, timeout_ms=5000)
             >>> print("Unsubscribed successfully within 5 seconds")
+            >>>
+            >>> # Unsubscribe from all exact channels with timeout
+            >>> from glide.async_commands.core import ALL_CHANNELS
+            >>> await client.unsubscribe(ALL_CHANNELS, timeout_ms=10000)
             >>>
             >>> # Unsubscribe from all exact channels with timeout
             >>> await client.unsubscribe(timeout=10.0)
@@ -8027,30 +8052,33 @@ class CoreCommands(Protocol):
         """
         Unsubscribe from channel patterns (blocking).
 
-        This command updates the client's internal desired subscription state and waits
-        for server confirmation.
+        This command updates the client's internal desired subscription state
+        and waits for server confirmation.
 
         Args:
             patterns: A set of patterns to unsubscribe from.
-                    If None, unsubscribes from all patterns.
-            timeout_ms: Maximum time in milliseconds to wait for server confirmation.
-                    A value of 0 blocks indefinitely until confirmation.
+                    If None or ALL_PATTERNS, unsubscribes from all patterns.
+            timeout_ms: Maximum time in milliseconds to wait for server
+                    confirmation. A value of 0 blocks indefinitely until
+                    confirmation.
 
         Return: None
 
         Raises:
-            TimeoutError: If timeout > 0 and server confirmation not received within timeout.
+            TimeoutError: If timeout > 0 and server confirmation not received
+                    within timeout.
 
         Examples:
             >>> await client.punsubscribe({"news.*"})
-            >>> print("Unsubscribed from pattern successfully (waited indefinitely)")
+            >>> print("Unsubscribed from pattern successfully")
             >>>
             >>> # With timeout
-            >>> await client.punsubscribe({"news.*"}, timeout=5.0)
-            >>> print("Unsubscribed from pattern successfully within 5 seconds")
+            >>> await client.punsubscribe({"news.*"}, timeout_ms=5000)
+            >>> print("Unsubscribed from pattern successfully")
             >>>
             >>> # Unsubscribe from all patterns with timeout
-            >>> await client.punsubscribe(timeout=10.0)
+            >>> from glide.async_commands.core import ALL_PATTERNS
+            >>> await client.punsubscribe(ALL_PATTERNS, timeout_ms=10000)
         """
         if timeout_ms < 0:
             raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
