@@ -1518,6 +1518,7 @@ class ClusterCommands(CoreCommands):
 
         Raises:
             TimeoutError: If timeout > 0 and server confirmation not received within timeout.
+            ValueError: If timeout_ms is negative.
 
         Examples:
             >>> await client.ssubscribe({"shard_channel"})
@@ -1529,6 +1530,8 @@ class ClusterCommands(CoreCommands):
 
         Since: Valkey 7.0.0.
         """
+        if timeout_ms < 0:
+            raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args = list(channels) + [str(timeout_ms)]
         await self._execute_command(RequestType.SSubscribeBlocking, list(args))
 
@@ -1581,6 +1584,7 @@ class ClusterCommands(CoreCommands):
 
         Raises:
             TimeoutError: If timeout > 0 and server confirmation not received within timeout.
+            ValueError: If timeout_ms is negative.
 
         Examples:
             >>> await client.sunsubscribe({"shard_channel"})
@@ -1595,5 +1599,7 @@ class ClusterCommands(CoreCommands):
 
         Since: Valkey 7.0.0.
         """
+        if timeout_ms < 0:
+            raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args = (list(channels) if channels else []) + [str(timeout_ms)]
         await self._execute_command(RequestType.SUnsubscribeBlocking, list(args))
