@@ -261,7 +261,8 @@ class IamAuthConfig:
         is_serverless (bool): When True, adds ResourceType=ServerlessCache to the IAM signing URL.
             Required for ElastiCache Serverless authentication. Defaults to False.
 
-    Example:
+    Example usage::
+
         # Standard ElastiCache cluster:
         iam_config = IamAuthConfig(
             cluster_name="my-cluster",

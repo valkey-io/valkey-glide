@@ -1133,7 +1133,7 @@ mod tests {
 
         log_info(
             "Serverless token test completed successfully!",
-            format!("Token contains ResourceType=ServerlessCache"),
+            "Token contains ResourceType=ServerlessCache",
         );
     }
 
