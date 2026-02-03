@@ -758,6 +758,8 @@ class BaseClient(CoreCommands):
                 - total_bytes_compressed: Total bytes after compression
                 - total_bytes_decompressed: Total bytes after decompression
                 - compression_skipped_count: Number of times compression was skipped
+                - subscription_out_of_sync_count: Number of times subscriptions were out of sync during reconciliation
+                - subscription_last_sync_timestamp: Timestamp of last successful subscription sync (milliseconds since epoch)
         """
         stats = get_statistics()
         # Convert string values to integers for easier arithmetic operations

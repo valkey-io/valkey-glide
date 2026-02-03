@@ -9739,3 +9739,338 @@ func (client *baseClient) Watch(ctx context.Context, keys []string) (string, err
 	}
 	return handleOkResponse(result)
 }
+
+// GetStatistics retrieves compression, connection, and PubSub statistics for this client.
+//
+// Return value:
+//
+//	A map[string]uint64 containing statistics:
+//	  - total_connections: Total number of connections opened to Valkey
+//	  - total_clients: Total number of GLIDE clients
+//	  - total_values_compressed: Number of values successfully compressed
+//	  - total_values_decompressed: Number of values successfully decompressed
+//	  - total_original_bytes: Total bytes of original data before compression
+//	  - total_bytes_compressed: Total bytes after compression
+//	  - total_bytes_decompressed: Total bytes after decompression
+//	  - compression_skipped_count: Number of times compression was skipped
+//	  - subscription_out_of_sync_count: Number of times subscriptions were out of sync during reconciliation
+//	  - subscription_last_sync_timestamp: Timestamp of last successful subscription sync (milliseconds since epoch)
+func (client *baseClient) GetStatistics() map[string]uint64 {
+	stats := C.get_statistics()
+	return map[string]uint64{
+		"total_connections":                uint64(stats.total_connections),
+		"total_clients":                    uint64(stats.total_clients),
+		"total_values_compressed":          uint64(stats.total_values_compressed),
+		"total_values_decompressed":        uint64(stats.total_values_decompressed),
+		"total_original_bytes":             uint64(stats.total_original_bytes),
+		"total_bytes_compressed":           uint64(stats.total_bytes_compressed),
+		"total_bytes_decompressed":         uint64(stats.total_bytes_decompressed),
+		"compression_skipped_count":        uint64(stats.compression_skipped_count),
+		"subscription_out_of_sync_count":   uint64(stats.subscription_out_of_sync_count),
+		"subscription_last_sync_timestamp": uint64(stats.subscription_last_sync_timestamp),
+	}
+}
+
+// AllChannels represents "unsubscribe from all channels".
+// Pass this to Unsubscribe or UnsubscribeBlocking to unsubscribe from all channels.
+var AllChannels []string = nil
+
+// AllPatterns represents "unsubscribe from all patterns".
+// Pass this to PUnsubscribe or PUnsubscribeBlocking to unsubscribe from all patterns.
+var AllPatterns []string = nil
+
+// Subscribe subscribes the client to the specified channels (lazy, non-blocking).
+// This command updates the client's internal desired subscription state without waiting
+// for server confirmation. It returns immediately after updating the local state.
+// The client will attempt to subscribe asynchronously in the background.
+//
+// Note: Use GetSubscriptions() to verify the actual server-side subscription state.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	channels - A slice of channel names to subscribe to.
+//
+// Return value:
+//
+//	An error if the operation fails.
+//
+// Example:
+//
+//	err := client.Subscribe(ctx, []string{"channel1", "channel2"})
+func (client *baseClient) Subscribe(ctx context.Context, channels []string) error {
+	_, err := client.executeCommand(ctx, C.Subscribe, channels)
+	return err
+}
+
+// SubscribeBlocking subscribes the client to the specified channels (blocking).
+// This command updates the client's internal desired subscription state and waits
+// for server confirmation.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	channels - A slice of channel names to subscribe to.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.SubscribeBlocking(ctx, []string{"channel1"}, 5000)
+func (client *baseClient) SubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
+	if timeoutMs < 0 {
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
+	}
+	args := append(channels, strconv.Itoa(timeoutMs))
+	_, err := client.executeCommand(ctx, C.SubscribeBlocking, args)
+	return err
+}
+
+// PSubscribe subscribes the client to the specified patterns (lazy, non-blocking).
+// This command updates the client's internal desired subscription state without waiting
+// for server confirmation. It returns immediately after updating the local state.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	patterns - A slice of patterns to subscribe to (e.g., []string{"news.*"}).
+//
+// Return value:
+//
+//	An error if the operation fails.
+//
+// Example:
+//
+//	err := client.PSubscribe(ctx, []string{"news.*", "updates.*"})
+func (client *baseClient) PSubscribe(ctx context.Context, patterns []string) error {
+	_, err := client.executeCommand(ctx, C.PSubscribe, patterns)
+	return err
+}
+
+// PSubscribeBlocking subscribes the client to the specified patterns (blocking).
+// This command updates the client's internal desired subscription state and waits
+// for server confirmation.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	patterns - A slice of patterns to subscribe to.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.PSubscribeBlocking(ctx, []string{"news.*"}, 5000)
+func (client *baseClient) PSubscribeBlocking(ctx context.Context, patterns []string, timeoutMs int) error {
+	if timeoutMs < 0 {
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
+	}
+	args := append(patterns, strconv.Itoa(timeoutMs))
+	_, err := client.executeCommand(ctx, C.PSubscribeBlocking, args)
+	return err
+}
+
+// Unsubscribe unsubscribes the client from the specified channels (lazy, non-blocking).
+// If no channels are specified, unsubscribes from all exact channels.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	channels - A slice of channel names to unsubscribe from. Empty slice unsubscribes from all.
+//
+// Return value:
+//
+//	An error if the operation fails.
+//
+// Example:
+//
+//	err := client.Unsubscribe(ctx, []string{"channel1"})
+//	err := client.Unsubscribe(ctx, []string{}) // Unsubscribe from all
+func (client *baseClient) Unsubscribe(ctx context.Context, channels []string) error {
+	_, err := client.executeCommand(ctx, C.Unsubscribe, channels)
+	return err
+}
+
+// UnsubscribeBlocking unsubscribes the client from the specified channels (blocking).
+// If no channels are specified (nil or empty slice), unsubscribes from all exact channels.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	channels - A slice of channel names to unsubscribe from. Pass nil or AllChannels to unsubscribe from all.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.UnsubscribeBlocking(ctx, []string{"channel1"}, 5000)
+//	err := client.UnsubscribeBlocking(ctx, AllChannels, 5000) // Unsubscribe from all
+func (client *baseClient) UnsubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
+	if timeoutMs < 0 {
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
+	}
+	args := append(channels, strconv.Itoa(timeoutMs))
+	_, err := client.executeCommand(ctx, C.UnsubscribeBlocking, args)
+	return err
+}
+
+// UnsubscribeAll unsubscribes the client from all exact channels (lazy, non-blocking).
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//
+// Return value:
+//
+//	An error if the operation fails.
+//
+// Example:
+//
+//	err := client.UnsubscribeAll(ctx)
+func (client *baseClient) UnsubscribeAll(ctx context.Context) error {
+	return client.Unsubscribe(ctx, nil)
+}
+
+// UnsubscribeAllBlocking unsubscribes the client from all exact channels (blocking).
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.UnsubscribeAllBlocking(ctx, 5000)
+func (client *baseClient) UnsubscribeAllBlocking(ctx context.Context, timeoutMs int) error {
+	return client.UnsubscribeBlocking(ctx, nil, timeoutMs)
+}
+
+// PUnsubscribe unsubscribes the client from the specified patterns (lazy, non-blocking).
+// If no patterns are specified, unsubscribes from all patterns.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	patterns - A slice of patterns to unsubscribe from. Empty slice unsubscribes from all.
+//
+// Return value:
+//
+//	An error if the operation fails.
+//
+// Example:
+//
+//	err := client.PUnsubscribe(ctx, []string{"news.*"})
+func (client *baseClient) PUnsubscribe(ctx context.Context, patterns []string) error {
+	_, err := client.executeCommand(ctx, C.PUnsubscribe, patterns)
+	return err
+}
+
+// PUnsubscribeBlocking unsubscribes the client from the specified patterns (blocking).
+// If no patterns are specified (nil or empty slice), unsubscribes from all patterns.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	patterns - A slice of patterns to unsubscribe from. Pass nil or AllPatterns to unsubscribe from all.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.PUnsubscribeBlocking(ctx, []string{"news.*"}, 5000)
+//	err := client.PUnsubscribeBlocking(ctx, AllPatterns, 5000) // Unsubscribe from all
+func (client *baseClient) PUnsubscribeBlocking(ctx context.Context, patterns []string, timeoutMs int) error {
+	if timeoutMs < 0 {
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
+	}
+	args := append(patterns, strconv.Itoa(timeoutMs))
+	_, err := client.executeCommand(ctx, C.PUnsubscribeBlocking, args)
+	return err
+}
+
+// PUnsubscribeAll unsubscribes the client from all patterns (lazy, non-blocking).
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//
+// Return value:
+//
+//	An error if the operation fails.
+//
+// Example:
+//
+//	err := client.PUnsubscribeAll(ctx)
+func (client *baseClient) PUnsubscribeAll(ctx context.Context) error {
+	return client.PUnsubscribe(ctx, nil)
+}
+
+// PUnsubscribeAllBlocking unsubscribes the client from all patterns (blocking).
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.PUnsubscribeAllBlocking(ctx, 5000)
+func (client *baseClient) PUnsubscribeAllBlocking(ctx context.Context, timeoutMs int) error {
+	return client.PUnsubscribeBlocking(ctx, nil, timeoutMs)
+}
+
+// GetSubscriptions retrieves both the desired and current subscription states.
+// This allows verification of synchronization between what the client intends to be
+// subscribed to (desired) and what it is actually subscribed to on the server (actual).
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//
+// Return value:
+//
+//	A PubSubState containing desired and actual subscriptions, or an error.
+//
+// Example:
+//
+//	state, err := client.GetSubscriptions(ctx)
+//	if err != nil {
+//	    return err
+//	}
+//	// Check if subscribed to a channel
+//	if _, ok := state.ActualSubscriptions[models.Exact]["channel1"]; ok {
+//	    fmt.Println("Subscribed to channel1")
+//	}
+func (client *baseClient) GetSubscriptions(ctx context.Context) (*models.PubSubState, error) {
+	response, err := client.executeCommand(ctx, C.GetSubscriptions, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handlePubSubStateResponse(response)
+}
