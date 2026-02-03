@@ -63,6 +63,11 @@ from glide_shared.routes import Route
 
 from .cluster_scan_cursor import ClusterScanCursor
 
+# PubSub constants for unsubscribing from all channels/patterns
+ALL_CHANNELS: Optional[Set[str]] = None
+ALL_PATTERNS: Optional[Set[str]] = None
+ALL_SHARDED_CHANNELS: Optional[Set[str]] = None
+
 
 class CoreCommands(Protocol):
     def _execute_command(
