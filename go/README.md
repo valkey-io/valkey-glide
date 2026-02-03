@@ -243,6 +243,50 @@ All subscribe/unsubscribe methods have blocking variants with timeout support:
 
 For more code examples please refer to [examples.md](examples/examples.md).
 
+### Cluster Scan
+
+The cluster scan feature allows you to iterate over all keys in a cluster. You can optionally filter by pattern, type, and control batch size.
+
+#### Basic Cluster Scan
+
+```go
+cursor := models.NewClusterScanCursor()
+allKeys := []string{}
+
+for !cursor.IsFinished() {
+    result, err := client.Scan(context.Background(), cursor)
+    if err != nil {
+        fmt.Println("Error:", err)
+        break
+    }
+    allKeys = append(allKeys, result.Keys...)
+    cursor = result.Cursor
+}
+```
+
+#### Cluster Scan with Options
+
+```go
+opts := options.NewClusterScanOptions().
+    SetMatch("user:*").              // Filter by pattern
+    SetCount(100).                   // Batch size hint
+    SetType(constants.StringType).   // Filter by key type
+    SetAllowNonCoveredSlots(true)    // Allow scanning even if some slots are not covered
+
+cursor := models.NewClusterScanCursor()
+for !cursor.IsFinished() {
+    result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
+    if err != nil {
+        fmt.Println("Error:", err)
+        break
+    }
+    // Process result.Keys
+    cursor = result.Cursor
+}
+```
+
+**Note**: The `AllowNonCoveredSlots` option is useful when the cluster is not fully configured or some nodes are down. It allows the scan to proceed even if some hash slots are not covered by any node.
+
 ### Building & Testing
 
 Development instructions for local building & testing the package are in the [DEVELOPER.md](DEVELOPER.md) file.
