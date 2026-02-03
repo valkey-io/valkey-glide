@@ -1963,7 +1963,7 @@ public class CommandTests {
                 fcallReadOnlyPrimaryException
                         .getMessage()
                         .toLowerCase()
-                        .contains("Can not execute a script with write flag using *_ro command"));
+                        .contains("can not execute a script with write flag using"));
 
         // create the same function, but with RO flag
         String funcNameRO = funcName.toString() + "_ro";
