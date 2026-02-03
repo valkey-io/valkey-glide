@@ -2213,79 +2213,82 @@ where
         let nodes = new_slots.all_node_addresses();
         let nodes_len = nodes.len();
 
-        // Find existing connections or resolve DNS addresses
-        // TODO: optimize by parallelizing DNS lookups - DNS resolution may involve network I/O and is currently performed sequentially
-        // Issue link: https://github.com/valkey-io/valkey-glide/issues/5228
-        let mut addresses_and_connections = Vec::with_capacity(nodes_len);
-        for addr in nodes {
-            let addr = addr.to_string();
-
-            // Check for existing connection by address
-            if let Some(node) = inner
-                .conn_lock
-                .read()
-                .expect(MUTEX_READ_ERR)
-                .node_for_address(&addr)
-            {
-                addresses_and_connections.push((addr, Some(node)));
-                continue;
-            }
-
-            // If it's a DNS endpoint, it could have been stored in the existing connections vector using the resolved IP address instead of the DNS endpoint's name.
-            // We shall check if a connection is already exists under the resolved IP name.
-            let conn = if let Some((host, port)) = get_host_and_port_from_addr(&addr) {
-                get_socket_addrs(host, port)
-                    .await
-                    .ok()
-                    .and_then(|mut socket_addresses| {
-                        let conn_lock = inner.conn_lock.read().expect(MUTEX_READ_ERR);
-                        socket_addresses.find_map(|socket_addr| {
-                            conn_lock.node_for_address(&socket_addr.to_string())
-                        })
-                    })
-            } else {
-                None
-            };
-
-            // If we found a connection by IP lookup, update the PushManager. This ensures the PushManager
-            // stores the DNS address (which matches the connection_map key) instead of the old IP
-            // or config endpoint address, which is needed for pubsub tracking
-            if let Some(ref node) = conn {
-                node.user_connection
-                    .conn
-                    .clone()
-                    .await
-                    .update_push_manager_node_address(addr.clone());
-            }
-
-            addresses_and_connections.push((addr, conn));
-        }
-
         let cluster_params = inner
             .get_cluster_param(|params| params.clone())
             .expect(MUTEX_READ_ERR);
         let glide_connection_options = &inner.glide_connection_options;
 
-        // Create/retrieve connections in for found nodes
-        let connection_futures = addresses_and_connections.into_iter().map(|(addr, node)| {
+        // Find existing connections (by address or DNS resolution) or create new ones
+        let connection_futures = nodes.into_iter().map(|addr| {
+            let addr = addr.to_string();
+            let inner = Arc::clone(&inner);
             let cluster_params = cluster_params.clone();
             let glide_connection_options = glide_connection_options.clone();
+            let connection_timeout = cluster_params.connection_timeout;
+
             async move {
-                let result = get_or_create_conn(
-                    &addr,
-                    node,
-                    &cluster_params,
-                    RefreshConnectionType::AllConnections,
-                    glide_connection_options,
-                )
-                .await;
+                // TODO: Expose separate `dns_timeout` configuration in advanced settings
+                // to allow users to control DNS resolution timeout independently from connection timeout.
+                // Issue: https://github.com/valkey-io/valkey-glide/issues/5298
+                let result = tokio::time::timeout(connection_timeout, async {
+                    // Check for existing connection by direct address
+                    let node = inner
+                        .conn_lock
+                        .read()
+                        .expect(MUTEX_READ_ERR)
+                        .node_for_address(&addr);
+
+                    let node = match node {
+                        Some(n) => Some(n),
+                        None => {
+                            // If it's a DNS endpoint, it could have been stored in the existing connections vector
+                            // using the resolved IP address instead of the DNS endpoint's name.
+                            // We shall check if a connection already exists under the resolved IP name.
+                            if let Some((host, port)) = get_host_and_port_from_addr(&addr) {
+                                let conn = get_socket_addrs(host, port).await.ok().and_then(
+                                    |mut socket_addresses| {
+                                        let conn_lock =
+                                            inner.conn_lock.read().expect(MUTEX_READ_ERR);
+                                        socket_addresses.find_map(|socket_addr| {
+                                            conn_lock.node_for_address(&socket_addr.to_string())
+                                        })
+                                    },
+                                );
+
+                                // If we found a connection by IP lookup, update the PushManager. This ensures
+                                // the PushManager stores the DNS address (which matches the connection_map key)
+                                // instead of the old IP or config endpoint address, which is needed for pubsub tracking.
+                                if let Some(ref node) = conn {
+                                    node.user_connection
+                                        .conn
+                                        .clone()
+                                        .await
+                                        .update_push_manager_node_address(addr.clone());
+                                }
+                                conn
+                            } else {
+                                None
+                            }
+                        }
+                    };
+
+                    get_or_create_conn(
+                        &addr,
+                        node,
+                        &cluster_params,
+                        RefreshConnectionType::AllConnections,
+                        glide_connection_options,
+                    )
+                    .await
+                })
+                .await
+                .unwrap_or_else(|e| Err(e.into()));
+
                 (addr, result)
             }
         });
 
-        // Await all connection futures
-        // This is bounded by `connection_timeout` since `get_or_create_conn` uses it internally,
-        // so it is safe to await them all at once.
+        // Await all connection futures, this is bounded by `connection_timeout`.
         let results = futures::future::join_all(connection_futures).await;
 
         // Collect successful connections
