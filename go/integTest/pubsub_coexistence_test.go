@@ -4,6 +4,7 @@ package integTest
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -83,10 +84,7 @@ func (suite *GlideTestSuite) TestPubSubPatternCoexistence() {
 // TestPubSubMaxSizeMessage tests large message handling
 func (suite *GlideTestSuite) TestPubSubMaxSizeMessage() {
 	channel := "max_size_test"
-	largeMsg := make([]byte, 1024*1024) // 1MB
-	for i := range largeMsg {
-		largeMsg[i] = 'a'
-	}
+	largeMsg := strings.Repeat("a", 1024*1024)
 
 	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
 	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())

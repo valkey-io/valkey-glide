@@ -12,7 +12,7 @@ func (suite *GlideTestSuite) TestGetStatistics() {
 
 	stats := client.GetStatistics()
 
-	// Verify all expected keys are present
+	// Verify all expected keys are present and have correct type
 	expectedKeys := []string{
 		"total_connections",
 		"total_clients",
@@ -27,8 +27,9 @@ func (suite *GlideTestSuite) TestGetStatistics() {
 	}
 
 	for _, key := range expectedKeys {
-		_, exists := stats[key]
+		value, exists := stats[key]
 		assert.True(suite.T(), exists, "Expected key %s to exist in statistics", key)
+		assert.IsType(suite.T(), uint64(0), value, "Expected key %s to be uint64", key)
 	}
 
 	// Verify we have at least one connection and one client
@@ -42,7 +43,7 @@ func (suite *GlideTestSuite) TestGetStatisticsCluster() {
 
 	stats := client.GetStatistics()
 
-	// Verify all expected keys are present
+	// Verify all expected keys are present and have correct type
 	expectedKeys := []string{
 		"total_connections",
 		"total_clients",
@@ -57,8 +58,9 @@ func (suite *GlideTestSuite) TestGetStatisticsCluster() {
 	}
 
 	for _, key := range expectedKeys {
-		_, exists := stats[key]
+		value, exists := stats[key]
 		assert.True(suite.T(), exists, "Expected key %s to exist in statistics", key)
+		assert.IsType(suite.T(), uint64(0), value, "Expected key %s to be uint64", key)
 	}
 
 	// Verify we have at least one connection and one client
