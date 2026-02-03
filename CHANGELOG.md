@@ -11,6 +11,7 @@
 * CORE: Add client certificate and private key support for mTLS ([#5092](https://github.com/valkey-io/valkey-glide/issues/5092))
 * Python: Add client certificate and private key support for mTLS ([5123](https://github.com/valkey-io/valkey-glide/issues/5123))
 * JAVA: Add KEYS, MIGRATE and WAITAOF command support ([#5017](https://github.com/valkey-io/valkey-glide/pull/5107))
+* Python Sync: Add dynamic PubSub methods (subscribe, psubscribe, unsubscribe, punsubscribe, ssubscribe, sunsubscribe with timeout support), get_subscriptions(), and pubsub_reconciliation_interval configuration support. Unified configuration classes with async client by importing from glide_shared ([#5270](https://github.com/valkey-io/valkey-glide/pull/5270))
 * JAVA: Add ACL server management commands (ACL CAT, ACL DELUSER, ACL DRYRUN, ACL GENPASS, ACL GETUSER, ACL LIST, ACL LOAD, ACL LOG, ACL SAVE, ACL SETUSER, ACL USERS, ACL WHOAMI)
 * CORE: Fix typo in ACL SETUSER command mapping (AclSetSser → AclSetUser)
 * Python: Add inflight request limit support to sync client
