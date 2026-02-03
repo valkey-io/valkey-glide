@@ -9823,9 +9823,9 @@ func (client *baseClient) Subscribe(ctx context.Context, channels []string) erro
 //	err := client.SubscribeBlocking(ctx, []string{"channel1"}, 5000)
 func (client *baseClient) SubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
 	if timeoutMs < 0 {
-		return fmt.Errorf("timeout must be non-negative, got: %d", timeoutMs)
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
 	}
-	args := append(channels, fmt.Sprintf("%d", timeoutMs))
+	args := append(channels, strconv.Itoa(timeoutMs))
 	_, err := client.executeCommand(ctx, C.SubscribeBlocking, args)
 	return err
 }
@@ -9871,9 +9871,9 @@ func (client *baseClient) PSubscribe(ctx context.Context, patterns []string) err
 //	err := client.PSubscribeBlocking(ctx, []string{"news.*"}, 5000)
 func (client *baseClient) PSubscribeBlocking(ctx context.Context, patterns []string, timeoutMs int) error {
 	if timeoutMs < 0 {
-		return fmt.Errorf("timeout must be non-negative, got: %d", timeoutMs)
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
 	}
-	args := append(patterns, fmt.Sprintf("%d", timeoutMs))
+	args := append(patterns, strconv.Itoa(timeoutMs))
 	_, err := client.executeCommand(ctx, C.PSubscribeBlocking, args)
 	return err
 }
@@ -9919,9 +9919,9 @@ func (client *baseClient) Unsubscribe(ctx context.Context, channels []string) er
 //	err := client.UnsubscribeBlocking(ctx, AllChannels, 5000) // Unsubscribe from all
 func (client *baseClient) UnsubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
 	if timeoutMs < 0 {
-		return fmt.Errorf("timeout must be non-negative, got: %d", timeoutMs)
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
 	}
-	args := append(channels, fmt.Sprintf("%d", timeoutMs))
+	args := append(channels, strconv.Itoa(timeoutMs))
 	_, err := client.executeCommand(ctx, C.UnsubscribeBlocking, args)
 	return err
 }
@@ -10002,9 +10002,9 @@ func (client *baseClient) PUnsubscribe(ctx context.Context, patterns []string) e
 //	err := client.PUnsubscribeBlocking(ctx, AllPatterns, 5000) // Unsubscribe from all
 func (client *baseClient) PUnsubscribeBlocking(ctx context.Context, patterns []string, timeoutMs int) error {
 	if timeoutMs < 0 {
-		return fmt.Errorf("timeout must be non-negative, got: %d", timeoutMs)
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
 	}
-	args := append(patterns, fmt.Sprintf("%d", timeoutMs))
+	args := append(patterns, strconv.Itoa(timeoutMs))
 	_, err := client.executeCommand(ctx, C.PUnsubscribeBlocking, args)
 	return err
 }

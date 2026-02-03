@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
@@ -2680,9 +2681,9 @@ func (client *ClusterClient) SSubscribe(ctx context.Context, channels []string) 
 //	err := client.SSubscribeBlocking(ctx, []string{"shard_channel1"}, 5000)
 func (client *ClusterClient) SSubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
 	if timeoutMs < 0 {
-		return fmt.Errorf("timeout must be non-negative, got: %d", timeoutMs)
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
 	}
-	args := append(channels, fmt.Sprintf("%d", timeoutMs))
+	args := append(channels, strconv.Itoa(timeoutMs))
 	_, err := client.executeCommand(ctx, C.SSubscribeBlocking, args)
 	return err
 }
@@ -2727,9 +2728,9 @@ func (client *ClusterClient) SUnsubscribe(ctx context.Context, channels []string
 //	err := client.SUnsubscribeBlocking(ctx, AllShardedChannels, 5000) // Unsubscribe from all
 func (client *ClusterClient) SUnsubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
 	if timeoutMs < 0 {
-		return fmt.Errorf("timeout must be non-negative, got: %d", timeoutMs)
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
 	}
-	args := append(channels, fmt.Sprintf("%d", timeoutMs))
+	args := append(channels, strconv.Itoa(timeoutMs))
 	_, err := client.executeCommand(ctx, C.SUnsubscribeBlocking, args)
 	return err
 }
