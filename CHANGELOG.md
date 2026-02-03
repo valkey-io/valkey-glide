@@ -1,10 +1,16 @@
 ## 2.3
 
+#### Breaking Changes
+
+* Node: Remove support for EOL Node.js 16.x and 18.x ([#5276](https://github.com/valkey-io/valkey-glide/issues/5276))
+    * Node: Drop support for Node.js 16.x and 18.x. Minimum supported version is now Node.js 20.x.
+
 #### Changes
 
 * JAVA: Add EVAL_RO, EVALSHA_RO, and SCRIPT DEBUG commands ([#5125](https://github.com/valkey-io/valkey-glide/pull/5125))
 * CORE: Add client certificate and private key support for mTLS ([#5092](https://github.com/valkey-io/valkey-glide/issues/5092))
 * Python: Add client certificate and private key support for mTLS ([5123](https://github.com/valkey-io/valkey-glide/issues/5123))
+* JAVA: Add KEYS, MIGRATE and WAITAOF command support ([#5017](https://github.com/valkey-io/valkey-glide/pull/5107))
 * JAVA: Add ACL server management commands (ACL CAT, ACL DELUSER, ACL DRYRUN, ACL GENPASS, ACL GETUSER, ACL LIST, ACL LOAD, ACL LOG, ACL SAVE, ACL SETUSER, ACL USERS, ACL WHOAMI)
 * CORE: Fix typo in ACL SETUSER command mapping (AclSetSser → AclSetUser)
 * Python: Add inflight request limit support to sync client
@@ -359,6 +365,7 @@
 
 #### Changes
 
+* Java: Added Client API for retrieving internal statistics ([#2672](https://github.com/valkey-io/valkey-glide/pull/2672))
 * Node: Client API for retrieving internal statistics ([#2727](https://github.com/valkey-io/valkey-glide/pull/2727))
 * Python: Client API for retrieving internal statistics ([#2707](https://github.com/valkey-io/valkey-glide/pull/2707))
 * Node, Python, Java: Adding support for replacing connection configured password ([#2651](https://github.com/valkey-io/valkey-glide/pull/2651), [#2659](https://github.com/valkey-io/valkey-glide/pull/2659), [#2677](https://github.com/valkey-io/valkey-glide/pull/2677))

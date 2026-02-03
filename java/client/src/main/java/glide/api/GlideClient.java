@@ -7,7 +7,6 @@ import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
-import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
 import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
 import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
@@ -21,6 +20,7 @@ import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
 import static command_request.CommandRequestOuterClass.RequestType.Info;
+import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
@@ -135,13 +135,12 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> customCommand(@NonNull String[] args) {
-        return commandManager.submitNewCommand(CustomCommand, args, this::handleObjectOrNullResponse);
+        return commandManager.submitCustomCommand(args, this::handleObjectOrNullResponse);
     }
 
     @Override
     public CompletableFuture<Object> customCommand(@NonNull GlideString[] args) {
-        return commandManager.submitNewCommand(
-                CustomCommand, args, this::handleBinaryObjectOrNullResponse);
+        return commandManager.submitCustomCommand(args, this::handleBinaryObjectOrNullResponse);
     }
 
     @Deprecated
@@ -490,6 +489,44 @@ public class GlideClient extends BaseClient
     public CompletableFuture<GlideString> randomKeyBinary() {
         return commandManager.submitNewCommand(
                 RandomKey, BaseClient.EMPTY_GLIDE_STRING_ARRAY, this::handleGlideStringOrNullResponse);
+    }
+
+    /**
+     * Returns all keys matching <code>pattern</code>.
+     *
+     * @see <a href="https://valkey.io/commands/keys/">valkey.io</a> for details.
+     * @param pattern The pattern to match keys against.
+     * @return An array of keys matching the pattern. If no keys match, returns an empty array.
+     * @example
+     *     <pre>{@code
+     * String[] keys = client.keys("key*").get();
+     * System.out.println("Found keys: " + Arrays.toString(keys));
+     * }</pre>
+     */
+    public CompletableFuture<String[]> keys(String pattern) {
+        return commandManager.submitNewCommand(
+                Keys,
+                new String[] {pattern},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    /**
+     * Returns all keys matching <code>pattern</code>.
+     *
+     * @see <a href="https://valkey.io/commands/keys/">valkey.io</a> for details.
+     * @param pattern The pattern to match keys against.
+     * @return An array of keys matching the pattern. If no keys match, returns an empty array.
+     * @example
+     *     <pre>{@code
+     * GlideString[] keys = client.keys(gs("key*")).get();
+     * System.out.println("Found keys: " + Arrays.toString(keys));
+     * }</pre>
+     */
+    public CompletableFuture<GlideString[]> keys(GlideString pattern) {
+        return commandManager.submitNewCommand(
+                Keys,
+                new GlideString[] {pattern},
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
     @Override

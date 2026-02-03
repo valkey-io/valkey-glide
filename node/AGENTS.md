@@ -27,7 +27,7 @@ This is the Node.js/TypeScript client binding for Valkey GLIDE, providing both s
 **Supported Platforms:**
 - Linux: glibc 2.17+, musl libc 1.2.3+ (Alpine)
 - macOS: 13.5+ (x86_64), 15.0+ (aarch64/Apple Silicon)
-- Node.js: 16+ (npm 11+ recommended for Linux)
+- Node.js: 20+ (npm 11+ recommended for Linux)
 
 **Package:** `@valkey/valkey-glide` on npm
 
@@ -167,7 +167,7 @@ cargo fmt --manifest-path ./Cargo.toml --all
 - `package-lock.json`, `yarn.lock` - Lock files (project uses npm)
 
 ### Node.js-Specific Rules
-- **Node.js 16+ Required:** Minimum runtime version
+- **Node.js 20+ Required:** Minimum runtime version
 - **npm 11+ Recommended:** For Linux users (better libc support)
 - **Promise-based APIs:** All client methods return Promises
 - **Resource Management:** Call `client.close()` to cleanup connections
@@ -221,7 +221,7 @@ node/
 **Key Features:** TypeScript support, NAPI-RS native bindings, protobuf communication
 **Testing:** Jest test framework, interactive REPL, package manager compatibility tests
 **Platforms:** Linux (glibc/musl), macOS (Intel/Apple Silicon)
-**Dependencies:** Node.js 16+, protobufjs, long, platform-specific native binaries
+**Dependencies:** Node.js 20+, protobufjs, long, platform-specific native binaries
 
 ## If You Need More
 

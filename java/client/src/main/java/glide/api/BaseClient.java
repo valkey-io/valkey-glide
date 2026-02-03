@@ -96,6 +96,7 @@ import static command_request.CommandRequestOuterClass.RequestType.LTrim;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
@@ -152,6 +153,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Touch;
 import static command_request.CommandRequestOuterClass.RequestType.Type;
 import static command_request.CommandRequestOuterClass.RequestType.Unlink;
 import static command_request.CommandRequestOuterClass.RequestType.Wait;
+import static command_request.CommandRequestOuterClass.RequestType.WaitAof;
 import static command_request.CommandRequestOuterClass.RequestType.Watch;
 import static command_request.CommandRequestOuterClass.RequestType.XAck;
 import static command_request.CommandRequestOuterClass.RequestType.XAdd;
@@ -254,6 +256,7 @@ import glide.api.models.commands.HashFieldExpirationConditionOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeQuery;
@@ -516,7 +519,9 @@ public abstract class BaseClient
         // We'll update this once the connection provides the native handle
         GlideCoreClient core =
                 new GlideCoreClient(
-                        connectionManager.getNativeClientHandle(), connectionManager.getMaxInflightRequests());
+                        connectionManager.getNativeClientHandle(),
+                        connectionManager.getMaxInflightRequests(),
+                        connectionManager.getRequestTimeoutMs());
         // Register for PubSub push delivery
         try {
             GlideCoreClient.registerClient(connectionManager.getNativeClientHandle(), null);
@@ -776,6 +781,30 @@ public abstract class BaseClient
     protected <V> Map<GlideString, V> handleBinaryStringMapOrNullResponse(Response response)
             throws GlideException {
         return handleValkeyResponse(Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+    }
+
+    /**
+     * @param response A Protobuf response
+     * @return A map of <code>String</code> to <code>String[]</code>
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<String, Object[]>
+    protected Map<String, String[]> handleMapOfArraysResponse(Response response)
+            throws GlideException {
+        Map<String, Object[]> mapResponse =
+                handleValkeyResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
+        return castMapOfArrays(mapResponse, String.class);
+    }
+
+    /**
+     * @param response A Protobuf response
+     * @return A map of <code>String</code> to <code>GlideString[]</code>
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<String, Object[]>
+    protected Map<String, GlideString[]> handleBinaryStringMapOfArraysResponse(Response response)
+            throws GlideException {
+        Map<String, Object[]> mapResponse =
+                handleValkeyResponse(Map.class, EnumSet.noneOf(ResponseFlags.class), response);
+        return castMapOfArrays(mapResponse, GlideString.class);
     }
 
     /**
@@ -2676,13 +2705,14 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Object[]> bzpopmin(@NonNull String[] keys, double timeout) {
         String[] arguments = ArrayUtils.add(keys, Double.toString(timeout));
-        return commandManager.submitNewCommand(BZPopMin, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitBlockingCommand(
+                BZPopMin, arguments, this::handleArrayOrNullResponse);
     }
 
     @Override
     public CompletableFuture<Object[]> bzpopmin(@NonNull GlideString[] keys, double timeout) {
         GlideString[] arguments = ArrayUtils.add(keys, gs(Double.toString(timeout)));
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BZPopMin, arguments, this::handleArrayOrNullResponseBinary);
     }
 
@@ -2714,13 +2744,14 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Object[]> bzpopmax(@NonNull String[] keys, double timeout) {
         String[] arguments = ArrayUtils.add(keys, Double.toString(timeout));
-        return commandManager.submitNewCommand(BZPopMax, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitBlockingCommand(
+                BZPopMax, arguments, this::handleArrayOrNullResponse);
     }
 
     @Override
     public CompletableFuture<Object[]> bzpopmax(@NonNull GlideString[] keys, double timeout) {
         GlideString[] arguments = ArrayUtils.add(keys, gs(Double.toString(timeout)));
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BZPopMax, arguments, this::handleArrayOrNullResponseBinary);
     }
 
@@ -3347,6 +3378,9 @@ public abstract class BaseClient
     public CompletableFuture<Map<String, Map<String, String[][]>>> xread(
             @NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
         String[] arguments = options.toArgs(keysAndIds);
+        if (options.isBlocking()) {
+            return commandManager.submitBlockingCommand(XRead, arguments, this::handleXReadResponse);
+        }
         return commandManager.submitNewCommand(XRead, arguments, this::handleXReadResponse);
     }
 
@@ -3354,6 +3388,10 @@ public abstract class BaseClient
     public CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadBinary(
             @NonNull Map<GlideString, GlideString> keysAndIds, @NonNull StreamReadOptions options) {
         GlideString[] arguments = options.toArgsBinary(keysAndIds);
+        if (options.isBlocking()) {
+            return commandManager.submitBlockingCommand(
+                    XRead, arguments, this::handleXReadResponseBinary);
+        }
         return commandManager.submitNewCommand(XRead, arguments, this::handleXReadResponseBinary);
     }
 
@@ -3623,6 +3661,9 @@ public abstract class BaseClient
             @NonNull String consumer,
             @NonNull StreamReadGroupOptions options) {
         String[] arguments = options.toArgs(group, consumer, keysAndIds);
+        if (options.isBlocking()) {
+            return commandManager.submitBlockingCommand(XReadGroup, arguments, this::handleXReadResponse);
+        }
         return commandManager.submitNewCommand(XReadGroup, arguments, this::handleXReadResponse);
     }
 
@@ -3633,6 +3674,10 @@ public abstract class BaseClient
             @NonNull GlideString consumer,
             @NonNull StreamReadGroupOptions options) {
         GlideString[] arguments = options.toArgsBinary(group, consumer, keysAndIds);
+        if (options.isBlocking()) {
+            return commandManager.submitBlockingCommand(
+                    XReadGroup, arguments, this::handleXReadResponseBinary);
+        }
         return commandManager.submitNewCommand(XReadGroup, arguments, this::handleXReadResponseBinary);
     }
 
@@ -4115,14 +4160,14 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String[]> blpop(@NonNull String[] keys, double timeout) {
         String[] arguments = ArrayUtils.add(keys, Double.toString(timeout));
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BLPop, arguments, response -> castArray(handleArrayOrNullResponse(response), String.class));
     }
 
     @Override
     public CompletableFuture<GlideString[]> blpop(@NonNull GlideString[] keys, double timeout) {
         GlideString[] arguments = ArrayUtils.add(keys, gs(Double.toString(timeout)));
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BLPop,
                 arguments,
                 response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
@@ -4131,14 +4176,14 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String[]> brpop(@NonNull String[] keys, double timeout) {
         String[] arguments = ArrayUtils.add(keys, Double.toString(timeout));
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BRPop, arguments, response -> castArray(handleArrayOrNullResponse(response), String.class));
     }
 
     @Override
     public CompletableFuture<GlideString[]> brpop(@NonNull GlideString[] keys, double timeout) {
         GlideString[] arguments = ArrayUtils.add(keys, gs(Double.toString(timeout)));
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BRPop,
                 arguments,
                 response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
@@ -4297,7 +4342,7 @@ public abstract class BaseClient
                         new String[] {Double.toString(timeout), Integer.toString(keys.length)},
                         keys,
                         new String[] {modifier.toString()});
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BZMPop,
                 arguments,
                 response -> convertKeyValueArrayToMap(handleArrayOrNullResponse(response), Double.class));
@@ -4311,7 +4356,7 @@ public abstract class BaseClient
                         new GlideString[] {gs(Double.toString(timeout)), gs(Integer.toString(keys.length))},
                         keys,
                         new GlideString[] {gs(modifier.toString())});
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BZMPop,
                 arguments,
                 response ->
@@ -4327,7 +4372,7 @@ public abstract class BaseClient
                         new String[] {Double.toString(timeout), Integer.toString(keys.length)},
                         keys,
                         new String[] {modifier.toString(), COUNT_VALKEY_API, Long.toString(count)});
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BZMPop,
                 arguments,
                 response -> convertKeyValueArrayToMap(handleArrayOrNullResponse(response), Double.class));
@@ -4343,7 +4388,7 @@ public abstract class BaseClient
                         new GlideString[] {
                             gs(modifier.toString()), gs(COUNT_VALKEY_API), gs(Long.toString(count))
                         });
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BZMPop,
                 arguments,
                 response ->
@@ -4741,7 +4786,7 @@ public abstract class BaseClient
                         new String[] {Double.toString(timeout), Long.toString(keys.length)},
                         keys,
                         new String[] {direction.toString(), COUNT_FOR_LIST_VALKEY_API, Long.toString(count)});
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BLMPop,
                 arguments,
                 response -> castMapOfArrays(handleMapOrNullResponse(response), String.class));
@@ -4757,7 +4802,7 @@ public abstract class BaseClient
                         new GlideString[] {
                             gs(direction.toString()), gs(COUNT_FOR_LIST_VALKEY_API), gs(Long.toString(count))
                         });
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BLMPop,
                 arguments,
                 response ->
@@ -4773,7 +4818,7 @@ public abstract class BaseClient
                         new String[] {Double.toString(timeout), Long.toString(keys.length)},
                         keys,
                         new String[] {direction.toString()});
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BLMPop,
                 arguments,
                 response -> castMapOfArrays(handleMapOrNullResponse(response), String.class));
@@ -4787,7 +4832,7 @@ public abstract class BaseClient
                         new GlideString[] {gs(Double.toString(timeout)), gs(Long.toString(keys.length))},
                         keys,
                         new GlideString[] {gs(direction.toString())});
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BLMPop,
                 arguments,
                 response ->
@@ -4841,7 +4886,8 @@ public abstract class BaseClient
                 new String[] {
                     source, destination, wherefrom.toString(), whereto.toString(), Double.toString(timeout)
                 };
-        return commandManager.submitNewCommand(BLMove, arguments, this::handleStringOrNullResponse);
+        return commandManager.submitBlockingCommand(
+                BLMove, arguments, this::handleStringOrNullResponse);
     }
 
     @Override
@@ -4859,7 +4905,7 @@ public abstract class BaseClient
                     gs(whereto.toString()),
                     gs(Double.toString(timeout))
                 };
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 BLMove, arguments, this::handleGlideStringOrNullResponse);
     }
 
@@ -6028,10 +6074,94 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> wait(long numreplicas, long timeout) {
-        return commandManager.submitNewCommand(
+        return commandManager.submitBlockingCommand(
                 Wait,
                 new String[] {Long.toString(numreplicas), Long.toString(timeout)},
                 this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long[]> waitaof(long numlocal, long numreplicas, long timeout) {
+        return commandManager.submitBlockingCommand(
+                WaitAof,
+                new String[] {Long.toString(numlocal), Long.toString(numreplicas), Long.toString(timeout)},
+                response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost, long destinationPort, String key, long destinationDB, long timeout) {
+        return commandManager.submitNewCommand(
+                Migrate,
+                new String[] {
+                    destinationHost,
+                    Long.toString(destinationPort),
+                    key,
+                    Long.toString(destinationDB),
+                    Long.toString(timeout)
+                },
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            GlideString key,
+            long destinationDB,
+            long timeout) {
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(destinationPort)
+                        .add(key)
+                        .add(destinationDB)
+                        .add(timeout)
+                        .toArray(),
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            String key,
+            long destinationDB,
+            long timeout,
+            MigrateOptions migrateOptions) {
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(Long.toString(destinationPort))
+                        .add(key)
+                        .add(Long.toString(destinationDB))
+                        .add(Long.toString(timeout))
+                        .add(migrateOptions.toArgs())
+                        .toArray(),
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            GlideString key,
+            long destinationDB,
+            long timeout,
+            MigrateOptions migrateOptions) {
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(destinationPort)
+                        .add(key)
+                        .add(destinationDB)
+                        .add(timeout)
+                        .add(migrateOptions.toArgs())
+                        .toArray(),
+                this::handleStringResponse);
     }
 
     public CompletableFuture<String[]> aclCat() {
