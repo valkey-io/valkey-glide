@@ -126,8 +126,6 @@ impl Telemetry {
     pub fn compression_skipped_count() -> usize { 0 }
     pub fn incr_subscription_out_of_sync() -> usize { 0 }
     pub fn subscription_out_of_sync_count() -> usize { 0 }
-    pub fn update_subscription_last_sync_timestamp() -> usize { 0 }
-    pub fn subscription_last_sync_timestamp() -> usize { 0 }
     pub fn update_subscription_last_sync_timestamp(_timestamp: u64) -> u64 { 0 }
     pub fn subscription_last_sync_timestamp() -> u64 { 0 }
     pub fn reset() {}
