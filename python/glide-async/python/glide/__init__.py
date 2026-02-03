@@ -164,6 +164,7 @@ from glide_shared import (
 )
 
 from .async_commands import ft, glide_json
+from .async_commands import ALL_CHANNELS, ALL_PATTERNS, ALL_SHARDED_CHANNELS
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger
@@ -337,6 +338,9 @@ __all__ = [
     "ClusterScanCursor",
     # PubSub
     "PubSubMsg",
+    "ALL_CHANNELS",
+    "ALL_PATTERNS",
+    "ALL_SHARDED_CHANNELS",
     # Json
     "glide_json",
     "json_batch",
