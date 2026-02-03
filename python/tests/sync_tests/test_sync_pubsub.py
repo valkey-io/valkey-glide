@@ -3113,7 +3113,6 @@ class TestSyncPubSub:
         finally:
             client.close()
 
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_negative_timeout_raises_error(
         self,

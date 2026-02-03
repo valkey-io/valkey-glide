@@ -4992,7 +4992,6 @@ class TestPubSub:
             await pubsub_client_cleanup(listening_client)
             await pubsub_client_cleanup(publishing_client)
 
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_negative_timeout_raises_error(
         self,
