@@ -9,7 +9,8 @@ import (
 // The options used for performing a Cluster scan.
 type ClusterScanOptions struct {
 	BaseScanOptions
-	ScanType constants.ObjectType
+	ScanType             constants.ObjectType
+	AllowNonCoveredSlots bool
 }
 
 // Creates a options struct to be used in the Cluster Scan.
@@ -35,6 +36,14 @@ func (scanOptions *ClusterScanOptions) SetType(t constants.ObjectType) *ClusterS
 	return scanOptions
 }
 
+// SetAllowNonCoveredSlots sets whether to allow scanning even if some slots are not covered by any node.
+// If set to true, the scan will perform even if some slots are not covered by any node in the cluster.
+// This is useful when the cluster is not fully configured or some nodes are down.
+func (scanOptions *ClusterScanOptions) SetAllowNonCoveredSlots(allow bool) *ClusterScanOptions {
+	scanOptions.AllowNonCoveredSlots = allow
+	return scanOptions
+}
+
 func (opts *ClusterScanOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	baseArgs, err := opts.BaseScanOptions.ToArgs()
@@ -42,6 +51,10 @@ func (opts *ClusterScanOptions) ToArgs() ([]string, error) {
 
 	if string(opts.ScanType) != "" {
 		args = append(args, constants.TypeKeyword, string(opts.ScanType))
+	}
+
+	if opts.AllowNonCoveredSlots {
+		args = append(args, "ALLOW_NON_COVERED_SLOTS")
 	}
 
 	return args, err
