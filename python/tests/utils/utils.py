@@ -70,8 +70,14 @@ from glide_shared.config import (
     BackoffStrategy,
     CompressionBackend,
     CompressionConfiguration,
-    GlideClientConfiguration,
-    GlideClusterClientConfiguration,
+)
+from glide_shared.config import GlideClientConfiguration
+from glide_shared.config import GlideClientConfiguration as SyncGlideClientConfiguration
+from glide_shared.config import GlideClusterClientConfiguration
+from glide_shared.config import (
+    GlideClusterClientConfiguration as SyncGlideClusterClientConfiguration,
+)
+from glide_shared.config import (
     NodeAddress,
     ProtocolVersion,
     ReadFrom,
@@ -89,10 +95,6 @@ from glide_shared.routes import AllNodes
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
 from glide_sync import TGlideClient as TSyncGlideClient
-from glide_sync.config import GlideClientConfiguration as SyncGlideClientConfiguration
-from glide_sync.config import (
-    GlideClusterClientConfiguration as SyncGlideClusterClientConfiguration,
-)
 from glide_sync.logger import Level as SyncLogLevel
 from packaging import version
 

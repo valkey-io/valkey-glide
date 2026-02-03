@@ -174,6 +174,136 @@ test_standalone_client()
 
 ---
 
+## PubSub Configuration
+
+Valkey GLIDE supports dynamic PubSub with automatic subscription reconciliation. Configure the reconciliation interval to ensure subscriptions remain synchronized:
+
+```python
+# Async client
+from glide import GlideClientConfiguration, NodeAddress, GlideClient, AdvancedGlideClientConfiguration
+
+config = GlideClientConfiguration(
+    addresses=[NodeAddress("localhost", 6379)],
+    advanced_config=AdvancedGlideClientConfiguration(
+        pubsub_reconciliation_interval=5000  # Reconcile every 5 seconds (in milliseconds)
+    )
+)
+client = await GlideClient.create(config)
+
+# Sync client
+from glide_sync import GlideClientConfiguration, NodeAddress, GlideClient, AdvancedGlideClientConfiguration
+
+config = GlideClientConfiguration(
+    addresses=[NodeAddress("localhost", 6379)],
+    advanced_config=AdvancedGlideClientConfiguration(
+        pubsub_reconciliation_interval=5000  # Reconcile every 5 seconds (in milliseconds)
+    )
+)
+client = GlideClient.create(config)
+```
+
+### Pre-configured Subscriptions
+
+You can configure subscriptions at client creation time. The client will automatically establish these subscriptions during connection:
+
+```python
+# Async client with pre-configured subscriptions
+from glide import (
+    GlideClientConfiguration,
+    NodeAddress,
+    GlideClient,
+)
+
+def message_callback(msg, context):
+    print(f"Received message on {msg.channel}: {msg.message}")
+
+config = GlideClientConfiguration(
+    addresses=[NodeAddress("localhost", 6379)],
+    pubsub_subscriptions=GlideClientConfiguration.PubSubSubscriptions(
+        channels_and_patterns={
+            GlideClientConfiguration.PubSubChannelModes.Exact: {"news", "updates"},
+            GlideClientConfiguration.PubSubChannelModes.Pattern: {"events.*", "logs.*"},
+        },
+        callback=message_callback,
+        context=None  # Optional context passed to callback
+    )
+)
+client = await GlideClient.create(config)
+
+# Cluster client with sharded pubsub
+from glide import GlideClusterClientConfiguration, GlideClusterClient
+
+config = GlideClusterClientConfiguration(
+    addresses=[NodeAddress("localhost", 6379)],
+    pubsub_subscriptions=GlideClusterClientConfiguration.PubSubSubscriptions(
+        channels_and_patterns={
+            GlideClusterClientConfiguration.PubSubChannelModes.Exact: {"channel1"},
+            GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {"pattern*"},
+            GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {"shard_channel"},
+        },
+        callback=message_callback,
+        context=None
+    )
+)
+cluster_client = await GlideClusterClient.create(config)
+```
+
+### Dynamic Subscription Management
+
+Subscribe and unsubscribe at runtime:
+
+```python
+# Subscribe to channels
+await client.subscribe({"channel1", "channel2"}, timeout_ms=5000)
+
+# Subscribe to patterns
+await client.psubscribe({"news.*", "events.*"}, timeout_ms=5000)
+
+# Unsubscribe from specific channels
+await client.unsubscribe({"channel1"}, timeout_ms=5000)
+
+# Unsubscribe from all channels
+from glide.async_commands.core import ALL_CHANNELS
+await client.unsubscribe(ALL_CHANNELS, timeout_ms=5000)
+
+# Unsubscribe from all patterns
+from glide.async_commands.core import ALL_PATTERNS
+await client.punsubscribe(ALL_PATTERNS, timeout_ms=5000)
+
+# Cluster: sharded pubsub
+await cluster_client.ssubscribe({"shard_channel"}, timeout_ms=5000)
+await cluster_client.sunsubscribe({"shard_channel"}, timeout_ms=5000)
+
+# Check subscription state
+state = await client.get_subscriptions()
+print(f"Desired: {state.desired_subscriptions}")
+print(f"Actual: {state.actual_subscriptions}")
+```
+
+### Client Statistics
+
+Monitor client performance and subscription health using `get_statistics()`:
+
+```python
+stats = await client.get_statistics()  # Async
+# or
+stats = client.get_statistics()  # Sync
+
+# Available metrics:
+# - total_connections: Number of active connections
+# - total_clients: Number of client instances
+# - total_values_compressed: Count of compressed values
+# - total_values_decompressed: Count of decompressed values
+# - total_original_bytes: Original data size before compression
+# - total_bytes_compressed: Compressed data size
+# - total_bytes_decompressed: Decompressed data size
+# - compression_skipped_count: Times compression was skipped
+# - subscription_out_of_sync_count: Failed reconciliation attempts
+# - subscription_last_sync_timestamp: Last successful sync (milliseconds since epoch)
+```
+
+---
+
 ## OpenTelemetry Configuration
 
 Valkey GLIDE supports OpenTelemetry for distributed tracing and metrics collection. This allows you to monitor command execution, measure latency, and track performance across your application.

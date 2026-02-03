@@ -69,6 +69,8 @@ from glide_shared import (
     GeoSearchCount,
     GeospatialData,
     GeoUnit,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
     GlideError,
     HashFieldConditionalChange,
     IamAuthConfig,
@@ -153,7 +155,6 @@ from glide_shared import (
     json_batch,
 )
 
-from .config import GlideClientConfiguration, GlideClusterClientConfiguration
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger
