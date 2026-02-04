@@ -234,7 +234,8 @@ public class GlideClusterClientTest {
     public void custom_command_binary_with_multi_node_route_returns_multi_value() {
         TestCommandManager commandManager = new TestCommandManager(null);
 
-        Map<GlideString, GlideString> data = createMap(gs("key1"), gs("value1"), gs("key2"), gs("value2"));
+        Map<GlideString, GlideString> data =
+                createMap(gs("key1"), gs("value1"), gs("key2"), gs("value2"));
         try (TestClient client = new TestClient(commandManager, data)) {
             ClusterValue<Object> value = client.customCommand(new GlideString[0], ALL_NODES).get();
             assertEquals(data, value.getMultiValue());
