@@ -52,11 +52,6 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class CommandManager {
 
-    /**
-     * Set of blocking command names (uppercase) that have their own timeout in the command arguments.
-     * These commands should NOT use Java-side timeout - Rust handles their timeout based on the
-     * command's timeout argument.
-     */
     private static final Set<String> BLOCKING_COMMAND_NAMES;
 
     static {

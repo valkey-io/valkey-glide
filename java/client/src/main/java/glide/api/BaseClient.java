@@ -105,7 +105,11 @@ import static command_request.CommandRequestOuterClass.RequestType.ObjectRefCoun
 import static command_request.CommandRequestOuterClass.RequestType.PExpire;
 import static command_request.CommandRequestOuterClass.RequestType.PExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.PExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.PSubscribe;
+import static command_request.CommandRequestOuterClass.RequestType.PSubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.PTTL;
+import static command_request.CommandRequestOuterClass.RequestType.PUnsubscribe;
+import static command_request.CommandRequestOuterClass.RequestType.PUnsubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.Persist;
 import static command_request.CommandRequestOuterClass.RequestType.PfAdd;
 import static command_request.CommandRequestOuterClass.RequestType.PfCount;
@@ -148,10 +152,14 @@ import static command_request.CommandRequestOuterClass.RequestType.SetRange;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
 import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.Strlen;
+import static command_request.CommandRequestOuterClass.RequestType.Subscribe;
+import static command_request.CommandRequestOuterClass.RequestType.SubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.TTL;
 import static command_request.CommandRequestOuterClass.RequestType.Touch;
 import static command_request.CommandRequestOuterClass.RequestType.Type;
 import static command_request.CommandRequestOuterClass.RequestType.Unlink;
+import static command_request.CommandRequestOuterClass.RequestType.Unsubscribe;
+import static command_request.CommandRequestOuterClass.RequestType.UnsubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.Wait;
 import static command_request.CommandRequestOuterClass.RequestType.WaitAof;
 import static command_request.CommandRequestOuterClass.RequestType.Watch;
@@ -378,7 +386,7 @@ public abstract class BaseClient
     public static final String LCS_MATCHES_RESULT_KEY = "matches";
 
     // Constant empty arrays to reduce allocations
-    private static final String[] EMPTY_STRING_ARRAY = new String[0];
+    protected static final String[] EMPTY_STRING_ARRAY = new String[0];
     protected static final GlideString[] EMPTY_GLIDE_STRING_ARRAY = new GlideString[0];
 
     // Client components
@@ -6248,6 +6256,119 @@ public abstract class BaseClient
     public CompletableFuture<String> aclWhoami() {
         return commandManager.submitNewCommand(
                 AclWhoami, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    public CompletableFuture<Void> subscribe(Set<String> channels) {
+        return commandManager.submitNewCommand(
+                Subscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
+    }
+
+    public CompletableFuture<Void> subscribe(Set<String> channels, int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
+        String[] args = new String[channels.size() + 1];
+        int i = 0;
+        for (String channel : channels) {
+            args[i++] = channel;
+        }
+        args[i] = String.valueOf(timeoutMs);
+        return commandManager.submitNewCommand(SubscribeBlocking, args, response -> null);
+    }
+
+    public CompletableFuture<Void> psubscribe(Set<String> patterns) {
+        return commandManager.submitNewCommand(
+                PSubscribe, patterns.toArray(EMPTY_STRING_ARRAY), response -> null);
+    }
+
+    public CompletableFuture<Void> psubscribe(Set<String> patterns, int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
+        String[] args = new String[patterns.size() + 1];
+        int i = 0;
+        for (String pattern : patterns) {
+            args[i++] = pattern;
+        }
+        args[i] = String.valueOf(timeoutMs);
+        return commandManager.submitNewCommand(PSubscribeBlocking, args, response -> null);
+    }
+
+    public CompletableFuture<Void> unsubscribe() {
+        return commandManager.submitNewCommand(Unsubscribe, EMPTY_STRING_ARRAY, response -> null);
+    }
+
+    public CompletableFuture<Void> unsubscribe(Set<String> channels) {
+        return commandManager.submitNewCommand(
+                Unsubscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
+    }
+
+    public CompletableFuture<Void> unsubscribe(Set<String> channels, int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
+        String[] args = new String[channels.size() + 1];
+        int i = 0;
+        for (String channel : channels) {
+            args[i++] = channel;
+        }
+        args[i] = String.valueOf(timeoutMs);
+        return commandManager.submitNewCommand(UnsubscribeBlocking, args, response -> null);
+    }
+
+    public CompletableFuture<Void> unsubscribe(int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
+        return commandManager.submitNewCommand(
+                UnsubscribeBlocking, new String[] {String.valueOf(timeoutMs)}, response -> null);
+    }
+
+    public CompletableFuture<Void> punsubscribe() {
+        return commandManager.submitNewCommand(PUnsubscribe, EMPTY_STRING_ARRAY, response -> null);
+    }
+
+    public CompletableFuture<Void> punsubscribe(Set<String> patterns) {
+        return commandManager.submitNewCommand(
+                PUnsubscribe, patterns.toArray(EMPTY_STRING_ARRAY), response -> null);
+    }
+
+    public CompletableFuture<Void> punsubscribe(Set<String> patterns, int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
+        String[] args = new String[patterns.size() + 1];
+        int i = 0;
+        for (String pattern : patterns) {
+            args[i++] = pattern;
+        }
+        args[i] = String.valueOf(timeoutMs);
+        return commandManager.submitNewCommand(PUnsubscribeBlocking, args, response -> null);
+    }
+
+    public CompletableFuture<Void> punsubscribe(int timeoutMs) {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout must be non-negative, got: " + timeoutMs);
+        }
+        return commandManager.submitNewCommand(
+                PUnsubscribeBlocking, new String[] {String.valueOf(timeoutMs)}, response -> null);
+    }
+
+    protected Object parseSubscriptionState(Object response) {
+        if (!(response instanceof Object[])) {
+            throw new RuntimeException("Invalid response format from GetSubscriptions");
+        }
+        Object[] arr = (Object[]) response;
+        if (arr.length != 4) {
+            throw new RuntimeException("Invalid response format from GetSubscriptions");
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object[]> desiredMap = (Map<String, Object[]>) arr[1];
+        @SuppressWarnings("unchecked")
+        Map<String, Object[]> actualMap = (Map<String, Object[]>) arr[3];
+
+        return new Object[] {desiredMap, actualMap};
     }
 
     /**

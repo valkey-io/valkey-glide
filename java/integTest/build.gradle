@@ -225,10 +225,10 @@ clearDirs.finalizedBy 'startClusterForAz'
 // Run comprehensive cleanup after entire build finishes
 gradle.buildFinished {
     println "Finding and stopping all running Valkey processes..."
-
+    
     // OS detection
     def isWindowsRuntime = System.getProperty('os.name').toLowerCase().contains('windows')
-
+    
     // Find and kill all Valkey processes
     try {
         exec {
@@ -242,7 +242,7 @@ gradle.buildFinished {
     } catch (Exception e) {
         println "Failed to kill valkey-server processes: ${e.message}"
     }
-
+    
     // Also try redis-server processes
     try {
         exec {
@@ -256,7 +256,7 @@ gradle.buildFinished {
     } catch (Exception e) {
         println "Failed to kill redis-server processes: ${e.message}"
     }
-
+    
     // Clean up cluster folders
     try {
         exec {

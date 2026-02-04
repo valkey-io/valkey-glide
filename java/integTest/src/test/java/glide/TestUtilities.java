@@ -126,7 +126,7 @@ public class TestUtilities {
 
     /** Extract integer parameter value from INFO command output */
     public static long getValueFromInfo(String data, String value) {
-        for (String line : data.split("\r\n")) {
+        for (var line : data.split("\r\n")) {
             if (line.contains(value)) {
                 return Long.parseLong(line.split(":")[1]);
             }
@@ -137,7 +137,7 @@ public class TestUtilities {
 
     /** Extract first key from {@link ClusterValue} assuming it contains a multi-value. */
     public static <T> String getFirstKeyFromMultiValue(ClusterValue<T> data) {
-        return data.getMultiValue().keySet().toArray(new String[0])[0];
+        return data.getMultiValue().keySet().toArray(String[]::new)[0];
     }
 
     /** Extract first value from {@link ClusterValue} assuming it contains a multi-value. */
@@ -165,13 +165,14 @@ public class TestUtilities {
      * replacing duplicates with the last encountered value.
      */
     public static Map<String, String> parseInfoResponseToMap(String serverInfo) {
-        return Arrays.stream(serverInfo.split("\n"))
+        return serverInfo
+                .lines()
                 .filter(line -> line.contains(":"))
                 .map(line -> line.split(":", 2))
                 .collect(
                         Collectors.toMap(
-                                parts -> parts[0].trim(),
-                                parts -> parts[1].trim(),
+                                parts -> parts[0],
+                                parts -> parts[1],
                                 (existingValue, newValue) -> newValue,
                                 LinkedHashMap::new));
     }
@@ -191,10 +192,9 @@ public class TestUtilities {
 
     public static GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?>
             commonClientConfig() {
-        GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?> builder =
-                GlideClientConfiguration.builder();
-        for (String host : STANDALONE_HOSTS) {
-            String[] parts = host.split(":");
+        var builder = GlideClientConfiguration.builder();
+        for (var host : STANDALONE_HOSTS) {
+            var parts = host.split(":");
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
@@ -217,10 +217,9 @@ public class TestUtilities {
 
     public static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>
             commonClusterClientConfig() {
-        GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?> builder =
-                GlideClusterClientConfiguration.builder();
-        for (String host : CLUSTER_HOSTS) {
-            String[] parts = host.split(":");
+        var builder = GlideClusterClientConfiguration.builder();
+        for (var host : CLUSTER_HOSTS) {
+            var parts = host.split(":");
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
@@ -229,13 +228,12 @@ public class TestUtilities {
 
     public static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>
             azClusterClientConfig() {
-        GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?> builder =
-                GlideClusterClientConfiguration.builder();
-        for (String host : AZ_CLUSTER_HOSTS) {
+        var builder = GlideClusterClientConfiguration.builder();
+        for (var host : AZ_CLUSTER_HOSTS) {
             if (host.isEmpty()) {
                 continue;
             }
-            String[] parts = host.split(":");
+            var parts = host.split(":");
             if (parts.length < 2) {
                 throw new IllegalArgumentException(
                         "Invalid host format: " + host + ". Expected format: host:port");
@@ -257,29 +255,29 @@ public class TestUtilities {
         if (expected == null || actual == null) {
             assertEquals(expected, actual);
         } else if (expected.getClass().isArray()) {
-            Object[] expectedArray = (Object[]) expected;
-            Object[] actualArray = (Object[]) actual;
+            var expectedArray = (Object[]) expected;
+            var actualArray = (Object[]) actual;
             assertEquals(expectedArray.length, actualArray.length);
             for (int i = 0; i < expectedArray.length; i++) {
                 assertDeepEquals(expectedArray[i], actualArray[i]);
             }
         } else if (expected instanceof List) {
-            List<?> expectedList = (List<?>) expected;
-            List<?> actualList = (List<?>) actual;
+            var expectedList = (List<?>) expected;
+            var actualList = (List<?>) actual;
             assertEquals(expectedList.size(), actualList.size());
             for (int i = 0; i < expectedList.size(); i++) {
                 assertDeepEquals(expectedList.get(i), actualList.get(i));
             }
         } else if (expected instanceof Set) {
-            Set<?> expectedSet = (Set<?>) expected;
-            Set<?> actualSet = (Set<?>) actual;
+            var expectedSet = (Set<?>) expected;
+            var actualSet = (Set<?>) actual;
             assertEquals(expectedSet.size(), actualSet.size());
             assertTrue(expectedSet.containsAll(actualSet) && actualSet.containsAll(expectedSet));
         } else if (expected instanceof Map) {
-            Map<?, ?> expectedMap = (Map<?, ?>) expected;
-            Map<?, ?> actualMap = (Map<?, ?>) actual;
+            var expectedMap = (Map<?, ?>) expected;
+            var actualMap = (Map<?, ?>) actual;
             assertEquals(expectedMap.size(), actualMap.size());
-            for (Object key : expectedMap.keySet()) {
+            for (var key : expectedMap.keySet()) {
                 assertDeepEquals(expectedMap.get(key), actualMap.get(key));
             }
         } else if (expected instanceof Double || actual instanceof Double) {
@@ -308,14 +306,14 @@ public class TestUtilities {
             Optional<String> libCode) {
         assertTrue(response.length > 0);
         boolean hasLib = false;
-        for (Map<String, Object> lib : response) {
+        for (var lib : response) {
             hasLib = lib.containsValue(libName);
             if (hasLib) {
-                Object[] functions = (Object[]) lib.get("functions");
+                var functions = (Object[]) lib.get("functions");
                 assertEquals(functionDescriptions.size(), functions.length);
-                for (Object functionInfo : functions) {
-                    Map<String, Object> function = (Map<String, Object>) functionInfo;
-                    String functionName = (String) function.get("name");
+                for (var functionInfo : functions) {
+                    var function = (Map<String, Object>) functionInfo;
+                    var functionName = (String) function.get("name");
                     assertEquals(functionDescriptions.get(functionName), function.get("description"));
                     assertEquals(functionFlags.get(functionName), function.get("flags"));
                 }
@@ -357,14 +355,14 @@ public class TestUtilities {
             Optional<GlideString> libCode) {
         assertTrue(response.length > 0);
         boolean hasLib = false;
-        for (Map<GlideString, Object> lib : response) {
+        for (var lib : response) {
             hasLib = lib.containsValue(libName);
             if (hasLib) {
-                Object[] functions = (Object[]) lib.get(gs("functions"));
+                var functions = (Object[]) lib.get(gs("functions"));
                 assertEquals(functionDescriptions.size(), functions.length);
-                for (Object functionInfo : functions) {
-                    Map<GlideString, Object> function = (Map<GlideString, Object>) functionInfo;
-                    GlideString functionName = (GlideString) function.get(gs("name"));
+                for (var functionInfo : functions) {
+                    var function = (Map<GlideString, Object>) functionInfo;
+                    var functionName = (GlideString) function.get(gs("name"));
                     assertEquals(functionDescriptions.get(functionName), function.get(gs("description")));
                     assertSetsEqual(
                             functionFlags.get(functionName), (Set<GlideString>) function.get(gs("flags")));
@@ -407,11 +405,8 @@ public class TestUtilities {
             // fcall|fcall_ro <function name> <num keys> <key>* <arg>*
             assertEquals(runningFunction[1], runningScriptInfo.get("name"));
         }
-        Map<String, Map<String, Object>> expected = new java.util.HashMap<>();
-        Map<String, Object> luaMap = new java.util.HashMap<>();
-        luaMap.put("libraries_count", libCount);
-        luaMap.put("functions_count", functionCount);
-        expected.put("LUA", luaMap);
+        var expected =
+                Map.of("LUA", Map.of("libraries_count", libCount, "functions_count", functionCount));
         assertEquals(expected, response.get("engines"));
     }
 
@@ -444,11 +439,10 @@ public class TestUtilities {
             // fcall|fcall_ro <function name> <num keys> <key>* <arg>*
             assertEquals(runningFunction[1], runningScriptInfo.get(gs("name")));
         }
-        Map<GlideString, Map<GlideString, Object>> expected = new java.util.HashMap<>();
-        Map<GlideString, Object> luaMap = new java.util.HashMap<>();
-        luaMap.put(gs("libraries_count"), libCount);
-        luaMap.put(gs("functions_count"), functionCount);
-        expected.put(gs("LUA"), luaMap);
+        var expected =
+                Map.of(
+                        gs("LUA"),
+                        Map.of(gs("libraries_count"), libCount, gs("functions_count"), functionCount));
         assertEquals(expected, response.get(gs("engines")));
     }
 
@@ -456,7 +450,7 @@ public class TestUtilities {
     public static String generateLuaLibCode(
             String libName, Map<String, String> functions, boolean readonly) {
         StringBuilder code = new StringBuilder("#!lua name=" + libName + "\n");
-        for (Map.Entry<String, String> function : functions.entrySet()) {
+        for (var function : functions.entrySet()) {
             code.append("redis.register_function{ function_name = '")
                     .append(function.getKey())
                     .append("', callback = function(keys, args) ")

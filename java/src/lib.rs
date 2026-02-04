@@ -1067,6 +1067,20 @@ pub extern "system" fn Java_glide_ffi_resolvers_StatisticsResolver_getStatistics
         &format!("{}", Telemetry::compression_skipped_count()),
     );
 
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "subscription_out_of_sync_count",
+        &format!("{}", Telemetry::subscription_out_of_sync_count()),
+    );
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "subscription_last_sync_timestamp",
+        &format!("{}", Telemetry::subscription_last_sync_timestamp()),
+    );
+
     map
 }
 

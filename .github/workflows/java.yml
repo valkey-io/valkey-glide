@@ -169,6 +169,7 @@ jobs:
                       if [[ "${{ matrix.java }}" == "8" ]]; then
                           ./gradlew.bat --build-cache --continue build test -x javadoc -PtestJava8=true
                       else
+                          # Enable integration tests on Windows with WSL
                           ./gradlew.bat --build-cache --continue build test -x javadoc
                       fi
                   else

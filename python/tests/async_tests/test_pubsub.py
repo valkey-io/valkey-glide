@@ -4991,3 +4991,58 @@ class TestPubSub:
         finally:
             await pubsub_client_cleanup(listening_client)
             await pubsub_client_cleanup(publishing_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_negative_timeout_raises_error(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """Test that negative timeout raises ValueError."""
+        client = None
+        try:
+            client = await create_pubsub_client(request, cluster_mode)
+
+            # Test subscribe with negative timeout
+            with pytest.raises(ValueError) as exc_info:
+                await client.subscribe({"channel1"}, timeout_ms=-1)
+            assert "Timeout must be non-negative" in str(exc_info.value)
+            assert "got: -1" in str(exc_info.value)
+
+            # Test psubscribe with negative timeout
+            with pytest.raises(ValueError) as exc_info:
+                await client.psubscribe({"pattern*"}, timeout_ms=-100)
+            assert "Timeout must be non-negative" in str(exc_info.value)
+            assert "got: -100" in str(exc_info.value)
+
+            # Test unsubscribe with negative timeout
+            with pytest.raises(ValueError) as exc_info:
+                await client.unsubscribe({"channel1"}, timeout_ms=-5)
+            assert "Timeout must be non-negative" in str(exc_info.value)
+            assert "got: -5" in str(exc_info.value)
+
+            # Test punsubscribe with negative timeout
+            with pytest.raises(ValueError) as exc_info:
+                await client.punsubscribe({"pattern*"}, timeout_ms=-10)
+            assert "Timeout must be non-negative" in str(exc_info.value)
+            assert "got: -10" in str(exc_info.value)
+
+            # Test ssubscribe with negative timeout (cluster only)
+            if cluster_mode:
+                with pytest.raises(ValueError) as exc_info:
+                    await cast(GlideClusterClient, client).ssubscribe(
+                        {"shard1"}, timeout_ms=-20
+                    )
+                assert "Timeout must be non-negative" in str(exc_info.value)
+                assert "got: -20" in str(exc_info.value)
+
+                # Test sunsubscribe with negative timeout (cluster only)
+                with pytest.raises(ValueError) as exc_info:
+                    await cast(GlideClusterClient, client).sunsubscribe(
+                        {"shard1"}, timeout_ms=-30
+                    )
+                assert "Timeout must be non-negative" in str(exc_info.value)
+                assert "got: -30" in str(exc_info.value)
+
+        finally:
+            await pubsub_client_cleanup(client)
