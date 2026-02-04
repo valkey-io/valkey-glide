@@ -87,7 +87,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -613,7 +612,8 @@ public class GlideClusterClientTest {
     @Test
     public void info_with_route_returns_string() {
         // setup
-        Map<String, String> testClusterValue = createMap("addr1", "addr1 result", "addr2", "addr2 result");
+        Map<String, String> testClusterValue =
+                createMap("addr1", "addr1 result", "addr2", "addr2 result");
         Route route = ALL_NODES;
         CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
         testResponse.complete(ClusterValue.of(testClusterValue));
@@ -637,7 +637,8 @@ public class GlideClusterClientTest {
     public void info_with_route_with_infoOptions_returns_string() {
         // setup
         String[] infoArguments = new String[] {"ALL", "DEFAULT"};
-        Map<String, String> testClusterValue = createMap("addr1", "addr1 result", "addr2", "addr2 result");
+        Map<String, String> testClusterValue =
+                createMap("addr1", "addr1 result", "addr2", "addr2 result");
         CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
         testResponse.complete(ClusterValue.of(testClusterValue));
 
@@ -927,7 +928,8 @@ public class GlideClusterClientTest {
     public void configGet_with_multi_node_route_returns_multi_value() {
         CommandManager commandManager = new TestCommandManager(null);
 
-        Map<?, ?> data = Collections.singletonMap("node1", createMap("timeout", "1000", "maxmemory", "1GB"));
+        Map<?, ?> data =
+                Collections.singletonMap("node1", createMap("timeout", "1000", "maxmemory", "1GB"));
         try (TestClient client = new TestClient(commandManager, data)) {
             ClusterValue<?> value = client.configGet(TEST_ARGS, ALL_NODES).get();
             assertAll(
@@ -948,7 +950,8 @@ public class GlideClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.configSet(Collections.singletonMap("timeout", "1000"));
+        CompletableFuture<String> response =
+                service.configSet(Collections.singletonMap("timeout", "1000"));
 
         // verify
         assertEquals(testResponse, response);
@@ -968,7 +971,8 @@ public class GlideClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.configSet(Collections.singletonMap("value", "42"), RANDOM);
+        CompletableFuture<String> response =
+                service.configSet(Collections.singletonMap("value", "42"), RANDOM);
 
         // verify
         assertEquals(testResponse, response);
@@ -2347,7 +2351,8 @@ public class GlideClusterClientTest {
         // setup
         GlideString[] args = new GlideString[0];
         ClusterValue<Map<GlideString, Map<GlideString, Object>>> value =
-                ClusterValue.ofSingleValue(Collections.singletonMap(gs("1"), Collections.singletonMap(gs("2"), 2)));
+                ClusterValue.ofSingleValue(
+                        Collections.singletonMap(gs("1"), Collections.singletonMap(gs("2"), 2)));
         CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> testResponse =
                 new CompletableFuture<>();
         testResponse.complete(value);
@@ -2547,7 +2552,8 @@ public class GlideClusterClientTest {
         // setup
         GlideString[] args = new GlideString[0];
         ClusterValue<Map<GlideString, Map<GlideString, Object>>> value =
-                ClusterValue.ofSingleValue(Collections.singletonMap(gs("1"), Collections.singletonMap(gs("2"), 2)));
+                ClusterValue.ofSingleValue(
+                        Collections.singletonMap(gs("1"), Collections.singletonMap(gs("2"), 2)));
         CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> testResponse =
                 new CompletableFuture<>();
         testResponse.complete(value);

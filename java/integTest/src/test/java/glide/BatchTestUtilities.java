@@ -104,7 +104,8 @@ public class BatchTestUtilities {
         return map;
     }
 
-    public static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5) {
+    public static <K, V> Map<K, V> createMap(
+            K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5) {
         Map<K, V> map = new HashMap<>();
         map.put(k1, v1);
         map.put(k2, v2);
@@ -114,7 +115,8 @@ public class BatchTestUtilities {
         return map;
     }
 
-    public static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6) {
+    public static <K, V> Map<K, V> createMap(
+            K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6) {
         Map<K, V> map = new HashMap<>();
         map.put(k1, v1);
         map.put(k2, v2);
@@ -125,7 +127,8 @@ public class BatchTestUtilities {
         return map;
     }
 
-    public static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6, K k7, V v7) {
+    public static <K, V> Map<K, V> createMap(
+            K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6, K k7, V v7) {
         Map<K, V> map = new HashMap<>();
         map.put(k1, v1);
         map.put(k2, v2);
@@ -762,7 +765,8 @@ public class BatchTestUtilities {
                                 createMap(listKey4, new String[] {value3}), // lmpop({listKey4}, LEFT)
                                 createMap(listKey4, new String[] {value2, value1}), // lmpop({listKey4}, LEFT, 1L)
                                 createMap(listKey4, new String[] {value3}), // blmpop({listKey4}, LEFT, 0.1)
-                                createMap(listKey4, new String[] {value2, value1}), // blmpop(listKey4}, LEFT, 1L, 0.1)
+                                createMap(
+                                        listKey4, new String[] {value2, value1}), // blmpop(listKey4}, LEFT, 1L, 0.1)
                             });
         }
 
@@ -1024,7 +1028,9 @@ public class BatchTestUtilities {
                                 new Object[] {zSetKey3, createMap("g", 7.)}, // zmpop(zSetKey3, MAX)
                                 new Object[] {zSetKey3, createMap("a", 1., "b", 2.)}, // zmpop(zSetKey3, MIN, 2)
                                 new Object[] {zSetKey3, createMap("f", 6.)}, // bzmpop(zSetKey3, MAX, .1)
-                                new Object[] {zSetKey3, createMap("c", 3., "d", 4.)}, // bzmpop(zSetKey3, MIN, .1, 2)
+                                new Object[] {
+                                    zSetKey3, createMap("c", 3., "d", 4.)
+                                }, // bzmpop(zSetKey3, MIN, .1, 2)
                                 6L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
                                 4L, // zintercard(new String[] {zSetKey4, zSetKey3})
                                 2L, // zintercard(new String[] {zSetKey4, zSetKey3}, 2)
@@ -1139,9 +1145,12 @@ public class BatchTestUtilities {
         final String consumer1 = "{consumer}-1-" + generateRandomNumericSuffix();
 
         batch
-                .xadd(streamKey1, createMap("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
-                .xadd(streamKey1, createMap("field2", "value2"), StreamAddOptions.builder().id("0-2").build())
-                .xadd(streamKey1, createMap("field3", "value3"), StreamAddOptions.builder().id("0-3").build())
+                .xadd(
+                        streamKey1, createMap("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
+                .xadd(
+                        streamKey1, createMap("field2", "value2"), StreamAddOptions.builder().id("0-2").build())
+                .xadd(
+                        streamKey1, createMap("field3", "value3"), StreamAddOptions.builder().id("0-3").build())
                 .xadd(
                         streamKey4,
                         new String[][] {{"field4", "value4"}, {"field4", "value5"}},
@@ -1223,13 +1232,17 @@ public class BatchTestUtilities {
                     3L, // xlen(streamKey1)
                     createMap(
                             streamKey1,
-                            createMap("0-3", new String[][] {{"field3", "value3"}})), // xread(createMap(key9, "0-2"));
+                            createMap(
+                                    "0-3", new String[][] {{"field3", "value3"}})), // xread(createMap(key9, "0-2"));
                     createMap(
                             streamKey1,
                             createMap(
                                     "0-3",
-                                    new String[][] {{"field3", "value3"}})), // xread(createMap(key9, "0-2"), options);
-                    createMap("0-1", new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1")
+                                    new String[][] {
+                                        {"field3", "value3"}
+                                    })), // xread(createMap(key9, "0-2"), options);
+                    createMap(
+                            "0-1", new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1")
                     createMap(
                             "0-1",
                             new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1", 1l)
@@ -1253,7 +1266,8 @@ public class BatchTestUtilities {
                                     })), // xreadgroup(createMap(streamKey1, ">"), groupName1, consumer1);
                     createMap(
                             streamKey1,
-                            createMap()), // xreadgroup(createMap(streamKey1, ">"), groupName1, consumer1, options);
+                            createMap()), // xreadgroup(createMap(streamKey1, ">"), groupName1, consumer1,
+                    // options);
                     createMap(), // xclaim(streamKey1, groupName1, consumer1, 0L, new String[] {"0-1"})
                     createMap(
                             "0-3",
@@ -1467,26 +1481,32 @@ public class BatchTestUtilities {
 
         Map[] expectedLibData =
                 new Map[] {
-                    new HashMap<String, Object>() {{
-                        put("library_name", libName);
-                        put("engine", "LUA");
-                        put("functions", new Object[] {expectedFuncData});
-                        put("library_code", code);
-                    }}
+                    new HashMap<String, Object>() {
+                        {
+                            put("library_name", libName);
+                            put("engine", "LUA");
+                            put("functions", new Object[] {expectedFuncData});
+                            put("library_code", code);
+                        }
+                    }
                 };
 
         HashMap<String, Map<String, Object>> expectedFunctionStatsNonEmpty =
                 new HashMap<String, Map<String, Object>>() {
                     {
                         put("running_script", null);
-                        put("engines", createMap("LUA", createMap("libraries_count", 1L, "functions_count", 1L)));
+                        put(
+                                "engines",
+                                createMap("LUA", createMap("libraries_count", 1L, "functions_count", 1L)));
                     }
                 };
         HashMap<String, Map<String, Object>> expectedFunctionStatsEmpty =
                 new HashMap<String, Map<String, Object>>() {
                     {
                         put("running_script", null);
-                        put("engines", createMap("LUA", createMap("libraries_count", 0L, "functions_count", 0L)));
+                        put(
+                                "engines",
+                                createMap("LUA", createMap("libraries_count", 0L, "functions_count", 0L)));
                     }
                 };
 

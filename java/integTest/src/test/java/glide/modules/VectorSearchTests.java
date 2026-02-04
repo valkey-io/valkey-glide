@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.modules;
 
+import static glide.BatchTestUtilities.createMap;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
@@ -78,7 +79,7 @@ public class VectorSearchTests {
     @Test
     @SneakyThrows
     public void check_module_loaded() {
-        var info = client.info(new Section[] {Section.MODULES}, RANDOM).get().getSingleValue();
+        String info = client.info(new Section[] {Section.MODULES}, RANDOM).get().getSingleValue();
         assertTrue(info.contains("# search_index_stats"));
     }
 
@@ -149,7 +150,7 @@ public class VectorSearchTests {
                         .get());
 
         // create an index with multiple prefixes
-        var index = UUID.randomUUID().toString();
+        String index = UUID.randomUUID().toString();
         assertEquals(
                 OK,
                 FT.create(
@@ -168,7 +169,7 @@ public class VectorSearchTests {
                         .get());
 
         // create a duplicating index
-        var exception =
+        ExecutionException exception =
                 assertThrows(
                         ExecutionException.class,
                         () ->
@@ -233,7 +234,7 @@ public class VectorSearchTests {
                 client
                         .hset(
                                 gs(prefix + 0),
-                                Map.of(
+                                createMap(
                                         gs("vec"),
                                         gs(
                                                 new byte[] {
@@ -246,7 +247,7 @@ public class VectorSearchTests {
                 client
                         .hset(
                                 gs(prefix + 1),
-                                Map.of(
+                                createMap(
                                         gs("vec"),
                                         gs(
                                                 new byte[] {
@@ -264,10 +265,10 @@ public class VectorSearchTests {
 
         // FT.SEARCH hash_idx1 "*=>[KNN 2 @VEC $query_vec]" PARAMS 2 query_vec
         // "\x00\x00\x00\x00\x00\x00\x00\x00" DIALECT 2
-        var options =
+        FTSearchOptions options =
                 FTSearchOptions.builder()
                         .params(
-                                Map.of(
+                                createMap(
                                         gs("query_vec"),
                                         gs(
                                                 new byte[] {
@@ -276,17 +277,17 @@ public class VectorSearchTests {
                                                 })))
                         .addReturnField("vec")
                         .build();
-        var query = "*=>[KNN 2 @VEC $query_vec]";
-        var ftsearch = FT.search(client, index, query, options).get();
+        String query = "*=>[KNN 2 @VEC $query_vec]";
+        Object[] ftsearch = FT.search(client, index, query, options).get();
 
         assertArrayEquals(
                 new Object[] {
                     2L,
-                    Map.of(
+                    createMap(
                             gs(prefix + 0),
-                            Map.of(gs("vec"), gs("\0\0\0\0\0\0\0\0")),
+                            createMap(gs("vec"), gs("\0\0\0\0\0\0\0\0")),
                             gs(prefix + 1),
-                            Map.of(
+                            createMap(
                                     gs("vec"),
                                     gs(
                                             new byte[] {
@@ -304,11 +305,11 @@ public class VectorSearchTests {
 
         // TODO more tests with json index
 
-        var ftprofile = FT.profile(client, index, new FTProfileOptions(query, options)).get();
+        Object[] ftprofile = FT.profile(client, index, new FTProfileOptions(query, options)).get();
         assertArrayEquals(ftsearch, (Object[]) ftprofile[0]);
 
         // querying non-existing index
-        var exception =
+        ExecutionException exception =
                 assertThrows(
                         ExecutionException.class,
                         () -> FT.search(client, UUID.randomUUID().toString(), "*").get());
@@ -319,7 +320,7 @@ public class VectorSearchTests {
     @SneakyThrows
     @Test
     public void ft_drop_and_ft_list() {
-        var index = gs(UUID.randomUUID().toString());
+        GlideString index = gs(UUID.randomUUID().toString());
         assertEquals(
                 OK,
                 FT.create(
@@ -330,17 +331,20 @@ public class VectorSearchTests {
                                 })
                         .get());
 
-        var before = Set.of(FT.list(client).get());
+        GlideString[] beforeArray = FT.list(client).get();
+        Set<GlideString> before = new HashSet<>(Arrays.asList(beforeArray));
 
         assertEquals(OK, FT.dropindex(client, index).get());
 
-        var after = new HashSet<>(Set.of(FT.list(client).get()));
+        GlideString[] afterArray = FT.list(client).get();
+        Set<GlideString> after = new HashSet<>(Arrays.asList(afterArray));
 
         assertFalse(after.contains(index));
         after.add(index);
         assertEquals(after, before);
 
-        var exception = assertThrows(ExecutionException.class, () -> FT.dropindex(client, index).get());
+        ExecutionException exception =
+                assertThrows(ExecutionException.class, () -> FT.dropindex(client, index).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("Index does not exist"));
     }
@@ -348,10 +352,10 @@ public class VectorSearchTests {
     @SneakyThrows
     @Test
     public void ft_aggregate() {
-        var prefixBicycles = "{bicycles}:";
-        var indexBicycles = prefixBicycles + UUID.randomUUID();
-        var prefixMovies = "{movies}:";
-        var indexMovies = prefixMovies + UUID.randomUUID();
+        String prefixBicycles = "{bicycles}:";
+        String indexBicycles = prefixBicycles + UUID.randomUUID();
+        String prefixMovies = "{movies}:";
+        String indexMovies = prefixMovies + UUID.randomUUID();
 
         // FT.CREATE idx:bicycle ON JSON PREFIX 1 bicycle: SCHEMA $.model AS model TEXT $.description AS
         // description TEXT $.price AS price NUMERIC $.condition AS condition TAG SEPARATOR ,
@@ -447,7 +451,7 @@ public class VectorSearchTests {
         Thread.sleep(DATA_PROCESSING_TIMEOUT); // let server digest the data and update index
 
         // FT.AGGREGATE idx:bicycle "*" LOAD 1 "__key" GROUPBY 1 "@condition" REDUCE COUNT 0 AS bicylces
-        var options =
+        FTAggregateOptions options =
                 FTAggregateOptions.builder()
                         .loadFields(new String[] {"__key"})
                         .addClause(
@@ -455,14 +459,15 @@ public class VectorSearchTests {
                                         new String[] {"@condition"},
                                         new Reducer[] {new Reducer("COUNT", new String[0], "bicycles")}))
                         .build();
-        var aggreg = FT.aggregate(client, indexBicycles, "*", options).get();
+        Object[] aggreg = FT.aggregate(client, indexBicycles, "*", options).get();
         // elements (maps in array) could be reordered, comparing as sets
         assertDeepEquals(
-                Set.of(
-                        Map.of(gs("condition"), gs("new"), gs("bicycles"), 5.),
-                        Map.of(gs("condition"), gs("used"), gs("bicycles"), 4.),
-                        Map.of(gs("condition"), gs("refurbished"), gs("bicycles"), 1.)),
-                Set.of(aggreg));
+                new HashSet<>(
+                        Arrays.asList(
+                                createMap(gs("condition"), gs("new"), gs("bicycles"), 5.),
+                                createMap(gs("condition"), gs("used"), gs("bicycles"), 4.),
+                                createMap(gs("condition"), gs("refurbished"), gs("bicycles"), 1.))),
+                new HashSet<>(Arrays.asList(aggreg)));
 
         // FT.CREATE idx:movie ON hash PREFIX 1 "movie:" SCHEMA title TEXT release_year NUMERIC rating
         // NUMERIC genre TAG votes NUMERIC
@@ -487,7 +492,7 @@ public class VectorSearchTests {
         client
                 .hset(
                         prefixMovies + 11002,
-                        Map.of(
+                        createMap(
                                 "title",
                                 "Star Wars: Episode V - The Empire Strikes Back",
                                 "release_year",
@@ -504,7 +509,7 @@ public class VectorSearchTests {
         client
                 .hset(
                         prefixMovies + 11003,
-                        Map.of(
+                        createMap(
                                 "title",
                                 "The Godfather",
                                 "release_year",
@@ -521,7 +526,7 @@ public class VectorSearchTests {
         client
                 .hset(
                         prefixMovies + 11004,
-                        Map.of(
+                        createMap(
                                 "title",
                                 "Heat",
                                 "release_year",
@@ -538,7 +543,7 @@ public class VectorSearchTests {
         client
                 .hset(
                         prefixMovies + 11005,
-                        Map.of(
+                        createMap(
                                 "title",
                                 "Star Wars: Episode VI - Return of the Jedi",
                                 "genre",
@@ -579,37 +584,38 @@ public class VectorSearchTests {
         aggreg = FT.aggregate(client, indexMovies, "*", options).get();
         // elements (maps in array) could be reordered, comparing as sets
         assertDeepEquals(
-                Set.of(
-                        Map.of(
-                                gs("genre"),
-                                gs("Drama"),
-                                gs("nb_of_movies"),
-                                1.,
-                                gs("nb_of_votes"),
-                                1563839.,
-                                gs("avg_rating"),
-                                10.),
-                        Map.of(
-                                gs("genre"),
-                                gs("Action"),
-                                gs("nb_of_movies"),
-                                2.,
-                                gs("nb_of_votes"),
-                                2033895.,
-                                gs("avg_rating"),
-                                9.),
-                        Map.of(
-                                gs("genre"),
-                                gs("Thriller"),
-                                gs("nb_of_movies"),
-                                1.,
-                                gs("nb_of_votes"),
-                                559490.,
-                                gs("avg_rating"),
-                                9.)),
-                Set.of(aggreg));
+                new HashSet<>(
+                        Arrays.asList(
+                                createMap(
+                                        gs("genre"),
+                                        gs("Drama"),
+                                        gs("nb_of_movies"),
+                                        1.,
+                                        gs("nb_of_votes"),
+                                        1563839.,
+                                        gs("avg_rating"),
+                                        10.),
+                                createMap(
+                                        gs("genre"),
+                                        gs("Action"),
+                                        gs("nb_of_movies"),
+                                        2.,
+                                        gs("nb_of_votes"),
+                                        2033895.,
+                                        gs("avg_rating"),
+                                        9.),
+                                createMap(
+                                        gs("genre"),
+                                        gs("Thriller"),
+                                        gs("nb_of_movies"),
+                                        1.,
+                                        gs("nb_of_votes"),
+                                        559490.,
+                                        gs("avg_rating"),
+                                        9.))),
+                new HashSet<>(Arrays.asList(aggreg)));
 
-        var ftprofile = FT.profile(client, indexMovies, new FTProfileOptions("*", options)).get();
+        Object[] ftprofile = FT.profile(client, indexMovies, new FTProfileOptions("*", options)).get();
         assertDeepEquals(aggreg, ftprofile[0]);
     }
 
@@ -617,7 +623,7 @@ public class VectorSearchTests {
     @Test
     @SneakyThrows
     public void ft_info() {
-        var index = UUID.randomUUID().toString();
+        String index = UUID.randomUUID().toString();
         assertEquals(
                 OK,
                 FT.create(
@@ -634,22 +640,22 @@ public class VectorSearchTests {
                                         .build())
                         .get());
 
-        var response = FT.info(client, index).get();
+        Map<String, Object> response = FT.info(client, index).get();
         assertEquals(gs(index), response.get("index_name"));
         assertEquals(gs("JSON"), response.get("key_type"));
         assertArrayEquals(new GlideString[] {gs("123")}, (Object[]) response.get("key_prefixes"));
-        var fields = (Object[]) response.get("fields");
+        Object[] fields = (Object[]) response.get("fields");
         assertEquals(2, fields.length);
-        var f1 = (Map<GlideString, Object>) fields[1];
+        Map<GlideString, Object> f1 = (Map<GlideString, Object>) fields[1];
         assertEquals(gs("$.vec"), f1.get(gs("identifier")));
         assertEquals(gs("VECTOR"), f1.get(gs("type")));
         assertEquals(gs("VEC"), f1.get(gs("field_name")));
-        var f1params = (Map<GlideString, Object>) f1.get(gs("vector_params"));
+        Map<GlideString, Object> f1params = (Map<GlideString, Object>) f1.get(gs("vector_params"));
         assertEquals(gs("COSINE"), f1params.get(gs("distance_metric")));
         assertEquals(42L, f1params.get(gs("dimension")));
 
         assertEquals(
-                Map.of(
+                createMap(
                         gs("identifier"),
                         gs("$.name"),
                         gs("type"),
@@ -662,7 +668,8 @@ public class VectorSearchTests {
 
         // querying a missing index
         assertEquals(OK, FT.dropindex(client, index).get());
-        var exception = assertThrows(ExecutionException.class, () -> FT.info(client, index).get());
+        ExecutionException exception =
+                assertThrows(ExecutionException.class, () -> FT.info(client, index).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("Index not found"));
     }
@@ -671,9 +678,9 @@ public class VectorSearchTests {
     @Test
     public void ft_aliasadd_aliasdel_aliasupdate_aliaslist() {
 
-        var alias1 = "alias1";
-        var alias2 = "a2";
-        var indexName = "{" + UUID.randomUUID() + "-index}";
+        String alias1 = "alias1";
+        String alias2 = "a2";
+        String indexName = "{" + UUID.randomUUID() + "-index}";
 
         // create some indices
         assertEquals(
@@ -688,17 +695,18 @@ public class VectorSearchTests {
 
         assertEquals(0, FT.aliaslist(client).get().size());
         assertEquals(OK, FT.aliasadd(client, alias1, indexName).get());
-        assertEquals(Map.of(gs(alias1), gs(indexName)), FT.aliaslist(client).get());
+        assertEquals(createMap(gs(alias1), gs(indexName)), FT.aliaslist(client).get());
 
         // error with adding the same alias to the same index
-        var exception =
+        ExecutionException exception =
                 assertThrows(ExecutionException.class, () -> FT.aliasadd(client, alias1, indexName).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("Alias already exists"));
 
         assertEquals(OK, FT.aliasupdate(client, alias2, indexName).get());
         assertEquals(
-                Map.of(gs(alias1), gs(indexName), gs(alias2), gs(indexName)), FT.aliaslist(client).get());
+                createMap(gs(alias1), gs(indexName), gs(alias2), gs(indexName)),
+                FT.aliaslist(client).get());
         assertEquals(OK, FT.aliasdel(client, alias2).get());
 
         // with GlideString:
@@ -746,7 +754,7 @@ public class VectorSearchTests {
         assertEquals(OK, FT.dropindex(client, indexName).get());
 
         // missing index throws an error.
-        var exception =
+        ExecutionException exception =
                 assertThrows(
                         ExecutionException.class,
                         () -> FT.explain(client, UUID.randomUUID().toString(), "*").get());
@@ -793,7 +801,7 @@ public class VectorSearchTests {
         assertEquals(OK, FT.dropindex(client, indexName).get());
 
         // missing index throws an error.
-        var exception =
+        ExecutionException exception =
                 assertThrows(
                         ExecutionException.class,
                         () -> FT.explaincli(client, UUID.randomUUID().toString(), "*").get());

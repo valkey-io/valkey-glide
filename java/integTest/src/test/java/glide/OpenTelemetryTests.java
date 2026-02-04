@@ -3,8 +3,6 @@ package glide;
 
 import static glide.TestUtilities.commonClusterClientConfig;
 import static org.junit.jupiter.api.Assertions.*;
-import static glide.BatchTestUtilities.createMap;
-import static glide.BatchTestUtilities.createSet;
 
 import glide.api.GlideClusterClient;
 import glide.api.OpenTelemetry;
@@ -110,7 +108,10 @@ public class OpenTelemetryTests {
         List<String> spanNames = new ArrayList<>();
         spanData = new String(Files.readAllBytes(Paths.get(path)));
 
-        spans = Arrays.stream(spanData.split("\n")).filter(line -> !line.trim().isEmpty()).collect(Collectors.toList());
+        spans =
+                Arrays.stream(spanData.split("\n"))
+                        .filter(line -> !line.trim().isEmpty())
+                        .collect(Collectors.toList());
 
         // Check that we have spans
         if (spans.isEmpty()) {

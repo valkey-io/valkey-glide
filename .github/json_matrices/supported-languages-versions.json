@@ -1,8 +1,8 @@
 [
     {
         "language": "java",
-        "versions": ["11", "17", "21"],
-        "always-run-versions": ["17"]
+        "versions": ["8", "11", "17", "21"],
+        "always-run-versions": ["8", "17"]
     },
     {
         "language": "python",

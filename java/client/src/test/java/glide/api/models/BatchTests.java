@@ -914,7 +914,10 @@ public class BatchTests {
         batch.xadd("key", Collections.singletonMap("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
 
-        batch.xadd("key", Collections.singletonMap("field1", "foo1"), StreamAddOptions.builder().id("id").build());
+        batch.xadd(
+                "key",
+                Collections.singletonMap("field1", "foo1"),
+                StreamAddOptions.builder().id("id").build());
         results.add(Pair.of(XAdd, buildArgs("key", "id", "field1", "foo1")));
 
         batch.xadd("key", new String[][] {new String[] {"field1", "foo1"}});
@@ -933,7 +936,9 @@ public class BatchTests {
         batch.xread(Collections.singletonMap("key", "id"));
         results.add(Pair.of(XRead, buildArgs(READ_STREAMS_VALKEY_API, "key", "id")));
 
-        batch.xread(Collections.singletonMap("key", "id"), StreamReadOptions.builder().block(1L).count(2L).build());
+        batch.xread(
+                Collections.singletonMap("key", "id"),
+                StreamReadOptions.builder().block(1L).count(2L).build());
         results.add(
                 Pair.of(
                         XRead,

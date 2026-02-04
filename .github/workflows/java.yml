@@ -119,6 +119,13 @@ jobs:
                   distribution: "temurin"
                   java-version: ${{ matrix.java }}
 
+            - name: Set up JDK 11 (for Java 8 compilation)
+              if: matrix.java == '8'
+              uses: actions/setup-java@v4
+              with:
+                  distribution: "temurin"
+                  java-version: 11
+
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
               with:
@@ -154,22 +161,22 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
-            - name: Setup Python3 for Windows
-              if: ${{ matrix.host.OS == 'windows' }}
-              shell: bash
-              run: |
-                  # Create python3 symlink for Windows
-                  ln -sf $(which python) /usr/bin/python3
-
             - name: Build java client
               working-directory: java
               shell: bash
               run: |
                   if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
-                      # TODO: Remove -x :integTest:test when Windows integration tests are implemented
-                      ./gradlew.bat --build-cache --continue build test -x javadoc -x :integTest:test
+                      if [[ "${{ matrix.java }}" == "8" ]]; then
+                          ./gradlew.bat --build-cache --continue build test -x javadoc -PtestJava8=true
+                      else
+                          ./gradlew.bat --build-cache --continue build test -x javadoc
+                      fi
                   else
-                      ./gradlew --build-cache --continue build test -x javadoc
+                      if [[ "${{ matrix.java }}" == "8" ]]; then
+                          ./gradlew --build-cache --continue build test -x javadoc -PtestJava8=true
+                      else
+                          ./gradlew --build-cache --continue build test -x javadoc
+                      fi
                   fi
 
             - name: Ensure no skipped files by linter
@@ -210,10 +217,6 @@ jobs:
                 java: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
-                # TODO: Remove Windows exclusion when Windows integration tests are implemented
-                exclude:
-                    - host:
-                          OS: windows
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
@@ -229,6 +232,13 @@ jobs:
               with:
                   distribution: "temurin"
                   java-version: ${{ matrix.java }}
+
+            - name: Set up JDK 11 (for Java 8 compilation)
+              if: matrix.java == '8'
+              uses: actions/setup-java@v4
+              with:
+                  distribution: "temurin"
+                  java-version: 11
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -267,7 +277,21 @@ jobs:
 
             - name: Test pubsub
               working-directory: java
-              run: ./gradlew --build-cache :integTest:pubsubTest
+              shell: bash
+              run: |
+                  if [[ "${{ matrix.java }}" == "8" ]]; then
+                      if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                          ./gradlew.bat --build-cache :integTest:pubsubTest -PtestJava8=true
+                      else
+                          ./gradlew --build-cache :integTest:pubsubTest -PtestJava8=true
+                      fi
+                  else
+                      if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                          ./gradlew.bat --build-cache :integTest:pubsubTest
+                      else
+                          ./gradlew --build-cache :integTest:pubsubTest
+                      fi
+                  fi
 
             - name: Upload test & spotbugs reports
               if: always()

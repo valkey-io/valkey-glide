@@ -225,7 +225,10 @@ public class FTAggregateOptions {
                         gs(ClauseType.GROUPBY.toString()), gs(Integer.toString(properties.length))
                     },
                     properties,
-                    Stream.of(reducers).map(Reducer::toArgs).flatMap(Stream::of).toArray(size -> new GlideString[size]));
+                    Stream.of(reducers)
+                            .map(Reducer::toArgs)
+                            .flatMap(Stream::of)
+                            .toArray(size -> new GlideString[size]));
         }
 
         /**

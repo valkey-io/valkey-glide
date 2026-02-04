@@ -18,8 +18,6 @@ import com.google.gson.JsonParser;
 import glide.api.GlideClusterClient;
 import glide.api.commands.servermodules.Json;
 import glide.api.commands.servermodules.JsonBatch;
-import java.util.HashMap;
-import java.util.Map;
 import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
@@ -28,6 +26,7 @@ import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.json.JsonArrindexOptions;
 import glide.api.models.commands.json.JsonGetOptions;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -966,7 +965,8 @@ public class JsonTests {
                 Json.mget(client, new String[] {key1, key2, UUID.randomUUID().toString()}, "$.c").get();
         assertArrayEquals(new String[] {"[]", "[false]", null}, res1);
 
-        GlideString[] res2 = Json.mget(client, new GlideString[] {gs(key1), gs(key2)}, gs(".b[*]")).get();
+        GlideString[] res2 =
+                Json.mget(client, new GlideString[] {gs(key1), gs(key2)}, gs(".b[*]")).get();
         assertArrayEquals(new GlideString[] {gs("\"one\""), null}, res2);
     }
 

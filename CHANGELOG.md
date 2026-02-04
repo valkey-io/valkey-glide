@@ -5,6 +5,7 @@
 * JAVA: Add EVAL_RO, EVALSHA_RO, and SCRIPT DEBUG commands ([#5125](https://github.com/valkey-io/valkey-glide/pull/5125))
 * CORE: Add client certificate and private key support for mTLS ([#5092](https://github.com/valkey-io/valkey-glide/issues/5092))
 * Python: Add client certificate and private key support for mTLS ([5123](https://github.com/valkey-io/valkey-glide/issues/5123))
+* JAVA: Add KEYS, MIGRATE and WAITAOF command support ([#5017](https://github.com/valkey-io/valkey-glide/pull/5107))
 * JAVA: Add ACL server management commands (ACL CAT, ACL DELUSER, ACL DRYRUN, ACL GENPASS, ACL GETUSER, ACL LIST, ACL LOAD, ACL LOG, ACL SAVE, ACL SETUSER, ACL USERS, ACL WHOAMI)
 * CORE: Fix typo in ACL SETUSER command mapping (AclSetSser → AclSetUser)
 * Python: Add inflight request limit support to sync client
@@ -22,6 +23,7 @@
 #### Operational Enhancements
 * Docs: Add missing references to windows-x86_64 classifier ([#5028](https://github.com/valkey-io/valkey-glide/pull/5028))
 * CI: Upgrade ORT from 46.0.0 to 59.0.0 to fix Synopsys repository 403 error ([#5169](https://github.com/valkey-io/valkey-glide/pull/5169))
+* Java: Enable Windows integration test in workflow through WSL([#5112](https://github.com/valkey-io/valkey-glide/pull/5112/))
 
 ## 2.2.5
 
@@ -357,6 +359,7 @@
 
 #### Changes
 
+* Java: Added Client API for retrieving internal statistics ([#2672](https://github.com/valkey-io/valkey-glide/pull/2672))
 * Node: Client API for retrieving internal statistics ([#2727](https://github.com/valkey-io/valkey-glide/pull/2727))
 * Python: Client API for retrieving internal statistics ([#2707](https://github.com/valkey-io/valkey-glide/pull/2707))
 * Node, Python, Java: Adding support for replacing connection configured password ([#2651](https://github.com/valkey-io/valkey-glide/pull/2651), [#2659](https://github.com/valkey-io/valkey-glide/pull/2659), [#2677](https://github.com/valkey-io/valkey-glide/pull/2677))

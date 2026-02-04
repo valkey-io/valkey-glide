@@ -21,7 +21,6 @@ import static command_request.CommandRequestOuterClass.RequestType.ConfigResetSt
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
 import static command_request.CommandRequestOuterClass.RequestType.Copy;
-import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
 import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
@@ -221,8 +220,6 @@ import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE;
-
-import glide.api.models.commands.LInsertOptions.InsertPosition;
 import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EQUAL;
@@ -298,6 +295,7 @@ import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
@@ -416,8 +414,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.submitNewCommand(eq(CustomCommand), eq(arguments), any()))
-                .thenReturn(testResponse);
+        when(commandManager.submitCustomCommand(eq(arguments), any())).thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object> response = service.customCommand(arguments);
@@ -440,8 +437,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.submitNewCommand(eq(CustomCommand), eq(arguments), any()))
-                .thenReturn(testResponse);
+        when(commandManager.submitCustomCommand(eq(arguments), any())).thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object> response = service.customCommand(arguments);
@@ -4844,7 +4840,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Object>>submitNewCommand(eq(BZMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, Object>>submitBlockingCommand(
+                        eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -4870,7 +4867,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Object>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Object>>submitBlockingCommand(
                         eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -4898,7 +4895,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Object>>submitNewCommand(eq(BZMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, Object>>submitBlockingCommand(
+                        eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -4928,7 +4926,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Object>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Object>>submitBlockingCommand(
                         eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -5055,7 +5053,8 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.configSet(Collections.singletonMap("timeout", "1000"));
+        CompletableFuture<String> response =
+                service.configSet(Collections.singletonMap("timeout", "1000"));
 
         // verify
         assertEquals(testResponse, response);
@@ -5273,7 +5272,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMin), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMin), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5298,7 +5297,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMin), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMin), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5372,7 +5371,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMax), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMax), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5397,7 +5396,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMax), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMax), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -8067,7 +8066,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Map<String, String[][]>>>submitNewCommand(
+        when(commandManager.<Map<String, Map<String, String[][]>>>submitBlockingCommand(
                         eq(XRead), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -8109,7 +8108,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitBlockingCommand(
                         eq(XRead), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -8212,7 +8211,8 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult =
+                Collections.singletonMap(key, fieldValuesResult);
 
         CompletableFuture<Map<GlideString, GlideString[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
@@ -8279,7 +8279,8 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult =
+                Collections.singletonMap(key, fieldValuesResult);
 
         CompletableFuture<Map<GlideString, GlideString[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
@@ -8345,7 +8346,8 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult =
+                Collections.singletonMap(key, fieldValuesResult);
 
         CompletableFuture<Map<GlideString, GlideString[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
@@ -8413,7 +8415,8 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult =
+                Collections.singletonMap(key, fieldValuesResult);
 
         CompletableFuture<Map<GlideString, GlideString[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
@@ -8952,7 +8955,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Map<String, String[][]>>>submitNewCommand(
+        when(commandManager.<Map<String, Map<String, String[][]>>>submitBlockingCommand(
                         eq(XReadGroup), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -9002,7 +9005,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitBlockingCommand(
                         eq(XReadGroup), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -9056,7 +9059,8 @@ public class GlideClientTest {
         Long minIdleTime = 18L;
         String[] ids = new String[] {"testId"};
         String[] arguments = concatenateArrays(new String[] {key, groupName, consumer, "18"}, ids);
-        Map<String, String[][]> mockResult = Collections.singletonMap("1234-0", new String[][] {{"message", "log"}});
+        Map<String, String[][]> mockResult =
+                Collections.singletonMap("1234-0", new String[][] {{"message", "log"}});
 
         CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(mockResult);
@@ -9133,7 +9137,8 @@ public class GlideClientTest {
                     "5",
                     FORCE_VALKEY_API
                 };
-        Map<String, String[][]> mockResult = Collections.singletonMap("1234-0", new String[][] {{"message", "log"}});
+        Map<String, String[][]> mockResult =
+                Collections.singletonMap("1234-0", new String[][] {{"message", "log"}});
 
         CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(mockResult);
@@ -9401,7 +9406,8 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult =
+                Collections.singletonMap(key, fieldValuesResult);
 
         GlideString[] deletedMessageIds = new GlideString[] {gs("13-1"), gs("46-2"), gs("89-3")};
 
@@ -9478,7 +9484,8 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult =
+                Collections.singletonMap(key, fieldValuesResult);
 
         GlideString[] deletedMessageIds = new GlideString[] {gs("13-1"), gs("46-2"), gs("89-3")};
 
@@ -9555,7 +9562,8 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult =
+                Collections.singletonMap(key, fieldValuesResult);
 
         GlideString[] deletedMessageIds = new GlideString[] {gs("13-1"), gs("46-2"), gs("89-3")};
 
@@ -9642,7 +9650,8 @@ public class GlideClientTest {
         GlideString[][] fieldValuesResult = {
             {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
         };
-        Map<GlideString, GlideString[][]> completedResult = Collections.singletonMap(key, fieldValuesResult);
+        Map<GlideString, GlideString[][]> completedResult =
+                Collections.singletonMap(key, fieldValuesResult);
 
         GlideString[] deletedMessageIds = new GlideString[] {gs("13-1"), gs("46-2"), gs("89-3")};
 
@@ -10366,7 +10375,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(BLPop), eq(arguments), any()))
+        when(commandManager.<String[]>submitBlockingCommand(eq(BLPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -10391,7 +10400,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString[]>submitNewCommand(eq(BLPop), eq(arguments), any()))
+        when(commandManager.<GlideString[]>submitBlockingCommand(eq(BLPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -10516,7 +10525,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(BRPop), eq(arguments), any()))
+        when(commandManager.<String[]>submitBlockingCommand(eq(BRPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -10541,7 +10550,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString[]>submitNewCommand(eq(BRPop), eq(arguments), any()))
+        when(commandManager.<GlideString[]>submitBlockingCommand(eq(BRPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -11782,7 +11791,8 @@ public class GlideClientTest {
         // setup
         String[] args = new String[0];
         Map<String, Map<String, Map<String, Object>>> value =
-                Collections.singletonMap("::1", Collections.singletonMap("1", Collections.singletonMap("2", 2)));
+                Collections.singletonMap(
+                        "::1", Collections.singletonMap("1", Collections.singletonMap("2", 2)));
         CompletableFuture<Map<String, Map<String, Map<String, Object>>>> testResponse =
                 new CompletableFuture<>();
         testResponse.complete(value);
@@ -11808,7 +11818,8 @@ public class GlideClientTest {
         // setup
         GlideString[] args = new GlideString[0];
         Map<String, Map<GlideString, Map<GlideString, Object>>> value =
-                Collections.singletonMap("::1", Collections.singletonMap(gs("1"), Collections.singletonMap(gs("2"), 2)));
+                Collections.singletonMap(
+                        "::1", Collections.singletonMap(gs("1"), Collections.singletonMap(gs("2"), 2)));
         CompletableFuture<Map<String, Map<GlideString, Map<GlideString, Object>>>> testResponse =
                 new CompletableFuture<>();
         testResponse.complete(value);
@@ -12138,7 +12149,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, String[]>>submitNewCommand(eq(BLMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, String[]>>submitBlockingCommand(
+                        eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12164,13 +12176,14 @@ public class GlideClientTest {
                 new GlideString[] {
                     gs(Double.toString(timeout)), gs("2"), key, key2, gs(listDirection.toString())
                 };
-        Map<GlideString, GlideString[]> value = Collections.singletonMap(key, new GlideString[] {gs("five")});
+        Map<GlideString, GlideString[]> value =
+                Collections.singletonMap(key, new GlideString[] {gs("five")});
 
         CompletableFuture<Map<GlideString, GlideString[]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+        when(commandManager.<Map<GlideString, GlideString[]>>submitBlockingCommand(
                         eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -12210,7 +12223,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, String[]>>submitNewCommand(eq(BLMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, String[]>>submitBlockingCommand(
+                        eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12243,13 +12257,14 @@ public class GlideClientTest {
                     gs(COUNT_FOR_LIST_VALKEY_API),
                     gs(Long.toString(count))
                 };
-        Map<GlideString, GlideString[]> value = Collections.singletonMap(key, new GlideString[] {gs("five")});
+        Map<GlideString, GlideString[]> value =
+                Collections.singletonMap(key, new GlideString[] {gs("five")});
 
         CompletableFuture<Map<GlideString, GlideString[]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+        when(commandManager.<Map<GlideString, GlideString[]>>submitBlockingCommand(
                         eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -12537,7 +12552,8 @@ public class GlideClientTest {
         GlideString[] keys = {key, key2};
         ListDirection listDirection = ListDirection.LEFT;
         GlideString[] arguments = new GlideString[] {gs("2"), key, key2, gs(listDirection.toString())};
-        Map<GlideString, GlideString[]> value = Collections.singletonMap(key, new GlideString[] {gs("five")});
+        Map<GlideString, GlideString[]> value =
+                Collections.singletonMap(key, new GlideString[] {gs("five")});
 
         CompletableFuture<Map<GlideString, GlideString[]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -12606,7 +12622,8 @@ public class GlideClientTest {
                     gs(COUNT_FOR_LIST_VALKEY_API),
                     gs(Long.toString(count))
                 };
-        Map<GlideString, GlideString[]> value = Collections.singletonMap(key, new GlideString[] {gs("five")});
+        Map<GlideString, GlideString[]> value =
+                Collections.singletonMap(key, new GlideString[] {gs("five")});
 
         CompletableFuture<Map<GlideString, GlideString[]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -12742,7 +12759,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(BLMove), eq(arguments), any()))
+        when(commandManager.<String>submitBlockingCommand(eq(BLMove), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12770,7 +12787,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString>submitNewCommand(eq(BLMove), eq(arguments), any()))
+        when(commandManager.<GlideString>submitBlockingCommand(eq(BLMove), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -13517,7 +13534,8 @@ public class GlideClientTest {
         String key1 = "testKey1";
         String key2 = "testKey2";
         String[] arguments = new String[] {key1, key2, IDX_COMMAND_STRING};
-        Map<String, Object> value = createMap("matches", new Long[][][]{{{1L, 3L}, {0L, 2L}}}, "len", 3L);
+        Map<String, Object> value =
+                createMap("matches", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13542,7 +13560,8 @@ public class GlideClientTest {
         GlideString key1 = gs("testKey1");
         GlideString key2 = gs("testKey2");
         GlideString[] arguments = new GlideString[] {key1, key2, gs(IDX_COMMAND_STRING)};
-        Map<String, Object> value = createMap("matches", new Long[][][]{{{1L, 3L}, {0L, 2L}}}, "len", 3L);
+        Map<String, Object> value =
+                createMap("matches", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13564,7 +13583,8 @@ public class GlideClientTest {
     @Test
     public void lcsIdx_throws_NullPointerException() {
         // setup
-        Map<String, Object> value = createMap("missing", new Long[][][]{{{1L, 3L}, {0L, 2L}}}, "len", 3L);
+        Map<String, Object> value =
+                createMap("missing", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
 
         // exception
         RuntimeException runtimeException =
@@ -13584,7 +13604,11 @@ public class GlideClientTest {
         String[] arguments =
                 new String[] {key1, key2, IDX_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, "2"};
         Map<String, Object> value =
-                createMap("matches", new Object[]{new Object[]{new Long[]{1L, 3L}, new Long[]{0L, 2L}, 3L}}, "len", 3L);
+                createMap(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13613,7 +13637,11 @@ public class GlideClientTest {
                     key1, key2, gs(IDX_COMMAND_STRING), gs(MINMATCHLEN_COMMAND_STRING), gs("2")
                 };
         Map<String, Object> value =
-                createMap("matches", new Object[]{new Object[]{new Long[]{1L, 3L}, new Long[]{0L, 2L}, 3L}}, "len", 3L);
+                createMap(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13639,7 +13667,11 @@ public class GlideClientTest {
         String key2 = "testKey2";
         String[] arguments = new String[] {key1, key2, IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING};
         Map<String, Object> value =
-                createMap("matches", new Object[]{new Object[]{new Long[]{1L, 3L}, new Long[]{0L, 2L}, 3L}}, "len", 3L);
+                createMap(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13666,7 +13698,11 @@ public class GlideClientTest {
         GlideString[] arguments =
                 new GlideString[] {key1, key2, gs(IDX_COMMAND_STRING), gs(WITHMATCHLEN_COMMAND_STRING)};
         Map<String, Object> value =
-                createMap("matches", new Object[]{new Object[]{new Long[]{1L, 3L}, new Long[]{0L, 2L}, 3L}}, "len", 3L);
+                createMap(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13700,7 +13736,11 @@ public class GlideClientTest {
                     WITHMATCHLEN_COMMAND_STRING
                 };
         Map<String, Object> value =
-                createMap("matches", new Object[]{new Object[]{new Long[]{1L, 3L}, new Long[]{0L, 2L}, 3L}}, "len", 3L);
+                createMap(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -13734,7 +13774,11 @@ public class GlideClientTest {
                     gs(WITHMATCHLEN_COMMAND_STRING)
                 };
         Map<String, Object> value =
-                createMap("matches", new Object[]{new Object[]{new Long[]{1L, 3L}, new Long[]{0L, 2L}, 3L}}, "len", 3L);
+                createMap(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -14617,7 +14661,8 @@ public class GlideClientTest {
         testResponse.complete(result);
 
         // match on protobuf request
-        when(commandManager.<Long>submitNewCommand(eq(Wait), eq(args), any())).thenReturn(testResponse);
+        when(commandManager.<Long>submitBlockingCommand(eq(Wait), eq(args), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Long> response = service.wait(numreplicas, timeout);
@@ -15656,7 +15701,19 @@ public class GlideClientTest {
         String[] arguments = {key};
         Map<String, Object>[] mockResult =
                 new Map[] {
-                    createMap("name", "groupName", "consumers", 2, "pending", 2, "last-delivered-id", "1638126030001-0", "entries-read", 2, "lag", 2)
+                    createMap(
+                            "name",
+                            "groupName",
+                            "consumers",
+                            2,
+                            "pending",
+                            2,
+                            "last-delivered-id",
+                            "1638126030001-0",
+                            "entries-read",
+                            2,
+                            "lag",
+                            2)
                 };
 
         CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
@@ -15684,7 +15741,19 @@ public class GlideClientTest {
         GlideString[] arguments = {key};
         Map<GlideString, Object>[] mockResult =
                 new Map[] {
-                    createMap(gs("name"), gs("groupName"), gs("consumers"), 2, gs("pending"), 2, gs("last-delivered-id"), gs("1638126030001-0"), gs("entries-read"), 2, gs("lag"), 2)
+                    createMap(
+                            gs("name"),
+                            gs("groupName"),
+                            gs("consumers"),
+                            2,
+                            gs("pending"),
+                            2,
+                            gs("last-delivered-id"),
+                            gs("1638126030001-0"),
+                            gs("entries-read"),
+                            2,
+                            gs("lag"),
+                            2)
                 };
 
         CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
@@ -15742,7 +15811,15 @@ public class GlideClientTest {
         GlideString[] arguments = {key, groupName};
         Map<GlideString, Object>[] mockResult =
                 new Map[] {
-                    createMap(gs("name"), gs("groupName"), gs("pending"), 2, gs("idle"), 9104628, gs("inactive"), 18104698)
+                    createMap(
+                            gs("name"),
+                            gs("groupName"),
+                            gs("pending"),
+                            2,
+                            gs("idle"),
+                            9104628,
+                            gs("inactive"),
+                            18104698)
                 };
 
         CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
@@ -16055,7 +16132,8 @@ public class GlideClientTest {
         return map;
     }
 
-    private static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6) {
+    private static <K, V> Map<K, V> createMap(
+            K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6) {
         Map<K, V> map = new LinkedHashMap<>();
         map.put(k1, v1);
         map.put(k2, v2);

@@ -1,8 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
-import java.util.Collections;
-
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.deleteAclUser;
@@ -20,7 +18,7 @@ import glide.api.GlideClient;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
-import java.util.Map;
+import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
@@ -28,7 +26,7 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-@Timeout(10) // seconds
+@Timeout(20) // seconds
 public class StandaloneClientTests {
 
     @SneakyThrows

@@ -1,8 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
-import java.util.Collections;
-
+import static glide.BatchTestUtilities.*;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClusterClientConfig;
@@ -21,7 +20,6 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Named.named;
 
 import glide.BatchTestUtilities.BatchBuilder;
-import static glide.BatchTestUtilities.*;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
@@ -35,8 +33,8 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
@@ -496,7 +494,8 @@ public class ClusterBatchTests {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         String libName = "mylib";
         String funcName = "myfun";
-        String code = generateLuaLibCode(libName, Collections.singletonMap(funcName, "return args[1]"), true);
+        String code =
+                generateLuaLibCode(libName, Collections.singletonMap(funcName, "return args[1]"), true);
 
         // Setup
         clusterClient.functionLoad(code, true).get();
@@ -550,7 +549,10 @@ public class ClusterBatchTests {
                 };
 
         batch
-                .xadd(streamKey, Collections.singletonMap("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
+                .xadd(
+                        streamKey,
+                        Collections.singletonMap("field1", "value1"),
+                        StreamAddOptions.builder().id("0-1").build())
                 .xinfoStream(streamKey)
                 .xinfoStreamFull(streamKey);
 
@@ -567,7 +569,8 @@ public class ClusterBatchTests {
 
         assertDeepEquals(
                 new Object[] {
-                    "0-1", // xadd(streamKey, Collections.singletonMap("field1", "value1"), ... .id("0-1").build());
+                    "0-1", // xadd(streamKey, Collections.singletonMap("field1", "value1"), ...
+                    // .id("0-1").build());
                     expectedStreamInfo, // xinfoStream(streamKey)
                     expectedStreamFullInfo, // xinfoStreamFull(streamKey)
                 },
@@ -583,7 +586,8 @@ public class ClusterBatchTests {
         // use dump to ensure that we have non-string convertible bytes
         byte[] bytes = clusterClient.dump(gs(key)).get();
 
-        ClusterBatch batch = new ClusterBatch(isAtomic).withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
+        ClusterBatch batch =
+                new ClusterBatch(isAtomic).withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
 
         Object[] responses = clusterClient.exec(batch, true).get();
 

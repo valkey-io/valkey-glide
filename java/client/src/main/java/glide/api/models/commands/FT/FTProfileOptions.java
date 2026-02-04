@@ -8,7 +8,6 @@ import glide.api.commands.servermodules.FT;
 import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import lombok.NonNull;
 
 /** Mandatory parameters for {@link FT#profile} command. */

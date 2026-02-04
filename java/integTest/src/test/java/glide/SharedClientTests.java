@@ -5,12 +5,14 @@ import static glide.Java8Compat.repeat;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.getRandomString;
+import static glide.TestUtilities.isWindows;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Named.named;
 
 import glide.api.BaseClient;
@@ -36,7 +38,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(35) // seconds
+@Timeout(35)
 public class SharedClientTests {
 
     private static GlideClient standaloneClient = null;
@@ -136,6 +138,12 @@ public class SharedClientTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("clientAndDataSize")
     public void client_can_handle_concurrent_workload(BaseClient client, int valueSize) {
+        // Due to limited resources on Github Action when using a Windows runner with WSL, this test is
+        // flaky.
+        // It will be disabled.
+        // TODO: Remove isWindows skip after flaky investigation
+        // https://github.com/valkey-io/valkey-glide/issues/5210
+        assumeTrue(!isWindows(), "Skip on Windows");
         ExecutorService executorService = Executors.newCachedThreadPool();
         @SuppressWarnings("unchecked")
         CompletableFuture<Void>[] futures = new CompletableFuture[100];

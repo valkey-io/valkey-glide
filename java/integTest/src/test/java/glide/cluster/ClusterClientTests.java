@@ -18,10 +18,8 @@ import glide.api.GlideClusterClient;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
-import java.util.Map;
-import java.util.UUID;
 import java.util.Collections;
-
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.RandomStringUtils;

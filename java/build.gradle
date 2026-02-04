@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'java-library'
-    id 'io.freefair.lombok' version '6.6.3'
+    id 'io.freefair.lombok' version '8.6'
     id 'com.diffplug.spotless' version '7.2.1'
     id 'jacoco'
 }
@@ -56,7 +56,7 @@ subprojects {
         toolchain {
             languageVersion.set(JavaLanguageVersion.of(11))
             // Only specify vendor when no JAVA_HOME is set (i.e., no setup-java used)
-            if (!System.getenv("GLIDE_CONTAINER_BUILD") && 
+            if (!System.getenv("GLIDE_CONTAINER_BUILD") &&
                 !System.getenv("JAVA_HOME")) {
                 vendor = JvmVendorSpec.ADOPTIUM // Temurin
             }

@@ -42,7 +42,8 @@ public class JsonWriter {
 
             Path path = Paths.get(resultsFile);
             if (Files.exists(path)) {
-                TypeToken<Collection<Measurements>> collectionType = new TypeToken<Collection<Measurements>>() {};
+                TypeToken<Collection<Measurements>> collectionType =
+                        new TypeToken<Collection<Measurements>>() {};
                 byte[] fileBytes = readAllBytes(Files.newInputStream(path));
                 String json = new String(fileBytes);
                 recordings = gson.fromJson(json, collectionType.getType());

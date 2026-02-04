@@ -403,4 +403,84 @@ public interface GenericClusterCommands {
      * }</pre>
      */
     CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor, ScanOptions options);
+
+    /**
+     * Returns all keys matching <code>pattern</code>.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/keys/">valkey.io</a> for details.
+     * @param pattern The pattern to match keys against.
+     * @return A <code>Map</code> where each key is a node address and the value is an array of keys
+     *     matching the pattern on that node.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String[]> result = client.keys("*").get();
+     * for (Map.Entry<String, String[]> entry : result.getMultiValue().entrySet()) {
+     *     System.out.println("Node " + entry.getKey() + " has keys: " + Arrays.toString(entry.getValue()));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String[]>> keys(String pattern);
+
+    /**
+     * Returns all keys matching <code>pattern</code>.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/keys/">valkey.io</a> for details.
+     * @param pattern The pattern to match keys against.
+     * @return A <code>Map</code> where each key is a node address and the value is an array of keys
+     *     matching the pattern on that node.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<GlideString[]> result = client.keys(gs("*")).get();
+     * for (Map.Entry<String, GlideString[]> entry : result.getMultiValue().entrySet()) {
+     *     System.out.println("Node " + entry.getKey() + " has keys: " + Arrays.toString(entry.getValue()));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<GlideString[]>> keys(GlideString pattern);
+
+    /**
+     * Returns all keys matching <code>pattern</code>.
+     *
+     * @see <a href="https://valkey.io/commands/keys/">valkey.io</a> for details.
+     * @param pattern The pattern to match keys against.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A <code>String</code> array of keys matching the pattern when routed to a single node,
+     *     or a <code>Map</code> where each key is a node address and the value is an array of keys
+     *     when routed to multiple nodes.
+     * @example
+     *     <pre>{@code
+     * // Get keys from a specific node
+     * ClusterValue<String[]> result = client.keys("user:*", new SlotKeyRoute("user:1", PRIMARY)).get();
+     * System.out.println("Keys: " + Arrays.toString(result.getSingleValue()));
+     *
+     * // Get keys from all nodes
+     * ClusterValue<String[]> allResult = client.keys("*", ALL_NODES).get();
+     * for (Map.Entry<String, String[]> entry : allResult.getMultiValue().entrySet()) {
+     *     System.out.println("Node " + entry.getKey() + ": " + Arrays.toString(entry.getValue()));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String[]>> keys(String pattern, Route route);
+
+    /**
+     * Returns all keys matching <code>pattern</code>.
+     *
+     * @see <a href="https://valkey.io/commands/keys/">valkey.io</a> for details.
+     * @param pattern The pattern to match keys against.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A <code>GlideString</code> array of keys matching the pattern when routed to a single
+     *     node, or a <code>Map</code> where each key is a node address and the value is an array of
+     *     keys when routed to multiple nodes.
+     * @example
+     *     <pre>{@code
+     * // Get keys from a specific node
+     * ClusterValue<GlideString[]> result = client.keys(gs("user:*"), new SlotKeyRoute(gs("user:1"), PRIMARY)).get();
+     * System.out.println("Keys: " + Arrays.toString(result.getSingleValue()));
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<GlideString[]>> keys(GlideString pattern, Route route);
 }

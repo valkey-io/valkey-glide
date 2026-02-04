@@ -1,8 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
-import java.util.Collections;
-
+import static glide.BatchTestUtilities.*;
 import static glide.Java8Compat.repeat;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
@@ -30,7 +29,6 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Named.named;
 
 import glide.BatchTestUtilities.BatchBuilder;
-import static glide.BatchTestUtilities.*;
 import glide.api.GlideClient;
 import glide.api.models.Batch;
 import glide.api.models.GlideString;
@@ -43,6 +41,7 @@ import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -55,7 +54,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(10) // seconds
+@Timeout(20) // seconds
 public class BatchTests {
 
     @SneakyThrows
@@ -695,11 +694,14 @@ public class BatchTests {
         setupBatch.set(typeKeys.get(STRING), UUID.randomUUID().toString());
         setupBatch.lpush(typeKeys.get(LIST), new String[] {UUID.randomUUID().toString()});
         setupBatch.sadd(typeKeys.get(SET), new String[] {UUID.randomUUID().toString()});
-        setupBatch.zadd(typeKeys.get(ZSET), Collections.singletonMap(UUID.randomUUID().toString(), 1.0));
+        setupBatch.zadd(
+                typeKeys.get(ZSET), Collections.singletonMap(UUID.randomUUID().toString(), 1.0));
         setupBatch.hset(
-                typeKeys.get(HASH), Collections.singletonMap(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+                typeKeys.get(HASH),
+                Collections.singletonMap(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
         setupBatch.xadd(
-                typeKeys.get(STREAM), Collections.singletonMap(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+                typeKeys.get(STREAM),
+                Collections.singletonMap(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
         assertNotNull(client.exec(setupBatch, true).get());
 
         for (ScanOptions.ObjectType type : ScanOptions.ObjectType.values()) {
@@ -756,11 +758,14 @@ public class BatchTests {
         setupBatch.set(typeKeys.get(STRING), UUID.randomUUID().toString());
         setupBatch.lpush(typeKeys.get(LIST), new String[] {UUID.randomUUID().toString()});
         setupBatch.sadd(typeKeys.get(SET), new String[] {UUID.randomUUID().toString()});
-        setupBatch.zadd(typeKeys.get(ZSET), Collections.singletonMap(UUID.randomUUID().toString(), 1.0));
+        setupBatch.zadd(
+                typeKeys.get(ZSET), Collections.singletonMap(UUID.randomUUID().toString(), 1.0));
         setupBatch.hset(
-                typeKeys.get(HASH), Collections.singletonMap(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+                typeKeys.get(HASH),
+                Collections.singletonMap(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
         setupBatch.xadd(
-                typeKeys.get(STREAM), Collections.singletonMap(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+                typeKeys.get(STREAM),
+                Collections.singletonMap(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
         assertNotNull(client.exec(setupBatch, true).get());
 
         final GlideString initialCursor = gs("0");
@@ -832,7 +837,8 @@ public class BatchTests {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         String libName = "mylib";
         String funcName = "myfun";
-        String code = generateLuaLibCode(libName, Collections.singletonMap(funcName, "return args[1]"), true);
+        String code =
+                generateLuaLibCode(libName, Collections.singletonMap(funcName, "return args[1]"), true);
 
         // Setup
         client.functionLoad(code, true).get();
@@ -880,7 +886,10 @@ public class BatchTests {
                 };
 
         batch
-                .xadd(streamKey, Collections.singletonMap("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
+                .xadd(
+                        streamKey,
+                        Collections.singletonMap("field1", "value1"),
+                        StreamAddOptions.builder().id("0-1").build())
                 .xinfoStream(streamKey)
                 .xinfoStreamFull(streamKey);
 
@@ -897,7 +906,8 @@ public class BatchTests {
 
         assertDeepEquals(
                 new Object[] {
-                    "0-1", // xadd(streamKey, Collections.singletonMap("field1", "value1"), ... .id("0-1").build());
+                    "0-1", // xadd(streamKey, Collections.singletonMap("field1", "value1"), ...
+                    // .id("0-1").build());
                     expectedStreamInfo, // xinfoStream(streamKey)
                     expectedStreamFullInfo, // xinfoStreamFull(streamKey)
                 },

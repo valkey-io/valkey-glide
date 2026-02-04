@@ -89,7 +89,7 @@ public class ClusterValueTests {
         data = new HashMap<>();
         ((Map<GlideString, Object>) data).put(gs("node1"), node1Map);
         ((Map<GlideString, Object>) data).put(gs("node2"), Collections.emptyMap());
-        
+
         Map<GlideString, GlideString> node1MapNorm = new HashMap<>();
         node1MapNorm.put(gs("config1"), gs("param1"));
         node1MapNorm.put(gs("config2"), gs("param2"));

@@ -526,7 +526,8 @@ public class FT {
             @NonNull BaseClient client,
             @NonNull GlideString indexName,
             @NonNull FTProfileOptions options) {
-        GlideString[] args = concatenateArrays(new GlideString[] {gs("FT.PROFILE"), indexName}, options.toArgs());
+        GlideString[] args =
+                concatenateArrays(new GlideString[] {gs("FT.PROFILE"), indexName}, options.toArgs());
         return executeCommand(client, args, false);
     }
 

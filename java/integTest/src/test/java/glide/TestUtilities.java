@@ -54,6 +54,15 @@ public class TestUtilities {
     private static final String REDIS_VERSION_KEY = "redis_version";
 
     /**
+     * Checks if the current operating system is Windows.
+     *
+     * @return true if running on Windows, false otherwise
+     */
+    public static boolean isWindows() {
+        return System.getProperty("os.name").toLowerCase().contains("windows");
+    }
+
+    /**
      * Creates a Glide client for testing purposes
      *
      * @param addresses Optional list of node addresses
@@ -161,8 +170,8 @@ public class TestUtilities {
                 .map(line -> line.split(":", 2))
                 .collect(
                         Collectors.toMap(
-                                parts -> parts[0],
-                                parts -> parts[1],
+                                parts -> parts[0].trim(),
+                                parts -> parts[1].trim(),
                                 (existingValue, newValue) -> newValue,
                                 LinkedHashMap::new));
     }
@@ -182,7 +191,8 @@ public class TestUtilities {
 
     public static GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?>
             commonClientConfig() {
-        GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?> builder = GlideClientConfiguration.builder();
+        GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?> builder =
+                GlideClientConfiguration.builder();
         for (String host : STANDALONE_HOSTS) {
             String[] parts = host.split(":");
             builder.address(
@@ -207,7 +217,8 @@ public class TestUtilities {
 
     public static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>
             commonClusterClientConfig() {
-        GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?> builder = GlideClusterClientConfiguration.builder();
+        GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?> builder =
+                GlideClusterClientConfiguration.builder();
         for (String host : CLUSTER_HOSTS) {
             String[] parts = host.split(":");
             builder.address(
@@ -218,9 +229,17 @@ public class TestUtilities {
 
     public static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>
             azClusterClientConfig() {
-        GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?> builder = GlideClusterClientConfiguration.builder();
+        GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?> builder =
+                GlideClusterClientConfiguration.builder();
         for (String host : AZ_CLUSTER_HOSTS) {
+            if (host.isEmpty()) {
+                continue;
+            }
             String[] parts = host.split(":");
+            if (parts.length < 2) {
+                throw new IllegalArgumentException(
+                        "Invalid host format: " + host + ". Expected format: host:port");
+            }
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }

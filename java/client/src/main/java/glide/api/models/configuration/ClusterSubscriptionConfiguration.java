@@ -10,7 +10,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.Getter;
 
 /**
@@ -77,7 +76,9 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
         // Java 8 compatible: manually create unmodifiable map
         Map<PubSubClusterChannelMode, Set<GlideString>> unmodifiableMap = new HashMap<>();
         for (Map.Entry<PubSubClusterChannelMode, Set<GlideString>> entry : subscriptions.entrySet()) {
-            unmodifiableMap.put(entry.getKey(), java.util.Collections.unmodifiableSet(new java.util.HashSet<>(entry.getValue())));
+            unmodifiableMap.put(
+                    entry.getKey(),
+                    java.util.Collections.unmodifiableSet(new java.util.HashSet<>(entry.getValue())));
         }
         this.subscriptions = java.util.Collections.unmodifiableMap(unmodifiableMap);
     }
@@ -134,7 +135,8 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
          */
         public ClusterSubscriptionConfigurationBuilder subscriptions(
                 PubSubClusterChannelMode mode, Set<GlideString> subscriptions) {
-            this.subscriptions.put(mode, java.util.Collections.unmodifiableSet(new java.util.HashSet<>(subscriptions)));
+            this.subscriptions.put(
+                    mode, java.util.Collections.unmodifiableSet(new java.util.HashSet<>(subscriptions)));
             return this;
         }
 

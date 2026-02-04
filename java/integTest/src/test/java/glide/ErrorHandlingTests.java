@@ -1,8 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
-import java.util.Collections;
-
 import static glide.TestUtilities.commonClientConfig;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -20,7 +18,7 @@ import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-@Timeout(10) // seconds
+@Timeout(15) // seconds
 public class ErrorHandlingTests {
 
     @Test

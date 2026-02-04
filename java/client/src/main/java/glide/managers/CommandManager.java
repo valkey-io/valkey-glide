@@ -34,8 +34,11 @@ import glide.internal.GlideCoreClient;
 import glide.utils.BufferUtils;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +51,30 @@ import response.ResponseOuterClass.Response;
  */
 @RequiredArgsConstructor
 public class CommandManager {
+
+    /**
+     * Set of blocking command names (uppercase) that have their own timeout in the command arguments.
+     * These commands should NOT use Java-side timeout - Rust handles their timeout based on the
+     * command's timeout argument.
+     */
+    private static final Set<String> BLOCKING_COMMAND_NAMES;
+
+    static {
+        Set<String> blockingCommands = new HashSet<>();
+        blockingCommands.add("BLPOP");
+        blockingCommands.add("BRPOP");
+        blockingCommands.add("BLMOVE");
+        blockingCommands.add("BZPOPMAX");
+        blockingCommands.add("BZPOPMIN");
+        blockingCommands.add("BRPOPLPUSH");
+        blockingCommands.add("BLMPOP");
+        blockingCommands.add("BZMPOP");
+        blockingCommands.add("XREAD");
+        blockingCommands.add("XREADGROUP");
+        blockingCommands.add("WAIT");
+        blockingCommands.add("WAITAOF");
+        BLOCKING_COMMAND_NAMES = Collections.unmodifiableSet(blockingCommands);
+    }
 
     /** Core client connection. */
     private final GlideCoreClient coreClient;
@@ -138,6 +165,120 @@ public class CommandManager {
                 command, responseHandler, true, false); // GlideString arguments -> expect binary response
     }
 
+    // ==================== BLOCKING COMMAND METHODS ====================
+    // These methods skip Java-side timeout because blocking commands (BLPOP, BRPOP, etc.)
+    // have their own timeout in the command arguments, which Rust handles correctly.
+
+    /** Build a blocking command and submit it (no Java-side timeout). */
+    public <T> CompletableFuture<T> submitBlockingCommand(
+            RequestType requestType,
+            String[] arguments,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
+        return submitBlockingCommandToJni(command, responseHandler, false, true);
+    }
+
+    /** Build a blocking command and submit it (no Java-side timeout). */
+    public <T> CompletableFuture<T> submitBlockingCommand(
+            RequestType requestType,
+            GlideString[] arguments,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
+        return submitBlockingCommandToJni(command, responseHandler, true, false);
+    }
+
+    /** Build a blocking command with route and submit it (no Java-side timeout). */
+    public <T> CompletableFuture<T> submitBlockingCommand(
+            RequestType requestType,
+            String[] arguments,
+            Route route,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
+        return submitBlockingCommandToJni(command, responseHandler, false, true);
+    }
+
+    /** Build a blocking command with route and submit it (no Java-side timeout). */
+    public <T> CompletableFuture<T> submitBlockingCommand(
+            RequestType requestType,
+            GlideString[] arguments,
+            Route route,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
+        return submitBlockingCommandToJni(command, responseHandler, true, false);
+    }
+
+    // ==================== CUSTOM COMMAND METHODS ====================
+    // Custom commands need special handling: if the command name is a blocking command,
+    // we skip Java-side timeout; otherwise we use normal timeout handling.
+
+    /** Submit a custom command, detecting if it's a blocking command. */
+    public <T> CompletableFuture<T> submitCustomCommand(
+            String[] arguments, GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        CommandRequest.Builder command = prepareCommandRequest(RequestType.CustomCommand, arguments);
+        if (isBlockingCustomCommand(arguments)) {
+            return submitBlockingCommandToJni(command, responseHandler, false, true);
+        }
+        return submitCommandToJni(command, responseHandler, false, true);
+    }
+
+    /** Submit a custom command with GlideString args, detecting if it's a blocking command. */
+    public <T> CompletableFuture<T> submitCustomCommand(
+            GlideString[] arguments, GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        CommandRequest.Builder command = prepareCommandRequest(RequestType.CustomCommand, arguments);
+        if (isBlockingCustomCommand(arguments)) {
+            return submitBlockingCommandToJni(command, responseHandler, true, false);
+        }
+        return submitCommandToJni(command, responseHandler, true, false);
+    }
+
+    /** Submit a custom command with route, detecting if it's a blocking command. */
+    public <T> CompletableFuture<T> submitCustomCommand(
+            String[] arguments, Route route, GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        CommandRequest.Builder command =
+                prepareCommandRequest(RequestType.CustomCommand, arguments, route);
+        if (isBlockingCustomCommand(arguments)) {
+            return submitBlockingCommandToJni(command, responseHandler, false, true);
+        }
+        return submitCommandToJni(command, responseHandler, false, true);
+    }
+
+    /** Submit a custom command with route and GlideString args, detecting if it's blocking. */
+    public <T> CompletableFuture<T> submitCustomCommand(
+            GlideString[] arguments,
+            Route route,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        CommandRequest.Builder command =
+                prepareCommandRequest(RequestType.CustomCommand, arguments, route);
+        if (isBlockingCustomCommand(arguments)) {
+            return submitBlockingCommandToJni(command, responseHandler, true, false);
+        }
+        return submitCommandToJni(command, responseHandler, true, false);
+    }
+
+    /** Check if a custom command is a blocking command by inspecting the first argument. */
+    private boolean isBlockingCustomCommand(String[] arguments) {
+        return arguments != null
+                && arguments.length > 0
+                && arguments[0] != null
+                && BLOCKING_COMMAND_NAMES.contains(arguments[0].toUpperCase());
+    }
+
+    /** Check if a custom command is a blocking command by inspecting the first argument. */
+    private boolean isBlockingCustomCommand(GlideString[] arguments) {
+        return arguments != null
+                && arguments.length > 0
+                && arguments[0] != null
+                && BLOCKING_COMMAND_NAMES.contains(arguments[0].toString().toUpperCase());
+    }
+
     /** Specialized path for ObjectEncoding with GlideString args but textual response. */
     public <T> CompletableFuture<T> submitObjectEncoding(
             GlideString[] arguments, GlideExceptionCheckedFunction<Response, T> responseHandler) {
@@ -163,7 +304,8 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         CommandRequest.Builder command = prepareCommandRequest(batch, raiseOnError, options);
         boolean expectUtf8Response = !batch.isBinaryOutput();
-        return submitBatchToJni(command, responseHandler, expectUtf8Response);
+        Integer timeoutOverride = options.map(BaseBatchOptions::getTimeout).orElse(null);
+        return submitBatchToJni(command, responseHandler, expectUtf8Response, timeoutOverride);
     }
 
     /** Build a Script (by hash) request to send to Valkey. */
@@ -302,7 +444,8 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         CommandRequest.Builder command = prepareCommandRequest(batch, raiseOnError, options);
         boolean expectUtf8Response = !batch.isBinaryOutput();
-        return submitBatchToJni(command, responseHandler, expectUtf8Response);
+        Integer timeoutOverride = options.map(BaseBatchOptions::getTimeout).orElse(null);
+        return submitBatchToJni(command, responseHandler, expectUtf8Response, timeoutOverride);
     }
 
     private static byte[][] toByteMatrix(List<GlideString> values) {
@@ -542,6 +685,59 @@ public class CommandManager {
         }
     }
 
+    /**
+     * Submit a blocking command to JNI without Java-side timeout. Blocking commands (BLPOP, BRPOP,
+     * etc.) have their own timeout in the command arguments, which Rust handles correctly.
+     */
+    protected <T> CompletableFuture<T> submitBlockingCommandToJni(
+            CommandRequest.Builder command,
+            GlideExceptionCheckedFunction<Response, T> responseHandler,
+            boolean binaryMode,
+            boolean expectUtf8Response) {
+
+        if (!coreClient.isConnected()) {
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
+            errorFuture.completeExceptionally(
+                    new ClosingException("Client closed: Unable to submit command."));
+            return errorFuture;
+        }
+
+        try {
+            // Serialize the protobuf command request
+            byte[] requestBytes = command.build().toByteArray();
+
+            // Execute via JNI WITHOUT Java-side timeout - Rust handles blocking command timeout
+            CompletableFuture<Object> jniFuture =
+                    expectUtf8Response
+                            ? coreClient.executeCommandAsyncNoTimeout(requestBytes)
+                            : coreClient.executeBinaryCommandAsyncNoTimeout(requestBytes);
+
+            return jniFuture
+                    .thenApply(
+                            result -> {
+                                Response.Builder builder = Response.newBuilder();
+                                Object toStore = result;
+                                if (result == null) {
+                                    builder.setRespPointer(0L);
+                                } else if ("OK".equals(result)) {
+                                    builder.setConstantResponse(ConstantResponse.OK);
+                                } else {
+                                    if (result instanceof ByteBuffer) {
+                                        toStore = normalizeDirectBuffer((ByteBuffer) result, expectUtf8Response);
+                                    }
+                                    long objectId = JniResponseRegistry.storeObject(toStore);
+                                    builder.setRespPointer(objectId);
+                                }
+                                return responseHandler.apply(builder.build());
+                            })
+                    .exceptionally(this::exceptionHandler);
+        } catch (Exception e) {
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
+            errorFuture.completeExceptionally(e);
+            return errorFuture;
+        }
+    }
+
     private Object normalizeDirectBuffer(ByteBuffer buffer, boolean expectUtf8Response) {
         ByteBuffer dup = buffer.duplicate();
         dup.order(ByteOrder.BIG_ENDIAN);
@@ -617,7 +813,8 @@ public class CommandManager {
     protected <T> CompletableFuture<T> submitBatchToJni(
             CommandRequest.Builder command,
             GlideExceptionCheckedFunction<Response, T> responseHandler,
-            boolean expectUtf8Response) {
+            boolean expectUtf8Response,
+            Integer timeoutOverrideMs) {
 
         if (!coreClient.isConnected()) {
             CompletableFuture<T> errorFuture = new CompletableFuture<T>();
@@ -632,7 +829,7 @@ public class CommandManager {
 
             // Execute via JNI and convert response
             return coreClient
-                    .executeBatchAsync(requestBytes, expectUtf8Response)
+                    .executeBatchAsync(requestBytes, expectUtf8Response, timeoutOverrideMs)
                     .thenApply(result -> convertJniToProtobufResponse(result, expectUtf8Response))
                     .thenApply(responseHandler::apply)
                     .exceptionally(this::exceptionHandler);
@@ -909,7 +1106,8 @@ public class CommandManager {
 
         if (options.isPresent()) {
             BatchOptions opts = options.get();
-            CommandRequestOuterClass.Batch.Builder batchBuilder = prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
+            CommandRequestOuterClass.Batch.Builder batchBuilder =
+                    prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
             builder.setBatch(batchBuilder.setRaiseOnError(raiseOnError).build());
         } else {
             builder.setBatch(batch.getProtobufBatch().setRaiseOnError(raiseOnError).build());

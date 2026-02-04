@@ -282,7 +282,8 @@ public class Benchmarking {
 
         String value = repeatString("0", dataSize);
         Map<ChosenAction, Operation> actions = new HashMap<>();
-        actions.put(ChosenAction.GET_EXISTING,
+        actions.put(
+                ChosenAction.GET_EXISTING,
                 (client) -> {
                     if (async) {
                         ((AsyncClient) client).asyncGet(generateKeySet()).get();
@@ -290,7 +291,8 @@ public class Benchmarking {
                         ((SyncClient) client).get(generateKeySet());
                     }
                 });
-        actions.put(ChosenAction.GET_NON_EXISTING,
+        actions.put(
+                ChosenAction.GET_NON_EXISTING,
                 (client) -> {
                     if (async) {
                         ((AsyncClient) client).asyncGet(generateKeyGet()).get();
@@ -298,7 +300,8 @@ public class Benchmarking {
                         ((SyncClient) client).get(generateKeyGet());
                     }
                 });
-        actions.put(ChosenAction.SET,
+        actions.put(
+                ChosenAction.SET,
                 (client) -> {
                     if (async) {
                         ((AsyncClient) client).asyncSet(generateKeySet(), value).get();

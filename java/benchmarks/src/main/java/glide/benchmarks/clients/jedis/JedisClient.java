@@ -37,7 +37,8 @@ public class JedisClient implements SyncClient {
         if (isClusterMode) {
             jedisCluster =
                     new JedisCluster(
-                            Collections.singleton(new HostAndPort(connectionSettings.host, connectionSettings.port)),
+                            Collections.singleton(
+                                    new HostAndPort(connectionSettings.host, connectionSettings.port)),
                             DefaultJedisClientConfig.builder().ssl(connectionSettings.useSsl).build());
         } else {
             jedisStandalonePool =

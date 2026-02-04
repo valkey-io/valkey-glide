@@ -1,10 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
-import java.util.Collections;
-
 import static glide.BatchTestUtilities.createMap;
-import static glide.BatchTestUtilities.createSet;
 import static glide.Java8Compat.repeat;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
@@ -64,6 +61,7 @@ import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -376,7 +374,10 @@ public class CommandTests {
         ExecutionException exception =
                 assertThrows(
                         ExecutionException.class,
-                        () -> regularClient.configSet(Collections.singletonMap("Unknown Option", "Unknown Value")).get());
+                        () ->
+                                regularClient
+                                        .configSet(Collections.singletonMap("Unknown Option", "Unknown Value"))
+                                        .get());
         assertInstanceOf(RequestException.class, exception.getCause());
     }
 
@@ -540,7 +541,9 @@ public class CommandTests {
         String oldPolicy =
                 regularClient.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
         try {
-            assertEquals(OK, regularClient.configSet(Collections.singletonMap(maxmemoryPolicy, "allkeys-lfu")).get());
+            assertEquals(
+                    OK,
+                    regularClient.configSet(Collections.singletonMap(maxmemoryPolicy, "allkeys-lfu")).get());
             assertEquals(OK, regularClient.set(key, "").get());
             assertTrue(regularClient.objectFreq(key).get() >= 0L);
         } finally {
@@ -580,7 +583,8 @@ public class CommandTests {
         String libName = "mylib1c";
         String funcName = "myfunc1c";
         // function $funcName returns first argument
-        String code = generateLuaLibCode(libName, Collections.singletonMap(funcName, "return args[1]"), true);
+        String code =
+                generateLuaLibCode(libName, Collections.singletonMap(funcName, "return args[1]"), true);
         assertEquals(libName, regularClient.functionLoad(code, false).get());
 
         Object functionResult =
@@ -627,7 +631,8 @@ public class CommandTests {
         assertEquals(libName, regularClient.functionLoad(newCode, true).get());
 
         // load new lib and delete it - first lib remains loaded
-        String anotherLib = generateLuaLibCode("anotherLib", Collections.singletonMap("anotherFunc", ""), false);
+        String anotherLib =
+                generateLuaLibCode("anotherLib", Collections.singletonMap("anotherFunc", ""), false);
         assertEquals("anotherLib", regularClient.functionLoad(anotherLib, true).get());
         assertEquals(OK, regularClient.functionDelete("anotherLib").get());
 
@@ -669,7 +674,8 @@ public class CommandTests {
         GlideString funcName = gs("myfunc1c");
         // function $funcName returns first argument
         GlideString code =
-                generateLuaLibCodeBinary(libName, Collections.singletonMap(funcName, gs("return args[1]")), true);
+                generateLuaLibCodeBinary(
+                        libName, Collections.singletonMap(funcName, gs("return args[1]")), true);
         assertEquals(libName, regularClient.functionLoad(code, false).get());
 
         Object functionResult =
@@ -717,12 +723,15 @@ public class CommandTests {
         // function $newFuncName returns argument array len
         GlideString newCode =
                 generateLuaLibCodeBinary(
-                        libName, createMap(funcName, gs("return args[1]"), newFuncName, gs("return #args")), true);
+                        libName,
+                        createMap(funcName, gs("return args[1]"), newFuncName, gs("return #args")),
+                        true);
         assertEquals(libName, regularClient.functionLoad(newCode, true).get());
 
         // load new lib and delete it - first lib remains loaded
         GlideString anotherLib =
-                generateLuaLibCodeBinary(gs("anotherLib"), Collections.singletonMap(gs("anotherFunc"), gs("")), false);
+                generateLuaLibCodeBinary(
+                        gs("anotherLib"), Collections.singletonMap(gs("anotherFunc"), gs("")), false);
         assertEquals(gs("anotherLib"), regularClient.functionLoad(anotherLib, true).get());
         assertEquals(OK, regularClient.functionDelete(gs("anotherLib")).get());
 
@@ -1055,7 +1064,8 @@ public class CommandTests {
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
         // function $funcName returns first argument
-        String code = generateLuaLibCode(libName, Collections.singletonMap(funcName, "return args[1]"), false);
+        String code =
+                generateLuaLibCode(libName, Collections.singletonMap(funcName, "return args[1]"), false);
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
         Map<String, Map<String, Map<String, Object>>> response = regularClient.functionStats().get();
@@ -1095,10 +1105,12 @@ public class CommandTests {
 
         // function $funcName returns first argument
         GlideString code =
-                generateLuaLibCodeBinary(libName, Collections.singletonMap(funcName, gs("return args[1]")), false);
+                generateLuaLibCodeBinary(
+                        libName, Collections.singletonMap(funcName, gs("return args[1]")), false);
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
-        Map<String, Map<GlideString, Map<GlideString, Object>>> response = regularClient.functionStatsBinary().get();
+        Map<String, Map<GlideString, Map<GlideString, Object>>> response =
+                regularClient.functionStatsBinary().get();
         for (Map<GlideString, Map<GlideString, Object>> nodeResponse : response.values()) {
             checkFunctionStatsBinaryResponse(nodeResponse, new GlideString[0], 1, 1);
         }
@@ -1171,7 +1183,8 @@ public class CommandTests {
 
         // create lib with another name, but with the same function names
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
-        code = generateLuaLibCode(name2, createMap(name1, "return args[1]", name2, "return #args"), false);
+        code =
+                generateLuaLibCode(name2, createMap(name1, "return args[1]", name2, "return #args"), false);
         assertEquals(name2, regularClient.functionLoad(code, true).get());
 
         // REPLACE policy now fails due to a name collision
@@ -1845,6 +1858,9 @@ public class CommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     public void scriptKill_unkillable(GlideClient regularClient) {
+        // Ensure no script is blocking the server from a previous test
+        waitForNotBusy(regularClient::scriptKill);
+
         String key = UUID.randomUUID().toString();
         String code = createLongRunningLuaScript(6, false);
         Script script = new Script(code, false);
