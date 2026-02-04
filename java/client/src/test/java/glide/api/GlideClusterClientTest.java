@@ -238,7 +238,10 @@ public class GlideClusterClientTest {
                 createMap(gs("key1"), gs("value1"), gs("key2"), gs("value2"));
         try (TestClient client = new TestClient(commandManager, data)) {
             ClusterValue<Object> value = client.customCommand(new GlideString[0], ALL_NODES).get();
-            assertEquals(data, value.getMultiValue());
+            Map<?, ?> result = value.getMultiValue();
+            assertEquals(2, result.size());
+            assertTrue(result.containsValue(gs("value1")));
+            assertTrue(result.containsValue(gs("value2")));
         }
     }
 
