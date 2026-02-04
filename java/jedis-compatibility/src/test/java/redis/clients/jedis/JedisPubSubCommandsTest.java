@@ -9,10 +9,23 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for Jedis Pub/Sub commands (publish, pubsubChannels, pubsubNumPat, pubsubNumSub).
+ * Unit tests for Jedis Pub/Sub commands (publish, pubsubChannels, pubsubNumPat, pubsubNumSub,
+ * subscribe, unsubscribe, psubscribe, punsubscribe).
  *
- * <p>{@code publish()} delegates to the GLIDE Java client and returns {@code 0} (subscriber count
- * is not provided by the underlying API).
+ * <p>PubSub behavior in GLIDE compatibility layer:
+ *
+ * <ul>
+ *   <li>{@code publish()} returns {@code 0} (subscriber count not provided by underlying API)
+ *   <li>{@code subscribe()/psubscribe()} use GLIDE's dynamic subscription APIs to add channels/patterns
+ *       at runtime
+ *   <li>{@code unsubscribe()/punsubscribe()} use GLIDE's dynamic APIs to remove channels/patterns
+ *   <li>All subscription methods are non-blocking and add/remove from desired subscription state
+ *   <li>For message callbacks, configure {@code StandaloneSubscriptionConfiguration} or {@code
+ *       ClusterSubscriptionConfiguration} at client creation time
+ * </ul>
+ *
+ * <p>These tests verify method signatures and return types. Integration tests in the main client
+ * module verify actual subscription behavior.
  */
 public class JedisPubSubCommandsTest {
 

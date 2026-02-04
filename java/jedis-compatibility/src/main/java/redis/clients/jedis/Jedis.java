@@ -7020,28 +7020,25 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Subscribes to one or more channels. This method sends the SUBSCRIBE command to the server.
+     * Subscribes to one or more channels. This method dynamically adds channels to the subscription.
      *
-     * <p><b>Note:</b> This is a low-level implementation that sends the subscription command but does
-     * not handle incoming messages. For full PubSub functionality with message callbacks, use GLIDE's
-     * native subscription configuration at client creation time.
+     * <p>This is a non-blocking operation that adds the channels to the desired subscription state.
+     * Messages published to these channels will be received via the configured callback or message
+     * queue.
      *
      * @see <a href="https://valkey.io/commands/subscribe/">valkey.io</a> for details.
      * @param channels the channels to subscribe to
-     * @apiNote For production use, consider using GLIDE's native {@link
+     * @apiNote For production use, configure PubSub callbacks via {@link
      *     glide.api.models.configuration.StandaloneSubscriptionConfiguration} or {@link
-     *     glide.api.models.configuration.ClusterSubscriptionConfiguration} for proper message
-     *     handling.
+     *     glide.api.models.configuration.ClusterSubscriptionConfiguration} at client creation time.
      * @since Valkey 1.0.0
      */
     public void subscribe(String... channels) {
         executeCommandWithGlide(
                 "SUBSCRIBE",
                 () -> {
-                    String[] args = new String[channels.length + 1];
-                    args[0] = "SUBSCRIBE";
-                    System.arraycopy(channels, 0, args, 1, channels.length);
-                    glideClient.customCommand(args).get();
+                    Set<String> channelSet = new HashSet<>(Arrays.asList(channels));
+                    glideClient.subscribe(channelSet).get();
                     return null;
                 });
     }
@@ -7049,25 +7046,25 @@ public final class Jedis implements Closeable {
     /**
      * Subscribes to one or more channels (binary version).
      *
-     * <p><b>Note:</b> This is a low-level implementation that sends the subscription command but does
-     * not handle incoming messages. For full PubSub functionality with message callbacks, use GLIDE's
-     * native subscription configuration at client creation time.
+     * <p>This is a non-blocking operation that adds the channels to the desired subscription state.
+     * Messages published to these channels will be received via the configured callback or message
+     * queue.
      *
      * @see <a href="https://valkey.io/commands/subscribe/">valkey.io</a> for details.
      * @param channels the channels to subscribe to
-     * @apiNote For production use, consider using GLIDE's native subscription configuration.
+     * @apiNote For production use, configure PubSub callbacks via GLIDE's native subscription
+     *     configuration at client creation time.
      * @since Valkey 1.0.0
      */
     public void subscribe(byte[]... channels) {
         executeCommandWithGlide(
                 "SUBSCRIBE",
                 () -> {
-                    GlideString[] args = new GlideString[channels.length + 1];
-                    args[0] = GlideString.of("SUBSCRIBE");
-                    for (int i = 0; i < channels.length; i++) {
-                        args[i + 1] = GlideString.of(channels[i]);
+                    Set<String> channelSet = new HashSet<>();
+                    for (byte[] channel : channels) {
+                        channelSet.add(new String(channel, VALKEY_CHARSET));
                     }
-                    glideClient.customCommand(args).get();
+                    glideClient.subscribe(channelSet).get();
                     return null;
                 });
     }
@@ -7076,23 +7073,22 @@ public final class Jedis implements Closeable {
      * Subscribes to one or more channel patterns. Patterns support glob-style wildcards (e.g., {@code
      * news.*}).
      *
-     * <p><b>Note:</b> This is a low-level implementation that sends the subscription command but does
-     * not handle incoming messages. For full PubSub functionality with message callbacks, use GLIDE's
-     * native subscription configuration at client creation time.
+     * <p>This is a non-blocking operation that adds the patterns to the desired subscription state.
+     * Messages published to channels matching these patterns will be received via the configured
+     * callback or message queue.
      *
      * @see <a href="https://valkey.io/commands/psubscribe/">valkey.io</a> for details.
      * @param patterns the channel patterns to subscribe to
-     * @apiNote For production use, consider using GLIDE's native subscription configuration.
+     * @apiNote For production use, configure PubSub callbacks via GLIDE's native subscription
+     *     configuration at client creation time.
      * @since Valkey 1.0.0
      */
     public void psubscribe(String... patterns) {
         executeCommandWithGlide(
                 "PSUBSCRIBE",
                 () -> {
-                    String[] args = new String[patterns.length + 1];
-                    args[0] = "PSUBSCRIBE";
-                    System.arraycopy(patterns, 0, args, 1, patterns.length);
-                    glideClient.customCommand(args).get();
+                    Set<String> patternSet = new HashSet<>(Arrays.asList(patterns));
+                    glideClient.psubscribe(patternSet).get();
                     return null;
                 });
     }
@@ -7100,25 +7096,25 @@ public final class Jedis implements Closeable {
     /**
      * Subscribes to one or more channel patterns (binary version).
      *
-     * <p><b>Note:</b> This is a low-level implementation that sends the subscription command but does
-     * not handle incoming messages. For full PubSub functionality with message callbacks, use GLIDE's
-     * native subscription configuration at client creation time.
+     * <p>This is a non-blocking operation that adds the patterns to the desired subscription state.
+     * Messages published to channels matching these patterns will be received via the configured
+     * callback or message queue.
      *
      * @see <a href="https://valkey.io/commands/psubscribe/">valkey.io</a> for details.
      * @param patterns the channel patterns to subscribe to
-     * @apiNote For production use, consider using GLIDE's native subscription configuration.
+     * @apiNote For production use, configure PubSub callbacks via GLIDE's native subscription
+     *     configuration at client creation time.
      * @since Valkey 1.0.0
      */
     public void psubscribe(byte[]... patterns) {
         executeCommandWithGlide(
                 "PSUBSCRIBE",
                 () -> {
-                    GlideString[] args = new GlideString[patterns.length + 1];
-                    args[0] = GlideString.of("PSUBSCRIBE");
-                    for (int i = 0; i < patterns.length; i++) {
-                        args[i + 1] = GlideString.of(patterns[i]);
+                    Set<String> patternSet = new HashSet<>();
+                    for (byte[] pattern : patterns) {
+                        patternSet.add(new String(pattern, VALKEY_CHARSET));
                     }
-                    glideClient.customCommand(args).get();
+                    glideClient.psubscribe(patternSet).get();
                     return null;
                 });
     }
@@ -7179,8 +7175,8 @@ public final class Jedis implements Closeable {
      * Unsubscribes from one or more channels. If no channels are specified, unsubscribes from all
      * channels.
      *
-     * <p><b>Note:</b> This is a low-level implementation that sends the unsubscribe command. For full
-     * PubSub functionality, use GLIDE's native subscription configuration at client creation time.
+     * <p>This is a non-blocking operation that removes the channels from the desired subscription
+     * state.
      *
      * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details.
      * @param channels the channels to unsubscribe from (empty array unsubscribes from all)
@@ -7190,10 +7186,12 @@ public final class Jedis implements Closeable {
         executeCommandWithGlide(
                 "UNSUBSCRIBE",
                 () -> {
-                    String[] args = new String[channels.length + 1];
-                    args[0] = "UNSUBSCRIBE";
-                    System.arraycopy(channels, 0, args, 1, channels.length);
-                    glideClient.customCommand(args).get();
+                    if (channels.length == 0) {
+                        glideClient.unsubscribe().get();
+                    } else {
+                        Set<String> channelSet = new HashSet<>(Arrays.asList(channels));
+                        glideClient.unsubscribe(channelSet).get();
+                    }
                     return null;
                 });
     }
@@ -7201,8 +7199,8 @@ public final class Jedis implements Closeable {
     /**
      * Unsubscribes from one or more channels (binary version).
      *
-     * <p><b>Note:</b> This is a low-level implementation that sends the unsubscribe command. For full
-     * PubSub functionality, use GLIDE's native subscription configuration at client creation time.
+     * <p>This is a non-blocking operation that removes the channels from the desired subscription
+     * state.
      *
      * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details.
      * @param channels the channels to unsubscribe from (empty array unsubscribes from all)
@@ -7212,12 +7210,15 @@ public final class Jedis implements Closeable {
         executeCommandWithGlide(
                 "UNSUBSCRIBE",
                 () -> {
-                    GlideString[] args = new GlideString[channels.length + 1];
-                    args[0] = GlideString.of("UNSUBSCRIBE");
-                    for (int i = 0; i < channels.length; i++) {
-                        args[i + 1] = GlideString.of(channels[i]);
+                    if (channels.length == 0) {
+                        glideClient.unsubscribe().get();
+                    } else {
+                        Set<String> channelSet = new HashSet<>();
+                        for (byte[] channel : channels) {
+                            channelSet.add(new String(channel, VALKEY_CHARSET));
+                        }
+                        glideClient.unsubscribe(channelSet).get();
                     }
-                    glideClient.customCommand(args).get();
                     return null;
                 });
     }
@@ -7226,8 +7227,8 @@ public final class Jedis implements Closeable {
      * Unsubscribes from one or more channel patterns. If no patterns are specified, unsubscribes from
      * all patterns.
      *
-     * <p><b>Note:</b> This is a low-level implementation that sends the unsubscribe command. For full
-     * PubSub functionality, use GLIDE's native subscription configuration at client creation time.
+     * <p>This is a non-blocking operation that removes the patterns from the desired subscription
+     * state.
      *
      * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details.
      * @param patterns the channel patterns to unsubscribe from (empty array unsubscribes from all)
@@ -7237,10 +7238,12 @@ public final class Jedis implements Closeable {
         executeCommandWithGlide(
                 "PUNSUBSCRIBE",
                 () -> {
-                    String[] args = new String[patterns.length + 1];
-                    args[0] = "PUNSUBSCRIBE";
-                    System.arraycopy(patterns, 0, args, 1, patterns.length);
-                    glideClient.customCommand(args).get();
+                    if (patterns.length == 0) {
+                        glideClient.punsubscribe().get();
+                    } else {
+                        Set<String> patternSet = new HashSet<>(Arrays.asList(patterns));
+                        glideClient.punsubscribe(patternSet).get();
+                    }
                     return null;
                 });
     }
@@ -7248,8 +7251,8 @@ public final class Jedis implements Closeable {
     /**
      * Unsubscribes from one or more channel patterns (binary version).
      *
-     * <p><b>Note:</b> This is a low-level implementation that sends the unsubscribe command. For full
-     * PubSub functionality, use GLIDE's native subscription configuration at client creation time.
+     * <p>This is a non-blocking operation that removes the patterns from the desired subscription
+     * state.
      *
      * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details.
      * @param patterns the channel patterns to unsubscribe from (empty array unsubscribes from all)
@@ -7259,12 +7262,15 @@ public final class Jedis implements Closeable {
         executeCommandWithGlide(
                 "PUNSUBSCRIBE",
                 () -> {
-                    GlideString[] args = new GlideString[patterns.length + 1];
-                    args[0] = GlideString.of("PUNSUBSCRIBE");
-                    for (int i = 0; i < patterns.length; i++) {
-                        args[i + 1] = GlideString.of(patterns[i]);
+                    if (patterns.length == 0) {
+                        glideClient.punsubscribe().get();
+                    } else {
+                        Set<String> patternSet = new HashSet<>();
+                        for (byte[] pattern : patterns) {
+                            patternSet.add(new String(pattern, VALKEY_CHARSET));
+                        }
+                        glideClient.punsubscribe(patternSet).get();
                     }
-                    glideClient.customCommand(args).get();
                     return null;
                 });
     }

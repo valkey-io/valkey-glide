@@ -1672,6 +1672,138 @@ public class JedisTest {
     }
 
     @Test
+    void subscribe_unsubscribe_channels() {
+        String channel1 = "ch1:" + UUID.randomUUID();
+        String channel2 = "ch2:" + UUID.randomUUID();
+
+        // Test subscribe to multiple channels
+        assertDoesNotThrow(
+                () -> jedis.subscribe(channel1, channel2),
+                "SUBSCRIBE should complete without exception");
+
+        // Test unsubscribe from specific channel
+        assertDoesNotThrow(
+                () -> jedis.unsubscribe(channel1), "UNSUBSCRIBE should complete without exception");
+
+        // Test unsubscribe from all channels (empty varargs)
+        assertDoesNotThrow(
+                () -> jedis.unsubscribe(new String[0]),
+                "UNSUBSCRIBE with no args should complete without exception");
+    }
+
+    @Test
+    void subscribe_unsubscribe_channels_binary() {
+        String channel1 = "ch1:" + UUID.randomUUID();
+        String channel2 = "ch2:" + UUID.randomUUID();
+        byte[] channel1Bytes = channel1.getBytes(StandardCharsets.UTF_8);
+        byte[] channel2Bytes = channel2.getBytes(StandardCharsets.UTF_8);
+
+        // Test subscribe to multiple channels (binary)
+        assertDoesNotThrow(
+                () -> jedis.subscribe(channel1Bytes, channel2Bytes),
+                "SUBSCRIBE binary should complete without exception");
+
+        // Test unsubscribe from specific channel (binary)
+        assertDoesNotThrow(
+                () -> jedis.unsubscribe(channel1Bytes),
+                "UNSUBSCRIBE binary should complete without exception");
+
+        // Test unsubscribe from all channels (empty varargs, binary)
+        assertDoesNotThrow(
+                () -> jedis.unsubscribe(new byte[0][]),
+                "UNSUBSCRIBE binary with empty array should complete without exception");
+    }
+
+    @Test
+    void psubscribe_punsubscribe_patterns() {
+        String pattern1 = "news.*";
+        String pattern2 = "alerts.*";
+
+        // Test psubscribe to multiple patterns
+        assertDoesNotThrow(
+                () -> jedis.psubscribe(pattern1, pattern2),
+                "PSUBSCRIBE should complete without exception");
+
+        // Test punsubscribe from specific pattern
+        assertDoesNotThrow(
+                () -> jedis.punsubscribe(pattern1), "PUNSUBSCRIBE should complete without exception");
+
+        // Test punsubscribe from all patterns (empty varargs)
+        assertDoesNotThrow(
+                () -> jedis.punsubscribe(new String[0]),
+                "PUNSUBSCRIBE with no args should complete without exception");
+    }
+
+    @Test
+    void psubscribe_punsubscribe_patterns_binary() {
+        String pattern1 = "news.*";
+        String pattern2 = "alerts.*";
+        byte[] pattern1Bytes = pattern1.getBytes(StandardCharsets.UTF_8);
+        byte[] pattern2Bytes = pattern2.getBytes(StandardCharsets.UTF_8);
+
+        // Test psubscribe to multiple patterns (binary)
+        assertDoesNotThrow(
+                () -> jedis.psubscribe(pattern1Bytes, pattern2Bytes),
+                "PSUBSCRIBE binary should complete without exception");
+
+        // Test punsubscribe from specific pattern (binary)
+        assertDoesNotThrow(
+                () -> jedis.punsubscribe(pattern1Bytes),
+                "PUNSUBSCRIBE binary should complete without exception");
+
+        // Test punsubscribe from all patterns (empty varargs, binary)
+        assertDoesNotThrow(
+                () -> jedis.punsubscribe(new byte[0][]),
+                "PUNSUBSCRIBE binary with empty array should complete without exception");
+    }
+
+    @Test
+    void subscribe_and_unsubscribe_lifecycle() {
+        String channel1 = "lifecycle:" + UUID.randomUUID();
+        String channel2 = "lifecycle:" + UUID.randomUUID();
+
+        // Subscribe to multiple channels
+        assertDoesNotThrow(
+                () -> jedis.subscribe(channel1, channel2), "SUBSCRIBE to multiple channels should complete");
+
+        // Unsubscribe from one channel
+        assertDoesNotThrow(
+                () -> jedis.unsubscribe(channel1), "UNSUBSCRIBE from specific channel should complete");
+
+        // Unsubscribe from all remaining channels
+        assertDoesNotThrow(
+                () -> jedis.unsubscribe(new String[0]),
+                "UNSUBSCRIBE from all channels should complete");
+
+        // Note: To receive messages from subscriptions, configure the client with
+        // StandaloneSubscriptionConfiguration or ClusterSubscriptionConfiguration at creation time.
+    }
+
+    @Test
+    void psubscribe_and_punsubscribe_lifecycle() {
+        String pattern1 = "pattern:" + UUID.randomUUID() + ".*";
+        String pattern2 = "pattern:" + UUID.randomUUID() + ".*";
+
+        // Subscribe to multiple patterns
+        assertDoesNotThrow(
+                () -> jedis.psubscribe(pattern1, pattern2),
+                "PSUBSCRIBE to multiple patterns should complete");
+
+        // Unsubscribe from one pattern
+        assertDoesNotThrow(
+                () -> jedis.punsubscribe(pattern1),
+                "PUNSUBSCRIBE from specific pattern should complete");
+
+        // Unsubscribe from all remaining patterns
+        assertDoesNotThrow(
+                () -> jedis.punsubscribe(new String[0]),
+                "PUNSUBSCRIBE from all patterns should complete");
+
+        // Note: To receive messages via pattern subscriptions, configure the client with
+        // subscription configuration at creation time.
+    }
+
+    @Test
     void send_command_binary_data() {
         String key = UUID.randomUUID().toString();
         byte[] binaryValue = {0x00, 0x01, 0x02, 0x03, (byte) 0xFF};
