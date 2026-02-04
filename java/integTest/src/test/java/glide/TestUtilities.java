@@ -171,8 +171,8 @@ public class TestUtilities {
                 .map(line -> line.split(":", 2))
                 .collect(
                         Collectors.toMap(
-                                parts -> parts[0],
-                                parts -> parts[1],
+                                parts -> parts[0].trim(),
+                                parts -> parts[1].trim(),
                                 (existingValue, newValue) -> newValue,
                                 LinkedHashMap::new));
     }
