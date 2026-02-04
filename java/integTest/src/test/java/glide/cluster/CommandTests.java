@@ -79,6 +79,7 @@ import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.RequestRoutingConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
@@ -169,6 +170,10 @@ public class CommandTests {
                                 GlideClusterClient.createClient(
                                                 commonClusterClientConfig()
                                                         .requestTimeout(7000)
+                                                        .advancedConfiguration(
+                                                                AdvancedGlideClusterClientConfiguration.builder()
+                                                                        .connectionTimeout(10000)
+                                                                        .build())
                                                         .protocol(ProtocolVersion.RESP2)
                                                         .build())
                                         .get())),
@@ -178,6 +183,10 @@ public class CommandTests {
                                 GlideClusterClient.createClient(
                                                 commonClusterClientConfig()
                                                         .requestTimeout(7000)
+                                                        .advancedConfiguration(
+                                                                AdvancedGlideClusterClientConfiguration.builder()
+                                                                        .connectionTimeout(10000)
+                                                                        .build())
                                                         .protocol(ProtocolVersion.RESP3)
                                                         .build())
                                         .get())));
