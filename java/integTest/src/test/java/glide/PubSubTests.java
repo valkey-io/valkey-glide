@@ -9,6 +9,7 @@ import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
+import static glide.utils.Java8Utils.createSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -1783,7 +1784,7 @@ public class PubSubTests {
             String message = "test-message";
 
             // Dynamic subscribe (lazy)
-            Set<String> channels = Set.of(channel);
+            Set<String> channels = createSet(channel);
             listener.subscribe(channels).get();
             Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
@@ -1809,7 +1810,7 @@ public class PubSubTests {
             String message = "test-message";
 
             // Dynamic psubscribe (lazy)
-            Set<String> patterns = Set.of(pattern);
+            Set<String> patterns = createSet(pattern);
             listener.psubscribe(patterns).get();
             Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
@@ -1836,7 +1837,7 @@ public class PubSubTests {
             String message = "test-message";
 
             // Subscribe
-            Set<String> channels = Set.of(channel);
+            Set<String> channels = createSet(channel);
             listener.subscribe(channels).get();
 
             Thread.sleep(MESSAGE_DELIVERY_DELAY);
@@ -1866,7 +1867,7 @@ public class PubSubTests {
             String message = "test-message";
 
             // Dynamic ssubscribe (lazy)
-            Set<String> channels = Set.of(channel);
+            Set<String> channels = createSet(channel);
             listener.ssubscribe(channels).get();
             Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
@@ -1892,7 +1893,7 @@ public class PubSubTests {
             String message = "test-message";
 
             // Subscribe
-            Set<String> channels = Set.of(channel);
+            Set<String> channels = createSet(channel);
             listener.ssubscribe(channels).get();
             Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
@@ -1920,7 +1921,7 @@ public class PubSubTests {
         // Create client with pre-configured subscription
         BaseClient listener;
         if (standalone) {
-            var subConfig =
+            StandaloneSubscriptionConfiguration subConfig =
                     StandaloneSubscriptionConfiguration.builder()
                             .subscription(PubSubChannelMode.EXACT, gs(channel))
                             .build();
@@ -1932,7 +1933,7 @@ public class PubSubTests {
                                             .build())
                             .get();
         } else {
-            var subConfig =
+            ClusterSubscriptionConfiguration subConfig =
                     ClusterSubscriptionConfiguration.builder()
                             .subscription(PubSubClusterChannelMode.EXACT, gs(channel))
                             .build();
@@ -1955,7 +1956,7 @@ public class PubSubTests {
         assertEquals(message, msg.getMessage().getString());
 
         // Now unsubscribe dynamically from the pre-configured subscription
-        Set<String> channels = Set.of(channel);
+        Set<String> channels = createSet(channel);
         listener.unsubscribe(channels).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
@@ -2005,7 +2006,7 @@ public class PubSubTests {
             long initialTimestamp = Long.parseLong(initialStats.get("subscription_last_sync_timestamp"));
 
             // Subscribe to a channel
-            Set<String> channels = Set.of(channel);
+            Set<String> channels = createSet(channel);
             client.subscribe(channels).get();
 
             // Wait for reconciliation
