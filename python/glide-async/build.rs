@@ -5,7 +5,6 @@ use std::path::Path;
 use std::process::Command;
 
 fn main() {
-
     // --- PART 1: Run Protobuf Generation Script ---
     // The script is in the parent directory
     let script_path = Path::new("../dev.py");
@@ -28,11 +27,14 @@ fn main() {
         .expect("Failed to execute python command");
 
     if !status.success() {
-        panic!("Protobuf generation (dev.py) failed with exit code: {:?}", status.code());
+        panic!(
+            "Protobuf generation (dev.py) failed with exit code: {:?}",
+            status.code()
+        );
     }
 
     // --- PART 2: Copy glide-shared ---
-    let source_dir = Path::new("../glide-shared/glide_shared");    
+    let source_dir = Path::new("../glide-shared/glide_shared");
     let dest_dir = Path::new("./python/glide_shared");
     println!("cargo:rerun-if-changed={}", source_dir.display());
 
