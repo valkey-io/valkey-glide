@@ -6,6 +6,7 @@ import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.getRandomString;
 import static glide.TestUtilities.isWindows;
 import static glide.api.BaseClient.OK;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -20,6 +21,7 @@ import glide.api.GlideClusterClient;
 import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -78,8 +80,25 @@ public class SharedClientTests {
     @MethodSource("getClients")
     public void validate_statistics(BaseClient client) {
         assertFalse(client.getStatistics().isEmpty());
-        // we expect 8 items in the statistics map
-        assertEquals(8, client.getStatistics().size());
+        // we expect 10 items in the statistics map
+        assertEquals(10, client.getStatistics().size());
+
+        // Verify all expected keys are present
+        Map<String, String> stats = client.getStatistics();
+        assertTrue(stats.containsKey("total_connections"));
+        assertTrue(stats.containsKey("total_clients"));
+        assertTrue(stats.containsKey("total_values_compressed"));
+        assertTrue(stats.containsKey("total_values_decompressed"));
+        assertTrue(stats.containsKey("total_original_bytes"));
+        assertTrue(stats.containsKey("total_bytes_compressed"));
+        assertTrue(stats.containsKey("total_bytes_decompressed"));
+        assertTrue(stats.containsKey("compression_skipped_count"));
+        assertTrue(stats.containsKey("subscription_out_of_sync_count"));
+        assertTrue(stats.containsKey("subscription_last_sync_timestamp"));
+
+        // Verify subscription metrics are numeric
+        assertDoesNotThrow(() -> Long.parseLong(stats.get("subscription_out_of_sync_count")));
+        assertDoesNotThrow(() -> Long.parseLong(stats.get("subscription_last_sync_timestamp")));
     }
 
     @AfterAll
