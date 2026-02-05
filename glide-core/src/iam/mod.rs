@@ -1074,4 +1074,107 @@ mod tests {
 
         // Stop the refresh task
     }
+
+    #[test]
+    fn test_build_base_url_non_serverless() {
+        let url = build_base_url("my-cluster", "testuser", false);
+        assert_eq!(
+            url,
+            "https://my-cluster/?Action=connect&User=testuser"
+        );
+        assert!(!url.contains("ResourceType"));
+    }
+
+    #[test]
+    fn test_build_base_url_serverless() {
+        let url = build_base_url("my-cluster", "testuser", true);
+        assert_eq!(
+            url,
+            "https://my-cluster/?Action=connect&User=testuser&ResourceType=ServerlessCache"
+        );
+        assert!(url.contains("ResourceType=ServerlessCache"));
+    }
+
+    #[test]
+    fn test_build_base_url_serverless_with_special_characters() {
+        let url = build_base_url("my-cluster", "test@user", true);
+        assert!(url.contains("User=test%40user"));
+        assert!(url.contains("ResourceType=ServerlessCache"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_serverless_includes_resource_type() {
+        initialize_test_environment();
+        setup_test_credentials();
+
+        let cluster_name = "serverless-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+
+        let callback = Arc::new(move |_token: String| {});
+
+        let manager = IAMTokenManager::new(
+            cluster_name.clone(),
+            username.clone(),
+            region.clone(),
+            ServiceType::ElastiCache,
+            None,
+            true, // serverless
+            Some(callback),
+        )
+        .await
+        .unwrap();
+
+        let token = manager.get_token().await;
+
+        // Verify token contains ResourceType=ServerlessCache
+        assert!(
+            token.contains("ResourceType=ServerlessCache"),
+            "Serverless token should contain ResourceType=ServerlessCache, got: {}",
+            token
+        );
+        assert!(
+            token.starts_with(&format!("{}/", cluster_name)),
+            "Token should start with cluster name"
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_non_serverless_does_not_include_resource_type() {
+        initialize_test_environment();
+        setup_test_credentials();
+
+        let cluster_name = "regular-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+
+        let callback = Arc::new(move |_token: String| {});
+
+        let manager = IAMTokenManager::new(
+            cluster_name.clone(),
+            username.clone(),
+            region.clone(),
+            ServiceType::ElastiCache,
+            None,
+            false, // not serverless
+            Some(callback),
+        )
+        .await
+        .unwrap();
+
+        let token = manager.get_token().await;
+
+        // Verify token does NOT contain ResourceType
+        assert!(
+            !token.contains("ResourceType"),
+            "Non-serverless token should not contain ResourceType, got: {}",
+            token
+        );
+        assert!(
+            token.starts_with(&format!("{}/", cluster_name)),
+            "Token should start with cluster name"
+        );
+    }
 }
