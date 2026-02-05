@@ -4,6 +4,7 @@ import pytest
 from glide_shared.config import (
     GlideClientConfiguration,
     IamAuthConfig,
+    NodeAddress,
     ServerCredentials,
     ServiceType,
 )
@@ -180,7 +181,8 @@ class TestServerCredentialsWithIam:
             is_serverless=True,
         )
         config = GlideClientConfiguration(
-            credentials=ServerCredentials(username="user", iam_config=iam_config)
+            [NodeAddress("127.0.0.1")],
+            credentials=ServerCredentials(username="user", iam_config=iam_config),
         )
         request = config._create_a_protobuf_conn_request()
         assert request.authentication_info.iam_credentials.is_serverless is True
