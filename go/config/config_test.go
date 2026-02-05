@@ -253,7 +253,9 @@ func TestServerCredentialsWithIamServerless(t *testing.T) {
 	assert.NotNil(t, creds)
 
 	authInfo := creds.toProtobuf()
-	assert.Nil(t, authInfo.IamCredentials.IsServerless) // nil means false (default)
+	// After protobuf serialization fix, isServerless is always set explicitly
+	assert.NotNil(t, authInfo.IamCredentials.IsServerless)
+	assert.False(t, *authInfo.IamCredentials.IsServerless)
 }
 
 func TestServerCredentialsWithIamServerlessEnabled(t *testing.T) {
