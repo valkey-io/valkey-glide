@@ -1078,10 +1078,7 @@ mod tests {
     #[test]
     fn test_build_base_url_non_serverless() {
         let url = build_base_url("my-cluster", "testuser", false);
-        assert_eq!(
-            url,
-            "https://my-cluster/?Action=connect&User=testuser"
-        );
+        assert_eq!(url, "https://my-cluster/?Action=connect&User=testuser");
         assert!(!url.contains("ResourceType"));
     }
 
