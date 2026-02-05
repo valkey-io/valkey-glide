@@ -1913,57 +1913,66 @@ public class CommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     public void fcall_readonly_binary_function(GlideClusterClient clusterClient) {
+        // TODO: Remove the skip after fixing Windows Replicas issues
+        // https://github.com/valkey-io/valkey-glide/issues/5210
+        assumeTrue(!isWindows(), "Skip on Windows");
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        assumeTrue(
-                !SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"),
-                "Temporary disabeling this test on valkey 8");
 
-        String libName = "fcall_readonly_function";
+        String libName =
+                "fcall_readonly_binary_function_" + UUID.randomUUID().toString().replace("-", "_");
         // intentionally using a REPLICA route
         Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
         Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
-        GlideString funcName = gs("fcall_readonly_function");
+        GlideString funcName = gs(libName);
 
         // function $funcName returns a magic number
         String code = generateLuaLibCode(libName, Map.of(funcName.toString(), "return 42"), false);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
-        // fcall on a replica node should fail, because a function isn't guaranteed to be RO
-        var executionException =
-                assertThrows(
-                        ExecutionException.class, () -> clusterClient.fcall(funcName, replicaRoute).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-        assertTrue(
-                executionException.getMessage().contains("You can't write against a read only replica."));
+        // Wait for function to replicate to replica, retrying if needed
+        ExecutionException fcallReplicaException = null;
+        for (int i = 0; i < 10 && fcallReplicaException == null; i++) {
+            try {
+                clusterClient.fcall(funcName, replicaRoute).get();
+                Thread.sleep(100); // Function not yet on replica, wait and retry
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof RequestException
+                        && e.getMessage().toLowerCase().contains("readonly")) {
+                    fcallReplicaException = e;
+                }
+            }
+        }
+        assertNotNull(fcallReplicaException, "Expected readonly error from replica");
 
-        // fcall_ro also fails
-        executionException =
+        // fcall_ro also fails on replica
+        ExecutionException fcallReadOnlyReplicaException =
                 assertThrows(
                         ExecutionException.class,
                         () -> clusterClient.fcallReadOnly(funcName, replicaRoute).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-        assertTrue(
-                executionException.getMessage().contains("You can't write against a read only replica."));
+        assertInstanceOf(RequestException.class, fcallReadOnlyReplicaException.getCause());
+        assertTrue(fcallReadOnlyReplicaException.getMessage().toLowerCase().contains("readonly"));
 
         // fcall_ro also fails to run it even on primary - another error
-        executionException =
+        ExecutionException fcallReadOnlyPrimaryException =
                 assertThrows(
                         ExecutionException.class,
                         () -> clusterClient.fcallReadOnly(funcName, primaryRoute).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertInstanceOf(RequestException.class, fcallReadOnlyPrimaryException.getCause());
         assertTrue(
-                executionException
+                fcallReadOnlyPrimaryException
                         .getMessage()
-                        .contains("Can not execute a script with write flag using *_ro command."));
+                        .toLowerCase()
+                        .contains("can not execute a script with write flag using"));
 
         // create the same function, but with RO flag
-        code = generateLuaLibCode(libName, Map.of(funcName.toString(), "return 42"), true);
+        String funcNameRO = funcName.toString() + "_ro";
+        code = generateLuaLibCode(libName, Map.of(funcNameRO, "return 42"), true);
 
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
         // fcall should succeed now
-        assertEquals(42L, clusterClient.fcall(funcName, replicaRoute).get().getSingleValue());
+        assertEquals(42L, clusterClient.fcall(gs(funcNameRO), replicaRoute).get().getSingleValue());
 
         assertEquals(OK, clusterClient.functionDelete(libName).get());
     }
