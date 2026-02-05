@@ -754,7 +754,9 @@ class BaseClientConfiguration:
                     iam_config.refresh_interval_seconds
                 )
 
-            request.authentication_info.iam_credentials.is_serverless = iam_config.is_serverless
+            request.authentication_info.iam_credentials.is_serverless = (
+                iam_config.is_serverless
+            )
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
