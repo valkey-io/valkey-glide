@@ -20,6 +20,7 @@ import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.exceptions.RequestException;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -35,6 +36,7 @@ import lombok.SneakyThrows;
 import net.bytebuddy.utility.RandomString;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -258,5 +260,59 @@ public class SharedClientTests {
 
         cleanupClient.close();
         testClient.close();
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_cleanup_mechanism_works() {
+        List<WeakReference<BaseClient>> clientRefs = new ArrayList<>();
+
+        // Create and destroy multiple clients to test cleanup mechanism
+        for (int i = 0; i < 5; i++) {
+            GlideClient standaloneClient = GlideClient.createClient(commonClientConfig().build()).get();
+            GlideClusterClient clusterClient =
+                    GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+
+            clientRefs.add(new WeakReference<>(standaloneClient));
+            clientRefs.add(new WeakReference<>(clusterClient));
+
+            // Do simple operations to ensure clients are working
+            assertEquals(OK, standaloneClient.set("cleanup_test_standalone_" + i, "value").get());
+            assertEquals(OK, clusterClient.set("cleanup_test_cluster_" + i, "value").get());
+
+            // Close clients
+            standaloneClient.close();
+            clusterClient.close();
+
+            // Clear references
+            standaloneClient = null;
+            clusterClient = null;
+        }
+
+        // Force garbage collection multiple times
+        for (int i = 0; i < 5; i++) {
+            System.gc();
+            Thread.sleep(100);
+        }
+
+        // Wait for cleanup thread to process PhantomReferences
+        Thread.sleep(1000);
+
+        // Check that clients were garbage collected
+        int collected = 0;
+        for (WeakReference<BaseClient> ref : clientRefs) {
+            if (ref.get() == null) {
+                collected++;
+            }
+        }
+
+        // At least 70% should be collected (allowing for GC timing variations)
+        assertTrue(
+                collected >= clientRefs.size() * 0.7,
+                "Cleanup mechanism may not be working properly. Only "
+                        + collected
+                        + "/"
+                        + clientRefs.size()
+                        + " clients were garbage collected");
     }
 }
