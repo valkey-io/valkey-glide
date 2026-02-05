@@ -227,10 +227,8 @@ public class ConnectionManager {
                                     iamBuilder.setRefreshIntervalSeconds(iamConfig.getRefreshIntervalSeconds());
                                 }
 
-                                // Set is_serverless flag for serverless ElastiCache
-                                if (iamConfig.isServerless()) {
-                                    iamBuilder.setIsServerless(true);
-                                }
+                                // Always set is_serverless flag explicitly for consistent protobuf serialization
+                                iamBuilder.setIsServerless(iamConfig.isServerless());
 
                                 authBuilder.setIamCredentials(iamBuilder.build());
                             }

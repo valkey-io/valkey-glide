@@ -480,19 +480,16 @@ impl Drop for IAMTokenManager {
 /// When `is_serverless` is true, the URL includes `ResourceType=ServerlessCache`
 /// as required by AWS serverless ElastiCache.
 fn build_base_url(hostname: &str, username: &str, is_serverless: bool) -> String {
-    if is_serverless {
-        format!(
-            "https://{}/?Action=connect&User={}&ResourceType=ServerlessCache",
-            hostname,
-            urlencoding::encode(username)
-        )
+    let encoded_username = urlencoding::encode(username);
+    let resource_type_suffix = if is_serverless {
+        "&ResourceType=ServerlessCache"
     } else {
-        format!(
-            "https://{}/?Action=connect&User={}",
-            hostname,
-            urlencoding::encode(username)
-        )
-    }
+        ""
+    };
+    format!(
+        "https://{}/?Action=connect&User={}{}",
+        hostname, encoded_username, resource_type_suffix
+    )
 }
 
 /// Remove `http://` or `https://` scheme from a URL string.

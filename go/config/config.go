@@ -100,10 +100,8 @@ func (config *IamAuthConfig) toProtobuf() *protobuf.IamCredentials {
 		iamCreds.RefreshIntervalSeconds = config.refreshIntervalSeconds
 	}
 
-	if config.isServerless {
-		isServerless := true
-		iamCreds.IsServerless = &isServerless
-	}
+	// Always set isServerless explicitly for consistent protobuf serialization
+	iamCreds.IsServerless = &config.isServerless
 
 	return iamCreds
 }
