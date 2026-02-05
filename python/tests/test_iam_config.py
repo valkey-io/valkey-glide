@@ -1,9 +1,13 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import pytest
-from glide_shared.config import IamAuthConfig, ServerCredentials, ServiceType
+from glide_shared.config import (
+    GlideClientConfiguration,
+    IamAuthConfig,
+    ServerCredentials,
+    ServiceType,
+)
 from glide_shared.exceptions import ConfigurationError
-from glide_sync.config import GlideClientConfiguration
 
 
 class TestIamAuthConfig:
