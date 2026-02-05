@@ -754,7 +754,6 @@ class BaseClientConfiguration:
                     iam_config.refresh_interval_seconds
                 )
 
-            # Always set is_serverless flag explicitly for consistent protobuf serialization
             request.authentication_info.iam_credentials.is_serverless = iam_config.is_serverless
 
     def _create_a_protobuf_conn_request(

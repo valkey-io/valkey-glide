@@ -227,7 +227,6 @@ public class ConnectionManager {
                                     iamBuilder.setRefreshIntervalSeconds(iamConfig.getRefreshIntervalSeconds());
                                 }
 
-                                // Always set is_serverless flag explicitly for consistent protobuf serialization
                                 iamBuilder.setIsServerless(iamConfig.isServerless());
 
                                 authBuilder.setIamCredentials(iamBuilder.build());
