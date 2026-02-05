@@ -20,6 +20,7 @@
 * Python: Move OpenTelemetry config classes to glide_shared for code reuse between async and sync clients
 * JAVA: Add dynamic PubSub methods (subscribe, psubscribe, unsubscribe, punsubscribe, ssubscribe, sunsubscribe), getSubscriptions() for subscription state tracking, pubsubReconciliationIntervalMs configuration option, and subscription_out_of_sync_count and subscription_last_sync_timestamp metrics ([#5267](https://github.com/valkey-io/valkey-glide/issues/5267))
 * Go: Add ALLOW_NON_COVERED_SLOTS flag support for cluster scan ([#4895](https://github.com/valkey-io/valkey-glide/issues/4895))
+* All Clients: Add serverless ElastiCache support to IAM authentication with `is_serverless` parameter ([#5248](https://github.com/valkey-io/valkey-glide/issues/5248))
 
 #### Fixes
 * Node: Fix to handle non-string types in toBuffersArray ([#4842](https://github.com/valkey-io/valkey-glide/issues/4842))
