@@ -2978,6 +2978,16 @@ describe("GlideClusterClient", () => {
                     );
 
                     expect(replica_received_gets).toBe(true);
+
+                    // Verify total GET calls
+                    const total_get_calls = Object.values(info_result)
+                        .filter((info) => info.includes("cmdstat_get:calls="))
+                        .reduce((sum, info) => {
+                            const match = info.match(/cmdstat_get:calls=(\d+)/);
+                            return sum + (match ? parseInt(match[1]) : 0);
+                        }, 0);
+
+                    expect(total_get_calls).toBe(get_calls);
                 } finally {
                     client?.close();
                 }

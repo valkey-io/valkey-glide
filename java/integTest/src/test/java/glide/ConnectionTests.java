@@ -439,6 +439,10 @@ public class ConnectionTests {
     public void test_all_nodes_routes_to_primary_and_replicas() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
 
+        int nGetCalls = 4;
+        String getCmdstat = String.format("cmdstat_get:calls=%d", nGetCalls);
+        int slot = 12182; // slot for key "foo"
+
         GlideClusterClient client =
                 GlideClusterClient.createClient(
                                 commonClusterClientConfig()
@@ -448,7 +452,7 @@ public class ConnectionTests {
                         .get();
         assertEquals(client.configResetStat(ALL_NODES).get(), OK);
 
-        int nGetCalls = 100;
+        // Execute GET commands for key "foo"
         for (int i = 0; i < nGetCalls; i++) {
             client.get("foo").get();
         }
@@ -457,21 +461,59 @@ public class ConnectionTests {
                 client.info(new InfoOptions.Section[] {InfoOptions.Section.ALL}, ALL_NODES).get();
         Map<String, String> infoData = infoResult.getMultiValue();
 
-        long nodesWithGets =
-                infoData.values().stream().filter(value -> value.contains("cmdstat_get:calls=")).count();
-        assertTrue(nodesWithGets > 1, "ALL_NODES should route to multiple nodes");
+        // Get replica count for the slot that handles key "foo"
+        var clusterInfo =
+                client
+                        .customCommand(
+                                new String[] {"INFO", "REPLICATION"},
+                                new RequestRoutingConfiguration.SlotKeyRoute("foo", PRIMARY))
+                        .get();
+        long nReplicas =
+                Long.parseLong(
+                        Stream.of(((String) clusterInfo.getSingleValue()).split("\\R"))
+                                .map(line -> line.split(":", 2))
+                                .filter(parts -> parts.length == 2 && parts[0].trim().equals("connected_slaves"))
+                                .map(parts -> parts[1].trim())
+                                .findFirst()
+                                .get());
 
-        boolean primaryReceivedGets =
+        // Count nodes that received GET calls
+        long nodesWithCalls =
                 infoData.values().stream()
-                        .anyMatch(
-                                value -> value.contains("role:master") && value.contains("cmdstat_get:calls="));
-        assertTrue(primaryReceivedGets, "ALL_NODES should route to primary");
+                        .filter(value -> value.contains("cmdstat_get:calls="))
+                        .count();
 
-        boolean replicaReceivedGets =
+        // Verify that primary + replicas for this slot received calls (slot-based routing)
+        assertEquals(nReplicas + 1, nodesWithCalls, 
+                "ALL_NODES should route to primary and all replicas for the slot. Expected " + 
+                (nReplicas + 1) + " nodes, got " + nodesWithCalls);
+
+        // Verify both primary and replicas received calls
+        long primaryCalls =
                 infoData.values().stream()
-                        .anyMatch(
-                                value -> value.contains("role:slave") && value.contains("cmdstat_get:calls="));
-        assertTrue(replicaReceivedGets, "ALL_NODES should route to replicas");
+                        .filter(value -> value.contains("cmdstat_get:calls=") && value.contains("role:master"))
+                        .count();
+        long replicaCalls =
+                infoData.values().stream()
+                        .filter(value -> value.contains("cmdstat_get:calls=") && value.contains("role:slave"))
+                        .count();
+
+        assertTrue(primaryCalls > 0, "Primary should receive calls with ALL_NODES strategy");
+        assertTrue(replicaCalls > 0, "Replicas should receive calls with ALL_NODES strategy");
+
+        // Verify total GET calls
+        long totalGetCalls =
+                infoData.values().stream()
+                        .filter(value -> value.contains("cmdstat_get:calls="))
+                        .mapToInt(
+                                value -> {
+                                    int startIndex =
+                                            value.indexOf("cmdstat_get:calls=") + "cmdstat_get:calls=".length();
+                                    int endIndex = value.indexOf(",", startIndex);
+                                    return Integer.parseInt(value.substring(startIndex, endIndex));
+                                })
+                        .sum();
+        assertEquals(nGetCalls, totalGetCalls, "Total GET calls mismatch");
 
         client.close();
     }

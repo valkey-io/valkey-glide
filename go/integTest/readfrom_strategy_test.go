@@ -329,6 +329,7 @@ func (suite *GlideTestSuite) TestAllNodesRoutesToPrimaryAndReplicas() {
 	nodesWithGets := 0
 	primaryReceivedGets := false
 	replicaReceivedGets := false
+	totalGetCalls := 0
 
 	for _, value := range infoResult.MultiValue() {
 		if strings.Contains(value, "cmdstat_get:calls=") {
@@ -339,10 +340,20 @@ func (suite *GlideTestSuite) TestAllNodesRoutesToPrimaryAndReplicas() {
 			if strings.Contains(value, "role:slave") {
 				replicaReceivedGets = true
 			}
+			startIndex := strings.Index(value, "cmdstat_get:calls=") + len("cmdstat_get:calls=")
+			endIndex := strings.Index(value[startIndex:], ",")
+			if endIndex == -1 {
+				endIndex = len(value[startIndex:])
+			}
+			endIndex += startIndex
+			calls, err := strconv.Atoi(value[startIndex:endIndex])
+			assert.NoError(suite.T(), err)
+			totalGetCalls += calls
 		}
 	}
 
 	assert.Greater(suite.T(), nodesWithGets, 1)
 	assert.True(suite.T(), primaryReceivedGets)
 	assert.True(suite.T(), replicaReceivedGets)
+	assert.Equal(suite.T(), nGetCalls, totalGetCalls)
 }

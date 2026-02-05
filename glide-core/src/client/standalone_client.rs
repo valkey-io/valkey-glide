@@ -25,6 +25,9 @@ enum ReadFrom {
     PreferReplica {
         latest_read_replica_index: Arc<AtomicUsize>,
     },
+    AllNodes {
+        latest_read_node_index: Arc<AtomicUsize>,
+    },
     AZAffinity {
         client_az: String,
         last_read_replica_index: Arc<AtomicUsize>,
@@ -338,6 +341,35 @@ impl StandaloneClient {
         }
     }
 
+    fn round_robin_read_from_all_nodes(
+        &self,
+        latest_read_node_index: &Arc<AtomicUsize>,
+    ) -> &ReconnectingConnection {
+        let initial_index = latest_read_node_index.load(Ordering::Relaxed);
+        let mut check_count = 0;
+        loop {
+            check_count += 1;
+
+            // Looped through all nodes, no connected node was found.
+            if check_count > self.inner.nodes.len() {
+                return self.get_primary_connection();
+            }
+            let index = (initial_index + check_count) % self.inner.nodes.len();
+            let Some(connection) = self.inner.nodes.get(index) else {
+                continue;
+            };
+            if connection.is_connected() {
+                let _ = latest_read_node_index.compare_exchange_weak(
+                    initial_index,
+                    index,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                );
+                return connection;
+            }
+        }
+    }
+
     async fn round_robin_read_from_replica_az_awareness(
         &self,
         latest_read_replica_index: &Arc<AtomicUsize>,
@@ -434,6 +466,9 @@ impl StandaloneClient {
             ReadFrom::PreferReplica {
                 latest_read_replica_index,
             } => self.round_robin_read_from_replica(latest_read_replica_index),
+            ReadFrom::AllNodes {
+                latest_read_node_index,
+            } => self.round_robin_read_from_all_nodes(latest_read_node_index),
             ReadFrom::AZAffinity {
                 client_az,
                 last_read_replica_index,
@@ -757,8 +792,8 @@ fn get_read_from(read_from: Option<super::ReadFrom>) -> ReadFrom {
         Some(super::ReadFrom::PreferReplica) => ReadFrom::PreferReplica {
             latest_read_replica_index: Default::default(),
         },
-        Some(super::ReadFrom::AllNodes) => ReadFrom::PreferReplica {
-            latest_read_replica_index: Default::default(),
+        Some(super::ReadFrom::AllNodes) => ReadFrom::AllNodes {
+            latest_read_node_index: Default::default(),
         },
         Some(super::ReadFrom::AZAffinity(az)) => ReadFrom::AZAffinity {
             client_az: az,
