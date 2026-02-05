@@ -258,6 +258,9 @@ class IamAuthConfig:
         region (str): The AWS region where the ElastiCache/MemoryDB cluster is located.
         refresh_interval_seconds (Optional[int]): Optional refresh interval in seconds for renewing IAM authentication tokens.
             If not provided, the core will use a default value of 300 seconds (5 min).
+        is_serverless (bool): Whether this is a serverless ElastiCache cluster. When True, presigned URLs
+            include `ResourceType=ServerlessCache` as required by AWS serverless ElastiCache.
+            Defaults to False for backward compatibility.
     """
 
     def __init__(
@@ -266,11 +269,13 @@ class IamAuthConfig:
         service: ServiceType,
         region: str,
         refresh_interval_seconds: Optional[int] = None,
+        is_serverless: bool = False,
     ):
         self.cluster_name = cluster_name
         self.service = service
         self.region = region
         self.refresh_interval_seconds = refresh_interval_seconds
+        self.is_serverless = is_serverless
 
 
 class ServerCredentials:
@@ -748,6 +753,10 @@ class BaseClientConfiguration:
                 request.authentication_info.iam_credentials.refresh_interval_seconds = (
                     iam_config.refresh_interval_seconds
                 )
+
+            # Set is_serverless flag
+            if iam_config.is_serverless:
+                request.authentication_info.iam_credentials.is_serverless = True
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
