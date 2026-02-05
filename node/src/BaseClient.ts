@@ -551,6 +551,12 @@ export interface IamAuthConfig {
      * If not provided, defaults to 300 seconds (5 min).
      */
     refreshIntervalSeconds?: number;
+    /**
+     * Whether this is a serverless ElastiCache cluster. When true, presigned URLs
+     * include `ResourceType=ServerlessCache` as required by AWS serverless ElastiCache.
+     * Defaults to false for backward compatibility.
+     */
+    isServerless?: boolean;
 }
 
 /** Represents the credentials for connecting to a server. */
@@ -9159,6 +9165,8 @@ export class BaseClient {
                         // leave undefined if not provided (optional field)
                         refreshIntervalSeconds:
                             creds.iamConfig.refreshIntervalSeconds,
+                        // set is_serverless for serverless ElastiCache clusters
+                        isServerless: creds.iamConfig.isServerless,
                     },
                 );
 
