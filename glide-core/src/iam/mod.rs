@@ -574,7 +574,13 @@ mod tests {
         username: &str,
         service_type: ServiceType,
     ) -> IamTokenState {
-        create_test_state_with_serverless(region, cluster_name, username, service_type, NOT_SERVERLESS)
+        create_test_state_with_serverless(
+            region,
+            cluster_name,
+            username,
+            service_type,
+            NOT_SERVERLESS,
+        )
     }
 
     /// Helper function to create IAMTokenState for testing with serverless option
