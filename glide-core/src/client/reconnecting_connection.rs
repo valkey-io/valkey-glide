@@ -20,7 +20,7 @@ use tokio::task;
 use tokio::time::timeout;
 use tokio_retry2::{Retry, RetryError};
 
-use super::{DEFAULT_CONNECTION_TIMEOUT, run_with_timeout};
+use super::{run_with_timeout, types::DEFAULT_CONNECTION_TIMEOUT};
 
 const WRITE_LOCK_ERR: &str = "Failed to acquire the write lock";
 const READ_LOCK_ERR: &str = "Failed to acquire the read lock";
@@ -158,7 +158,8 @@ async fn create_connection(
                     redis::ErrorKind::AuthenticationFailed
                         | redis::ErrorKind::InvalidClientConfig
                         | redis::ErrorKind::RESP3NotSupported
-                ) || e.to_string().contains("NOAUTH");
+                ) || e.to_string().contains("NOAUTH")
+                    || e.to_string().contains("WRONGPASS");
                 if is_permanent {
                     RetryError::permanent(e)
                 } else {

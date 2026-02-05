@@ -281,7 +281,7 @@ enum RequestType {
     AclLoad                        = 1107;
     AclLog                         = 1108;
     AclSave                        = 1109;
-    AclSetSser                     = 1110;
+    AclSetUser                     = 1110;
     AclUsers                       = 1111;
     AclWhoami                      = 1112;
     BgRewriteAof                   = 1113;

@@ -10,7 +10,7 @@ use crate::{
     cluster_client::ClusterParams,
     ErrorKind, RedisError, RedisResult,
 };
-use std::net::SocketAddr;
+use std::net::{Ipv6Addr, SocketAddr};
 
 use futures::prelude::*;
 use futures_util::{future::BoxFuture, join};
@@ -484,13 +484,19 @@ where
 }
 
 /// Splits a string address into host and port. If the passed address cannot be parsed, None is returned.
-/// [addr] should be in the following format: "<host>:<port>".
-pub(crate) fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
-    let parts: Vec<&str> = addr.split(':').collect();
-    if parts.len() != 2 {
-        return None;
-    }
-    let host = parts.first().unwrap();
-    let port = parts.get(1).unwrap();
-    port.parse::<u16>().ok().map(|port| (*host, port))
+/// [addr] should be in one of the following formats:
+/// - IPv4/hostname: "<host>:<port>" (e.g., "127.0.0.1:6379")
+/// - IPv6 bracketed: "[<ipv6>]:<port>" (e.g., "[2001:db8::1]:6379")
+pub fn get_host_and_port_from_addr(addr: &str) -> Option<(&str, u16)> {
+    let (host, port_str) = addr.rsplit_once(':')?;
+    let port = port_str.parse::<u16>().ok()?;
+    let host = if host.starts_with('[') && host.ends_with(']') {
+        let inner = host.strip_prefix('[').unwrap().strip_suffix(']').unwrap();
+        inner.parse::<Ipv6Addr>().ok()?;
+        inner
+    } else {
+        host
+    };
+
+    Some((host, port))
 }

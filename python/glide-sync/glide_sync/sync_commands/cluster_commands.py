@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Union, cast
+from typing import Dict, List, Mapping, Optional, Set, Union, cast
 
 from glide_shared.commands.batch import ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
@@ -1456,3 +1456,33 @@ class ClusterCommands(CoreCommands):
                 allow_non_covered_slots=allow_non_covered_slots,
             ),
         )
+
+    def ssubscribe(self, channels: Set[str], timeout_ms: int = 0) -> None:
+        """Subscribe to sharded channels (blocking)."""
+        if timeout_ms < 0:
+            raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
+        args: List[Union[str, bytes]] = cast(
+            List[Union[str, bytes]], list(channels) + [str(timeout_ms)]
+        )
+        self._execute_command(RequestType.SSubscribeBlocking, args)
+
+    def sunsubscribe(
+        self, channels: Optional[Set[str]] = None, timeout_ms: int = 0
+    ) -> None:
+        """
+        Unsubscribe from sharded channels (blocking).
+
+        Args:
+            channels: A set of sharded channel names to unsubscribe from.
+                    If None or ALL_SHARDED_CHANNELS, unsubscribes from all
+                    sharded channels.
+            timeout_ms: Maximum time in milliseconds to wait for server
+                    confirmation. A value of 0 blocks indefinitely.
+        """
+        if timeout_ms < 0:
+            raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
+        args: List[Union[str, bytes]] = cast(
+            List[Union[str, bytes]],
+            (list(channels) if channels else []) + [str(timeout_ms)],
+        )
+        self._execute_command(RequestType.SUnsubscribeBlocking, args)

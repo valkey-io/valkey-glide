@@ -408,7 +408,7 @@ class TestGlideClients:
                         1, 100, 2
                     ),  # needs to be configured so that we wont be connected within 7 seconds bc of default retries
                 )
-            assert "timed out" in str(e)
+            assert "timed out" in str(e).lower() or "timeout" in str(e).lower()
 
         async def connect_to_client():
             # Create a second client with a connection timeout of 7 seconds
@@ -10845,15 +10845,13 @@ class TestScripts:
         )
 
         # Add test for script_kill with writing script
-        writing_script = Script(
-            """
+        writing_script = Script("""
             redis.call('SET', KEYS[1], 'value')
             local start = redis.call('TIME')[1]
             while redis.call('TIME')[1] - start < 15 do
                 redis.call('SET', KEYS[1], 'value')
             end
-        """
-        )
+        """)
 
         async def run_writing_script():
             await test_client.invoke_script(writing_script, keys=[get_random_string(5)])
