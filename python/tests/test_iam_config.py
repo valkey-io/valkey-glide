@@ -1,8 +1,21 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import pytest
-from glide_shared.config import IamAuthConfig, ServerCredentials, ServiceType
+from glide_shared.config import (
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+    IamAuthConfig,
+    NodeAddress,
+    ServerCredentials,
+    ServiceType,
+)
 from glide_shared.exceptions import ConfigurationError
+from glide_shared.protobuf.connection_request_pb2 import (
+    ConnectionRequest,
+)
+from glide_shared.protobuf.connection_request_pb2 import (
+    ServiceType as ProtobufServiceType,
+)
 
 
 class TestIamAuthConfig:
@@ -18,6 +31,7 @@ class TestIamAuthConfig:
         assert iam_config.service == ServiceType.ELASTICACHE
         assert iam_config.region == "us-east-1"
         assert iam_config.refresh_interval_seconds is None  # Core will use default
+        assert iam_config.is_serverless is False  # Default to non-serverless
 
     def test_iam_auth_config_memorydb(self):
         """Test IAM config creation for MemoryDB."""
@@ -29,6 +43,7 @@ class TestIamAuthConfig:
 
         assert iam_config.service == ServiceType.MEMORYDB
         assert iam_config.region == "us-west-2"
+        assert iam_config.is_serverless is False  # Default to non-serverless
 
     def test_iam_auth_config_custom_refresh(self):
         """Test IAM config with custom refresh interval."""
@@ -40,6 +55,7 @@ class TestIamAuthConfig:
         )
 
         assert iam_config.refresh_interval_seconds == 600
+        assert iam_config.is_serverless is False  # Default to non-serverless
 
     def test_iam_auth_config_serverless(self):
         """Test IAM config with serverless flag for ElastiCache Serverless."""
@@ -78,6 +94,7 @@ class TestServerCredentialsWithIam:
         assert credentials.username == "myUser"
         assert credentials.password is None
         assert credentials.iam_config is not None
+        assert credentials.iam_config.is_serverless is False
         assert credentials.is_iam_auth() is True
 
     def test_server_credentials_password_only(self):
@@ -139,3 +156,103 @@ class TestServerCredentialsWithIam:
             ServerCredentials(username="myUser")
 
         assert "Either password or iam_config must be provided" in str(exc_info.value)
+
+
+class TestIamConfigProtobufIntegration:
+    """Tests that verify IAM config is properly serialized to protobuf."""
+
+    def test_iam_serverless_true_in_protobuf(self):
+        """Test that is_serverless=True is properly passed to protobuf."""
+        iam_config = IamAuthConfig(
+            cluster_name="my-serverless-cache",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            is_serverless=True,
+        )
+        credentials = ServerCredentials(username="myUser", iam_config=iam_config)
+
+        config = GlideClientConfiguration(
+            [NodeAddress("127.0.0.1")],
+            credentials=credentials,
+            use_tls=True,
+        )
+        request = config._create_a_protobuf_conn_request()
+
+        assert isinstance(request, ConnectionRequest)
+        assert request.authentication_info.iam_credentials.is_serverless is True
+        assert (
+            request.authentication_info.iam_credentials.cluster_name
+            == "my-serverless-cache"
+        )
+        assert (
+            request.authentication_info.iam_credentials.service_type
+            == ProtobufServiceType.ELASTICACHE
+        )
+        assert request.authentication_info.iam_credentials.region == "us-east-1"
+
+    def test_iam_serverless_false_in_protobuf(self):
+        """Test that is_serverless=False (default) is properly passed to protobuf."""
+        iam_config = IamAuthConfig(
+            cluster_name="my-cluster",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            is_serverless=False,
+        )
+        credentials = ServerCredentials(username="myUser", iam_config=iam_config)
+
+        config = GlideClientConfiguration(
+            [NodeAddress("127.0.0.1")],
+            credentials=credentials,
+            use_tls=True,
+        )
+        request = config._create_a_protobuf_conn_request()
+
+        assert isinstance(request, ConnectionRequest)
+        assert request.authentication_info.iam_credentials.is_serverless is False
+
+    def test_iam_serverless_default_in_protobuf(self):
+        """Test that is_serverless defaults to False in protobuf when not specified."""
+        iam_config = IamAuthConfig(
+            cluster_name="my-cluster",
+            service=ServiceType.MEMORYDB,
+            region="us-west-2",
+        )
+        credentials = ServerCredentials(username="myUser", iam_config=iam_config)
+
+        config = GlideClusterClientConfiguration(
+            [NodeAddress("127.0.0.1")],
+            credentials=credentials,
+            use_tls=True,
+        )
+        request = config._create_a_protobuf_conn_request(cluster_mode=True)
+
+        assert isinstance(request, ConnectionRequest)
+        assert request.authentication_info.iam_credentials.is_serverless is False
+        assert (
+            request.authentication_info.iam_credentials.service_type
+            == ProtobufServiceType.MEMORYDB
+        )
+
+    def test_iam_serverless_with_refresh_interval_in_protobuf(self):
+        """Test that is_serverless works correctly with custom refresh interval."""
+        iam_config = IamAuthConfig(
+            cluster_name="my-serverless-cache",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            refresh_interval_seconds=120,
+            is_serverless=True,
+        )
+        credentials = ServerCredentials(username="myUser", iam_config=iam_config)
+
+        config = GlideClusterClientConfiguration(
+            [NodeAddress("127.0.0.1")],
+            credentials=credentials,
+            use_tls=True,
+        )
+        request = config._create_a_protobuf_conn_request(cluster_mode=True)
+
+        assert isinstance(request, ConnectionRequest)
+        assert request.authentication_info.iam_credentials.is_serverless is True
+        assert (
+            request.authentication_info.iam_credentials.refresh_interval_seconds == 120
+        )

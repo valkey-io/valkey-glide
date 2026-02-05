@@ -26,6 +26,7 @@ import {
     isGlideRecord,
     MAX_REQUEST_ARGS_LEN,
     RequestError,
+    ServiceType,
     SlotKeyTypes,
     TimeUnit,
 } from "../build-ts";
@@ -669,6 +670,58 @@ describe("SocketConnectionInternals", () => {
             {
                 addresses: [{ host: "foo" }],
                 credentials: { username, password },
+            },
+        );
+        closeTestResources(connection, server, socket);
+    });
+
+    it("should pass IAM config with isServerless true", async () => {
+        const { connection, server, socket } = await getConnectionAndSocket(
+            (request: connection_request.ConnectionRequest) =>
+                request.authenticationInfo?.iamCredentials?.clusterName ===
+                    "my-serverless-cache" &&
+                request.authenticationInfo?.iamCredentials?.isServerless ===
+                    true &&
+                request.authenticationInfo?.iamCredentials?.region ===
+                    "us-east-1" &&
+                request.authenticationInfo?.iamCredentials?.serviceType ===
+                    connection_request.ServiceType.ELASTICACHE,
+            {
+                addresses: [{ host: "foo" }],
+                credentials: {
+                    username: "myUser",
+                    iamConfig: {
+                        clusterName: "my-serverless-cache",
+                        service: ServiceType.Elasticache,
+                        region: "us-east-1",
+                        isServerless: true,
+                    },
+                },
+            },
+        );
+        closeTestResources(connection, server, socket);
+    });
+
+    it("should pass IAM config with isServerless false (default)", async () => {
+        const { connection, server, socket } = await getConnectionAndSocket(
+            (request: connection_request.ConnectionRequest) =>
+                request.authenticationInfo?.iamCredentials?.clusterName ===
+                    "my-cluster" &&
+                request.authenticationInfo?.iamCredentials?.isServerless ===
+                    false &&
+                request.authenticationInfo?.iamCredentials?.serviceType ===
+                    connection_request.ServiceType.MEMORYDB,
+            {
+                addresses: [{ host: "foo" }],
+                credentials: {
+                    username: "myUser",
+                    iamConfig: {
+                        clusterName: "my-cluster",
+                        service: ServiceType.MemoryDB,
+                        region: "us-west-2",
+                        isServerless: false,
+                    },
+                },
             },
         );
         closeTestResources(connection, server, socket);
