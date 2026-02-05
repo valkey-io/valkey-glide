@@ -3,6 +3,7 @@
 import pytest
 from glide_shared.config import IamAuthConfig, ServerCredentials, ServiceType
 from glide_shared.exceptions import ConfigurationError
+from glide_sync.config import GlideClientConfiguration
 
 
 class TestIamAuthConfig:
@@ -165,3 +166,17 @@ class TestServerCredentialsWithIam:
             ServerCredentials(username="myUser")
 
         assert "Either password or iam_config must be provided" in str(exc_info.value)
+
+    def test_iam_auth_config_serverless_protobuf_serialization(self):
+        """Test that is_serverless is correctly serialized to protobuf."""
+        iam_config = IamAuthConfig(
+            cluster_name="serverless-cluster",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            is_serverless=True,
+        )
+        config = GlideClientConfiguration(
+            credentials=ServerCredentials(username="user", iam_config=iam_config)
+        )
+        request = config._create_a_protobuf_conn_request()
+        assert request.authentication_info.iam_credentials.is_serverless is True

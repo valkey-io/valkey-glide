@@ -641,4 +641,23 @@ describeIamTests("IAM Auth: Elasticache Cluster", () => {
 
         await client.close();
     });
+
+    it("test_iam_config_serverless_default", () => {
+        const iamConfig: IamAuthConfig = {
+            clusterName: "my-cluster",
+            service: ServiceType.Elasticache,
+            region: "us-east-1",
+        };
+        expect(iamConfig.isServerless).toBeUndefined();
+    });
+
+    it("test_iam_config_serverless_enabled", () => {
+        const iamConfig: IamAuthConfig = {
+            clusterName: "serverless-cluster",
+            service: ServiceType.Elasticache,
+            region: "us-east-1",
+            isServerless: true,
+        };
+        expect(iamConfig.isServerless).toBe(true);
+    });
 });
