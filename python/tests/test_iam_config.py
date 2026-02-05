@@ -41,6 +41,54 @@ class TestIamAuthConfig:
 
         assert iam_config.refresh_interval_seconds == 600
 
+    def test_iam_auth_config_serverless_default_false(self):
+        """Test IAM config defaults is_serverless to False."""
+        iam_config = IamAuthConfig(
+            cluster_name="my-cluster",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+        )
+
+        assert iam_config.is_serverless is False
+
+    def test_iam_auth_config_serverless_true(self):
+        """Test IAM config with is_serverless set to True."""
+        iam_config = IamAuthConfig(
+            cluster_name="serverless-cluster",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            is_serverless=True,
+        )
+
+        assert iam_config.is_serverless is True
+
+    def test_iam_auth_config_serverless_false_explicit(self):
+        """Test IAM config with is_serverless explicitly set to False."""
+        iam_config = IamAuthConfig(
+            cluster_name="my-cluster",
+            service=ServiceType.ELASTICACHE,
+            region="us-east-1",
+            is_serverless=False,
+        )
+
+        assert iam_config.is_serverless is False
+
+    def test_iam_auth_config_all_options(self):
+        """Test IAM config with all options including is_serverless."""
+        iam_config = IamAuthConfig(
+            cluster_name="serverless-cluster",
+            service=ServiceType.ELASTICACHE,
+            region="us-west-2",
+            refresh_interval_seconds=300,
+            is_serverless=True,
+        )
+
+        assert iam_config.cluster_name == "serverless-cluster"
+        assert iam_config.service == ServiceType.ELASTICACHE
+        assert iam_config.region == "us-west-2"
+        assert iam_config.refresh_interval_seconds == 300
+        assert iam_config.is_serverless is True
+
 
 class TestServerCredentialsWithIam:
     def test_server_credentials_with_iam(self):
