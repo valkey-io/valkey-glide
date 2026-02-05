@@ -15,6 +15,7 @@ import lombok.NonNull;
  *     .service(ServiceType.ELASTICACHE)
  *     .region("us-east-1")
  *     .refreshIntervalSeconds(300)
+ *     .isServerless(true)
  *     .build();
  * }</pre>
  */
@@ -35,4 +36,11 @@ public class IamAuthConfig {
      * defaults to 300 seconds (5 min).
      */
     private final Integer refreshIntervalSeconds;
+
+    /**
+     * Whether this is a serverless ElastiCache cluster. When true, presigned URLs include {@code
+     * ResourceType=ServerlessCache} as required by AWS serverless ElastiCache. Defaults to false for
+     * backward compatibility.
+     */
+    @Builder.Default private final boolean isServerless = false;
 }
