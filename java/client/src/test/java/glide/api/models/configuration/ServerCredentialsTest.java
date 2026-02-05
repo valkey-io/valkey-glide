@@ -140,23 +140,23 @@ public class ServerCredentialsTest {
     @Test
     public void testIamConfigServerlessDefault() {
         IamAuthConfig iamConfig =
-            IamAuthConfig.builder()
-                .clusterName("my-cluster")
-                .service(ServiceType.ELASTICACHE)
-                .region("us-east-1")
-                .build();
+                IamAuthConfig.builder()
+                        .clusterName("my-cluster")
+                        .service(ServiceType.ELASTICACHE)
+                        .region("us-east-1")
+                        .build();
         assertFalse(iamConfig.isServerless());
     }
 
     @Test
     public void testIamConfigServerlessEnabled() {
         IamAuthConfig iamConfig =
-            IamAuthConfig.builder()
-                .clusterName("serverless-cluster")
-                .service(ServiceType.ELASTICACHE)
-                .region("us-east-1")
-                .isServerless(true)
-                .build();
+                IamAuthConfig.builder()
+                        .clusterName("serverless-cluster")
+                        .service(ServiceType.ELASTICACHE)
+                        .region("us-east-1")
+                        .isServerless(true)
+                        .build();
         assertTrue(iamConfig.isServerless());
     }
 }
