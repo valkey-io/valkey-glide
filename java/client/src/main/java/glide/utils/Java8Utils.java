@@ -287,6 +287,28 @@ public class Java8Utils {
         return Arrays.asList(elements);
     }
 
+    /**
+     * Repeats a string n times. Java 8 compatible alternative to String.repeat() (Java 11+).
+     *
+     * @param str the string to repeat
+     * @param count the number of times to repeat
+     * @return the repeated string
+     * @throws IllegalArgumentException if count is negative
+     */
+    public static String repeat(String str, int count) {
+        if (count < 0) {
+            throw new IllegalArgumentException("count is negative: " + count);
+        }
+        if (count == 0 || str.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(str.length() * count);
+        for (int i = 0; i < count; i++) {
+            sb.append(str);
+        }
+        return sb.toString();
+    }
+
     private Java8Utils() {
         // Utility class, prevent instantiation
     }
