@@ -28,6 +28,7 @@
 * Python: Fix Sphinx docs build failure with duplicate object warnings  ([#5163](https://github.com/valkey-io/valkey-glide/issues/5163))
 * Java: Restore shading and relocation of protobuf ([#5031](https://github.com/valkey-io/valkey-glide/pull/5031))
 * CORE: Remove DEFAULT_CLIENT_CREATION_TIMEOUT and honor user-provided connection timeout by centralizing timeout logic in ConnectionRequest ([#5183](https://github.com/valkey-io/valkey-glide/issues/5183))
+* Java: Fix ClusterValue to handle single-node Map results correctly ([#4963](https://github.com/valkey-io/valkey-glide/issues/4963), [#5257](https://github.com/valkey-io/valkey-glide/pull/5257))
 
 #### Operational Enhancements
 * Docs: Add missing references to windows-x86_64 classifier ([#5028](https://github.com/valkey-io/valkey-glide/pull/5028))
