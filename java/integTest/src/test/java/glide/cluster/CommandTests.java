@@ -42,6 +42,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.REPLICA;
+import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -114,33 +115,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 public class CommandTests {
 
     private static final String INITIAL_VALUE = "VALUE";
-
-    // Helper method to create a map with 2 entries (Java 8 compatible)
-    private static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2) {
-        Map<K, V> map = new HashMap<>();
-        map.put(k1, v1);
-        map.put(k2, v2);
-        return map;
-    }
-
-    // Helper method to create a map with 3 entries (Java 8 compatible)
-    private static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3) {
-        Map<K, V> map = new HashMap<>();
-        map.put(k1, v1);
-        map.put(k2, v2);
-        map.put(k3, v3);
-        return map;
-    }
-
-    // Helper method to create a map with 4 entries (Java 8 compatible)
-    private static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4) {
-        Map<K, V> map = new HashMap<>();
-        map.put(k1, v1);
-        map.put(k2, v2);
-        map.put(k3, v3);
-        map.put(k4, v4);
-        return map;
-    }
 
     public static final List<String> DEFAULT_INFO_SECTIONS =
             Arrays.asList(

@@ -188,6 +188,41 @@ public class Java8Utils {
     }
 
     /**
+     * Creates a HashMap with seven key-value pairs. Java 8 compatible alternative to Map.of() (Java
+     * 9+).
+     *
+     * @param <K> the type of keys
+     * @param <V> the type of values
+     * @param k1 the first key
+     * @param v1 the first value
+     * @param k2 the second key
+     * @param v2 the second value
+     * @param k3 the third key
+     * @param v3 the third value
+     * @param k4 the fourth key
+     * @param v4 the fourth value
+     * @param k5 the fifth key
+     * @param v5 the fifth value
+     * @param k6 the sixth key
+     * @param v6 the sixth value
+     * @param k7 the seventh key
+     * @param v7 the seventh value
+     * @return a HashMap containing the key-value pairs
+     */
+    public static <K, V> Map<K, V> createMap(
+            K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6, K k7, V v7) {
+        Map<K, V> map = new HashMap<>();
+        map.put(k1, v1);
+        map.put(k2, v2);
+        map.put(k3, v3);
+        map.put(k4, v4);
+        map.put(k5, v5);
+        map.put(k6, v6);
+        map.put(k7, v7);
+        return map;
+    }
+
+    /**
      * Creates a singleton set. Java 8 compatible alternative to Set.of() (Java 9+).
      *
      * @param <T> the type of element

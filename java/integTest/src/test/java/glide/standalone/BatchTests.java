@@ -1,7 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
-import static glide.BatchTestUtilities.*;
 import static glide.Java8Compat.repeat;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
@@ -17,6 +16,7 @@ import static glide.api.models.commands.scan.ScanOptions.ObjectType.SET;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.STREAM;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.STRING;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.ZSET;
+import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

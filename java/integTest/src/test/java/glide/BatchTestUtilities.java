@@ -10,6 +10,8 @@ import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.ScoreFilter.MIN;
+import static glide.utils.Java8Utils.createMap;
+import static glide.utils.Java8Utils.createSet;
 
 import glide.api.models.BaseBatch;
 import glide.api.models.commands.ExpireOptions;
@@ -61,7 +63,6 @@ import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BiFunction;
@@ -69,91 +70,6 @@ import java.util.stream.Stream;
 import org.junit.jupiter.params.provider.Arguments;
 
 public class BatchTestUtilities {
-
-    public static <K, V> Map<K, V> createMap() {
-        return new HashMap<>();
-    }
-
-    public static <K, V> Map<K, V> createMap(K k1, V v1) {
-        Map<K, V> map = new HashMap<>();
-        map.put(k1, v1);
-        return map;
-    }
-
-    public static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2) {
-        Map<K, V> map = new HashMap<>();
-        map.put(k1, v1);
-        map.put(k2, v2);
-        return map;
-    }
-
-    public static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3) {
-        Map<K, V> map = new HashMap<>();
-        map.put(k1, v1);
-        map.put(k2, v2);
-        map.put(k3, v3);
-        return map;
-    }
-
-    public static <K, V> Map<K, V> createMap(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4) {
-        Map<K, V> map = new HashMap<>();
-        map.put(k1, v1);
-        map.put(k2, v2);
-        map.put(k3, v3);
-        map.put(k4, v4);
-        return map;
-    }
-
-    public static <K, V> Map<K, V> createMap(
-            K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5) {
-        Map<K, V> map = new HashMap<>();
-        map.put(k1, v1);
-        map.put(k2, v2);
-        map.put(k3, v3);
-        map.put(k4, v4);
-        map.put(k5, v5);
-        return map;
-    }
-
-    public static <K, V> Map<K, V> createMap(
-            K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6) {
-        Map<K, V> map = new HashMap<>();
-        map.put(k1, v1);
-        map.put(k2, v2);
-        map.put(k3, v3);
-        map.put(k4, v4);
-        map.put(k5, v5);
-        map.put(k6, v6);
-        return map;
-    }
-
-    public static <K, V> Map<K, V> createMap(
-            K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5, K k6, V v6, K k7, V v7) {
-        Map<K, V> map = new HashMap<>();
-        map.put(k1, v1);
-        map.put(k2, v2);
-        map.put(k3, v3);
-        map.put(k4, v4);
-        map.put(k5, v5);
-        map.put(k6, v6);
-        map.put(k7, v7);
-        return map;
-    }
-
-    public static <T> Set<T> createSet(T v1, T v2) {
-        Set<T> set = new java.util.HashSet<>();
-        set.add(v1);
-        set.add(v2);
-        return set;
-    }
-
-    public static <T> Set<T> createSet(T v1, T v2, T v3) {
-        Set<T> set = new java.util.HashSet<>();
-        set.add(v1);
-        set.add(v2);
-        set.add(v3);
-        return set;
-    }
 
     private static final int KEY_SUFFIX_LENGTH = 6;
     private static final String value1 = "value1-" + generateRandomNumericSuffix();
