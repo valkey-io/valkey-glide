@@ -36,6 +36,8 @@ message IamCredentials {
     string region = 2;
     ServiceType service_type = 3;
     optional uint32 refresh_interval_seconds = 4;
+    // Set to true for serverless ElastiCache clusters to include ResourceType=ServerlessCache in presigned URLs
+    optional bool is_serverless = 5;
 }
 
 enum ProtocolVersion {

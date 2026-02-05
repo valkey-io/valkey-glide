@@ -151,6 +151,8 @@ struct IamTokenState {
     refresh_interval_seconds: u32,
     /// Cached AWS credentials used to sign tokens (resolved once in `new()`).
     credentials: aws_credential_types::Credentials,
+    /// Whether this is a serverless ElastiCache cluster
+    is_serverless: bool,
 }
 
 /// IAM-based token manager for ElastiCache/MemoryDB.
@@ -200,6 +202,8 @@ impl IAMTokenManager {
     /// * `refresh_interval_seconds` - Optional refresh interval in seconds. Defaults to 5 minutes (300 seconds).
     ///   Maximum allowed is 12 hours (43200 seconds). Values above 15 minutes (900 seconds) will log a warning
     ///   about potential performance consequences.
+    /// * `is_serverless` - Whether this is a serverless ElastiCache cluster. When true, presigned URLs
+    ///   include `ResourceType=ServerlessCache`. Defaults to false.
     /// * `token_refresh_callback` - Optional callback to be called when the token is refreshed
     pub async fn new(
         cluster_name: String,
@@ -207,6 +211,7 @@ impl IAMTokenManager {
         region: String,
         service_type: ServiceType,
         refresh_interval_seconds: Option<u32>,
+        is_serverless: bool,
         token_refresh_callback: Option<Arc<dyn Fn(String) + Send + Sync>>,
     ) -> Result<Self, GlideIAMError> {
         let validated_refresh_interval = validate_refresh_interval(refresh_interval_seconds)?;
@@ -220,6 +225,7 @@ impl IAMTokenManager {
             refresh_interval_seconds: validated_refresh_interval
                 .unwrap_or(DEFAULT_REFRESH_INTERVAL_SECONDS),
             credentials: creds,
+            is_serverless,
         };
 
         // Generate initial token using the state
@@ -400,7 +406,7 @@ impl IAMTokenManager {
         let service_name: &'static str = state.service_type.into();
         let signing_time = SystemTime::now();
         let hostname = state.cluster_name.clone();
-        let base_url = build_base_url(&hostname, &state.username);
+        let base_url = build_base_url(&hostname, &state.username, state.is_serverless);
         let identity_value = state.credentials.clone().into();
 
         let mut signing_settings = SigningSettings::default();
@@ -465,12 +471,28 @@ impl Drop for IAMTokenManager {
 }
 
 /// Build the presign base URL for the target host and user.
-fn build_base_url(hostname: &str, username: &str) -> String {
-    format!(
-        "https://{}/?Action=connect&User={}",
-        hostname,
-        urlencoding::encode(username)
-    )
+///
+/// # Arguments
+/// * `hostname` - The cluster hostname
+/// * `username` - The username for authentication
+/// * `is_serverless` - Whether this is a serverless ElastiCache cluster
+///
+/// When `is_serverless` is true, the URL includes `ResourceType=ServerlessCache`
+/// as required by AWS serverless ElastiCache.
+fn build_base_url(hostname: &str, username: &str, is_serverless: bool) -> String {
+    if is_serverless {
+        format!(
+            "https://{}/?Action=connect&User={}&ResourceType=ServerlessCache",
+            hostname,
+            urlencoding::encode(username)
+        )
+    } else {
+        format!(
+            "https://{}/?Action=connect&User={}",
+            hostname,
+            urlencoding::encode(username)
+        )
+    }
 }
 
 /// Remove `http://` or `https://` scheme from a URL string.
@@ -551,6 +573,17 @@ mod tests {
         username: &str,
         service_type: ServiceType,
     ) -> IamTokenState {
+        create_test_state_with_serverless(region, cluster_name, username, service_type, false)
+    }
+
+    /// Helper function to create IAMTokenState for testing with serverless option
+    fn create_test_state_with_serverless(
+        region: &str,
+        cluster_name: &str,
+        username: &str,
+        service_type: ServiceType,
+        is_serverless: bool,
+    ) -> IamTokenState {
         // Create mock credentials for testing
         let credentials = aws_credential_types::Credentials::new(
             "test_access_key",
@@ -567,6 +600,7 @@ mod tests {
             service_type,
             refresh_interval_seconds: DEFAULT_REFRESH_INTERVAL_SECONDS,
             credentials,
+            is_serverless,
         }
     }
 
@@ -605,6 +639,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             Some(2), // 2 second refresh interval for fast testing
+            false,   // not serverless
             Some(callback),
         )
         .await
@@ -661,6 +696,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             None,
+            false, // not serverless
             Some(callback),
         )
         .await
@@ -699,6 +735,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
+            false, // not serverless
             Some(callback),
         )
         .await;
@@ -743,6 +780,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             None,
+            false, // not serverless
             Some(callback),
         )
         .await
@@ -777,6 +815,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
+            false, // not serverless
             Some(callback),
         )
         .await
@@ -838,6 +877,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             Some(1), // 1 minute refresh interval for faster testing
+            false,   // not serverless
             Some(callback),
         )
         .await
@@ -884,6 +924,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 Some(interval),
+                false, // not serverless
                 Some(create_test_callback()),
             )
             .await;
@@ -903,6 +944,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 Some(interval),
+                false, // not serverless
                 Some(create_test_callback()),
             )
             .await;
@@ -946,6 +988,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             Some(REFRESH_TIME_SECONDS),
+            false, // not serverless
             Some(create_test_callback()),
         )
         .await
