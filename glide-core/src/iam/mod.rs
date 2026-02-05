@@ -636,7 +636,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             Some(2), // 2 second refresh interval for fast testing
-            false,   // not serverless
+            false
             Some(callback),
         )
         .await
@@ -693,7 +693,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             None,
-            false, // not serverless
+            false
             Some(callback),
         )
         .await
@@ -732,7 +732,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
-            false, // not serverless
+            false
             Some(callback),
         )
         .await;
@@ -777,7 +777,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             None,
-            false, // not serverless
+            false
             Some(callback),
         )
         .await
@@ -812,7 +812,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
-            false, // not serverless
+            false
             Some(callback),
         )
         .await
@@ -874,7 +874,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             Some(1), // 1 minute refresh interval for faster testing
-            false,   // not serverless
+            false
             Some(callback),
         )
         .await
@@ -921,7 +921,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 Some(interval),
-                false, // not serverless
+                false
                 Some(create_test_callback()),
             )
             .await;
@@ -941,7 +941,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 Some(interval),
-                false, // not serverless
+                false
                 Some(create_test_callback()),
             )
             .await;
@@ -985,7 +985,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             Some(REFRESH_TIME_SECONDS),
-            false, // not serverless
+            false
             Some(create_test_callback()),
         )
         .await
@@ -1152,7 +1152,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
-            false, // not serverless
+            false
             Some(callback),
         )
         .await
