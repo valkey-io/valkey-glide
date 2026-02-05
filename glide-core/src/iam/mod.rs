@@ -513,6 +513,10 @@ mod tests {
 
     const IAM_TOKENS_JSON: &str = "/tmp/iam_tokens.json";
 
+    // Serverless ElastiCache configuration constants for tests
+    const IS_SERVERLESS: bool = true;
+    const NOT_SERVERLESS: bool = false;
+
     // This ensures the file is deleted once before all tests
     static INIT: Once = Once::new();
 
@@ -570,7 +574,7 @@ mod tests {
         username: &str,
         service_type: ServiceType,
     ) -> IamTokenState {
-        create_test_state_with_serverless(region, cluster_name, username, service_type, false)
+        create_test_state_with_serverless(region, cluster_name, username, service_type, NOT_SERVERLESS)
     }
 
     /// Helper function to create IAMTokenState for testing with serverless option
@@ -636,7 +640,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             Some(2), // 2 second refresh interval for fast testing
-            false,
+            NOT_SERVERLESS,
             Some(callback),
         )
         .await
@@ -693,7 +697,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             None,
-            false,
+            NOT_SERVERLESS,
             Some(callback),
         )
         .await
@@ -732,7 +736,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
-            false,
+            NOT_SERVERLESS,
             Some(callback),
         )
         .await;
@@ -777,7 +781,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             None,
-            false,
+            NOT_SERVERLESS,
             Some(callback),
         )
         .await
@@ -812,7 +816,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
-            false,
+            NOT_SERVERLESS,
             Some(callback),
         )
         .await
@@ -874,7 +878,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             Some(1), // 1 minute refresh interval for faster testing
-            false,
+            NOT_SERVERLESS,
             Some(callback),
         )
         .await
@@ -921,7 +925,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 Some(interval),
-                false,
+                NOT_SERVERLESS,
                 Some(create_test_callback()),
             )
             .await;
@@ -941,7 +945,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 Some(interval),
-                false,
+                NOT_SERVERLESS,
                 Some(create_test_callback()),
             )
             .await;
@@ -985,7 +989,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             Some(REFRESH_TIME_SECONDS),
-            false,
+            NOT_SERVERLESS,
             Some(create_test_callback()),
         )
         .await
@@ -1114,7 +1118,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
-            true, // serverless
+            IS_SERVERLESS,
             Some(callback),
         )
         .await
@@ -1152,7 +1156,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
-            false,
+            NOT_SERVERLESS,
             Some(callback),
         )
         .await
