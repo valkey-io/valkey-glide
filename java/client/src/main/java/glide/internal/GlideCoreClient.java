@@ -39,6 +39,10 @@ public class GlideCoreClient implements AutoCloseable {
                                     break;
                                 } catch (Exception e) {
                                     // Log but don't stop cleanup thread
+                                    glide.api.logging.Logger.log(
+                                            glide.api.logging.Logger.Level.WARN,
+                                            "GlideCoreClient-Cleanup",
+                                            "Error in cleanup thread: " + e.getMessage());
                                 }
                             }
                         },
