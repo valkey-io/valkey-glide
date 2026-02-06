@@ -375,12 +375,14 @@ jobs:
             - name: Start standalone Valkey server
               working-directory: utils
               id: port
+              shell: bash
               run: |
                   PORT=$(python3 ./cluster_manager.py start -r 0 2>&1 | grep CLUSTER_NODES | cut -d = -f 2 | cut -d , -f 1 | cut -d : -f 2)
                   echo "PORT=$PORT" >> $GITHUB_OUTPUT
 
             - name: Test deployment
               working-directory: java
+              shell: bash
               env:
                   PORT: ${{ steps.port.outputs.PORT }}
               run: |
