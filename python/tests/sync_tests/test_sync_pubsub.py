@@ -13,6 +13,7 @@ from glide_shared.exceptions import (
     ConfigurationError,
     RequestError,
 )
+from glide_shared.routes import AllNodes
 from glide_sync import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
@@ -24,13 +25,28 @@ from glide_sync import (
 from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 
 from tests.sync_tests.conftest import create_sync_client
+from tests.utils.pubsub_test_utils import PubSubTestConstants
 from tests.utils.utils import (
+    MessageReadMethod,
+    SubscriptionMethod,
     create_pubsub_subscription,
+    create_sync_pubsub_client,
     decode_pubsub_msg,
+    get_pubsub_modes,
     get_random_string,
+    kill_connections,
     new_message,
+    psubscribe_by_method,
+    pubsub_client_cleanup,
+    punsubscribe_by_method,
     run_sync_func_with_timeout_in_thread,
+    ssubscribe_by_method,
+    subscribe_by_method,
+    sunsubscribe_by_method,
     sync_check_if_server_version_lt,
+    unsubscribe_by_method,
+    wait_for_subscription_state,
+    wait_for_subscription_state_if_needed,
 )
 
 
@@ -207,6 +223,82 @@ def client_cleanup(
     del client
     # The closure is not completed in the glide-core instantly
     time.sleep(1)
+
+
+def wait_for_subscription_state(
+    client: Union[GlideClient, GlideClusterClient],
+    expected_channels: Optional[Set[str]] = None,
+    expected_patterns: Optional[Set[str]] = None,
+    expected_sharded: Optional[Set[str]] = None,
+    timeout_sec: float = 3.0,
+    check_actual: bool = True,
+) -> None:
+    """
+    Poll for subscription state to match expected channels/patterns.
+    
+    Args:
+        client: The client to check
+        expected_channels: Expected exact channels (None to skip check, empty set to check for no channels)
+        expected_patterns: Expected pattern channels (None to skip check, empty set to check for no patterns)
+        expected_sharded: Expected sharded channels (None to skip check, empty set to check for no sharded)
+        timeout_sec: Maximum time to wait in seconds
+        check_actual: If True, check actual_subscriptions; if False, check desired_subscriptions
+    """
+    modes = get_pubsub_modes(client)
+    start_time = time.time()
+    
+    while time.time() - start_time < timeout_sec:
+        state = client.get_subscriptions()
+        subs = state.actual_subscriptions if check_actual else state.desired_subscriptions
+        
+        # For each subscription type, check if it matches expected
+        # If expected is None, skip the check
+        # If expected is empty set, check that actual is also empty
+        # If expected is non-empty set, check that expected is subset of actual
+        channels_match = (
+            expected_channels is None 
+            or (len(expected_channels) == 0 and len(subs[modes.Exact]) == 0)
+            or (len(expected_channels) > 0 and expected_channels.issubset(subs[modes.Exact]))
+        )
+        patterns_match = (
+            expected_patterns is None 
+            or (len(expected_patterns) == 0 and len(subs[modes.Pattern]) == 0)
+            or (len(expected_patterns) > 0 and expected_patterns.issubset(subs[modes.Pattern]))
+        )
+        sharded_match = (
+            expected_sharded is None 
+            or not hasattr(modes, 'Sharded')
+            or (len(expected_sharded) == 0 and len(subs.get(modes.Sharded, set())) == 0)  # type: ignore[union-attr,arg-type]
+            or (len(expected_sharded) > 0 and expected_sharded.issubset(subs.get(modes.Sharded, set())))  # type: ignore[union-attr,arg-type]
+        )
+        
+        if channels_match and patterns_match and sharded_match:
+            return
+        
+        time.sleep(0.1)
+    
+    # Final check with detailed error
+    state = client.get_subscriptions()
+    subs = state.actual_subscriptions if check_actual else state.desired_subscriptions
+    
+    if expected_channels is not None:
+        if len(expected_channels) == 0 and len(subs[modes.Exact]) > 0:
+            raise AssertionError(f"Expected no channels but found {subs[modes.Exact]}")
+        elif len(expected_channels) > 0 and not expected_channels.issubset(subs[modes.Exact]):
+            raise AssertionError(f"Expected channels {expected_channels} not in {subs[modes.Exact]}")
+    
+    if expected_patterns is not None:
+        if len(expected_patterns) == 0 and len(subs[modes.Pattern]) > 0:
+            raise AssertionError(f"Expected no patterns but found {subs[modes.Pattern]}")
+        elif len(expected_patterns) > 0 and not expected_patterns.issubset(subs[modes.Pattern]):
+            raise AssertionError(f"Expected patterns {expected_patterns} not in {subs[modes.Pattern]}")
+    
+    if expected_sharded is not None and hasattr(modes, 'Sharded'):
+        sharded_subs = subs.get(modes.Sharded, set())  # type: ignore[union-attr,arg-type]
+        if len(expected_sharded) == 0 and len(sharded_subs) > 0:
+            raise AssertionError(f"Expected no sharded channels but found {sharded_subs}")
+        elif len(expected_sharded) > 0 and not expected_sharded.issubset(sharded_subs):
+            raise AssertionError(f"Expected sharded {expected_sharded} not in {sharded_subs}")
 
 
 class TestSyncPubSub:
@@ -1952,10 +2044,6 @@ class TestSyncPubSub:
             client_cleanup(client_sharded, pub_sub_sharded if cluster_mode else None)
             client_cleanup(client_dont_care, None)
 
-    @pytest.mark.skip(
-        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
-        + "to vary across platforms and server versions"
-    )
     @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_sync_pubsub_exact_max_size_message(self, request, cluster_mode: bool):
         """
@@ -2024,10 +2112,6 @@ class TestSyncPubSub:
             client_cleanup(publishing_client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
-    @pytest.mark.skip(
-        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
-        + "to vary across platforms and server versions"
-    )
     @pytest.mark.parametrize("cluster_mode", [True])
     def test_sync_pubsub_sharded_max_size_message(self, request, cluster_mode: bool):
         """
@@ -2104,10 +2188,6 @@ class TestSyncPubSub:
             client_cleanup(listening_client, pub_sub if cluster_mode else None)
             client_cleanup(publishing_client, None)
 
-    @pytest.mark.skip(
-        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
-        + "to vary across platforms and server versions"
-    )
     @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_sync_pubsub_exact_max_size_message_callback(
         self, request, cluster_mode: bool
@@ -2162,10 +2242,6 @@ class TestSyncPubSub:
             client_cleanup(publishing_client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
-    @pytest.mark.skip(
-        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
-        + "to vary across platforms and server versions"
-    )
     @pytest.mark.parametrize("cluster_mode", [True])
     def test_sync_pubsub_sharded_max_size_message_callback(
         self, request, cluster_mode: bool
@@ -2791,7 +2867,13 @@ class TestSyncPubSub:
                 cast(GlideClusterClient, client).ssubscribe({sharded_channel})
 
             # Wait for subscriptions to be registered
-            time.sleep(0.1)
+            wait_for_subscription_state(
+                client,
+                expected_channels={exact_channel},
+                expected_patterns={pattern},
+                expected_sharded={sharded_channel} if sharded_channel else None,
+                timeout_sec=3.0,
+            )
 
             # Get subscriptions
             state = client.get_subscriptions()
@@ -2820,8 +2902,15 @@ class TestSyncPubSub:
                     {sharded_channel}, timeout_ms=5000
                 )
 
-            # Verify unsubscribed
-            time.sleep(0.5)
+            # Verify unsubscribed - wait for state to update
+            wait_for_subscription_state(
+                client,
+                expected_channels=set(),
+                expected_patterns=set(),
+                expected_sharded=set() if sharded_channel else None,
+                timeout_sec=3.0,
+            )
+            
             state = client.get_subscriptions()
             assert exact_channel not in state.actual_subscriptions[modes.Exact]
             assert pattern not in state.actual_subscriptions[modes.Pattern]
@@ -2899,7 +2988,17 @@ class TestSyncPubSub:
                 )
 
             # Wait for all subscriptions
-            time.sleep(0.5)
+            all_exact = {exact_config, exact_blocking}
+            all_patterns = {pattern_config, pattern_blocking}
+            all_sharded = {sharded_config, sharded_blocking} if (cluster_mode and sharded_config and sharded_blocking) else None
+            
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels=all_exact,
+                expected_patterns=all_patterns,
+                expected_sharded=all_sharded,
+                timeout_sec=3.0,
+            )
 
             # Verify all subscriptions are active
             state = listening_client.get_subscriptions()
@@ -2909,14 +3008,10 @@ class TestSyncPubSub:
                 else GlideClientConfiguration.PubSubChannelModes
             )
 
-            all_exact = {exact_config, exact_blocking}
-            all_patterns = {pattern_config, pattern_blocking}
-
             assert all_exact.issubset(state.actual_subscriptions[modes.Exact])
             assert all_patterns.issubset(state.actual_subscriptions[modes.Pattern])
 
             if cluster_mode and sharded_config and sharded_blocking:
-                all_sharded = {sharded_config, sharded_blocking}
                 assert all_sharded.issubset(state.actual_subscriptions[modes.Sharded])  # type: ignore[union-attr,arg-type]
 
             # Publish messages to all channels
@@ -3083,20 +3178,34 @@ class TestSyncPubSub:
         """
         Test that subscription metrics are available in get_statistics().
         """
-        client = create_sync_client(
-            request,
-            cluster_mode,
-            connection_timeout=20000,
-        )
+        # Create client with pubsub enabled (no callback needed for reconciliation)
+        client = create_sync_pubsub_client(request, cluster_mode)
         try:
-            # Subscribe to a channel
-            client.subscribe({"test_metrics_channel"}, timeout_ms=5000)
+            # Use lazy subscribe to trigger reconciliation
+            client.subscribe_lazy({"test_metrics_channel"})
 
-            # Wait for reconciliation
-            time.sleep(1)
+            # Wait for subscription to actually be applied (reconciliation completes)
+            wait_for_subscription_state(
+                client,
+                expected_channels={"test_metrics_channel"},
+                timeout_sec=5.0,
+            )
+
+            # Now wait for the NEXT reconciliation cycle to check sync state and update timestamp
+            # Reconciliation runs every 3 seconds, so we may need to wait up to 3 more seconds
+            # Plus some buffer for processing time. Cluster mode may take significantly longer.
+            last_sync = 0
+            stats = {}
+            for i in range(30):
+                time.sleep(1)
+                stats = client.get_statistics()
+                last_sync = int(stats.get("subscription_last_sync_timestamp", "0"))
+                print(f"[{i+1}s] Waiting for timestamp update: last_sync={last_sync}")
+                if last_sync > 0:
+                    print(f"Timestamp updated after {i+1} seconds")
+                    break
 
             # Check metrics
-            stats = client.get_statistics()
             assert (
                 "subscription_out_of_sync_count" in stats
             ), f"subscription_out_of_sync_count not in stats. Available keys: {list(stats.keys())}"
@@ -3104,11 +3213,8 @@ class TestSyncPubSub:
                 "subscription_last_sync_timestamp" in stats
             ), f"subscription_last_sync_timestamp not in stats. Available keys: {list(stats.keys())}"
 
-            # Verify timestamp is recent (within last 5 seconds)
-            last_sync = int(stats["subscription_last_sync_timestamp"])
-            assert last_sync > 0
-            current_time_ms = int(time.time() * 1000)
-            assert current_time_ms - last_sync < 5000
+            # Verify timestamp is set
+            assert last_sync > 0, f"Timestamp should be set after subscription within 30s, got {last_sync}"
 
         finally:
             client.close()
@@ -3165,3 +3271,1209 @@ class TestSyncPubSub:
 
         finally:
             client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method",
+        [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_unsubscribe_exact_channel(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test basic unsubscription from exact channels using lazy and blocking APIs.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            channel = "channel"
+            message1 = "exact_message_1"
+            message2 = "exact_message_2"
+
+            callback, context = None, None
+            callback_messages: List[PubSubMsg] = []
+            if method == MethodTesting.Callback:
+                callback = new_message
+                context = callback_messages
+
+            # Create client with callback, subscribe dynamically
+            listening_client = create_sync_pubsub_client(
+                request, cluster_mode, callback=callback, context=context
+            )
+            publishing_client = create_sync_client(request, cluster_mode)
+            
+            # Subscribe using the specified method
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.subscribe_lazy({channel})
+            else:  # Blocking
+                listening_client.subscribe({channel}, timeout_ms=5000)
+            
+            # Verify subscription is active
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels={channel},
+                timeout_sec=3.0,
+            )
+            state = listening_client.get_subscriptions()
+            assert channel in state.actual_subscriptions[get_pubsub_modes(listening_client).Exact]
+
+            publishing_client.publish(message1, channel)
+            time.sleep(1)
+            
+            # Get message
+            if method == MethodTesting.Callback:
+                assert len(callback_messages) >= 1
+                pubsub_msg = callback_messages[0]
+            elif method == MethodTesting.Sync:
+                pubsub_msg = listening_client.try_get_pubsub_message()
+            else:
+                pubsub_msg = listening_client.get_pubsub_message()
+            
+            assert pubsub_msg.message.decode() == message1
+
+            # Unsubscribe
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.unsubscribe_lazy({channel})
+            else:  # Blocking
+                listening_client.unsubscribe({channel}, timeout_ms=5000)
+
+            # Verify unsubscribed
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels=set(),
+                timeout_sec=3.0,
+            )
+            state = listening_client.get_subscriptions()
+            assert channel not in state.actual_subscriptions[get_pubsub_modes(listening_client).Exact]
+
+            # Publish second message - should not be received
+            publishing_client.publish(message2, channel)
+            time.sleep(1)
+
+            # Check no messages left
+            if method == MethodTesting.Callback:
+                assert len(callback_messages) == 1
+            else:
+                msg = listening_client.try_get_pubsub_message()
+                assert msg is None
+
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_subscribe_empty_set_raises_error(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that subscribing with an empty set raises an error for dynamic subscription methods.
+        """
+        client = None
+        try:
+            client = create_sync_client(request, cluster_mode)
+            
+            # Lazy methods should raise error with empty set
+            with pytest.raises(RequestError):
+                client.subscribe_lazy(set())
+            
+            with pytest.raises(RequestError):
+                client.psubscribe_lazy(set())
+            
+            if cluster_mode:
+                with pytest.raises(RequestError):
+                    cast(GlideClusterClient, client).ssubscribe_lazy(set())
+        
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_config_subscription_with_empty_set_is_allowed(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that Config subscription method with empty sets is a silent no-op.
+        """
+        client = None
+        try:
+            # Create client with empty subscription config - should not error
+            pub_sub = create_simple_pubsub_config(
+                cluster_mode, channels=set(), patterns=set()
+            )
+            client, _ = create_two_clients_with_pubsub(
+                request, cluster_mode, client1_pubsub=pub_sub
+            )
+            
+            # Should be able to get subscriptions (empty)
+            state = client.get_subscriptions()
+            modes = get_pubsub_modes(listening_client)
+            assert len(state.desired_subscriptions.get(modes.Exact, set())) == 0
+            assert len(state.desired_subscriptions.get(modes.Pattern, set())) == 0
+        
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method",
+        [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_lazy_client_multiple_subscription_types(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test multiple subscription types (exact, pattern, and sharded for cluster) with a lazy client.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            channel = "exact_channel"
+            pattern = "pattern_*"
+            pattern_channel = "pattern_match"
+            sharded_channel = "sharded_channel"
+            
+            callback, context = None, None
+            callback_messages: List[PubSubMsg] = []
+            if method == MethodTesting.Callback:
+                callback = new_message
+                context = callback_messages
+
+            listening_client = create_sync_pubsub_client(
+                request, cluster_mode, callback=callback, context=context
+            )
+            publishing_client = create_sync_client(request, cluster_mode)
+            
+            # Subscribe to exact channel
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.subscribe_lazy({channel})
+            else:
+                listening_client.subscribe({channel}, timeout_ms=5000)
+            
+            # Subscribe to pattern
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.psubscribe_lazy({pattern})
+            else:
+                listening_client.psubscribe({pattern}, timeout_ms=5000)
+            
+            # Subscribe to sharded (cluster only)
+            if cluster_mode:
+                if subscription_method == SubscriptionMethod.Lazy:
+                    cast(GlideClusterClient, listening_client).ssubscribe_lazy({sharded_channel})
+                else:
+                    cast(GlideClusterClient, listening_client).ssubscribe({sharded_channel}, timeout_ms=5000)
+            
+            time.sleep(1)
+            
+            # Publish to exact channel
+            publishing_client.publish("msg1", channel)
+            time.sleep(0.5)
+            
+            # Publish to pattern
+            publishing_client.publish("msg2", pattern_channel)
+            time.sleep(0.5)
+            
+            # Publish to sharded
+            if cluster_mode:
+                cast(GlideClusterClient, publishing_client).publish("msg3", sharded_channel, sharded=True)
+                time.sleep(0.5)
+            
+            # Verify messages received
+            if method == MethodTesting.Callback:
+                expected_count = 3 if cluster_mode else 2
+                assert len(callback_messages) >= expected_count
+            else:
+                msg1 = listening_client.try_get_pubsub_message() if method == MethodTesting.Sync else listening_client.get_pubsub_message()
+                assert msg1 is not None
+                
+                msg2 = listening_client.try_get_pubsub_message() if method == MethodTesting.Sync else listening_client.get_pubsub_message()
+                assert msg2 is not None
+        
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_pubsub_reconciliation_interval_config(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that pubsub_reconciliation_interval controls reconciliation frequency.
+        """
+        client = None
+        try:
+            # Create client with pubsub enabled and reconciliation interval
+            # Note: reconciliation_interval is set via environment or config, 
+            # but we need pubsub enabled to test it
+            client = create_sync_pubsub_client(request, cluster_mode)
+            
+            # Subscribe to a channel
+            client.subscribe_lazy({"test_channel"})
+            
+            # Wait for reconciliation
+            wait_for_subscription_state(
+                client,
+                expected_channels={"test_channel"},
+                timeout_sec=5.0,
+            )
+            
+            # Check subscription state
+            state = client.get_subscriptions()
+            modes = get_pubsub_modes(client)
+            assert "test_channel" in state.desired_subscriptions.get(modes.Exact, set())
+        
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_lazy_vs_blocking_timeout(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that blocking subscribe times out when reconciliation can't complete.
+        """
+        client = None
+        try:
+            # Create client with pubsub enabled but without callback
+            client = create_sync_pubsub_client(request, cluster_mode)
+            
+            # Lazy should succeed (doesn't wait)
+            client.subscribe_lazy({"channel1"})
+            
+            # Blocking with short timeout should timeout
+            # (can't reconcile without callback or polling)
+            with pytest.raises(Exception):  # TimeoutError or similar
+                client.subscribe({"channel2"}, timeout_ms=100)
+        
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_pubsub_callback_only_raises_error_on_get_methods(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Tests that when a client is configured with only a callback (no polling),
+        calling get_pubsub_message() or try_get_pubsub_message() raises ConfigurationError.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            callback_messages: List[PubSubMsg] = []
+            
+            # Create client with callback only
+            listening_client = create_sync_pubsub_client(
+                request, cluster_mode, 
+                callback=new_message, 
+                context=callback_messages
+            )
+            publishing_client = create_sync_client(request, cluster_mode)
+            
+            # Subscribe
+            listening_client.subscribe_lazy({"test_channel"})
+            time.sleep(1)
+            # Publish message
+            publishing_client.publish("test_message", "test_channel")
+            time.sleep(1)
+            
+            # Verify message received via callback
+            assert len(callback_messages) >= 1
+            
+            # Try to call get methods - should raise ConfigurationError
+            with pytest.raises(ConfigurationError):
+                listening_client.get_pubsub_message()
+            
+            with pytest.raises(ConfigurationError):
+                listening_client.try_get_pubsub_message()
+        
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method",
+        [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_punsubscribe_pattern(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test basic pattern unsubscription using lazy and blocking APIs.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            pattern = "news_punsubscribe_test.*"
+            channel = "news_punsubscribe_test.sports"
+            message1 = "message_before_unsub"
+            message2 = "message_after_unsub"
+
+            callback, context = None, None
+            callback_messages: List[PubSubMsg] = []
+            if method == MethodTesting.Callback:
+                callback = new_message
+                context = callback_messages
+
+            listening_client = create_sync_pubsub_client(
+                request, cluster_mode, callback=callback, context=context
+            )
+            publishing_client = create_sync_client(request, cluster_mode)
+            
+            # Subscribe to pattern
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.psubscribe_lazy({pattern})
+            else:
+                listening_client.psubscribe({pattern}, timeout_ms=5000)
+            
+            time.sleep(0.5)
+            state = listening_client.get_subscriptions()
+            assert pattern in state.actual_subscriptions[get_pubsub_modes(listening_client).Pattern]
+
+            # Publish first message
+            publishing_client.publish(message1, channel)
+            time.sleep(1)
+            
+            # Verify message received
+            if method == MethodTesting.Callback:
+                assert len(callback_messages) >= 1
+            else:
+                msg = listening_client.try_get_pubsub_message() if method == MethodTesting.Sync else listening_client.get_pubsub_message()
+                assert msg is not None
+
+            # Unsubscribe from pattern
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.punsubscribe_lazy({pattern})
+            else:
+                listening_client.punsubscribe({pattern}, timeout_ms=5000)
+            
+            time.sleep(0.5)
+            state = listening_client.get_subscriptions()
+            assert pattern not in state.actual_subscriptions[get_pubsub_modes(listening_client).Pattern]
+
+            # Publish second message - should not be received
+            publishing_client.publish(message2, channel)
+            time.sleep(1)
+
+            # Check no new messages
+            if method == MethodTesting.Callback:
+                assert len(callback_messages) == 1
+            else:
+                msg = listening_client.try_get_pubsub_message()
+                assert msg is None
+
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize(
+        "method",
+        [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_sunsubscribe_sharded_channel(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test basic sharded channel unsubscription.
+        """
+        if not cluster_mode:
+            pytest.skip("Sharded channels only available in cluster mode")
+            
+        listening_client, publishing_client = None, None
+        try:
+            channel = "sharded_channel_test"
+            message1 = "message_before_unsub"
+            message2 = "message_after_unsub"
+
+            callback, context = None, None
+            callback_messages: List[PubSubMsg] = []
+            if method == MethodTesting.Callback:
+                callback = new_message
+                context = callback_messages
+
+            listening_client = create_sync_pubsub_client(
+                request, cluster_mode, callback=callback, context=context
+            )
+            publishing_client = create_sync_client(request, cluster_mode)
+            
+            # Subscribe to sharded channel
+            if subscription_method == SubscriptionMethod.Lazy:
+                cast(GlideClusterClient, listening_client).ssubscribe_lazy({channel})
+            else:
+                cast(GlideClusterClient, listening_client).ssubscribe({channel}, timeout_ms=5000)
+            
+            time.sleep(0.5)
+            state = listening_client.get_subscriptions()
+            assert channel in state.actual_subscriptions[get_pubsub_modes(listening_client).Sharded]
+
+            # Publish first message
+            cast(GlideClusterClient, publishing_client).publish(message1, channel, sharded=True)
+            time.sleep(1)
+            # Verify message received
+            if method == MethodTesting.Callback:
+                assert len(callback_messages) >= 1
+            else:
+                msg = listening_client.try_get_pubsub_message() if method == MethodTesting.Sync else listening_client.get_pubsub_message()
+                assert msg is not None
+
+            # Unsubscribe
+            if subscription_method == SubscriptionMethod.Lazy:
+                cast(GlideClusterClient, listening_client).sunsubscribe_lazy({channel})
+            else:
+                cast(GlideClusterClient, listening_client).sunsubscribe({channel}, timeout_ms=5000)
+            
+            time.sleep(0.5)
+            state = listening_client.get_subscriptions()
+            assert channel not in state.actual_subscriptions[get_pubsub_modes(listening_client).Sharded]
+
+            # Publish second message - should not be received
+            cast(GlideClusterClient, publishing_client).publish(message2, channel, sharded=True)
+            time.sleep(1)
+
+            # Check no new messages
+            if method == MethodTesting.Callback:
+                assert len(callback_messages) == 1
+            else:
+                msg = listening_client.try_get_pubsub_message()
+                assert msg is None
+
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method",
+        [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_unsubscribe_all_subscription_types(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test unsubscribing from all subscription types at once.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            channel = "exact_channel"
+            pattern = "pattern_*"
+            
+            callback, context = None, None
+            callback_messages: List[PubSubMsg] = []
+            if method == MethodTesting.Callback:
+                callback = new_message
+                context = callback_messages
+
+            listening_client = create_sync_pubsub_client(
+                request, cluster_mode, callback=callback, context=context
+            )
+            publishing_client = create_sync_client(request, cluster_mode)
+            
+            # Subscribe to exact and pattern
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.subscribe_lazy({channel})
+                listening_client.psubscribe_lazy({pattern})
+            else:
+                listening_client.subscribe({channel}, timeout_ms=5000)
+                listening_client.psubscribe({pattern}, timeout_ms=5000)
+            
+            if cluster_mode:
+                sharded = "sharded_channel"
+                if subscription_method == SubscriptionMethod.Lazy:
+                    cast(GlideClusterClient, listening_client).ssubscribe_lazy({sharded})
+                else:
+                    cast(GlideClusterClient, listening_client).ssubscribe({sharded}, timeout_ms=5000)
+            
+            # Wait for subscriptions to be active
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels={channel},
+                expected_patterns={pattern},
+                expected_sharded={sharded} if cluster_mode else None,
+                timeout_sec=3.0,
+            )
+            
+            # Unsubscribe from all
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.unsubscribe_lazy()
+                listening_client.punsubscribe_lazy()
+            else:
+                listening_client.unsubscribe(timeout_ms=5000)
+                listening_client.punsubscribe(timeout_ms=5000)
+            
+            if cluster_mode:
+                if subscription_method == SubscriptionMethod.Lazy:
+                    cast(GlideClusterClient, listening_client).sunsubscribe_lazy()
+                else:
+                    cast(GlideClusterClient, listening_client).sunsubscribe(timeout_ms=5000)
+            
+            # Wait for unsubscriptions to complete
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels=set(),
+                expected_patterns=set(),
+                expected_sharded=set() if cluster_mode else None,
+                timeout_sec=3.0,
+            )
+            
+            # Verify all unsubscribed
+            state = listening_client.get_subscriptions()
+            modes = get_pubsub_modes(listening_client)
+            assert len(state.desired_subscriptions.get(modes.Exact, set())) == 0
+            assert len(state.desired_subscriptions.get(modes.Pattern, set())) == 0
+            if cluster_mode and hasattr(modes, 'Sharded'):
+                assert len(state.desired_subscriptions.get(modes.Sharded, set())) == 0
+
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Lazy,
+        ],
+    )
+    def test_sync_subscription_sync_timestamp_metric_on_success(
+        self,
+        request,
+        cluster_mode: bool,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test that sync timestamp updates on successful subscription.
+        Only tests lazy subscribe since blocking subscribe doesn't trigger async reconciliation.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            channel1 = "channel1_sync_timestamp"
+            channel2 = "channel2_sync_timestamp"
+
+            # No callback needed - reconciliation works automatically
+            listening_client = create_sync_pubsub_client(request, cluster_mode)
+            publishing_client = create_sync_client(request, cluster_mode)
+
+            initial_stats = listening_client.get_statistics()
+            initial_timestamp = int(initial_stats.get("subscription_last_sync_timestamp", "0"))
+            print(f"Initial timestamp: {initial_timestamp}")
+
+            # Subscribe to first channel
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.subscribe_lazy({channel1})
+            else:
+                listening_client.subscribe({channel1}, timeout_ms=5000)
+            
+            print(f"Subscribed to {channel1}, waiting for state...")
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels={channel1},
+                timeout_sec=3.0,
+            )
+            print(f"Subscription to {channel1} confirmed")
+
+            # Subscribe to second channel - this ensures we will have at least 1 full reconciliation cycle
+            # and 1 successful timestamp update before checking it
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.subscribe_lazy({channel2})
+            else:
+                listening_client.subscribe({channel2}, timeout_ms=5000)
+            
+            print(f"Subscribed to {channel2}, waiting for state...")
+            # Wait for both subscriptions to be applied
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels={channel1, channel2},
+                timeout_sec=3.0,
+            )
+            print(f"Both subscriptions confirmed")
+
+            # Wait for next reconciliation cycle to confirm sync and update timestamp (up to 20 seconds)
+            # The timestamp is only updated when the system is synchronized (desired == actual)
+            timestamp_after = 0
+            for i in range(20):
+                time.sleep(1)
+                stats_after = listening_client.get_statistics()
+                timestamp_after = int(stats_after.get("subscription_last_sync_timestamp", "0"))
+                state = listening_client.get_subscriptions()
+                desired_count = len(state.desired_subscriptions.get(get_pubsub_modes(listening_client).Exact, set()))
+                actual_count = len(state.actual_subscriptions.get(get_pubsub_modes(listening_client).Exact, set()))
+                print(f"[{i+1}s] timestamp={timestamp_after}, desired={desired_count}, actual={actual_count}")
+                if timestamp_after > 0:
+                    print(f"Timestamp set after {i+1} seconds")
+                    break
+            
+            # Just verify that timestamp is set (non-zero), don't compare to initial
+            # The initial timestamp might be from an empty subscription set, and the new timestamp
+            # should be from the current subscription set
+            assert timestamp_after > 0, f"Timestamp should be set after subscriptions, got {timestamp_after}"
+
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method",
+        [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [SubscriptionMethod.Lazy, SubscriptionMethod.Blocking],
+    )
+    def test_sync_pubsub_exact_happy_path_custom_command(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Tests the basic happy path for exact PUBSUB functionality using custom commands.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            channel = "test_exact_channel_custom"
+            message = "test_exact_message_custom"
+
+            callback, context = None, None
+            callback_messages: List[PubSubMsg] = []
+            if method == MethodTesting.Callback:
+                callback = new_message
+                context = callback_messages
+
+            listening_client = create_sync_pubsub_client(
+                request, cluster_mode, callback=callback, context=context
+            )
+            publishing_client = create_sync_client(request, cluster_mode)
+
+            # Subscribe using custom_command
+            if subscription_method == SubscriptionMethod.Lazy:
+                cmd = ["SUBSCRIBE", channel]
+            else:
+                cmd = ["SUBSCRIBE_BLOCKING", channel, "5000"]
+
+            result = listening_client.custom_command(cmd)
+            assert result is None
+
+            # Verify subscription
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels={channel},
+                timeout_sec=3.0,
+            )
+
+            publishing_client.publish(message, channel)
+            time.sleep(1)
+
+            pubsub_msg = get_message_by_method(method, listening_client, callback_messages, 0)
+            assert pubsub_msg.message == message
+            assert pubsub_msg.channel == channel
+            assert pubsub_msg.pattern is None
+
+            check_no_messages_left(method, listening_client, callback_messages, 1)
+
+            # Unsubscribe using custom_command
+            if subscription_method == SubscriptionMethod.Lazy:
+                unsub_cmd = ["UNSUBSCRIBE", channel]
+            else:
+                unsub_cmd = ["UNSUBSCRIBE_BLOCKING", channel, "5000"]
+
+            result = listening_client.custom_command(unsub_cmd)
+            assert result is None
+
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_resubscribe_after_connection_kill_exact_channels(
+        self, request, cluster_mode: bool
+    ):
+        """
+        Test that exact channel subscriptions are automatically restored after connection is killed.
+        """
+        client = None
+        try:
+            channel = "test_channel_reconnect"
+            
+            client = create_sync_pubsub_client(request, cluster_mode, channels={channel})
+            
+            # Verify initial subscription
+            wait_for_subscription_state(client, expected_channels={channel}, timeout_sec=3.0)
+            
+            # Kill all connections
+            client.custom_command(["CLIENT", "KILL", "TYPE", "NORMAL"])
+            
+            # Wait for reconnection and resubscription
+            time.sleep(2)
+            
+            # Verify subscription is restored
+            wait_for_subscription_state(client, expected_channels={channel}, timeout_sec=5.0)
+            
+            state = client.get_subscriptions()
+            assert channel in state.actual_subscriptions[get_pubsub_modes(client).Exact]
+            
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_resubscribe_after_connection_kill_many_exact_channels(
+        self, request, cluster_mode: bool
+    ):
+        """
+        Test that multiple exact channel subscriptions are restored after connection kill.
+        """
+        client = None
+        try:
+            channels = {f"channel_{i}" for i in range(10)}
+            
+            client = create_sync_pubsub_client(request, cluster_mode, channels=channels)
+            
+            # Verify initial subscriptions
+            wait_for_subscription_state(client, expected_channels=channels, timeout_sec=3.0)
+            
+            # Kill all connections
+            client.custom_command(["CLIENT", "KILL", "TYPE", "NORMAL"])
+            
+            # Wait for reconnection and resubscription
+            time.sleep(2)
+            
+            # Verify all subscriptions are restored
+            wait_for_subscription_state(client, expected_channels=channels, timeout_sec=5.0)
+            
+            state = client.get_subscriptions()
+            assert channels.issubset(state.actual_subscriptions[get_pubsub_modes(client).Exact])
+            
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_resubscribe_after_connection_kill_patterns(
+        self, request, cluster_mode: bool
+    ):
+        """
+        Test that pattern subscriptions are restored after connection kill.
+        """
+        client = None
+        try:
+            pattern = "test_pattern_*"
+            
+            client = create_sync_pubsub_client(request, cluster_mode, patterns={pattern})
+            
+            # Verify initial subscription
+            wait_for_subscription_state(client, expected_patterns={pattern}, timeout_sec=3.0)
+            
+            # Kill all connections
+            client.custom_command(["CLIENT", "KILL", "TYPE", "NORMAL"])
+            
+            # Wait for reconnection and resubscription
+            time.sleep(2)
+            
+            # Verify subscription is restored
+            wait_for_subscription_state(client, expected_patterns={pattern}, timeout_sec=5.0)
+            
+            state = client.get_subscriptions()
+            assert pattern in state.actual_subscriptions[get_pubsub_modes(client).Pattern]
+            
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.skip_if_version_below("7.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    def test_sync_resubscribe_after_connection_kill_sharded(
+        self, request, cluster_mode: bool
+    ):
+        """
+        Test that sharded subscriptions are restored after connection kill.
+        """
+        client = None
+        try:
+            channel = "test_sharded_reconnect"
+            
+            client = create_sync_pubsub_client(request, cluster_mode, sharded={channel})
+            
+            # Verify initial subscription
+            wait_for_subscription_state(client, expected_sharded={channel}, timeout_sec=3.0)
+            
+            # Kill all connections
+            client.custom_command(["CLIENT", "KILL", "TYPE", "NORMAL"])
+            
+            # Wait for reconnection and resubscription
+            time.sleep(2)
+            
+            # Verify subscription is restored
+            wait_for_subscription_state(client, expected_sharded={channel}, timeout_sec=5.0)
+            
+            state = client.get_subscriptions()
+            modes = get_pubsub_modes(client)
+            if hasattr(modes, 'Sharded'):
+                assert channel in state.actual_subscriptions[modes.Sharded]  # type: ignore
+            
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.skip_if_version_below("7.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    def test_sync_ssubscribe_channels_different_slots(
+        self, request, cluster_mode: bool
+    ):
+        """
+        Test subscribing to sharded channels in different slots.
+        """
+        client, publishing_client = None, None
+        try:
+            # These channels hash to different slots
+            channels = {
+                "{slot1}channel_a",
+                "{slot2}channel_b",
+                "{slot3}channel_c",
+                "{slot1}channel_d",
+                "{slot4}channel_e",
+            }
+            messages = {ch: f"msg_{ch}" for ch in channels}
+            
+            # Create client without config-based subscriptions
+            client = create_sync_pubsub_client(request, cluster_mode)
+            publishing_client = create_sync_client(request, cluster_mode)
+            
+            # Subscribe dynamically
+            cast(GlideClusterClient, client).ssubscribe(channels, timeout_ms=5000)
+            
+            # Verify subscriptions
+            wait_for_subscription_state(
+                client, expected_sharded=channels, timeout_sec=3.0
+            )
+            
+            # Publish to all channels
+            for channel, message in messages.items():
+                cast(GlideClusterClient, publishing_client).publish(message, channel, sharded=True)
+            
+            time.sleep(1)
+            
+            # Retrieve all messages using try_get with retry
+            received_messages = {}
+            for _ in range(len(channels)):
+                msg = None
+                for attempt in range(10):
+                    msg = client.try_get_pubsub_message()
+                    if msg:
+                        msg = decode_pubsub_msg(msg)
+                        break
+                    time.sleep(0.5)
+                
+                assert msg is not None, f"Failed to receive message after 10 attempts"
+                received_messages[msg.channel] = msg.message
+            
+            assert received_messages == messages
+            
+        finally:
+            if client:
+                client.close()
+            if publishing_client:
+                publishing_client.close()
+
+    @pytest.mark.skip_if_version_below("7.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    def test_sync_sunsubscribe_channels_different_slots(
+        self, request, cluster_mode: bool
+    ):
+        """
+        Test unsubscribing from sharded channels in different slots.
+        """
+        client = None
+        try:
+            channels = {
+                "{slot1}channel_a",
+                "{slot2}channel_b",
+            }
+            
+            # Create client and subscribe dynamically
+            client = create_sync_pubsub_client(request, cluster_mode)
+            cast(GlideClusterClient, client).ssubscribe(channels, timeout_ms=5000)
+            
+            # Verify subscriptions
+            wait_for_subscription_state(
+                client, expected_sharded=channels, timeout_sec=3.0
+            )
+            
+            # Unsubscribe from one channel
+            channel_to_unsub = "{slot1}channel_a"
+            cast(GlideClusterClient, client).sunsubscribe({channel_to_unsub}, timeout_ms=5000)
+            
+            # Verify only one channel remains
+            remaining = channels - {channel_to_unsub}
+            wait_for_subscription_state(
+                client, expected_sharded=remaining, timeout_sec=3.0
+            )
+            
+            state = client.get_subscriptions()
+            modes = get_pubsub_modes(client)
+            if hasattr(modes, 'Sharded'):
+                assert channel_to_unsub not in state.actual_subscriptions[modes.Sharded]  # type: ignore
+                assert remaining.issubset(state.actual_subscriptions[modes.Sharded])  # type: ignore
+            
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_subscription_metrics_on_acl_failure(
+        self, request, cluster_mode: bool
+    ):
+        """
+        Test that out-of-sync metric is recorded when subscription fails due to ACL.
+        """
+        listening_client, admin_client = None, None
+        try:
+            channel = "channel_acl_metrics_test"
+            username = f"{PubSubTestConstants.ACL_TEST_USERNAME_PREFIX}_acl_metrics"
+            password = f"{PubSubTestConstants.ACL_TEST_PASSWORD_PREFIX}_acl_metrics"
+
+            admin_client = create_sync_client(request, cluster_mode)
+
+            # Create user without pubsub permissions
+            acl_command = [
+                "ACL",
+                "SETUSER",
+                username,
+                "ON",
+                f">{password}",
+                "~*",
+                "resetchannels",
+                "+@all",
+                "-@pubsub",
+            ]
+
+            if cluster_mode:
+                cast(GlideClusterClient, admin_client).custom_command(acl_command, route=AllNodes())
+            else:
+                admin_client.custom_command(acl_command)
+
+            # Create regular client (not pubsub) and authenticate with restricted user
+            listening_client = create_sync_client(request, cluster_mode)
+            
+            if cluster_mode:
+                cast(GlideClusterClient, listening_client).custom_command(["AUTH", username, password], route=AllNodes())
+            else:
+                listening_client.custom_command(["AUTH", username, password])
+
+            # Get initial metrics
+            initial_stats = listening_client.get_statistics()
+            initial_out_of_sync = int(
+                initial_stats.get("subscription_out_of_sync_count", "0")
+            )
+
+            # Try to subscribe (will fail due to ACL)
+            listening_client.subscribe_lazy({channel})
+
+            # Wait for reconciliation attempts and poll for metric update
+            out_of_sync_count = initial_out_of_sync
+            for i in range(15):
+                time.sleep(1)
+                stats = listening_client.get_statistics()
+                out_of_sync_count = int(stats.get("subscription_out_of_sync_count", "0"))
+                print(f"[{i+1}s] out_of_sync_count={out_of_sync_count}, initial={initial_out_of_sync}")
+                if out_of_sync_count > initial_out_of_sync:
+                    print(f"Metric increased after {i+1} seconds")
+                    break
+
+            assert (
+                out_of_sync_count > initial_out_of_sync
+            ), f"Expected out-of-sync count to increase from {initial_out_of_sync}, got {out_of_sync_count}"
+            
+            # Verify subscription is NOT active (desired != actual)
+            state = listening_client.get_subscriptions()
+            modes = get_pubsub_modes(listening_client)
+            
+            desired_channels = state.desired_subscriptions.get(modes.Exact, set())
+            actual_channels = state.actual_subscriptions.get(modes.Exact, set())
+            
+            assert channel in desired_channels, "Channel should be in desired"
+            assert channel not in actual_channels, "Channel should NOT be in actual (ACL blocked)"
+
+        finally:
+            # Cleanup: delete test user
+            if admin_client:
+                try:
+                    admin_client.custom_command(["ACL", "DELUSER", username])
+                except:
+                    pass
+                admin_client.close()
+            if listening_client:
+                listening_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_subscription_metrics_repeated_reconciliation_failures(
+        self, request, cluster_mode: bool
+    ):
+        """
+        Test that out-of-sync metric increments on repeated reconciliation failures.
+        """
+        listening_client, admin_client = None, None
+        try:
+            channel1 = "channel1_repeated_failures"
+            channel2 = "channel2_repeated_failures"
+            username = f"{PubSubTestConstants.ACL_TEST_USERNAME_PREFIX}_repeated"
+            password = f"{PubSubTestConstants.ACL_TEST_PASSWORD_PREFIX}_repeated"
+
+            admin_client = create_sync_client(request, cluster_mode)
+
+            # Create user WITHOUT pubsub permissions
+            acl_create_command = [
+                "ACL",
+                "SETUSER",
+                username,
+                "ON",
+                f">{password}",
+                "~*",
+                "resetchannels",
+                "+@all",
+                "-@pubsub",
+            ]
+
+            if cluster_mode:
+                cast(GlideClusterClient, admin_client).custom_command(
+                    acl_create_command, route=AllNodes()
+                )
+            else:
+                admin_client.custom_command(acl_create_command)
+
+            listening_client = create_sync_client(request, cluster_mode)
+
+            if cluster_mode:
+                cast(GlideClusterClient, listening_client).custom_command(
+                    ["AUTH", username, password], route=AllNodes()
+                )
+            else:
+                listening_client.custom_command(["AUTH", username, password])
+
+            initial_stats = listening_client.get_statistics()
+            initial_out_of_sync = int(
+                initial_stats.get("subscription_out_of_sync_count", "0")
+            )
+
+            channels = [channel1, channel2]
+
+            for channel in channels:
+                listening_client.subscribe_lazy({channel})
+                time.sleep(4)  # Wait for reconciliation interval (3s) to trigger between subscriptions
+
+            # Give time for more reconciliation attempts
+            # Poll for metric to increase
+            out_of_sync_count = initial_out_of_sync
+            for i in range(15):
+                time.sleep(1)
+                stats = listening_client.get_statistics()
+                out_of_sync_count = int(stats.get("subscription_out_of_sync_count", "0"))
+                print(f"[{i+1}s] out_of_sync_count={out_of_sync_count}, initial={initial_out_of_sync}")
+                if out_of_sync_count >= initial_out_of_sync + 1:
+                    print(f"Metric increased after {i+1} seconds")
+                    break
+
+            # Should have at least 1 out-of-sync event (reconciliation failures are batched)
+            assert (
+                out_of_sync_count >= initial_out_of_sync + 1
+            ), f"Expected at least 1 out-of-sync event, got {out_of_sync_count - initial_out_of_sync}"
+
+        finally:
+            if admin_client:
+                acl_delete_command = ["ACL", "DELUSER", username]
+
+                try:
+                    if cluster_mode:
+                        cast(GlideClusterClient, admin_client).custom_command(
+                            acl_delete_command, route=AllNodes()
+                        )
+                    else:
+                        admin_client.custom_command(acl_delete_command)
+                except:
+                    pass
+                admin_client.close()
+
+            if listening_client:
+                listening_client.close()

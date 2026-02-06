@@ -19,6 +19,7 @@ from glide_shared.exceptions import TimeoutError as GlideTimeoutError
 from glide_shared.routes import AllNodes
 
 from tests.async_tests.conftest import create_client
+from tests.utils.pubsub_test_utils import PubSubTestConstants
 from tests.utils.utils import (
     MessageReadMethod,
     SubscriptionMethod,
@@ -3975,8 +3976,8 @@ class TestPubSub:
         """
         Test that blocking subscribe times out when reconciliation can't complete.
         """
-        username = "mock_test_user_timeout"
-        password = "password_timeout"
+        username = f"{PubSubTestConstants.ACL_TEST_USERNAME_PREFIX}_timeout"
+        password = f"{PubSubTestConstants.ACL_TEST_PASSWORD_PREFIX}_timeout"
         channel = "channel_timeout_test"
 
         admin_client = await create_client(request, cluster_mode)
@@ -4045,8 +4046,8 @@ class TestPubSub:
         listening_client, admin_client = None, None
         try:
             channel = "channel_acl_metrics_test"
-            username = "mock_test_user_acl_metrics"
-            password = "password_acl_metrics"
+            username = f"{PubSubTestConstants.ACL_TEST_USERNAME_PREFIX}_acl_metrics"
+            password = f"{PubSubTestConstants.ACL_TEST_PASSWORD_PREFIX}_acl_metrics"
 
             admin_client = await create_client(request, cluster_mode)
 
@@ -4194,8 +4195,8 @@ class TestPubSub:
         try:
             channel1 = "channel1_repeated_failures"
             channel2 = "channel2_repeated_failures"
-            username = "mock_test_user_repeated"
-            password = "password_repeated"
+            username = f"{PubSubTestConstants.ACL_TEST_USERNAME_PREFIX}_repeated"
+            password = f"{PubSubTestConstants.ACL_TEST_PASSWORD_PREFIX}_repeated"
 
             admin_client = await create_client(request, cluster_mode)
 

@@ -51,6 +51,9 @@ from glide_shared.commands.stream import (
     _create_xpending_range_args,
 )
 from glide_shared.constants import (
+    ALL_CHANNELS,
+    ALL_PATTERNS,
+    ALL_SHARDED_CHANNELS,
     TOK,
     TEncodable,
     TResult,
@@ -62,25 +65,6 @@ from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
 
 from .cluster_scan_cursor import ClusterScanCursor
-
-# PubSub constants for unsubscribing from all channels/patterns
-ALL_CHANNELS: Optional[Set[str]] = None
-"""
-Constant representing 'unsubscribe from all channels'.
-Pass this to unsubscribe() to unsubscribe from all channels.
-"""
-
-ALL_PATTERNS: Optional[Set[str]] = None
-"""
-Constant representing 'unsubscribe from all patterns'.
-Pass this to punsubscribe() to unsubscribe from all patterns.
-"""
-
-ALL_SHARDED_CHANNELS: Optional[Set[str]] = None
-"""
-Constant representing 'unsubscribe from all sharded channels'.
-Pass this to sunsubscribe() to unsubscribe from all sharded channels.
-"""
 
 
 class CoreCommands(Protocol):
@@ -7727,6 +7711,102 @@ class CoreCommands(Protocol):
         )
         result = self._execute_command(RequestType.Sort, args)
         return cast(int, result)
+
+    def subscribe_lazy(self, channels: Set[str]) -> None:
+        """
+        Subscribe to exact channels (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+        The client will attempt to subscribe asynchronously in the background.
+
+        Note:
+            Use `get_subscriptions()` to verify the actual server-side subscription state.
+
+        Args:
+            channels: A set of channel names to subscribe to.
+
+        Returns: None
+
+        Examples:
+            >>> client.subscribe_lazy({"channel1"})
+            >>> # Subscription request sent, not waiting for confirmation
+            >>>
+            >>> # Multiple channels
+            >>> client.subscribe_lazy({"channel1", "channel2"})
+        """
+        self._execute_command(RequestType.Subscribe, list(channels))
+
+    def psubscribe_lazy(self, patterns: Set[str]) -> None:
+        """
+        Subscribe to channel patterns (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+        The client will attempt to subscribe asynchronously in the background.
+
+        Note:
+            Use `get_subscriptions()` to verify the actual server-side subscription state.
+
+        Args:
+            patterns: A set of patterns to subscribe to (e.g., {"news.*"}).
+
+        Returns: None
+
+        Examples:
+            >>> client.psubscribe_lazy({"news.*"})
+            >>> # Pattern subscription request sent, not waiting for confirmation
+            >>>
+            >>> # Multiple patterns
+            >>> client.psubscribe_lazy({"news.*", "updates.*"})
+        """
+        self._execute_command(RequestType.PSubscribe, list(patterns))
+
+    def unsubscribe_lazy(self, channels: Optional[Set[str]] = None) -> None:
+        """
+        Unsubscribe from exact channels (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+
+        Args:
+            channels: A set of channel names to unsubscribe from.
+                    If None or ALL_CHANNELS, unsubscribes from all exact channels.
+
+        Returns: None
+
+        Examples:
+            >>> client.unsubscribe_lazy({"channel1"})
+            >>> # Unsubscribe request sent, not waiting for confirmation
+            >>>
+            >>> # Unsubscribe from all channels
+            >>> client.unsubscribe_lazy()
+        """
+        args: List[Union[str, bytes]] = list(channels) if channels else []
+        self._execute_command(RequestType.Unsubscribe, args)
+
+    def punsubscribe_lazy(self, patterns: Optional[Set[str]] = None) -> None:
+        """
+        Unsubscribe from channel patterns (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+
+        Args:
+            patterns: A set of patterns to unsubscribe from.
+                    If None or ALL_PATTERNS, unsubscribes from all patterns.
+
+        Returns: None
+
+        Examples:
+            >>> client.punsubscribe_lazy({"news.*"})
+            >>> # Unsubscribe request sent, not waiting for confirmation
+            >>>
+            >>> # Unsubscribe from all patterns
+            >>> client.punsubscribe_lazy()
+        """
+        args: List[Union[str, bytes]] = list(patterns) if patterns else []
+        self._execute_command(RequestType.PUnsubscribe, args)
 
     def subscribe(self, channels: Set[str], timeout_ms: int = 0) -> None:
         """Subscribe to exact channels (blocking)."""

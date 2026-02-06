@@ -2298,11 +2298,16 @@ async def check_no_messages_left(
         assert callback_messages is not None
         assert len(callback_messages) == expected_callback_count
 
+# Import shared pubsub test utilities
+from tests.utils.pubsub_test_utils import (
+    new_message as _new_message,
+    PubSubTestConstants,
+)
 
+# Re-export for backward compatibility
 def new_message(msg: PubSubMsg, context: Any) -> None:
     """Standard callback function that appends messages to a context list."""
-    received_messages: List[PubSubMsg] = context
-    received_messages.append(msg)
+    return _new_message(msg, context)
 
 
 async def pubsub_client_cleanup(
@@ -2377,3 +2382,100 @@ async def pubsub_client_cleanup(
 
         if cleanup_error:
             raise cleanup_error
+
+
+def create_sync_pubsub_client(
+    request,
+    cluster_mode: bool,
+    channels: Optional[Set[str]] = None,
+    patterns: Optional[Set[str]] = None,
+    sharded: Optional[Set[str]] = None,
+    callback=None,
+    context=None,
+):
+    """Create a sync client with pubsub configuration."""
+    from tests.sync_tests.conftest import create_sync_client
+    
+    # Build subscription modes for both cluster and standalone
+    modes = get_pubsub_modes(cluster_mode)
+    subscription_modes = {
+        modes.Exact: channels or set(),
+        modes.Pattern: patterns or set(),
+    }
+    
+    # Add sharded mode only for cluster
+    if cluster_mode and hasattr(modes, 'Sharded'):
+        subscription_modes[modes.Sharded] = sharded or set()
+    
+    # Always create subscription to enable pubsub (even if empty)
+    # Pass the same modes dict for both cluster and standalone
+    if cluster_mode:
+        subscription = create_pubsub_subscription(
+            cluster_mode,
+            subscription_modes,  # cluster_channels_and_patterns
+            {},  # standalone_channels_and_patterns (not used)
+            callback,
+            context,
+        )
+    else:
+        subscription = create_pubsub_subscription(
+            cluster_mode,
+            {},  # cluster_channels_and_patterns (not used)
+            subscription_modes,  # standalone_channels_and_patterns
+            callback,
+            context,
+        )
+    
+    if cluster_mode:
+        return create_sync_client(
+            request,
+            cluster_mode,
+            cluster_mode_pubsub=subscription,
+        )
+    else:
+        return create_sync_client(
+            request,
+            cluster_mode,
+            standalone_mode_pubsub=subscription,
+        )
+
+
+
+def sync_pubsub_client_cleanup(client):
+    """Cleanup sync pubsub client."""
+    if client:
+        try:
+            client.close()
+        except:
+            pass
+
+
+def sync_check_no_messages_left(
+    message_read_method, client, callback_messages, expected_count
+):
+    """Check that no additional messages are left."""
+    import time
+    from tests.sync_tests.test_sync_pubsub import MethodTesting
+    
+    time.sleep(0.5)
+    
+    if message_read_method == MethodTesting.Callback:
+        assert len(callback_messages) == expected_count
+    else:
+        msg = client.try_get_pubsub_message()
+        assert msg is None
+
+
+def sync_get_message_by_method(
+    message_read_method, client, callback_messages, index
+):
+    """Get message by the specified method."""
+    from tests.sync_tests.test_sync_pubsub import MethodTesting
+    
+    if message_read_method == MethodTesting.Callback:
+        assert len(callback_messages) > index
+        return callback_messages[index]
+    elif message_read_method == MethodTesting.Sync:
+        return client.try_get_pubsub_message()
+    else:  # Async
+        return client.get_pubsub_message()

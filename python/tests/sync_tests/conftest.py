@@ -280,3 +280,78 @@ def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
             raise TimeoutError(f"Connection timeout during teardown: {e}")
         else:
             raise e
+
+
+def create_sync_pubsub_client(
+    request,
+    cluster_mode: bool,
+    channels: Optional[Set[str]] = None,
+    patterns: Optional[Set[str]] = None,
+    sharded_channels: Optional[Set[str]] = None,
+    callback: Optional[Any] = None,
+    context: Optional[Any] = None,
+    protocol: ProtocolVersion = ProtocolVersion.RESP3,
+    timeout: Optional[int] = None,
+    reconciliation_interval_ms: Optional[int] = None,
+) -> TSyncGlideClient:
+    """
+    Create a sync client with pubsub configuration.
+    Convenience wrapper similar to async create_pubsub_client.
+    """
+    from tests.utils.utils import create_pubsub_subscription, get_pubsub_modes
+    
+    has_subscriptions = channels or patterns or sharded_channels
+    has_callback = callback is not None
+
+    if has_subscriptions or has_callback:
+        # Build subscription config
+        if cluster_mode:
+            modes = GlideClusterClientConfiguration.PubSubChannelModes
+        else:
+            modes = GlideClientConfiguration.PubSubChannelModes
+        
+        channels_dict = {}
+        if channels:
+            channels_dict[modes.Exact] = channels
+        if patterns:
+            channels_dict[modes.Pattern] = patterns
+        if cluster_mode and sharded_channels:
+            channels_dict[modes.Sharded] = sharded_channels
+        
+        pubsub_subscription = create_pubsub_subscription(
+            cluster_mode,
+            channels_dict if cluster_mode else {},
+            channels_dict if not cluster_mode else {},
+            callback=callback,
+            context=context,
+        )
+        
+        # Create config with pubsub
+        if cluster_mode:
+            config = AdvancedGlideClusterClientConfiguration(
+                addresses=[NodeAddress("localhost", 7001)],
+                client_name="test_pubsub_client",
+                protocol=protocol,
+                request_timeout=timeout,
+                cluster_mode_pubsub=pubsub_subscription,
+                pubsub_reconciliation_interval=reconciliation_interval_ms,
+            )
+        else:
+            config = AdvancedGlideClientConfiguration(
+                addresses=[NodeAddress("localhost", 6379)],
+                client_name="test_pubsub_client",
+                protocol=protocol,
+                request_timeout=timeout,
+                standalone_mode_pubsub=pubsub_subscription,
+                pubsub_reconciliation_interval=reconciliation_interval_ms,
+            )
+        
+        return create_sync_client(
+            request,
+            cluster_mode,
+            cluster_mode_pubsub=pubsub_subscription if cluster_mode else None,
+            standalone_mode_pubsub=pubsub_subscription if not cluster_mode else None,
+        )
+    else:
+        # No pubsub config
+        return create_sync_client(request, cluster_mode)
