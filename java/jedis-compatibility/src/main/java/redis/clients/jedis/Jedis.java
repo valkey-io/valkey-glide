@@ -704,9 +704,7 @@ public final class Jedis implements Closeable {
      * @return "OK" if successful
      */
     public String aclSetUser(String name) {
-        return executeCommandWithGlide(
-                "ACL",
-                () -> glideClient.aclSetUser(name, new String[0]).get());
+        return executeCommandWithGlide("ACL", () -> glideClient.aclSetUser(name, new String[0]).get());
     }
 
     /**
@@ -717,9 +715,7 @@ public final class Jedis implements Closeable {
      * @return "OK" if successful
      */
     public String aclSetUser(String name, String... rules) {
-        return executeCommandWithGlide(
-                "ACL",
-                () -> glideClient.aclSetUser(name, rules).get());
+        return executeCommandWithGlide("ACL", () -> glideClient.aclSetUser(name, rules).get());
     }
 
     /**
@@ -782,8 +778,7 @@ public final class Jedis implements Closeable {
      * @return the generated password string
      */
     public String aclGenPass(int bits) {
-        return executeCommandWithGlide(
-                "ACL",                 () -> glideClient.aclGenPass(bits).get());
+        return executeCommandWithGlide("ACL", () -> glideClient.aclGenPass(bits).get());
     }
 
     /**
@@ -792,9 +787,7 @@ public final class Jedis implements Closeable {
      * @return list of ACL log entries
      */
     public List<AccessControlLogEntry> aclLog() {
-        return executeCommandWithGlide(
-                "ACL",
-                () -> parseAclLogResponse(glideClient.aclLog().get()));
+        return executeCommandWithGlide("ACL", () -> parseAclLogResponse(glideClient.aclLog().get()));
     }
 
     /**
@@ -805,8 +798,7 @@ public final class Jedis implements Closeable {
      */
     public List<AccessControlLogEntry> aclLog(int count) {
         return executeCommandWithGlide(
-                "ACL",
-                () -> parseAclLogResponse(glideClient.aclLog(count).get()));
+                "ACL", () -> parseAclLogResponse(glideClient.aclLog(count).get()));
     }
 
     /**
@@ -818,8 +810,7 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "ACL",
                 () -> {
-                    Object result =
-                            glideClient.customCommand(new String[] {"ACL", "LOG", "RESET"}).get();
+                    Object result = glideClient.customCommand(new String[] {"ACL", "LOG", "RESET"}).get();
                     return result != null ? result.toString() : null;
                 });
     }
@@ -875,8 +866,7 @@ public final class Jedis implements Closeable {
      */
     public String aclDryRun(String username, String command, String... args) {
         return executeCommandWithGlide(
-                "ACL",
-                () -> glideClient.aclDryRun(username, command, args).get());
+                "ACL", () -> glideClient.aclDryRun(username, command, args).get());
     }
 
     private static AccessControlUser parseAclGetUserResponse(Object result) {

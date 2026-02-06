@@ -180,7 +180,8 @@ public class JedisMethodsTest {
         Method aclLoad = jedisClass.getMethod("aclLoad");
         assertEquals(String.class, aclLoad.getReturnType());
 
-        Method aclDryRun = jedisClass.getMethod("aclDryRun", String.class, String.class, String[].class);
+        Method aclDryRun =
+                jedisClass.getMethod("aclDryRun", String.class, String.class, String[].class);
         assertEquals(String.class, aclDryRun.getReturnType());
     }
 }
