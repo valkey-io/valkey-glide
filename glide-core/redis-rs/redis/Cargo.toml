@@ -78,6 +78,7 @@ telemetrylib = { path = "../../telemetry" }
 logger_core = { path = "../../../logger_core" }
 
 lazy_static = "1"
+lru = "0.16.2"
 
 [features]
 default = [
@@ -135,6 +136,7 @@ versions = "7"
 which = "8"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 serde_json = { version = "1" }
+
 
 [[test]]
 name = "test_async"
