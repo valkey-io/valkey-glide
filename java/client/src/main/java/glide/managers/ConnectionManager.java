@@ -3,22 +3,29 @@ package glide.managers;
 
 import static connection_request.ConnectionRequestOuterClass.*;
 
+import glide.api.models.GlideString;
 import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
+import glide.api.models.configuration.BaseSubscriptionConfiguration;
+import glide.api.models.configuration.ClusterSubscriptionConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.PeriodicChecksConfig;
 import glide.api.models.configuration.PeriodicChecksManualInterval;
 import glide.api.models.configuration.PeriodicChecksStatus;
 import glide.api.models.configuration.ServerCredentials;
+import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
 import glide.internal.AsyncRegistry;
 import glide.internal.GlideNativeBridge;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import lombok.RequiredArgsConstructor;
@@ -104,18 +111,19 @@ public class ConnectionManager {
                         byte[][] subPattern = glide.internal.GlideCoreClient.EMPTY_2D_BYTE_ARRAY;
                         byte[][] subSharded = glide.internal.GlideCoreClient.EMPTY_2D_BYTE_ARRAY;
                         if (configuration.getSubscriptionConfiguration() != null) {
-                            var sc = configuration.getSubscriptionConfiguration();
+                            BaseSubscriptionConfiguration sc = configuration.getSubscriptionConfiguration();
                             try {
                                 if (sc
                                         instanceof glide.api.models.configuration.StandaloneSubscriptionConfiguration) {
-                                    var subs =
-                                            ((glide.api.models.configuration.StandaloneSubscriptionConfiguration) sc)
-                                                    .getSubscriptions();
-                                    var exact =
+                                    Map<StandaloneSubscriptionConfiguration.PubSubChannelMode, Set<GlideString>>
+                                            subs =
+                                                    ((glide.api.models.configuration.StandaloneSubscriptionConfiguration) sc)
+                                                            .getSubscriptions();
+                                    Set<GlideString> exact =
                                             subs.get(
                                                     glide.api.models.configuration.StandaloneSubscriptionConfiguration
                                                             .PubSubChannelMode.EXACT);
-                                    var pattern =
+                                    Set<GlideString> pattern =
                                             subs.get(
                                                     glide.api.models.configuration.StandaloneSubscriptionConfiguration
                                                             .PubSubChannelMode.PATTERN);
@@ -133,18 +141,19 @@ public class ConnectionManager {
                                     }
                                 } else if (sc
                                         instanceof glide.api.models.configuration.ClusterSubscriptionConfiguration) {
-                                    var subs =
-                                            ((glide.api.models.configuration.ClusterSubscriptionConfiguration) sc)
-                                                    .getSubscriptions();
-                                    var exact =
+                                    Map<ClusterSubscriptionConfiguration.PubSubClusterChannelMode, Set<GlideString>>
+                                            subs =
+                                                    ((glide.api.models.configuration.ClusterSubscriptionConfiguration) sc)
+                                                            .getSubscriptions();
+                                    Set<GlideString> exact =
                                             subs.get(
                                                     glide.api.models.configuration.ClusterSubscriptionConfiguration
                                                             .PubSubClusterChannelMode.EXACT);
-                                    var pattern =
+                                    Set<GlideString> pattern =
                                             subs.get(
                                                     glide.api.models.configuration.ClusterSubscriptionConfiguration
                                                             .PubSubClusterChannelMode.PATTERN);
-                                    var sharded =
+                                    Set<GlideString> sharded =
                                             subs.get(
                                                     glide.api.models.configuration.ClusterSubscriptionConfiguration
                                                             .PubSubClusterChannelMode.SHARDED);
@@ -208,7 +217,7 @@ public class ConnectionManager {
                             }
                             // Set IAM credentials if present
                             if (credentials.getIamConfig() != null) {
-                                var iamConfig = credentials.getIamConfig();
+                                IamAuthConfig iamConfig = credentials.getIamConfig();
                                 IamCredentials.Builder iamBuilder = IamCredentials.newBuilder();
                                 iamBuilder.setClusterName(iamConfig.getClusterName());
                                 iamBuilder.setRegion(iamConfig.getRegion());

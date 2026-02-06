@@ -42,6 +42,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.REPLICA;
+import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -91,6 +92,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -116,7 +118,7 @@ public class CommandTests {
     private static final String INITIAL_VALUE = "VALUE";
 
     public static final List<String> DEFAULT_INFO_SECTIONS =
-            List.of(
+            Arrays.asList(
                     "Server",
                     "Clients",
                     "Memory",
@@ -131,7 +133,7 @@ public class CommandTests {
     public static final List<String> EVERYTHING_INFO_SECTIONS =
             SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")
                     // Latencystats was added in Valkey 7
-                    ? List.of(
+                    ? Arrays.asList(
                             "Server",
                             "Clients",
                             "Memory",
@@ -145,7 +147,7 @@ public class CommandTests {
                             "Latencystats",
                             "Cluster",
                             "Keyspace")
-                    : List.of(
+                    : Arrays.asList(
                             "Server",
                             "Clients",
                             "Memory",
@@ -318,9 +320,9 @@ public class CommandTests {
     public void custom_command_del_returns_a_number(GlideClusterClient clusterClient) {
         String key = "custom_command_del_returns_a_number";
         clusterClient.set(key, INITIAL_VALUE).get();
-        var del = clusterClient.customCommand(new String[] {"DEL", key}).get();
+        ClusterValue<Object> del = clusterClient.customCommand(new String[] {"DEL", key}).get();
         assertEquals(1L, del.getSingleValue());
-        var data = clusterClient.get(key).get();
+        String data = clusterClient.get(key).get();
         assertNull(data);
     }
 
@@ -456,7 +458,7 @@ public class CommandTests {
         //       3) "92d73b6eb847604b63c7f7cbbf39b148acdd1318"
         //       4) (empty array)
         // Extracting first slot key
-        var slotKey =
+        String slotKey =
                 (String) ((Object[]) ((Object[]) ((Object[]) slotData.getSingleValue())[0])[2])[2];
 
         Section[] sections = {CLIENTS};
@@ -496,7 +498,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void clientId(GlideClusterClient clusterClient) {
-        var id = clusterClient.clientId().get();
+        Long id = clusterClient.clientId().get();
         assertTrue(id > 0);
     }
 
@@ -504,7 +506,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void clientId_with_single_node_route(GlideClusterClient clusterClient) {
-        var data = clusterClient.clientId(RANDOM).get();
+        ClusterValue<Long> data = clusterClient.clientId(RANDOM).get();
         assertTrue(data.getSingleValue() > 0L);
     }
 
@@ -512,7 +514,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void clientId_with_multi_node_route(GlideClusterClient clusterClient) {
-        var data = clusterClient.clientId(ALL_NODES).get();
+        ClusterValue<Long> data = clusterClient.clientId(ALL_NODES).get();
         data.getMultiValue().values().forEach(id -> assertTrue(id > 0));
     }
 
@@ -523,7 +525,7 @@ public class CommandTests {
         // TODO replace with the corresponding command once implemented
         clusterClient.customCommand(new String[] {"client", "setname", "clientGetName"}).get();
 
-        var name = clusterClient.clientGetName().get();
+        String name = clusterClient.clientGetName().get();
 
         assertEquals("clientGetName", name);
     }
@@ -538,7 +540,7 @@ public class CommandTests {
                         new String[] {"client", "setname", "clientGetName_with_single_node_route"}, ALL_NODES)
                 .get();
 
-        var name = clusterClient.clientGetName(RANDOM).get();
+        ClusterValue<String> name = clusterClient.clientGetName(RANDOM).get();
 
         assertEquals("clientGetName_with_single_node_route", name.getSingleValue());
     }
@@ -553,7 +555,7 @@ public class CommandTests {
                         new String[] {"client", "setname", "clientGetName_with_multi_node_route"}, ALL_NODES)
                 .get();
 
-        var name = clusterClient.clientGetName(ALL_NODES).get();
+        ClusterValue<String> name = clusterClient.clientGetName(ALL_NODES).get();
 
         assertEquals("clientGetName_with_multi_node_route", getFirstEntryFromMultiValue(name));
     }
@@ -566,13 +568,13 @@ public class CommandTests {
         clusterClient.info(new Section[] {STATS}).get();
         clusterClient.info(new Section[] {STATS}).get();
 
-        var data = clusterClient.info(new Section[] {STATS}).get();
+        ClusterValue<String> data = clusterClient.info(new Section[] {STATS}).get();
         // always use the same node address for before and after
         final String firstNodeAddress = getFirstKeyFromMultiValue(data);
         String firstNodeInfo = data.getMultiValue().get(firstNodeAddress);
         long valueBefore = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
-        var result = clusterClient.configResetStat().get();
+        String result = clusterClient.configResetStat().get();
         assertEquals(OK, result);
 
         data = clusterClient.info(new Section[] {STATS}).get();
@@ -592,10 +594,10 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void config_rewrite_non_existent_config_file(GlideClusterClient clusterClient) {
-        var info = clusterClient.info(new Section[] {SERVER}, RANDOM).get();
-        var configFile = parseInfoResponseToMap(info.getSingleValue()).get("config_file");
+        ClusterValue<String> info = clusterClient.info(new Section[] {SERVER}, RANDOM).get();
+        String configFile = parseInfoResponseToMap(info.getSingleValue()).get("config_file");
 
-        if (configFile.isEmpty()) {
+        if (configFile == null || configFile.isEmpty()) {
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> clusterClient.configRewrite().get());
             assertInstanceOf(RequestException.class, executionException.getCause());
@@ -618,7 +620,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void configGet_with_no_args_returns_error(GlideClusterClient clusterClient) {
-        var exception =
+        ExecutionException exception =
                 assertThrows(
                         ExecutionException.class, () -> clusterClient.configGet(new String[] {}).get());
         assertInstanceOf(GlideException.class, exception.getCause());
@@ -628,7 +630,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void configGet_with_wildcard(GlideClusterClient clusterClient) {
-        var data = clusterClient.configGet(new String[] {"*file"}).get();
+        Map<String, String> data = clusterClient.configGet(new String[] {"*file"}).get();
         assertTrue(data.size() > 5);
         assertTrue(data.containsKey("pidfile"));
         assertTrue(data.containsKey("logfile"));
@@ -639,7 +641,7 @@ public class CommandTests {
     @SneakyThrows
     public void configGet_with_multiple_params(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        var data = clusterClient.configGet(new String[] {"pidfile", "logfile"}).get();
+        Map<String, String> data = clusterClient.configGet(new String[] {"pidfile", "logfile"}).get();
         assertAll(
                 () -> assertEquals(2, data.size()),
                 () -> assertTrue(data.containsKey("pidfile")),
@@ -650,11 +652,12 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void configGet_with_wildcard_and_multi_node_route(GlideClusterClient clusterClient) {
-        var data = clusterClient.configGet(new String[] {"*file"}, ALL_PRIMARIES).get();
+        ClusterValue<Map<String, String>> data =
+                clusterClient.configGet(new String[] {"*file"}, ALL_PRIMARIES).get();
         assertTrue(data.hasMultiData());
         assertTrue(data.getMultiValue().size() > 1);
         Map<String, String> config =
-                data.getMultiValue().get(data.getMultiValue().keySet().toArray(String[]::new)[0]);
+                data.getMultiValue().get(data.getMultiValue().keySet().toArray(new String[0])[0]);
         assertAll(
                 () -> assertTrue(config.size() > 5),
                 () -> assertTrue(config.containsKey("pidfile")),
@@ -665,14 +668,14 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void configSet_a_parameter(GlideClusterClient clusterClient) {
-        var oldValue = clusterClient.configGet(new String[] {"maxclients"}).get().get("maxclients");
+        String oldValue = clusterClient.configGet(new String[] {"maxclients"}).get().get("maxclients");
 
-        var response = clusterClient.configSet(Map.of("maxclients", "42")).get();
+        String response = clusterClient.configSet(Collections.singletonMap("maxclients", "42")).get();
         assertEquals(OK, response);
-        var newValue = clusterClient.configGet(new String[] {"maxclients"}).get();
+        Map<String, String> newValue = clusterClient.configGet(new String[] {"maxclients"}).get();
         assertEquals("42", newValue.get("maxclients"));
 
-        response = clusterClient.configSet(Map.of("maxclients", oldValue)).get();
+        response = clusterClient.configSet(Collections.singletonMap("maxclients", oldValue)).get();
         assertEquals(OK, response);
     }
 
@@ -680,20 +683,26 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void configSet_a_parameter_with_routing(GlideClusterClient clusterClient) {
-        var oldValue =
+        String oldValue =
                 clusterClient
                         .configGet(new String[] {"cluster-node-timeout"})
                         .get()
                         .get("cluster-node-timeout");
 
-        var response =
-                clusterClient.configSet(Map.of("cluster-node-timeout", "100500"), ALL_NODES).get();
+        String response =
+                clusterClient
+                        .configSet(Collections.singletonMap("cluster-node-timeout", "100500"), ALL_NODES)
+                        .get();
         assertEquals(OK, response);
 
-        var newValue = clusterClient.configGet(new String[] {"cluster-node-timeout"}).get();
+        Map<String, String> newValue =
+                clusterClient.configGet(new String[] {"cluster-node-timeout"}).get();
         assertEquals("100500", newValue.get("cluster-node-timeout"));
 
-        response = clusterClient.configSet(Map.of("cluster-node-timeout", oldValue), ALL_NODES).get();
+        response =
+                clusterClient
+                        .configSet(Collections.singletonMap("cluster-node-timeout", oldValue), ALL_NODES)
+                        .get();
         assertEquals(OK, response);
     }
 
@@ -814,7 +823,7 @@ public class CommandTests {
 
         // check the first node's server time
         Object[] serverTime =
-                result.getMultiValue().get(result.getMultiValue().keySet().toArray(String[]::new)[0]);
+                result.getMultiValue().get(result.getMultiValue().keySet().toArray(new String[0])[0]);
 
         assertEquals(2, serverTime.length);
         assertTrue(
@@ -828,12 +837,12 @@ public class CommandTests {
     @SneakyThrows
     public void lastsave(GlideClusterClient clusterClient) {
         long result = clusterClient.lastsave().get();
-        var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
+        Instant yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
 
         assertTrue(Instant.ofEpochSecond(result).isAfter(yesterday));
 
         ClusterValue<Long> data = clusterClient.lastsave(ALL_NODES).get();
-        for (var value : data.getMultiValue().values()) {
+        for (Long value : data.getMultiValue().values()) {
             assertTrue(Instant.ofEpochSecond(value).isAfter(yesterday));
         }
     }
@@ -842,7 +851,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void lolwut_lolwut(GlideClusterClient clusterClient) {
-        var response = clusterClient.lolwut().get();
+        String response = clusterClient.lolwut().get();
         System.out.printf("%nLOLWUT cluster client standard response%n%s%n", response);
         assertTrue(
                 response.contains("ver") && response.contains(SERVER_VERSION.toString()),
@@ -867,15 +876,15 @@ public class CommandTests {
                 response.contains("ver") && response.contains(SERVER_VERSION.toString()),
                 "Expected LOLWUT output to contain version string");
 
-        var clusterResponse = clusterClient.lolwut(ALL_NODES).get();
-        for (var nodeResponse : clusterResponse.getMultiValue().values()) {
+        ClusterValue<String> clusterResponse = clusterClient.lolwut(ALL_NODES).get();
+        for (String nodeResponse : clusterResponse.getMultiValue().values()) {
             assertTrue(
                     nodeResponse.contains("ver") && nodeResponse.contains(SERVER_VERSION.toString()),
                     "Expected LOLWUT output to contain version string");
         }
 
         clusterResponse = clusterClient.lolwut(new int[] {10, 20}, ALL_NODES).get();
-        for (var nodeResponse : clusterResponse.getMultiValue().values()) {
+        for (String nodeResponse : clusterResponse.getMultiValue().values()) {
             assertTrue(
                     nodeResponse.contains("ver") && nodeResponse.contains(SERVER_VERSION.toString()),
                     "Expected LOLWUT output to contain version string");
@@ -897,7 +906,7 @@ public class CommandTests {
         if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
             // Test with version 9 and 2 parameters on all nodes
             clusterResponse = clusterClient.lolwut(9, new int[] {30, 4}, ALL_NODES).get();
-            for (var nodeResponse : clusterResponse.getMultiValue().values()) {
+            for (String nodeResponse : clusterResponse.getMultiValue().values()) {
                 assertTrue(
                         nodeResponse.contains("ver") && nodeResponse.contains(SERVER_VERSION.toString()),
                         "Expected LOLWUT output to contain version string");
@@ -961,7 +970,7 @@ public class CommandTests {
         assertEquals(0L, clusterClient.dbsize(route).get());
 
         if (!is62orHigher) {
-            var executionException =
+            ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> clusterClient.flushdb(SYNC).get());
             assertInstanceOf(RequestException.class, executionException.getCause());
         }
@@ -976,17 +985,20 @@ public class CommandTests {
         String oldPolicy =
                 clusterClient.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
         try {
-            assertEquals(OK, clusterClient.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu")).get());
+            assertEquals(
+                    OK,
+                    clusterClient.configSet(Collections.singletonMap(maxmemoryPolicy, "allkeys-lfu")).get());
             assertEquals(OK, clusterClient.set(key, "").get());
             assertTrue(clusterClient.objectFreq(key).get() >= 0L);
         } finally {
-            clusterClient.configSet(Map.of(maxmemoryPolicy, oldPolicy)).get();
+            clusterClient.configSet(Collections.singletonMap(maxmemoryPolicy, oldPolicy)).get();
         }
     }
 
     @SneakyThrows
     public static Stream<Arguments> callCrossSlotCommandsWhichShouldFail() {
-        var clusterClient = GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+        GlideClusterClient clusterClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
         return Stream.of(
                 Arguments.of("smove", null, clusterClient.smove("abc", "zxy", "lkn")),
                 Arguments.of("rename", null, clusterClient.rename("abc", "xyz")),
@@ -1147,9 +1159,9 @@ public class CommandTests {
                                 new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")},
                                 new GlideString[0])),
                 Arguments.of(
-                        "xread", null, clusterClient.xread(Map.of("abc", "stream1", "zxy", "stream2"))),
+                        "xread", null, clusterClient.xread(createMap("abc", "stream1", "zxy", "stream2"))),
                 Arguments.of("copy", "6.2.0", clusterClient.copy("abc", "def", true)),
-                Arguments.of("msetnx", null, clusterClient.msetnx(Map.of("abc", "def", "ghi", "jkl"))),
+                Arguments.of("msetnx", null, clusterClient.msetnx(createMap("abc", "def", "ghi", "jkl"))),
                 Arguments.of("lcs", "7.0.0", clusterClient.lcs("abc", "def")),
                 Arguments.of("lcsLEN", "7.0.0", clusterClient.lcsLen("abc", "def")),
                 Arguments.of("lcsIdx", "7.0.0", clusterClient.lcsIdx("abc", "def")),
@@ -1187,20 +1199,21 @@ public class CommandTests {
         if (minVer != null) {
             assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo(minVer));
         }
-        var executionException = assertThrows(ExecutionException.class, future::get);
+        ExecutionException executionException = assertThrows(ExecutionException.class, future::get);
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
     }
 
     @SneakyThrows
     public static Stream<Arguments> callCrossSlotCommandsWhichShouldPass() {
-        var clusterClient = GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+        GlideClusterClient clusterClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
         return Stream.of(
                 Arguments.of("exists", clusterClient.exists(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of("unlink", clusterClient.unlink(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of("del", clusterClient.del(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of("mget", clusterClient.mget(new String[] {"abc", "zxy", "lkn"})),
-                Arguments.of("mset", clusterClient.mset(Map.of("abc", "1", "zxy", "2", "lkn", "3"))),
+                Arguments.of("mset", clusterClient.mset(createMap("abc", "1", "zxy", "2", "lkn", "3"))),
                 Arguments.of("touch", clusterClient.touch(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of(
                         "touch binary",
@@ -1222,7 +1235,7 @@ public class CommandTests {
         if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             assertEquals(OK, clusterClient.flushall(SYNC).get());
         } else {
-            var executionException =
+            ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> clusterClient.flushall(SYNC).get());
             assertInstanceOf(RequestException.class, executionException.getCause());
             assertEquals(OK, clusterClient.flushall(ASYNC).get());
@@ -1233,13 +1246,13 @@ public class CommandTests {
         String[] allKeys = keysResult.getSingleValue();
         assertEquals(0, allKeys.length);
 
-        var route = new SlotKeyRoute("key", PRIMARY);
+        Route route = new SlotKeyRoute("key", PRIMARY);
         assertEquals(OK, clusterClient.flushall().get());
         assertEquals(OK, clusterClient.flushall(route).get());
         assertEquals(OK, clusterClient.flushall(ASYNC).get());
         assertEquals(OK, clusterClient.flushall(ASYNC, route).get());
 
-        var replicaRoute = new SlotKeyRoute("key", REPLICA);
+        Route replicaRoute = new SlotKeyRoute("key", REPLICA);
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             // Since Valkey 8.0.0 flushall can run on replicas
             assertEquals(OK, clusterClient.flushall(route).get());
@@ -1273,17 +1286,19 @@ public class CommandTests {
         String libName = "mylib1c_" + singleNodeRoute;
         String funcName = "myfunc1c_" + singleNodeRoute;
         // function $funcName returns first argument
-        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
+        String code =
+                generateLuaLibCode(libName, Collections.singletonMap(funcName, "return args[1]"), true);
         Route route = singleNodeRoute ? new SlotKeyRoute("1", PRIMARY) : ALL_PRIMARIES;
 
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
         assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
 
-        var fcallResult = clusterClient.fcall(funcName, new String[] {"one", "two"}, route).get();
+        ClusterValue<Object> fcallResult =
+                clusterClient.fcall(funcName, new String[] {"one", "two"}, route).get();
         if (route instanceof SingleNodeRoute) {
             assertEquals("one", fcallResult.getSingleValue());
         } else {
-            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+            for (Object nodeResponse : fcallResult.getMultiValue().values()) {
                 assertEquals("one", nodeResponse);
             }
         }
@@ -1291,31 +1306,31 @@ public class CommandTests {
         if (route instanceof SingleNodeRoute) {
             assertEquals("one", fcallResult.getSingleValue());
         } else {
-            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+            for (Object nodeResponse : fcallResult.getMultiValue().values()) {
                 assertEquals("one", nodeResponse);
             }
         }
 
-        var expectedDescription =
+        Map<String, String> expectedDescription =
                 new HashMap<String, String>() {
                     {
                         put(funcName, null);
                     }
                 };
-        var expectedFlags =
+        Map<String, Set<String>> expectedFlags =
                 new HashMap<String, Set<String>>() {
                     {
-                        put(funcName, Set.of("no-writes"));
+                        put(funcName, Collections.singleton("no-writes"));
                     }
                 };
 
-        var response = clusterClient.functionList(false, route).get();
+        ClusterValue<Map<String, Object>[]> response = clusterClient.functionList(false, route).get();
         if (singleNodeRoute) {
-            var flist = response.getSingleValue();
+            Map<String, Object>[] flist = response.getSingleValue();
             checkFunctionListResponse(
                     flist, libName, expectedDescription, expectedFlags, Optional.empty());
         } else {
-            for (var flist : response.getMultiValue().values()) {
+            for (Map<String, Object>[] flist : response.getMultiValue().values()) {
                 checkFunctionListResponse(
                         flist, libName, expectedDescription, expectedFlags, Optional.empty());
             }
@@ -1323,18 +1338,18 @@ public class CommandTests {
 
         response = clusterClient.functionList(true, route).get();
         if (singleNodeRoute) {
-            var flist = response.getSingleValue();
+            Map<String, Object>[] flist = response.getSingleValue();
             checkFunctionListResponse(
                     flist, libName, expectedDescription, expectedFlags, Optional.of(code));
         } else {
-            for (var flist : response.getMultiValue().values()) {
+            for (Map<String, Object>[] flist : response.getMultiValue().values()) {
                 checkFunctionListResponse(
                         flist, libName, expectedDescription, expectedFlags, Optional.of(code));
             }
         }
 
         // re-load library without overwriting
-        var executionException =
+        ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> clusterClient.functionLoad(code, false, route).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
@@ -1348,27 +1363,28 @@ public class CommandTests {
         // function $newFuncName returns argument array len
         String newCode =
                 generateLuaLibCode(
-                        libName, Map.of(funcName, "return args[1]", newFuncName, "return #args"), true);
+                        libName, createMap(funcName, "return args[1]", newFuncName, "return #args"), true);
 
         assertEquals(libName, clusterClient.functionLoad(newCode, true, route).get());
 
         expectedDescription.put(newFuncName, null);
-        expectedFlags.put(newFuncName, Set.of("no-writes"));
+        expectedFlags.put(newFuncName, Collections.singleton("no-writes"));
 
         response = clusterClient.functionList(false, route).get();
         if (singleNodeRoute) {
-            var flist = response.getSingleValue();
+            Map<String, Object>[] flist = response.getSingleValue();
             checkFunctionListResponse(
                     flist, libName, expectedDescription, expectedFlags, Optional.empty());
         } else {
-            for (var flist : response.getMultiValue().values()) {
+            for (Map<String, Object>[] flist : response.getMultiValue().values()) {
                 checkFunctionListResponse(
                         flist, libName, expectedDescription, expectedFlags, Optional.empty());
             }
         }
 
         // load new lib and delete it - first lib remains loaded
-        String anotherLib = generateLuaLibCode("anotherLib", Map.of("anotherFunc", ""), false);
+        String anotherLib =
+                generateLuaLibCode("anotherLib", Collections.singletonMap("anotherFunc", ""), false);
         assertEquals("anotherLib", clusterClient.functionLoad(anotherLib, true, route).get());
         assertEquals(OK, clusterClient.functionDelete("anotherLib", route).get());
 
@@ -1382,11 +1398,11 @@ public class CommandTests {
 
         response = clusterClient.functionList(true, route).get();
         if (singleNodeRoute) {
-            var flist = response.getSingleValue();
+            Map<String, Object>[] flist = response.getSingleValue();
             checkFunctionListResponse(
                     flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
         } else {
-            for (var flist : response.getMultiValue().values()) {
+            for (Map<String, Object>[] flist : response.getMultiValue().values()) {
                 checkFunctionListResponse(
                         flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
             }
@@ -1396,7 +1412,7 @@ public class CommandTests {
         if (route instanceof SingleNodeRoute) {
             assertEquals(2L, fcallResult.getSingleValue());
         } else {
-            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+            for (Object nodeResponse : fcallResult.getMultiValue().values()) {
                 assertEquals(2L, nodeResponse);
             }
         }
@@ -1405,7 +1421,7 @@ public class CommandTests {
         if (route instanceof SingleNodeRoute) {
             assertEquals(2L, fcallResult.getSingleValue());
         } else {
-            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+            for (Object nodeResponse : fcallResult.getMultiValue().values()) {
                 assertEquals(2L, nodeResponse);
             }
         }
@@ -1424,18 +1440,19 @@ public class CommandTests {
         GlideString funcName = gs("myfunc1c_" + singleNodeRoute);
         // function $funcName returns first argument
         GlideString code =
-                generateLuaLibCodeBinary(libName, Map.of(funcName, gs("return args[1]")), true);
+                generateLuaLibCodeBinary(
+                        libName, Collections.singletonMap(funcName, gs("return args[1]")), true);
         Route route = singleNodeRoute ? new SlotKeyRoute("1", PRIMARY) : ALL_PRIMARIES;
 
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
         assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
 
-        var fcallResult =
+        ClusterValue<Object> fcallResult =
                 clusterClient.fcall(funcName, new GlideString[] {gs("one"), gs("two")}, route).get();
         if (route instanceof SingleNodeRoute) {
             assertEquals(gs("one"), fcallResult.getSingleValue());
         } else {
-            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+            for (Object nodeResponse : fcallResult.getMultiValue().values()) {
                 assertEquals(gs("one"), nodeResponse);
             }
         }
@@ -1446,31 +1463,32 @@ public class CommandTests {
         if (route instanceof SingleNodeRoute) {
             assertEquals(gs("one"), fcallResult.getSingleValue());
         } else {
-            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+            for (Object nodeResponse : fcallResult.getMultiValue().values()) {
                 assertEquals(gs("one"), nodeResponse);
             }
         }
 
-        var expectedDescription =
+        Map<GlideString, GlideString> expectedDescription =
                 new HashMap<GlideString, GlideString>() {
                     {
                         put(funcName, null);
                     }
                 };
-        var expectedFlags =
+        Map<GlideString, Set<GlideString>> expectedFlags =
                 new HashMap<GlideString, Set<GlideString>>() {
                     {
-                        put(funcName, Set.of(gs("no-writes")));
+                        put(funcName, Collections.singleton(gs("no-writes")));
                     }
                 };
 
-        var response = clusterClient.functionListBinary(false, route).get();
+        ClusterValue<Map<GlideString, Object>[]> response =
+                clusterClient.functionListBinary(false, route).get();
         if (singleNodeRoute) {
-            var flist = response.getSingleValue();
+            Map<GlideString, Object>[] flist = response.getSingleValue();
             checkFunctionListResponseBinary(
                     flist, libName, expectedDescription, expectedFlags, Optional.empty());
         } else {
-            for (var flist : response.getMultiValue().values()) {
+            for (Map<GlideString, Object>[] flist : response.getMultiValue().values()) {
                 checkFunctionListResponseBinary(
                         flist, libName, expectedDescription, expectedFlags, Optional.empty());
             }
@@ -1478,18 +1496,18 @@ public class CommandTests {
 
         response = clusterClient.functionListBinary(true, route).get();
         if (singleNodeRoute) {
-            var flist = response.getSingleValue();
+            Map<GlideString, Object>[] flist = response.getSingleValue();
             checkFunctionListResponseBinary(
                     flist, libName, expectedDescription, expectedFlags, Optional.of(code));
         } else {
-            for (var flist : response.getMultiValue().values()) {
+            for (Map<GlideString, Object>[] flist : response.getMultiValue().values()) {
                 checkFunctionListResponseBinary(
                         flist, libName, expectedDescription, expectedFlags, Optional.of(code));
             }
         }
 
         // re-load library without overwriting
-        var executionException =
+        ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> clusterClient.functionLoad(code, false, route).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
@@ -1503,20 +1521,22 @@ public class CommandTests {
         // function $newFuncName returns argument array len
         GlideString newCode =
                 generateLuaLibCodeBinary(
-                        libName, Map.of(funcName, gs("return args[1]"), newFuncName, gs("return #args")), true);
+                        libName,
+                        createMap(funcName, gs("return args[1]"), newFuncName, gs("return #args")),
+                        true);
 
         assertEquals(libName, clusterClient.functionLoad(newCode, true, route).get());
 
         expectedDescription.put(newFuncName, null);
-        expectedFlags.put(newFuncName, Set.of(gs("no-writes")));
+        expectedFlags.put(newFuncName, Collections.singleton(gs("no-writes")));
 
         response = clusterClient.functionListBinary(false, route).get();
         if (singleNodeRoute) {
-            var flist = response.getSingleValue();
+            Map<GlideString, Object>[] flist = response.getSingleValue();
             checkFunctionListResponseBinary(
                     flist, libName, expectedDescription, expectedFlags, Optional.empty());
         } else {
-            for (var flist : response.getMultiValue().values()) {
+            for (Map<GlideString, Object>[] flist : response.getMultiValue().values()) {
                 checkFunctionListResponseBinary(
                         flist, libName, expectedDescription, expectedFlags, Optional.empty());
             }
@@ -1524,7 +1544,8 @@ public class CommandTests {
 
         // load new lib and delete it - first lib remains loaded
         GlideString anotherLib =
-                generateLuaLibCodeBinary(gs("anotherLib"), Map.of(gs("anotherFunc"), gs("")), false);
+                generateLuaLibCodeBinary(
+                        gs("anotherLib"), Collections.singletonMap(gs("anotherFunc"), gs("")), false);
         assertEquals(gs("anotherLib"), clusterClient.functionLoad(anotherLib, true, route).get());
         assertEquals(OK, clusterClient.functionDelete(gs("anotherLib"), route).get());
 
@@ -1538,11 +1559,11 @@ public class CommandTests {
 
         response = clusterClient.functionListBinary(true, route).get();
         if (singleNodeRoute) {
-            var flist = response.getSingleValue();
+            Map<GlideString, Object>[] flist = response.getSingleValue();
             checkFunctionListResponseBinary(
                     flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
         } else {
-            for (var flist : response.getMultiValue().values()) {
+            for (Map<GlideString, Object>[] flist : response.getMultiValue().values()) {
                 checkFunctionListResponseBinary(
                         flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
             }
@@ -1553,7 +1574,7 @@ public class CommandTests {
         if (route instanceof SingleNodeRoute) {
             assertEquals(2L, fcallResult.getSingleValue());
         } else {
-            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+            for (Object nodeResponse : fcallResult.getMultiValue().values()) {
                 assertEquals(2L, nodeResponse);
             }
         }
@@ -1564,7 +1585,7 @@ public class CommandTests {
         if (route instanceof SingleNodeRoute) {
             assertEquals(2L, fcallResult.getSingleValue());
         } else {
-            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+            for (Object nodeResponse : fcallResult.getMultiValue().values()) {
                 assertEquals(2L, nodeResponse);
             }
         }
@@ -1585,24 +1606,25 @@ public class CommandTests {
         // function $funcName returns first argument
         // generating RO functions to execution on a replica (default routing goes to RANDOM including
         // replicas)
-        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
+        String code =
+                generateLuaLibCode(libName, Collections.singletonMap(funcName, "return args[1]"), true);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
         assertEquals("one", clusterClient.fcall(funcName, new String[] {"one", "two"}).get());
         assertEquals("one", clusterClient.fcallReadOnly(funcName, new String[] {"one", "two"}).get());
 
-        var flist = clusterClient.functionList(false).get();
-        var expectedDescription =
+        Map<String, Object>[] flist = clusterClient.functionList(false).get();
+        Map<String, String> expectedDescription =
                 new HashMap<String, String>() {
                     {
                         put(funcName, null);
                     }
                 };
-        var expectedFlags =
+        Map<String, Set<String>> expectedFlags =
                 new HashMap<String, Set<String>>() {
                     {
-                        put(funcName, Set.of("no-writes"));
+                        put(funcName, Collections.singleton("no-writes"));
                     }
                 };
         checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
@@ -1612,7 +1634,7 @@ public class CommandTests {
                 flist, libName, expectedDescription, expectedFlags, Optional.of(code));
 
         // re-load library without overwriting
-        var executionException =
+        ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> clusterClient.functionLoad(code, false).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
@@ -1625,12 +1647,13 @@ public class CommandTests {
         // function $newFuncName returns argument array len
         String newCode =
                 generateLuaLibCode(
-                        libName, Map.of(funcName, "return args[1]", newFuncName, "return #args"), true);
+                        libName, createMap(funcName, "return args[1]", newFuncName, "return #args"), true);
 
         assertEquals(libName, clusterClient.functionLoad(newCode, true).get());
 
         // load new lib and delete it - first lib remains loaded
-        String anotherLib = generateLuaLibCode("anotherLib", Map.of("anotherFunc", ""), false);
+        String anotherLib =
+                generateLuaLibCode("anotherLib", Collections.singletonMap("anotherFunc", ""), false);
         assertEquals("anotherLib", clusterClient.functionLoad(anotherLib, true).get());
         assertEquals(OK, clusterClient.functionDelete("anotherLib").get());
 
@@ -1643,7 +1666,7 @@ public class CommandTests {
 
         flist = clusterClient.functionList(libName, false).get();
         expectedDescription.put(newFuncName, null);
-        expectedFlags.put(newFuncName, Set.of("no-writes"));
+        expectedFlags.put(newFuncName, Collections.singleton("no-writes"));
         checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
         flist = clusterClient.functionList(libName, true).get();
@@ -1671,7 +1694,8 @@ public class CommandTests {
         // generating RO functions to execution on a replica (default routing goes to RANDOM including
         // replicas)
         GlideString code =
-                generateLuaLibCodeBinary(libName, Map.of(funcName, gs("return args[1]")), true);
+                generateLuaLibCodeBinary(
+                        libName, Collections.singletonMap(funcName, gs("return args[1]")), true);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
@@ -1681,17 +1705,17 @@ public class CommandTests {
                 gs("one"),
                 clusterClient.fcallReadOnly(funcName, new GlideString[] {gs("one"), gs("two")}).get());
 
-        var flist = clusterClient.functionListBinary(false).get();
-        var expectedDescription =
+        Map<GlideString, Object>[] flist = clusterClient.functionListBinary(false).get();
+        Map<GlideString, GlideString> expectedDescription =
                 new HashMap<GlideString, GlideString>() {
                     {
                         put(funcName, null);
                     }
                 };
-        var expectedFlags =
+        Map<GlideString, Set<GlideString>> expectedFlags =
                 new HashMap<GlideString, Set<GlideString>>() {
                     {
-                        put(funcName, Set.of(gs("no-writes")));
+                        put(funcName, Collections.singleton(gs("no-writes")));
                     }
                 };
         checkFunctionListResponseBinary(
@@ -1702,7 +1726,7 @@ public class CommandTests {
                 flist, libName, expectedDescription, expectedFlags, Optional.of(code));
 
         // re-load library without overwriting
-        var executionException =
+        ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> clusterClient.functionLoad(code, false).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
@@ -1715,13 +1739,16 @@ public class CommandTests {
         // function $newFuncName returns argument array len
         GlideString newCode =
                 generateLuaLibCodeBinary(
-                        libName, Map.of(funcName, gs("return args[1]"), newFuncName, gs("return #args")), true);
+                        libName,
+                        createMap(funcName, gs("return args[1]"), newFuncName, gs("return #args")),
+                        true);
 
         assertEquals(libName, clusterClient.functionLoad(newCode, true).get());
 
         // load new lib and delete it - first lib remains loaded
         GlideString anotherLib =
-                generateLuaLibCodeBinary(gs("anotherLib"), Map.of(gs("anotherFunc"), gs("")), false);
+                generateLuaLibCodeBinary(
+                        gs("anotherLib"), Collections.singletonMap(gs("anotherFunc"), gs("")), false);
         assertEquals(gs("anotherLib"), clusterClient.functionLoad(anotherLib, true).get());
         assertEquals(OK, clusterClient.functionDelete(gs("anotherLib")).get());
 
@@ -1734,7 +1761,7 @@ public class CommandTests {
 
         flist = clusterClient.functionListBinary(libName, false).get();
         expectedDescription.put(newFuncName, null);
-        expectedFlags.put(newFuncName, Set.of(gs("no-writes")));
+        expectedFlags.put(newFuncName, Collections.singleton(gs("no-writes")));
         checkFunctionListResponseBinary(
                 flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
@@ -1762,20 +1789,22 @@ public class CommandTests {
         String libName = "mylib_with_keys";
         String funcName = "myfunc_with_keys";
         // function $funcName returns array with first two arguments
-        String code = generateLuaLibCode(libName, Map.of(funcName, "return {keys[1], keys[2]}"), true);
+        String code =
+                generateLuaLibCode(
+                        libName, Collections.singletonMap(funcName, "return {keys[1], keys[2]}"), true);
 
         // loading function to the node where key is stored
         assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
 
         // due to common prefix, all keys are mapped to the same hash slot
-        var functionResult =
+        Object functionResult =
                 clusterClient.fcall(funcName, new String[] {key + 1, key + 2}, new String[0]).get();
         assertArrayEquals(new Object[] {key + 1, key + 2}, (Object[]) functionResult);
         functionResult =
                 clusterClient.fcallReadOnly(funcName, new String[] {key + 1, key + 2}, new String[0]).get();
         assertArrayEquals(new Object[] {key + 1, key + 2}, (Object[]) functionResult);
 
-        var transaction =
+        ClusterBatch transaction =
                 new ClusterBatch(true)
                         .fcall(funcName, new String[] {key + 1, key + 2}, new String[0])
                         .fcallReadOnly(funcName, new String[] {key + 1, key + 2}, new String[0]);
@@ -1807,12 +1836,13 @@ public class CommandTests {
         GlideString funcName = gs("myfunc_with_keys_" + prefix);
         // function $funcName returns array with first argument
         String code =
-                generateLuaLibCode(libName, Map.of(funcName.toString(), "return {args[1]}"), true);
+                generateLuaLibCode(
+                        libName, Collections.singletonMap(funcName.toString(), "return {args[1]}"), true);
 
         // loading function to the node where key is stored
         assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
 
-        var functionResult =
+        Object functionResult =
                 clusterClient
                         .fcall(funcName, new GlideString[] {gs(key)}, new GlideString[] {binaryString})
                         .get();
@@ -1823,7 +1853,7 @@ public class CommandTests {
                         .get();
         assertArrayEquals(new Object[] {binaryString}, (Object[]) functionResult);
 
-        var transaction =
+        ClusterBatch transaction =
                 new ClusterBatch(true)
                         .withBinaryOutput()
                         .fcall(funcName, new GlideString[] {gs(key)}, new GlideString[] {binaryString})
@@ -1858,7 +1888,8 @@ public class CommandTests {
         String funcName = libName;
 
         // function $funcName returns a magic number
-        String code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), false);
+        String code =
+                generateLuaLibCode(libName, Collections.singletonMap(funcName, "return 42"), false);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
@@ -1899,7 +1930,7 @@ public class CommandTests {
 
         // create the same function, but with RO flag
         String funcNameRO = funcName + "_ro";
-        code = generateLuaLibCode(libName, Map.of(funcNameRO, "return 42"), true);
+        code = generateLuaLibCode(libName, Collections.singletonMap(funcNameRO, "return 42"), true);
 
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
@@ -1926,7 +1957,9 @@ public class CommandTests {
         GlideString funcName = gs(libName);
 
         // function $funcName returns a magic number
-        String code = generateLuaLibCode(libName, Map.of(funcName.toString(), "return 42"), false);
+        String code =
+                generateLuaLibCode(
+                        libName, Collections.singletonMap(funcName.toString(), "return 42"), false);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
@@ -1967,7 +2000,7 @@ public class CommandTests {
 
         // create the same function, but with RO flag
         String funcNameRO = funcName.toString() + "_ro";
-        code = generateLuaLibCode(libName, Map.of(funcNameRO, "return 42"), true);
+        code = generateLuaLibCode(libName, createMap(funcNameRO, "return 42"), true);
 
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
@@ -1991,7 +2024,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
 
         // nothing to kill
-        var exception =
+        ExecutionException exception =
                 assertThrows(ExecutionException.class, () -> clusterClient.functionKill().get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
@@ -1999,7 +2032,7 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
-        try (var testClient =
+        try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
@@ -2047,7 +2080,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
 
         // nothing to kill
-        var exception =
+        ExecutionException exception =
                 assertThrows(ExecutionException.class, () -> clusterClient.functionKill().get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
@@ -2055,7 +2088,7 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
-        try (var testClient =
+        try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
@@ -2105,7 +2138,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
 
         // nothing to kill
-        var exception =
+        ExecutionException exception =
                 assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
@@ -2113,7 +2146,7 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
-        try (var testClient =
+        try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
@@ -2159,7 +2192,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
 
         // nothing to kill
-        var exception =
+        ExecutionException exception =
                 assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
@@ -2167,7 +2200,7 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
-        try (var testClient =
+        try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
@@ -2214,7 +2247,7 @@ public class CommandTests {
         promise.complete(null);
 
         // nothing to kill
-        var exception =
+        ExecutionException exception =
                 assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
@@ -2222,7 +2255,7 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
-        try (var testClient =
+        try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
@@ -2283,7 +2316,7 @@ public class CommandTests {
         promise.complete(null);
 
         // nothing to kill
-        var exception =
+        ExecutionException exception =
                 assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
@@ -2291,7 +2324,7 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
-        try (var testClient =
+        try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
@@ -2343,30 +2376,31 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
 
         // function $funcName returns first argument
-        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), false);
+        String code =
+                generateLuaLibCode(libName, Collections.singletonMap(funcName, "return args[1]"), false);
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
-        var response = clusterClient.functionStats().get().getMultiValue();
-        for (var nodeResponse : response.values()) {
+        ClusterValue<Map<String, Map<String, Object>>> response = clusterClient.functionStats().get();
+        for (Map<String, Map<String, Object>> nodeResponse : response.getMultiValue().values()) {
             checkFunctionStatsResponse(nodeResponse, new String[0], 1, 1);
         }
 
         code =
                 generateLuaLibCode(
                         libName + "_2",
-                        Map.of(funcName + "_2", "return 'OK'", funcName + "_3", "return 42"),
+                        createMap(funcName + "_2", "return 'OK'", funcName + "_3", "return 42"),
                         false);
         assertEquals(libName + "_2", clusterClient.functionLoad(code, true).get());
 
-        response = clusterClient.functionStats().get().getMultiValue();
-        for (var nodeResponse : response.values()) {
+        response = clusterClient.functionStats().get();
+        for (Map<String, Map<String, Object>> nodeResponse : response.getMultiValue().values()) {
             checkFunctionStatsResponse(nodeResponse, new String[0], 2, 3);
         }
 
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
 
-        response = clusterClient.functionStats().get().getMultiValue();
-        for (var nodeResponse : response.values()) {
+        response = clusterClient.functionStats().get();
+        for (Map<String, Map<String, Object>> nodeResponse : response.getMultiValue().values()) {
             checkFunctionStatsResponse(nodeResponse, new String[0], 0, 0);
         }
     }
@@ -2383,18 +2417,21 @@ public class CommandTests {
 
         // function $funcName returns first argument
         GlideString code =
-                generateLuaLibCodeBinary(libName, Map.of(funcName, gs("return args[1]")), false);
+                generateLuaLibCodeBinary(
+                        libName, Collections.singletonMap(funcName, gs("return args[1]")), false);
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
-        var response = clusterClient.functionStatsBinary().get().getMultiValue();
-        for (var nodeResponse : response.values()) {
+        ClusterValue<Map<GlideString, Map<GlideString, Object>>> response =
+                clusterClient.functionStatsBinary().get();
+        for (Map<GlideString, Map<GlideString, Object>> nodeResponse :
+                response.getMultiValue().values()) {
             checkFunctionStatsBinaryResponse(nodeResponse, new GlideString[0], 1, 1);
         }
 
         code =
                 generateLuaLibCodeBinary(
                         gs(libName.toString() + "_2"),
-                        Map.of(
+                        createMap(
                                 gs(funcName.toString() + "_2"),
                                 gs("return 'OK'"),
                                 gs(funcName.toString() + "_3"),
@@ -2402,15 +2439,17 @@ public class CommandTests {
                         false);
         assertEquals(gs(libName.toString() + "_2"), clusterClient.functionLoad(code, true).get());
 
-        response = clusterClient.functionStatsBinary().get().getMultiValue();
-        for (var nodeResponse : response.values()) {
+        response = clusterClient.functionStatsBinary().get();
+        for (Map<GlideString, Map<GlideString, Object>> nodeResponse :
+                response.getMultiValue().values()) {
             checkFunctionStatsBinaryResponse(nodeResponse, new GlideString[0], 2, 3);
         }
 
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
 
-        response = clusterClient.functionStatsBinary().get().getMultiValue();
-        for (var nodeResponse : response.values()) {
+        response = clusterClient.functionStatsBinary().get();
+        for (Map<GlideString, Map<GlideString, Object>> nodeResponse :
+                response.getMultiValue().values()) {
             checkFunctionStatsBinaryResponse(nodeResponse, new GlideString[0], 0, 0);
         }
     }
@@ -2428,14 +2467,16 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
 
         // function $funcName returns first argument
-        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), false);
+        String code =
+                generateLuaLibCode(libName, Collections.singletonMap(funcName, "return args[1]"), false);
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
-        var response = clusterClient.functionStats(route).get();
+        ClusterValue<Map<String, Map<String, Object>>> response =
+                clusterClient.functionStats(route).get();
         if (singleNodeRoute) {
             checkFunctionStatsResponse(response.getSingleValue(), new String[0], 1, 1);
         } else {
-            for (var nodeResponse : response.getMultiValue().values()) {
+            for (Map<String, Map<String, Object>> nodeResponse : response.getMultiValue().values()) {
                 checkFunctionStatsResponse(nodeResponse, new String[0], 1, 1);
             }
         }
@@ -2443,7 +2484,7 @@ public class CommandTests {
         code =
                 generateLuaLibCode(
                         libName + "_2",
-                        Map.of(funcName + "_2", "return 'OK'", funcName + "_3", "return 42"),
+                        createMap(funcName + "_2", "return 'OK'", funcName + "_3", "return 42"),
                         false);
         assertEquals(libName + "_2", clusterClient.functionLoad(code, true, route).get());
 
@@ -2451,7 +2492,7 @@ public class CommandTests {
         if (singleNodeRoute) {
             checkFunctionStatsResponse(response.getSingleValue(), new String[0], 2, 3);
         } else {
-            for (var nodeResponse : response.getMultiValue().values()) {
+            for (Map<String, Map<String, Object>> nodeResponse : response.getMultiValue().values()) {
                 checkFunctionStatsResponse(nodeResponse, new String[0], 2, 3);
             }
         }
@@ -2462,7 +2503,7 @@ public class CommandTests {
         if (singleNodeRoute) {
             checkFunctionStatsResponse(response.getSingleValue(), new String[0], 0, 0);
         } else {
-            for (var nodeResponse : response.getMultiValue().values()) {
+            for (Map<String, Map<String, Object>> nodeResponse : response.getMultiValue().values()) {
                 checkFunctionStatsResponse(nodeResponse, new String[0], 0, 0);
             }
         }
@@ -2483,14 +2524,17 @@ public class CommandTests {
 
         // function $funcName returns first argument
         GlideString code =
-                generateLuaLibCodeBinary(libName, Map.of(funcName, gs("return args[1]")), false);
+                generateLuaLibCodeBinary(
+                        libName, Collections.singletonMap(funcName, gs("return args[1]")), false);
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
-        var response = clusterClient.functionStatsBinary(route).get();
+        ClusterValue<Map<GlideString, Map<GlideString, Object>>> response =
+                clusterClient.functionStatsBinary(route).get();
         if (singleNodeRoute) {
             checkFunctionStatsBinaryResponse(response.getSingleValue(), new GlideString[0], 1, 1);
         } else {
-            for (var nodeResponse : response.getMultiValue().values()) {
+            for (Map<GlideString, Map<GlideString, Object>> nodeResponse :
+                    response.getMultiValue().values()) {
                 checkFunctionStatsBinaryResponse(nodeResponse, new GlideString[0], 1, 1);
             }
         }
@@ -2498,7 +2542,7 @@ public class CommandTests {
         code =
                 generateLuaLibCodeBinary(
                         gs(libName.toString() + "_2"),
-                        Map.of(
+                        createMap(
                                 gs(funcName.toString() + "_2"),
                                 gs("return 'OK'"),
                                 gs(funcName.toString() + "_3"),
@@ -2511,7 +2555,8 @@ public class CommandTests {
         if (singleNodeRoute) {
             checkFunctionStatsBinaryResponse(response.getSingleValue(), new GlideString[0], 2, 3);
         } else {
-            for (var nodeResponse : response.getMultiValue().values()) {
+            for (Map<GlideString, Map<GlideString, Object>> nodeResponse :
+                    response.getMultiValue().values()) {
                 checkFunctionStatsBinaryResponse(nodeResponse, new GlideString[0], 2, 3);
             }
         }
@@ -2522,7 +2567,8 @@ public class CommandTests {
         if (singleNodeRoute) {
             checkFunctionStatsBinaryResponse(response.getSingleValue(), new GlideString[0], 0, 0);
         } else {
-            for (var nodeResponse : response.getMultiValue().values()) {
+            for (Map<GlideString, Map<GlideString, Object>> nodeResponse :
+                    response.getMultiValue().values()) {
                 checkFunctionStatsBinaryResponse(nodeResponse, new GlideString[0], 0, 0);
             }
         }
@@ -2548,14 +2594,15 @@ public class CommandTests {
         // function $name1 returns first argument
         // function $name2 returns argument array len
         String code =
-                generateLuaLibCode(libname1, Map.of(name1, "return args[1]", name2, "return #args"), true);
+                generateLuaLibCode(
+                        libname1, createMap(name1, "return args[1]", name2, "return #args"), true);
         assertEquals(libname1, clusterClient.functionLoad(code, true).get());
         Map<String, Object>[] flist = clusterClient.functionList(true).get();
 
         final byte[] dump = clusterClient.functionDump().get();
 
         // restore without cleaning the lib and/or overwrite option causes an error
-        var executionException =
+        ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> clusterClient.functionRestore(dump).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(executionException.getMessage().contains("Library " + libname1 + " already exists"));
@@ -2570,7 +2617,7 @@ public class CommandTests {
         // REPLACE policy succeeds
         assertEquals(OK, clusterClient.functionRestore(dump, REPLACE).get());
         // but nothing changed - all code overwritten
-        var restoredFunctionList = clusterClient.functionList(true).get();
+        Map<String, Object>[] restoredFunctionList = clusterClient.functionList(true).get();
         assertEquals(1, restoredFunctionList.length);
         assertEquals(libname1, restoredFunctionList[0].get("library_name"));
         // Note that function ordering may differ across nodes so we can't do a deep equals
@@ -2579,7 +2626,8 @@ public class CommandTests {
         // create lib with another name, but with the same function names
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
         code =
-                generateLuaLibCode(libname2, Map.of(name1, "return args[1]", name2, "return #args"), true);
+                generateLuaLibCode(
+                        libname2, createMap(name1, "return args[1]", name2, "return #args"), true);
         assertEquals(libname2, clusterClient.functionLoad(code, true).get());
         restoredFunctionList = clusterClient.functionList(true).get();
         assertEquals(1, restoredFunctionList.length);
@@ -3142,7 +3190,8 @@ public class CommandTests {
             hashData.put(hashKey + ":" + i, "value " + i);
         }
         for (String k : hashData.keySet()) {
-            assertEquals(1L, clusterClient.hset(k, Map.of("field" + k, "value" + k)).get());
+            assertEquals(
+                    1L, clusterClient.hset(k, Collections.singletonMap("field" + k, "value" + k)).get());
         }
 
         ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
@@ -3206,7 +3255,7 @@ public class CommandTests {
             zSetData.put(zSetKey + ":" + i, "value " + i);
         }
         for (String k : zSetData.keySet()) {
-            assertEquals(1L, clusterClient.zadd(k, Map.of(k, 1.0)).get());
+            assertEquals(1L, clusterClient.zadd(k, Collections.singletonMap(k, 1.0)).get());
         }
 
         ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
@@ -3239,7 +3288,7 @@ public class CommandTests {
             streamData.put(streamKey + ":" + i, "value " + i);
         }
         for (String k : streamData.keySet()) {
-            assertNotNull(clusterClient.xadd(k, Map.of(k, "value " + k)).get());
+            assertNotNull(clusterClient.xadd(k, Collections.singletonMap(k, "value " + k)).get());
         }
 
         ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
@@ -3303,8 +3352,8 @@ public class CommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     public void script_large_keys_and_or_args(GlideClusterClient clusterClient) {
-        String str1 = "0".repeat(1 << 12); // 4k
-        String str2 = "0".repeat(1 << 12); // 4k
+        String str1 = new String(new char[1 << 12]).replace("\\0", "0"); // 4k
+        String str2 = new String(new char[1 << 12]).replace("\\0", "0"); // 4k
 
         try (Script script = new Script("return KEYS[1]", false)) {
             // 1 very big key
@@ -3406,7 +3455,8 @@ public class CommandTests {
         String sha1_1 = script1.getHash();
         String sha1_2 = script2.getHash();
         String sha1_3 = script3.getHash();
-        String nonExistentSha1 = "0".repeat(40); // A SHA1 that doesn't exist
+        String nonExistentSha1 =
+                new String(new char[40]).replace("\\0", "0"); // A SHA1 that doesn't exist
 
         // Check existence of scripts
         Boolean[] result =
@@ -3441,7 +3491,8 @@ public class CommandTests {
         GlideString sha1_1 = gs(script1.getHash());
         GlideString sha1_2 = gs(script2.getHash());
         GlideString sha1_3 = gs(script3.getHash());
-        GlideString nonExistentSha1 = gs("0".repeat(40)); // A SHA1 that doesn't exist
+        GlideString nonExistentSha1 =
+                gs(new String(new char[40]).replace("\\0", "0")); // A SHA1 that doesn't exist
 
         // Check existence of scripts
         Boolean[] result =
@@ -3511,7 +3562,7 @@ public class CommandTests {
         CompletableFuture<Object> promise = new CompletableFuture<>();
         promise.complete(null);
 
-        try (var testClient =
+        try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
@@ -3568,7 +3619,7 @@ public class CommandTests {
         CompletableFuture<Object> promise = new CompletableFuture<>();
         promise.complete(null);
 
-        try (var testClient =
+        try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {

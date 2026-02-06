@@ -11,6 +11,7 @@ import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
+import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -32,8 +33,8 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
@@ -183,8 +184,8 @@ public class ClusterBatchTests {
             return;
         }
         int length = 1 << 25; // 33mb
-        String key = "0".repeat(length);
-        String value = "0".repeat(length);
+        String key = new String(new char[length]).replace("\\0", "0");
+        String value = new String(new char[length]).replace("\\0", "0");
 
         ClusterBatch batch = new ClusterBatch(isAtomic);
         batch.set(key, value);
@@ -204,8 +205,8 @@ public class ClusterBatchTests {
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void lastsave(GlideClusterClient clusterClient, boolean isAtomic) {
-        var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
-        var response = clusterClient.exec(new ClusterBatch(isAtomic).lastsave(), true).get();
+        Instant yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
+        Object[] response = clusterClient.exec(new ClusterBatch(isAtomic).lastsave(), true).get();
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 
@@ -219,15 +220,15 @@ public class ClusterBatchTests {
                 clusterClient.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
         try {
             ClusterBatch batch = new ClusterBatch(isAtomic);
-            batch.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
+            batch.configSet(Collections.singletonMap(maxmemoryPolicy, "allkeys-lfu"));
             batch.set(objectFreqKey, "");
             batch.objectFreq(objectFreqKey);
-            var response = clusterClient.exec(batch, true).get();
+            Object[] response = clusterClient.exec(batch, true).get();
             assertEquals(OK, response[0]);
             assertEquals(OK, response[1]);
             assertTrue((long) response[2] >= 0L);
         } finally {
-            clusterClient.configSet(Map.of(maxmemoryPolicy, oldPolicy));
+            clusterClient.configSet(Collections.singletonMap(maxmemoryPolicy, oldPolicy));
         }
     }
 
@@ -239,7 +240,7 @@ public class ClusterBatchTests {
         ClusterBatch batch = new ClusterBatch(isAtomic);
         batch.set(objectIdletimeKey, "");
         batch.objectIdletime(objectIdletimeKey);
-        var response = clusterClient.exec(batch, true).get();
+        Object[] response = clusterClient.exec(batch, true).get();
         assertEquals(OK, response[0]);
         assertTrue((long) response[1] >= 0L);
     }
@@ -252,7 +253,7 @@ public class ClusterBatchTests {
         ClusterBatch batch = new ClusterBatch(isAtomic);
         batch.set(objectRefcountKey, "");
         batch.objectRefcount(objectRefcountKey);
-        var response = clusterClient.exec(batch, true).get();
+        Object[] response = clusterClient.exec(batch, true).get();
         assertEquals(OK, response[0]);
         assertTrue((long) response[1] >= 0L);
     }
@@ -264,7 +265,7 @@ public class ClusterBatchTests {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"));
         String zSetKey1 = "{key}:zsetKey1-" + UUID.randomUUID();
         ClusterBatch batch = new ClusterBatch(true);
-        batch.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
+        batch.zadd(zSetKey1, createMap("one", 1.0, "two", 2.0, "three", 3.0));
         batch.zrankWithScore(zSetKey1, "one");
         batch.zrevrankWithScore(zSetKey1, "one");
 
@@ -371,7 +372,7 @@ public class ClusterBatchTests {
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void sort(GlideClusterClient clusterClient, boolean isAtomic) {
-        var prefix = "{" + UUID.randomUUID() + "}:";
+        String prefix = "{" + UUID.randomUUID() + "}:";
         String key1 = prefix + "1";
         String key2 = prefix + "2";
         String key3 = prefix + "3";
@@ -394,8 +395,8 @@ public class ClusterBatchTests {
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             batch
-                    .hset(key3, Map.of("name", "Alice", "age", "30"))
-                    .hset(key4, Map.of("name", "Bob", "age", "25"))
+                    .hset(key3, createMap("name", "Alice", "age", "30"))
+                    .hset(key4, createMap("name", "Bob", "age", "25"))
                     .lpush(key5, new String[] {"4", "3"})
                     .sort(
                             key5,
@@ -450,8 +451,8 @@ public class ClusterBatchTests {
                     concatenateArrays(
                             expectedResult,
                             new Object[] {
-                                2L, // hset(key3, Map.of("name", "Alice", "age", "30"))
-                                2L, // hset(key4, Map.of("name", "Bob", "age", "25"))
+                                2L, // hset(key3, createMap("name", "Alice", "age", "30"))
+                                2L, // hset(key4, createMap("name", "Bob", "age", "25"))
                                 2L, // lpush(key5, new String[] {"4", "3"})
                                 ascendingListByAge, // sort(key5, SortOptions)
                                 descendingListByAge, // sort(key5, SortOptions)
@@ -493,7 +494,8 @@ public class ClusterBatchTests {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         String libName = "mylib";
         String funcName = "myfun";
-        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
+        String code =
+                generateLuaLibCode(libName, Collections.singletonMap(funcName, "return args[1]"), true);
 
         // Setup
         clusterClient.functionLoad(code, true).get();
@@ -523,7 +525,7 @@ public class ClusterBatchTests {
         ClusterBatch batch = new ClusterBatch(isAtomic);
         final String streamKey = "{streamKey}-" + UUID.randomUUID();
         LinkedHashMap<String, Object> expectedStreamInfo =
-                new LinkedHashMap<>() {
+                new LinkedHashMap<String, Object>() {
                     {
                         put("radix-tree-keys", 1L);
                         put("radix-tree-nodes", 2L);
@@ -535,7 +537,7 @@ public class ClusterBatchTests {
                     }
                 };
         LinkedHashMap<String, Object> expectedStreamFullInfo =
-                new LinkedHashMap<>() {
+                new LinkedHashMap<String, Object>() {
                     {
                         put("radix-tree-keys", 1L);
                         put("radix-tree-nodes", 2L);
@@ -547,7 +549,10 @@ public class ClusterBatchTests {
                 };
 
         batch
-                .xadd(streamKey, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
+                .xadd(
+                        streamKey,
+                        Collections.singletonMap("field1", "value1"),
+                        StreamAddOptions.builder().id("0-1").build())
                 .xinfoStream(streamKey)
                 .xinfoStreamFull(streamKey);
 
@@ -564,7 +569,8 @@ public class ClusterBatchTests {
 
         assertDeepEquals(
                 new Object[] {
-                    "0-1", // xadd(streamKey, Map.of("field1", "value1"), ... .id("0-1").build());
+                    "0-1", // xadd(streamKey, Collections.singletonMap("field1", "value1"), ...
+                    // .id("0-1").build());
                     expectedStreamInfo, // xinfoStream(streamKey)
                     expectedStreamFullInfo, // xinfoStreamFull(streamKey)
                 },
@@ -578,11 +584,12 @@ public class ClusterBatchTests {
         String key = UUID.randomUUID().toString();
         clusterClient.set(key, "_").get();
         // use dump to ensure that we have non-string convertible bytes
-        var bytes = clusterClient.dump(gs(key)).get();
+        byte[] bytes = clusterClient.dump(gs(key)).get();
 
-        var batch = new ClusterBatch(isAtomic).withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
+        ClusterBatch batch =
+                new ClusterBatch(isAtomic).withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
 
-        var responses = clusterClient.exec(batch, true).get();
+        Object[] responses = clusterClient.exec(batch, true).get();
 
         assertDeepEquals(
                 new Object[] {

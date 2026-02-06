@@ -2,6 +2,7 @@
 package glide.api.models;
 
 import static glide.api.models.GlideString.gs;
+import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -10,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Collections;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +19,7 @@ public class ClusterValueTests {
 
     @Test
     public void handle_null() {
-        var value = ClusterValue.of(null);
+        ClusterValue<?> value = ClusterValue.of(null);
         assertAll(
                 () -> assertFalse(value.hasMultiData()),
                 () -> assertTrue(value.hasSingleData()),
@@ -30,7 +32,7 @@ public class ClusterValueTests {
 
     @Test
     public void handle_single_data() {
-        var value = ClusterValue.of(42);
+        ClusterValue<?> value = ClusterValue.of(42);
         assertAll(
                 () -> assertFalse(value.hasMultiData()),
                 () -> assertTrue(value.hasSingleData()),
@@ -43,12 +45,12 @@ public class ClusterValueTests {
 
     @Test
     public void handle_empty_map() {
-        var value = ClusterValue.of(Map.of());
+        ClusterValue<?> value = ClusterValue.of(Collections.emptyMap());
         assertAll(
                 () -> assertTrue(value.hasMultiData()),
                 () -> assertFalse(value.hasSingleData()),
                 () -> assertNotNull(value.getMultiValue()),
-                () -> assertEquals(Map.of(), value.getMultiValue()),
+                () -> assertEquals(Collections.emptyMap(), value.getMultiValue()),
                 () ->
                         assertEquals(
                                 "No single value stored",
@@ -57,8 +59,9 @@ public class ClusterValueTests {
 
     @Test
     public void handle_multi_data() {
-        var data = Map.of("node1", Map.of("config1", "param1", "config2", "param2"), "node2", Map.of());
-        var value = ClusterValue.of(data);
+        Map<String, String> node1Map = createMap("config1", "param1", "config2", "param2");
+        Map<String, Object> data = createMap("node1", node1Map, "node2", Collections.emptyMap());
+        ClusterValue<?> value = ClusterValue.of(data);
         assertAll(
                 () -> assertTrue(value.hasMultiData()),
                 () -> assertFalse(value.hasSingleData()),
@@ -72,19 +75,16 @@ public class ClusterValueTests {
 
     @Test
     public void handle_multi_binary_data() {
-        var data =
-                Map.of(
-                        gs("node1"),
-                        Map.of(gs("config1"), gs("param1"), gs("config2"), gs("param2")),
-                        gs("node2"),
-                        Map.of());
-        var dataNormalized =
-                Map.of(
-                        "node1",
-                        Map.of(gs("config1"), gs("param1"), gs("config2"), gs("param2")),
-                        "node2",
-                        Map.of());
-        var value = ClusterValue.of(data);
+        Map<GlideString, GlideString> node1Map =
+                createMap(gs("config1"), gs("param1"), gs("config2"), gs("param2"));
+        Map<GlideString, Object> data =
+                createMap(gs("node1"), node1Map, gs("node2"), Collections.emptyMap());
+
+        Map<GlideString, GlideString> node1MapNorm =
+                createMap(gs("config1"), gs("param1"), gs("config2"), gs("param2"));
+        Map<String, Object> dataNormalized =
+                createMap("node1", node1MapNorm, "node2", Collections.emptyMap());
+        ClusterValue<?> value = ClusterValue.of(data);
         assertAll(
                 () -> assertTrue(value.hasMultiData()),
                 () -> assertFalse(value.hasSingleData()),
@@ -98,7 +98,8 @@ public class ClusterValueTests {
 
     @Test
     public void single_value_ctor() {
-        var value = ClusterValue.ofSingleValue(Map.of("config1", "param1", "config2", "param2"));
+        Map<String, String> map = createMap("config1", "param1", "config2", "param2");
+        ClusterValue<?> value = ClusterValue.ofSingleValue(map);
         assertAll(
                 () -> assertFalse(value.hasMultiData()),
                 () -> assertTrue(value.hasSingleData()),
@@ -107,7 +108,8 @@ public class ClusterValueTests {
 
     @Test
     public void multi_value_ctor() {
-        var value = ClusterValue.ofMultiValue(Map.of("config1", "param1", "config2", "param2"));
+        Map<String, String> map = createMap("config1", "param1", "config2", "param2");
+        ClusterValue<?> value = ClusterValue.ofMultiValue(map);
         assertAll(
                 () -> assertTrue(value.hasMultiData()),
                 () -> assertFalse(value.hasSingleData()),
@@ -118,9 +120,9 @@ public class ClusterValueTests {
 
     @Test
     public void multi_value_binary_ctor() {
-        var value =
-                ClusterValue.ofMultiValueBinary(
-                        Map.of(gs("config1"), gs("param1"), gs("config2"), gs("param2")));
+        Map<GlideString, GlideString> map =
+                createMap(gs("config1"), gs("param1"), gs("config2"), gs("param2"));
+        ClusterValue<?> value = ClusterValue.ofMultiValueBinary(map);
         assertAll(
                 () -> assertTrue(value.hasMultiData()),
                 () -> assertFalse(value.hasSingleData()),

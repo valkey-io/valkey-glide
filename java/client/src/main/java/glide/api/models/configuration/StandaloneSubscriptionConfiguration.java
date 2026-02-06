@@ -4,11 +4,12 @@ package glide.api.models.configuration;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.Getter;
 
 /**
@@ -65,10 +66,12 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
             Optional<Object> context,
             Map<PubSubChannelMode, Set<GlideString>> subscriptions) {
         super(callback, context);
-        this.subscriptions =
-                subscriptions.entrySet().stream()
-                        .collect(
-                                Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> Set.copyOf(e.getValue())));
+        Map<PubSubChannelMode, Set<GlideString>> unmodifiableMap = new LinkedHashMap<>();
+        for (Map.Entry<PubSubChannelMode, Set<GlideString>> entry : subscriptions.entrySet()) {
+            unmodifiableMap.put(
+                    entry.getKey(), Collections.unmodifiableSet(new HashSet<>(entry.getValue())));
+        }
+        this.subscriptions = Collections.unmodifiableMap(unmodifiableMap);
     }
 
     public static StandaloneSubscriptionConfigurationBuilder builder() {
@@ -113,7 +116,7 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
          */
         public StandaloneSubscriptionConfigurationBuilder subscriptions(
                 PubSubChannelMode mode, Set<GlideString> subscriptions) {
-            this.subscriptions.put(mode, Set.copyOf(subscriptions));
+            this.subscriptions.put(mode, Collections.unmodifiableSet(new HashSet<>(subscriptions)));
             return this;
         }
 
