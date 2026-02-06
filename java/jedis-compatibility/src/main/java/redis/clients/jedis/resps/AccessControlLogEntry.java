@@ -38,7 +38,7 @@ public class AccessControlLogEntry implements Serializable {
     private final long timestampLastUpdated;
 
     public AccessControlLogEntry(Map<String, Object> map) {
-        count = (long) map.get(COUNT);
+        count = toLong(map.get(COUNT), 0L);
         reason = (String) map.get(REASON);
         context = (String) map.get(CONTEXT);
         object = (String) map.get(OBJECT);
@@ -46,9 +46,33 @@ public class AccessControlLogEntry implements Serializable {
         ageSeconds = (String) map.get(AGE_SECONDS);
         clientInfo = getMapFromRawClientInfo((String) map.get(CLIENT_INFO));
         logEntry = map;
-        entryId = (long) map.get(ENTRY_ID);
-        timestampCreated = (long) map.get(TIMESTAMP_CREATED);
-        timestampLastUpdated = (long) map.get(TIMESTAMP_LAST_UPDATED);
+        entryId = toLong(map.get(ENTRY_ID), 0L);
+        timestampCreated = toLong(map.get(TIMESTAMP_CREATED), 0L);
+        timestampLastUpdated = toLong(map.get(TIMESTAMP_LAST_UPDATED), 0L);
+    }
+
+    /**
+     * Helper method to safely convert an Object to long with a default value. This is used to handle
+     * Redis 7.2+ fields (entry-id, timestamp-created, timestamp-last-updated) that may not be present
+     * in older Redis/Valkey versions. The method handles null values, Number instances, and string
+     * representations of numbers.
+     *
+     * @param o The object to convert to long
+     * @param defaultValue The default value to return if conversion fails or object is null
+     * @return The long value or defaultValue if conversion fails
+     */
+    private static long toLong(Object o, long defaultValue) {
+        if (o == null) {
+            return defaultValue;
+        }
+        if (o instanceof Number) {
+            return ((Number) o).longValue();
+        }
+        try {
+            return Long.parseLong(o.toString());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 
     public long getCount() {
@@ -106,6 +130,9 @@ public class AccessControlLogEntry implements Serializable {
      * @return A Map with all client info
      */
     private Map<String, String> getMapFromRawClientInfo(String clientInfo) {
+        if (clientInfo == null || clientInfo.isEmpty()) {
+            return new LinkedHashMap<>(0);
+        }
         String[] entries = clientInfo.split(" ");
         Map<String, String> clientInfoMap = new LinkedHashMap<>(entries.length);
         for (String entry : entries) {
