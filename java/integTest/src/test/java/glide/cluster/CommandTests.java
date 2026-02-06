@@ -2000,7 +2000,7 @@ public class CommandTests {
 
         // create the same function, but with RO flag
         String funcNameRO = funcName.toString() + "_ro";
-        code = generateLuaLibCode(libName, Map.of(funcNameRO, "return 42"), true);
+        code = generateLuaLibCode(libName, createMap(funcNameRO, "return 42"), true);
 
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
