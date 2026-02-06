@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.memory;
 
+import static glide.utils.Java8Utils.repeat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.GlideClusterClient;
@@ -66,13 +67,13 @@ public class LeakSmokeTest {
             int largeSize = 32 * 1024; // 32KB - DirectByteBuffer path
             int veryLargeSize = Integer.getInteger("LEAK_VALUE_SIZE", 128 * 1024); // 128KB default
 
-            String smallValue = repeatString("x", smallSize);
-            String mediumValue = repeatString("y", mediumSize);
-            String largeValue = repeatString("z", largeSize);
-            String veryLargeValue = repeatString("w", veryLargeSize);
+            String smallValue = repeat("x", smallSize);
+            String mediumValue = repeat("y", mediumSize);
+            String largeValue = repeat("z", largeSize);
+            String veryLargeValue = repeat("w", veryLargeSize);
 
             // Also test with non-ASCII to stress UTF-8 encoding with large data
-            String unicodeLarge = repeatString("测试数据🔥", largeSize / 10); // >16KB in UTF-8
+            String unicodeLarge = repeat("测试数据🔥", largeSize / 10); // >16KB in UTF-8
 
             Logger.log(
                     Logger.Level.INFO,
@@ -150,7 +151,7 @@ public class LeakSmokeTest {
                     client.get(key).get(10, TimeUnit.SECONDS);
                 } else {
                     // 10% - Extremely large value (512KB) - Really stress DirectByteBuffer
-                    String extremeLarge = repeatString("E", 512 * 1024);
+                    String extremeLarge = repeat("E", 512 * 1024);
                     client.set(key, extremeLarge).get(10, TimeUnit.SECONDS);
                     client.get(key).get(10, TimeUnit.SECONDS);
                 }
@@ -210,14 +211,6 @@ public class LeakSmokeTest {
     private static long usedHeapMb() {
         long used = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
         return used / (1024 * 1024);
-    }
-
-    private static String repeatString(String str, int count) {
-        StringBuilder sb = new StringBuilder(str.length() * count);
-        for (int i = 0; i < count; i++) {
-            sb.append(str);
-        }
-        return sb.toString();
     }
 
     private static byte[] readAllBytes(java.io.InputStream is) throws java.io.IOException {

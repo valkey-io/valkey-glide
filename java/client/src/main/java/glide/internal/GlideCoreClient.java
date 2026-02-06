@@ -2,10 +2,13 @@
 package glide.internal;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import glide.api.BaseClient;
 import glide.ffi.resolvers.NativeUtils;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -18,8 +21,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class GlideCoreClient implements AutoCloseable {
     private static final ReferenceQueue<Object> CLEANUP_QUEUE = new ReferenceQueue<>();
-    private static final java.util.concurrent.ConcurrentHashMap<PhantomReference<?>, Runnable>
-            CLEANUP_ACTIONS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<PhantomReference<?>, Runnable> CLEANUP_ACTIONS =
+            new ConcurrentHashMap<>();
 
     static {
         // Start cleanup thread
@@ -69,17 +72,16 @@ public class GlideCoreClient implements AutoCloseable {
 
     private static native void freeNativeBuffer(long id);
 
-    private static final java.util.concurrent.ConcurrentHashMap<
-                    Long, java.lang.ref.WeakReference<glide.api.BaseClient>>
-            clients = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Long, WeakReference<BaseClient>> clients =
+            new ConcurrentHashMap<>();
 
     /**
      * Empty 2D byte array constant for reuse in various contexts (script params, subPattern, etc.)
      */
     public static final byte[][] EMPTY_2D_BYTE_ARRAY = new byte[0][];
 
-    public static void registerClient(long handle, glide.api.BaseClient client) {
-        clients.put(handle, new java.lang.ref.WeakReference<>(client));
+    public static void registerClient(long handle, BaseClient client) {
+        clients.put(handle, new WeakReference<>(client));
     }
 
     public static void unregisterClient(long handle) {
@@ -94,9 +96,9 @@ public class GlideCoreClient implements AutoCloseable {
                 (pattern != null && pattern.length > 0)
                         ? new glide.api.models.PubSubMessage(msg, ch, glide.api.models.GlideString.of(pattern))
                         : new glide.api.models.PubSubMessage(msg, ch);
-        java.lang.ref.WeakReference<glide.api.BaseClient> ref = clients.get(handle);
+        WeakReference<BaseClient> ref = clients.get(handle);
         if (ref != null) {
-            glide.api.BaseClient c = ref.get();
+            BaseClient c = ref.get();
             if (c != null) c.__enqueuePubSubMessage(m);
         }
     }

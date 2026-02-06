@@ -66,21 +66,21 @@ public class ClusterValue<T> {
 
     /** A constructor for the value. */
     public static <T> ClusterValue<T> ofSingleValue(T data) {
-        ClusterValue<T> res = new ClusterValue<T>();
+        ClusterValue<T> res = new ClusterValue<>();
         res.singleValue = data;
         return res;
     }
 
     /** A constructor for the value. */
     public static <T> ClusterValue<T> ofMultiValue(Map<String, T> data) {
-        ClusterValue<T> res = new ClusterValue<T>();
+        ClusterValue<T> res = new ClusterValue<>();
         res.multiValue = Collections.unmodifiableMap(new LinkedHashMap<>(data));
         return res;
     }
 
     /** A constructor for the value. */
     public static <T> ClusterValue<T> ofMultiValueBinary(Map<GlideString, T> data) {
-        ClusterValue<T> res = new ClusterValue<T>();
+        ClusterValue<T> res = new ClusterValue<>();
         // the map node address can be converted to a string
         res.multiValue =
                 Collections.unmodifiableMap(

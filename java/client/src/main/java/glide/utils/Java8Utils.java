@@ -13,8 +13,7 @@ import java.util.Set;
 public class Java8Utils {
 
     /**
-     * Compares two byte arrays lexicographically. Java 8 compatible alternative to Arrays.compare
-     * (Java 9+).
+     * Compares two byte arrays lexicographically.
      *
      * @param a the first array to compare
      * @param b the second array to compare
@@ -35,7 +34,7 @@ public class Java8Utils {
     }
 
     /**
-     * Creates an empty HashMap. Java 8 compatible alternative to Map.of() (Java 9+).
+     * Creates an empty HashMap.
      *
      * @param <K> the type of keys
      * @param <V> the type of values
@@ -46,7 +45,7 @@ public class Java8Utils {
     }
 
     /**
-     * Creates a HashMap with one key-value pair. Java 8 compatible alternative to Map.of() (Java 9+).
+     * Creates a HashMap with one key-value pair.
      *
      * @param <K> the type of keys
      * @param <V> the type of values
@@ -61,8 +60,7 @@ public class Java8Utils {
     }
 
     /**
-     * Creates a HashMap with two key-value pairs. Java 8 compatible alternative to Map.of() (Java
-     * 9+).
+     * Creates a HashMap with two key-value pairs.
      *
      * @param <K> the type of keys
      * @param <V> the type of values
@@ -80,8 +78,7 @@ public class Java8Utils {
     }
 
     /**
-     * Creates a HashMap with three key-value pairs. Java 8 compatible alternative to Map.of() (Java
-     * 9+).
+     * Creates a HashMap with three key-value pairs.
      *
      * @param <K> the type of keys
      * @param <V> the type of values
@@ -102,8 +99,7 @@ public class Java8Utils {
     }
 
     /**
-     * Creates a HashMap with four key-value pairs. Java 8 compatible alternative to Map.of() (Java
-     * 9+).
+     * Creates a HashMap with four key-value pairs.
      *
      * @param <K> the type of keys
      * @param <V> the type of values
@@ -127,8 +123,7 @@ public class Java8Utils {
     }
 
     /**
-     * Creates a HashMap with five key-value pairs. Java 8 compatible alternative to Map.of() (Java
-     * 9+).
+     * Creates a HashMap with five key-value pairs.
      *
      * @param <K> the type of keys
      * @param <V> the type of values
@@ -156,8 +151,7 @@ public class Java8Utils {
     }
 
     /**
-     * Creates a HashMap with six key-value pairs. Java 8 compatible alternative to Map.of() (Java
-     * 9+).
+     * Creates a HashMap with six key-value pairs.
      *
      * @param <K> the type of keys
      * @param <V> the type of values
@@ -188,8 +182,7 @@ public class Java8Utils {
     }
 
     /**
-     * Creates a HashMap with seven key-value pairs. Java 8 compatible alternative to Map.of() (Java
-     * 9+).
+     * Creates a HashMap with seven key-value pairs.
      *
      * @param <K> the type of keys
      * @param <V> the type of values
@@ -223,50 +216,23 @@ public class Java8Utils {
     }
 
     /**
-     * Creates a singleton set. Java 8 compatible alternative to Set.of() (Java 9+).
-     *
-     * @param <T> the type of element
-     * @param element the single element
-     * @return a singleton set containing the element
-     */
-    public static <T> Set<T> createSet(T element) {
-        return Collections.singleton(element);
-    }
-
-    /**
-     * Creates a HashSet with two elements. Java 8 compatible alternative to Set.of() (Java 9+).
+     * Creates a HashSet with elements.
      *
      * @param <T> the type of elements
-     * @param e1 the first element
-     * @param e2 the second element
+     * @param elements the elements
      * @return a HashSet containing the elements
      */
-    public static <T> Set<T> createSet(T e1, T e2) {
+    @SafeVarargs
+    public static <T> Set<T> createSet(T... elements) {
         Set<T> set = new HashSet<>();
-        set.add(e1);
-        set.add(e2);
+        for (T element : elements) {
+            set.add(element);
+        }
         return set;
     }
 
     /**
-     * Creates a HashSet with three elements. Java 8 compatible alternative to Set.of() (Java 9+).
-     *
-     * @param <T> the type of elements
-     * @param e1 the first element
-     * @param e2 the second element
-     * @param e3 the third element
-     * @return a HashSet containing the elements
-     */
-    public static <T> Set<T> createSet(T e1, T e2, T e3) {
-        Set<T> set = new HashSet<>();
-        set.add(e1);
-        set.add(e2);
-        set.add(e3);
-        return set;
-    }
-
-    /**
-     * Creates an empty list. Java 8 compatible alternative to List.of() (Java 9+).
+     * Creates an empty list.
      *
      * @param <T> the type of elements
      * @return an empty list
@@ -276,7 +242,7 @@ public class Java8Utils {
     }
 
     /**
-     * Creates a list with elements. Java 8 compatible alternative to List.of() (Java 9+).
+     * Creates a list with elements.
      *
      * @param <T> the type of elements
      * @param elements the elements
@@ -288,7 +254,7 @@ public class Java8Utils {
     }
 
     /**
-     * Repeats a string n times. Java 8 compatible alternative to String.repeat() (Java 11+).
+     * Repeats a string n times.
      *
      * @param str the string to repeat
      * @param count the number of times to repeat

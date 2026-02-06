@@ -32,10 +32,10 @@ import glide.api.models.exceptions.RequestException;
 import glide.ffi.resolvers.OpenTelemetryResolver;
 import glide.internal.GlideCoreClient;
 import glide.utils.BufferUtils;
+import glide.utils.Java8Utils;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -52,24 +52,21 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class CommandManager {
 
-    private static final Set<String> BLOCKING_COMMAND_NAMES;
-
-    static {
-        Set<String> blockingCommands = new HashSet<>();
-        blockingCommands.add("BLPOP");
-        blockingCommands.add("BRPOP");
-        blockingCommands.add("BLMOVE");
-        blockingCommands.add("BZPOPMAX");
-        blockingCommands.add("BZPOPMIN");
-        blockingCommands.add("BRPOPLPUSH");
-        blockingCommands.add("BLMPOP");
-        blockingCommands.add("BZMPOP");
-        blockingCommands.add("XREAD");
-        blockingCommands.add("XREADGROUP");
-        blockingCommands.add("WAIT");
-        blockingCommands.add("WAITAOF");
-        BLOCKING_COMMAND_NAMES = Collections.unmodifiableSet(blockingCommands);
-    }
+    private static final Set<String> BLOCKING_COMMAND_NAMES =
+            Collections.unmodifiableSet(
+                    Java8Utils.createSet(
+                            "BLPOP",
+                            "BRPOP",
+                            "BLMOVE",
+                            "BZPOPMAX",
+                            "BZPOPMIN",
+                            "BRPOPLPUSH",
+                            "BLMPOP",
+                            "BZMPOP",
+                            "XREAD",
+                            "XREADGROUP",
+                            "WAIT",
+                            "WAITAOF"));
 
     /** Core client connection. */
     private final GlideCoreClient coreClient;

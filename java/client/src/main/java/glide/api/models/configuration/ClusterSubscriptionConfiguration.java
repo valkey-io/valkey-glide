@@ -6,7 +6,9 @@ import static glide.api.models.GlideString.gs;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.GlideClusterClient;
 import glide.api.models.GlideString;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -73,14 +75,12 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
             Optional<Object> context,
             Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions) {
         super(callback, context);
-        // Java 8 compatible: manually create unmodifiable map
         Map<PubSubClusterChannelMode, Set<GlideString>> unmodifiableMap = new HashMap<>();
         for (Map.Entry<PubSubClusterChannelMode, Set<GlideString>> entry : subscriptions.entrySet()) {
             unmodifiableMap.put(
-                    entry.getKey(),
-                    java.util.Collections.unmodifiableSet(new java.util.HashSet<>(entry.getValue())));
+                    entry.getKey(), Collections.unmodifiableSet(new HashSet<>(entry.getValue())));
         }
-        this.subscriptions = java.util.Collections.unmodifiableMap(unmodifiableMap);
+        this.subscriptions = Collections.unmodifiableMap(unmodifiableMap);
     }
 
     public static ClusterSubscriptionConfigurationBuilder builder() {
@@ -135,8 +135,7 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
          */
         public ClusterSubscriptionConfigurationBuilder subscriptions(
                 PubSubClusterChannelMode mode, Set<GlideString> subscriptions) {
-            this.subscriptions.put(
-                    mode, java.util.Collections.unmodifiableSet(new java.util.HashSet<>(subscriptions)));
+            this.subscriptions.put(mode, Collections.unmodifiableSet(new HashSet<>(subscriptions)));
             return this;
         }
 
