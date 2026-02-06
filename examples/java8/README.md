@@ -5,7 +5,7 @@ This example demonstrates using Valkey GLIDE with Java 8.
 ## Requirements
 
 - **Java 8** (JDK 1.8)
-- A running Valkey or Redis server on `localhost:6379`
+- A running Valkey server on `localhost:6379`
 
 **Note:** While Java 8 is supported, **JDK 11 or later is strongly recommended** as Java 8 no longer receives free security updates from Oracle.
 
