@@ -27,6 +27,7 @@ import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
 import redis.clients.jedis.args.ListDirection;
 import redis.clients.jedis.args.ListPosition;
+import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
 import redis.clients.jedis.params.HGetExParams;
@@ -38,7 +39,6 @@ import redis.clients.jedis.resps.AccessControlLogEntry;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.ScanResult;
 import redis.clients.jedis.util.KeyValue;
-import redis.clients.jedis.exceptions.JedisException;
 
 /**
  * Jedis compatibility test that validates GLIDE's Jedis compatibility layer functionality.
@@ -3471,6 +3471,7 @@ public class JedisTest {
 
             AccessControlUser userInfo = jedis.aclGetUser(username);
             assertNotNull(userInfo);
+            assertTrue(userInfo.toString().contains(username));
 
             AccessControlUser nonExistent = jedis.aclGetUser("nonexistent_user_12345");
             assertNull(nonExistent);
@@ -3577,19 +3578,21 @@ public class JedisTest {
     }
 
     @Test
+    void acl_log_reset() {
+        String result = jedis.aclLogReset();
+        assertEquals("OK", result);
+
+        List<AccessControlLogEntry> log = jedis.aclLog();
+        assertNotNull(log);
+        assertEquals(0, log.size());
+    }
+
+    @Test
     void acl_setuser_complex_rules() {
         String username = "complexuser_" + UUID.randomUUID().toString().replace("-", "");
 
         try {
-            String result =
-                    jedis.aclSetUser(
-                            username,
-                            "on",
-                            "+get",
-                            "+set",
-                            "+del",
-                            "~key:*",
-                            "nopass");
+            String result = jedis.aclSetUser(username, "on", "+get", "+set", "+del", "~key:*", "nopass");
             assertEquals("OK", result);
 
             List<String> users = jedis.aclUsers();

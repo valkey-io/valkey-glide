@@ -26,7 +26,10 @@ public class AclCommandsTest {
         AccessControlLogEntry entry = new AccessControlLogEntry(map);
         assertEquals(1L, entry.getCount());
         assertEquals("auth", entry.getReason());
+        assertEquals("toplevel", entry.getContext());
+        assertEquals("AUTH", entry.getObject());
         assertEquals("testuser", entry.getUsername());
+        assertEquals("1.0", entry.getAgeSeconds());
         assertEquals(0L, entry.getEntryId());
         assertEquals(0L, entry.getTimestampCreated());
         assertEquals(0L, entry.getTimestampLastUpdated());

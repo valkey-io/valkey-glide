@@ -51,6 +51,16 @@ public class AccessControlLogEntry implements Serializable {
         timestampLastUpdated = toLong(map.get(TIMESTAMP_LAST_UPDATED), 0L);
     }
 
+    /**
+     * Helper method to safely convert an Object to long with a default value. This is used to handle
+     * Redis 7.2+ fields (entry-id, timestamp-created, timestamp-last-updated) that may not be present
+     * in older Redis/Valkey versions. The method handles null values, Number instances, and string
+     * representations of numbers.
+     *
+     * @param o The object to convert to long
+     * @param defaultValue The default value to return if conversion fails or object is null
+     * @return The long value or defaultValue if conversion fails
+     */
     private static long toLong(Object o, long defaultValue) {
         if (o == null) {
             return defaultValue;
