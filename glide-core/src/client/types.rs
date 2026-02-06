@@ -90,6 +90,10 @@ pub struct IamAuthenticationConfig {
 
     /// Token refresh interval in seconds (1 second to 12 hours, default 14 minutes)
     pub refresh_interval_seconds: Option<u32>,
+
+    /// When true, adds ResourceType=ServerlessCache to the IAM signing URL.
+    /// Required for ElastiCache Serverless authentication.
+    pub is_serverless: bool,
 }
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -204,12 +208,14 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                     _ => ServiceType::ElastiCache,
                 };
                 let refresh_interval_seconds = iam_creds.refresh_interval_seconds;
+                let is_serverless = iam_creds.is_serverless;
 
                 IamAuthenticationConfig {
                     cluster_name,
                     region,
                     service_type,
                     refresh_interval_seconds,
+                    is_serverless,
                 }
             });
 
@@ -467,6 +473,94 @@ mod tests {
             let config = request.compression_config.unwrap();
             // Should fall back to Zstd for unknown backends
             assert_eq!(config.backend, CompressionBackendType::Zstd);
+        }
+
+        #[test]
+        fn test_iam_is_serverless_true_protobuf_deserialization() {
+            let mut proto_request = protobuf::ConnectionRequest::new();
+            proto_request.addresses.push(protobuf::NodeAddress {
+                host: "localhost".into(),
+                port: 6379,
+                ..Default::default()
+            });
+
+            let mut auth_info = protobuf::AuthenticationInfo::new();
+            let mut iam_creds = protobuf::IamCredentials::new();
+            iam_creds.cluster_name = "serverless-cluster".into();
+            iam_creds.region = "us-east-1".into();
+            iam_creds.service_type = protobuf::ServiceType::ELASTICACHE.into();
+            iam_creds.is_serverless = true;
+
+            auth_info.iam_credentials = ::protobuf::MessageField::some(iam_creds);
+            proto_request.authentication_info = ::protobuf::MessageField::some(auth_info);
+
+            let request: ConnectionRequest = proto_request.into();
+            assert!(request.authentication_info.is_some());
+
+            let auth = request.authentication_info.unwrap();
+            assert!(auth.iam_config.is_some());
+
+            let iam_config = auth.iam_config.unwrap();
+            assert!(iam_config.is_serverless);
+        }
+
+        #[test]
+        fn test_iam_is_serverless_false_protobuf_deserialization() {
+            let mut proto_request = protobuf::ConnectionRequest::new();
+            proto_request.addresses.push(protobuf::NodeAddress {
+                host: "localhost".into(),
+                port: 6379,
+                ..Default::default()
+            });
+
+            let mut auth_info = protobuf::AuthenticationInfo::new();
+            let mut iam_creds = protobuf::IamCredentials::new();
+            iam_creds.cluster_name = "standard-cluster".into();
+            iam_creds.region = "us-west-2".into();
+            iam_creds.service_type = protobuf::ServiceType::ELASTICACHE.into();
+            iam_creds.is_serverless = false;
+
+            auth_info.iam_credentials = ::protobuf::MessageField::some(iam_creds);
+            proto_request.authentication_info = ::protobuf::MessageField::some(auth_info);
+
+            let request: ConnectionRequest = proto_request.into();
+            assert!(request.authentication_info.is_some());
+
+            let auth = request.authentication_info.unwrap();
+            assert!(auth.iam_config.is_some());
+
+            let iam_config = auth.iam_config.unwrap();
+            assert!(!iam_config.is_serverless);
+        }
+
+        #[test]
+        fn test_iam_is_serverless_none_defaults_to_false_protobuf_deserialization() {
+            let mut proto_request = protobuf::ConnectionRequest::new();
+            proto_request.addresses.push(protobuf::NodeAddress {
+                host: "localhost".into(),
+                port: 6379,
+                ..Default::default()
+            });
+
+            let mut auth_info = protobuf::AuthenticationInfo::new();
+            let mut iam_creds = protobuf::IamCredentials::new();
+            iam_creds.cluster_name = "legacy-cluster".into();
+            iam_creds.region = "eu-west-1".into();
+            iam_creds.service_type = protobuf::ServiceType::MEMORYDB.into();
+            // is_serverless is not set (None) - should default to false
+
+            auth_info.iam_credentials = ::protobuf::MessageField::some(iam_creds);
+            proto_request.authentication_info = ::protobuf::MessageField::some(auth_info);
+
+            let request: ConnectionRequest = proto_request.into();
+            assert!(request.authentication_info.is_some());
+
+            let auth = request.authentication_info.unwrap();
+            assert!(auth.iam_config.is_some());
+
+            let iam_config = auth.iam_config.unwrap();
+            // Should default to false for backward compatibility
+            assert!(!iam_config.is_serverless);
         }
     }
 }

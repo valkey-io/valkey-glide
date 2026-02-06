@@ -56,6 +56,9 @@ type IamAuthConfig struct {
 	// Optional refresh interval in seconds for renewing IAM authentication tokens.
 	// If not provided, the core will use its default value.
 	refreshIntervalSeconds *uint32
+	// When true, adds ResourceType=ServerlessCache to the IAM signing URL.
+	// Required for ElastiCache Serverless authentication. Defaults to false.
+	isServerless bool
 }
 
 // NewIamAuthConfig returns an [IamAuthConfig] struct with the given configuration.
@@ -73,10 +76,18 @@ func (config *IamAuthConfig) WithRefreshIntervalSeconds(seconds uint32) *IamAuth
 	return config
 }
 
+// WithServerless sets whether this is an ElastiCache Serverless cache.
+// When true, adds ResourceType=ServerlessCache to the IAM signing URL.
+func (config *IamAuthConfig) WithServerless(isServerless bool) *IamAuthConfig {
+	config.isServerless = isServerless
+	return config
+}
+
 func (config *IamAuthConfig) toProtobuf() *protobuf.IamCredentials {
 	iamCreds := &protobuf.IamCredentials{
-		ClusterName: config.clusterName,
-		Region:      config.region,
+		ClusterName:  config.clusterName,
+		Region:       config.region,
+		IsServerless: config.isServerless,
 	}
 
 	if config.service == ElastiCache {

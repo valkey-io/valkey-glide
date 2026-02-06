@@ -10,11 +10,20 @@ import lombok.NonNull;
  *
  * @example
  *     <pre>{@code
+ * // Standard ElastiCache cluster:
  * IamAuthConfig iamConfig = IamAuthConfig.builder()
  *     .clusterName("my-cluster")
  *     .service(ServiceType.ELASTICACHE)
  *     .region("us-east-1")
  *     .refreshIntervalSeconds(300)
+ *     .build();
+ *
+ * // ElastiCache Serverless:
+ * IamAuthConfig serverlessConfig = IamAuthConfig.builder()
+ *     .clusterName("my-serverless-cache")
+ *     .service(ServiceType.ELASTICACHE)
+ *     .region("us-east-1")
+ *     .isServerless(true)
  *     .build();
  * }</pre>
  */
@@ -35,4 +44,10 @@ public class IamAuthConfig {
      * defaults to 300 seconds (5 min).
      */
     private final Integer refreshIntervalSeconds;
+
+    /**
+     * When true, adds ResourceType=ServerlessCache to the IAM signing URL. Required for ElastiCache
+     * Serverless authentication. Defaults to false.
+     */
+    @Builder.Default private final boolean isServerless = false;
 }

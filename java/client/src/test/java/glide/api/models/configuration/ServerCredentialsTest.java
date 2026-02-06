@@ -107,6 +107,35 @@ public class ServerCredentialsTest {
     }
 
     @Test
+    public void testIamServerlessConfig() {
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName("my-serverless-cache")
+                        .service(ServiceType.ELASTICACHE)
+                        .region("us-east-1")
+                        .isServerless(true)
+                        .build();
+
+        ServerCredentials credentials =
+                ServerCredentials.builder().username("iamUser").iamConfig(iamConfig).build();
+
+        assertTrue(credentials.getIamConfig().isServerless());
+        assertEquals("my-serverless-cache", credentials.getIamConfig().getClusterName());
+    }
+
+    @Test
+    public void testIamServerlessDefaultsFalse() {
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName("my-cluster")
+                        .service(ServiceType.ELASTICACHE)
+                        .region("us-east-1")
+                        .build();
+
+        assertFalse(iamConfig.isServerless());
+    }
+
+    @Test
     public void testIamConfigRequiredFields() {
         // Test that all required fields must be provided
         assertThrows(
