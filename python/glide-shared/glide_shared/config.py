@@ -480,6 +480,13 @@ class AdvancedBaseClientConfiguration:
         tcp_nodelay: Optional[bool] = None,
         pubsub_reconciliation_interval: Optional[int] = None,
     ):
+        if (
+            pubsub_reconciliation_interval is not None
+            and pubsub_reconciliation_interval <= 0
+        ):
+            raise ValueError(
+                f"pubsub_reconciliation_interval must be positive, got: {pubsub_reconciliation_interval}"
+            )
         self.connection_timeout = connection_timeout
         self.tls_config = tls_config
         self.tcp_nodelay = tcp_nodelay

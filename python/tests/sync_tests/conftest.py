@@ -6,6 +6,8 @@ from typing import Generator, List, Optional
 import pytest
 from glide_shared.config import (
     BackoffStrategy,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
     NodeAddress,
     ProtocolVersion,
     ReadFrom,
@@ -15,7 +17,6 @@ from glide_shared.exceptions import ClosingError
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
 from glide_sync import TGlideClient as TSyncGlideClient
-from glide_sync.config import GlideClientConfiguration, GlideClusterClientConfiguration
 from glide_sync.logger import Level as LogLevel
 from glide_sync.logger import Logger
 

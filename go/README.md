@@ -139,7 +139,153 @@ func main() {
 }
 ```
 
+### PubSub Example:
+
+Valkey GLIDE supports PubSub (Publish/Subscribe) for real-time messaging. You can subscribe to channels and patterns, and dynamically manage subscriptions.
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "time"
+
+    glide "github.com/valkey-io/valkey-glide/go/v2"
+    "github.com/valkey-io/valkey-glide/go/v2/config"
+)
+
+func main() {
+    host := "localhost"
+    port := 6379
+
+    // Configure client with PubSub callback and reconciliation interval
+    config := config.NewClientConfiguration().
+        WithAddress(&config.NodeAddress{Host: host, Port: port}).
+        WithPubSubCallback(func(msg glide.PubSubMessage, ctx glide.MessageContext) {
+            fmt.Printf("Received message: %s from channel: %s\n", msg.Message, msg.Channel)
+        }).
+        WithPubSubReconciliationInterval(5000) // Reconcile subscriptions every 5 seconds
+
+    client, err := glide.NewClient(config)
+    if err != nil {
+        fmt.Println("Error creating client:", err)
+        return
+    }
+    defer client.Close()
+
+    ctx := context.Background()
+
+    // Subscribe to channels
+    err = client.Subscribe(ctx, []string{"news", "updates"})
+    if err != nil {
+        fmt.Println("Error subscribing:", err)
+        return
+    }
+
+    // Subscribe to patterns
+    err = client.PSubscribe(ctx, []string{"events:*"})
+    if err != nil {
+        fmt.Println("Error pattern subscribing:", err)
+        return
+    }
+
+    // Get current subscriptions
+    state, err := client.GetSubscriptions(ctx)
+    if err != nil {
+        fmt.Println("Error getting subscriptions:", err)
+        return
+    }
+    fmt.Printf("Subscribed to %d channels and %d patterns\n", 
+        len(state.DesiredSubscriptions["exact"]), 
+        len(state.DesiredSubscriptions["pattern"]))
+
+    // Wait for messages
+    time.Sleep(10 * time.Second)
+
+    // Unsubscribe from specific channels
+    err = client.Unsubscribe(ctx, []string{"news"})
+    if err != nil {
+        fmt.Println("Error unsubscribing:", err)
+        return
+    }
+
+    // Unsubscribe from all channels and patterns
+    err = client.UnsubscribeAll(ctx)
+    if err != nil {
+        fmt.Println("Error unsubscribing from all:", err)
+        return
+    }
+}
+```
+
+**PubSub Configuration Options:**
+
+- `WithPubSubCallback`: Set a callback function to handle incoming PubSub messages
+- `WithPubSubReconciliationInterval`: Set the interval (in milliseconds) for automatic subscription reconciliation. This ensures subscriptions are maintained even if the connection is temporarily lost. Default is 0 (disabled).
+
+**PubSub Methods:**
+
+- `Subscribe(ctx, channels)`: Subscribe to one or more channels
+- `PSubscribe(ctx, patterns)`: Subscribe to channel patterns (e.g., "news:*")
+- `SSubscribe(ctx, channels)`: Subscribe to sharded channels (cluster mode only)
+- `Unsubscribe(ctx, channels)`: Unsubscribe from specific channels (pass `nil` or `glide.AllChannels` to unsubscribe from all)
+- `PUnsubscribe(ctx, patterns)`: Unsubscribe from patterns (pass `nil` or `glide.AllPatterns` to unsubscribe from all)
+- `SUnsubscribe(ctx, channels)`: Unsubscribe from sharded channels (pass `nil` or `glide.AllShardedChannels` to unsubscribe from all)
+- `GetSubscriptions(ctx)`: Get the current subscription state
+
+**Blocking Variants:**
+
+All subscribe/unsubscribe methods have blocking variants with timeout support:
+- `SubscribeBlocking(ctx, channels, timeoutMs)`
+- `UnsubscribeBlocking(ctx, channels, timeoutMs)`
+- And similar for PSubscribe, SSubscribe, etc.
+
 For more code examples please refer to [examples.md](examples/examples.md).
+
+### Cluster Scan
+
+The cluster scan feature allows you to iterate over all keys in a cluster. You can optionally filter by pattern, type, and control batch size.
+
+#### Basic Cluster Scan
+
+```go
+cursor := models.NewClusterScanCursor()
+allKeys := []string{}
+
+for !cursor.IsFinished() {
+    result, err := client.Scan(context.Background(), cursor)
+    if err != nil {
+        fmt.Println("Error:", err)
+        break
+    }
+    allKeys = append(allKeys, result.Keys...)
+    cursor = result.Cursor
+}
+```
+
+#### Cluster Scan with Options
+
+```go
+opts := options.NewClusterScanOptions().
+    SetMatch("user:*").              // Filter by pattern
+    SetCount(100).                   // Batch size hint
+    SetType(constants.StringType).   // Filter by key type
+    SetAllowNonCoveredSlots(true)    // Allow scanning even if some slots are not covered
+
+cursor := models.NewClusterScanCursor()
+for !cursor.IsFinished() {
+    result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
+    if err != nil {
+        fmt.Println("Error:", err)
+        break
+    }
+    // Process result.Keys
+    cursor = result.Cursor
+}
+```
+
+**Note**: The `AllowNonCoveredSlots` option is useful when the cluster is not fully configured or some nodes are down. It allows the scan to proceed even if some hash slots are not covered by any node.
 
 ### Building & Testing
 

@@ -844,8 +844,8 @@ impl GlideClientHandle {
     /// # Arguments
     /// * `callback_idx` - Index to identify this request in JavaScript
     /// * `request_type` - The type of Redis command (maps to RequestType enum)
-    /// * `args_pointer_high` - High 32 bits of the args Vec<Bytes> pointer
-    /// * `args_pointer_low` - Low 32 bits of the args Vec<Bytes> pointer
+    /// * `args_pointer_high` - High 32 bits of the args `Vec<Bytes>` pointer
+    /// * `args_pointer_low` - Low 32 bits of the args `Vec<Bytes>` pointer
     /// * `route_bytes` - Optional routing information for cluster mode
     ///
     /// # Returns

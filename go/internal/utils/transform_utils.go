@@ -95,11 +95,12 @@ func ToString(v any) (string, bool) {
 	case []byte:
 		return string(val), true
 	case int64:
-		return fmt.Sprintf("%d", val), true
+		return strconv.FormatInt(val, 10), true
 	case float64:
-		return fmt.Sprintf("%g", val), true
+		// These parameters result in the same formatting rules as Sprintf().
+		return strconv.FormatFloat(val, 'g', -1, 64), true
 	case int:
-		return fmt.Sprintf("%d", val), true
+		return strconv.Itoa(val), true
 	default:
 		return fmt.Sprintf("%v", val), true
 	}

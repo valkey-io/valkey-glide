@@ -30,8 +30,23 @@ import {
     Transaction,
 } from "../build-ts";
 
-const CLUSTER_PORTS = process.env.CLUSTER_ENDPOINTS || "127.0.0.1:37287";
-const STANDALONE_PORT = process.env.STAND_ALONE_ENDPOINT || "127.0.0.1:35086";
+// Lazy getters for endpoints — global.* is set by setup.ts in beforeAll(),
+// which runs AFTER module evaluation, so we must defer the read.
+function getStandalonePort(): string {
+    return (
+        global.STAND_ALONE_ENDPOINT ||
+        process.env.STAND_ALONE_ENDPOINT ||
+        "127.0.0.1:35086"
+    );
+}
+
+function getClusterPorts(): string {
+    return (
+        global.CLUSTER_ENDPOINTS ||
+        process.env.CLUSTER_ENDPOINTS ||
+        "127.0.0.1:37287"
+    );
+}
 
 function parseEndpoint(endpoint: string): { host: string; port: number } {
     const [host, portStr] = endpoint.split(":");
@@ -43,7 +58,7 @@ describe("NAPI Client Integration Tests", () => {
         let client: GlideClient;
 
         beforeAll(async () => {
-            const endpoint = parseEndpoint(STANDALONE_PORT);
+            const endpoint = parseEndpoint(getStandalonePort());
             client = await GlideClient.createClient({
                 addresses: [endpoint],
             });
@@ -290,7 +305,7 @@ describe("NAPI Client Integration Tests", () => {
 
             it("should throw error after close", async () => {
                 const tempClient = await GlideClient.createClient({
-                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                    addresses: [parseEndpoint(getStandalonePort())],
                 });
 
                 tempClient.close();
@@ -303,7 +318,7 @@ describe("NAPI Client Integration Tests", () => {
         describe("Error Propagation", () => {
             it("should throw ClosingError for script on closed client", async () => {
                 const tempClient = await GlideClient.createClient({
-                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                    addresses: [parseEndpoint(getStandalonePort())],
                 });
                 tempClient.close();
                 const script = new Script("return 1");
@@ -315,7 +330,7 @@ describe("NAPI Client Integration Tests", () => {
 
             it("should throw ClosingError for updateConnectionPassword on closed client", async () => {
                 const tempClient = await GlideClient.createClient({
-                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                    addresses: [parseEndpoint(getStandalonePort())],
                 });
                 tempClient.close();
                 await expect(
@@ -328,7 +343,7 @@ describe("NAPI Client Integration Tests", () => {
             it("should handle multiple sequential clients", async () => {
                 for (let i = 0; i < 3; i++) {
                     const tempClient = await GlideClient.createClient({
-                        addresses: [parseEndpoint(STANDALONE_PORT)],
+                        addresses: [parseEndpoint(getStandalonePort())],
                     });
 
                     const result = await tempClient.set(
@@ -369,7 +384,7 @@ describe("NAPI Client Integration Tests", () => {
         describe("Inflight Limits", () => {
             it("should enforce inflight limit for batches", async () => {
                 const limitedClient = await GlideClient.createClient({
-                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                    addresses: [parseEndpoint(getStandalonePort())],
                     inflightRequestsLimit: 1,
                 });
 
@@ -409,7 +424,7 @@ describe("NAPI Client Integration Tests", () => {
 
             it("should enforce inflight limit for script invocations", async () => {
                 const limitedClient = await GlideClient.createClient({
-                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                    addresses: [parseEndpoint(getStandalonePort())],
                     inflightRequestsLimit: 1,
                 });
 
@@ -454,7 +469,7 @@ describe("NAPI Client Integration Tests", () => {
 
             it("should enforce inflight limit for batch operations", async () => {
                 const limitedClient = await GlideClient.createClient({
-                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                    addresses: [parseEndpoint(getStandalonePort())],
                     inflightRequestsLimit: 1,
                 });
 
@@ -487,7 +502,7 @@ describe("NAPI Client Integration Tests", () => {
         describe("Protocol Versions", () => {
             it("should work with RESP2", async () => {
                 const resp2Client = await GlideClient.createClient({
-                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                    addresses: [parseEndpoint(getStandalonePort())],
                     protocol: ProtocolVersion.RESP2,
                 });
 
@@ -507,7 +522,7 @@ describe("NAPI Client Integration Tests", () => {
 
             it("should work with RESP3", async () => {
                 const resp3Client = await GlideClient.createClient({
-                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                    addresses: [parseEndpoint(getStandalonePort())],
                     protocol: ProtocolVersion.RESP3,
                 });
 
@@ -529,7 +544,7 @@ describe("NAPI Client Integration Tests", () => {
         describe("Client Lifecycle", () => {
             it("should reject in-flight requests on close", async () => {
                 const tempClient = await GlideClient.createClient({
-                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                    addresses: [parseEndpoint(getStandalonePort())],
                 });
 
                 const promises = [];
@@ -559,7 +574,7 @@ describe("NAPI Client Integration Tests", () => {
 
             it("should handle double close gracefully", async () => {
                 const tempClient = await GlideClient.createClient({
-                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                    addresses: [parseEndpoint(getStandalonePort())],
                 });
 
                 await tempClient.set("double-close-key", "value");
@@ -571,7 +586,7 @@ describe("NAPI Client Integration Tests", () => {
 
             it("should throw ClosingError for operations after close", async () => {
                 const tempClient = await GlideClient.createClient({
-                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                    addresses: [parseEndpoint(getStandalonePort())],
                 });
 
                 tempClient.close();
@@ -587,7 +602,7 @@ describe("NAPI Client Integration Tests", () => {
         let clusterClient: GlideClusterClient;
 
         beforeAll(async () => {
-            const endpoints = CLUSTER_PORTS.split(",").map(parseEndpoint);
+            const endpoints = getClusterPorts().split(",").map(parseEndpoint);
             clusterClient = await GlideClusterClient.createClient({
                 addresses: endpoints,
             });
@@ -720,7 +735,7 @@ describe("NAPI Client Integration Tests", () => {
 
         beforeAll(async () => {
             client = await GlideClient.createClient({
-                addresses: [parseEndpoint(STANDALONE_PORT)],
+                addresses: [parseEndpoint(getStandalonePort())],
             });
         });
 

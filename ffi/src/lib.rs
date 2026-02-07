@@ -3004,6 +3004,10 @@ pub struct Statistics {
     pub total_bytes_decompressed: c_ulong,
     /// Number of times compression was skipped
     pub compression_skipped_count: c_ulong,
+    /// Number of times subscriptions were out of sync during reconciliation
+    pub subscription_out_of_sync_count: c_ulong,
+    /// Timestamp of last successful subscription sync (milliseconds since epoch)
+    pub subscription_last_sync_timestamp: c_ulong,
 }
 
 /// Get compression and connection statistics.
@@ -3025,6 +3029,8 @@ pub extern "C" fn get_statistics() -> Statistics {
         total_bytes_compressed: Telemetry::total_bytes_compressed() as c_ulong,
         total_bytes_decompressed: Telemetry::total_bytes_decompressed() as c_ulong,
         compression_skipped_count: Telemetry::compression_skipped_count() as c_ulong,
+        subscription_out_of_sync_count: Telemetry::subscription_out_of_sync_count() as c_ulong,
+        subscription_last_sync_timestamp: Telemetry::subscription_last_sync_timestamp() as c_ulong,
     }
 }
 
