@@ -2,7 +2,6 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import * as net from "net";
 import { connection_request } from "../build-ts/ProtobufMessage";
 import {
     AdvancedBaseClientConfiguration,
@@ -237,21 +236,7 @@ export class GlideClient extends BaseClient {
     ): Promise<GlideClient> {
         return super.createClientInternal<GlideClient>(
             options,
-            (socket: net.Socket, options?: GlideClientConfiguration) =>
-                new GlideClient(socket, options),
-        );
-    }
-    /**
-     * @internal
-     */
-    static async __createClient(
-        options: BaseClientConfiguration,
-        connectedSocket: net.Socket,
-    ): Promise<GlideClient> {
-        return this.__createClientInternal(
-            options,
-            connectedSocket,
-            (socket, options) => new GlideClient(socket, options),
+            (options?: GlideClientConfiguration) => new GlideClient(options),
         );
     }
 
