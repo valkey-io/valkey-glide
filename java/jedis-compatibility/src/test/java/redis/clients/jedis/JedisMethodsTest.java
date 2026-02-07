@@ -125,4 +125,27 @@ public class JedisMethodsTest {
         Method closeMethod = jedisClass.getMethod("close");
         assertEquals(void.class, closeMethod.getReturnType());
     }
+
+    @Test
+    public void testSetMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        Method saddString = jedisClass.getMethod("sadd", String.class, String[].class);
+        assertEquals(long.class, saddString.getReturnType());
+
+        Method saddBinary = jedisClass.getMethod("sadd", byte[].class, byte[][].class);
+        assertEquals(long.class, saddBinary.getReturnType());
+
+        Method sremString = jedisClass.getMethod("srem", String.class, String[].class);
+        assertEquals(long.class, sremString.getReturnType());
+
+        Method sremBinary = jedisClass.getMethod("srem", byte[].class, byte[][].class);
+        assertEquals(long.class, sremBinary.getReturnType());
+
+        Method smembersString = jedisClass.getMethod("smembers", String.class);
+        assertEquals(Set.class, smembersString.getReturnType());
+
+        Method smembersBinary = jedisClass.getMethod("smembers", byte[].class);
+        assertEquals(Set.class, smembersBinary.getReturnType());
+    }
 }
