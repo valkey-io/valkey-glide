@@ -6349,11 +6349,15 @@ public abstract class BaseClient
 
     protected Object parseSubscriptionState(Object response) {
         if (!(response instanceof Object[])) {
-            throw new RuntimeException("Invalid response format from GetSubscriptions");
+            throw new RuntimeException(
+                    "Invalid response format from GetSubscriptions: expected Object[], got "
+                            + (response == null ? "null" : response.getClass().getName()));
         }
         Object[] arr = (Object[]) response;
         if (arr.length != 4) {
-            throw new RuntimeException("Invalid response format from GetSubscriptions");
+            throw new RuntimeException(
+                    "Invalid response format from GetSubscriptions: expected array length 4, got "
+                            + arr.length);
         }
 
         @SuppressWarnings("unchecked")
