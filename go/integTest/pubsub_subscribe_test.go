@@ -45,7 +45,7 @@ func (suite *GlideTestSuite) TestDynamicSubscribeUnsubscribe() {
 		suite.T().Logf("SUCCESS! Initial subscription works. Message: '%s'", msg.Message)
 
 		// Now test dynamic subscribe
-		err = receiver.(*glide.Client).SubscribeBlocking(context.Background(), []string{dynamicChannel}, 5000)
+		err = receiver.(*glide.Client).Subscribe(context.Background(), []string{dynamicChannel}, 5000)
 		assert.NoError(suite.T(), err)
 
 		time.Sleep(100 * time.Millisecond)
@@ -94,7 +94,7 @@ func (suite *GlideTestSuite) TestDynamicPSubscribeUnsubscribe() {
 	case msg := <-queue.WaitForMessage():
 		assert.Equal(suite.T(), "test_message", msg.Message)
 
-		err = receiver.(*glide.Client).PSubscribeBlocking(context.Background(), []string{dynamicPattern}, 5000)
+		err = receiver.(*glide.Client).PSubscribe(context.Background(), []string{dynamicPattern}, 5000)
 		assert.NoError(suite.T(), err)
 
 		time.Sleep(200 * time.Millisecond)
@@ -144,7 +144,7 @@ func (suite *GlideTestSuite) TestDynamicSSubscribeUnsubscribe() {
 	case msg := <-queue.WaitForMessage():
 		assert.Equal(suite.T(), "test_message", msg.Message)
 
-		err = receiver.(*glide.ClusterClient).SSubscribeBlocking(context.Background(), []string{dynamicChannel}, 5000)
+		err = receiver.(*glide.ClusterClient).SSubscribe(context.Background(), []string{dynamicChannel}, 5000)
 		assert.NoError(suite.T(), err)
 
 		time.Sleep(100 * time.Millisecond)
@@ -194,7 +194,7 @@ func (suite *GlideTestSuite) TestBlockingSubscribeUnsubscribe() {
 		assert.Equal(suite.T(), "message1", msg.Message)
 
 		// Dynamically subscribe to second channel
-		err = receiver.(*glide.Client).SubscribeBlocking(context.Background(), []string{channel2}, 5000)
+		err = receiver.(*glide.Client).Subscribe(context.Background(), []string{channel2}, 5000)
 		assert.NoError(suite.T(), err)
 
 		time.Sleep(200 * time.Millisecond)
@@ -209,7 +209,7 @@ func (suite *GlideTestSuite) TestBlockingSubscribeUnsubscribe() {
 			assert.Equal(suite.T(), "message2", msg.Message)
 
 			// Unsubscribe from first channel
-			err = receiver.(*glide.Client).UnsubscribeBlocking(context.Background(), []string{channel1}, 5000)
+			err = receiver.(*glide.Client).Unsubscribe(context.Background(), []string{channel1}, 5000)
 			assert.NoError(suite.T(), err)
 
 			time.Sleep(200 * time.Millisecond)

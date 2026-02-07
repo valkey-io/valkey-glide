@@ -14,9 +14,6 @@ import (
 
 // TestPubSub_Patterns tests all combinations of client types and message reading methods
 func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
-	if !*pubsubtest {
-		suite.T().Skip("Pubsub tests are disabled")
-	}
 	tests := []struct {
 		name           string
 		clientType     ClientType
@@ -189,9 +186,6 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 
 // TestPubSub_Basic_MultipleSubscribers tests message delivery to multiple subscribers
 func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
-	if !*pubsubtest {
-		suite.T().Skip("Pubsub tests are disabled")
-	}
 	tests := []struct {
 		name           string
 		clientType     ClientType
@@ -371,9 +365,6 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 
 // TestPubSub_Basic_PatternSubscription tests message pattern matching with PSUBSCRIBE
 func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
-	if !*pubsubtest {
-		suite.T().Skip("Pubsub tests are disabled")
-	}
 	tests := []struct {
 		name           string
 		clientType     ClientType
@@ -522,9 +513,6 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 
 // TestPubSub_Basic_ManyChannels tests a single subscriber subscribing to multiple channels
 func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
-	if !*pubsubtest {
-		suite.T().Skip("Pubsub tests are disabled")
-	}
 	tests := []struct {
 		name           string
 		clientType     ClientType
@@ -703,9 +691,6 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 
 // TestPubSub_Basic_PatternManyChannels tests pattern subscriptions with multiple channels
 func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
-	if !*pubsubtest {
-		suite.T().Skip("Pubsub tests are disabled")
-	}
 	tests := []struct {
 		name           string
 		clientType     ClientType
@@ -857,9 +842,6 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 
 // TestPubSub_Basic_CombinedExactPattern tests a single subscriber with both exact and pattern subscriptions
 func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
-	if !*pubsubtest {
-		suite.T().Skip("Pubsub tests are disabled")
-	}
 	tests := []struct {
 		name            string
 		clientType      ClientType
@@ -1036,9 +1018,6 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 // TestPubSub_Basic_CombinedExactPatternMultipleSubscribers tests multiple subscribers with both exact and pattern
 // subscriptions
 func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscribers() {
-	if !*pubsubtest {
-		suite.T().Skip("Pubsub tests are disabled")
-	}
 	tests := []struct {
 		name            string
 		clientType      ClientType

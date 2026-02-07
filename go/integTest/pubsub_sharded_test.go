@@ -109,7 +109,7 @@ func (suite *GlideTestSuite) TestSUnsubscribeShardedChannel() {
 	assert.Equal(suite.T(), "before", msg.Message)
 
 	// Unsubscribe
-	receiver.(*glide.ClusterClient).SUnsubscribe(ctx, []string{channel})
+	receiver.(*glide.ClusterClient).SUnsubscribe(ctx, []string{channel}, 5000)
 	time.Sleep(200 * time.Millisecond)
 
 	// Publish after unsubscribe - should not receive

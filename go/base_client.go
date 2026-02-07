@@ -9772,14 +9772,45 @@ func (client *baseClient) GetStatistics() map[string]uint64 {
 }
 
 // AllChannels represents "unsubscribe from all channels".
-// Pass this to Unsubscribe or UnsubscribeBlocking to unsubscribe from all channels.
+// Pass nil to Unsubscribe to unsubscribe from all channels.
 var AllChannels []string = nil
 
 // AllPatterns represents "unsubscribe from all patterns".
-// Pass this to PUnsubscribe or PUnsubscribeBlocking to unsubscribe from all patterns.
+// Pass nil to PUnsubscribe to unsubscribe from all patterns.
 var AllPatterns []string = nil
 
-// Subscribe subscribes the client to the specified channels (lazy, non-blocking).
+// AllShardedChannels represents "unsubscribe from all sharded channels".
+// Pass nil to SUnsubscribe to unsubscribe from all sharded channels.
+var AllShardedChannels []string = nil
+
+// Subscribe subscribes the client to the specified channels (blocking).
+// This command updates the client's internal desired subscription state and waits
+// for server confirmation.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	channels - A slice of channel names to subscribe to.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.Subscribe(ctx, []string{"channel1"}, 5000)
+func (client *baseClient) Subscribe(ctx context.Context, channels []string, timeoutMs int) error {
+	if timeoutMs < 0 {
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
+	}
+	args := append(channels, strconv.Itoa(timeoutMs))
+	_, err := client.executeCommand(ctx, C.SubscribeBlocking, args)
+	return err
+}
+
+// SubscribeLazy subscribes the client to the specified channels (non-blocking).
 // This command updates the client's internal desired subscription state without waiting
 // for server confirmation. It returns immediately after updating the local state.
 // The client will attempt to subscribe asynchronously in the background.
@@ -9797,20 +9828,20 @@ var AllPatterns []string = nil
 //
 // Example:
 //
-//	err := client.Subscribe(ctx, []string{"channel1", "channel2"})
-func (client *baseClient) Subscribe(ctx context.Context, channels []string) error {
+//	err := client.SubscribeLazy(ctx, []string{"channel1", "channel2"})
+func (client *baseClient) SubscribeLazy(ctx context.Context, channels []string) error {
 	_, err := client.executeCommand(ctx, C.Subscribe, channels)
 	return err
 }
 
-// SubscribeBlocking subscribes the client to the specified channels (blocking).
+// PSubscribe subscribes the client to the specified patterns (blocking).
 // This command updates the client's internal desired subscription state and waits
 // for server confirmation.
 //
 // Parameters:
 //
 //	ctx - The context for the operation.
-//	channels - A slice of channel names to subscribe to.
+//	patterns - A slice of patterns to subscribe to (e.g., []string{"news.*"}).
 //	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
 //	            A value of 0 blocks indefinitely until confirmation.
 //
@@ -9820,17 +9851,17 @@ func (client *baseClient) Subscribe(ctx context.Context, channels []string) erro
 //
 // Example:
 //
-//	err := client.SubscribeBlocking(ctx, []string{"channel1"}, 5000)
-func (client *baseClient) SubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
+//	err := client.PSubscribe(ctx, []string{"news.*"}, 5000)
+func (client *baseClient) PSubscribe(ctx context.Context, patterns []string, timeoutMs int) error {
 	if timeoutMs < 0 {
 		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
 	}
-	args := append(channels, strconv.Itoa(timeoutMs))
-	_, err := client.executeCommand(ctx, C.SubscribeBlocking, args)
+	args := append(patterns, strconv.Itoa(timeoutMs))
+	_, err := client.executeCommand(ctx, C.PSubscribeBlocking, args)
 	return err
 }
 
-// PSubscribe subscribes the client to the specified patterns (lazy, non-blocking).
+// PSubscribeLazy subscribes the client to the specified patterns (non-blocking).
 // This command updates the client's internal desired subscription state without waiting
 // for server confirmation. It returns immediately after updating the local state.
 //
@@ -9845,8 +9876,8 @@ func (client *baseClient) SubscribeBlocking(ctx context.Context, channels []stri
 //
 // Example:
 //
-//	err := client.PSubscribe(ctx, []string{"news.*", "updates.*"})
-func (client *baseClient) PSubscribe(ctx context.Context, patterns []string) error {
+//	err := client.PSubscribeLazy(ctx, []string{"news.*", "updates.*"})
+func (client *baseClient) PSubscribeLazy(ctx context.Context, patterns []string) error {
 	_, err := client.executeCommand(ctx, C.PSubscribe, patterns)
 	return err
 }
@@ -9878,34 +9909,13 @@ func (client *baseClient) PSubscribeBlocking(ctx context.Context, patterns []str
 	return err
 }
 
-// Unsubscribe unsubscribes the client from the specified channels (lazy, non-blocking).
-// If no channels are specified, unsubscribes from all exact channels.
-//
-// Parameters:
-//
-//	ctx - The context for the operation.
-//	channels - A slice of channel names to unsubscribe from. Empty slice unsubscribes from all.
-//
-// Return value:
-//
-//	An error if the operation fails.
-//
-// Example:
-//
-//	err := client.Unsubscribe(ctx, []string{"channel1"})
-//	err := client.Unsubscribe(ctx, []string{}) // Unsubscribe from all
-func (client *baseClient) Unsubscribe(ctx context.Context, channels []string) error {
-	_, err := client.executeCommand(ctx, C.Unsubscribe, channels)
-	return err
-}
-
-// UnsubscribeBlocking unsubscribes the client from the specified channels (blocking).
+// Unsubscribe unsubscribes the client from the specified channels (blocking).
 // If no channels are specified (nil or empty slice), unsubscribes from all exact channels.
 //
 // Parameters:
 //
 //	ctx - The context for the operation.
-//	channels - A slice of channel names to unsubscribe from. Pass nil or AllChannels to unsubscribe from all.
+//	channels - A slice of channel names to unsubscribe from. Pass nil to unsubscribe from all.
 //	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
 //	            A value of 0 blocks indefinitely until confirmation.
 //
@@ -9915,9 +9925,9 @@ func (client *baseClient) Unsubscribe(ctx context.Context, channels []string) er
 //
 // Example:
 //
-//	err := client.UnsubscribeBlocking(ctx, []string{"channel1"}, 5000)
-//	err := client.UnsubscribeBlocking(ctx, AllChannels, 5000) // Unsubscribe from all
-func (client *baseClient) UnsubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
+//	err := client.Unsubscribe(ctx, []string{"channel1"}, 5000)
+//	err := client.Unsubscribe(ctx, nil, 5000) // Unsubscribe from all
+func (client *baseClient) Unsubscribe(ctx context.Context, channels []string, timeoutMs int) error {
 	if timeoutMs < 0 {
 		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
 	}
@@ -9926,11 +9936,13 @@ func (client *baseClient) UnsubscribeBlocking(ctx context.Context, channels []st
 	return err
 }
 
-// UnsubscribeAll unsubscribes the client from all exact channels (lazy, non-blocking).
+// UnsubscribeLazy unsubscribes the client from the specified channels (non-blocking).
+// If no channels are specified (nil), unsubscribes from all exact channels.
 //
 // Parameters:
 //
 //	ctx - The context for the operation.
+//	channels - A slice of channel names to unsubscribe from. Pass nil to unsubscribe from all.
 //
 // Return value:
 //
@@ -9938,57 +9950,20 @@ func (client *baseClient) UnsubscribeBlocking(ctx context.Context, channels []st
 //
 // Example:
 //
-//	err := client.UnsubscribeAll(ctx)
-func (client *baseClient) UnsubscribeAll(ctx context.Context) error {
-	return client.Unsubscribe(ctx, nil)
-}
-
-// UnsubscribeAllBlocking unsubscribes the client from all exact channels (blocking).
-//
-// Parameters:
-//
-//	ctx - The context for the operation.
-//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
-//	            A value of 0 blocks indefinitely until confirmation.
-//
-// Return value:
-//
-//	An error if the operation fails or times out.
-//
-// Example:
-//
-//	err := client.UnsubscribeAllBlocking(ctx, 5000)
-func (client *baseClient) UnsubscribeAllBlocking(ctx context.Context, timeoutMs int) error {
-	return client.UnsubscribeBlocking(ctx, nil, timeoutMs)
-}
-
-// PUnsubscribe unsubscribes the client from the specified patterns (lazy, non-blocking).
-// If no patterns are specified, unsubscribes from all patterns.
-//
-// Parameters:
-//
-//	ctx - The context for the operation.
-//	patterns - A slice of patterns to unsubscribe from. Empty slice unsubscribes from all.
-//
-// Return value:
-//
-//	An error if the operation fails.
-//
-// Example:
-//
-//	err := client.PUnsubscribe(ctx, []string{"news.*"})
-func (client *baseClient) PUnsubscribe(ctx context.Context, patterns []string) error {
-	_, err := client.executeCommand(ctx, C.PUnsubscribe, patterns)
+//	err := client.UnsubscribeLazy(ctx, []string{"channel1"})
+//	err := client.UnsubscribeLazy(ctx, nil) // Unsubscribe from all
+func (client *baseClient) UnsubscribeLazy(ctx context.Context, channels []string) error {
+	_, err := client.executeCommand(ctx, C.Unsubscribe, channels)
 	return err
 }
 
-// PUnsubscribeBlocking unsubscribes the client from the specified patterns (blocking).
+// PUnsubscribe unsubscribes the client from the specified patterns (blocking).
 // If no patterns are specified (nil or empty slice), unsubscribes from all patterns.
 //
 // Parameters:
 //
 //	ctx - The context for the operation.
-//	patterns - A slice of patterns to unsubscribe from. Pass nil or AllPatterns to unsubscribe from all.
+//	patterns - A slice of patterns to unsubscribe from. Pass nil to unsubscribe from all.
 //	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
 //	            A value of 0 blocks indefinitely until confirmation.
 //
@@ -9998,9 +9973,9 @@ func (client *baseClient) PUnsubscribe(ctx context.Context, patterns []string) e
 //
 // Example:
 //
-//	err := client.PUnsubscribeBlocking(ctx, []string{"news.*"}, 5000)
-//	err := client.PUnsubscribeBlocking(ctx, AllPatterns, 5000) // Unsubscribe from all
-func (client *baseClient) PUnsubscribeBlocking(ctx context.Context, patterns []string, timeoutMs int) error {
+//	err := client.PUnsubscribe(ctx, []string{"news.*"}, 5000)
+//	err := client.PUnsubscribe(ctx, nil, 5000) // Unsubscribe from all
+func (client *baseClient) PUnsubscribe(ctx context.Context, patterns []string, timeoutMs int) error {
 	if timeoutMs < 0 {
 		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
 	}
@@ -10009,11 +9984,13 @@ func (client *baseClient) PUnsubscribeBlocking(ctx context.Context, patterns []s
 	return err
 }
 
-// PUnsubscribeAll unsubscribes the client from all patterns (lazy, non-blocking).
+// PUnsubscribeLazy unsubscribes the client from the specified patterns (non-blocking).
+// If no patterns are specified (nil), unsubscribes from all patterns.
 //
 // Parameters:
 //
 //	ctx - The context for the operation.
+//	patterns - A slice of patterns to unsubscribe from. Pass nil to unsubscribe from all.
 //
 // Return value:
 //
@@ -10021,28 +9998,11 @@ func (client *baseClient) PUnsubscribeBlocking(ctx context.Context, patterns []s
 //
 // Example:
 //
-//	err := client.PUnsubscribeAll(ctx)
-func (client *baseClient) PUnsubscribeAll(ctx context.Context) error {
-	return client.PUnsubscribe(ctx, nil)
-}
-
-// PUnsubscribeAllBlocking unsubscribes the client from all patterns (blocking).
-//
-// Parameters:
-//
-//	ctx - The context for the operation.
-//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
-//	            A value of 0 blocks indefinitely until confirmation.
-//
-// Return value:
-//
-//	An error if the operation fails or times out.
-//
-// Example:
-//
-//	err := client.PUnsubscribeAllBlocking(ctx, 5000)
-func (client *baseClient) PUnsubscribeAllBlocking(ctx context.Context, timeoutMs int) error {
-	return client.PUnsubscribeBlocking(ctx, nil, timeoutMs)
+//	err := client.PUnsubscribeLazy(ctx, []string{"news.*"})
+//	err := client.PUnsubscribeLazy(ctx, nil) // Unsubscribe from all
+func (client *baseClient) PUnsubscribeLazy(ctx context.Context, patterns []string) error {
+	_, err := client.executeCommand(ctx, C.PUnsubscribe, patterns)
+	return err
 }
 
 // GetSubscriptions retrieves both the desired and current subscription states.
