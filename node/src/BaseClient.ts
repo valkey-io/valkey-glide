@@ -8,7 +8,7 @@
  */
 
 import Long from "long";
-import { Buffer, Long as ProtoLong } from "protobufjs/minimal";
+import { Buffer } from "protobufjs/minimal";
 import {
     AggregationType,
     BaseScanOptions,
@@ -29,8 +29,6 @@ import {
     ConnectionError,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
-    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
     ExecAbortError,
     ExpireOptions,
     GeoAddOptions,
@@ -69,6 +67,7 @@ import {
     GlideClientHandle,
     CommandResponse,
     createLeakedStringVec,
+    freeLeakedStringVec,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -266,8 +265,10 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
+    createLeakedOtelSpan,
     dropOtelSpan,
     getStatistics,
+    OpenTelemetry,
     valueFromSplitPointer,
 } from ".";
 import {
@@ -502,28 +503,6 @@ export function convertRecordToGlideRecord<T>(
     return Object.entries(data).map(([key, value]) => {
         return { key, value };
     });
-}
-
-/**
- * Our purpose in creating PointerResponse type is to mark when response is of number/long pointer response type.
- * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
- */
-class PointerResponse {
-    pointer: number | ProtoLong | null;
-    // As Javascript does not support 64-bit integers,
-    // we split the Rust u64 pointer into two u32 integers (high and low) and build it again when we call value_from_split_pointer, the Rust function.
-    high: number | undefined;
-    low: number | undefined;
-
-    constructor(
-        pointer: number | ProtoLong | null,
-        high?: number | undefined,
-        low?: number | undefined,
-    ) {
-        this.pointer = pointer;
-        this.high = high;
-        this.low = low;
-    }
 }
 
 /** Represents the types of services that can be used for IAM authentication. */
@@ -1003,15 +982,14 @@ export class BaseClient {
         | [PromiseFunction, ErrorFunction, Decoder | undefined][]
         | [PromiseFunction, ErrorFunction][] = [];
     protected readonly availableCallbackSlots: number[] = [];
-    // These are stored for reference; actual enforcement happens in Rust NAPI layer
-    private readonly _requestTimeout!: number; // Timeout in milliseconds
     protected isClosed = false;
     protected defaultDecoder = Decoder.String;
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
-    private readonly _inflightRequestsLimit!: number;
     private config: BaseClientConfiguration | undefined;
     protected clientHandle: GlideClientHandle | null = null;
+    /** Stores OTel span pointers keyed by callbackIndex for span lifecycle management. */
+    private readonly otelSpanPointers = new Map<number, bigint>();
 
     protected configurePubsub(
         options: GlideClusterClientConfiguration | GlideClientConfiguration,
@@ -1129,74 +1107,34 @@ export class BaseClient {
         }
     }
 
-    private dropCommandSpan(spanPtr: number | Long | null | undefined) {
-        if (spanPtr === null || spanPtr === undefined) return;
-
-        if (typeof spanPtr === "number") {
-            return dropOtelSpan(BigInt(spanPtr)); // Convert number to BigInt
-        } else if (spanPtr instanceof Long) {
-            return dropOtelSpan(BigInt(spanPtr.toString())); // Convert Long to BigInt via string
-        }
+    /**
+     * Creates an OTel span for a command and stores the span pointer keyed by
+     * callbackIndex so it can be dropped when the response arrives.
+     *
+     * Callers MUST gate this behind `OpenTelemetry.shouldSample()` to avoid
+     * unnecessary work on the hot path when OTel is not sampling.
+     */
+    private createOtelSpanForCallback(
+        callbackIndex: number,
+        commandName: string,
+    ): void {
+        const [low, high] = createLeakedOtelSpan(commandName);
+        // Combine split pointer into a single bigint for dropOtelSpan,
+        // using Long to match the pointer representation used elsewhere.
+        const spanPtr = BigInt(new Long(low, high, true).toString());
+        this.otelSpanPointers.set(callbackIndex, spanPtr);
     }
 
-    processResponse(message: response.Response) {
-        if (message.closingError != null) {
-            this.close(message.closingError);
-            return;
+    /**
+     * Drops the OTel span associated with the given callbackIndex, if one exists.
+     */
+    private dropOtelSpanForCallback(callbackIndex: number): void {
+        const spanPtr = this.otelSpanPointers.get(callbackIndex);
+
+        if (spanPtr !== undefined) {
+            this.otelSpanPointers.delete(callbackIndex);
+            dropOtelSpan(spanPtr);
         }
-
-        const [resolve, reject, decoder = this.defaultDecoder] =
-            this.promiseCallbackFunctions[message.callbackIdx];
-        this.availableCallbackSlots.push(message.callbackIdx);
-
-        if (message.requestError != null) {
-            const errorType = getRequestErrorClass(message.requestError.type);
-            reject(new errorType(message.requestError.message ?? undefined));
-        } else if (message.respPointer != null) {
-            let pointer;
-
-            if (typeof message.respPointer === "number") {
-                // Response from type number
-                const long = Long.fromNumber(message.respPointer);
-                pointer = new PointerResponse(
-                    message.respPointer,
-                    long.high,
-                    long.low,
-                );
-            } else {
-                // Response from type long
-                pointer = new PointerResponse(
-                    message.respPointer,
-                    message.respPointer.high,
-                    message.respPointer.low,
-                );
-            }
-
-            try {
-                resolve(
-                    valueFromSplitPointer(
-                        pointer.high!,
-                        pointer.low!,
-                        decoder === Decoder.String,
-                    ),
-                );
-            } catch (err: unknown) {
-                Logger.log("error", "Decoder", `Decoding error: '${err}'`);
-                reject(
-                    err instanceof ValkeyError
-                        ? err
-                        : new Error(
-                              `Decoding error: '${err}'. \n NOTE: If this was thrown during a command with write operations, the data could be UNRECOVERABLY LOST.`,
-                          ),
-                );
-            }
-        } else if (message.constantResponse === response.ConstantResponse.OK) {
-            resolve("OK");
-        } else {
-            resolve(null);
-        }
-
-        this.dropCommandSpan(message.rootSpanPtr);
     }
 
     processPush(response: response.Response) {
@@ -1291,6 +1229,8 @@ export class BaseClient {
         } else {
             resolve(null);
         }
+
+        this.dropOtelSpanForCallback(response.callbackIdx);
     };
 
     protected constructor(options?: BaseClientConfiguration) {
@@ -1298,11 +1238,7 @@ export class BaseClient {
         Logger.log("info", "Client lifetime", `construct client`);
 
         this.config = options;
-        this._requestTimeout =
-            options?.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS;
         this.defaultDecoder = options?.defaultDecoder ?? Decoder.String;
-        this._inflightRequestsLimit =
-            options?.inflightRequestsLimit ?? DEFAULT_INFLIGHT_REQUESTS_LIMIT;
     }
 
     protected getCallbackIndex(): number {
@@ -1353,7 +1289,27 @@ export class BaseClient {
         }
 
         // Batch commands
-        return this.sendBatch<T>(command, isAtomic, raiseOnError);
+        return this.sendBatch<T>(command, options, isAtomic, raiseOnError).then(
+            (result: T) => {
+                // Patch error prototypes in batch results.
+                // The Rust NAPI layer returns errors as plain JS Error objects with
+                // name="RequestError". We need to re-class them as RequestError instances
+                // so that `instanceof RequestError` checks work correctly.
+                if (Array.isArray(result)) {
+                    for (const item of result) {
+                        if (
+                            item?.constructor?.name === "Error" &&
+                            /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+                            (item as any).name === "RequestError"
+                        ) {
+                            Object.setPrototypeOf(item, RequestError.prototype);
+                        }
+                    }
+                }
+
+                return result;
+            },
+        );
     }
 
     /**
@@ -1362,16 +1318,42 @@ export class BaseClient {
      */
     private sendBatch<T>(
         commands: command_request.Command[],
+        options: WritePromiseOptions = {},
         isAtomic: boolean,
         raiseOnError: boolean,
     ): Promise<T> {
+        // Validate: retry strategy is not supported for atomic batches (transactions)
+        if (isAtomic && "retryStrategy" in options && options.retryStrategy) {
+            // Free any leaked arg pointers in the commands before rejecting
+            for (const cmd of commands) {
+                if (cmd.argsVecPointer) {
+                    const ptr =
+                        typeof cmd.argsVecPointer === "number"
+                            ? Long.fromNumber(cmd.argsVecPointer)
+                            : cmd.argsVecPointer;
+                    freeLeakedStringVec(ptr.high, ptr.low);
+                }
+            }
+
+            return Promise.reject(
+                new RequestError(
+                    "Retry strategy is not supported for atomic batches.",
+                ),
+            ) as Promise<T>;
+        }
+
         const callbackIndex = this.getCallbackIndex();
+
+        // Create an OTel span for this batch if tracing is enabled
+        if (OpenTelemetry.shouldSample()) {
+            this.createOtelSpanForCallback(callbackIndex, "Batch");
+        }
 
         return new Promise<T>((resolve, reject) => {
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
                 reject,
-                undefined,
+                options?.decoder,
             ];
 
             // Convert commands to BatchCommand format
@@ -1409,17 +1391,47 @@ export class BaseClient {
                 };
             });
 
+            // Extract timeout from options if present
+            const timeout =
+                "timeout" in options ? (options.timeout as number) : undefined;
+
+            // Extract retry strategy from options if present (cluster batch only)
+            const retryServerError =
+                "retryStrategy" in options
+                    ? options.retryStrategy?.retryServerError
+                    : undefined;
+            const retryConnectionError =
+                "retryStrategy" in options
+                    ? options.retryStrategy?.retryConnectionError
+                    : undefined;
+
+            // Encode route to protobuf bytes if provided
+            let routeBytes: Uint8Array | undefined;
+
+            if (options.route) {
+                const protoRoute = this.toProtobufRoute(options.route);
+
+                if (protoRoute) {
+                    routeBytes =
+                        command_request.Routes.encode(protoRoute).finish();
+                }
+            }
+
             // Call the Rust sendBatch via NAPI
             const success = this.clientHandle!.sendBatch(
                 callbackIndex,
                 batchCommands,
                 isAtomic,
                 raiseOnError,
-                undefined, // timeout - use default
+                timeout,
+                retryServerError,
+                retryConnectionError,
+                routeBytes,
             );
 
             if (!success) {
-                // Inflight limit exceeded
+                // Inflight limit exceeded - drop span and clean up
+                this.dropOtelSpanForCallback(callbackIndex);
                 this.availableCallbackSlots.push(callbackIndex);
                 reject(
                     new RequestError(
@@ -1439,6 +1451,15 @@ export class BaseClient {
         options: WritePromiseOptions = {},
     ): Promise<T> {
         const callbackIndex = this.getCallbackIndex();
+
+        // Create an OTel span for this command if tracing is enabled.
+        // Defer the command name lookup to avoid the string table access
+        // on every request when OTel is not sampling.
+        if (OpenTelemetry.shouldSample()) {
+            const commandName =
+                command_request.RequestType[command.requestType] ?? "Unknown";
+            this.createOtelSpanForCallback(callbackIndex, commandName);
+        }
 
         return new Promise<T>((resolve, reject) => {
             this.promiseCallbackFunctions[callbackIndex] = [
@@ -1496,7 +1517,8 @@ export class BaseClient {
             );
 
             if (!success) {
-                // Inflight limit exceeded
+                // Inflight limit exceeded - drop span and clean up
+                this.dropOtelSpanForCallback(callbackIndex);
                 this.availableCallbackSlots.push(callbackIndex);
                 reject(
                     new RequestError(
@@ -1510,6 +1532,7 @@ export class BaseClient {
     protected createUpdateConnectionPasswordPromise(
         command: command_request.UpdateConnectionPassword,
     ): Promise<GlideString> {
+        this.ensureClientIsOpen();
         const callbackIndex = this.getCallbackIndex();
 
         return new Promise<GlideString>((resolve, reject) => {
@@ -1539,6 +1562,7 @@ export class BaseClient {
     protected createRefreshIamTokenPromise(
         _command: command_request.RefreshIamToken, // eslint-disable-line @typescript-eslint/no-unused-vars
     ): Promise<GlideString> {
+        this.ensureClientIsOpen();
         const callbackIndex = this.getCallbackIndex();
 
         return new Promise<GlideString>((resolve, reject) => {
@@ -1563,8 +1587,9 @@ export class BaseClient {
 
     protected createScriptInvocationPromise<T = GlideString>(
         command: command_request.ScriptInvocation,
-        options: DecoderOption = {},
+        options: DecoderOption & RouteOption = {},
     ): Promise<T> {
+        this.ensureClientIsOpen();
         const callbackIndex = this.getCallbackIndex();
 
         return new Promise<T>((resolve, reject) => {
@@ -1616,6 +1641,18 @@ export class BaseClient {
                 argsPointerLow = low;
             }
 
+            // Encode route to protobuf bytes if provided
+            let routeBytes: Uint8Array | undefined;
+
+            if (options.route) {
+                const protoRoute = this.toProtobufRoute(options.route);
+
+                if (protoRoute) {
+                    routeBytes =
+                        command_request.Routes.encode(protoRoute).finish();
+                }
+            }
+
             const success = this.clientHandle!.invokeScript(
                 callbackIndex,
                 command.hash,
@@ -1623,6 +1660,7 @@ export class BaseClient {
                 keysPointerLow,
                 argsPointerHigh,
                 argsPointerLow,
+                routeBytes,
             );
 
             if (!success) {
@@ -9387,6 +9425,13 @@ export class BaseClient {
         this.pubsubFutures.forEach(([, reject]) => {
             reject(new ClosingError(errorMessage || ""));
         });
+
+        // Clean up OTel spans for in-flight requests to prevent memory leaks
+        for (const spanPtr of this.otelSpanPointers.values()) {
+            dropOtelSpan(spanPtr);
+        }
+
+        this.otelSpanPointers.clear();
 
         if (this.clientHandle) {
             try {

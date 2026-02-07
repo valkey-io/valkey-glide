@@ -636,39 +636,11 @@ export class GlideClusterClient extends BaseClient {
     /**
      * @internal
      */
-    protected scanOptionsToProto(
-        cursor: string,
-        options?: ClusterScanOptions,
-    ): command_request.ClusterScan {
-        const command = command_request.ClusterScan.create();
-        command.cursor = cursor;
-
-        if (options?.match) {
-            command.matchPattern =
-                typeof options.match === "string"
-                    ? Buffer.from(options.match)
-                    : options.match;
-        }
-
-        if (options?.count) {
-            command.count = options.count;
-        }
-
-        if (options?.type) {
-            command.objectType = options.type;
-        }
-
-        command.allowNonCoveredSlots = options?.allowNonCoveredSlots ?? false;
-        return command;
-    }
-
-    /**
-     * @internal
-     */
     protected createClusterScanPromise(
         cursor: ClusterScanCursor,
         options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
+        this.ensureClientIsOpen();
         const callbackIndex = this.getCallbackIndex();
 
         return new Promise<[ClusterScanCursor, GlideString[]]>(
@@ -697,16 +669,14 @@ export class GlideClusterClient extends BaseClient {
                     options?.decoder,
                 ];
 
-                // Convert match pattern to string if needed
-                let matchPattern: string | undefined;
+                // Convert match pattern to Uint8Array to preserve binary patterns
+                let matchPattern: Uint8Array | undefined;
 
                 if (options?.match) {
                     if (typeof options.match === "string") {
-                        matchPattern = options.match;
-                    } else if (options.match instanceof Buffer) {
-                        matchPattern = options.match.toString();
+                        matchPattern = new TextEncoder().encode(options.match);
                     } else if (options.match instanceof Uint8Array) {
-                        matchPattern = new TextDecoder().decode(options.match);
+                        matchPattern = options.match;
                     }
                 }
 
@@ -1887,9 +1857,6 @@ export class GlideClusterClient extends BaseClient {
         command: command_request.ScriptInvocation,
         options?: { args?: GlideString[] } & DecoderOption & RouteOption,
     ): Promise<T> {
-        // Note: Scripts are routed by the server based on KEYS[] argument slots.
-        // Explicit route option is not currently passed through NAPI layer but
-        // cluster-aware routing happens automatically via glide-core.
         return this.createScriptInvocationPromise<T>(command, options);
     }
 

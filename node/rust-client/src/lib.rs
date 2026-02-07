@@ -27,7 +27,6 @@ use glide_core::command_request::{
 };
 use glide_core::connection_request::ConnectionRequest as ProtobufConnectionRequest;
 use glide_core::request_type::RequestType;
-use glide_core::start_socket_listener;
 use napi::bindgen_prelude::BigInt;
 use napi::bindgen_prelude::Either;
 use napi::bindgen_prelude::Uint8Array;
@@ -162,6 +161,7 @@ impl ResponseBuffer {
     fn push(&self, response: CommandResponse) -> bool {
         // Don't accept new responses or trigger wake-up if closed
         if self.is_closed() {
+            Self::free_response_value(&response);
             return false;
         }
         {
@@ -187,6 +187,32 @@ impl ResponseBuffer {
         let mut guard = self.responses.lock();
         // drain().collect() - original Vec keeps its capacity, returns new Vec with elements
         guard.drain(..).collect()
+    }
+
+    /// Free all leaked Value pointers in pending responses.
+    /// Free a leaked Value pointer from a single CommandResponse, if present.
+    /// Called when a response is dropped without being consumed by JS
+    /// (e.g., push() finds the buffer already closed).
+    fn free_response_value(response: &CommandResponse) {
+        if let (Some(high), Some(low)) = (response.resp_pointer_high, response.resp_pointer_low) {
+            let mut bytes = [0u8; 8];
+            (&mut bytes[..4]).write_u32::<LittleEndian>(low).unwrap();
+            (&mut bytes[4..]).write_u32::<LittleEndian>(high).unwrap();
+            let pointer = u64::from_le_bytes(bytes);
+            if pointer != 0 {
+                unsafe { drop(Box::from_raw(pointer as *mut Value)) };
+            }
+        }
+    }
+
+    /// Free all leaked Value pointers in pending responses.
+    /// Called during close() to prevent memory leaks when responses are
+    /// never consumed by JS (e.g., responses in-flight when client shuts down).
+    fn free_leaked_values(&self) {
+        let mut guard = self.responses.lock();
+        for response in guard.drain(..) {
+            Self::free_response_value(&response);
+        }
     }
 }
 
@@ -274,6 +300,9 @@ struct BatchCommandMessage {
     is_atomic: bool, // true = transaction (MULTI/EXEC), false = pipeline
     raise_on_error: bool,
     timeout: Option<u32>,
+    retry_server_error: bool,
+    retry_connection_error: bool,
+    routing: Option<RoutingInfo>,
 }
 
 /// Script invocation message (EVALSHA with auto-LOAD fallback)
@@ -282,13 +311,14 @@ struct ScriptInvocationMessage {
     hash: String,
     keys: Vec<Bytes>,
     args: Vec<Bytes>,
+    routing: Option<RoutingInfo>,
 }
 
 /// Cluster scan message
 struct ClusterScanMessage {
     callback_idx: u32,
     cursor: String,
-    match_pattern: Option<String>,
+    match_pattern: Option<Bytes>,
     count: Option<i64>,
     object_type: Option<String>,
     allow_non_covered_slots: bool,
@@ -430,12 +460,16 @@ fn parse_route_bytes(route_bytes: &[u8], cmd: Option<&redis::Cmd>) -> Option<Rou
 }
 
 /// Execute a batch of commands (pipeline or transaction)
+#[allow(clippy::too_many_arguments)]
 async fn execute_batch(
     client: &mut Client,
     commands: Vec<redis::Cmd>,
     is_atomic: bool,
     raise_on_error: bool,
     timeout: Option<u32>,
+    retry_server_error: bool,
+    retry_connection_error: bool,
+    routing: Option<RoutingInfo>,
 ) -> redis::RedisResult<Value> {
     use redis::{Pipeline, PipelineRetryStrategy};
 
@@ -459,15 +493,15 @@ async fn execute_batch(
     // Execute based on type
     if is_atomic {
         client
-            .send_transaction(&pipeline, None, timeout, raise_on_error)
+            .send_transaction(&pipeline, routing, timeout, raise_on_error)
             .await
     } else {
         let retry_strategy = PipelineRetryStrategy {
-            retry_server_error: false,
-            retry_connection_error: false,
+            retry_server_error,
+            retry_connection_error,
         };
         client
-            .send_pipeline(&pipeline, None, raise_on_error, timeout, retry_strategy)
+            .send_pipeline(&pipeline, routing, raise_on_error, timeout, retry_strategy)
             .await
     }
 }
@@ -491,8 +525,6 @@ pub struct GlideClientHandle {
     command_tx: Option<mpsc::UnboundedSender<WorkerMessage>>,
     /// Counter tracking inflight requests to enforce limits
     inflight_requests: Arc<AtomicIsize>,
-    /// Maximum allowed inflight requests (used to initialize inflight_requests counter)
-    inflight_requests_limit: isize,
     /// Shared response buffer
     response_buffer: Arc<ResponseBuffer>,
     /// Wake-up callback to notify JS when responses are available.
@@ -604,7 +636,6 @@ pub fn create_direct_client<'a>(
         let handle = GlideClientHandle {
             command_tx: Some(command_tx_for_handle),
             inflight_requests: inflight_counter.clone(),
-            inflight_requests_limit,
             response_buffer: Arc::clone(&response_buffer_worker),
             wake_callback: Some(Arc::clone(&wake_tsfn)),
         };
@@ -658,7 +689,7 @@ pub fn create_direct_client<'a>(
                     task::spawn_local(async move {
                         let result = client_clone.send_command(&mut cmd, routing).await;
                         let response = build_response(callback_idx, result);
-                        inflight.fetch_add(1, Ordering::Relaxed);
+                        inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response) {
                             wake.call((), ThreadsafeFunctionCallMode::NonBlocking);
                         }
@@ -679,10 +710,13 @@ pub fn create_direct_client<'a>(
                             batch_msg.is_atomic,
                             batch_msg.raise_on_error,
                             batch_msg.timeout,
+                            batch_msg.retry_server_error,
+                            batch_msg.retry_connection_error,
+                            batch_msg.routing,
                         )
                         .await;
                         let response = build_response(callback_idx, result);
-                        inflight.fetch_add(1, Ordering::Relaxed);
+                        inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response) {
                             wake.call((), ThreadsafeFunctionCallMode::NonBlocking);
                         }
@@ -699,10 +733,10 @@ pub fn create_direct_client<'a>(
                         let keys: Vec<&[u8]> = script_msg.keys.iter().map(|k| k.as_ref()).collect();
                         let args: Vec<&[u8]> = script_msg.args.iter().map(|a| a.as_ref()).collect();
                         let result = client_clone
-                            .invoke_script(&script_msg.hash, &keys, &args, None)
+                            .invoke_script(&script_msg.hash, &keys, &args, script_msg.routing)
                             .await;
                         let response = build_response(callback_idx, result);
-                        inflight.fetch_add(1, Ordering::Relaxed);
+                        inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response) {
                             wake.call((), ThreadsafeFunctionCallMode::NonBlocking);
                         }
@@ -730,7 +764,7 @@ pub fn create_direct_client<'a>(
                                     .allow_non_covered_slots(scan_msg.allow_non_covered_slots);
                                 if let Some(pattern) = scan_msg.match_pattern {
                                     args_builder =
-                                        args_builder.with_match_pattern::<Bytes>(pattern.into());
+                                        args_builder.with_match_pattern::<Bytes>(pattern);
                                 }
                                 if let Some(count) = scan_msg.count {
                                     args_builder = args_builder.with_count(count as u32);
@@ -741,10 +775,10 @@ pub fn create_direct_client<'a>(
                                 let scan_args = args_builder.build();
                                 client_clone.cluster_scan(&scan_cursor, scan_args).await
                             }
-                            Err(e) => Err(e.into()),
+                            Err(e) => Err(e),
                         };
                         let response = build_response(callback_idx, result);
-                        inflight.fetch_add(1, Ordering::Relaxed);
+                        inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response) {
                             wake.call((), ThreadsafeFunctionCallMode::NonBlocking);
                         }
@@ -762,7 +796,7 @@ pub fn create_direct_client<'a>(
                             .update_connection_password(pwd_msg.password, pwd_msg.immediate_auth)
                             .await;
                         let response = build_response(callback_idx, result);
-                        inflight.fetch_add(1, Ordering::Relaxed);
+                        inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response) {
                             wake.call((), ThreadsafeFunctionCallMode::NonBlocking);
                         }
@@ -778,7 +812,7 @@ pub fn create_direct_client<'a>(
                     task::spawn_local(async move {
                         let result = client_clone.refresh_iam_token().await.map(|()| Value::Okay);
                         let response = build_response(callback_idx, result);
-                        inflight.fetch_add(1, Ordering::Relaxed);
+                        inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response) {
                             wake.call((), ThreadsafeFunctionCallMode::NonBlocking);
                         }
@@ -827,6 +861,20 @@ impl GlideClientHandle {
         args_pointer_low: u32,
         route_bytes: Option<Uint8Array>,
     ) -> Result<bool> {
+        // Reconstruct the args pointer from high/low bits (simple bit ops, no allocation)
+        // IMPORTANT: Reclaim the pointer BEFORE the inflight check to avoid leaking
+        // the args if the inflight limit is exceeded and we return early.
+        let pointer = (args_pointer_low as u64) | ((args_pointer_high as u64) << 32);
+
+        // Take ownership of the args vector from the raw pointer
+        // SAFETY: The pointer must have been created by create_leaked_string_vec
+        // and must not have been freed yet. A zero pointer means no arguments.
+        let args: Vec<Bytes> = if pointer == 0 {
+            Vec::new()
+        } else {
+            *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) }
+        };
+
         // Check inflight limit synchronously
         // fetch_sub returns the previous value, so we check if it was > 0
         // Use AcqRel for the decrement (Acquire to see current value, Release for visibility)
@@ -834,16 +882,9 @@ impl GlideClientHandle {
         if prev <= 0 {
             // Restore the counter since we're not actually sending (Relaxed is fine for restore)
             self.inflight_requests.fetch_add(1, Ordering::Relaxed);
+            // args is dropped here, freeing the reclaimed pointer
             return Ok(false);
         }
-
-        // Reconstruct the args pointer from high/low bits (simple bit ops, no allocation)
-        let pointer = (args_pointer_low as u64) | ((args_pointer_high as u64) << 32);
-
-        // Take ownership of the args vector from the raw pointer
-        // SAFETY: The pointer must have been created by create_leaked_string_vec
-        // and must not have been freed yet
-        let args: Box<Vec<Bytes>> = unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) };
 
         // Convert request_type u32 to RequestType enum via protobuf EnumOrUnknown
         let proto_request_type =
@@ -868,10 +909,10 @@ impl GlideClientHandle {
                     closing_error: None,
                     is_push: false,
                 };
-                if self.response_buffer.push(response) {
-                    if let Some(cb) = &self.wake_callback {
-                        cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
-                    }
+                if self.response_buffer.push(response)
+                    && let Some(cb) = &self.wake_callback
+                {
+                    cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
                 }
                 return Ok(true);
             }
@@ -909,10 +950,10 @@ impl GlideClientHandle {
                 closing_error: Some("Client connection closed".to_string()),
                 is_push: false,
             };
-            if self.response_buffer.push(response) {
-                if let Some(cb) = &self.wake_callback {
-                    cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
-                }
+            if self.response_buffer.push(response)
+                && let Some(cb) = &self.wake_callback
+            {
+                cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
             }
         }
 
@@ -936,6 +977,9 @@ impl GlideClientHandle {
         // IMPORTANT: Mark closed FIRST to prevent any in-flight tasks from calling wake_callback
         // This prevents segfaults when the ThreadsafeFunction is dropped while tasks are running
         self.response_buffer.mark_closed();
+
+        // Free any leaked Value pointers in pending responses that were never consumed by JS
+        self.response_buffer.free_leaked_values();
 
         // Drop the command channel sender to signal the worker loop to exit.
         // When all senders are dropped, command_rx.recv() will return None,
@@ -971,6 +1015,7 @@ impl GlideClientHandle {
     /// * `true` if the batch was successfully queued
     /// * `false` if the inflight request limit was exceeded
     #[napi]
+    #[allow(clippy::too_many_arguments)]
     pub fn send_batch(
         &self,
         callback_idx: u32,
@@ -978,21 +1023,36 @@ impl GlideClientHandle {
         is_atomic: bool,
         raise_on_error: bool,
         timeout: Option<u32>,
+        retry_server_error: Option<bool>,
+        retry_connection_error: Option<bool>,
+        route_bytes: Option<Uint8Array>,
     ) -> Result<bool> {
         // Check inflight limit synchronously
         let prev = self.inflight_requests.fetch_sub(1, Ordering::AcqRel);
         if prev <= 0 {
             self.inflight_requests.fetch_add(1, Ordering::Relaxed);
+            // Free all leaked arg pointers in the batch commands before returning
+            for cmd in &commands {
+                let ptr = (cmd.args_pointer_low as u64) | ((cmd.args_pointer_high as u64) << 32);
+                if ptr != 0 {
+                    unsafe { drop(Box::from_raw(ptr as *mut Vec<Bytes>)) };
+                }
+            }
             return Ok(false);
         }
 
         // Convert BatchCommand array to Vec<redis::Cmd>
         let mut cmds = Vec::with_capacity(commands.len());
-        for batch_cmd in commands {
-            // Reconstruct the args pointer
+        let mut commands_iter = commands.into_iter();
+        while let Some(batch_cmd) = commands_iter.next() {
+            // Reconstruct the args pointer (zero means no arguments)
             let pointer =
                 (batch_cmd.args_pointer_low as u64) | ((batch_cmd.args_pointer_high as u64) << 32);
-            let args: Box<Vec<Bytes>> = unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) };
+            let args: Vec<Bytes> = if pointer == 0 {
+                Vec::new()
+            } else {
+                *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) }
+            };
 
             // Convert request_type to RequestType enum
             let proto_request_type = protobuf::EnumOrUnknown::<ProtobufRequestType>::from_i32(
@@ -1002,6 +1062,14 @@ impl GlideClientHandle {
 
             // Get the base command
             let Some(mut cmd) = request_type_enum.get_command() else {
+                // Free remaining batch command arg pointers to prevent leaks
+                for remaining_cmd in commands_iter {
+                    let ptr = (remaining_cmd.args_pointer_low as u64)
+                        | ((remaining_cmd.args_pointer_high as u64) << 32);
+                    if ptr != 0 {
+                        unsafe { drop(Box::from_raw(ptr as *mut Vec<Bytes>)) };
+                    }
+                }
                 self.inflight_requests.fetch_add(1, Ordering::Relaxed);
                 let response = CommandResponse {
                     callback_idx,
@@ -1015,10 +1083,10 @@ impl GlideClientHandle {
                     closing_error: None,
                     is_push: false,
                 };
-                if self.response_buffer.push(response) {
-                    if let Some(cb) = &self.wake_callback {
-                        cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
-                    }
+                if self.response_buffer.push(response)
+                    && let Some(cb) = &self.wake_callback
+                {
+                    cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
                 }
                 return Ok(true);
             };
@@ -1031,6 +1099,9 @@ impl GlideClientHandle {
             cmds.push(cmd);
         }
 
+        // Parse routing information if provided
+        let routing = route_bytes.and_then(|bytes| parse_route_bytes(&bytes, None));
+
         // Send batch message to worker
         let msg = WorkerMessage::Batch(BatchCommandMessage {
             callback_idx,
@@ -1038,6 +1109,9 @@ impl GlideClientHandle {
             is_atomic,
             raise_on_error,
             timeout,
+            retry_server_error: retry_server_error.unwrap_or(false),
+            retry_connection_error: retry_connection_error.unwrap_or(false),
+            routing,
         });
 
         let send_failed = match &self.command_tx {
@@ -1055,10 +1129,10 @@ impl GlideClientHandle {
                 closing_error: Some("Client connection closed".to_string()),
                 is_push: false,
             };
-            if self.response_buffer.push(response) {
-                if let Some(cb) = &self.wake_callback {
-                    cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
-                }
+            if self.response_buffer.push(response)
+                && let Some(cb) = &self.wake_callback
+            {
+                cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
             }
         }
 
@@ -1067,6 +1141,7 @@ impl GlideClientHandle {
 
     /// Invokes a Lua script using EVALSHA with automatic LOAD fallback.
     #[napi]
+    #[allow(clippy::too_many_arguments)]
     pub fn invoke_script(
         &self,
         callback_idx: u32,
@@ -1075,27 +1150,44 @@ impl GlideClientHandle {
         keys_pointer_low: u32,
         args_pointer_high: u32,
         args_pointer_low: u32,
+        route_bytes: Option<Uint8Array>,
     ) -> Result<bool> {
+        // Reconstruct keys pointer
+        // IMPORTANT: Reclaim pointers BEFORE the inflight check to avoid leaking
+        // the keys/args if the inflight limit is exceeded and we return early.
+        // A zero pointer means no keys/args.
+        let keys_pointer = (keys_pointer_low as u64) | ((keys_pointer_high as u64) << 32);
+        let keys: Vec<Bytes> = if keys_pointer == 0 {
+            Vec::new()
+        } else {
+            *unsafe { Box::from_raw(keys_pointer as *mut Vec<Bytes>) }
+        };
+
+        // Reconstruct args pointer
+        let args_pointer = (args_pointer_low as u64) | ((args_pointer_high as u64) << 32);
+        let args: Vec<Bytes> = if args_pointer == 0 {
+            Vec::new()
+        } else {
+            *unsafe { Box::from_raw(args_pointer as *mut Vec<Bytes>) }
+        };
+
         // Check inflight limit
         let prev = self.inflight_requests.fetch_sub(1, Ordering::AcqRel);
         if prev <= 0 {
             self.inflight_requests.fetch_add(1, Ordering::Relaxed);
+            // keys and args are dropped here, freeing the reclaimed pointers
             return Ok(false);
         }
 
-        // Reconstruct keys pointer
-        let keys_pointer = (keys_pointer_low as u64) | ((keys_pointer_high as u64) << 32);
-        let keys: Box<Vec<Bytes>> = unsafe { Box::from_raw(keys_pointer as *mut Vec<Bytes>) };
-
-        // Reconstruct args pointer
-        let args_pointer = (args_pointer_low as u64) | ((args_pointer_high as u64) << 32);
-        let args: Box<Vec<Bytes>> = unsafe { Box::from_raw(args_pointer as *mut Vec<Bytes>) };
+        // Parse routing information if provided
+        let routing = route_bytes.and_then(|bytes| parse_route_bytes(&bytes, None));
 
         let msg = WorkerMessage::ScriptInvocation(ScriptInvocationMessage {
             callback_idx,
             hash,
-            keys: (*keys).clone(),
-            args: (*args).clone(),
+            keys,
+            args,
+            routing,
         });
 
         let send_failed = match &self.command_tx {
@@ -1113,10 +1205,10 @@ impl GlideClientHandle {
                 closing_error: Some("Client connection closed".to_string()),
                 is_push: false,
             };
-            if self.response_buffer.push(response) {
-                if let Some(cb) = &self.wake_callback {
-                    cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
-                }
+            if self.response_buffer.push(response)
+                && let Some(cb) = &self.wake_callback
+            {
+                cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
             }
         }
 
@@ -1129,7 +1221,7 @@ impl GlideClientHandle {
         &self,
         callback_idx: u32,
         cursor: String,
-        match_pattern: Option<String>,
+        match_pattern: Option<Uint8Array>,
         count: Option<i64>,
         object_type: Option<String>,
         allow_non_covered_slots: Option<bool>,
@@ -1144,7 +1236,7 @@ impl GlideClientHandle {
         let msg = WorkerMessage::ClusterScan(ClusterScanMessage {
             callback_idx,
             cursor,
-            match_pattern,
+            match_pattern: match_pattern.map(|p| Bytes::from(p.to_vec())),
             count,
             object_type,
             allow_non_covered_slots: allow_non_covered_slots.unwrap_or(false),
@@ -1165,10 +1257,10 @@ impl GlideClientHandle {
                 closing_error: Some("Client connection closed".to_string()),
                 is_push: false,
             };
-            if self.response_buffer.push(response) {
-                if let Some(cb) = &self.wake_callback {
-                    cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
-                }
+            if self.response_buffer.push(response)
+                && let Some(cb) = &self.wake_callback
+            {
+                cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
             }
         }
 
@@ -1211,10 +1303,10 @@ impl GlideClientHandle {
                 closing_error: Some("Client connection closed".to_string()),
                 is_push: false,
             };
-            if self.response_buffer.push(response) {
-                if let Some(cb) = &self.wake_callback {
-                    cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
-                }
+            if self.response_buffer.push(response)
+                && let Some(cb) = &self.wake_callback
+            {
+                cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
             }
         }
 
@@ -1248,10 +1340,10 @@ impl GlideClientHandle {
                 closing_error: Some("Client connection closed".to_string()),
                 is_push: false,
             };
-            if self.response_buffer.push(response) {
-                if let Some(cb) = &self.wake_callback {
-                    cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
-                }
+            if self.response_buffer.push(response)
+                && let Some(cb) = &self.wake_callback
+            {
+                cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
             }
         }
 
@@ -1339,20 +1431,6 @@ fn to_js_error(err: impl std::error::Error) -> Error {
 
 fn to_js_result<T, E: std::error::Error>(result: std::result::Result<T, E>) -> Result<T> {
     result.map_err(to_js_error)
-}
-
-#[napi(js_name = "StartSocketConnection", ts_return_type = "Promise<string>")]
-pub fn start_socket_listener_external<'a>(env: &'a Env) -> Result<Object<'a>> {
-    let (deferred, promise) = env.create_deferred()?;
-
-    start_socket_listener(move |result| {
-        match result {
-            Ok(path) => deferred.resolve(|_| Ok(path)),
-            Err(error_message) => deferred.reject(napi::Error::new(Status::Unknown, error_message)),
-        };
-    });
-
-    Ok(promise)
 }
 
 #[napi(js_name = "InitOpenTelemetry")]
@@ -1640,6 +1718,17 @@ pub fn create_leaked_string_vec(message: Vec<Uint8Array>) -> [u32; 2] {
     let bytes_vec: Vec<Bytes> = message.iter().map(|v| Bytes::from(v.to_vec())).collect();
     let pointer = from_mut(Box::leak(Box::new(bytes_vec)));
     split_pointer(pointer)
+}
+
+/// Free a previously leaked string vec by its split pointer.
+/// Called from JS to reclaim memory when a leaked pointer will not be
+/// passed to send_command/send_batch/invoke_script (e.g., early error paths).
+#[napi]
+pub fn free_leaked_string_vec(high_bits: u32, low_bits: u32) {
+    let pointer = (low_bits as u64) | ((high_bits as u64) << 32);
+    if pointer != 0 {
+        unsafe { drop(Box::from_raw(pointer as *mut Vec<Bytes>)) };
+    }
 }
 
 #[napi(ts_return_type = "[number, number]")]
