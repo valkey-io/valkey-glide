@@ -15,6 +15,7 @@ import {
 } from "@jest/globals";
 import {
     Batch,
+    ClosingError,
     ClusterBatch,
     ClusterScanCursor,
     ClusterTransaction,
@@ -154,6 +155,27 @@ describe("NAPI Client Integration Tests", () => {
                 expect(results?.[2]).toBe("not-a-number");
             });
 
+            it("should return RequestError instances for batch errors", async () => {
+                // Run a batch with an intentional error (e.g., LPOP on a string key)
+                await client.set("batch-error-key", "hello");
+
+                const batch = new Batch(false); // non-atomic pipeline
+                batch.set("batch-error-ok", "value");
+                batch.lpop("batch-error-key"); // WRONGTYPE error
+                batch.get("batch-error-ok");
+
+                const result = await client.exec(batch, false); // raiseOnError=false
+
+                expect(result).not.toBeNull();
+                expect(result!.length).toBe(3);
+                expect(result![0]).toBe("OK");
+                expect(result![1]).toBeInstanceOf(RequestError);
+                expect((result![1] as RequestError).message).toContain(
+                    "WRONGTYPE",
+                );
+                expect(result![2]).toBe("value");
+            });
+
             it("should run large batch", async () => {
                 const batch = new Batch(false);
                 const count = 100;
@@ -278,6 +300,30 @@ describe("NAPI Client Integration Tests", () => {
             });
         });
 
+        describe("Error Propagation", () => {
+            it("should throw ClosingError for script on closed client", async () => {
+                const tempClient = await GlideClient.createClient({
+                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                });
+                tempClient.close();
+                const script = new Script("return 1");
+                await expect(tempClient.invokeScript(script)).rejects.toThrow(
+                    /closed/i,
+                );
+                script.release();
+            });
+
+            it("should throw ClosingError for updateConnectionPassword on closed client", async () => {
+                const tempClient = await GlideClient.createClient({
+                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                });
+                tempClient.close();
+                await expect(
+                    tempClient.updateConnectionPassword("newpass"),
+                ).rejects.toThrow(/closed/i);
+            });
+        });
+
         describe("Connection Management", () => {
             it("should handle multiple sequential clients", async () => {
                 for (let i = 0; i < 3; i++) {
@@ -316,6 +362,124 @@ describe("NAPI Client Integration Tests", () => {
 
                 for (let i = 0; i < 100; i++) {
                     expect(values[i]).toBe(`value-${i}`);
+                }
+            });
+        });
+
+        describe("Inflight Limits", () => {
+            it("should enforce inflight limit for batches", async () => {
+                const limitedClient = await GlideClient.createClient({
+                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                    inflightRequestsLimit: 1,
+                });
+
+                try {
+                    // Send commands that should respect the limit
+                    // With limit=1, rapid concurrent sends should trigger rejection
+                    const promises = [];
+
+                    for (let i = 0; i < 50; i++) {
+                        promises.push(
+                            limitedClient.set(`inflight-${i}`, `val-${i}`),
+                        );
+                    }
+
+                    const results = await Promise.allSettled(promises);
+                    // Some should succeed, some may be rejected due to inflight limit
+                    const fulfilled = results.filter(
+                        (r) => r.status === "fulfilled",
+                    );
+                    const rejected = results.filter(
+                        (r) => r.status === "rejected",
+                    );
+
+                    // At least some should have been fulfilled
+                    expect(fulfilled.length).toBeGreaterThan(0);
+
+                    // If any were rejected, they should have the right error message
+                    for (const r of rejected) {
+                        if (r.status === "rejected") {
+                            expect(r.reason.message).toContain("Inflight");
+                        }
+                    }
+                } finally {
+                    limitedClient.close();
+                }
+            });
+
+            it("should enforce inflight limit for script invocations", async () => {
+                const limitedClient = await GlideClient.createClient({
+                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                    inflightRequestsLimit: 1,
+                });
+
+                try {
+                    const script = new Script("return ARGV[1]");
+
+                    try {
+                        const promises = [];
+
+                        for (let i = 0; i < 50; i++) {
+                            promises.push(
+                                limitedClient.invokeScript(script, {
+                                    args: [`val-${i}`],
+                                }),
+                            );
+                        }
+
+                        const results = await Promise.allSettled(promises);
+                        const fulfilled = results.filter(
+                            (r) => r.status === "fulfilled",
+                        );
+                        const rejected = results.filter(
+                            (r) => r.status === "rejected",
+                        );
+
+                        // At least some should have been fulfilled
+                        expect(fulfilled.length).toBeGreaterThan(0);
+
+                        // If any were rejected, they should have the right error message
+                        for (const r of rejected) {
+                            if (r.status === "rejected") {
+                                expect(r.reason.message).toContain("Inflight");
+                            }
+                        }
+                    } finally {
+                        script.release();
+                    }
+                } finally {
+                    limitedClient.close();
+                }
+            });
+
+            it("should enforce inflight limit for batch operations", async () => {
+                const limitedClient = await GlideClient.createClient({
+                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                    inflightRequestsLimit: 1,
+                });
+
+                try {
+                    // Occupy the single inflight slot with a blocking command
+                    const blockingKey = `{nonexisting}:inflight-batch-${Date.now()}`;
+                    // Use short timeout and catch the rejection from close()
+                    const blockingPromise = limitedClient
+                        .blpop([blockingKey], 1)
+                        .catch(() => {
+                            /* expected to be rejected by close() */
+                        });
+
+                    // Now try to send a batch while the slot is occupied
+                    const batch = new Batch(false);
+                    batch.set("batch-inflight-1", "val1");
+                    batch.get("batch-inflight-1");
+
+                    await expect(
+                        limitedClient.exec(batch, true),
+                    ).rejects.toThrow(RequestError);
+
+                    await blockingPromise;
+                } finally {
+                    limitedClient.close();
                 }
             });
         });
@@ -361,6 +525,62 @@ describe("NAPI Client Integration Tests", () => {
                 }
             });
         });
+
+        describe("Client Lifecycle", () => {
+            it("should reject in-flight requests on close", async () => {
+                const tempClient = await GlideClient.createClient({
+                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                });
+
+                const promises = [];
+
+                for (let i = 0; i < 10; i++) {
+                    promises.push(tempClient.get(`lifecycle-key-${i}`));
+                }
+
+                tempClient.close();
+
+                // Some may resolve (completed before close), others should reject
+                const results = await Promise.allSettled(promises);
+                const rejected = results.filter((r) => r.status === "rejected");
+
+                // Any rejected promises should be ClosingError
+                for (const result of rejected) {
+                    expect(
+                        (result as PromiseRejectedResult).reason,
+                    ).toBeInstanceOf(ClosingError);
+                }
+
+                // At minimum, the client should be closed after close()
+                expect(
+                    (tempClient as unknown as { isClosed: boolean }).isClosed,
+                ).toBe(true);
+            });
+
+            it("should handle double close gracefully", async () => {
+                const tempClient = await GlideClient.createClient({
+                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                });
+
+                await tempClient.set("double-close-key", "value");
+                tempClient.close();
+
+                // Second close should not throw
+                expect(() => tempClient.close()).not.toThrow();
+            });
+
+            it("should throw ClosingError for operations after close", async () => {
+                const tempClient = await GlideClient.createClient({
+                    addresses: [parseEndpoint(STANDALONE_PORT)],
+                });
+
+                tempClient.close();
+
+                await expect(tempClient.get("key")).rejects.toThrow(
+                    ClosingError,
+                );
+            });
+        });
     });
 
     describe("GlideClusterClient", () => {
@@ -401,8 +621,9 @@ describe("NAPI Client Integration Tests", () => {
                     sections: [InfoOptions.Cluster],
                     route: "randomNode",
                 });
-                // Info returns object with node -> info string mapping
-                expect(typeof info).toBe("object");
+                // With randomNode route, response is a string from a single node
+                expect(typeof info).toBe("string");
+                expect(info).toContain("cluster_enabled");
             });
         });
 
