@@ -471,8 +471,9 @@ describe("OpenTelemetry GlideClusterClient", () => {
             const { spanNames } = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
 
             // Check for expected span names
+            // In the NAPI layer, batch spans are created on the JS side with name "Batch"
+            // (the old socket IPC path created a Rust-side span named "send_batch")
             expect(spanNames).toContain("Batch");
-            expect(spanNames).toContain("send_batch");
 
             // Force GC and check memory
             if (global.gc) {
