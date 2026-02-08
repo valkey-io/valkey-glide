@@ -1613,12 +1613,8 @@ export class BaseClient {
                 const [low, high] = createLeakedStringVec(keysAsUint8Arrays);
                 keysPointerHigh = high;
                 keysPointerLow = low;
-            } else {
-                // Create empty vec for keys
-                const [low, high] = createLeakedStringVec([]);
-                keysPointerHigh = high;
-                keysPointerLow = low;
             }
+            // else: keep default (0, 0) — Rust treats null pointer as empty vec
 
             // Convert args to pointer
             let argsPointerHigh = 0;
@@ -1634,12 +1630,8 @@ export class BaseClient {
                 const [low, high] = createLeakedStringVec(argsAsUint8Arrays);
                 argsPointerHigh = high;
                 argsPointerLow = low;
-            } else {
-                // Create empty vec for args
-                const [low, high] = createLeakedStringVec([]);
-                argsPointerHigh = high;
-                argsPointerLow = low;
             }
+            // else: keep default (0, 0) — Rust treats null pointer as empty vec
 
             // Encode route to protobuf bytes if provided
             let routeBytes: Uint8Array | undefined;
