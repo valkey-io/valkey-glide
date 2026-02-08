@@ -68,6 +68,23 @@ import org.junit.jupiter.params.provider.ValueSource;
 @Timeout(30) // sec
 public class PubSubTests {
 
+    /** Enumeration for specifying how subscriptions are established. */
+    private enum SubscriptionMethod {
+        /** Subscriptions set in client configuration at creation time. */
+        Config,
+        /** Non-blocking subscription using subscribe() without timeout. */
+        Lazy,
+        /** Blocking subscription with timeout. */
+        Blocking
+    }
+
+    /** Enumeration for specifying the method of reading PUBSUB messages. */
+    private enum MessageReadMethod {
+        Callback,
+        Sync,
+        Async
+    }
+
     // TODO protocol version
     @SneakyThrows
     @SuppressWarnings("unchecked")
@@ -131,6 +148,78 @@ public class PubSubTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
         senders.add(client);
         return client;
+    }
+
+    @SneakyThrows
+    private BaseClient createClientWithEmptySubscriptionConfig(boolean standalone) {
+        var client =
+                standalone
+                        ? GlideClient.createClient(
+                                        commonClientConfig()
+                                                .subscriptionConfiguration(
+                                                        StandaloneSubscriptionConfiguration.builder().build())
+                                                .build())
+                                .get()
+                        : GlideClusterClient.createClient(
+                                        commonClusterClientConfig()
+                                                .subscriptionConfiguration(
+                                                        ClusterSubscriptionConfiguration.builder().build())
+                                                .build())
+                                .get();
+        senders.add(client);
+        return client;
+    }
+
+    /**
+     * Subscribe to channels based on subscription method. For Config method, subscriptions are
+     * already set at client creation. For Lazy/Blocking, subscribe dynamically.
+     */
+    @SneakyThrows
+    private void subscribeByMethod(
+            BaseClient client,
+            SubscriptionMethod method,
+            Map<? extends ChannelMode, Set<GlideString>> subscriptions) {
+        if (method == SubscriptionMethod.Config) {
+            return;
+        }
+
+        Set<GlideString> exactChannels = subscriptions.get(exact(client instanceof GlideClient));
+        if (exactChannels != null && !exactChannels.isEmpty()) {
+            Set<String> channels =
+                    exactChannels.stream().map(GlideString::getString).collect(Collectors.toSet());
+            if (method == SubscriptionMethod.Lazy) {
+                client.subscribe(channels).get();
+            } else {
+                client.subscribe(channels, 5000).get();
+            }
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+        }
+
+        Set<GlideString> patternChannels = subscriptions.get(pattern(client instanceof GlideClient));
+        if (patternChannels != null && !patternChannels.isEmpty()) {
+            Set<String> patterns =
+                    patternChannels.stream().map(GlideString::getString).collect(Collectors.toSet());
+            if (method == SubscriptionMethod.Lazy) {
+                client.psubscribe(patterns).get();
+            } else {
+                client.psubscribe(patterns, 5000).get();
+            }
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+        }
+
+        if (client instanceof GlideClusterClient) {
+            Set<GlideString> shardedChannels = subscriptions.get(PubSubClusterChannelMode.SHARDED);
+            if (shardedChannels != null && !shardedChannels.isEmpty()) {
+                Set<String> channels =
+                        shardedChannels.stream().map(GlideString::getString).collect(Collectors.toSet());
+                if (method == SubscriptionMethod.Lazy) {
+                    ((GlideClusterClient) client).ssubscribe(channels).get();
+                } else {
+                    ((GlideClusterClient) client).ssubscribe(channels, 5000).get();
+                }
+                Thread.sleep(MESSAGE_DELIVERY_DELAY);
+            }
+        }
     }
 
     /**
@@ -203,12 +292,6 @@ public class PubSubTests {
         pubsubMessageQueue.clear();
     }
 
-    private enum MessageReadMethod {
-        Callback,
-        Async,
-        Sync
-    }
-
     @SneakyThrows
     private void verifyReceivedPubsubMessages(
             Set<Pair<Integer, PubSubMessage>> pubsubMessages,
@@ -235,15 +318,20 @@ public class PubSubTests {
         }
     }
 
-    /** Permute all combinations of `standalone` as bool vs {@link MessageReadMethod}. */
+    /**
+     * Permute all combinations of `standalone` as bool vs {@link MessageReadMethod} vs {@link
+     * SubscriptionMethod}.
+     */
     private static Stream<Arguments> getTestScenarios() {
-        return Stream.of(
-                Arguments.of(true, MessageReadMethod.Callback),
-                Arguments.of(true, MessageReadMethod.Sync),
-                Arguments.of(true, MessageReadMethod.Async),
-                Arguments.of(false, MessageReadMethod.Callback),
-                Arguments.of(false, MessageReadMethod.Sync),
-                Arguments.of(false, MessageReadMethod.Async));
+        List<Arguments> scenarios = new ArrayList<>();
+        for (boolean standalone : new boolean[] {true, false}) {
+            for (MessageReadMethod readMethod : MessageReadMethod.values()) {
+                for (SubscriptionMethod subMethod : SubscriptionMethod.values()) {
+                    scenarios.add(Arguments.of(standalone, readMethod, subMethod));
+                }
+            }
+        }
+        return scenarios.stream();
     }
 
     private ChannelMode exact(boolean standalone) {
@@ -259,15 +347,43 @@ public class PubSubTests {
             boolean standalone,
             boolean withCallback,
             int clientId,
-            Map<? extends ChannelMode, Set<GlideString>> subscriptions) {
+            Map<? extends ChannelMode, Set<GlideString>> subscriptions,
+            SubscriptionMethod subscriptionMethod) {
         MessageCallback callback =
                 (msg, ctx) ->
                         ((ConcurrentLinkedDeque<Pair<Integer, PubSubMessage>>) ctx)
                                 .push(Pair.of(clientId, msg));
-        return withCallback
-                ? createClientWithSubscriptions(
-                        standalone, subscriptions, Optional.of(callback), Optional.of(pubsubMessageQueue))
-                : createClientWithSubscriptions(standalone, subscriptions);
+
+        if (subscriptionMethod == SubscriptionMethod.Config) {
+            return withCallback
+                    ? createClientWithSubscriptions(
+                            standalone, subscriptions, Optional.of(callback), Optional.of(pubsubMessageQueue))
+                    : createClientWithSubscriptions(standalone, subscriptions);
+        }
+
+        if (withCallback) {
+            return standalone
+                    ? GlideClient.createClient(
+                                    commonClientConfig()
+                                            .requestTimeout(5000)
+                                            .subscriptionConfiguration(
+                                                    StandaloneSubscriptionConfiguration.builder()
+                                                            .callback(callback, pubsubMessageQueue)
+                                                            .build())
+                                            .build())
+                            .join()
+                    : GlideClusterClient.createClient(
+                                    commonClusterClientConfig()
+                                            .requestTimeout(5000)
+                                            .subscriptionConfiguration(
+                                                    ClusterSubscriptionConfiguration.builder()
+                                                            .callback(callback, pubsubMessageQueue)
+                                                            .build())
+                                            .build())
+                            .join();
+        } else {
+            return createClientWithEmptySubscriptionConfig(standalone);
+        }
     }
 
     // TODO why `publish` returns 0 on cluster or > 1 on standalone when there is only 1 receiver???
@@ -301,15 +417,18 @@ public class PubSubTests {
 
     /** Similar to `test_pubsub_exact_happy_path` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}, subscribe via {2}")
     @MethodSource("getTestScenarios")
-    public void exact_happy_path(boolean standalone, MessageReadMethod method) {
+    public void exact_happy_path(
+            boolean standalone, MessageReadMethod method, SubscriptionMethod subscriptionMethod) {
         GlideString channel = gs(UUID.randomUUID().toString());
         GlideString message = gs(UUID.randomUUID().toString());
         var subscriptions = Map.of(exact(standalone), Set.of(channel));
 
         var listener =
-                createListener(standalone, method == MessageReadMethod.Callback, 1, subscriptions);
+                createListener(
+                        standalone, method == MessageReadMethod.Callback, 1, subscriptions, subscriptionMethod);
+        subscribeByMethod(listener, subscriptionMethod, subscriptions);
         var sender = createClient(standalone);
 
         sender.publish(message, channel).get();
@@ -321,9 +440,10 @@ public class PubSubTests {
 
     /** Similar to `test_pubsub_exact_happy_path_many_channels` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}, subscribe via {2}")
     @MethodSource("getTestScenarios")
-    public void exact_happy_path_many_channels(boolean standalone, MessageReadMethod method) {
+    public void exact_happy_path_many_channels(
+            boolean standalone, MessageReadMethod method, SubscriptionMethod subscriptionMethod) {
         int numChannels = 16;
         int messagesPerChannel = 16;
         var messages = new ArrayList<PubSubMessage>(numChannels * messagesPerChannel);
@@ -340,7 +460,9 @@ public class PubSubTests {
         }
 
         var listener =
-                createListener(standalone, method == MessageReadMethod.Callback, 1, subscriptions);
+                createListener(
+                        standalone, method == MessageReadMethod.Callback, 1, subscriptions, subscriptionMethod);
+        subscribeByMethod(listener, subscriptionMethod, subscriptions);
         var sender = createClient(standalone);
 
         for (var pubsubMessage : messages) {
@@ -364,7 +486,13 @@ public class PubSubTests {
         GlideString pubsubMessage = gs(UUID.randomUUID().toString());
         var subscriptions = Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel));
 
-        var listener = createListener(false, method == MessageReadMethod.Callback, 1, subscriptions);
+        var listener =
+                createListener(
+                        false,
+                        method == MessageReadMethod.Callback,
+                        1,
+                        subscriptions,
+                        SubscriptionMethod.Config);
         var sender = (GlideClusterClient) createClient(false);
 
         sender.publish(pubsubMessage, channel, true).get();
@@ -396,7 +524,13 @@ public class PubSubTests {
             }
         }
 
-        var listener = createListener(false, method == MessageReadMethod.Callback, 1, subscriptions);
+        var listener =
+                createListener(
+                        false,
+                        method == MessageReadMethod.Callback,
+                        1,
+                        subscriptions,
+                        SubscriptionMethod.Config);
         var sender = (GlideClusterClient) createClient(false);
 
         for (var pubsubMessage : pubsubMessages) {
@@ -414,9 +548,10 @@ public class PubSubTests {
 
     /** Similar to `test_pubsub_pattern` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}, subscribe via {2}")
     @MethodSource("getTestScenarios")
-    public void pattern(boolean standalone, MessageReadMethod method) {
+    public void pattern(
+            boolean standalone, MessageReadMethod method, SubscriptionMethod subscriptionMethod) {
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
         Map<GlideString, GlideString> message2channels =
@@ -431,7 +566,9 @@ public class PubSubTests {
                         Set.of(pattern));
 
         var listener =
-                createListener(standalone, method == MessageReadMethod.Callback, 1, subscriptions);
+                createListener(
+                        standalone, method == MessageReadMethod.Callback, 1, subscriptions, subscriptionMethod);
+        subscribeByMethod(listener, subscriptionMethod, subscriptions);
         var sender = createClient(standalone);
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // need some time to propagate subscriptions - why?
@@ -452,9 +589,10 @@ public class PubSubTests {
 
     /** Similar to `test_pubsub_pattern_many_channels` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}, subscribe via {2}")
     @MethodSource("getTestScenarios")
-    public void pattern_many_channels(boolean standalone, MessageReadMethod method) {
+    public void pattern_many_channels(
+            boolean standalone, MessageReadMethod method, SubscriptionMethod subscriptionMethod) {
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
         int numChannels = 16;
@@ -472,7 +610,9 @@ public class PubSubTests {
         }
 
         var listener =
-                createListener(standalone, method == MessageReadMethod.Callback, 1, subscriptions);
+                createListener(
+                        standalone, method == MessageReadMethod.Callback, 1, subscriptions, subscriptionMethod);
+        subscribeByMethod(listener, subscriptionMethod, subscriptions);
         var sender = createClient(standalone);
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // need some time to propagate subscriptions - why?
@@ -489,9 +629,10 @@ public class PubSubTests {
 
     /** Similar to `test_pubsub_combined_exact_and_pattern_one_client` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}, subscribe via {2}")
     @MethodSource("getTestScenarios")
-    public void combined_exact_and_pattern_one_client(boolean standalone, MessageReadMethod method) {
+    public void combined_exact_and_pattern_one_client(
+            boolean standalone, MessageReadMethod method, SubscriptionMethod subscriptionMethod) {
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
         int numChannels = 16;
@@ -521,7 +662,9 @@ public class PubSubTests {
         }
 
         var listener =
-                createListener(standalone, method == MessageReadMethod.Callback, 1, subscriptions);
+                createListener(
+                        standalone, method == MessageReadMethod.Callback, 1, subscriptions, subscriptionMethod);
+        subscribeByMethod(listener, subscriptionMethod, subscriptions);
         var sender = createClient(standalone);
 
         for (var pubsubMessage : messages) {
@@ -538,10 +681,10 @@ public class PubSubTests {
      * Similar to `test_pubsub_combined_exact_and_pattern_multiple_clients` in python client tests.
      */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}, subscribe via {2}")
     @MethodSource("getTestScenarios")
     public void combined_exact_and_pattern_multiple_clients(
-            boolean standalone, MessageReadMethod method) {
+            boolean standalone, MessageReadMethod method, SubscriptionMethod subscriptionMethod) {
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
         int numChannels = 16;
@@ -563,11 +706,15 @@ public class PubSubTests {
         }
 
         var listenerExactSub =
-                createListener(standalone, method == MessageReadMethod.Callback, 1, subscriptions);
+                createListener(
+                        standalone, method == MessageReadMethod.Callback, 1, subscriptions, subscriptionMethod);
+        subscribeByMethod(listenerExactSub, subscriptionMethod, subscriptions);
 
         subscriptions = Map.of(pattern(standalone), Set.of(pattern));
         var listenerPatternSub =
-                createListener(standalone, method == MessageReadMethod.Callback, 2, subscriptions);
+                createListener(
+                        standalone, method == MessageReadMethod.Callback, 2, subscriptions, subscriptionMethod);
+        subscribeByMethod(listenerPatternSub, subscriptionMethod, subscriptions);
 
         var sender = createClient(standalone);
 
@@ -643,7 +790,13 @@ public class PubSubTests {
             messages.add(new PubSubMessage(message, channel, pattern));
         }
 
-        var listener = createListener(false, method == MessageReadMethod.Callback, 1, subscriptions);
+        var listener =
+                createListener(
+                        false,
+                        method == MessageReadMethod.Callback,
+                        1,
+                        subscriptions,
+                        SubscriptionMethod.Config);
         var sender = (GlideClusterClient) createClient(false);
 
         for (var pubsubMessage : messages) {
@@ -698,7 +851,7 @@ public class PubSubTests {
             messages.add(new PubSubMessage(message, channel, gs(pattern)));
         }
 
-        var listener = createListener(false, false, 1, subscriptions);
+        var listener = createListener(false, false, 1, subscriptions, SubscriptionMethod.Config);
         var sender = (GlideClusterClient) createClient(false);
 
         for (var pubsubMessage : messages) {
@@ -746,6 +899,7 @@ public class PubSubTests {
     @EnumSource(MessageReadMethod.class)
     public void combined_exact_pattern_and_sharded_multi_client(MessageReadMethod method) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+        SubscriptionMethod subscriptionMethod = SubscriptionMethod.Config; // Default for this test
 
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
@@ -786,19 +940,25 @@ public class PubSubTests {
                         false,
                         method == MessageReadMethod.Callback,
                         PubSubClusterChannelMode.EXACT.ordinal(),
-                        subscriptionsExact);
+                        subscriptionsExact,
+                        subscriptionMethod);
+        subscribeByMethod(listenerExact, subscriptionMethod, subscriptionsExact);
         var listenerPattern =
                 createListener(
                         false,
                         method == MessageReadMethod.Callback,
                         PubSubClusterChannelMode.PATTERN.ordinal(),
-                        subscriptionsPattern);
+                        subscriptionsPattern,
+                        subscriptionMethod);
+        subscribeByMethod(listenerPattern, subscriptionMethod, subscriptionsPattern);
         var listenerSharded =
                 createListener(
                         false,
                         method == MessageReadMethod.Callback,
                         PubSubClusterChannelMode.SHARDED.ordinal(),
-                        subscriptionsSharded);
+                        subscriptionsSharded,
+                        subscriptionMethod);
+        subscribeByMethod(listenerSharded, subscriptionMethod, subscriptionsSharded);
 
         var sender = (GlideClusterClient) createClient(false);
 
@@ -877,20 +1037,35 @@ public class PubSubTests {
                 method == MessageReadMethod.Callback
                         ? (GlideClusterClient)
                                 createListener(
-                                        false, true, PubSubClusterChannelMode.EXACT.ordinal(), subscriptionsExact)
+                                        false,
+                                        true,
+                                        PubSubClusterChannelMode.EXACT.ordinal(),
+                                        subscriptionsExact,
+                                        SubscriptionMethod.Config)
                         : (GlideClusterClient) createClientWithSubscriptions(false, subscriptionsExact);
+        subscribeByMethod(listenerExact, SubscriptionMethod.Config, subscriptionsExact);
 
         var listenerPattern =
                 method == MessageReadMethod.Callback
                         ? createListener(
-                                false, true, PubSubClusterChannelMode.PATTERN.ordinal(), subscriptionsPattern)
+                                false,
+                                true,
+                                PubSubClusterChannelMode.PATTERN.ordinal(),
+                                subscriptionsPattern,
+                                SubscriptionMethod.Config)
                         : (GlideClusterClient) createClientWithSubscriptions(false, subscriptionsPattern);
+        subscribeByMethod(listenerPattern, SubscriptionMethod.Config, subscriptionsPattern);
 
         var listenerSharded =
                 method == MessageReadMethod.Callback
                         ? createListener(
-                                false, true, PubSubClusterChannelMode.SHARDED.ordinal(), subscriptionsSharded)
+                                false,
+                                true,
+                                PubSubClusterChannelMode.SHARDED.ordinal(),
+                                subscriptionsSharded,
+                                SubscriptionMethod.Config)
                         : (GlideClusterClient) createClientWithSubscriptions(false, subscriptionsSharded);
+        subscribeByMethod(listenerSharded, SubscriptionMethod.Config, subscriptionsSharded);
 
         listenerPattern.publish(exactMessage.getMessage(), channel).get();
         listenerSharded.publish(patternMessage.getMessage(), channel).get();
@@ -963,9 +1138,10 @@ public class PubSubTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}, subscribe via {2}")
     @MethodSource("getTestScenarios")
-    public void transaction_with_all_types_of_messages(boolean standalone, MessageReadMethod method) {
+    public void transaction_with_all_types_of_messages(
+            boolean standalone, MessageReadMethod method, SubscriptionMethod subscriptionMethod) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         assumeTrue(
                 standalone, // TODO activate tests after fix
@@ -995,7 +1171,9 @@ public class PubSubTests {
                                 Set.of(shardPrefix));
 
         var listener =
-                createListener(standalone, method == MessageReadMethod.Callback, 1, subscriptions);
+                createListener(
+                        standalone, method == MessageReadMethod.Callback, 1, subscriptions, subscriptionMethod);
+        subscribeByMethod(listener, subscriptionMethod, subscriptions);
         var sender = createClient(standalone);
 
         if (standalone) {
@@ -1674,7 +1852,8 @@ public class PubSubTests {
                         ? Map.of(PubSubChannelMode.EXACT, Set.of())
                         : Map.of(PubSubClusterChannelMode.EXACT, Set.of());
 
-        BaseClient listener = createListener(standalone, true, 1, subscriptions);
+        BaseClient listener =
+                createListener(standalone, true, 1, subscriptions, SubscriptionMethod.Config);
 
         // Dynamically subscribe to additional channel via customCommand
         if (standalone) {
