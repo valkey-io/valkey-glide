@@ -1,3 +1,15 @@
+## 2.2.7
+
+### Fixes
+
+* Core: Fix topology not refreshing correctly when using `refreshTopologyFromInitialNodes`([#5225] https://github.com/valkey-io/valkey-glide/pull/5225)
+
+#### Changes
+* Java: Add topology periodic checks config ([#5229] https://github.com/valkey-io/valkey-glide/pull/5229)
+* Core: Improve topology refresh reliability and handle ReadOnly errors ([#5225] https://github.com/valkey-io/valkey-glide/pull/5225)
+* Core:  Optimize client creation to improve startup performance ([#5225] https://github.com/valkey-io/valkey-glide/pull/5225)
+
+
 ## 2.2.6
 
 ### Fixes
