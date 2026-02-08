@@ -299,7 +299,7 @@ def create_sync_pubsub_client(
     Convenience wrapper similar to async create_pubsub_client.
     """
     from tests.utils.utils import create_pubsub_subscription, get_pubsub_modes
-    
+
     has_subscriptions = channels or patterns or sharded_channels
     has_callback = callback is not None
 
@@ -309,7 +309,7 @@ def create_sync_pubsub_client(
             modes = GlideClusterClientConfiguration.PubSubChannelModes
         else:
             modes = GlideClientConfiguration.PubSubChannelModes
-        
+
         channels_dict = {}
         if channels:
             channels_dict[modes.Exact] = channels
@@ -317,7 +317,7 @@ def create_sync_pubsub_client(
             channels_dict[modes.Pattern] = patterns
         if cluster_mode and sharded_channels:
             channels_dict[modes.Sharded] = sharded_channels
-        
+
         pubsub_subscription = create_pubsub_subscription(
             cluster_mode,
             channels_dict if cluster_mode else {},
@@ -325,7 +325,7 @@ def create_sync_pubsub_client(
             callback=callback,
             context=context,
         )
-        
+
         # Create config with pubsub
         if cluster_mode:
             config = AdvancedGlideClusterClientConfiguration(
@@ -345,7 +345,7 @@ def create_sync_pubsub_client(
                 standalone_mode_pubsub=pubsub_subscription,
                 pubsub_reconciliation_interval=reconciliation_interval_ms,
             )
-        
+
         return create_sync_client(
             request,
             cluster_mode,

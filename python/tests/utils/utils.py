@@ -2298,11 +2298,13 @@ async def check_no_messages_left(
         assert callback_messages is not None
         assert len(callback_messages) == expected_callback_count
 
+
 # Import shared pubsub test utilities
 from tests.utils.pubsub_test_utils import (
-    new_message as _new_message,
     PubSubTestConstants,
 )
+from tests.utils.pubsub_test_utils import new_message as _new_message
+
 
 # Re-export for backward compatibility
 def new_message(msg: PubSubMsg, context: Any) -> None:
@@ -2395,18 +2397,18 @@ def create_sync_pubsub_client(
 ):
     """Create a sync client with pubsub configuration."""
     from tests.sync_tests.conftest import create_sync_client
-    
+
     # Build subscription modes for both cluster and standalone
     modes = get_pubsub_modes(cluster_mode)
     subscription_modes = {
         modes.Exact: channels or set(),
         modes.Pattern: patterns or set(),
     }
-    
+
     # Add sharded mode only for cluster
-    if cluster_mode and hasattr(modes, 'Sharded'):
+    if cluster_mode and hasattr(modes, "Sharded"):
         subscription_modes[modes.Sharded] = sharded or set()
-    
+
     # Always create subscription to enable pubsub (even if empty)
     # Pass the same modes dict for both cluster and standalone
     if cluster_mode:
@@ -2425,7 +2427,7 @@ def create_sync_pubsub_client(
             callback,
             context,
         )
-    
+
     if cluster_mode:
         return create_sync_client(
             request,
@@ -2438,7 +2440,6 @@ def create_sync_pubsub_client(
             cluster_mode,
             standalone_mode_pubsub=subscription,
         )
-
 
 
 def sync_pubsub_client_cleanup(client):
@@ -2455,10 +2456,11 @@ def sync_check_no_messages_left(
 ):
     """Check that no additional messages are left."""
     import time
+
     from tests.sync_tests.test_sync_pubsub import MethodTesting
-    
+
     time.sleep(0.5)
-    
+
     if message_read_method == MethodTesting.Callback:
         assert len(callback_messages) == expected_count
     else:
@@ -2466,12 +2468,10 @@ def sync_check_no_messages_left(
         assert msg is None
 
 
-def sync_get_message_by_method(
-    message_read_method, client, callback_messages, index
-):
+def sync_get_message_by_method(message_read_method, client, callback_messages, index):
     """Get message by the specified method."""
     from tests.sync_tests.test_sync_pubsub import MethodTesting
-    
+
     if message_read_method == MethodTesting.Callback:
         assert len(callback_messages) > index
         return callback_messages[index]

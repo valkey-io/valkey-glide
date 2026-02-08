@@ -53,9 +53,6 @@ from glide_shared.commands.stream import (
     _create_xpending_range_args,
 )
 from glide_shared.constants import (
-    ALL_CHANNELS,
-    ALL_PATTERNS,
-    ALL_SHARDED_CHANNELS,
     TOK,
     TEncodable,
     TResult,

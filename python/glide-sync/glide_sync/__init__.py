@@ -160,9 +160,6 @@ from .logger import Level as LogLevel
 from .logger import Logger
 from .opentelemetry import OpenTelemetry
 from .sync_commands import (
-    ALL_CHANNELS,
-    ALL_PATTERNS,
-    ALL_SHARDED_CHANNELS,
     ft,
     glide_json,
 )
@@ -282,9 +279,6 @@ __all__ = [
     "UpdateOptions",
     # PubSub
     "PubSubMsg",
-    "ALL_CHANNELS",
-    "ALL_PATTERNS",
-    "ALL_SHARDED_CHANNELS",
     # Json
     "glide_json",
     "json_batch",
