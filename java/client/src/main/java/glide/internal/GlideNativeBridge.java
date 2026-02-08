@@ -84,7 +84,4 @@ public class GlideNativeBridge {
             String objectType,
             boolean expectUtf8Response,
             long callbackId);
-
-    /** Mark a callback as timed out on the native side. */
-    public static native void markTimedOut(long callbackId);
 }
