@@ -332,7 +332,7 @@ def create_sync_pubsub_client(
 
         # Create config with pubsub
         if cluster_mode:
-            config = AdvancedGlideClusterClientConfiguration(
+            _ = AdvancedGlideClusterClientConfiguration(
                 addresses=[NodeAddress("localhost", 7001)],
                 client_name="test_pubsub_client",
                 protocol=protocol,
@@ -341,7 +341,7 @@ def create_sync_pubsub_client(
                 pubsub_reconciliation_interval=reconciliation_interval_ms,
             )
         else:
-            config = AdvancedGlideClientConfiguration(
+            _ = AdvancedGlideClientConfiguration(
                 addresses=[NodeAddress("localhost", 6379)],
                 client_name="test_pubsub_client",
                 protocol=protocol,

@@ -98,6 +98,8 @@ from glide_sync import TGlideClient as TSyncGlideClient
 from glide_sync.logger import Level as SyncLogLevel
 from packaging import version
 
+from tests.utils.pubsub_test_utils import new_message as _new_message
+
 from tests.utils.cluster import ValkeyCluster
 
 TAnyGlideClient = Union[TGlideClient, TSyncGlideClient]
@@ -2299,13 +2301,6 @@ async def check_no_messages_left(
         assert len(callback_messages) == expected_callback_count
 
 
-# Import shared pubsub test utilities
-from tests.utils.pubsub_test_utils import (
-    PubSubTestConstants,
-)
-from tests.utils.pubsub_test_utils import new_message as _new_message
-
-
 # Re-export for backward compatibility
 def new_message(msg: PubSubMsg, context: Any) -> None:
     """Standard callback function that appends messages to a context list."""
@@ -2447,7 +2442,7 @@ def sync_pubsub_client_cleanup(client):
     if client:
         try:
             client.close()
-        except:
+        except Exception:
             pass
 
 

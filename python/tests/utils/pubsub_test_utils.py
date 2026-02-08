@@ -4,7 +4,7 @@
 Shared utilities for pubsub tests (both async and sync).
 """
 
-from typing import Any, List, Optional
+from typing import Any, List
 
 from glide_shared.commands.core_options import PubSubMsg
 

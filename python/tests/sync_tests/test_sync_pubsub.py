@@ -36,7 +36,6 @@ from tests.utils.utils import (
     new_message,
     run_sync_func_with_timeout_in_thread,
     sync_check_if_server_version_lt,
-    wait_for_subscription_state,
 )
 
 
@@ -421,17 +420,6 @@ class TestSyncPubSub:
 
             assert listening_client
             assert publishing_client
-
-            # Subscribe dynamically if not using Config method
-            if subscription_method != SubscriptionMethod.Config:
-                # TODO: Adjust channels/patterns/sharded based on test
-                sync_subscribe_by_method(
-                    listening_client,
-                    subscription_method,
-                    cluster_mode,
-                    channels={channel} if "channel" in locals() else None,
-                    patterns={pattern} if "pattern" in locals() else None,
-                )
 
             # Subscribe dynamically if not using Config method
             if subscription_method != SubscriptionMethod.Config:
@@ -3575,7 +3563,7 @@ class TestSyncPubSub:
 
             # Should be able to get subscriptions (empty)
             state = client.get_subscriptions()
-            modes = get_pubsub_modes(listening_client)
+            modes = get_pubsub_modes(client)
             assert len(state.desired_subscriptions.get(modes.Exact, set())) == 0
             assert len(state.desired_subscriptions.get(modes.Pattern, set())) == 0
 
@@ -4170,7 +4158,7 @@ class TestSyncPubSub:
                 expected_channels={channel1, channel2},
                 timeout_sec=3.0,
             )
-            print(f"Both subscriptions confirmed")
+            print("Both subscriptions confirmed")
 
             # Wait for next reconciliation cycle to confirm sync and update timestamp (up to 20 seconds)
             # The timestamp is only updated when the system is synchronized (desired == actual)
@@ -4496,7 +4484,7 @@ class TestSyncPubSub:
                         break
                     time.sleep(0.5)
 
-                assert msg is not None, f"Failed to receive message after 10 attempts"
+                assert msg is not None, "Failed to receive message after 10 attempts"
                 received_messages[msg.channel] = msg.message
 
             assert received_messages == messages
@@ -4643,7 +4631,7 @@ class TestSyncPubSub:
             if admin_client:
                 try:
                     admin_client.custom_command(["ACL", "DELUSER", username])
-                except:
+                except Exception:
                     pass
                 admin_client.close()
             if listening_client:
@@ -4739,7 +4727,7 @@ class TestSyncPubSub:
                         )
                     else:
                         admin_client.custom_command(acl_delete_command)
-                except:
+                except Exception:
                     pass
                 admin_client.close()
 

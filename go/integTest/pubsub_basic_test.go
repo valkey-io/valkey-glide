@@ -1610,15 +1610,17 @@ func (suite *GlideTestSuite) TestCombinedDifferentChannelsWithSameName() {
 
 	// Should receive 2 messages (one for exact, one for pattern)
 	receivedCount := 0
+	timeout := time.After(2 * time.Second)
 	for i := 0; i < 2; i++ {
 		select {
 		case msg := <-queue.WaitForMessage():
 			assert.Equal(suite.T(), "test_message", msg.Message)
 			receivedCount++
-		case <-time.After(2 * time.Second):
-			break
+		case <-timeout:
+			goto done
 		}
 	}
+done:
 
 	assert.Equal(suite.T(), 2, receivedCount, "Should receive message twice (exact + pattern)")
 }
@@ -1697,7 +1699,7 @@ func (suite *GlideTestSuite) TestCallbackOnlyRaisesErrorOnGetMethods() {
 	channel := "callback_only_channel"
 	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
 
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, true, ConfigMethod, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, true, LazyMethod, suite.T())
 	defer receiver.Close()
 
 	client := receiver.(*glide.Client)

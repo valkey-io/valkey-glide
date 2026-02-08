@@ -166,7 +166,7 @@ func (suite *GlideTestSuite) TestSubscribeTimeout() {
 	channel := "timeout_test_channel"
 
 	channels := []ChannelDefn{}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, LazyMethod, suite.T())
 	defer receiver.Close()
 
 	// Subscribe with very short timeout should still succeed for normal operation

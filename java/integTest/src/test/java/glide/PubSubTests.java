@@ -2291,6 +2291,9 @@ public class PubSubTests {
     @Test
     @SneakyThrows
     public void test_sunsubscribe_all_cluster() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature is added in version 7.0.0");
+
         String channel1 = "{slot}channel1_" + UUID.randomUUID();
         String channel2 = "{slot}channel2_" + UUID.randomUUID();
 
@@ -2360,6 +2363,9 @@ public class PubSubTests {
     @Test
     @SneakyThrows
     public void test_ssubscribe_channels_different_slots() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature is added in version 7.0.0");
+
         // Use different hash tags to ensure different slots
         String channel1 = "{slot1}channel_" + UUID.randomUUID();
         String channel2 = "{slot2}channel_" + UUID.randomUUID();
@@ -2378,14 +2384,17 @@ public class PubSubTests {
         assertTrue(sharded.contains(channel2));
 
         // Publish to both channels
-        publisher.publish(channel1, "message1").get();
-        publisher.publish(channel2, "message2").get();
+        publisher.publish(channel1, "message1", true).get();
+        publisher.publish(channel2, "message2", true).get();
         Thread.sleep(500);
     }
 
     @Test
     @SneakyThrows
     public void test_sunsubscribe_channels_different_slots() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature is added in version 7.0.0");
+
         String channel1 = "{slot1}channel_" + UUID.randomUUID();
         String channel2 = "{slot2}channel_" + UUID.randomUUID();
 
