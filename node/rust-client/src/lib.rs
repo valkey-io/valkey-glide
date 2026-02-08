@@ -159,21 +159,25 @@ impl ResponseBuffer {
     /// Returns false if the buffer is closed (no wake-up needed).
     #[inline]
     fn push(&self, response: CommandResponse) -> bool {
-        // Don't accept new responses or trigger wake-up if closed
+        // Fast path: don't acquire the lock if already closed
         if self.is_closed() {
             Self::free_response_value(&response);
             return false;
         }
         {
             let mut guard = self.responses.lock();
+            // Re-check under lock to close the race with close()+free_leaked_values().
+            // Without this, a response pushed after free_leaked_values() drains the
+            // buffer but before the post-push closed check would leak its Value pointer.
+            if self.is_closed() {
+                drop(guard);
+                Self::free_response_value(&response);
+                return false;
+            }
             guard.push(response);
         }
         // Try to set wake_pending from false to true
         // Returns true if we successfully changed it (meaning we should wake)
-        // Also check closed again to avoid race
-        if self.is_closed() {
-            return false;
-        }
         self.wake_pending
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
             .is_ok()
@@ -1357,6 +1361,10 @@ impl Drop for GlideClientHandle {
         // mark_closed() is idempotent (uses AtomicBool), so calling it again is safe.
         self.response_buffer.mark_closed();
 
+        // Free any leaked Value pointers in pending responses.
+        // If close() already called this, the buffer will be empty and this is a no-op.
+        self.response_buffer.free_leaked_values();
+
         // Drop the command channel to signal worker to exit.
         // If already dropped by close(), this is a no-op.
         // The spawned worker task will call release_worker_pool() when its message loop exits,
@@ -1685,6 +1693,12 @@ pub fn value_from_split_pointer<'a>(
         .write_u32::<LittleEndian>(high_bits)
         .unwrap();
     let pointer = u64::from_le_bytes(bytes);
+    if pointer == 0 {
+        return Err(napi::Error::new(
+            Status::InvalidArg,
+            "Null pointer passed to value_from_split_pointer",
+        ));
+    }
     let value = unsafe { Box::from_raw(pointer as *mut Value) };
     resp_value_to_js(*value, js_env, string_decoder)
 }
