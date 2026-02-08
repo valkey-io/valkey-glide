@@ -9,6 +9,7 @@ import {
 } from "../build-ts";
 import {
     createLeakedStringVec,
+    freeLeakedStringVec,
     valueFromSplitPointer,
 } from "../build-ts/native";
 
@@ -21,23 +22,27 @@ describe("NAPI createLeakedStringVec", () => {
         const [low, high] = createLeakedStringVec(args);
         // Pointer should be non-zero (at least one of the halves)
         expect(low !== 0 || high !== 0).toBe(true);
+        freeLeakedStringVec(high, low);
     });
 
     it("should handle empty vector", () => {
         const [low, high] = createLeakedStringVec([]);
         expect(low !== 0 || high !== 0).toBe(true);
+        freeLeakedStringVec(high, low);
     });
 
     it("should handle large arguments", () => {
         const largeArg = new Uint8Array(MAX_REQUEST_ARGS_LEN + 100).fill(65);
         const [low, high] = createLeakedStringVec([largeArg]);
         expect(low !== 0 || high !== 0).toBe(true);
+        freeLeakedStringVec(high, low);
     });
 
     it("should handle binary data with null bytes", () => {
         const binaryData = new Uint8Array([0x00, 0x01, 0xff, 0x00, 0xfe]);
         const [low, high] = createLeakedStringVec([binaryData]);
         expect(low !== 0 || high !== 0).toBe(true);
+        freeLeakedStringVec(high, low);
     });
 
     it("should handle multiple large arguments", () => {
@@ -49,6 +54,7 @@ describe("NAPI createLeakedStringVec", () => {
 
         const [low, high] = createLeakedStringVec(args);
         expect(low !== 0 || high !== 0).toBe(true);
+        freeLeakedStringVec(high, low);
     });
 });
 
