@@ -16,7 +16,6 @@ import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConfigurationError;
-import glide.api.models.exceptions.GlideException;
 import glide.internal.AsyncRegistry;
 import glide.internal.GlideNativeBridge;
 import java.util.concurrent.CompletableFuture;
@@ -34,7 +33,7 @@ public class ConnectionManager {
     private static final String DEFAULT_LIB_NAME = "GlideJava";
 
     /** Native client handle for operations */
-    private volatile long nativeClientHandle = 0;
+    private long nativeClientHandle = 0;
 
     private int maxInflightRequests = 0;
     private int requestTimeoutMs = 5000;
@@ -391,10 +390,10 @@ public class ConnectionManager {
 
                         return null; // Success
                     } catch (Exception e) {
-                        if (e instanceof GlideException) {
-                            throw (GlideException) e;
+                        if (e instanceof ClosingException) {
+                            throw e;
                         }
-                        throw new ClosingException("Failed to create client: " + e.getMessage());
+                        throw new RuntimeException("Failed to create client", e);
                     }
                 });
     }
@@ -440,10 +439,7 @@ public class ConnectionManager {
                 nativeClientHandle = 0;
             }
         } catch (Exception e) {
-            if (e instanceof GlideException) {
-                throw (GlideException) e;
-            }
-            throw new ClosingException("Failed to close client: " + e.getMessage());
+            throw new RuntimeException("Failed to close client", e);
         }
     }
 

@@ -1498,16 +1498,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_getGlideCoreDefault
     glide_core::client::DEFAULT_MAX_INFLIGHT_REQUESTS as jint
 }
 
-/// Mark a callback as timed out on the native side.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_internal_GlideNativeBridge_markTimedOut(
-    _env: JNIEnv,
-    _class: JClass,
-    callback_id: jlong,
-) {
-    jni_client::mark_callback_timed_out(callback_id);
-}
-
 /// Execute a batch (pipeline/transaction) asynchronously using FFI-imported logic
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(

@@ -7,6 +7,7 @@ import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
+import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
 import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
 import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
@@ -134,12 +135,13 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> customCommand(@NonNull String[] args) {
-        return commandManager.submitCustomCommand(args, this::handleObjectOrNullResponse);
+        return commandManager.submitNewCommand(CustomCommand, args, this::handleObjectOrNullResponse);
     }
 
     @Override
     public CompletableFuture<Object> customCommand(@NonNull GlideString[] args) {
-        return commandManager.submitCustomCommand(args, this::handleBinaryObjectOrNullResponse);
+        return commandManager.submitNewCommand(
+                CustomCommand, args, this::handleBinaryObjectOrNullResponse);
     }
 
     @Deprecated
