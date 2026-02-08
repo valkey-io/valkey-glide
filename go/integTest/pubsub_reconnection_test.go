@@ -21,7 +21,7 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillExactChannels() {
 	channels := []ChannelDefn{
 		{Channel: channel, Mode: ExactMode},
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	// Wait for initial subscription
@@ -48,7 +48,7 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillExactChannels() {
 	assert.True(suite.T(), exists, "Subscription should be restored after reconnection")
 
 	// Test cluster
-	clusterReceiver := suite.CreatePubSubReceiver(ClusterClient, channels, 10, false, suite.T())
+	clusterReceiver := suite.CreatePubSubReceiver(ClusterClient, channels, 10, false, ConfigMethod, suite.T())
 	defer clusterReceiver.Close()
 
 	time.Sleep(200 * time.Millisecond)
@@ -85,7 +85,7 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillManyChannels() {
 	}
 
 	// Test standalone
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	time.Sleep(300 * time.Millisecond)
@@ -123,7 +123,7 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillPatterns() {
 	channels := []ChannelDefn{
 		{Channel: pattern, Mode: PatternMode},
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	time.Sleep(200 * time.Millisecond)
@@ -147,7 +147,7 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillPatterns() {
 	assert.True(suite.T(), exists, "Pattern subscription should be restored")
 
 	// Test cluster
-	clusterReceiver := suite.CreatePubSubReceiver(ClusterClient, channels, 10, false, suite.T())
+	clusterReceiver := suite.CreatePubSubReceiver(ClusterClient, channels, 10, false, ConfigMethod, suite.T())
 	defer clusterReceiver.Close()
 
 	time.Sleep(200 * time.Millisecond)
@@ -179,7 +179,7 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillSharded() {
 	channels := []ChannelDefn{
 		{Channel: channel, Mode: ShardedMode},
 	}
-	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 10, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 10, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	time.Sleep(200 * time.Millisecond)

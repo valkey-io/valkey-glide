@@ -150,12 +150,12 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ChannelSubscription() {
 			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
-				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, t)
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, ConfigMethod, t)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
-				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, t)
+				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, ConfigMethod, t)
 			}
 
 			// Allow subscription to establish
@@ -326,13 +326,13 @@ func (suite *GlideTestSuite) TestPubSub_Basic_MultipleSubscribers() {
 
 			for i := 0; i < numSubscribers; i++ {
 				if !tt.useCallback {
-					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, false, t)
+					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, false, ConfigMethod, t)
 					subscribers[i] = receiver
 					queue, err := receiver.(PubSubQueuer).GetQueue()
 					assert.Nil(t, err)
 					queues[i+1] = queue
 				} else {
-					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, true, t)
+					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, true, ConfigMethod, t)
 					subscribers[i] = receiver
 				}
 			}
@@ -461,12 +461,12 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternSubscription() {
 			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
-				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, t)
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, ConfigMethod, t)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
-				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, t)
+				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, ConfigMethod, t)
 			}
 
 			// Allow subscription to establish
@@ -654,12 +654,12 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
-				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, t)
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, ConfigMethod, t)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
-				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, t)
+				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, ConfigMethod, t)
 			}
 
 			// Allow subscription to establish
@@ -790,12 +790,12 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
-				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, t)
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, ConfigMethod, t)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
-				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, t)
+				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, ConfigMethod, t)
 			}
 
 			// Allow subscription to establish
@@ -952,12 +952,12 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 			var receiver interfaces.BaseClientCommands
 			queues := make(map[int]*glide.PubSubMessageQueue)
 			if !tt.useCallback {
-				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, t)
+				receiver = suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, ConfigMethod, t)
 				queue, err := receiver.(PubSubQueuer).GetQueue()
 				assert.Nil(t, err)
 				queues[1] = queue
 			} else {
-				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, t)
+				suite.CreatePubSubReceiver(tt.clientType, channels, 1, true, ConfigMethod, t)
 			}
 
 			// Allow subscription to establish
@@ -1132,13 +1132,13 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 
 			for i := 0; i < numSubscribers; i++ {
 				if !tt.useCallback {
-					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, false, t)
+					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, false, ConfigMethod, t)
 					subscribers[i] = receiver
 					queue, err := receiver.(PubSubQueuer).GetQueue()
 					assert.Nil(t, err)
 					queues[i+1] = queue
 				} else {
-					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, true, t)
+					receiver := suite.CreatePubSubReceiver(tt.clientType, channels, i+1, true, ConfigMethod, t)
 					subscribers[i] = receiver
 				}
 			}

@@ -22,7 +22,7 @@ func (suite *GlideTestSuite) TestLazyVsBlockingSubscription() {
 	channels := []ChannelDefn{
 		{Channel: "initial_channel", Mode: ExactMode},
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	queue, err := receiver.(*glide.Client).GetQueue()
@@ -98,7 +98,7 @@ func (suite *GlideTestSuite) TestUnsubscribeAllChannels() {
 		{Channel: channel2, Mode: ExactMode},
 		{Channel: pattern1, Mode: PatternMode},
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	queue, err := receiver.(*glide.Client).GetQueue()
@@ -166,7 +166,7 @@ func (suite *GlideTestSuite) TestSubscribeTimeout() {
 	channel := "timeout_test_channel"
 
 	channels := []ChannelDefn{}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	// Subscribe with very short timeout should still succeed for normal operation
@@ -187,7 +187,7 @@ func (suite *GlideTestSuite) TestNegativeTimeoutError() {
 	channels := []ChannelDefn{
 		{Channel: "initial_channel", Mode: ExactMode},
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	// Negative timeout should return error
@@ -210,7 +210,7 @@ func (suite *GlideTestSuite) TestDynamicSubscriptionManagement() {
 	channels := []ChannelDefn{
 		{Channel: "initial_dynamic", Mode: ExactMode},
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	queue, err := receiver.(*glide.Client).GetQueue()
@@ -292,7 +292,7 @@ func (suite *GlideTestSuite) TestMixedSubscriptionMethods() {
 	channels := []ChannelDefn{
 		{Channel: "initial_mixed", Mode: ExactMode},
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	queue, err := receiver.(*glide.Client).GetQueue()

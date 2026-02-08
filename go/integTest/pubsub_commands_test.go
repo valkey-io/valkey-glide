@@ -110,7 +110,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_Channels() {
 			}
 
 			// Create a client with subscriptions
-			receiver := suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, t)
+			receiver := suite.CreatePubSubReceiver(tt.clientType, channels, 1, false, ConfigMethod, t)
 			t.Cleanup(func() { receiver.Close() })
 
 			// Allow subscription to establish
@@ -212,7 +212,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumPat() {
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
 			// Create a client with subscriptions
-			receiver := suite.CreatePubSubReceiver(tt.clientType, tt.channelDefns, 1, false, t)
+			receiver := suite.CreatePubSubReceiver(tt.clientType, tt.channelDefns, 1, false, ConfigMethod, t)
 			t.Cleanup(func() { receiver.Close() })
 
 			// Allow subscription to establish
@@ -379,7 +379,7 @@ func (suite *GlideTestSuite) TestPubSub_Commands_NumSub() {
 
 			clients := make([]interfaces.BaseClientCommands, 0, len(tt.channelDefns))
 			for _, defn := range tt.channelDefns {
-				client := suite.CreatePubSubReceiver(tt.clientType, []ChannelDefn{defn}, 1, false, t)
+				client := suite.CreatePubSubReceiver(tt.clientType, []ChannelDefn{defn}, 1, false, ConfigMethod, t)
 				clients = append(clients, client)
 				t.Cleanup(func() { client.Close() })
 			}

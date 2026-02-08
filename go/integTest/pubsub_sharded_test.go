@@ -23,7 +23,7 @@ func (suite *GlideTestSuite) TestShardedPubSubManyChannels() {
 		}
 	}
 
-	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	publisher := suite.defaultClusterClient()
@@ -59,7 +59,7 @@ func (suite *GlideTestSuite) TestShardedPubSubCoexistence() {
 	channel := "sharded_coexist"
 
 	channels := []ChannelDefn{{Channel: channel, Mode: ShardedMode}}
-	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	publisher := suite.defaultClusterClient()
@@ -90,7 +90,7 @@ func (suite *GlideTestSuite) TestSUnsubscribeShardedChannel() {
 	channel := "sunsubscribe_test"
 
 	channels := []ChannelDefn{{Channel: channel, Mode: ShardedMode}}
-	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	publisher := suite.defaultClusterClient()

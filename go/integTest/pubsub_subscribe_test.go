@@ -23,7 +23,7 @@ func (suite *GlideTestSuite) TestDynamicSubscribeUnsubscribe() {
 	channels := []ChannelDefn{
 		{Channel: initialChannel, Mode: ExactMode},
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	queue, err := receiver.(*glide.Client).GetQueue()
@@ -77,7 +77,7 @@ func (suite *GlideTestSuite) TestDynamicPSubscribeUnsubscribe() {
 	channels := []ChannelDefn{
 		{Channel: initialPattern, Mode: PatternMode},
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	queue, err := receiver.(*glide.Client).GetQueue()
@@ -127,7 +127,7 @@ func (suite *GlideTestSuite) TestDynamicSSubscribeUnsubscribe() {
 	channels := []ChannelDefn{
 		{Channel: initialChannel, Mode: ShardedMode},
 	}
-	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	queue, err := receiver.(*glide.ClusterClient).GetQueue()
@@ -175,7 +175,7 @@ func (suite *GlideTestSuite) TestBlockingSubscribeUnsubscribe() {
 	channels := []ChannelDefn{
 		{Channel: channel1, Mode: ExactMode},
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	queue, err := receiver.(*glide.Client).GetQueue()
@@ -245,7 +245,7 @@ func (suite *GlideTestSuite) TestGetSubscriptions() {
 		{Channel: channel, Mode: ExactMode},
 		{Channel: pattern, Mode: PatternMode},
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	time.Sleep(100 * time.Millisecond)
@@ -286,7 +286,7 @@ func (suite *GlideTestSuite) TestPubSubReconciliationMetrics() {
 	channels := []ChannelDefn{
 		{Channel: initialChannel, Mode: ExactMode},
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	// Get statistics

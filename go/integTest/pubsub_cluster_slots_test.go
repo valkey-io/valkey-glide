@@ -36,7 +36,7 @@ func (suite *GlideTestSuite) TestSSubscribeChannelsDifferentSlots() {
 	channelDefns := []ChannelDefn{
 		{Channel: "initial_sharded", Mode: ShardedMode},
 	}
-	receiver := suite.CreatePubSubReceiver(ClusterClient, channelDefns, 20, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(ClusterClient, channelDefns, 20, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	clusterReceiver := receiver.(*glide.ClusterClient)
@@ -105,7 +105,7 @@ func (suite *GlideTestSuite) TestSUnsubscribeChannelsDifferentSlots() {
 	channelDefns := []ChannelDefn{
 		{Channel: "initial_sharded", Mode: ShardedMode},
 	}
-	receiver := suite.CreatePubSubReceiver(ClusterClient, channelDefns, 10, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(ClusterClient, channelDefns, 10, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	clusterReceiver := receiver.(*glide.ClusterClient)
@@ -154,7 +154,7 @@ func (suite *GlideTestSuite) TestShardedPubSubMultipleSlots() {
 		{Channel: "{user3}notifications", Mode: ShardedMode},
 	}
 
-	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 10, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 10, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	time.Sleep(300 * time.Millisecond)
