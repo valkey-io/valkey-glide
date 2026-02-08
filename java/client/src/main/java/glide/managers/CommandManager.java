@@ -544,7 +544,6 @@ public class CommandManager {
 
     private Object normalizeDirectBuffer(ByteBuffer buffer, boolean expectUtf8Response) {
         ByteBuffer dup = buffer.duplicate();
-        dup.order(ByteOrder.BIG_ENDIAN);
         dup.rewind();
         if (dup.remaining() == 0) {
             return expectUtf8Response ? "" : glide.api.models.GlideString.gs(new byte[0]);
