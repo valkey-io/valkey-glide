@@ -27,26 +27,16 @@ from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClien
 from tests.sync_tests.conftest import create_sync_client
 from tests.utils.pubsub_test_utils import PubSubTestConstants
 from tests.utils.utils import (
-    MessageReadMethod,
     SubscriptionMethod,
     create_pubsub_subscription,
     create_sync_pubsub_client,
     decode_pubsub_msg,
     get_pubsub_modes,
     get_random_string,
-    kill_connections,
     new_message,
-    psubscribe_by_method,
-    pubsub_client_cleanup,
-    punsubscribe_by_method,
     run_sync_func_with_timeout_in_thread,
-    ssubscribe_by_method,
-    subscribe_by_method,
-    sunsubscribe_by_method,
     sync_check_if_server_version_lt,
-    unsubscribe_by_method,
     wait_for_subscription_state,
-    wait_for_subscription_state_if_needed,
 )
 
 

@@ -1,7 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import time
-from typing import Generator, List, Optional
+from typing import Any, Generator, List, Optional, Set
 
 import pytest
 from glide_shared.config import (
@@ -14,6 +14,10 @@ from glide_shared.config import (
     ServerCredentials,
 )
 from glide_shared.exceptions import ClosingError
+from glide_sync import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
+)
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
 from glide_sync import TGlideClient as TSyncGlideClient
@@ -298,7 +302,7 @@ def create_sync_pubsub_client(
     Create a sync client with pubsub configuration.
     Convenience wrapper similar to async create_pubsub_client.
     """
-    from tests.utils.utils import create_pubsub_subscription, get_pubsub_modes
+    from tests.utils.utils import create_pubsub_subscription
 
     has_subscriptions = channels or patterns or sharded_channels
     has_callback = callback is not None
