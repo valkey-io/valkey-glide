@@ -312,19 +312,27 @@ def create_sync_pubsub_client(
         standalone_channels_dict = {}
 
         if cluster_mode:
-            modes = GlideClusterClientConfiguration.PubSubChannelModes
             if channels:
-                cluster_channels_dict[modes.Exact] = channels
+                cluster_channels_dict[
+                    GlideClusterClientConfiguration.PubSubChannelModes.Exact
+                ] = channels
             if patterns:
-                cluster_channels_dict[modes.Pattern] = patterns
+                cluster_channels_dict[
+                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern
+                ] = patterns
             if sharded_channels:
-                cluster_channels_dict[modes.Sharded] = sharded_channels
+                cluster_channels_dict[
+                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded
+                ] = sharded_channels
         else:
-            modes = GlideClientConfiguration.PubSubChannelModes
             if channels:
-                standalone_channels_dict[modes.Exact] = channels
+                standalone_channels_dict[
+                    GlideClientConfiguration.PubSubChannelModes.Exact
+                ] = channels
             if patterns:
-                standalone_channels_dict[modes.Pattern] = patterns
+                standalone_channels_dict[
+                    GlideClientConfiguration.PubSubChannelModes.Pattern
+                ] = patterns
 
         pubsub_subscription = create_pubsub_subscription(
             cluster_mode,
@@ -334,14 +342,22 @@ def create_sync_pubsub_client(
             context=context,
         )
 
-        return create_sync_client(
-            request,
-            cluster_mode,
-            cluster_mode_pubsub=pubsub_subscription if cluster_mode else None,
-            standalone_mode_pubsub=pubsub_subscription if not cluster_mode else None,
-            request_timeout=timeout,
-            reconciliation_interval_ms=reconciliation_interval_ms,
-        )
+        if cluster_mode:
+            return create_sync_client(
+                request,
+                cluster_mode,
+                cluster_mode_pubsub=pubsub_subscription,  # type: ignore[arg-type]
+                request_timeout=timeout,
+                reconciliation_interval_ms=reconciliation_interval_ms,
+            )
+        else:
+            return create_sync_client(
+                request,
+                cluster_mode,
+                standalone_mode_pubsub=pubsub_subscription,  # type: ignore[arg-type]
+                request_timeout=timeout,
+                reconciliation_interval_ms=reconciliation_interval_ms,
+            )
     else:
         # No pubsub config
         return create_sync_client(request, cluster_mode)
@@ -380,19 +396,27 @@ def sync_pubsub_test_clients(
             standalone_channels_dict = {}
 
             if cluster_mode:
-                modes = GlideClusterClientConfiguration.PubSubChannelModes
                 if channels:
-                    cluster_channels_dict[modes.Exact] = channels
+                    cluster_channels_dict[
+                        GlideClusterClientConfiguration.PubSubChannelModes.Exact
+                    ] = channels
                 if patterns:
-                    cluster_channels_dict[modes.Pattern] = patterns
+                    cluster_channels_dict[
+                        GlideClusterClientConfiguration.PubSubChannelModes.Pattern
+                    ] = patterns
                 if sharded:
-                    cluster_channels_dict[modes.Sharded] = sharded
+                    cluster_channels_dict[
+                        GlideClusterClientConfiguration.PubSubChannelModes.Sharded
+                    ] = sharded
             else:
-                modes = GlideClientConfiguration.PubSubChannelModes
                 if channels:
-                    standalone_channels_dict[modes.Exact] = channels
+                    standalone_channels_dict[
+                        GlideClientConfiguration.PubSubChannelModes.Exact
+                    ] = channels
                 if patterns:
-                    standalone_channels_dict[modes.Pattern] = patterns
+                    standalone_channels_dict[
+                        GlideClientConfiguration.PubSubChannelModes.Pattern
+                    ] = patterns
 
             pub_sub = create_pubsub_subscription(
                 cluster_mode,
@@ -407,22 +431,26 @@ def sync_pubsub_test_clients(
         else:  # Lazy or Blocking
             # For Lazy/Blocking, create client with empty subscriptions but with callback if provided
             if cluster_mode:
-                pubsub_config = GlideClusterClientConfiguration.PubSubSubscriptions(
-                    channels_and_patterns={},
-                    callback=callback,
-                    context=context,
+                cluster_pubsub_config = (
+                    GlideClusterClientConfiguration.PubSubSubscriptions(
+                        channels_and_patterns={},
+                        callback=callback,
+                        context=context,
+                    )
                 )
                 listening_client = create_sync_client(
-                    request, cluster_mode, cluster_mode_pubsub=pubsub_config
+                    request, cluster_mode, cluster_mode_pubsub=cluster_pubsub_config
                 )
             else:
-                pubsub_config = GlideClientConfiguration.PubSubSubscriptions(
+                standalone_pubsub_config = GlideClientConfiguration.PubSubSubscriptions(
                     channels_and_patterns={},
                     callback=callback,
                     context=context,
                 )
                 listening_client = create_sync_client(
-                    request, cluster_mode, standalone_mode_pubsub=pubsub_config
+                    request,
+                    cluster_mode,
+                    standalone_mode_pubsub=standalone_pubsub_config,
                 )
 
             publishing_client = create_sync_client(request, cluster_mode)
