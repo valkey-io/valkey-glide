@@ -2216,19 +2216,24 @@ public class PubSubTests {
         GlideClient client = createStandaloneClientWithEmptySubscriptions();
         GlideClient publisher = createStandaloneClient();
 
-        // Subscribe to multiple channels
-        client.subscribe(Set.of(channel1, channel2)).get();
-        Thread.sleep(500);
-        Thread.sleep(500);
+        try {
+            // Subscribe to multiple channels
+            client.subscribe(Set.of(channel1, channel2)).get();
+            Thread.sleep(500);
+            Thread.sleep(500);
 
-        // Unsubscribe from all
-        client.unsubscribe().get();
-        Thread.sleep(500);
-        Thread.sleep(500);
+            // Unsubscribe from all
+            client.unsubscribe().get();
+            Thread.sleep(500);
+            Thread.sleep(500);
 
-        // Verify we can subscribe again (proves unsubscribe worked)
-        client.subscribe(Set.of(channel1)).get();
-        Thread.sleep(500);
+            // Verify we can subscribe again (proves unsubscribe worked)
+            client.subscribe(Set.of(channel1)).get();
+            Thread.sleep(500);
+        } finally {
+            client.close();
+            listeners.remove(client);
+        }
     }
 
     @Test
@@ -2239,25 +2244,30 @@ public class PubSubTests {
 
         GlideClusterClient client = createClusterClientWithEmptySubscriptions();
 
-        // Subscribe to multiple channels
-        client.subscribe(Set.of(channel1, channel2)).get();
-        Thread.sleep(500);
-        Thread.sleep(500);
+        try {
+            // Subscribe to multiple channels
+            client.subscribe(Set.of(channel1, channel2)).get();
+            Thread.sleep(500);
+            Thread.sleep(500);
 
-        // Verify subscriptions
-        var state = client.getSubscriptions().get();
-        Set<String> exact = state.getActualSubscriptions().get(PubSubClusterChannelMode.EXACT);
-        assertNotNull(exact);
-        assertEquals(2, exact.size());
+            // Verify subscriptions
+            var state = client.getSubscriptions().get();
+            Set<String> exact = state.getActualSubscriptions().get(PubSubClusterChannelMode.EXACT);
+            assertNotNull(exact);
+            assertEquals(2, exact.size());
 
-        // Unsubscribe from all
-        client.unsubscribe().get();
-        Thread.sleep(500);
+            // Unsubscribe from all
+            client.unsubscribe().get();
+            Thread.sleep(500);
 
-        // Verify all unsubscribed
-        state = client.getSubscriptions().get();
-        Set<String> exactAfter = state.getActualSubscriptions().get(PubSubClusterChannelMode.EXACT);
-        assertTrue(exactAfter == null || exactAfter.isEmpty());
+            // Verify all unsubscribed
+            state = client.getSubscriptions().get();
+            Set<String> exactAfter = state.getActualSubscriptions().get(PubSubClusterChannelMode.EXACT);
+            assertTrue(exactAfter == null || exactAfter.isEmpty());
+        } finally {
+            client.close();
+            listeners.remove(client);
+        }
     }
 
     @Test
@@ -2268,24 +2278,29 @@ public class PubSubTests {
 
         GlideClient client = createStandaloneClientWithEmptySubscriptions();
 
-        // Subscribe to multiple patterns
-        client.psubscribe(Set.of(pattern1, pattern2)).get();
-        Thread.sleep(500);
+        try {
+            // Subscribe to multiple patterns
+            client.psubscribe(Set.of(pattern1, pattern2)).get();
+            Thread.sleep(500);
 
-        // Verify subscriptions
-        var state = client.getSubscriptions().get();
-        Set<String> patterns = state.getActualSubscriptions().get(PubSubChannelMode.PATTERN);
-        assertNotNull(patterns);
-        assertEquals(2, patterns.size());
+            // Verify subscriptions
+            var state = client.getSubscriptions().get();
+            Set<String> patterns = state.getActualSubscriptions().get(PubSubChannelMode.PATTERN);
+            assertNotNull(patterns);
+            assertEquals(2, patterns.size());
 
-        // Unsubscribe from all patterns
-        client.punsubscribe().get();
-        Thread.sleep(500);
+            // Unsubscribe from all patterns
+            client.punsubscribe().get();
+            Thread.sleep(500);
 
-        // Verify all unsubscribed
-        state = client.getSubscriptions().get();
-        Set<String> patternsAfter = state.getActualSubscriptions().get(PubSubChannelMode.PATTERN);
-        assertTrue(patternsAfter == null || patternsAfter.isEmpty());
+            // Verify all unsubscribed
+            state = client.getSubscriptions().get();
+            Set<String> patternsAfter = state.getActualSubscriptions().get(PubSubChannelMode.PATTERN);
+            assertTrue(patternsAfter == null || patternsAfter.isEmpty());
+        } finally {
+            client.close();
+            listeners.remove(client);
+        }
     }
 
     @Test
@@ -2299,24 +2314,30 @@ public class PubSubTests {
 
         GlideClusterClient client = createClusterClientWithEmptySubscriptions();
 
-        // Subscribe to multiple sharded channels
-        client.ssubscribe(Set.of(channel1, channel2)).get();
-        Thread.sleep(500);
+        try {
+            // Subscribe to multiple sharded channels
+            client.ssubscribe(Set.of(channel1, channel2)).get();
+            Thread.sleep(500);
 
-        // Verify subscriptions
-        var state = client.getSubscriptions().get();
-        Set<String> sharded = state.getActualSubscriptions().get(PubSubClusterChannelMode.SHARDED);
-        assertNotNull(sharded);
-        assertEquals(2, sharded.size());
+            // Verify subscriptions
+            var state = client.getSubscriptions().get();
+            Set<String> sharded = state.getActualSubscriptions().get(PubSubClusterChannelMode.SHARDED);
+            assertNotNull(sharded);
+            assertEquals(2, sharded.size());
 
-        // Unsubscribe from all sharded channels
-        client.sunsubscribe().get();
-        Thread.sleep(500);
+            // Unsubscribe from all sharded channels
+            client.sunsubscribe().get();
+            Thread.sleep(500);
 
-        // Verify all unsubscribed
-        state = client.getSubscriptions().get();
-        Set<String> shardedAfter = state.getActualSubscriptions().get(PubSubClusterChannelMode.SHARDED);
-        assertTrue(shardedAfter == null || shardedAfter.isEmpty());
+            // Verify all unsubscribed
+            state = client.getSubscriptions().get();
+            Set<String> shardedAfter =
+                    state.getActualSubscriptions().get(PubSubClusterChannelMode.SHARDED);
+            assertTrue(shardedAfter == null || shardedAfter.isEmpty());
+        } finally {
+            client.close();
+            listeners.remove(client);
+        }
     }
 
     @Test
@@ -2327,16 +2348,21 @@ public class PubSubTests {
         GlideClient client = createStandaloneClientWithEmptySubscriptions();
         GlideClient publisher = createStandaloneClient();
 
-        // Subscribe with timeout
-        client.subscribe(Set.of(channel), 1000).get();
+        try {
+            // Subscribe with timeout
+            client.subscribe(Set.of(channel), 1000).get();
 
-        // Verify subscription
-        var state = client.getSubscriptions().get();
-        assertTrue(state.getActualSubscriptions().get(PubSubChannelMode.EXACT).contains(channel));
+            // Verify subscription
+            var state = client.getSubscriptions().get();
+            assertTrue(state.getActualSubscriptions().get(PubSubChannelMode.EXACT).contains(channel));
 
-        // Publish and verify message received
-        publisher.publish(channel, "test_message").get();
-        Thread.sleep(500);
+            // Publish and verify message received
+            publisher.publish(channel, "test_message").get();
+            Thread.sleep(500);
+        } finally {
+            client.close();
+            listeners.remove(client);
+        }
     }
 
     @Test
@@ -2347,17 +2373,22 @@ public class PubSubTests {
         GlideClusterClient client = createClusterClientWithEmptySubscriptions();
         GlideClusterClient publisher = createClusterClient();
 
-        // Subscribe with timeout
-        client.subscribe(Set.of(channel), 1000).get();
+        try {
+            // Subscribe with timeout
+            client.subscribe(Set.of(channel), 1000).get();
 
-        // Verify subscription
-        var state = client.getSubscriptions().get();
-        assertTrue(
-                state.getActualSubscriptions().get(PubSubClusterChannelMode.EXACT).contains(channel));
+            // Verify subscription
+            var state = client.getSubscriptions().get();
+            assertTrue(
+                    state.getActualSubscriptions().get(PubSubClusterChannelMode.EXACT).contains(channel));
 
-        // Publish and verify message received
-        publisher.publish(channel, "test_message").get();
-        Thread.sleep(500);
+            // Publish and verify message received
+            publisher.publish(channel, "test_message").get();
+            Thread.sleep(500);
+        } finally {
+            client.close();
+            listeners.remove(client);
+        }
     }
 
     @Test
@@ -2383,10 +2414,17 @@ public class PubSubTests {
         assertTrue(sharded.contains(channel1));
         assertTrue(sharded.contains(channel2));
 
-        // Publish to both channels
-        publisher.publish(channel1, "message1", true).get();
-        publisher.publish(channel2, "message2", true).get();
-        Thread.sleep(500);
+        try {
+            // Publish to both channels
+            publisher.publish(channel1, "message1", true).get();
+            publisher.publish(channel2, "message2", true).get();
+            Thread.sleep(500);
+        } finally {
+            client.sunsubscribe().get();
+            Thread.sleep(100);
+            client.close();
+            listeners.remove(client);
+        }
     }
 
     @Test
@@ -2413,6 +2451,12 @@ public class PubSubTests {
         Set<String> sharded = state.getActualSubscriptions().get(PubSubClusterChannelMode.SHARDED);
         assertFalse(sharded.contains(channel1));
         assertTrue(sharded.contains(channel2));
+
+        // Cleanup remaining subscription
+        client.sunsubscribe().get();
+        Thread.sleep(100);
+        client.close();
+        listeners.remove(client);
     }
 
     @Test
@@ -2454,6 +2498,9 @@ public class PubSubTests {
         state = client.getSubscriptions().get();
         patterns = state.getActualSubscriptions().get(PubSubChannelMode.PATTERN);
         assertTrue(patterns == null || patterns.isEmpty());
+
+        client.close();
+        listeners.remove(client);
     }
 
     @Test
@@ -2499,6 +2546,9 @@ public class PubSubTests {
         assertTrue(exactAfter == null || exactAfter.isEmpty());
         assertTrue(patternsAfter == null || patternsAfter.isEmpty());
         assertTrue(shardedAfter == null || shardedAfter.isEmpty());
+
+        client.close();
+        listeners.remove(client);
     }
 
     @Test
