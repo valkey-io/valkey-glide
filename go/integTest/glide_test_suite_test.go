@@ -833,7 +833,7 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 
 	switch clientType {
 	case StandaloneClient:
-		if channels[0].Mode == ShardedMode {
+		if len(channels) > 0 && channels[0].Mode == ShardedMode {
 			t.Fatalf("Sharded mode is not supported for standalone client")
 			return nil
 		}

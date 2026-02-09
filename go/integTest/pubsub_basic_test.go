@@ -1199,6 +1199,7 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 		})
 	}
 }
+
 func (suite *GlideTestSuite) TestSubscribeEmptySetRaisesError() {
 	ctx := context.Background()
 
@@ -1214,6 +1215,7 @@ func (suite *GlideTestSuite) TestSubscribeEmptySetRaisesError() {
 	err := client.Subscribe(ctx, []string{}, 5000)
 	assert.Error(suite.T(), err)
 }
+
 func (suite *GlideTestSuite) TestUnsubscribeSpecificChannels() {
 	ctx := context.Background()
 	channel1 := "unsub_channel_1"
@@ -1689,11 +1691,13 @@ func (suite *GlideTestSuite) TestNumSubAndShardNumSubSeparation() {
 	// Regular channel should be 0 in shard numsub
 	assert.Equal(suite.T(), int64(0), shardNumSub[regularChannel])
 }
+
 func (suite *GlideTestSuite) TestRESP2RaisesError() {
 	// RESP2 is not supported for pubsub - this would be tested at client creation time
 	// Skipping as Go client enforces RESP3 for pubsub at compile time
 	suite.T().Skip("RESP2 validation happens at client creation, not runtime")
 }
+
 func (suite *GlideTestSuite) TestCallbackOnlyRaisesErrorOnGetMethods() {
 	// Create callback-only client
 	channel := "callback_only_channel"
@@ -1708,6 +1712,7 @@ func (suite *GlideTestSuite) TestCallbackOnlyRaisesErrorOnGetMethods() {
 	_, err := client.GetQueue()
 	assert.Error(suite.T(), err, "GetQueue should fail for callback-only client")
 }
+
 func (suite *GlideTestSuite) TestReconciliationIntervalSupport() {
 	// This is tested implicitly by all reconnection tests
 	// The reconciliation interval determines how often the client checks subscription state
