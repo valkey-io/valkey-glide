@@ -280,6 +280,20 @@ jobs:
               with:
                   distribution: "temurin"
                   java-version: 11
+            
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ubuntu
+                  target: aarch64-unknown-linux-gnu
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  language: java
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "29.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Build and Publish valkey-glide
               working-directory: java
