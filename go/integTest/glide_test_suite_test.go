@@ -978,8 +978,10 @@ func (suite *GlideTestSuite) subscribeByMethod(
 		}
 	}
 
-	// Wait for subscription to propagate
-	time.Sleep(100 * time.Millisecond)
+	// Only sleep for LazyMethod since BlockingMethod already waits for confirmation
+	if method == LazyMethod {
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
 func getChannelMode(sharded bool) TestChannelMode {
