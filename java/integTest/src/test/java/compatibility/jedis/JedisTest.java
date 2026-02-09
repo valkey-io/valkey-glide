@@ -1705,8 +1705,11 @@ public class JedisTest {
         Set<String> inter = jedis.sinter(key1, key2);
         assertEquals(Set.of("b", "c"), inter, "SINTER should return b,c");
 
-        long interCard = jedis.sintercard(key1, key2);
-        assertEquals(2L, interCard, "SINTERCARD should return 2");
+        // SINTERCARD was added in Redis 7.0
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            long interCard = jedis.sintercard(key1, key2);
+            assertEquals(2L, interCard, "SINTERCARD should return 2");
+        }
 
         long interStoreLen = jedis.sinterstore(dest, key1, key2);
         assertEquals(2L, interStoreLen, "SINTERSTORE should store 2 elements");
