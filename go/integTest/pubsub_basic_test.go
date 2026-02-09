@@ -1626,6 +1626,7 @@ done:
 
 	assert.Equal(suite.T(), 2, receivedCount, "Should receive message twice (exact + pattern)")
 }
+
 func (suite *GlideTestSuite) TestChannelsAndShardChannelsSeparation() {
 	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
@@ -1658,6 +1659,7 @@ func (suite *GlideTestSuite) TestChannelsAndShardChannelsSeparation() {
 	assert.Contains(suite.T(), shardChannels, shardedChannel)
 	assert.NotContains(suite.T(), shardChannels, regularChannel)
 }
+
 func (suite *GlideTestSuite) TestNumSubAndShardNumSubSeparation() {
 	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
