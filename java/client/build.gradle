@@ -153,9 +153,12 @@ clean.dependsOn('cleanProtobuf', 'cleanRust')
 
 tasks.register('copyNativeLib', Copy) {
     def target
+    def targetPath
     if (project.hasProperty('target')) {
         target = project.target
-        from "${projectDir}/../target/${target}/release/"
+        // cargo-zigbuild puts the output in a directory without the glibc version suffix
+        targetPath = target.contains(".2.") ? target.substring(0, target.indexOf(".2.")) : target
+        from "${projectDir}/../target/${targetPath}/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
         from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
