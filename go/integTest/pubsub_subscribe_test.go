@@ -4,6 +4,7 @@ package integTest
 
 import (
 	"context"
+	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -12,156 +13,210 @@ import (
 )
 
 func (suite *GlideTestSuite) TestDynamicSubscribeUnsubscribe() {
-	initialChannel := "initial_channel"
-	dynamicChannel := "dynamic_channel"
-
-	// Create publisher
-	publisher := suite.defaultClient()
-	defer publisher.Close()
-
-	// Create subscriber using EXACT same pattern as working test
-	channels := []ChannelDefn{
-		{Channel: initialChannel, Mode: ExactMode},
+	tests := []struct {
+		name   string
+		method SubscriptionMethod
+	}{
+		{"Blocking", BlockingMethod},
+		{"Lazy", LazyMethod},
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
-	defer receiver.Close()
 
-	queue, err := receiver.(*glide.Client).GetQueue()
-	assert.NoError(suite.T(), err)
+	for _, tt := range tests {
+		suite.T().Run(tt.name, func(t *testing.T) {
+			initialChannel := "initial_channel"
+			dynamicChannel := "dynamic_channel"
 
-	// Allow subscription to establish
-	time.Sleep(100 * time.Millisecond)
+			// Create publisher
+			publisher := suite.defaultClient()
+			defer publisher.Close()
 
-	// Publish test message
-	_, err = publisher.Publish(context.Background(), initialChannel, "test_message")
-	assert.NoError(suite.T(), err)
+			// Create subscriber using EXACT same pattern as working test
+			channels := []ChannelDefn{
+				{Channel: initialChannel, Mode: ExactMode},
+			}
+			receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, t)
+			defer receiver.Close()
 
-	// Allow time for message to be received
-	time.Sleep(100 * time.Millisecond)
+			queue, err := receiver.(*glide.Client).GetQueue()
+			assert.NoError(t, err)
 
-	// Verify message received
-	select {
-	case msg := <-queue.WaitForMessage():
-		suite.T().Logf("SUCCESS! Initial subscription works. Message: '%s'", msg.Message)
+			// Allow subscription to establish
+			time.Sleep(100 * time.Millisecond)
 
-		// Now test dynamic subscribe
-		err = receiver.(*glide.Client).Subscribe(context.Background(), []string{dynamicChannel}, 5000)
-		assert.NoError(suite.T(), err)
+			// Publish test message
+			_, err = publisher.Publish(context.Background(), initialChannel, "test_message")
+			assert.NoError(t, err)
 
-		time.Sleep(100 * time.Millisecond)
+			// Allow time for message to be received
+			time.Sleep(100 * time.Millisecond)
 
-		_, err = publisher.Publish(context.Background(), dynamicChannel, "dynamic_message")
-		assert.NoError(suite.T(), err)
+			// Verify message received
+			select {
+			case msg := <-queue.WaitForMessage():
+				t.Logf("SUCCESS! Initial subscription works. Message: '%s'", msg.Message)
 
-		time.Sleep(100 * time.Millisecond)
+				// Now test dynamic subscribe using parameterized method
+				ctx := context.Background()
+				if tt.method == LazyMethod {
+					err = receiver.(*glide.Client).SubscribeLazy(ctx, []string{dynamicChannel})
+					assert.NoError(t, err)
+					time.Sleep(200 * time.Millisecond) // Wait for lazy subscription
+				} else {
+					err = receiver.(*glide.Client).Subscribe(ctx, []string{dynamicChannel}, 5000)
+					assert.NoError(t, err)
+					// No sleep needed for blocking
+				}
 
-		select {
-		case msg := <-queue.WaitForMessage():
-			suite.T().Logf("Dynamic subscribe SUCCESS! Message: '%s'", msg.Message)
-			assert.Equal(suite.T(), "dynamic_message", msg.Message)
-		case <-time.After(2 * time.Second):
-			suite.T().Fatal("Dynamic subscribe failed")
-		}
-	case <-time.After(2 * time.Second):
-		suite.T().Fatal("Initial subscription failed")
+				_, err = publisher.Publish(context.Background(), dynamicChannel, "dynamic_message")
+				assert.NoError(t, err)
+
+				time.Sleep(100 * time.Millisecond)
+
+				select {
+				case msg := <-queue.WaitForMessage():
+					t.Logf("Dynamic subscribe SUCCESS! Message: '%s'", msg.Message)
+					assert.Equal(t, "dynamic_message", msg.Message)
+				case <-time.After(2 * time.Second):
+					t.Fatal("Dynamic subscribe failed")
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("Initial subscription failed")
+			}
+		})
 	}
 }
 
 func (suite *GlideTestSuite) TestDynamicPSubscribeUnsubscribe() {
-	initialPattern := "initial_*"
-	dynamicPattern := "dynamic_*"
-
-	publisher := suite.defaultClient()
-	defer publisher.Close()
-
-	channels := []ChannelDefn{
-		{Channel: initialPattern, Mode: PatternMode},
+	tests := []struct {
+		name   string
+		method SubscriptionMethod
+	}{
+		{"Blocking", BlockingMethod},
+		{"Lazy", LazyMethod},
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
-	defer receiver.Close()
 
-	queue, err := receiver.(*glide.Client).GetQueue()
-	assert.NoError(suite.T(), err)
+	for _, tt := range tests {
+		suite.T().Run(tt.name, func(t *testing.T) {
+			initialPattern := "initial_*"
+			dynamicPattern := "dynamic_*"
 
-	time.Sleep(200 * time.Millisecond)
+			publisher := suite.defaultClient()
+			defer publisher.Close()
 
-	_, err = publisher.Publish(context.Background(), "initial_test", "test_message")
-	assert.NoError(suite.T(), err)
+			channels := []ChannelDefn{
+				{Channel: initialPattern, Mode: PatternMode},
+			}
+			receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, t)
+			defer receiver.Close()
 
-	time.Sleep(200 * time.Millisecond)
+			queue, err := receiver.(*glide.Client).GetQueue()
+			assert.NoError(t, err)
 
-	select {
-	case msg := <-queue.WaitForMessage():
-		assert.Equal(suite.T(), "test_message", msg.Message)
+			time.Sleep(200 * time.Millisecond)
 
-		err = receiver.(*glide.Client).PSubscribe(context.Background(), []string{dynamicPattern}, 5000)
-		assert.NoError(suite.T(), err)
+			_, err = publisher.Publish(context.Background(), "initial_test", "test_message")
+			assert.NoError(t, err)
 
-		time.Sleep(200 * time.Millisecond)
+			time.Sleep(200 * time.Millisecond)
 
-		_, err = publisher.Publish(context.Background(), "dynamic_test", "dynamic_message")
-		assert.NoError(suite.T(), err)
+			select {
+			case msg := <-queue.WaitForMessage():
+				assert.Equal(t, "test_message", msg.Message)
 
-		time.Sleep(200 * time.Millisecond)
+				ctx := context.Background()
+				if tt.method == LazyMethod {
+					err = receiver.(*glide.Client).PSubscribeLazy(ctx, []string{dynamicPattern})
+					assert.NoError(t, err)
+					time.Sleep(200 * time.Millisecond) // Wait for lazy subscription
+				} else {
+					err = receiver.(*glide.Client).PSubscribe(ctx, []string{dynamicPattern}, 5000)
+					assert.NoError(t, err)
+					// No sleep needed for blocking
+				}
 
-		select {
-		case msg := <-queue.WaitForMessage():
-			assert.Equal(suite.T(), "dynamic_message", msg.Message)
-		case <-time.After(2 * time.Second):
-			suite.T().Fatal("Dynamic psubscribe failed")
-		}
-	case <-time.After(2 * time.Second):
-		suite.T().Fatal("Initial pattern subscription failed")
+				_, err = publisher.Publish(context.Background(), "dynamic_test", "dynamic_message")
+				assert.NoError(t, err)
+
+				time.Sleep(200 * time.Millisecond)
+
+				select {
+				case msg := <-queue.WaitForMessage():
+					assert.Equal(t, "dynamic_message", msg.Message)
+				case <-time.After(2 * time.Second):
+					t.Fatal("Dynamic psubscribe failed")
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("Initial pattern subscription failed")
+			}
+		})
 	}
 }
 
 func (suite *GlideTestSuite) TestDynamicSSubscribeUnsubscribe() {
 	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
-	initialChannel := "initial_shard_channel"
-	dynamicChannel := "dynamic_shard_channel"
-
-	publisher := suite.defaultClusterClient()
-	defer publisher.Close()
-
-	channels := []ChannelDefn{
-		{Channel: initialChannel, Mode: ShardedMode},
+	tests := []struct {
+		name   string
+		method SubscriptionMethod
+	}{
+		{"Blocking", BlockingMethod},
+		{"Lazy", LazyMethod},
 	}
-	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 1, false, ConfigMethod, suite.T())
-	defer receiver.Close()
 
-	queue, err := receiver.(*glide.ClusterClient).GetQueue()
-	assert.NoError(suite.T(), err)
+	for _, tt := range tests {
+		suite.T().Run(tt.name, func(t *testing.T) {
+			initialChannel := "initial_shard_channel"
+			dynamicChannel := "dynamic_shard_channel"
 
-	time.Sleep(100 * time.Millisecond)
+			publisher := suite.defaultClusterClient()
+			defer publisher.Close()
 
-	_, err = publisher.Publish(context.Background(), initialChannel, "test_message", true)
-	assert.NoError(suite.T(), err)
+			channels := []ChannelDefn{
+				{Channel: initialChannel, Mode: ShardedMode},
+			}
+			receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 1, false, ConfigMethod, t)
+			defer receiver.Close()
 
-	time.Sleep(100 * time.Millisecond)
+			queue, err := receiver.(*glide.ClusterClient).GetQueue()
+			assert.NoError(t, err)
 
-	select {
-	case msg := <-queue.WaitForMessage():
-		assert.Equal(suite.T(), "test_message", msg.Message)
+			time.Sleep(100 * time.Millisecond)
 
-		err = receiver.(*glide.ClusterClient).SSubscribe(context.Background(), []string{dynamicChannel}, 5000)
-		assert.NoError(suite.T(), err)
+			_, err = publisher.Publish(context.Background(), initialChannel, "test_message", true)
+			assert.NoError(t, err)
 
-		time.Sleep(100 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 
-		_, err = publisher.Publish(context.Background(), dynamicChannel, "dynamic_message", true)
-		assert.NoError(suite.T(), err)
+			select {
+			case msg := <-queue.WaitForMessage():
+				assert.Equal(t, "test_message", msg.Message)
 
-		time.Sleep(100 * time.Millisecond)
+				ctx := context.Background()
+				if tt.method == LazyMethod {
+					err = receiver.(*glide.ClusterClient).SSubscribeLazy(ctx, []string{dynamicChannel})
+					assert.NoError(t, err)
+					time.Sleep(200 * time.Millisecond) // Wait for lazy subscription
+				} else {
+					err = receiver.(*glide.ClusterClient).SSubscribe(ctx, []string{dynamicChannel}, 5000)
+					assert.NoError(t, err)
+					// No sleep needed for blocking
+				}
 
-		select {
-		case msg := <-queue.WaitForMessage():
-			assert.Equal(suite.T(), "dynamic_message", msg.Message)
-		case <-time.After(2 * time.Second):
-			suite.T().Fatal("Dynamic ssubscribe failed")
-		}
-	case <-time.After(2 * time.Second):
-		suite.T().Fatal("Initial sharded subscription failed")
+				_, err = publisher.Publish(context.Background(), dynamicChannel, "dynamic_message", true)
+				assert.NoError(t, err)
+
+				time.Sleep(100 * time.Millisecond)
+
+				select {
+				case msg := <-queue.WaitForMessage():
+					assert.Equal(t, "dynamic_message", msg.Message)
+				case <-time.After(2 * time.Second):
+					t.Fatal("Dynamic ssubscribe failed")
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("Initial sharded subscription failed")
+			}
+		})
 	}
 }
 
