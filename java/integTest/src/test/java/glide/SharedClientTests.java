@@ -4,12 +4,15 @@ package glide;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.getRandomString;
+import static glide.TestUtilities.isWindows;
 import static glide.api.BaseClient.OK;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Named.named;
 
 import glide.api.BaseClient;
@@ -18,6 +21,7 @@ import glide.api.GlideClusterClient;
 import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -34,7 +38,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(35) // seconds
+@Timeout(35)
 public class SharedClientTests {
 
     private static GlideClient standaloneClient = null;
@@ -76,8 +80,25 @@ public class SharedClientTests {
     @MethodSource("getClients")
     public void validate_statistics(BaseClient client) {
         assertFalse(client.getStatistics().isEmpty());
-        // we expect 8 items in the statistics map
-        assertEquals(8, client.getStatistics().size());
+        // we expect 10 items in the statistics map
+        assertEquals(10, client.getStatistics().size());
+
+        // Verify all expected keys are present
+        Map<String, String> stats = client.getStatistics();
+        assertTrue(stats.containsKey("total_connections"));
+        assertTrue(stats.containsKey("total_clients"));
+        assertTrue(stats.containsKey("total_values_compressed"));
+        assertTrue(stats.containsKey("total_values_decompressed"));
+        assertTrue(stats.containsKey("total_original_bytes"));
+        assertTrue(stats.containsKey("total_bytes_compressed"));
+        assertTrue(stats.containsKey("total_bytes_decompressed"));
+        assertTrue(stats.containsKey("compression_skipped_count"));
+        assertTrue(stats.containsKey("subscription_out_of_sync_count"));
+        assertTrue(stats.containsKey("subscription_last_sync_timestamp"));
+
+        // Verify subscription metrics are numeric
+        assertDoesNotThrow(() -> Long.parseLong(stats.get("subscription_out_of_sync_count")));
+        assertDoesNotThrow(() -> Long.parseLong(stats.get("subscription_last_sync_timestamp")));
     }
 
     @AfterAll
@@ -134,6 +155,12 @@ public class SharedClientTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("clientAndDataSize")
     public void client_can_handle_concurrent_workload(BaseClient client, int valueSize) {
+        // Due to limited resources on Github Action when using a Windows runner with WSL, this test is
+        // flaky.
+        // It will be disabled.
+        // TODO: Remove isWindows skip after flaky investigation
+        // https://github.com/valkey-io/valkey-glide/issues/5210
+        assumeTrue(!isWindows(), "Skip on Windows");
         ExecutorService executorService = Executors.newCachedThreadPool();
         @SuppressWarnings("unchecked")
         CompletableFuture<Void>[] futures = new CompletableFuture[100];

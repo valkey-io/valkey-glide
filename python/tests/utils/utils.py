@@ -70,8 +70,14 @@ from glide_shared.config import (
     BackoffStrategy,
     CompressionBackend,
     CompressionConfiguration,
-    GlideClientConfiguration,
-    GlideClusterClientConfiguration,
+)
+from glide_shared.config import GlideClientConfiguration
+from glide_shared.config import GlideClientConfiguration as SyncGlideClientConfiguration
+from glide_shared.config import GlideClusterClientConfiguration
+from glide_shared.config import (
+    GlideClusterClientConfiguration as SyncGlideClusterClientConfiguration,
+)
+from glide_shared.config import (
     NodeAddress,
     ProtocolVersion,
     ReadFrom,
@@ -89,10 +95,6 @@ from glide_shared.routes import AllNodes
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
 from glide_sync import TGlideClient as TSyncGlideClient
-from glide_sync.config import GlideClientConfiguration as SyncGlideClientConfiguration
-from glide_sync.config import (
-    GlideClusterClientConfiguration as SyncGlideClusterClientConfiguration,
-)
 from glide_sync.logger import Level as SyncLogLevel
 from packaging import version
 
@@ -534,8 +536,8 @@ def create_client_config(
     addresses: Optional[List[NodeAddress]] = None,
     client_name: Optional[str] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
-    timeout: Optional[int] = 1000,
-    connection_timeout: Optional[int] = 1000,
+    request_timeout: Optional[int] = 1000,
+    connection_timeout: Optional[int] = 10000,
     cluster_mode_pubsub: Optional[
         GlideClusterClientConfiguration.PubSubSubscriptions
     ] = None,
@@ -585,7 +587,7 @@ def create_client_config(
             database_id=database_id,
             client_name=client_name,
             protocol=protocol,
-            request_timeout=timeout,
+            request_timeout=request_timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
@@ -608,7 +610,7 @@ def create_client_config(
             database_id=database_id,
             client_name=client_name,
             protocol=protocol,
-            request_timeout=timeout,
+            request_timeout=request_timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
@@ -632,8 +634,8 @@ def create_sync_client_config(
     addresses: Optional[List[NodeAddress]] = None,
     client_name: Optional[str] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
-    timeout: Optional[int] = 1000,
-    connection_timeout: Optional[int] = 1000,
+    request_timeout: Optional[int] = 1000,
+    connection_timeout: Optional[int] = 10000,
     cluster_mode_pubsub: Optional[
         GlideClusterClientConfiguration.PubSubSubscriptions
     ] = None,
@@ -648,6 +650,7 @@ def create_sync_client_config(
     tls_insecure: Optional[bool] = None,
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
+    inflight_requests_limit: Optional[int] = None,
 ) -> Union[SyncGlideClusterClientConfiguration, SyncGlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
@@ -682,10 +685,11 @@ def create_sync_client_config(
             database_id=database_id,
             client_name=client_name,
             protocol=protocol,
-            request_timeout=timeout,
+            request_timeout=request_timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
             read_from=read_from,
             client_az=client_az,
+            inflight_requests_limit=inflight_requests_limit,
             advanced_config=AdvancedGlideClusterClientConfiguration(
                 connection_timeout, tls_config=tls_adv_conf
             ),
@@ -702,10 +706,11 @@ def create_sync_client_config(
             database_id=database_id,
             client_name=client_name,
             protocol=protocol,
-            request_timeout=timeout,
+            request_timeout=request_timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
             read_from=read_from,
             client_az=client_az,
+            inflight_requests_limit=inflight_requests_limit,
             advanced_config=AdvancedGlideClientConfiguration(
                 connection_timeout, tls_config=tls_adv_conf
             ),

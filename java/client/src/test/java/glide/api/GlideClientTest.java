@@ -21,7 +21,6 @@ import static command_request.CommandRequestOuterClass.RequestType.ConfigResetSt
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
 import static command_request.CommandRequestOuterClass.RequestType.Copy;
-import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
 import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
@@ -101,7 +100,9 @@ import static command_request.CommandRequestOuterClass.RequestType.ObjectRefCoun
 import static command_request.CommandRequestOuterClass.RequestType.PExpire;
 import static command_request.CommandRequestOuterClass.RequestType.PExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.PExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.PSubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.PTTL;
+import static command_request.CommandRequestOuterClass.RequestType.PUnsubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.Persist;
 import static command_request.CommandRequestOuterClass.RequestType.PfAdd;
 import static command_request.CommandRequestOuterClass.RequestType.PfCount;
@@ -146,12 +147,14 @@ import static command_request.CommandRequestOuterClass.RequestType.SetRange;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
 import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.Strlen;
+import static command_request.CommandRequestOuterClass.RequestType.SubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.TTL;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.Touch;
 import static command_request.CommandRequestOuterClass.RequestType.Type;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static command_request.CommandRequestOuterClass.RequestType.Unlink;
+import static command_request.CommandRequestOuterClass.RequestType.UnsubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.Wait;
 import static command_request.CommandRequestOuterClass.RequestType.Watch;
 import static command_request.CommandRequestOuterClass.RequestType.XAck;
@@ -412,8 +415,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.submitNewCommand(eq(CustomCommand), eq(arguments), any()))
-                .thenReturn(testResponse);
+        when(commandManager.submitCustomCommand(eq(arguments), any())).thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object> response = service.customCommand(arguments);
@@ -436,8 +438,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.submitNewCommand(eq(CustomCommand), eq(arguments), any()))
-                .thenReturn(testResponse);
+        when(commandManager.submitCustomCommand(eq(arguments), any())).thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object> response = service.customCommand(arguments);
@@ -4840,7 +4841,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Object>>submitNewCommand(eq(BZMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, Object>>submitBlockingCommand(
+                        eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -4866,7 +4868,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Object>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Object>>submitBlockingCommand(
                         eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -4894,7 +4896,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Object>>submitNewCommand(eq(BZMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, Object>>submitBlockingCommand(
+                        eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -4924,7 +4927,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Object>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Object>>submitBlockingCommand(
                         eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -5269,7 +5272,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMin), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMin), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5294,7 +5297,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMin), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMin), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5368,7 +5371,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMax), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMax), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5393,7 +5396,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMax), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMax), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -8063,7 +8066,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Map<String, String[][]>>>submitNewCommand(
+        when(commandManager.<Map<String, Map<String, String[][]>>>submitBlockingCommand(
                         eq(XRead), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -8105,7 +8108,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitBlockingCommand(
                         eq(XRead), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -8948,7 +8951,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Map<String, String[][]>>>submitNewCommand(
+        when(commandManager.<Map<String, Map<String, String[][]>>>submitBlockingCommand(
                         eq(XReadGroup), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -8998,7 +9001,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitBlockingCommand(
                         eq(XReadGroup), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -10362,7 +10365,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(BLPop), eq(arguments), any()))
+        when(commandManager.<String[]>submitBlockingCommand(eq(BLPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -10387,7 +10390,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString[]>submitNewCommand(eq(BLPop), eq(arguments), any()))
+        when(commandManager.<GlideString[]>submitBlockingCommand(eq(BLPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -10512,7 +10515,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(BRPop), eq(arguments), any()))
+        when(commandManager.<String[]>submitBlockingCommand(eq(BRPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -10537,7 +10540,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString[]>submitNewCommand(eq(BRPop), eq(arguments), any()))
+        when(commandManager.<GlideString[]>submitBlockingCommand(eq(BRPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12134,7 +12137,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, String[]>>submitNewCommand(eq(BLMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, String[]>>submitBlockingCommand(
+                        eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12166,7 +12170,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+        when(commandManager.<Map<GlideString, GlideString[]>>submitBlockingCommand(
                         eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -12206,7 +12210,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, String[]>>submitNewCommand(eq(BLMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, String[]>>submitBlockingCommand(
+                        eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12245,7 +12250,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+        when(commandManager.<Map<GlideString, GlideString[]>>submitBlockingCommand(
                         eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -12738,7 +12743,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(BLMove), eq(arguments), any()))
+        when(commandManager.<String>submitBlockingCommand(eq(BLMove), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12766,7 +12771,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString>submitNewCommand(eq(BLMove), eq(arguments), any()))
+        when(commandManager.<GlideString>submitBlockingCommand(eq(BLMove), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -14637,7 +14642,8 @@ public class GlideClientTest {
         testResponse.complete(result);
 
         // match on protobuf request
-        when(commandManager.<Long>submitNewCommand(eq(Wait), eq(args), any())).thenReturn(testResponse);
+        when(commandManager.<Long>submitBlockingCommand(eq(Wait), eq(args), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Long> response = service.wait(numreplicas, timeout);
@@ -16073,5 +16079,78 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void subscribe_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(eq(SubscribeBlocking), any(String[].class), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.subscribe(Set.of("channel1", "channel2"), 5000);
+
+        // verify
+        assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void unsubscribe_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(eq(UnsubscribeBlocking), any(String[].class), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.unsubscribe(Set.of("channel1"), 1000);
+
+        // verify
+        assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void psubscribe_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(eq(PSubscribeBlocking), any(String[].class), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.psubscribe(Set.of("pattern*"), 3000);
+
+        // verify
+        assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void punsubscribe_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(
+                        eq(PUnsubscribeBlocking), any(String[].class), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.punsubscribe(Set.of("pattern*"), 2000);
+
+        // verify
+        assertNull(response.get());
     }
 }

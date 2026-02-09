@@ -1260,11 +1260,20 @@ pub unsafe extern "C-unwind" fn command(
         Routes::default()
     };
 
+    // Check inflight request limit
+    if !client_adapter.core.client.reserve_inflight_request() {
+        let err = RedisError::from((ErrorKind::ClientError, "Reached maximum inflight requests"));
+        return unsafe { client_adapter.handle_redis_error(err, request_id) };
+    }
+
     let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let mut client = client_adapter.core.client.clone();
+    let client_for_release = client_adapter.core.client.clone();
     let result = client_adapter.execute_request(request_id, async move {
         let routing_info = get_route(route, Some(&cmd))?;
-        client.send_command(&mut cmd, routing_info).await
+        let result = client.send_command(&mut cmd, routing_info).await;
+        client_for_release.release_inflight_request();
+        result
     });
     if let Ok(span) = child_span {
         span.end();
@@ -2995,6 +3004,10 @@ pub struct Statistics {
     pub total_bytes_decompressed: c_ulong,
     /// Number of times compression was skipped
     pub compression_skipped_count: c_ulong,
+    /// Number of times subscriptions were out of sync during reconciliation
+    pub subscription_out_of_sync_count: c_ulong,
+    /// Timestamp of last successful subscription sync (milliseconds since epoch)
+    pub subscription_last_sync_timestamp: c_ulong,
 }
 
 /// Get compression and connection statistics.
@@ -3016,6 +3029,8 @@ pub extern "C" fn get_statistics() -> Statistics {
         total_bytes_compressed: Telemetry::total_bytes_compressed() as c_ulong,
         total_bytes_decompressed: Telemetry::total_bytes_decompressed() as c_ulong,
         compression_skipped_count: Telemetry::compression_skipped_count() as c_ulong,
+        subscription_out_of_sync_count: Telemetry::subscription_out_of_sync_count() as c_ulong,
+        subscription_last_sync_timestamp: Telemetry::subscription_last_sync_timestamp() as c_ulong,
     }
 }
 

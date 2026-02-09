@@ -302,6 +302,8 @@ class _GlideFFI:
                 unsigned long total_bytes_compressed;
                 unsigned long total_bytes_decompressed;
                 unsigned long compression_skipped_count;
+                unsigned long subscription_out_of_sync_count;
+                unsigned long subscription_last_sync_timestamp;
             } Statistics;
 
             Statistics get_statistics();
@@ -323,3 +325,7 @@ class _GlideFFI:
     def lib(self):
         """Access to the loaded library for calling functions."""
         return self._lib
+
+
+# Singleton instance accessor
+GlideFFI = _GlideFFI()
