@@ -424,7 +424,7 @@ def sync_pubsub_test_clients(
                 listening_client = create_sync_client(
                     request, cluster_mode, standalone_mode_pubsub=pubsub_config
                 )
-            
+
             publishing_client = create_sync_client(request, cluster_mode)
             sync_subscribe_by_method(
                 listening_client,
