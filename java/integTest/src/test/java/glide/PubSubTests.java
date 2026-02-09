@@ -379,6 +379,7 @@ public class PubSubTests {
         }
     }
 
+    @SneakyThrows
     private void closeAllClients() {
         for (var client : senders) {
             client.close();

@@ -653,6 +653,7 @@ def create_sync_client_config(
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
     inflight_requests_limit: Optional[int] = None,
+    reconciliation_interval_ms: Optional[int] = None,
 ) -> Union[SyncGlideClusterClientConfiguration, SyncGlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
@@ -693,7 +694,9 @@ def create_sync_client_config(
             client_az=client_az,
             inflight_requests_limit=inflight_requests_limit,
             advanced_config=AdvancedGlideClusterClientConfiguration(
-                connection_timeout, tls_config=tls_adv_conf
+                connection_timeout,
+                tls_config=tls_adv_conf,
+                pubsub_reconciliation_interval=reconciliation_interval_ms,
             ),
             lazy_connect=lazy_connect,
             compression=compression_config,
@@ -714,7 +717,9 @@ def create_sync_client_config(
             client_az=client_az,
             inflight_requests_limit=inflight_requests_limit,
             advanced_config=AdvancedGlideClientConfiguration(
-                connection_timeout, tls_config=tls_adv_conf
+                connection_timeout,
+                tls_config=tls_adv_conf,
+                pubsub_reconciliation_interval=reconciliation_interval_ms,
             ),
             reconnect_strategy=reconnect_strategy,
             lazy_connect=lazy_connect,

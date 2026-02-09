@@ -4501,10 +4501,10 @@ class TestSyncPubSub:
 
             if cluster_mode:
                 cast(GlideClusterClient, admin_client).custom_command(
-                    acl_command, route=AllNodes()
+                    acl_command, route=AllNodes()  # type: ignore[arg-type]
                 )
             else:
-                admin_client.custom_command(acl_command)
+                admin_client.custom_command(acl_command)  # type: ignore[arg-type]
 
             # Create regular client (not pubsub) and authenticate with restricted user
             listening_client = create_sync_client(request, cluster_mode)
@@ -4606,19 +4606,19 @@ class TestSyncPubSub:
 
             if cluster_mode:
                 cast(GlideClusterClient, admin_client).custom_command(
-                    acl_create_command, route=AllNodes()
+                    acl_create_command, route=AllNodes()  # type: ignore[arg-type]
                 )
             else:
-                admin_client.custom_command(acl_create_command)
+                admin_client.custom_command(acl_create_command)  # type: ignore[arg-type]
 
             listening_client = create_sync_client(request, cluster_mode)
 
             if cluster_mode:
                 cast(GlideClusterClient, listening_client).custom_command(
-                    ["AUTH", username, password], route=AllNodes()
+                    ["AUTH", username, password], route=AllNodes()  # type: ignore[arg-type]
                 )
             else:
-                listening_client.custom_command(["AUTH", username, password])
+                listening_client.custom_command(["AUTH", username, password])  # type: ignore[arg-type]
 
             initial_stats = listening_client.get_statistics()
             initial_out_of_sync = int(
@@ -4661,10 +4661,10 @@ class TestSyncPubSub:
                 try:
                     if cluster_mode:
                         cast(GlideClusterClient, admin_client).custom_command(
-                            acl_delete_command, route=AllNodes()
+                            acl_delete_command, route=AllNodes()  # type: ignore[arg-type]
                         )
                     else:
-                        admin_client.custom_command(acl_delete_command)
+                        admin_client.custom_command(acl_delete_command)  # type: ignore[arg-type]
                 except Exception:
                     pass
                 admin_client.close()
