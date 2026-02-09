@@ -71,7 +71,11 @@ func (suite *GlideTestSuite) TestPubSub_Basic_ManyChannels() {
 
 // TestPubSub_Basic_PatternManyChannels tests pattern subscriptions with multiple channels
 func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
-	tests := CreatePatternTestCases("test-pattern-*", []string{"test-pattern-1", "test-pattern-2", "test-pattern-3"}, "test pattern message")
+	tests := CreatePatternTestCases(
+		"test-pattern-*",
+		[]string{"test-pattern-1", "test-pattern-2", "test-pattern-3"},
+		"test pattern message",
+	)
 
 	for _, tt := range tests {
 		suite.T().Run(tt.Name, func(t *testing.T) {
@@ -82,7 +86,12 @@ func (suite *GlideTestSuite) TestPubSub_Basic_PatternManyChannels() {
 
 // TestPubSub_Basic_CombinedExactPattern tests a single subscriber with both exact and pattern subscriptions
 func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
-	tests := CreateCombinedTestCases("test-exact-channel", "test-pattern-*", []string{"test-pattern-1", "test-pattern-2"}, "test message")
+	tests := CreateCombinedTestCases(
+		"test-exact-channel",
+		"test-pattern-*",
+		[]string{"test-pattern-1", "test-pattern-2"},
+		"test message",
+	)
 
 	for _, tt := range tests {
 		suite.T().Run(tt.Name, func(t *testing.T) {
@@ -94,7 +103,12 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPattern() {
 // TestPubSub_Basic_CombinedExactPatternMultipleSubscribers tests multiple subscribers with both exact and pattern
 // subscriptions
 func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscribers() {
-	tests := CreateCombinedTestCases("test-exact-channel", "test-pattern-*", []string{"test-pattern-1", "test-pattern-2"}, "test message")
+	tests := CreateCombinedTestCases(
+		"test-exact-channel",
+		"test-pattern-*",
+		[]string{"test-pattern-1", "test-pattern-2"},
+		"test message",
+	)
 
 	for _, tt := range tests {
 		suite.T().Run(tt.Name, func(t *testing.T) {
@@ -240,6 +254,7 @@ func (suite *GlideTestSuite) TestPUnsubscribeSpecificPatterns() {
 	_, exists = state.ActualSubscriptions[models.Pattern][pattern2]
 	assert.True(suite.T(), exists)
 }
+
 func (suite *GlideTestSuite) TestSUnsubscribeSpecificShardedChannels() {
 	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
@@ -272,6 +287,7 @@ func (suite *GlideTestSuite) TestSUnsubscribeSpecificShardedChannels() {
 	_, exists = state.ActualSubscriptions[models.Sharded][channel2]
 	assert.True(suite.T(), exists)
 }
+
 func (suite *GlideTestSuite) TestUnsubscribeAllTypes() {
 	ctx := context.Background()
 	channel := "test_channel"
@@ -318,6 +334,7 @@ func (suite *GlideTestSuite) TestUnsubscribeAllTypes() {
 	assert.Equal(suite.T(), 0, len(state.ActualSubscriptions[models.Exact]))
 	assert.Equal(suite.T(), 0, len(state.ActualSubscriptions[models.Pattern]))
 }
+
 func (suite *GlideTestSuite) TestMixedSubscriptionMethodsAllTypes() {
 	ctx := context.Background()
 
@@ -358,6 +375,7 @@ func (suite *GlideTestSuite) TestMixedSubscriptionMethodsAllTypes() {
 	_, exists = state.ActualSubscriptions[models.Pattern]["blocking_pattern_*"]
 	assert.True(suite.T(), exists)
 }
+
 func (suite *GlideTestSuite) TestCustomCommandWithPubSub() {
 	ctx := context.Background()
 	channel := "custom_cmd_channel"
@@ -381,6 +399,7 @@ func (suite *GlideTestSuite) TestCustomCommandWithPubSub() {
 	_, exists := state.ActualSubscriptions[models.Exact][channel]
 	assert.True(suite.T(), exists)
 }
+
 func (suite *GlideTestSuite) TestLazyVsBlockingBehavior() {
 	ctx := context.Background()
 
@@ -418,6 +437,7 @@ func (suite *GlideTestSuite) TestLazyVsBlockingBehavior() {
 	_, inActual := state.ActualSubscriptions[models.Exact]["blocking_channel"]
 	assert.True(suite.T(), inActual, "Should be in actual after blocking returns")
 }
+
 func (suite *GlideTestSuite) TestGetSubscriptionsDesiredVsActual() {
 	ctx := context.Background()
 	channel := "test_desired_actual"
@@ -449,6 +469,7 @@ func (suite *GlideTestSuite) TestGetSubscriptionsDesiredVsActual() {
 	_, inActual := state.ActualSubscriptions[models.Exact][channel]
 	assert.True(suite.T(), inActual, "Should be in actual after reconciliation")
 }
+
 func (suite *GlideTestSuite) TestTwoPublishingClientsSameName() {
 	ctx := context.Background()
 	channel := "same_name_channel"
@@ -492,6 +513,7 @@ func (suite *GlideTestSuite) TestTwoPublishingClientsSameName() {
 	assert.True(suite.T(), messages["message_from_pub1"])
 	assert.True(suite.T(), messages["message_from_pub2"])
 }
+
 func (suite *GlideTestSuite) TestThreePublishingClientsSameNameWithSharded() {
 	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
@@ -538,6 +560,7 @@ func (suite *GlideTestSuite) TestThreePublishingClientsSameNameWithSharded() {
 	assert.True(suite.T(), messages["msg_1"])
 	assert.True(suite.T(), messages["msg_2"])
 }
+
 func (suite *GlideTestSuite) TestCombinedDifferentChannelsWithSameName() {
 	ctx := context.Background()
 	channelName := "same_name"

@@ -123,7 +123,11 @@ func (suite *GlideTestSuite) SetupPubSubTest(testCase PubSubTestCase, t *testing
 }
 
 // SetupMultiSubscriberTest creates a test setup with multiple subscribers
-func (suite *GlideTestSuite) SetupMultiSubscriberTest(testCase PubSubTestCase, numSubscribers int, t *testing.T) (*PubSubTestSetup, map[int]*glide.PubSubMessageQueue) {
+func (suite *GlideTestSuite) SetupMultiSubscriberTest(
+	testCase PubSubTestCase,
+	numSubscribers int,
+	t *testing.T,
+) (*PubSubTestSetup, map[int]*glide.PubSubMessageQueue) {
 	if testCase.Sharded {
 		suite.SkipIfServerVersionLowerThan("7.0.0", t)
 	}
@@ -161,7 +165,12 @@ func (suite *GlideTestSuite) SetupMultiSubscriberTest(testCase PubSubTestCase, n
 }
 
 // PublishMessage publishes a message using the appropriate client type
-func (suite *GlideTestSuite) PublishMessage(publisher interfaces.BaseClientCommands, clientType ClientType, channel, message string, sharded bool) error {
+func (suite *GlideTestSuite) PublishMessage(
+	publisher interfaces.BaseClientCommands,
+	clientType ClientType,
+	channel, message string,
+	sharded bool,
+) error {
 	if clientType == ClusterClient {
 		_, err := publisher.(*glide.ClusterClient).Publish(
 			context.Background(),
@@ -378,7 +387,11 @@ type CombinedTestCase struct {
 }
 
 // CreateCombinedTestCases generates test cases for combined exact and pattern subscriptions
-func CreateCombinedTestCases(exactChannel, pattern string, patternChannels []string, messageContent string) []CombinedTestCase {
+func CreateCombinedTestCases(
+	exactChannel, pattern string,
+	patternChannels []string,
+	messageContent string,
+) []CombinedTestCase {
 	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 	readMethods := []MessageReadMethod{CallbackMethod, WaitForMessageMethod, SignalChannelMethod, SyncLoopMethod}
 
@@ -464,7 +477,13 @@ func (suite *GlideTestSuite) ExecuteAndVerifyPubSubTest(testCase PubSubTestCase,
 	defer setup.Receiver.Close()
 
 	// Publish test message
-	err := suite.PublishMessage(setup.Publisher, testCase.ClientType, testCase.ChannelName, testCase.MessageContent, testCase.Sharded)
+	err := suite.PublishMessage(
+		setup.Publisher,
+		testCase.ClientType,
+		testCase.ChannelName,
+		testCase.MessageContent,
+		testCase.Sharded,
+	)
 	assert.Nil(t, err)
 
 	// Allow time for the message to be received
