@@ -5,6 +5,7 @@ use crate::cluster::get_connection_addr;
 use crate::cluster_client::SlotsRefreshRateLimit;
 use crate::cluster_routing::Slot;
 use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap};
+use crate::types::AddressResolver;
 use crate::{cluster::TlsMode, ErrorKind, RedisError, RedisResult, Value};
 #[cfg(all(feature = "cluster-async", not(feature = "tokio-comp")))]
 use async_std::sync::RwLock;
@@ -116,6 +117,7 @@ pub(crate) fn parse_and_count_slots(
     raw_slot_resp: &Value,
     tls: Option<TlsMode>,
     addr_of_answering_node: &str,
+    address_resolver: Option<&dyn AddressResolver>,
 ) -> RedisResult<ParsedSlotsResult> {
     // Parse response.
     let mut slots = Vec::with_capacity(2);
@@ -261,7 +263,7 @@ pub(crate) fn parse_and_count_slots(
                             };
 
                         let connection_addr =
-                            get_connection_addr(canonical_hostname, port, tls, None).to_string();
+                            get_connection_addr(canonical_hostname, port, tls, None, address_resolver).to_string();
 
                         // Store IP mapping if we have an IP for this node
                         if let Some(ip) = resolved_ip {
@@ -314,6 +316,7 @@ pub(crate) fn calculate_topology<'a>(
     tls_mode: Option<TlsMode>,
     num_of_queried_nodes: usize,
     read_from_replica: ReadFromReplicaStrategy,
+    address_resolver: Option<&dyn AddressResolver>,
 ) -> RedisResult<(SlotMap, TopologyHash)> {
     let mut hash_view_map = HashMap::new();
     for (host, view) in topology_views {
@@ -321,7 +324,7 @@ pub(crate) fn calculate_topology<'a>(
             slots_count,
             slots,
             address_to_ip_map,
-        }) = parse_and_count_slots(view, tls_mode, host)
+        }) = parse_and_count_slots(view, tls_mode, host, address_resolver)
         {
             let hash_value = calculate_hash(&(slots_count, &slots));
             let topology_entry = hash_view_map.entry(hash_value).or_insert(TopologyView {
@@ -576,8 +579,8 @@ mod tests {
             ),
         ]);
 
-        let res1 = parse_and_count_slots(&view1, None, "foo").unwrap();
-        let res2 = parse_and_count_slots(&view2, None, "foo").unwrap();
+        let res1 = parse_and_count_slots(&view1, None, "foo", None).unwrap();
+        let res2 = parse_and_count_slots(&view2, None, "foo", None).unwrap();
         assert_eq!(
             calculate_hash(&(res1.slots_count, &res1.slots)),
             calculate_hash(&(res2.slots_count, &res2.slots))
@@ -598,7 +601,7 @@ mod tests {
 
         let ParsedSlotsResult {
             slots_count, slots, ..
-        } = parse_and_count_slots(&view, None, "node").unwrap();
+        } = parse_and_count_slots(&view, None, "node", None).unwrap();
         assert_eq!(slots_count, 4001);
         assert_eq!(slots[0].master(), "node:6379");
     }
@@ -635,8 +638,8 @@ mod tests {
             ),
         ]);
 
-        let res1 = parse_and_count_slots(&view1, None, "node1").unwrap();
-        let res2 = parse_and_count_slots(&view2, None, "node3").unwrap();
+        let res1 = parse_and_count_slots(&view1, None, "node1", None).unwrap();
+        let res2 = parse_and_count_slots(&view2, None, "node3", None).unwrap();
 
         assert_eq!(
             calculate_hash(&(res1.slots_count, &res1.slots)),
@@ -683,7 +686,7 @@ mod tests {
                 slots_count,
                 slots,
                 address_to_ip_map,
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(slots_count, 16384);
             assert_eq!(slots.len(), 1);
@@ -730,7 +733,7 @@ mod tests {
                 slots_count,
                 slots,
                 address_to_ip_map,
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(slots_count, 16384);
             assert_eq!(slots.len(), 1);
@@ -769,7 +772,7 @@ mod tests {
                 slots_count,
                 slots,
                 address_to_ip_map,
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(slots_count, 16384);
             assert_eq!(slots.len(), 1);
@@ -801,7 +804,7 @@ mod tests {
             slots,
             address_to_ip_map,
             ..
-        } = parse_and_count_slots(&view, None, "fallback").unwrap();
+        } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
         assert_eq!(slots[0].master(), "node1:6379");
         assert!(address_to_ip_map.is_empty());
@@ -822,7 +825,7 @@ mod tests {
 
             let ParsedSlotsResult {
                 address_to_ip_map, ..
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(address_to_ip_map.len(), 1);
             assert_eq!(
@@ -847,7 +850,7 @@ mod tests {
                 slots,
                 address_to_ip_map,
                 ..
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(slots[0].master(), "node1.example.com:6379");
             assert!(address_to_ip_map.is_empty());
@@ -901,7 +904,7 @@ mod tests {
                 slots_count,
                 slots,
                 address_to_ip_map,
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(slots_count, 16384);
             assert_eq!(slots.len(), 3);
@@ -938,7 +941,7 @@ mod tests {
 
             let ParsedSlotsResult {
                 address_to_ip_map, ..
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(address_to_ip_map.len(), 1);
             assert_eq!(
@@ -1054,6 +1057,7 @@ mod tests {
             None,
             queried_nodes,
             ReadFromReplicaStrategy::AlwaysFromPrimary,
+            None,
         )
         .unwrap();
         let res = collect_shard_addrs(&topology_view);
@@ -1077,6 +1081,7 @@ mod tests {
             None,
             queried_nodes,
             ReadFromReplicaStrategy::AlwaysFromPrimary,
+            None,
         );
         assert!(topology_view.is_err());
     }
@@ -1096,6 +1101,7 @@ mod tests {
             None,
             queried_nodes,
             ReadFromReplicaStrategy::AlwaysFromPrimary,
+            None,
         )
         .unwrap();
         let res = collect_shard_addrs(&topology_view);
@@ -1119,6 +1125,7 @@ mod tests {
             None,
             queried_nodes,
             ReadFromReplicaStrategy::AlwaysFromPrimary,
+            None,
         )
         .unwrap();
         let res = collect_shard_addrs(&topology_view);
@@ -1143,6 +1150,7 @@ mod tests {
             None,
             queried_nodes,
             ReadFromReplicaStrategy::AlwaysFromPrimary,
+            None,
         )
         .unwrap();
         let res = collect_shard_addrs(&topology_view);
@@ -1167,11 +1175,72 @@ mod tests {
             None,
             queried_nodes,
             ReadFromReplicaStrategy::AlwaysFromPrimary,
+            None,
         )
         .unwrap();
         let res = collect_shard_addrs(&topology_view);
         let node_1 = get_node_addr("node1", 6379);
         let expected = vec![node_1];
         assert_eq!(res, expected);
+    }
+
+    /// A test implementation of AddressResolver that transforms addresses
+    /// by appending a suffix to the host.
+    #[derive(Debug)]
+    struct TestAddressResolver {
+        prefix: String,
+    }
+
+    impl TestAddressResolver {
+        fn new(prefix: &str) -> Self {
+            Self {
+                prefix: prefix.to_string(),
+            }
+        }
+    }
+
+    impl crate::types::AddressResolver for TestAddressResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            (format!("{}{}", self.prefix, host), port)
+        }
+    }
+
+    #[test]
+    fn parse_slots_with_address_resolver_transforms_addresses() {
+        // Create a resolver that appends ".resolved" to all hostnames
+        let resolver: Arc<dyn crate::types::AddressResolver> =
+            Arc::new(TestAddressResolver::new("resolved."));
+
+        // Create slot data with a primary and replica
+        let view = Value::Array(vec![slot_value_with_replicas(
+            0,
+            16383,
+            vec![("primary.example.com", 6379), ("replica.example.com", 6380)],
+        )]);
+
+        // Parse without resolver - addresses should be unchanged
+        let result_without_resolver = parse_and_count_slots(&view, None, "fallback", None).unwrap();
+        assert_eq!(result_without_resolver.slots.len(), 1);
+        assert_eq!(
+            result_without_resolver.slots[0].master(),
+            "primary.example.com:6379"
+        );
+        assert_eq!(
+            result_without_resolver.slots[0].replicas(),
+            &["replica.example.com:6380".to_string()]
+        );
+
+        // Parse with resolver - addresses should be transformed
+        let result_with_resolver =
+            parse_and_count_slots(&view, None, "fallback", Some(&resolver)).unwrap();
+        assert_eq!(result_with_resolver.slots.len(), 1);
+        assert_eq!(
+            result_with_resolver.slots[0].master(),
+            "resolved.primary.example.com:6379"
+        );
+        assert_eq!(
+            result_with_resolver.slots[0].replicas(),
+            &["resolved.replica.example.com:6380".to_string()]
+        );
     }
 }
