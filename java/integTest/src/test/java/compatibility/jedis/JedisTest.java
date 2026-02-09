@@ -1678,8 +1678,7 @@ public class JedisTest {
 
         // Test subscribe to multiple channels
         assertDoesNotThrow(
-                () -> jedis.subscribe(channel1, channel2),
-                "SUBSCRIBE should complete without exception");
+                () -> jedis.subscribe(channel1, channel2), "SUBSCRIBE should complete without exception");
 
         // Test unsubscribe from specific channel
         assertDoesNotThrow(
@@ -1721,8 +1720,7 @@ public class JedisTest {
 
         // Test psubscribe to multiple patterns
         assertDoesNotThrow(
-                () -> jedis.psubscribe(pattern1, pattern2),
-                "PSUBSCRIBE should complete without exception");
+                () -> jedis.psubscribe(pattern1, pattern2), "PSUBSCRIBE should complete without exception");
 
         // Test punsubscribe from specific pattern
         assertDoesNotThrow(
@@ -1764,7 +1762,8 @@ public class JedisTest {
 
         // Subscribe to multiple channels
         assertDoesNotThrow(
-                () -> jedis.subscribe(channel1, channel2), "SUBSCRIBE to multiple channels should complete");
+                () -> jedis.subscribe(channel1, channel2),
+                "SUBSCRIBE to multiple channels should complete");
 
         // Unsubscribe from one channel
         assertDoesNotThrow(
@@ -1772,8 +1771,7 @@ public class JedisTest {
 
         // Unsubscribe from all remaining channels
         assertDoesNotThrow(
-                () -> jedis.unsubscribe(new String[0]),
-                "UNSUBSCRIBE from all channels should complete");
+                () -> jedis.unsubscribe(new String[0]), "UNSUBSCRIBE from all channels should complete");
 
         // Note: To receive messages from subscriptions, configure the client with
         // StandaloneSubscriptionConfiguration or ClusterSubscriptionConfiguration at creation time.
@@ -1791,13 +1789,11 @@ public class JedisTest {
 
         // Unsubscribe from one pattern
         assertDoesNotThrow(
-                () -> jedis.punsubscribe(pattern1),
-                "PUNSUBSCRIBE from specific pattern should complete");
+                () -> jedis.punsubscribe(pattern1), "PUNSUBSCRIBE from specific pattern should complete");
 
         // Unsubscribe from all remaining patterns
         assertDoesNotThrow(
-                () -> jedis.punsubscribe(new String[0]),
-                "PUNSUBSCRIBE from all patterns should complete");
+                () -> jedis.punsubscribe(new String[0]), "PUNSUBSCRIBE from all patterns should complete");
 
         // Note: To receive messages via pattern subscriptions, configure the client with
         // subscription configuration at creation time.

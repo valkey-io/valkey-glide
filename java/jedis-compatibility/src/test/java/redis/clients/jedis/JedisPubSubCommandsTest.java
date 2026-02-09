@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Test;
  *
  * <ul>
  *   <li>{@code publish()} returns {@code 0} (subscriber count not provided by underlying API)
- *   <li>{@code subscribe()/psubscribe()} use GLIDE's dynamic subscription APIs to add channels/patterns
- *       at runtime
+ *   <li>{@code subscribe()/psubscribe()} use GLIDE's dynamic subscription APIs to add
+ *       channels/patterns at runtime
  *   <li>{@code unsubscribe()/punsubscribe()} use GLIDE's dynamic APIs to remove channels/patterns
  *   <li>All subscription methods are non-blocking and add/remove from desired subscription state
  *   <li>For message callbacks, configure {@code StandaloneSubscriptionConfiguration} or {@code
