@@ -1255,6 +1255,7 @@ func (suite *GlideTestSuite) TestUnsubscribeSpecificChannels() {
 	_, exists = state.ActualSubscriptions[models.Exact][channel3]
 	assert.True(suite.T(), exists)
 }
+
 func (suite *GlideTestSuite) TestPUnsubscribeSpecificPatterns() {
 	ctx := context.Background()
 	pattern1 := "pattern1_*"
