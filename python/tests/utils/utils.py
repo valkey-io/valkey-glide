@@ -98,9 +98,8 @@ from glide_sync import TGlideClient as TSyncGlideClient
 from glide_sync.logger import Level as SyncLogLevel
 from packaging import version
 
-from tests.utils.pubsub_test_utils import new_message as _new_message
-
 from tests.utils.cluster import ValkeyCluster
+from tests.utils.pubsub_test_utils import new_message as _new_message
 
 TAnyGlideClient = Union[TGlideClient, TSyncGlideClient]
 
