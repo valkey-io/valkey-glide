@@ -86,7 +86,6 @@ public class PubSubTests {
         Async
     }
 
-    // TODO protocol version
     @SneakyThrows
     @SuppressWarnings("unchecked")
     private <M extends ChannelMode> BaseClient createClientWithSubscriptions(
@@ -94,56 +93,63 @@ public class PubSubTests {
             Map<M, Set<GlideString>> subscriptions,
             Optional<MessageCallback> callback,
             Optional<Object> context) {
-        if (standalone) {
-            var subConfigBuilder =
-                    StandaloneSubscriptionConfiguration.builder()
-                            .subscriptions((Map<PubSubChannelMode, Set<GlideString>>) subscriptions);
-
-            if (callback.isPresent()) {
-                subConfigBuilder.callback(callback.get(), context.get());
-            }
-            var client =
-                    GlideClient.createClient(
-                                    commonClientConfig()
-                                            .requestTimeout(5000)
-                                            .subscriptionConfiguration(subConfigBuilder.build())
-                                            .build())
-                            .get();
-            listeners.put(client, subscriptions);
-            return client;
-        } else {
-            var subConfigBuilder =
-                    ClusterSubscriptionConfiguration.builder()
-                            .subscriptions((Map<PubSubClusterChannelMode, Set<GlideString>>) subscriptions);
-
-            if (callback.isPresent()) {
-                subConfigBuilder.callback(callback.get(), context.get());
-            }
-
-            var client =
-                    GlideClusterClient.createClient(
-                                    commonClusterClientConfig()
-                                            .requestTimeout(5000)
-                                            .subscriptionConfiguration(subConfigBuilder.build())
-                                            .build())
-                            .get();
-            listeners.put(client, subscriptions);
-            return client;
-        }
-    }
-
-    private <M extends ChannelMode> BaseClient createClientWithSubscriptions(
-            boolean standalone, Map<M, Set<GlideString>> subscriptions) {
-        var client =
-                createClientWithSubscriptions(
-                        standalone, subscriptions, Optional.empty(), Optional.empty());
+        BaseClient client =
+                standalone
+                        ? createStandaloneClientWithConfig(subscriptions, callback, context)
+                        : createClusterClientWithConfig(subscriptions, callback, context);
         listeners.put(client, subscriptions);
         return client;
     }
 
     @SneakyThrows
+    @SuppressWarnings("unchecked")
+    private <M extends ChannelMode> GlideClient createStandaloneClientWithConfig(
+            Map<M, Set<GlideString>> subscriptions,
+            Optional<MessageCallback> callback,
+            Optional<Object> context) {
+        var builder =
+                StandaloneSubscriptionConfiguration.builder()
+                        .subscriptions((Map<PubSubChannelMode, Set<GlideString>>) subscriptions);
+        if (callback.isPresent()) {
+            builder.callback(callback.get(), context.get());
+        }
+        return GlideClient.createClient(
+                        commonClientConfig()
+                                .requestTimeout(5000)
+                                .subscriptionConfiguration(builder.build())
+                                .build())
+                .get();
+    }
+
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    private <M extends ChannelMode> GlideClusterClient createClusterClientWithConfig(
+            Map<M, Set<GlideString>> subscriptions,
+            Optional<MessageCallback> callback,
+            Optional<Object> context) {
+        var builder =
+                ClusterSubscriptionConfiguration.builder()
+                        .subscriptions((Map<PubSubClusterChannelMode, Set<GlideString>>) subscriptions);
+        if (callback.isPresent()) {
+            builder.callback(callback.get(), context.get());
+        }
+        return GlideClusterClient.createClient(
+                        commonClusterClientConfig()
+                                .requestTimeout(5000)
+                                .subscriptionConfiguration(builder.build())
+                                .build())
+                .get();
+    }
+
+    private <M extends ChannelMode> BaseClient createClientWithSubscriptions(
+            boolean standalone, Map<M, Set<GlideString>> subscriptions) {
+        return createClientWithSubscriptions(
+                standalone, subscriptions, Optional.empty(), Optional.empty());
+    }
+
+    @SneakyThrows
     private BaseClient createClient(boolean standalone) {
-        var client =
+        BaseClient client =
                 standalone
                         ? GlideClient.createClient(commonClientConfig().build()).get()
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -153,22 +159,28 @@ public class PubSubTests {
 
     @SneakyThrows
     private BaseClient createClientWithEmptySubscriptionConfig(boolean standalone) {
-        var client =
-                standalone
-                        ? GlideClient.createClient(
-                                        commonClientConfig()
-                                                .subscriptionConfiguration(
-                                                        StandaloneSubscriptionConfiguration.builder().build())
-                                                .build())
-                                .get()
-                        : GlideClusterClient.createClient(
-                                        commonClusterClientConfig()
-                                                .subscriptionConfiguration(
-                                                        ClusterSubscriptionConfiguration.builder().build())
-                                                .build())
-                                .get();
+        BaseClient client =
+                standalone ? createStandaloneClientWithEmptyConfig() : createClusterClientWithEmptyConfig();
         senders.add(client);
         return client;
+    }
+
+    @SneakyThrows
+    private GlideClient createStandaloneClientWithEmptyConfig() {
+        return GlideClient.createClient(
+                        commonClientConfig()
+                                .subscriptionConfiguration(StandaloneSubscriptionConfiguration.builder().build())
+                                .build())
+                .get();
+    }
+
+    @SneakyThrows
+    private GlideClusterClient createClusterClientWithEmptyConfig() {
+        return GlideClusterClient.createClient(
+                        commonClusterClientConfig()
+                                .subscriptionConfiguration(ClusterSubscriptionConfiguration.builder().build())
+                                .build())
+                .get();
     }
 
     @SneakyThrows
@@ -188,25 +200,14 @@ public class PubSubTests {
 
     @SneakyThrows
     private GlideClient createStandaloneClientWithEmptySubscriptions() {
-        GlideClient client =
-                GlideClient.createClient(
-                                commonClientConfig()
-                                        .subscriptionConfiguration(
-                                                StandaloneSubscriptionConfiguration.builder().build())
-                                        .build())
-                        .get();
+        GlideClient client = createStandaloneClientWithEmptyConfig();
         listeners.put(client, Map.of());
         return client;
     }
 
     @SneakyThrows
     private GlideClusterClient createClusterClientWithEmptySubscriptions() {
-        GlideClusterClient client =
-                GlideClusterClient.createClient(
-                                commonClusterClientConfig()
-                                        .subscriptionConfiguration(ClusterSubscriptionConfiguration.builder().build())
-                                        .build())
-                        .get();
+        GlideClusterClient client = createClusterClientWithEmptyConfig();
         listeners.put(client, Map.of());
         return client;
     }
@@ -215,14 +216,7 @@ public class PubSubTests {
     private GlideClient createStandaloneClientWithSubscriptions(
             Map<PubSubChannelMode, Set<GlideString>> subscriptions) {
         GlideClient client =
-                GlideClient.createClient(
-                                commonClientConfig()
-                                        .subscriptionConfiguration(
-                                                StandaloneSubscriptionConfiguration.builder()
-                                                        .subscriptions(subscriptions)
-                                                        .build())
-                                        .build())
-                        .get();
+                createStandaloneClientWithConfig(subscriptions, Optional.empty(), Optional.empty());
         listeners.put(client, subscriptions);
         return client;
     }
@@ -231,14 +225,7 @@ public class PubSubTests {
     private GlideClusterClient createClusterClientWithSubscriptions(
             Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions) {
         GlideClusterClient client =
-                GlideClusterClient.createClient(
-                                commonClusterClientConfig()
-                                        .subscriptionConfiguration(
-                                                ClusterSubscriptionConfiguration.builder()
-                                                        .subscriptions(subscriptions)
-                                                        .build())
-                                        .build())
-                        .get();
+                createClusterClientWithConfig(subscriptions, Optional.empty(), Optional.empty());
         listeners.put(client, subscriptions);
         return client;
     }
@@ -256,6 +243,16 @@ public class PubSubTests {
             return;
         }
 
+        subscribeToExactChannels(client, method, subscriptions);
+        subscribeToPatternChannels(client, method, subscriptions);
+        subscribeToShardedChannels(client, method, subscriptions);
+    }
+
+    @SneakyThrows
+    private void subscribeToExactChannels(
+            BaseClient client,
+            SubscriptionMethod method,
+            Map<? extends ChannelMode, Set<GlideString>> subscriptions) {
         Set<GlideString> exactChannels = subscriptions.get(exact(client instanceof GlideClient));
         if (exactChannels != null && !exactChannels.isEmpty()) {
             Set<String> channels =
@@ -267,7 +264,13 @@ public class PubSubTests {
                 client.subscribe(channels, 5000).get();
             }
         }
+    }
 
+    @SneakyThrows
+    private void subscribeToPatternChannels(
+            BaseClient client,
+            SubscriptionMethod method,
+            Map<? extends ChannelMode, Set<GlideString>> subscriptions) {
         Set<GlideString> patternChannels = subscriptions.get(pattern(client instanceof GlideClient));
         if (patternChannels != null && !patternChannels.isEmpty()) {
             Set<String> patterns =
@@ -279,7 +282,13 @@ public class PubSubTests {
                 client.psubscribe(patterns, 5000).get();
             }
         }
+    }
 
+    @SneakyThrows
+    private void subscribeToShardedChannels(
+            BaseClient client,
+            SubscriptionMethod method,
+            Map<? extends ChannelMode, Set<GlideString>> subscriptions) {
         if (client instanceof GlideClusterClient) {
             Set<GlideString> shardedChannels = subscriptions.get(PubSubClusterChannelMode.SHARDED);
             if (shardedChannels != null && !shardedChannels.isEmpty()) {
@@ -313,59 +322,68 @@ public class PubSubTests {
     @AfterEach
     @SneakyThrows
     public void cleanup() {
+        unsubscribeAllListeners();
+        closeAllClients();
+        pubsubMessageQueue.clear();
+    }
+
+    @SneakyThrows
+    private void unsubscribeAllListeners() {
         for (var pair : listeners.entrySet()) {
             var client = pair.getKey();
             var subscriptionTypes = pair.getValue();
             if (client instanceof GlideClusterClient) {
-                for (var subscription : subscriptionTypes.entrySet()) {
-                    var channels = subscription.getValue().toArray(GlideString[]::new);
-                    for (GlideString channel : channels) {
-                        switch ((PubSubClusterChannelMode) subscription.getKey()) {
-                            case EXACT:
-                                ((GlideClusterClient) client)
-                                        .customCommand(new GlideString[] {gs("unsubscribe"), channel})
-                                        .get();
-                                break;
-                            case PATTERN:
-                                ((GlideClusterClient) client)
-                                        .customCommand(new GlideString[] {gs("punsubscribe"), channel})
-                                        .get();
-                                break;
-                            case SHARDED:
-                                ((GlideClusterClient) client)
-                                        .customCommand(new GlideString[] {gs("sunsubscribe"), channel})
-                                        .get();
-                                break;
-                        }
-                    }
-                }
+                unsubscribeClusterClient((GlideClusterClient) client, subscriptionTypes);
             } else {
-                for (var subscription : subscriptionTypes.entrySet()) {
-                    var channels = subscription.getValue().toArray(GlideString[]::new);
-                    switch ((PubSubChannelMode) subscription.getKey()) {
-                        case EXACT:
-                            ((GlideClient) client)
-                                    .customCommand(ArrayUtils.addFirst(channels, gs("unsubscribe")))
-                                    .get();
-                            break;
-                        case PATTERN:
-                            ((GlideClient) client)
-                                    .customCommand(ArrayUtils.addFirst(channels, gs("punsubscribe")))
-                                    .get();
-                            break;
-                    }
+                unsubscribeStandaloneClient((GlideClient) client, subscriptionTypes);
+            }
+        }
+        Thread.sleep(200); // Wait for unsubscribe commands to fully propagate
+        listeners.clear();
+    }
+
+    @SneakyThrows
+    private void unsubscribeClusterClient(
+            GlideClusterClient client, Map<? extends ChannelMode, Set<GlideString>> subscriptionTypes) {
+        for (var subscription : subscriptionTypes.entrySet()) {
+            var channels = subscription.getValue().toArray(GlideString[]::new);
+            for (GlideString channel : channels) {
+                switch ((PubSubClusterChannelMode) subscription.getKey()) {
+                    case EXACT:
+                        client.customCommand(new GlideString[] {gs("unsubscribe"), channel}).get();
+                        break;
+                    case PATTERN:
+                        client.customCommand(new GlideString[] {gs("punsubscribe"), channel}).get();
+                        break;
+                    case SHARDED:
+                        client.customCommand(new GlideString[] {gs("sunsubscribe"), channel}).get();
+                        break;
                 }
             }
         }
-        // Wait for unsubscribe commands to fully propagate
-        Thread.sleep(200);
+    }
 
-        listeners.clear();
+    @SneakyThrows
+    private void unsubscribeStandaloneClient(
+            GlideClient client, Map<? extends ChannelMode, Set<GlideString>> subscriptionTypes) {
+        for (var subscription : subscriptionTypes.entrySet()) {
+            var channels = subscription.getValue().toArray(GlideString[]::new);
+            switch ((PubSubChannelMode) subscription.getKey()) {
+                case EXACT:
+                    client.customCommand(ArrayUtils.addFirst(channels, gs("unsubscribe"))).get();
+                    break;
+                case PATTERN:
+                    client.customCommand(ArrayUtils.addFirst(channels, gs("punsubscribe"))).get();
+                    break;
+            }
+        }
+    }
+
+    private void closeAllClients() {
         for (var client : senders) {
             client.close();
         }
         senders.clear();
-        pubsubMessageQueue.clear();
     }
 
     @SneakyThrows
@@ -373,25 +391,42 @@ public class PubSubTests {
             Set<Pair<Integer, PubSubMessage>> pubsubMessages,
             BaseClient listener,
             MessageReadMethod method) {
-        if (method == MessageReadMethod.Callback) {
-            assertEquals(pubsubMessages, new HashSet<>(pubsubMessageQueue));
-        } else if (method == MessageReadMethod.Async) {
-            var received = new HashSet<PubSubMessage>(pubsubMessages.size());
-            CompletableFuture<PubSubMessage> messagePromise;
-            while ((messagePromise = listener.getPubSubMessage()).isDone()) {
-                received.add(messagePromise.get());
-            }
-            assertEquals(
-                    pubsubMessages.stream().map(Pair::getValue).collect(Collectors.toSet()), received);
-        } else { // Sync
-            var received = new HashSet<PubSubMessage>(pubsubMessages.size());
-            PubSubMessage message;
-            while ((message = listener.tryGetPubSubMessage()) != null) {
-                received.add(message);
-            }
-            assertEquals(
-                    pubsubMessages.stream().map(Pair::getValue).collect(Collectors.toSet()), received);
+        switch (method) {
+            case Callback:
+                verifyCallbackMessages(pubsubMessages);
+                break;
+            case Async:
+                verifyAsyncMessages(pubsubMessages, listener);
+                break;
+            case Sync:
+                verifySyncMessages(pubsubMessages, listener);
+                break;
         }
+    }
+
+    private void verifyCallbackMessages(Set<Pair<Integer, PubSubMessage>> pubsubMessages) {
+        assertEquals(pubsubMessages, new HashSet<>(pubsubMessageQueue));
+    }
+
+    @SneakyThrows
+    private void verifyAsyncMessages(
+            Set<Pair<Integer, PubSubMessage>> pubsubMessages, BaseClient listener) {
+        var received = new HashSet<PubSubMessage>(pubsubMessages.size());
+        CompletableFuture<PubSubMessage> messagePromise;
+        while ((messagePromise = listener.getPubSubMessage()).isDone()) {
+            received.add(messagePromise.get());
+        }
+        assertEquals(pubsubMessages.stream().map(Pair::getValue).collect(Collectors.toSet()), received);
+    }
+
+    private void verifySyncMessages(
+            Set<Pair<Integer, PubSubMessage>> pubsubMessages, BaseClient listener) {
+        var received = new HashSet<PubSubMessage>(pubsubMessages.size());
+        PubSubMessage message;
+        while ((message = listener.tryGetPubSubMessage()) != null) {
+            received.add(message);
+        }
+        assertEquals(pubsubMessages.stream().map(Pair::getValue).collect(Collectors.toSet()), received);
     }
 
     /**
@@ -437,29 +472,44 @@ public class PubSubTests {
                     : createClientWithSubscriptions(standalone, subscriptions);
         }
 
-        if (withCallback) {
-            return standalone
-                    ? GlideClient.createClient(
-                                    commonClientConfig()
-                                            .requestTimeout(5000)
-                                            .subscriptionConfiguration(
-                                                    StandaloneSubscriptionConfiguration.builder()
-                                                            .callback(callback, pubsubMessageQueue)
-                                                            .build())
-                                            .build())
-                            .join()
-                    : GlideClusterClient.createClient(
-                                    commonClusterClientConfig()
-                                            .requestTimeout(5000)
-                                            .subscriptionConfiguration(
-                                                    ClusterSubscriptionConfiguration.builder()
-                                                            .callback(callback, pubsubMessageQueue)
-                                                            .build())
-                                            .build())
-                            .join();
-        } else {
-            return createClientWithEmptySubscriptionConfig(standalone);
-        }
+        return withCallback
+                ? createClientWithCallbackOnly(standalone, callback)
+                : createClientWithEmptySubscriptionConfig(standalone);
+    }
+
+    @SneakyThrows
+    private BaseClient createClientWithCallbackOnly(boolean standalone, MessageCallback callback) {
+        BaseClient client =
+                standalone
+                        ? createStandaloneClientWithCallback(callback)
+                        : createClusterClientWithCallback(callback);
+        return client;
+    }
+
+    @SneakyThrows
+    private GlideClient createStandaloneClientWithCallback(MessageCallback callback) {
+        return GlideClient.createClient(
+                        commonClientConfig()
+                                .requestTimeout(5000)
+                                .subscriptionConfiguration(
+                                        StandaloneSubscriptionConfiguration.builder()
+                                                .callback(callback, pubsubMessageQueue)
+                                                .build())
+                                .build())
+                .join();
+    }
+
+    @SneakyThrows
+    private GlideClusterClient createClusterClientWithCallback(MessageCallback callback) {
+        return GlideClusterClient.createClient(
+                        commonClusterClientConfig()
+                                .requestTimeout(5000)
+                                .subscriptionConfiguration(
+                                        ClusterSubscriptionConfiguration.builder()
+                                                .callback(callback, pubsubMessageQueue)
+                                                .build())
+                                .build())
+                .join();
     }
 
     // TODO why `publish` returns 0 on cluster or > 1 on standalone when there is only 1 receiver???
@@ -1977,82 +2027,84 @@ public class PubSubTests {
     @ValueSource(booleans = {true, false})
     @SneakyThrows
     public void dynamic_subscribe_lazy(boolean standalone) {
-        try (BaseClient listener = createClient(standalone);
-                BaseClient sender = createClient(standalone)) {
-            String channel = "test-channel-" + UUID.randomUUID();
-            String message = "test-message";
+        executeWithClients(
+                standalone,
+                (listener, sender) -> {
+                    String channel = "test-channel-" + UUID.randomUUID();
+                    String message = "test-message";
 
-            // Dynamic subscribe (lazy)
-            Set<String> channels = Set.of(channel);
-            listener.subscribe(channels).get();
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+                    // Dynamic subscribe (lazy)
+                    Set<String> channels = Set.of(channel);
+                    listener.subscribe(channels).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            // Publish message
-            sender.publish(message, channel).get();
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+                    // Publish message
+                    sender.publish(message, channel).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            // Receive message
-            PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
-            assertEquals(message, msg.getMessage().getString());
-            assertEquals(channel, msg.getChannel().getString());
-        }
+                    // Receive message
+                    PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
+                    assertEquals(message, msg.getMessage().getString());
+                    assertEquals(channel, msg.getChannel().getString());
+                });
     }
 
     @SneakyThrows
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void dynamic_psubscribe_lazy(boolean standalone) {
-        try (BaseClient listener = createClient(standalone);
-                BaseClient sender = createClient(standalone)) {
-            String pattern = "test-pattern-*";
-            String channel = "test-pattern-" + UUID.randomUUID();
-            String message = "test-message";
+        executeWithClients(
+                standalone,
+                (listener, sender) -> {
+                    String pattern = "test-pattern-*";
+                    String channel = "test-pattern-" + UUID.randomUUID();
+                    String message = "test-message";
 
-            // Dynamic psubscribe (lazy)
-            Set<String> patterns = Set.of(pattern);
-            listener.psubscribe(patterns).get();
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+                    // Dynamic psubscribe (lazy)
+                    Set<String> patterns = Set.of(pattern);
+                    listener.psubscribe(patterns).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            // Publish message
-            sender.publish(message, channel).get();
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+                    // Publish message
+                    sender.publish(message, channel).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            // Receive message
-            PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
-            assertEquals(message, msg.getMessage().getString());
-            assertEquals(channel, msg.getChannel().getString());
-            assertTrue(msg.getPattern().isPresent());
-            assertEquals(pattern, msg.getPattern().get().getString());
-        }
+                    // Receive message
+                    PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
+                    assertEquals(message, msg.getMessage().getString());
+                    assertEquals(channel, msg.getChannel().getString());
+                    assertTrue(msg.getPattern().isPresent());
+                    assertEquals(pattern, msg.getPattern().get().getString());
+                });
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     @SneakyThrows
     public void dynamic_unsubscribe(boolean standalone) {
-        try (BaseClient listener = createClient(standalone);
-                BaseClient sender = createClient(standalone)) {
-            String channel = "test-channel-" + UUID.randomUUID();
-            String message = "test-message";
+        executeWithClients(
+                standalone,
+                (listener, sender) -> {
+                    String channel = "test-channel-" + UUID.randomUUID();
+                    String message = "test-message";
 
-            // Subscribe
-            Set<String> channels = Set.of(channel);
-            listener.subscribe(channels).get();
+                    // Subscribe
+                    Set<String> channels = Set.of(channel);
+                    listener.subscribe(channels).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+                    // Unsubscribe
+                    listener.unsubscribe(channels).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            // Unsubscribe
-            listener.unsubscribe(channels).get();
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+                    // Publish message
+                    sender.publish(message, channel).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            // Publish message
-            sender.publish(message, channel).get();
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
-
-            // Should not receive message
-            PubSubMessage msg = listener.tryGetPubSubMessage();
-            assertNull(msg);
-        }
+                    // Should not receive message
+                    PubSubMessage msg = listener.tryGetPubSubMessage();
+                    assertNull(msg);
+                });
     }
 
     @Test
@@ -2060,25 +2112,25 @@ public class PubSubTests {
     public void dynamic_ssubscribe_lazy() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
-        try (GlideClusterClient listener = (GlideClusterClient) createClient(false);
-                GlideClusterClient sender = (GlideClusterClient) createClient(false)) {
-            String channel = "test-shard-channel-" + UUID.randomUUID();
-            String message = "test-message";
+        executeWithClusterClients(
+                (listener, sender) -> {
+                    String channel = "test-shard-channel-" + UUID.randomUUID();
+                    String message = "test-message";
 
-            // Dynamic ssubscribe (lazy)
-            Set<String> channels = Set.of(channel);
-            listener.ssubscribe(channels).get();
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+                    // Dynamic ssubscribe (lazy)
+                    Set<String> channels = Set.of(channel);
+                    listener.ssubscribe(channels).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            // Publish message
-            sender.publish(message, channel, true).get();
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+                    // Publish message
+                    sender.publish(message, channel, true).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            // Receive message
-            PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
-            assertEquals(message, msg.getMessage().getString());
-            assertEquals(channel, msg.getChannel().getString());
-        }
+                    // Receive message
+                    PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
+                    assertEquals(message, msg.getMessage().getString());
+                    assertEquals(channel, msg.getChannel().getString());
+                });
     }
 
     @Test
@@ -2086,27 +2138,53 @@ public class PubSubTests {
     public void dynamic_sunsubscribe() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
+        executeWithClusterClients(
+                (listener, sender) -> {
+                    String channel = "test-shard-channel-" + UUID.randomUUID();
+                    String message = "test-message";
+
+                    // Subscribe
+                    Set<String> channels = Set.of(channel);
+                    listener.ssubscribe(channels).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+                    // Unsubscribe
+                    listener.sunsubscribe(channels).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+                    // Publish message
+                    sender.publish(message, channel, true).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+                    // Should not receive message
+                    PubSubMessage msg = listener.tryGetPubSubMessage();
+                    assertNull(msg);
+                });
+    }
+
+    @FunctionalInterface
+    private interface ClientTestAction {
+        void execute(BaseClient listener, BaseClient sender) throws Exception;
+    }
+
+    @FunctionalInterface
+    private interface ClusterClientTestAction {
+        void execute(GlideClusterClient listener, GlideClusterClient sender) throws Exception;
+    }
+
+    @SneakyThrows
+    private void executeWithClients(boolean standalone, ClientTestAction action) {
+        try (BaseClient listener = createClient(standalone);
+                BaseClient sender = createClient(standalone)) {
+            action.execute(listener, sender);
+        }
+    }
+
+    @SneakyThrows
+    private void executeWithClusterClients(ClusterClientTestAction action) {
         try (GlideClusterClient listener = (GlideClusterClient) createClient(false);
                 GlideClusterClient sender = (GlideClusterClient) createClient(false)) {
-            String channel = "test-shard-channel-" + UUID.randomUUID();
-            String message = "test-message";
-
-            // Subscribe
-            Set<String> channels = Set.of(channel);
-            listener.ssubscribe(channels).get();
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
-
-            // Unsubscribe
-            listener.sunsubscribe(channels).get();
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
-
-            // Publish message
-            sender.publish(message, channel, true).get();
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
-
-            // Should not receive message
-            PubSubMessage msg = listener.tryGetPubSubMessage();
-            assertNull(msg);
+            action.execute(listener, sender);
         }
     }
 
@@ -2176,20 +2254,7 @@ public class PubSubTests {
     @SneakyThrows
     public void test_subscription_metrics_in_statistics(boolean standalone) {
         try (BaseClient client = createClient(standalone)) {
-            // Get initial statistics
-            Map<String, String> stats = client.getStatistics();
-
-            // Verify subscription metrics exist
-            assertTrue(stats.containsKey("subscription_out_of_sync_count"));
-            assertTrue(stats.containsKey("subscription_last_sync_timestamp"));
-
-            // Verify they are valid numbers
-            long outOfSyncCount = Long.parseLong(stats.get("subscription_out_of_sync_count"));
-            long lastSyncTimestamp = Long.parseLong(stats.get("subscription_last_sync_timestamp"));
-
-            // Verify they are non-negative
-            assertTrue(outOfSyncCount >= 0);
-            assertTrue(lastSyncTimestamp >= 0);
+            verifySubscriptionMetricsExist(client);
         }
     }
 
@@ -2222,6 +2287,22 @@ public class PubSubTests {
             client.unsubscribe().get();
             Thread.sleep(100);
         }
+    }
+
+    private void verifySubscriptionMetricsExist(BaseClient client) {
+        Map<String, String> stats = client.getStatistics();
+
+        // Verify subscription metrics exist
+        assertTrue(stats.containsKey("subscription_out_of_sync_count"));
+        assertTrue(stats.containsKey("subscription_last_sync_timestamp"));
+
+        // Verify they are valid numbers
+        long outOfSyncCount = Long.parseLong(stats.get("subscription_out_of_sync_count"));
+        long lastSyncTimestamp = Long.parseLong(stats.get("subscription_last_sync_timestamp"));
+
+        // Verify they are non-negative
+        assertTrue(outOfSyncCount >= 0);
+        assertTrue(lastSyncTimestamp >= 0);
     }
 
     @Test
