@@ -579,6 +579,22 @@ func (c *ClientType) String() string {
 	return []string{"StandaloneClient", "ClusterClient"}[*c]
 }
 
+// Get the string representation of the message read method
+func (m MessageReadMethod) String() string {
+	switch m {
+	case CallbackMethod:
+		return "Callback"
+	case WaitForMessageMethod:
+		return "WaitForMessage"
+	case SignalChannelMethod:
+		return "SignalChannel"
+	case SyncLoopMethod:
+		return "SyncLoop"
+	default:
+		return "Unknown"
+	}
+}
+
 func (suite *GlideTestSuite) createAnyClient(clientType ClientType, subscription any) interfaces.BaseClientCommands {
 	switch clientType {
 	case StandaloneClient:
