@@ -16,6 +16,35 @@ def new_message(msg: PubSubMsg, context: Any) -> None:
     received_messages.append(msg)
 
 
+def wait_for_messages(
+    expected_count: int, messages: List[PubSubMsg], timeout: float = 3.0
+) -> List[PubSubMsg]:
+    """
+    Wait for expected number of messages to arrive in callback list.
+
+    Args:
+        expected_count: Number of messages to wait for
+        messages: List that callback appends to
+        timeout: Maximum time to wait in seconds
+
+    Returns:
+        List of messages received
+
+    Raises:
+        TimeoutError: If expected messages don't arrive in time
+    """
+    import time
+
+    start = time.time()
+    while len(messages) < expected_count:
+        if time.time() - start > timeout:
+            raise TimeoutError(
+                f"Timeout waiting for {expected_count} messages, got {len(messages)}"
+            )
+        time.sleep(0.1)
+    return messages[:expected_count]
+
+
 # Shared test constants
 class PubSubTestConstants:
     """Constants used across pubsub tests."""
