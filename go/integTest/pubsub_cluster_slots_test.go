@@ -12,7 +12,7 @@ import (
 )
 
 // TestSSubscribeChannelsDifferentSlots tests subscribing to sharded channels
-// in different hash slots (cluster only, Redis 7.0+)
+// in different hash slots (cluster only, Valkey 7.0+)
 func (suite *GlideTestSuite) TestSSubscribeChannelsDifferentSlots() {
 	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
@@ -90,7 +90,7 @@ func (suite *GlideTestSuite) TestSSubscribeChannelsDifferentSlots() {
 }
 
 // TestSUnsubscribeChannelsDifferentSlots tests unsubscribing from sharded channels
-// in different hash slots (cluster only, Redis 7.0+)
+// in different hash slots (cluster only, Valkey 7.0+)
 func (suite *GlideTestSuite) TestSUnsubscribeChannelsDifferentSlots() {
 	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 

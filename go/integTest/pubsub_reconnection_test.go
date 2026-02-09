@@ -169,7 +169,7 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillPatterns() {
 }
 
 // TestResubscribeAfterConnectionKillSharded tests that sharded subscriptions
-// are restored after connection kill (cluster only, Redis 7.0+)
+// are restored after connection kill (cluster only, Valkey 7.0+)
 func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillSharded() {
 	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 

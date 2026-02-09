@@ -106,7 +106,8 @@ class BaseClient(CoreCommands):
         )
 
         # Always create pubsub callback to support dynamic subscriptions
-        # This enables reconciliation to work even without initial subscriptions
+        # This ensures messages are always handled by the wrapper, whether they originate
+        # from configured subscriptions or from dynamic subscriptions added at runtime
         python_callback = self._create_push_handle_callback()
         pubsub_callback = self._ffi.callback("PubSubCallback", python_callback)
         # Store reference to prevent garbage collection

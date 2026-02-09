@@ -262,10 +262,10 @@ public class PubSubTests {
                     exactChannels.stream().map(GlideString::getString).collect(Collectors.toSet());
             if (method == SubscriptionMethod.Lazy) {
                 client.subscribe(channels).get();
+                Thread.sleep(MESSAGE_DELIVERY_DELAY);
             } else {
                 client.subscribe(channels, 5000).get();
             }
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
         }
 
         Set<GlideString> patternChannels = subscriptions.get(pattern(client instanceof GlideClient));
@@ -274,10 +274,10 @@ public class PubSubTests {
                     patternChannels.stream().map(GlideString::getString).collect(Collectors.toSet());
             if (method == SubscriptionMethod.Lazy) {
                 client.psubscribe(patterns).get();
+                Thread.sleep(MESSAGE_DELIVERY_DELAY);
             } else {
                 client.psubscribe(patterns, 5000).get();
             }
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
         }
 
         if (client instanceof GlideClusterClient) {
@@ -287,10 +287,10 @@ public class PubSubTests {
                         shardedChannels.stream().map(GlideString::getString).collect(Collectors.toSet());
                 if (method == SubscriptionMethod.Lazy) {
                     ((GlideClusterClient) client).ssubscribe(channels).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
                 } else {
                     ((GlideClusterClient) client).ssubscribe(channels, 5000).get();
                 }
-                Thread.sleep(MESSAGE_DELIVERY_DELAY);
             }
         }
     }

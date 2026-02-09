@@ -9937,6 +9937,8 @@ func (client *baseClient) Unsubscribe(ctx context.Context, channels []string, ti
 }
 
 // UnsubscribeLazy unsubscribes the client from the specified channels (non-blocking).
+// This command updates the client's internal desired subscription state without waiting
+// for server confirmation. It returns immediately after updating the local state.
 // If no channels are specified (nil), unsubscribes from all exact channels.
 //
 // Parameters:
@@ -9985,6 +9987,8 @@ func (client *baseClient) PUnsubscribe(ctx context.Context, patterns []string, t
 }
 
 // PUnsubscribeLazy unsubscribes the client from the specified patterns (non-blocking).
+// This command updates the client's internal desired subscription state without waiting
+// for server confirmation. It returns immediately after updating the local state.
 // If no patterns are specified (nil), unsubscribes from all patterns.
 //
 // Parameters:

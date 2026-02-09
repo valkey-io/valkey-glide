@@ -2637,7 +2637,7 @@ func (client *ClusterClient) UnwatchWithOptions(ctx context.Context, route optio
 // This command updates the client's internal desired subscription state and waits
 // for server confirmation.
 //
-// Sharded pubsub is only available in cluster mode and requires Redis 7.0+.
+// Sharded pubsub is only available in cluster mode and requires Valkey 7.0+.
 //
 // Parameters:
 //
@@ -2666,7 +2666,7 @@ func (client *ClusterClient) SSubscribe(ctx context.Context, channels []string, 
 // This command updates the client's internal desired subscription state without waiting
 // for server confirmation. It returns immediately after updating the local state.
 //
-// Sharded pubsub is only available in cluster mode and requires Redis 7.0+.
+// Sharded pubsub is only available in cluster mode and requires Valkey 7.0+.
 //
 // Parameters:
 //

@@ -88,29 +88,33 @@ def sync_subscribe_by_method(
     sharded: Optional[Set[str]] = None,
 ) -> None:
     """
-    Subscribe to channels/patterns using the specified method (Lazy or Blocking).
+    Subscribe to channels/patterns using the specified method (Config, Lazy, or Blocking).
     For Config method, does nothing (subscriptions already set at client creation).
+    For Lazy method, uses non-blocking lazy subscribe methods.
+    For Blocking method, uses blocking subscribe with timeout.
     """
     if subscription_method == SubscriptionMethod.Config:
         return  # Already subscribed at creation
 
-    # For sync, timeout_ms=0 means non-blocking (lazy), >0 means blocking
-    timeout_ms = 5000 if subscription_method == SubscriptionMethod.Blocking else 0
-
-    # Subscribe to exact channels
-    if channels:
-        client.subscribe(channels, timeout_ms)
-
-    # Subscribe to patterns
-    if patterns:
-        client.psubscribe(patterns, timeout_ms)
-
-    # Subscribe to sharded channels (cluster only)
-    if cluster_mode and sharded:
-        client.ssubscribe(sharded, timeout_ms)  # type: ignore[union-attr]
-
-    # Wait for subscription to propagate
-    time.sleep(0.5)
+    if subscription_method == SubscriptionMethod.Lazy:
+        # Use lazy (non-blocking) subscribe methods
+        if channels:
+            client.subscribe_lazy(channels)
+        if patterns:
+            client.psubscribe_lazy(patterns)
+        if cluster_mode and sharded:
+            client.ssubscribe_lazy(sharded)  # type: ignore[union-attr]
+        # Wait for lazy subscription to propagate
+        time.sleep(0.5)
+    else:  # Blocking
+        # Use blocking subscribe with timeout - no sleep needed
+        timeout_ms = 5000
+        if channels:
+            client.subscribe(channels, timeout_ms)
+        if patterns:
+            client.psubscribe(patterns, timeout_ms)
+        if cluster_mode and sharded:
+            client.ssubscribe(sharded, timeout_ms)  # type: ignore[union-attr]
 
 
 def create_two_clients_with_pubsub(
