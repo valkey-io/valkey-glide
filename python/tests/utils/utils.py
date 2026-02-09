@@ -12,6 +12,7 @@ from typing import (
     Mapping,
     Optional,
     Set,
+    TypeAlias,
     TypeVar,
     Union,
     cast,
@@ -1819,15 +1820,15 @@ class MessageReadMethod(IntEnum):
 
 
 # Type alias for PubSubChannelModes
-ClusterPubSubModes = GlideClusterClientConfiguration.PubSubChannelModes
-StandalonePubSubModes = GlideClientConfiguration.PubSubChannelModes
+ClusterPubSubModes: TypeAlias = GlideClusterClientConfiguration.PubSubChannelModes
+StandalonePubSubModes: TypeAlias = GlideClientConfiguration.PubSubChannelModes
 
 
 def get_pubsub_modes(
-    client: TGlideClient,
+    client: Union[TGlideClient, TSyncGlideClient],
 ) -> Any:
     """Get the appropriate PubSubChannelModes enum for the client type."""
-    if isinstance(client, GlideClusterClient):
+    if isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
         return GlideClusterClientConfiguration.PubSubChannelModes
     return GlideClientConfiguration.PubSubChannelModes
 
@@ -2393,7 +2394,11 @@ def create_sync_pubsub_client(
     from tests.sync_tests.conftest import create_sync_client
 
     # Build subscription modes for both cluster and standalone
-    modes = get_pubsub_modes(cluster_mode)
+    if cluster_mode:
+        modes = GlideClusterClientConfiguration.PubSubChannelModes
+    else:
+        modes = GlideClientConfiguration.PubSubChannelModes
+
     subscription_modes = {
         modes.Exact: channels or set(),
         modes.Pattern: patterns or set(),
