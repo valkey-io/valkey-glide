@@ -2381,66 +2381,6 @@ async def pubsub_client_cleanup(
             raise cleanup_error
 
 
-def create_sync_pubsub_client(
-    request,
-    cluster_mode: bool,
-    channels: Optional[Set[str]] = None,
-    patterns: Optional[Set[str]] = None,
-    sharded: Optional[Set[str]] = None,
-    callback=None,
-    context=None,
-):
-    """Create a sync client with pubsub configuration."""
-    from tests.sync_tests.conftest import create_sync_client
-
-    # Build subscription modes for both cluster and standalone
-    if cluster_mode:
-        modes = GlideClusterClientConfiguration.PubSubChannelModes
-    else:
-        modes = GlideClientConfiguration.PubSubChannelModes
-
-    subscription_modes = {
-        modes.Exact: channels or set(),
-        modes.Pattern: patterns or set(),
-    }
-
-    # Add sharded mode only for cluster
-    if cluster_mode and hasattr(modes, "Sharded"):
-        subscription_modes[modes.Sharded] = sharded or set()
-
-    # Always create subscription to enable pubsub (even if empty)
-    # Pass the same modes dict for both cluster and standalone
-    if cluster_mode:
-        subscription = create_pubsub_subscription(
-            cluster_mode,
-            subscription_modes,  # cluster_channels_and_patterns
-            {},  # standalone_channels_and_patterns (not used)
-            callback,
-            context,
-        )
-    else:
-        subscription = create_pubsub_subscription(
-            cluster_mode,
-            {},  # cluster_channels_and_patterns (not used)
-            subscription_modes,  # standalone_channels_and_patterns
-            callback,
-            context,
-        )
-
-    if cluster_mode:
-        return create_sync_client(
-            request,
-            cluster_mode,
-            cluster_mode_pubsub=subscription,
-        )
-    else:
-        return create_sync_client(
-            request,
-            cluster_mode,
-            standalone_mode_pubsub=subscription,
-        )
-
-
 def sync_pubsub_client_cleanup(client):
     """Cleanup sync pubsub client."""
     if client:

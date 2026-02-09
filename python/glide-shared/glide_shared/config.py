@@ -977,10 +977,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
                 ]
                 for channel_pattern in channels_patterns:
                     entry.channels_or_patterns.append(str.encode(channel_pattern))
-        else:
-            # Create empty pubsub subscriptions to enable dynamic subscriptions
-            # This ensures the core creates a synchronizer even without initial subscriptions
-            pass  # The protobuf field exists by default, just leave it empty
+        # else: Create empty pubsub subscriptions to enable dynamic subscriptions
+        # The protobuf field exists by default, just leave it empty
 
         return request
 

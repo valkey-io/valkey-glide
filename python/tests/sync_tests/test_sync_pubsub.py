@@ -24,12 +24,11 @@ from glide_sync import (
 )
 from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 
-from tests.sync_tests.conftest import create_sync_client
+from tests.sync_tests.conftest import create_sync_client, create_sync_pubsub_client
 from tests.utils.pubsub_test_utils import PubSubTestConstants
 from tests.utils.utils import (
     SubscriptionMethod,
     create_pubsub_subscription,
-    create_sync_pubsub_client,
     decode_pubsub_msg,
     get_pubsub_modes,
     get_random_string,
