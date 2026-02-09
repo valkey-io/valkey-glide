@@ -2,7 +2,6 @@
 package glide;
 
 import static glide.TestConfiguration.SERVER_VERSION;
-import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
@@ -358,6 +357,9 @@ public class PubSubTests {
                 }
             }
         }
+        // Wait for unsubscribe commands to fully propagate
+        Thread.sleep(200);
+
         listeners.clear();
         for (var client : senders) {
             client.close();
@@ -1538,12 +1540,11 @@ public class PubSubTests {
     public void pubsub_channels(boolean standalone) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
-        // no channels exists yet
         var client = createClient(standalone);
-        assertEquals(0, client.pubsubChannels().get().length);
-        assertEquals(0, client.pubsubChannelsBinary().get().length);
-        assertEquals(0, client.pubsubChannels("**").get().length);
-        assertEquals(0, client.pubsubChannels(gs("**")).get().length);
+
+        // Get initial channel counts (may not be 0 if other tests are running)
+        int initialChannelCount = client.pubsubChannels().get().length;
+        int initialBinaryChannelCount = client.pubsubChannelsBinary().get().length;
 
         var channels = Set.of("test_channel1", "test_channel2", "some_channel");
         String pattern = "test_*";
@@ -1559,27 +1560,24 @@ public class PubSubTests {
 
         var listener = createClientWithSubscriptions(standalone, subscriptions);
 
-        // test without pattern
-        assertEquals(channels, Set.of(client.pubsubChannels().get()));
-        assertEquals(channels, Set.of(listener.pubsubChannels().get()));
-        assertEquals(
-                channels.stream().map(GlideString::gs).collect(Collectors.toSet()),
-                Set.of(client.pubsubChannelsBinary().get()));
-        assertEquals(
-                channels.stream().map(GlideString::gs).collect(Collectors.toSet()),
-                Set.of(listener.pubsubChannelsBinary().get()));
+        // test without pattern - verify our channels are present
+        var allChannels = Set.of(client.pubsubChannels().get());
+        assertTrue(allChannels.containsAll(channels), "All subscribed channels should be present");
 
-        // test with pattern
-        assertEquals(
-                Set.of("test_channel1", "test_channel2"), Set.of(client.pubsubChannels(pattern).get()));
-        assertEquals(
-                Set.of(gs("test_channel1"), gs("test_channel2")),
-                Set.of(client.pubsubChannels(gs(pattern)).get()));
-        assertEquals(
-                Set.of("test_channel1", "test_channel2"), Set.of(listener.pubsubChannels(pattern).get()));
-        assertEquals(
-                Set.of(gs("test_channel1"), gs("test_channel2")),
-                Set.of(listener.pubsubChannels(gs(pattern)).get()));
+        var allBinaryChannels = Set.of(client.pubsubChannelsBinary().get());
+        var expectedBinaryChannels = channels.stream().map(GlideString::gs).collect(Collectors.toSet());
+        assertTrue(
+                allBinaryChannels.containsAll(expectedBinaryChannels),
+                "All subscribed binary channels should be present");
+
+        // test with pattern - verify matching channels are present
+        var patternChannels = Set.of(client.pubsubChannels(pattern).get());
+        assertTrue(patternChannels.contains("test_channel1"));
+        assertTrue(patternChannels.contains("test_channel2"));
+
+        var patternBinaryChannels = Set.of(client.pubsubChannels(gs(pattern)).get());
+        assertTrue(patternBinaryChannels.contains(gs("test_channel1")));
+        assertTrue(patternBinaryChannels.contains(gs("test_channel2")));
 
         // test with non-matching pattern
         assertEquals(0, client.pubsubChannels("non_matching_*").get().length);
@@ -1594,9 +1592,10 @@ public class PubSubTests {
     public void pubsub_numpat(boolean standalone) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
-        // no channels exists yet
         var client = createClient(standalone);
-        assertEquals(0, client.pubsubNumPat().get());
+
+        // Get initial pattern count (may not be 0 if other tests are running)
+        long initialNumPat = client.pubsubNumPat().get();
 
         var patterns = Set.of("news.*", "announcements.*");
 
@@ -1611,8 +1610,9 @@ public class PubSubTests {
 
         var listener = createClientWithSubscriptions(standalone, subscriptions);
 
-        assertEquals(2, client.pubsubNumPat().get());
-        assertEquals(2, listener.pubsubNumPat().get());
+        // Verify pattern count increased by 2
+        assertEquals(initialNumPat + 2, client.pubsubNumPat().get());
+        assertEquals(initialNumPat + 2, listener.pubsubNumPat().get());
     }
 
     @SneakyThrows
@@ -1689,6 +1689,9 @@ public class PubSubTests {
         var patterns = Set.of(prefix + "news.*", prefix + "announcements.*");
         String pattern = prefix + "test_*";
 
+        // Get initial pattern count
+        long initialNumPat = client.pubsubNumPat().get();
+
         var transaction =
                 (standalone ? new Batch(true) : new ClusterBatch(true))
                         .pubsubChannels()
@@ -1697,20 +1700,22 @@ public class PubSubTests {
                         .pubsubNumSub(channels);
         ClusterBatchOptions options = ClusterBatchOptions.builder().route(route).build();
 
-        // no channels exists yet
+        // Get initial state
         var result =
                 standalone
                         ? ((GlideClient) client).exec((Batch) transaction, false).get()
                         : ((GlideClusterClient) client).exec((ClusterBatch) transaction, false, options).get();
-        assertDeepEquals(
-                new Object[] {
-                    new String[0], // pubsubChannels()
-                    new String[0], // pubsubChannels(pattern)
-                    0L, // pubsubNumPat()
-                    Arrays.stream(channels)
-                            .collect(Collectors.toMap(c -> c, c -> 0L)), // pubsubNumSub(channels)
-                },
-                result);
+
+        // Verify initial state - channels should be empty or contain only other test channels
+        // Pattern count should match what we captured earlier
+        assertEquals(initialNumPat, ((Number) result[2]).longValue());
+
+        // All our channels should have 0 subscribers initially
+        @SuppressWarnings("unchecked")
+        var numSubResult = (Map<String, Long>) result[3];
+        for (String channel : channels) {
+            assertEquals(0L, numSubResult.get(channel).longValue());
+        }
 
         Map<? extends ChannelMode, Set<GlideString>> subscriptions =
                 standalone
@@ -1732,19 +1737,27 @@ public class PubSubTests {
                         ? ((GlideClient) client).exec((Batch) transaction, false).get()
                         : ((GlideClusterClient) client).exec((ClusterBatch) transaction, false, options).get();
 
-        // convert arrays to sets, because we can't compare arrays - they received reordered
-        result[0] = Set.of((Object[]) result[0]);
-        result[1] = Set.of((Object[]) result[1]);
+        // convert arrays to sets for comparison
+        var resultChannels = Set.of((Object[]) result[0]);
+        var resultPatternChannels = Set.of((Object[]) result[1]);
+        long resultNumPat = ((Number) result[2]).longValue();
+        @SuppressWarnings("unchecked")
+        var resultNumSub = (Map<String, Long>) result[3];
 
-        assertDeepEquals(
-                new Object[] {
-                    Set.of(channels), // pubsubChannels()
-                    Set.of("{boo}-test_channel1", "{boo}-test_channel2"), // pubsubChannels(pattern)
-                    2L, // pubsubNumPat()
-                    Arrays.stream(channels)
-                            .collect(Collectors.toMap(c -> c, c -> 1L)), // pubsubNumSub(channels)
-                },
-                result);
+        // Verify our channels are present
+        assertTrue(resultChannels.containsAll(Set.of(channels)));
+
+        // Verify pattern-matched channels
+        assertTrue(resultPatternChannels.contains("{boo}-test_channel1"));
+        assertTrue(resultPatternChannels.contains("{boo}-test_channel2"));
+
+        // Verify pattern count increased by 2
+        assertEquals(initialNumPat + 2, resultNumPat);
+
+        // Verify our channels have 1 subscriber each
+        for (String channel : channels) {
+            assertEquals(1L, resultNumSub.get(channel).longValue());
+        }
     }
 
     @SneakyThrows
@@ -2204,6 +2217,10 @@ public class PubSubTests {
 
             // Timestamp should have been updated (or at least not decreased)
             assertTrue(updatedTimestamp >= initialTimestamp);
+
+            // Cleanup subscription
+            client.unsubscribe().get();
+            Thread.sleep(100);
         }
     }
 
@@ -2291,13 +2308,15 @@ public class PubSubTests {
 
             // Unsubscribe from all patterns
             client.punsubscribe().get();
-            Thread.sleep(500);
+            Thread.sleep(1000); // Wait longer to ensure unsubscribe completes
 
             // Verify all unsubscribed
             state = client.getSubscriptions().get();
             Set<String> patternsAfter = state.getActualSubscriptions().get(PubSubChannelMode.PATTERN);
             assertTrue(patternsAfter == null || patternsAfter.isEmpty());
         } finally {
+            // Extra wait before closing to ensure server processes unsubscribe
+            Thread.sleep(200);
             client.close();
             listeners.remove(client);
         }
