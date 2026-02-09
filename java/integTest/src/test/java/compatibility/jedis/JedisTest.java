@@ -3471,7 +3471,12 @@ public class JedisTest {
 
             AccessControlUser userInfo = jedis.aclGetUser(username);
             assertNotNull(userInfo);
-            assertTrue(userInfo.toString().contains(username));
+            assertFalse(userInfo.getFlags().isEmpty());
+            assertTrue(userInfo.getFlags().contains("on"));
+            assertNotNull(userInfo.getCommands());
+            assertTrue(userInfo.getCommands().contains("+get"));
+            assertTrue(userInfo.getCommands().contains("+set"));
+            assertFalse(userInfo.getKeys().isEmpty());
 
             AccessControlUser nonExistent = jedis.aclGetUser("nonexistent_user_12345");
             assertNull(nonExistent);
