@@ -4226,15 +4226,6 @@ class TestSyncPubSub:
             SubscriptionMethod.Blocking,
         ],
     )
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize(
-        "subscription_method",
-        [
-            SubscriptionMethod.Config,
-            SubscriptionMethod.Lazy,
-            SubscriptionMethod.Blocking,
-        ],
-    )
     def test_sync_resubscribe_after_connection_kill_patterns(
         self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
     ):
