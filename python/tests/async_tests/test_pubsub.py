@@ -3895,6 +3895,7 @@ class TestPubSub:
             channel2 = "channel2_repeated_failures"
             username = f"{PubSubTestConstants.ACL_TEST_USERNAME_PREFIX}_repeated"
             password = f"{PubSubTestConstants.ACL_TEST_PASSWORD_PREFIX}_repeated"
+            interval_ms = 500
 
             admin_client = await create_client(request, cluster_mode)
 
@@ -3918,7 +3919,11 @@ class TestPubSub:
             else:
                 await admin_client.custom_command(acl_create_command)
 
-            listening_client = await create_client(request, cluster_mode)
+            listening_client = await create_pubsub_client(
+                request,
+                cluster_mode,
+                reconciliation_interval_ms=interval_ms,
+            )
 
             if cluster_mode:
                 await cast(GlideClusterClient, listening_client).custom_command(
@@ -3937,16 +3942,19 @@ class TestPubSub:
             for channel in channels:
                 try:
                     await subscribe_by_method(
-                        listening_client, {channel}, subscription_method
+                        listening_client,
+                        {channel},
+                        subscription_method,
+                        timeout_ms=2000,
                     )
                 except GlideTimeoutError:
-                    # Expected for blocking method
+                    # Expected - ACL blocks subscription, blocking method times out
                     pass
 
-            # Give time for async reconciliation to run and intrease the metric
-            await anyio.sleep(0.5)
+            # Wait for at least 2 reconciliation cycles (2 * 500ms = 1000ms + buffer)
+            await anyio.sleep(1.5)
 
-            # Check that out-of-sync increased multiple times
+            # Check that out-of-sync metric increased
             stats = await listening_client.get_statistics()
             out_of_sync_count = int(stats.get("subscription_out_of_sync_count", "0"))
 

@@ -2866,8 +2866,15 @@ public class PubSubTests {
         listeners.put(client, Map.of());
 
         try {
+            // Wait for initial sync to complete (up to 5 attempts with 100ms intervals)
             Map<String, String> initialStats = client.getStatistics();
             long initialTs = Long.parseLong(initialStats.get("subscription_last_sync_timestamp"));
+
+            for (int i = 0; i < 5 && initialTs == 0; i++) {
+                Thread.sleep(100);
+                initialStats = client.getStatistics();
+                initialTs = Long.parseLong(initialStats.get("subscription_last_sync_timestamp"));
+            }
 
             long firstSyncTs = pollForTimestampChange(client, initialTs, timeoutSec, pollIntervalMs);
             long secondSyncTs = pollForTimestampChange(client, firstSyncTs, timeoutSec, pollIntervalMs);
