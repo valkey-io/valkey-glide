@@ -1,6 +1,7 @@
 import json
 import random
 import string
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from enum import IntEnum
@@ -12,11 +13,15 @@ from typing import (
     Mapping,
     Optional,
     Set,
-    TypeAlias,
     TypeVar,
     Union,
     cast,
 )
+
+if sys.version_info >= (3, 10):
+    from typing import TypeAlias
+else:
+    from typing_extensions import TypeAlias
 
 import anyio
 import pytest

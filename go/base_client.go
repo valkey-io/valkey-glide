@@ -78,6 +78,10 @@ func (client *baseClient) GetQueue() (*PubSubMessageQueue, error) {
 	if client.getMessageHandler() == nil {
 		return nil, errors.New("no subscriptions configured for this client")
 	}
+	// If a callback is configured, the queue should not be used
+	if client.getMessageHandler().callback != nil {
+		return nil, errors.New("cannot get queue for callback-only client")
+	}
 	return client.getMessageHandler().GetQueue(), nil
 }
 

@@ -683,7 +683,7 @@ func (suite *GlideTestSuite) TestCallbackOnlyRaisesErrorOnGetMethods() {
 	channel := "callback_only_channel"
 	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
 
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, true, LazyMethod, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, true, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	client := receiver.(*glide.Client)
