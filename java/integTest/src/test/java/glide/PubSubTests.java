@@ -2876,17 +2876,12 @@ public class PubSubTests {
                 initialTs = Long.parseLong(initialStats.get("subscription_last_sync_timestamp"));
             }
 
-            // Small delay to ensure we're not in the middle of a sync cycle
-            Thread.sleep(200);
+            // Wait for a full sync cycle to complete to get a stable baseline
+            // This ensures we're not measuring from mid-cycle
+            long baselineTs = pollForTimestampChange(client, initialTs, timeoutSec, pollIntervalMs);
 
-            // Re-read timestamp after delay to get a stable baseline
-            initialStats = client.getStatistics();
-            initialTs = Long.parseLong(initialStats.get("subscription_last_sync_timestamp"));
-
-            // Wait for first sync event after baseline
-            long firstSyncTs = pollForTimestampChange(client, initialTs, timeoutSec, pollIntervalMs);
-
-            // Wait for second sync event
+            // Now measure two consecutive sync intervals from this stable baseline
+            long firstSyncTs = pollForTimestampChange(client, baselineTs, timeoutSec, pollIntervalMs);
             long secondSyncTs = pollForTimestampChange(client, firstSyncTs, timeoutSec, pollIntervalMs);
 
             long actualIntervalMs = secondSyncTs - firstSyncTs;
