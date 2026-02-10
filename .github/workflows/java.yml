@@ -280,7 +280,7 @@ jobs:
               with:
                   distribution: "temurin"
                   java-version: 11
-            
+
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
               with:
