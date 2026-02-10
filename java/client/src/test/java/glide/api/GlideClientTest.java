@@ -2024,8 +2024,7 @@ public class GlideClientTest {
     @SneakyThrows
     @Test
     public void mget_binary_with_large_values_returns_null_for_missing_keys() {
-        // Test for issue #5275: large binary data causes MGET to yield GlideString "nil" instead
-        // of null for missing key
+        // Test for large binary data with mget command
         
         // Create 16KB of data to trigger DirectByteBuffer path
         byte[] largeData = new byte[16 * 1024];
