@@ -724,26 +724,15 @@ func (suite *GlideTestSuite) TestReconciliationIntervalSupport() {
 		return 0, fmt.Errorf("sync timestamp did not change within %.1fs. Previous: %d", timeoutSec, previousTs)
 	}
 
-	// Get initial timestamp and wait for it to be non-zero
+	// Get initial timestamp (may be 0 if sync hasn't happened yet)
 	initialStats := client.GetStatistics()
 	initialTs := int64(initialStats["subscription_last_sync_timestamp"])
 
-	// Wait for initial sync to complete (up to 10 attempts with 100ms intervals)
-	for i := 0; i < 10 && initialTs == 0; i++ {
-		time.Sleep(time.Duration(pollIntervalMs) * time.Millisecond)
-		initialStats = client.GetStatistics()
-		initialTs = int64(initialStats["subscription_last_sync_timestamp"])
-	}
-
-	// Wait for a full sync cycle to complete to get a stable baseline
-	// This ensures we're not measuring from mid-cycle
-	baselineTs, err := pollForTimestampChange(initialTs)
+	// Wait for first sync event (if initialTs is 0, this waits for first sync)
+	firstSyncTs, err := pollForTimestampChange(initialTs)
 	require.NoError(t, err)
 
-	// Now measure two consecutive sync intervals from this stable baseline
-	firstSyncTs, err := pollForTimestampChange(baselineTs)
-	require.NoError(t, err)
-
+	// Wait for second sync event
 	secondSyncTs, err := pollForTimestampChange(firstSyncTs)
 	require.NoError(t, err)
 
