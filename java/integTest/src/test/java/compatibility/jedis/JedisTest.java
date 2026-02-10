@@ -3779,9 +3779,7 @@ public class JedisTest {
         assertNotNull(entries);
         assertFalse(entries.isEmpty(), "XREADGROUP should return entries");
 
-        String[] ids = entries.stream()
-                .map(e -> e.getID().toString())
-                .toArray(String[]::new);
+        String[] ids = entries.stream().map(e -> e.getID().toString()).toArray(String[]::new);
         long ack = jedis.xack(key, group, ids);
         assertEquals(entries.size(), ack, "XACK should acknowledge all read entries");
     }
@@ -3797,8 +3795,7 @@ public class JedisTest {
         assertNotNull(summary);
         assertTrue(summary.getTotal() >= 0, "XPENDING summary total should be non-negative");
 
-        List<StreamPendingEntry> pending =
-                jedis.xpending(key, group, "-", "+", 10L);
+        List<StreamPendingEntry> pending = jedis.xpending(key, group, "-", "+", 10L);
         assertNotNull(pending);
     }
 

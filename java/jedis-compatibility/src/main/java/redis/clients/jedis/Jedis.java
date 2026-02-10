@@ -6179,9 +6179,7 @@ public final class Jedis implements Closeable {
                 "XADD",
                 () -> {
                     StreamAddOptions opts =
-                            StreamAddOptions.builder()
-                                    .id(id != null ? id.toString() : "*")
-                                    .build();
+                            StreamAddOptions.builder().id(id != null ? id.toString() : "*").build();
                     String result = glideClient.xadd(key, hash, opts).get();
                     return result == null ? null : new StreamEntryID(result);
                 });
@@ -6199,8 +6197,7 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "XADD",
                 () -> {
-                    StreamAddOptions opts =
-                            StreamAddOptions.builder().makeStream(makeStream).build();
+                    StreamAddOptions opts = StreamAddOptions.builder().makeStream(makeStream).build();
                     String result = glideClient.xadd(key, hash, opts).get();
                     return result == null ? null : new StreamEntryID(result);
                 });
@@ -6236,50 +6233,52 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "XRANGE",
                 () -> {
-                    StreamRange s = "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
-                    StreamRange e = "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
+                    StreamRange s =
+                            "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+                    StreamRange e =
+                            "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
                     Map<String, String[][]> raw = glideClient.xrange(key, s, e).get();
                     return toStreamEntryList(raw);
                 });
     }
 
-    /**
-     * Returns up to count entries in the stream in range [start, end]. Uses GLIDE xrange.
-     */
+    /** Returns up to count entries in the stream in range [start, end]. Uses GLIDE xrange. */
     public List<StreamEntry> xrange(String key, String start, String end, long count) {
         return executeCommandWithGlide(
                 "XRANGE",
                 () -> {
-                    StreamRange s = "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
-                    StreamRange e = "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
+                    StreamRange s =
+                            "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+                    StreamRange e =
+                            "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
                     Map<String, String[][]> raw = glideClient.xrange(key, s, e, count).get();
                     return raw == null ? Collections.emptyList() : toStreamEntryList(raw);
                 });
     }
 
-    /**
-     * Returns entries in the stream in reverse order [end, start]. Uses GLIDE xrevrange.
-     */
+    /** Returns entries in the stream in reverse order [end, start]. Uses GLIDE xrevrange. */
     public List<StreamEntry> xrevrange(String key, String end, String start) {
         return executeCommandWithGlide(
                 "XREVRANGE",
                 () -> {
-                    StreamRange e = "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
-                    StreamRange s = "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+                    StreamRange e =
+                            "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
+                    StreamRange s =
+                            "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
                     Map<String, String[][]> raw = glideClient.xrevrange(key, e, s).get();
                     return toStreamEntryList(raw);
                 });
     }
 
-    /**
-     * Returns up to count entries in reverse order. Uses GLIDE xrevrange.
-     */
+    /** Returns up to count entries in reverse order. Uses GLIDE xrevrange. */
     public List<StreamEntry> xrevrange(String key, String end, String start, long count) {
         return executeCommandWithGlide(
                 "XREVRANGE",
                 () -> {
-                    StreamRange e = "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
-                    StreamRange s = "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+                    StreamRange e =
+                            "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
+                    StreamRange s =
+                            "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
                     Map<String, String[][]> raw = glideClient.xrevrange(key, e, s, count).get();
                     return raw == null ? Collections.emptyList() : toStreamEntryList(raw);
                 });
@@ -6308,7 +6307,8 @@ public final class Jedis implements Closeable {
      * @param block block milliseconds (null to omit)
      * @param keysAndIds map of stream key to start id
      */
-    public Map<String, List<StreamEntry>> xread(Long count, Long block, Map<String, String> keysAndIds) {
+    public Map<String, List<StreamEntry>> xread(
+            Long count, Long block, Map<String, String> keysAndIds) {
         return executeCommandWithGlide(
                 "XREAD",
                 () -> {
@@ -6323,32 +6323,25 @@ public final class Jedis implements Closeable {
     /** Trims the stream by max length. Uses GLIDE xtrim. */
     public long xtrim(String key, long maxLen) {
         return executeCommandWithGlide(
-                "XTRIM",
-                () -> glideClient.xtrim(key, new StreamTrimOptions.MaxLen(maxLen)).get());
+                "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MaxLen(maxLen)).get());
     }
 
     /** Trims the stream by max length (exact or approximate). Uses GLIDE xtrim. */
     public long xtrim(String key, long maxLen, boolean exact) {
         return executeCommandWithGlide(
-                "XTRIM",
-                () ->
-                        glideClient
-                                .xtrim(key, new StreamTrimOptions.MaxLen(exact, maxLen))
-                                .get());
+                "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MaxLen(exact, maxLen)).get());
     }
 
     /** Trims the stream by minimum id. Uses GLIDE xtrim. */
     public long xtrim(String key, String minId) {
         return executeCommandWithGlide(
-                "XTRIM",
-                () -> glideClient.xtrim(key, new StreamTrimOptions.MinId(minId)).get());
+                "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MinId(minId)).get());
     }
 
     /** Creates a consumer group. Uses GLIDE xgroupCreate. */
     public String xgroupCreate(String key, String groupName, String id) {
         return executeCommandWithGlide(
-                "XGROUP CREATE",
-                () -> glideClient.xgroupCreate(key, groupName, id).get());
+                "XGROUP CREATE", () -> glideClient.xgroupCreate(key, groupName, id).get());
     }
 
     /** Creates a consumer group, optionally creating the stream. Uses GLIDE xgroupCreate. */
@@ -6358,25 +6351,20 @@ public final class Jedis implements Closeable {
                 () ->
                         glideClient
                                 .xgroupCreate(
-                                        key,
-                                        groupName,
-                                        id,
-                                        StreamGroupOptions.builder().mkStream(makeStream).build())
+                                        key, groupName, id, StreamGroupOptions.builder().mkStream(makeStream).build())
                                 .get());
     }
 
     /** Destroys a consumer group. Uses GLIDE xgroupDestroy. */
     public boolean xgroupDestroy(String key, String groupName) {
         return executeCommandWithGlide(
-                "XGROUP DESTROY",
-                () -> glideClient.xgroupDestroy(key, groupName).get());
+                "XGROUP DESTROY", () -> glideClient.xgroupDestroy(key, groupName).get());
     }
 
     /** Sets the last delivered id of a group. Uses GLIDE xgroupSetId. */
     public String xgroupSetId(String key, String groupName, String id) {
         return executeCommandWithGlide(
-                "XGROUP SETID",
-                () -> glideClient.xgroupSetId(key, groupName, id).get());
+                "XGROUP SETID", () -> glideClient.xgroupSetId(key, groupName, id).get());
     }
 
     /** Creates a consumer in the group. Uses GLIDE xgroupCreateConsumer. */
@@ -6389,8 +6377,7 @@ public final class Jedis implements Closeable {
     /** Deletes a consumer from the group. Uses GLIDE xgroupDelConsumer. */
     public long xgroupDelConsumer(String key, String group, String consumer) {
         return executeCommandWithGlide(
-                "XGROUP DELCONSUMER",
-                () -> glideClient.xgroupDelConsumer(key, group, consumer).get());
+                "XGROUP DELCONSUMER", () -> glideClient.xgroupDelConsumer(key, group, consumer).get());
     }
 
     /**
@@ -6405,19 +6392,13 @@ public final class Jedis implements Closeable {
                 () -> {
                     Map<String, Map<String, String[][]>> raw =
                             glideClient
-                                    .xreadgroup(
-                                            keysAndIds,
-                                            group,
-                                            consumer,
-                                            StreamReadGroupOptions.builder().build())
+                                    .xreadgroup(keysAndIds, group, consumer, StreamReadGroupOptions.builder().build())
                                     .get();
                     return toStreamReadResponse(raw);
                 });
     }
 
-    /**
-     * Reads from streams as a consumer with options. Uses GLIDE xreadgroup.
-     */
+    /** Reads from streams as a consumer with options. Uses GLIDE xreadgroup. */
     public Map<String, List<StreamEntry>> xreadgroup(
             String group,
             String consumer,
@@ -6428,8 +6409,7 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "XREADGROUP",
                 () -> {
-                    StreamReadGroupOptions.StreamReadGroupOptionsBuilder b =
-                            StreamReadGroupOptions.builder();
+                    StreamReadGroupOptions.StreamReadGroupOptionsBuilder b = StreamReadGroupOptions.builder();
                     if (count != null) b.count(count);
                     if (block != null) b.block(block);
                     if (noack) b.noack();
@@ -6454,8 +6434,8 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Returns pending summary for the group. Uses GLIDE xpending.
-     * Converts response to StreamPendingSummary (total, minId, maxId, consumerMessageCount).
+     * Returns pending summary for the group. Uses GLIDE xpending. Converts response to
+     * StreamPendingSummary (total, minId, maxId, consumerMessageCount).
      */
     public StreamPendingSummary xpending(String key, String group) {
         return executeCommandWithGlide(
@@ -6464,12 +6444,10 @@ public final class Jedis implements Closeable {
                     Object[] arr = glideClient.xpending(key, group).get();
                     if (arr == null || arr.length < 4) {
                         return new StreamPendingSummary(
-                                0L,
-                                new StreamEntryID("0-0"),
-                                new StreamEntryID("0-0"),
-                                Collections.emptyMap());
+                                0L, new StreamEntryID("0-0"), new StreamEntryID("0-0"), Collections.emptyMap());
                     }
-                    long total = arr[0] instanceof Long ? (Long) arr[0] : Long.parseLong(String.valueOf(arr[0]));
+                    long total =
+                            arr[0] instanceof Long ? (Long) arr[0] : Long.parseLong(String.valueOf(arr[0]));
                     String minIdStr = String.valueOf(arr[1]);
                     String maxIdStr = String.valueOf(arr[2]);
                     if (minIdStr == null || minIdStr.isEmpty() || "null".equals(minIdStr)) {
@@ -6484,22 +6462,20 @@ public final class Jedis implements Closeable {
                             if (o instanceof Object[] && ((Object[]) o).length >= 2) {
                                 Object[] pair = (Object[]) o;
                                 String name = String.valueOf(pair[0]);
-                                long count = pair[1] instanceof Long ? (Long) pair[1] : Long.parseLong(String.valueOf(pair[1]));
+                                long count =
+                                        pair[1] instanceof Long
+                                                ? (Long) pair[1]
+                                                : Long.parseLong(String.valueOf(pair[1]));
                                 consumerCounts.put(name, count);
                             }
                         }
                     }
                     return new StreamPendingSummary(
-                            total,
-                            new StreamEntryID(minIdStr),
-                            new StreamEntryID(maxIdStr),
-                            consumerCounts);
+                            total, new StreamEntryID(minIdStr), new StreamEntryID(maxIdStr), consumerCounts);
                 });
     }
 
-    /**
-     * Returns pending entries in range. Uses GLIDE xpending.
-     */
+    /** Returns pending entries in range. Uses GLIDE xpending. */
     public List<StreamPendingEntry> xpending(
             String key, String group, StreamRange start, StreamRange end, long count) {
         return executeCommandWithGlide(
@@ -6507,13 +6483,7 @@ public final class Jedis implements Closeable {
                 () -> {
                     Object[][] raw =
                             glideClient
-                                    .xpending(
-                                            key,
-                                            group,
-                                            start,
-                                            end,
-                                            count,
-                                            StreamPendingOptions.builder().build())
+                                    .xpending(key, group, start, end, count, StreamPendingOptions.builder().build())
                                     .get();
                     if (raw == null) return Collections.emptyList();
                     List<StreamPendingEntry> list = new ArrayList<>();
@@ -6521,8 +6491,10 @@ public final class Jedis implements Closeable {
                         if (row != null && row.length >= 4) {
                             StreamEntryID id = new StreamEntryID(String.valueOf(row[0]));
                             String consumer = String.valueOf(row[1]);
-                            long idle = row[2] instanceof Long ? (Long) row[2] : Long.parseLong(String.valueOf(row[2]));
-                            long delivered = row[3] instanceof Long ? (Long) row[3] : Long.parseLong(String.valueOf(row[3]));
+                            long idle =
+                                    row[2] instanceof Long ? (Long) row[2] : Long.parseLong(String.valueOf(row[2]));
+                            long delivered =
+                                    row[3] instanceof Long ? (Long) row[3] : Long.parseLong(String.valueOf(row[3]));
                             list.add(new StreamPendingEntry(id, consumer, idle, delivered));
                         }
                     }
@@ -6530,12 +6502,11 @@ public final class Jedis implements Closeable {
                 });
     }
 
-    /**
-     * Returns pending entries in id range. Uses GLIDE xpending.
-     */
+    /** Returns pending entries in id range. Uses GLIDE xpending. */
     public List<StreamPendingEntry> xpending(
             String key, String group, String start, String end, long count) {
-        StreamRange s = "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+        StreamRange s =
+                "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
         StreamRange e = "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
         return xpending(key, group, s, e, count);
     }
@@ -6570,40 +6541,32 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Auto-claims pending messages. Uses GLIDE xautoclaim.
-     * Returns Object[]: [String nextStartId, List of StreamEntry claimed].
+     * Auto-claims pending messages. Uses GLIDE xautoclaim. Returns Object[]: [String nextStartId,
+     * List of StreamEntry claimed].
      */
     public Object[] xautoclaim(
             String key, String group, String consumer, long minIdleTime, String start) {
         return executeCommandWithGlide(
-                "XAUTOCLAIM",
-                () -> glideClient.xautoclaim(key, group, consumer, minIdleTime, start).get());
+                "XAUTOCLAIM", () -> glideClient.xautoclaim(key, group, consumer, minIdleTime, start).get());
     }
 
-    /**
-     * Auto-claims pending messages with count. Uses GLIDE xautoclaim.
-     */
+    /** Auto-claims pending messages with count. Uses GLIDE xautoclaim. */
     public Object[] xautoclaim(
             String key, String group, String consumer, long minIdleTime, String start, long count) {
         return executeCommandWithGlide(
                 "XAUTOCLAIM",
-                () ->
-                        glideClient
-                                .xautoclaim(key, group, consumer, minIdleTime, start, count)
-                                .get());
+                () -> glideClient.xautoclaim(key, group, consumer, minIdleTime, start, count).get());
     }
 
     /**
-     * Returns stream info. Uses GLIDE xinfoStream.
-     * Returns raw Map; for StreamInfo use {@link #xinfoStreamAsInfo(String)}.
+     * Returns stream info. Uses GLIDE xinfoStream. Returns raw Map; for StreamInfo use {@link
+     * #xinfoStreamAsInfo(String)}.
      */
     public Map<String, Object> xinfoStream(String key) {
         return executeCommandWithGlide("XINFO STREAM", () -> glideClient.xinfoStream(key).get());
     }
 
-    /**
-     * Returns stream info as StreamInfo. Uses GLIDE xinfoStream and converts response.
-     */
+    /** Returns stream info as StreamInfo. Uses GLIDE xinfoStream and converts response. */
     public StreamInfo xinfoStreamAsInfo(String key) {
         return executeCommandWithGlide(
                 "XINFO STREAM",
@@ -6665,7 +6628,8 @@ public final class Jedis implements Closeable {
                         Map<String, Object> converted = new HashMap<>(m);
                         Object lastDelivered = m.get(StreamGroupInfo.LAST_DELIVERED);
                         if (lastDelivered instanceof String) {
-                            converted.put(StreamGroupInfo.LAST_DELIVERED, new StreamEntryID((String) lastDelivered));
+                            converted.put(
+                                    StreamGroupInfo.LAST_DELIVERED, new StreamEntryID((String) lastDelivered));
                         }
                         list.add(new StreamGroupInfo(converted));
                     }

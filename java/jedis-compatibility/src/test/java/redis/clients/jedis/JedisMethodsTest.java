@@ -194,8 +194,7 @@ public class JedisMethodsTest {
         // XADD
         assertNotNull(jedisClass.getMethod("xadd", String.class, Map.class));
         assertNotNull(jedisClass.getMethod("xadd", String.class, StreamEntryID.class, Map.class));
-        assertNotNull(
-                jedisClass.getMethod("xadd", String.class, Map.class, boolean.class));
+        assertNotNull(jedisClass.getMethod("xadd", String.class, Map.class, boolean.class));
 
         // XLEN, XDEL
         assertNotNull(jedisClass.getMethod("xlen", String.class));
@@ -206,17 +205,13 @@ public class JedisMethodsTest {
         assertNotNull(jedisClass.getMethod("xrange", String.class, String.class, String.class));
         assertNotNull(
                 jedisClass.getMethod("xrange", String.class, String.class, String.class, long.class));
+        assertNotNull(jedisClass.getMethod("xrevrange", String.class, String.class, String.class));
         assertNotNull(
-                jedisClass.getMethod("xrevrange", String.class, String.class, String.class));
-        assertNotNull(
-                jedisClass.getMethod(
-                        "xrevrange", String.class, String.class, String.class, long.class));
+                jedisClass.getMethod("xrevrange", String.class, String.class, String.class, long.class));
 
         // XREAD
         assertNotNull(jedisClass.getMethod("xread", Map.class));
-        assertNotNull(
-                jedisClass.getMethod(
-                        "xread", Long.class, Long.class, Map.class));
+        assertNotNull(jedisClass.getMethod("xread", Long.class, Long.class, Map.class));
 
         // XTRIM
         assertNotNull(jedisClass.getMethod("xtrim", String.class, long.class));
@@ -224,29 +219,21 @@ public class JedisMethodsTest {
         assertNotNull(jedisClass.getMethod("xtrim", String.class, String.class));
 
         // XGROUP
-        assertNotNull(
-                jedisClass.getMethod("xgroupCreate", String.class, String.class, String.class));
+        assertNotNull(jedisClass.getMethod("xgroupCreate", String.class, String.class, String.class));
         assertNotNull(
                 jedisClass.getMethod(
                         "xgroupCreate", String.class, String.class, String.class, boolean.class));
+        assertNotNull(jedisClass.getMethod("xgroupDestroy", String.class, String.class));
+        assertNotNull(jedisClass.getMethod("xgroupSetId", String.class, String.class, String.class));
         assertNotNull(
-                jedisClass.getMethod("xgroupDestroy", String.class, String.class));
+                jedisClass.getMethod("xgroupCreateConsumer", String.class, String.class, String.class));
         assertNotNull(
-                jedisClass.getMethod("xgroupSetId", String.class, String.class, String.class));
-        assertNotNull(
-                jedisClass.getMethod(
-                        "xgroupCreateConsumer", String.class, String.class, String.class));
-        assertNotNull(
-                jedisClass.getMethod(
-                        "xgroupDelConsumer", String.class, String.class, String.class));
+                jedisClass.getMethod("xgroupDelConsumer", String.class, String.class, String.class));
 
         // XREADGROUP, XACK
-        assertNotNull(
-                jedisClass.getMethod(
-                        "xreadgroup", String.class, String.class, Map.class));
+        assertNotNull(jedisClass.getMethod("xreadgroup", String.class, String.class, Map.class));
         assertNotNull(jedisClass.getMethod("xack", String.class, String.class, String[].class));
-        assertNotNull(
-                jedisClass.getMethod("xack", String.class, String.class, StreamEntryID[].class));
+        assertNotNull(jedisClass.getMethod("xack", String.class, String.class, StreamEntryID[].class));
 
         // XPENDING
         assertNotNull(jedisClass.getMethod("xpending", String.class, String.class));
@@ -265,20 +252,10 @@ public class JedisMethodsTest {
         // XCLAIM, XAUTOCLAIM
         assertNotNull(
                 jedisClass.getMethod(
-                        "xclaim",
-                        String.class,
-                        String.class,
-                        String.class,
-                        long.class,
-                        String[].class));
+                        "xclaim", String.class, String.class, String.class, long.class, String[].class));
         assertNotNull(
                 jedisClass.getMethod(
-                        "xautoclaim",
-                        String.class,
-                        String.class,
-                        String.class,
-                        long.class,
-                        String.class));
+                        "xautoclaim", String.class, String.class, String.class, long.class, String.class));
         assertNotNull(
                 jedisClass.getMethod(
                         "xautoclaim",
@@ -306,8 +283,7 @@ public class JedisMethodsTest {
         Method xlen = jedisClass.getMethod("xlen", String.class);
         assertEquals(long.class, xlen.getReturnType());
 
-        Method xrange =
-                jedisClass.getMethod("xrange", String.class, String.class, String.class);
+        Method xrange = jedisClass.getMethod("xrange", String.class, String.class, String.class);
         assertEquals(List.class, xrange.getReturnType());
 
         Method xread = jedisClass.getMethod("xread", Map.class);
@@ -325,8 +301,7 @@ public class JedisMethodsTest {
         Method xinfoGroups = jedisClass.getMethod("xinfoGroups", String.class);
         assertEquals(List.class, xinfoGroups.getReturnType());
 
-        Method xinfoConsumers =
-                jedisClass.getMethod("xinfoConsumers", String.class, String.class);
+        Method xinfoConsumers = jedisClass.getMethod("xinfoConsumers", String.class, String.class);
         assertEquals(List.class, xinfoConsumers.getReturnType());
     }
 }
