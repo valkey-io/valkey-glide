@@ -7,9 +7,11 @@ import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
+import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldIncrby;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow;
@@ -41,6 +43,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocketFactory;
@@ -6983,6 +6986,672 @@ public final class Jedis implements Closeable {
     @Deprecated
     public byte[] brpoplpush(final byte[] source, final byte[] destination, int timeout) {
         return blmove(source, destination, ListDirection.RIGHT, ListDirection.LEFT, timeout);
+    }
+
+    // ========================================
+    // Sorted Set Commands
+    // ========================================
+
+    /**
+     * Adds one or more members to a sorted set, or updates the score if it already exists.
+     *
+     * @param key the key of the sorted set
+     * @param score the score of the member
+     * @param member the member to add
+     * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public long zadd(String key, double score, String member) {
+        return executeCommandWithGlide(
+                "ZADD", () -> glideClient.zadd(key, Map.of(member, score)).get());
+    }
+
+    /**
+     * Adds one or more members to a sorted set, or updates the score if it already exists (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param score the score of the member
+     * @param member the member to add
+     * @return the number of elements added to the sorted set
+     */
+    public long zadd(final byte[] key, double score, final byte[] member) {
+        return executeCommandWithGlide(
+                "ZADD",
+                () -> glideClient.zadd(GlideString.of(key), Map.of(GlideString.of(member), score)).get());
+    }
+
+    /**
+     * Adds multiple members to a sorted set, or updates the score if they already exist.
+     *
+     * @param key the key of the sorted set
+     * @param scoreMembers a map of members to their scores
+     * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public long zadd(String key, Map<String, Double> scoreMembers) {
+        return executeCommandWithGlide("ZADD", () -> glideClient.zadd(key, scoreMembers).get());
+    }
+
+    /**
+     * Adds multiple members to a sorted set, or updates the score if they already exist (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param scoreMembers a map of members to their scores
+     * @return the number of elements added to the sorted set
+     */
+    public long zadd(final byte[] key, Map<byte[], Double> scoreMembers) {
+        return executeCommandWithGlide(
+                "ZADD",
+                () -> {
+                    Map<GlideString, Double> glideMap = new HashMap<>();
+                    for (Map.Entry<byte[], Double> entry : scoreMembers.entrySet()) {
+                        glideMap.put(GlideString.of(entry.getKey()), entry.getValue());
+                    }
+                    return glideClient.zadd(GlideString.of(key), glideMap).get();
+                });
+    }
+
+    /**
+     * Increments the score of a member in a sorted set. If the member does not exist, it is added
+     * with the increment as its score.
+     *
+     * @param key the key of the sorted set
+     * @param increment the amount to increment the score by
+     * @param member the member whose score to increment
+     * @return the new score of the member
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public double zaddIncr(String key, double increment, String member) {
+        return executeCommandWithGlide(
+                "ZADD", () -> glideClient.zaddIncr(key, member, increment).get());
+    }
+
+    /**
+     * Increments the score of a member in a sorted set (binary version). If the member does not
+     * exist, it is added with the increment as its score.
+     *
+     * @param key the key of the sorted set
+     * @param increment the amount to increment the score by
+     * @param member the member whose score to increment
+     * @return the new score of the member
+     */
+    public double zaddIncr(final byte[] key, double increment, final byte[] member) {
+        return executeCommandWithGlide(
+                "ZADD",
+                () -> glideClient.zaddIncr(GlideString.of(key), GlideString.of(member), increment).get());
+    }
+
+    /**
+     * Removes one or more members from a sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param members the members to remove
+     * @return the number of members removed from the sorted set
+     * @see <a href="https://valkey.io/commands/zrem/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public long zrem(String key, String... members) {
+        return executeCommandWithGlide("ZREM", () -> glideClient.zrem(key, members).get());
+    }
+
+    /**
+     * Removes one or more members from a sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param members the members to remove
+     * @return the number of members removed from the sorted set
+     */
+    public long zrem(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "ZREM",
+                () -> {
+                    GlideString[] glideMembers = convertToGlideStringArray(members);
+                    return glideClient.zrem(GlideString.of(key), glideMembers).get();
+                });
+    }
+
+    /**
+     * Returns the number of members in a sorted set.
+     *
+     * @param key the key of the sorted set
+     * @return the cardinality (number of elements) of the sorted set, or 0 if key does not exist
+     * @see <a href="https://valkey.io/commands/zcard/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public long zcard(String key) {
+        return executeCommandWithGlide("ZCARD", () -> glideClient.zcard(key).get());
+    }
+
+    /**
+     * Returns the number of members in a sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @return the cardinality (number of elements) of the sorted set, or 0 if key does not exist
+     */
+    public long zcard(final byte[] key) {
+        return executeCommandWithGlide("ZCARD", () -> glideClient.zcard(GlideString.of(key)).get());
+    }
+
+    /**
+     * Returns the score of a member in a sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose score to return
+     * @return the score of the member, or null if the member does not exist
+     * @see <a href="https://valkey.io/commands/zscore/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public Double zscore(String key, String member) {
+        return executeCommandWithGlide("ZSCORE", () -> glideClient.zscore(key, member).get());
+    }
+
+    /**
+     * Returns the score of a member in a sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose score to return
+     * @return the score of the member, or null if the member does not exist
+     */
+    public Double zscore(final byte[] key, final byte[] member) {
+        return executeCommandWithGlide(
+                "ZSCORE", () -> glideClient.zscore(GlideString.of(key), GlideString.of(member)).get());
+    }
+
+    /**
+     * Returns the scores of multiple members in a sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param members the members whose scores to return
+     * @return an array of scores corresponding to the members, with null for non-existing members
+     * @see <a href="https://valkey.io/commands/zmscore/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public List<Double> zmscore(String key, String... members) {
+        return executeCommandWithGlide(
+                "ZMSCORE", () -> Arrays.asList(glideClient.zmscore(key, members).get()));
+    }
+
+    /**
+     * Returns the scores of multiple members in a sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param members the members whose scores to return
+     * @return an array of scores corresponding to the members, with null for non-existing members
+     */
+    public List<Double> zmscore(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "ZMSCORE",
+                () -> {
+                    GlideString[] glideMembers = convertToGlideStringArray(members);
+                    return Arrays.asList(glideClient.zmscore(GlideString.of(key), glideMembers).get());
+                });
+    }
+
+    /**
+     * Returns the specified range of elements in a sorted set, by index.
+     *
+     * @param key the key of the sorted set
+     * @param start the starting index (0-based, can be negative to indicate offset from end)
+     * @param stop the ending index (0-based, can be negative to indicate offset from end)
+     * @return an array of elements in the specified range
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public List<String> zrange(String key, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZRANGE",
+                () -> {
+                    RangeOptions.RangeByIndex rangeQuery = new RangeOptions.RangeByIndex(start, stop);
+                    return Arrays.asList(glideClient.zrange(key, rangeQuery).get());
+                });
+    }
+
+    /**
+     * Returns the specified range of elements in a sorted set, by index (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param start the starting index (0-based, can be negative to indicate offset from end)
+     * @param stop the ending index (0-based, can be negative to indicate offset from end)
+     * @return an array of elements in the specified range
+     */
+    public List<byte[]> zrange(final byte[] key, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZRANGE",
+                () -> {
+                    RangeOptions.RangeByIndex rangeQuery = new RangeOptions.RangeByIndex(start, stop);
+                    GlideString[] result = glideClient.zrange(GlideString.of(key), rangeQuery).get();
+                    return Arrays.stream(result).map(GlideString::getBytes).collect(Collectors.toList());
+                });
+    }
+
+    /**
+     * Returns the specified range of elements with their scores in a sorted set, by index.
+     *
+     * @param key the key of the sorted set
+     * @param start the starting index (0-based, can be negative to indicate offset from end)
+     * @param stop the ending index (0-based, can be negative to indicate offset from end)
+     * @return a map of elements to their scores in the specified range
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public Map<String, Double> zrangeWithScores(String key, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZRANGE",
+                () -> {
+                    RangeOptions.RangeByIndex rangeQuery = new RangeOptions.RangeByIndex(start, stop);
+                    return glideClient.zrangeWithScores(key, rangeQuery).get();
+                });
+    }
+
+    /**
+     * Returns the specified range of elements with their scores in a sorted set, by index (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param start the starting index (0-based, can be negative to indicate offset from end)
+     * @param stop the ending index (0-based, can be negative to indicate offset from end)
+     * @return a map of elements to their scores in the specified range
+     */
+    public Map<byte[], Double> zrangeWithScores(final byte[] key, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZRANGE",
+                () -> {
+                    RangeOptions.RangeByIndex rangeQuery = new RangeOptions.RangeByIndex(start, stop);
+                    Map<GlideString, Double> result =
+                            glideClient.zrangeWithScores(GlideString.of(key), rangeQuery).get();
+                    Map<byte[], Double> byteMap = new HashMap<>();
+                    for (Map.Entry<GlideString, Double> entry : result.entrySet()) {
+                        byteMap.put(entry.getKey().getBytes(), entry.getValue());
+                    }
+                    return byteMap;
+                });
+    }
+
+    /**
+     * Returns the rank of a member in a sorted set, with scores ordered from low to high.
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose rank to return
+     * @return the rank of the member (0-based), or null if the member does not exist
+     * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public Long zrank(String key, String member) {
+        return executeCommandWithGlide("ZRANK", () -> glideClient.zrank(key, member).get());
+    }
+
+    /**
+     * Returns the rank of a member in a sorted set, with scores ordered from low to high (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose rank to return
+     * @return the rank of the member (0-based), or null if the member does not exist
+     */
+    public Long zrank(final byte[] key, final byte[] member) {
+        return executeCommandWithGlide(
+                "ZRANK", () -> glideClient.zrank(GlideString.of(key), GlideString.of(member)).get());
+    }
+
+    /**
+     * Returns the rank of a member in a sorted set, with scores ordered from high to low.
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose rank to return
+     * @return the rank of the member (0-based), or null if the member does not exist
+     * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public Long zrevrank(String key, String member) {
+        return executeCommandWithGlide("ZREVRANK", () -> glideClient.zrevrank(key, member).get());
+    }
+
+    /**
+     * Returns the rank of a member in a sorted set, with scores ordered from high to low (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose rank to return
+     * @return the rank of the member (0-based), or null if the member does not exist
+     */
+    public Long zrevrank(final byte[] key, final byte[] member) {
+        return executeCommandWithGlide(
+                "ZREVRANK", () -> glideClient.zrevrank(GlideString.of(key), GlideString.of(member)).get());
+    }
+
+    /**
+     * Returns the number of members in a sorted set with scores within the given range.
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum score (inclusive by default, use "(" prefix for exclusive)
+     * @param max the maximum score (inclusive by default, use "(" prefix for exclusive)
+     * @return the number of elements in the specified score range
+     * @see <a href="https://valkey.io/commands/zcount/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public long zcount(String key, double min, double max) {
+        return executeCommandWithGlide(
+                "ZCOUNT",
+                () -> {
+                    RangeOptions.ScoreBoundary minBound = new RangeOptions.ScoreBoundary(min);
+                    RangeOptions.ScoreBoundary maxBound = new RangeOptions.ScoreBoundary(max);
+                    return glideClient.zcount(key, minBound, maxBound).get();
+                });
+    }
+
+    /**
+     * Returns the number of members in a sorted set with scores within the given range (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum score (inclusive by default, use "(" prefix for exclusive)
+     * @param max the maximum score (inclusive by default, use "(" prefix for exclusive)
+     * @return the number of elements in the specified score range
+     */
+    public long zcount(final byte[] key, double min, double max) {
+        return executeCommandWithGlide(
+                "ZCOUNT",
+                () -> {
+                    RangeOptions.ScoreBoundary minBound = new RangeOptions.ScoreBoundary(min);
+                    RangeOptions.ScoreBoundary maxBound = new RangeOptions.ScoreBoundary(max);
+                    return glideClient.zcount(GlideString.of(key), minBound, maxBound).get();
+                });
+    }
+
+    /**
+     * Increments the score of a member in a sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param increment the amount to increment the score by
+     * @param member the member whose score to increment
+     * @return the new score of the member
+     * @see <a href="https://valkey.io/commands/zincrby/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public double zincrby(String key, double increment, String member) {
+        return executeCommandWithGlide(
+                "ZINCRBY", () -> glideClient.zincrby(key, increment, member).get());
+    }
+
+    /**
+     * Increments the score of a member in a sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param increment the amount to increment the score by
+     * @param member the member whose score to increment
+     * @return the new score of the member
+     */
+    public double zincrby(final byte[] key, double increment, final byte[] member) {
+        return executeCommandWithGlide(
+                "ZINCRBY",
+                () -> glideClient.zincrby(GlideString.of(key), increment, GlideString.of(member)).get());
+    }
+
+    /**
+     * Removes and returns up to count members with the lowest scores from the sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param count the maximum number of members to remove
+     * @return a map of removed members and their scores, ordered from lowest to highest score
+     * @see <a href="https://valkey.io/commands/zpopmin/">valkey.io</a>
+     * @since Valkey 5.0.0
+     */
+    public Map<String, Double> zpopmin(String key, int count) {
+        return executeCommandWithGlide("ZPOPMIN", () -> glideClient.zpopmin(key, count).get());
+    }
+
+    /**
+     * Removes and returns up to count members with the lowest scores from the sorted set (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param count the maximum number of members to remove
+     * @return a map of removed members and their scores, ordered from lowest to highest score
+     */
+    public Map<byte[], Double> zpopmin(final byte[] key, int count) {
+        return executeCommandWithGlide(
+                "ZPOPMIN",
+                () -> {
+                    Map<GlideString, Double> result = glideClient.zpopmin(GlideString.of(key), count).get();
+                    Map<byte[], Double> byteMap = new HashMap<>();
+                    for (Map.Entry<GlideString, Double> entry : result.entrySet()) {
+                        byteMap.put(entry.getKey().getBytes(), entry.getValue());
+                    }
+                    return byteMap;
+                });
+    }
+
+    /**
+     * Removes and returns up to count members with the highest scores from the sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param count the maximum number of members to remove
+     * @return a map of removed members and their scores, ordered from highest to lowest score
+     * @see <a href="https://valkey.io/commands/zpopmax/">valkey.io</a>
+     * @since Valkey 5.0.0
+     */
+    public Map<String, Double> zpopmax(String key, int count) {
+        return executeCommandWithGlide("ZPOPMAX", () -> glideClient.zpopmax(key, count).get());
+    }
+
+    /**
+     * Removes and returns up to count members with the highest scores from the sorted set (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param count the maximum number of members to remove
+     * @return a map of removed members and their scores, ordered from highest to lowest score
+     */
+    public Map<byte[], Double> zpopmax(final byte[] key, int count) {
+        return executeCommandWithGlide(
+                "ZPOPMAX",
+                () -> {
+                    Map<GlideString, Double> result = glideClient.zpopmax(GlideString.of(key), count).get();
+                    Map<byte[], Double> byteMap = new HashMap<>();
+                    for (Map.Entry<GlideString, Double> entry : result.entrySet()) {
+                        byteMap.put(entry.getKey().getBytes(), entry.getValue());
+                    }
+                    return byteMap;
+                });
+    }
+
+    /**
+     * Computes the union of sorted sets and stores the result in a destination key.
+     *
+     * @param dstkey the destination key
+     * @param sets the keys of the sorted sets to union
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public long zunionstore(String dstkey, String... sets) {
+        return executeCommandWithGlide(
+                "ZUNIONSTORE",
+                () -> {
+                    WeightAggregateOptions.KeyArray keyArray = new WeightAggregateOptions.KeyArray(sets);
+                    return glideClient.zunionstore(dstkey, keyArray).get();
+                });
+    }
+
+    /**
+     * Computes the union of sorted sets and stores the result in a destination key (binary version).
+     *
+     * @param dstkey the destination key
+     * @param sets the keys of the sorted sets to union
+     * @return the number of elements in the resulting sorted set
+     */
+    public long zunionstore(final byte[] dstkey, final byte[]... sets) {
+        return executeCommandWithGlide(
+                "ZUNIONSTORE",
+                () -> {
+                    GlideString[] glideSets = convertToGlideStringArray(sets);
+                    WeightAggregateOptions.KeyArrayBinary keyArray =
+                            new WeightAggregateOptions.KeyArrayBinary(glideSets);
+                    return glideClient.zunionstore(GlideString.of(dstkey), keyArray).get();
+                });
+    }
+
+    /**
+     * Computes the intersection of sorted sets and stores the result in a destination key.
+     *
+     * @param dstkey the destination key
+     * @param sets the keys of the sorted sets to intersect
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public long zinterstore(String dstkey, String... sets) {
+        return executeCommandWithGlide(
+                "ZINTERSTORE",
+                () -> {
+                    WeightAggregateOptions.KeyArray keyArray = new WeightAggregateOptions.KeyArray(sets);
+                    return glideClient.zinterstore(dstkey, keyArray).get();
+                });
+    }
+
+    /**
+     * Computes the intersection of sorted sets and stores the result in a destination key (binary
+     * version).
+     *
+     * @param dstkey the destination key
+     * @param sets the keys of the sorted sets to intersect
+     * @return the number of elements in the resulting sorted set
+     */
+    public long zinterstore(final byte[] dstkey, final byte[]... sets) {
+        return executeCommandWithGlide(
+                "ZINTERSTORE",
+                () -> {
+                    GlideString[] glideSets = convertToGlideStringArray(sets);
+                    WeightAggregateOptions.KeyArrayBinary keyArray =
+                            new WeightAggregateOptions.KeyArrayBinary(glideSets);
+                    return glideClient.zinterstore(GlideString.of(dstkey), keyArray).get();
+                });
+    }
+
+    /**
+     * Removes all members in a sorted set within the given rank range.
+     *
+     * @param key the key of the sorted set
+     * @param start the starting rank (0-based, can be negative to indicate offset from end)
+     * @param stop the ending rank (0-based, can be negative to indicate offset from end)
+     * @return the number of members removed
+     * @see <a href="https://valkey.io/commands/zremrangebyrank/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public long zremrangebyrank(String key, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZREMRANGEBYRANK", () -> glideClient.zremrangebyrank(key, start, stop).get());
+    }
+
+    /**
+     * Removes all members in a sorted set within the given rank range (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param start the starting rank (0-based, can be negative to indicate offset from end)
+     * @param stop the ending rank (0-based, can be negative to indicate offset from end)
+     * @return the number of members removed
+     */
+    public long zremrangebyrank(final byte[] key, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZREMRANGEBYRANK",
+                () -> glideClient.zremrangebyrank(GlideString.of(key), start, stop).get());
+    }
+
+    /**
+     * Removes all members in a sorted set within the given score range.
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum score (inclusive by default, use "(" prefix for exclusive)
+     * @param max the maximum score (inclusive by default, use "(" prefix for exclusive)
+     * @return the number of members removed
+     * @see <a href="https://valkey.io/commands/zremrangebyscore/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public long zremrangebyscore(String key, double min, double max) {
+        return executeCommandWithGlide(
+                "ZREMRANGEBYSCORE",
+                () -> {
+                    RangeOptions.ScoreBoundary minBound = new RangeOptions.ScoreBoundary(min);
+                    RangeOptions.ScoreBoundary maxBound = new RangeOptions.ScoreBoundary(max);
+                    return glideClient.zremrangebyscore(key, minBound, maxBound).get();
+                });
+    }
+
+    /**
+     * Removes all members in a sorted set within the given score range (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum score (inclusive by default, use "(" prefix for exclusive)
+     * @param max the maximum score (inclusive by default, use "(" prefix for exclusive)
+     * @return the number of members removed
+     */
+    public long zremrangebyscore(final byte[] key, double min, double max) {
+        return executeCommandWithGlide(
+                "ZREMRANGEBYSCORE",
+                () -> {
+                    RangeOptions.ScoreBoundary minBound = new RangeOptions.ScoreBoundary(min);
+                    RangeOptions.ScoreBoundary maxBound = new RangeOptions.ScoreBoundary(max);
+                    return glideClient.zremrangebyscore(GlideString.of(key), minBound, maxBound).get();
+                });
+    }
+
+    /**
+     * Iterates over members and scores of a sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param cursor the cursor position to start from (use "0" to start a new iteration)
+     * @return a ScanResult containing the next cursor position and a list of member-score pairs
+     * @see <a href="https://valkey.io/commands/zscan/">valkey.io</a>
+     * @since Valkey 2.8.0
+     */
+    public ScanResult<Map.Entry<String, Double>> zscan(String key, String cursor) {
+        return executeCommandWithGlide(
+                "ZSCAN",
+                () -> {
+                    Object[] result = glideClient.zscan(key, cursor).get();
+                    String nextCursor = (String) result[0];
+                    Object[] membersAndScores = (Object[]) result[1];
+
+                    List<Map.Entry<String, Double>> entries = new ArrayList<>();
+                    for (int i = 0; i < membersAndScores.length; i += 2) {
+                        String member = (String) membersAndScores[i];
+                        Double score = (Double) membersAndScores[i + 1];
+                        entries.add(new AbstractMap.SimpleEntry<>(member, score));
+                    }
+
+                    return new ScanResult<>(nextCursor, entries);
+                });
+    }
+
+    /**
+     * Iterates over members and scores of a sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param cursor the cursor position to start from (use "0" to start a new iteration)
+     * @return a ScanResult containing the next cursor position and a list of member-score pairs
+     */
+    public ScanResult<Map.Entry<byte[], Double>> zscan(final byte[] key, final byte[] cursor) {
+        return executeCommandWithGlide(
+                "ZSCAN",
+                () -> {
+                    Object[] result = glideClient.zscan(GlideString.of(key), GlideString.of(cursor)).get();
+                    GlideString nextCursor = (GlideString) result[0];
+                    Object[] membersAndScores = (Object[]) result[1];
+
+                    List<Map.Entry<byte[], Double>> entries = new ArrayList<>();
+                    for (int i = 0; i < membersAndScores.length; i += 2) {
+                        GlideString member = (GlideString) membersAndScores[i];
+                        Double score = (Double) membersAndScores[i + 1];
+                        entries.add(new AbstractMap.SimpleEntry<>(member.getBytes(), score));
+                    }
+
+                    return new ScanResult<>(nextCursor.getBytes(), entries);
+                });
     }
 
     // Static initialization block for cleanup hooks

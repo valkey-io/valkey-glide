@@ -125,4 +125,153 @@ public class JedisMethodsTest {
         Method closeMethod = jedisClass.getMethod("close");
         assertEquals(void.class, closeMethod.getReturnType());
     }
+
+    @Test
+    public void testSortedSetMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test zadd methods
+        Method zaddSingle = jedisClass.getMethod("zadd", String.class, double.class, String.class);
+        assertEquals(long.class, zaddSingle.getReturnType());
+
+        Method zaddMap = jedisClass.getMethod("zadd", String.class, java.util.Map.class);
+        assertEquals(long.class, zaddMap.getReturnType());
+
+        Method zaddBinary = jedisClass.getMethod("zadd", byte[].class, double.class, byte[].class);
+        assertEquals(long.class, zaddBinary.getReturnType());
+
+        // Test zaddIncr methods
+        Method zaddIncr = jedisClass.getMethod("zaddIncr", String.class, double.class, String.class);
+        assertEquals(double.class, zaddIncr.getReturnType());
+
+        Method zaddIncrBinary =
+                jedisClass.getMethod("zaddIncr", byte[].class, double.class, byte[].class);
+        assertEquals(double.class, zaddIncrBinary.getReturnType());
+
+        // Test zrem methods
+        Method zrem = jedisClass.getMethod("zrem", String.class, String[].class);
+        assertEquals(long.class, zrem.getReturnType());
+
+        Method zremBinary = jedisClass.getMethod("zrem", byte[].class, byte[][].class);
+        assertEquals(long.class, zremBinary.getReturnType());
+
+        // Test zcard methods
+        Method zcard = jedisClass.getMethod("zcard", String.class);
+        assertEquals(long.class, zcard.getReturnType());
+
+        Method zcardBinary = jedisClass.getMethod("zcard", byte[].class);
+        assertEquals(long.class, zcardBinary.getReturnType());
+
+        // Test zscore methods
+        Method zscore = jedisClass.getMethod("zscore", String.class, String.class);
+        assertEquals(Double.class, zscore.getReturnType());
+
+        Method zscoreBinary = jedisClass.getMethod("zscore", byte[].class, byte[].class);
+        assertEquals(Double.class, zscoreBinary.getReturnType());
+
+        // Test zmscore methods
+        Method zmscore = jedisClass.getMethod("zmscore", String.class, String[].class);
+        assertEquals(java.util.List.class, zmscore.getReturnType());
+
+        Method zmscoreBinary = jedisClass.getMethod("zmscore", byte[].class, byte[][].class);
+        assertEquals(java.util.List.class, zmscoreBinary.getReturnType());
+
+        // Test zrange methods
+        Method zrange = jedisClass.getMethod("zrange", String.class, long.class, long.class);
+        assertEquals(java.util.List.class, zrange.getReturnType());
+
+        Method zrangeBinary = jedisClass.getMethod("zrange", byte[].class, long.class, long.class);
+        assertEquals(java.util.List.class, zrangeBinary.getReturnType());
+
+        // Test zrangeWithScores methods
+        Method zrangeWithScores =
+                jedisClass.getMethod("zrangeWithScores", String.class, long.class, long.class);
+        assertEquals(java.util.Map.class, zrangeWithScores.getReturnType());
+
+        Method zrangeWithScoresBinary =
+                jedisClass.getMethod("zrangeWithScores", byte[].class, long.class, long.class);
+        assertEquals(java.util.Map.class, zrangeWithScoresBinary.getReturnType());
+
+        // Test zrank methods
+        Method zrank = jedisClass.getMethod("zrank", String.class, String.class);
+        assertEquals(Long.class, zrank.getReturnType());
+
+        Method zrankBinary = jedisClass.getMethod("zrank", byte[].class, byte[].class);
+        assertEquals(Long.class, zrankBinary.getReturnType());
+
+        // Test zrevrank methods
+        Method zrevrank = jedisClass.getMethod("zrevrank", String.class, String.class);
+        assertEquals(Long.class, zrevrank.getReturnType());
+
+        Method zrevrankBinary = jedisClass.getMethod("zrevrank", byte[].class, byte[].class);
+        assertEquals(Long.class, zrevrankBinary.getReturnType());
+
+        // Test zcount methods
+        Method zcount = jedisClass.getMethod("zcount", String.class, double.class, double.class);
+        assertEquals(long.class, zcount.getReturnType());
+
+        Method zcountBinary = jedisClass.getMethod("zcount", byte[].class, double.class, double.class);
+        assertEquals(long.class, zcountBinary.getReturnType());
+
+        // Test zincrby methods
+        Method zincrby = jedisClass.getMethod("zincrby", String.class, double.class, String.class);
+        assertEquals(double.class, zincrby.getReturnType());
+
+        Method zincrbyBinary =
+                jedisClass.getMethod("zincrby", byte[].class, double.class, byte[].class);
+        assertEquals(double.class, zincrbyBinary.getReturnType());
+
+        // Test zpopmin methods
+        Method zpopmin = jedisClass.getMethod("zpopmin", String.class, int.class);
+        assertEquals(java.util.Map.class, zpopmin.getReturnType());
+
+        Method zpopminBinary = jedisClass.getMethod("zpopmin", byte[].class, int.class);
+        assertEquals(java.util.Map.class, zpopminBinary.getReturnType());
+
+        // Test zpopmax methods
+        Method zpopmax = jedisClass.getMethod("zpopmax", String.class, int.class);
+        assertEquals(java.util.Map.class, zpopmax.getReturnType());
+
+        Method zpopmaxBinary = jedisClass.getMethod("zpopmax", byte[].class, int.class);
+        assertEquals(java.util.Map.class, zpopmaxBinary.getReturnType());
+
+        // Test zunionstore methods
+        Method zunionstore = jedisClass.getMethod("zunionstore", String.class, String[].class);
+        assertEquals(long.class, zunionstore.getReturnType());
+
+        Method zunionstoreBinary = jedisClass.getMethod("zunionstore", byte[].class, byte[][].class);
+        assertEquals(long.class, zunionstoreBinary.getReturnType());
+
+        // Test zinterstore methods
+        Method zinterstore = jedisClass.getMethod("zinterstore", String.class, String[].class);
+        assertEquals(long.class, zinterstore.getReturnType());
+
+        Method zinterstoreBinary = jedisClass.getMethod("zinterstore", byte[].class, byte[][].class);
+        assertEquals(long.class, zinterstoreBinary.getReturnType());
+
+        // Test zremrangebyrank methods
+        Method zremrangebyrank =
+                jedisClass.getMethod("zremrangebyrank", String.class, long.class, long.class);
+        assertEquals(long.class, zremrangebyrank.getReturnType());
+
+        Method zremrangebyrankBinary =
+                jedisClass.getMethod("zremrangebyrank", byte[].class, long.class, long.class);
+        assertEquals(long.class, zremrangebyrankBinary.getReturnType());
+
+        // Test zremrangebyscore methods
+        Method zremrangebyscore =
+                jedisClass.getMethod("zremrangebyscore", String.class, double.class, double.class);
+        assertEquals(long.class, zremrangebyscore.getReturnType());
+
+        Method zremrangebyscoreBinary =
+                jedisClass.getMethod("zremrangebyscore", byte[].class, double.class, double.class);
+        assertEquals(long.class, zremrangebyscoreBinary.getReturnType());
+
+        // Test zscan methods
+        Method zscan = jedisClass.getMethod("zscan", String.class, String.class);
+        assertEquals(redis.clients.jedis.resps.ScanResult.class, zscan.getReturnType());
+
+        Method zscanBinary = jedisClass.getMethod("zscan", byte[].class, byte[].class);
+        assertEquals(redis.clients.jedis.resps.ScanResult.class, zscanBinary.getReturnType());
+    }
 }
