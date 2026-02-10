@@ -714,6 +714,34 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void mget_string_with_large_values_returns_null_for_missing_keys(BaseClient client) {
+        // Test for issue #5275: String version should also handle null correctly with large data
+
+        // Create 16KB string to trigger DirectByteBuffer path
+        String largeString = "x".repeat(16 * 1024);
+
+        String key1 = UUID.randomUUID().toString();
+        String missingKey = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String value1 = "value1";
+
+        // Set only key1 and key2, leave missingKey unset
+        assertEquals(OK, client.set(key1, value1).get());
+        assertEquals(OK, client.set(key2, largeString).get());
+
+        // Execute MGET with missing key in the middle
+        String[] result = client.mget(new String[] {key1, missingKey, key2}).get();
+
+        // Verify results
+        assertEquals(3, result.length);
+        assertEquals(value1, result[0]);
+        assertNull(result[1], "Missing key should return null");
+        assertEquals(largeString, result[2]);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void incr_commands_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
 

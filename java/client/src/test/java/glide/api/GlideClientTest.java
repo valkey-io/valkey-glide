@@ -2051,6 +2051,33 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
+    public void mget_string_with_large_values_returns_null_for_missing_keys() {
+        // Test for issue #5275: String version should also handle null correctly with large data
+
+        // Create 16KB string to trigger DirectByteBuffer path
+        String largeString = "x".repeat(16 * 1024);
+
+        String[] keys = {"key1", "missing", "key2"};
+        String[] values = {"value1", null, largeString};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(values);
+
+        when(commandManager.<String[]>submitNewCommand(eq(MGet), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        CompletableFuture<String[]> response = service.mget(keys);
+        String[] payload = response.get();
+
+        assertEquals(testResponse, response);
+        assertEquals(3, payload.length);
+        assertEquals("value1", payload[0]);
+        assertNull(payload[1], "Missing key should return null");
+        assertEquals(largeString, payload[2]);
+    }
+
+    @SneakyThrows
+    @Test
     public void mset_returns_success() {
         // setup
         Map<String, String> keyValueMap = new LinkedHashMap<>();
