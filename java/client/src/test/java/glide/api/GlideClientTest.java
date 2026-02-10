@@ -2025,7 +2025,7 @@ public class GlideClientTest {
     @Test
     public void mget_binary_with_large_values_returns_null_for_missing_keys() {
         // Test for large binary data with mget command
-        
+
         // Create 16KB of data to trigger DirectByteBuffer path
         byte[] largeData = new byte[16 * 1024];
         java.util.Arrays.fill(largeData, (byte) 0x00);

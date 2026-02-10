@@ -686,7 +686,7 @@ public class SharedCommandTests {
     public void mget_with_large_binary_values_returns_null_for_missing_keys(BaseClient client) {
         // Test for issue #5275: large binary data causes MGET to yield GlideString "nil" instead
         // of null for missing key. This tests the DirectByteBuffer serialization path (>16KB).
-        
+
         // Create 16KB of data to trigger DirectByteBuffer path
         byte[] largeData = new byte[16 * 1024];
         java.util.Arrays.fill(largeData, (byte) 0xFF);
