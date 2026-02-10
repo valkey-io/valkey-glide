@@ -9805,6 +9805,7 @@ var AllShardedChannels []string = nil
 // Example:
 //
 //	err := client.Subscribe(ctx, []string{"channel1"}, 5000)
+//
 // Subscribe subscribes the client to the specified channels (blocking).
 // This command updates the client's internal desired subscription state and waits
 // for server confirmation.
@@ -9899,6 +9900,7 @@ func (client *baseClient) PSubscribe(ctx context.Context, patterns []string, tim
 // Example:
 //
 //	err := client.PSubscribeLazy(ctx, []string{"news.*", "updates.*"})
+//
 // PSubscribeLazy subscribes the client to the specified patterns (non-blocking).
 // This command updates the client's internal desired subscription state without waiting
 // for server confirmation. It returns immediately after updating the local state.

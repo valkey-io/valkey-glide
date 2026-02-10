@@ -24,7 +24,6 @@ import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.commands.batch.ClusterBatchOptions;
-import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.ChannelMode;
@@ -2856,8 +2855,7 @@ public class PubSubTests {
             client =
                     GlideClusterClient.createClient(
                                     commonClusterClientConfig()
-                                            .subscriptionConfiguration(
-                                                    ClusterSubscriptionConfiguration.builder().build())
+                                            .subscriptionConfiguration(ClusterSubscriptionConfiguration.builder().build())
                                             .advancedConfiguration(
                                                     AdvancedGlideClusterClientConfiguration.builder()
                                                             .pubsubReconciliationIntervalMs(intervalMs)
@@ -2889,8 +2887,7 @@ public class PubSubTests {
     }
 
     private long pollForTimestampChange(
-            BaseClient client, long previousTs, double timeoutSec, int pollIntervalMs)
-            throws Exception {
+            BaseClient client, long previousTs, double timeoutSec, int pollIntervalMs) throws Exception {
         long startMs = System.currentTimeMillis();
         while ((System.currentTimeMillis() - startMs) / 1000.0 < timeoutSec) {
             Map<String, String> stats = client.getStatistics();
@@ -2902,7 +2899,6 @@ public class PubSubTests {
         }
         throw new TimeoutException(
                 String.format(
-                        "Sync timestamp did not change within %.1fs. Previous: %d",
-                        timeoutSec, previousTs));
+                        "Sync timestamp did not change within %.1fs. Previous: %d", timeoutSec, previousTs));
     }
 }

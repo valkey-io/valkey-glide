@@ -191,9 +191,9 @@ public interface PubSubBaseCommands {
     /**
      * Subscribes the client to the specified channels.
      *
-     * <p>This command updates the client's internal desired subscription state without waiting
-     * for server confirmation. It returns immediately after updating the local state.
-     * The client will attempt to subscribe asynchronously in the background.
+     * <p>This command updates the client's internal desired subscription state without waiting for
+     * server confirmation. It returns immediately after updating the local state. The client will
+     * attempt to subscribe asynchronously in the background.
      *
      * <p>Note: Use {@code getSubscriptions()} to verify the actual server-side subscription state.
      *
@@ -211,12 +211,12 @@ public interface PubSubBaseCommands {
     /**
      * Subscribes the client to the specified channels with a timeout.
      *
-     * <p>This command updates the client's internal desired subscription state and waits
-     * for server confirmation.
+     * <p>This command updates the client's internal desired subscription state and waits for server
+     * confirmation.
      *
      * @param channels A set of channel names to subscribe to
-     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation.
-     *                  A value of 0 blocks indefinitely until confirmation.
+     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation. A value of
+     *     0 blocks indefinitely until confirmation.
      * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times
      *     out
      * @example
@@ -231,9 +231,9 @@ public interface PubSubBaseCommands {
     /**
      * Subscribes the client to channels matching the specified patterns.
      *
-     * <p>This command updates the client's internal desired subscription state without waiting
-     * for server confirmation. It returns immediately after updating the local state.
-     * The client will attempt to subscribe asynchronously in the background.
+     * <p>This command updates the client's internal desired subscription state without waiting for
+     * server confirmation. It returns immediately after updating the local state. The client will
+     * attempt to subscribe asynchronously in the background.
      *
      * <p>Patterns use glob-style matching:
      *
@@ -259,12 +259,12 @@ public interface PubSubBaseCommands {
     /**
      * Subscribes the client to channels matching the specified patterns with a timeout.
      *
-     * <p>This command updates the client's internal desired subscription state and waits
-     * for server confirmation.
+     * <p>This command updates the client's internal desired subscription state and waits for server
+     * confirmation.
      *
      * @param patterns A set of glob patterns to subscribe to
-     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation.
-     *                  A value of 0 blocks indefinitely until confirmation.
+     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation. A value of
+     *     0 blocks indefinitely until confirmation.
      * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times
      *     out
      * @example
@@ -306,12 +306,12 @@ public interface PubSubBaseCommands {
     /**
      * Unsubscribes the client from the specified channels with a timeout.
      *
-     * <p>This command updates the client's internal desired subscription state and waits
-     * for server confirmation.
+     * <p>This command updates the client's internal desired subscription state and waits for server
+     * confirmation.
      *
      * @param channels A set of channel names to unsubscribe from
-     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation.
-     *                  A value of 0 blocks indefinitely until confirmation.
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation. A value
+     *     of 0 blocks indefinitely until confirmation.
      * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or
      *     times out
      * @example
@@ -368,12 +368,12 @@ public interface PubSubBaseCommands {
     /**
      * Unsubscribes the client from the specified patterns with a timeout.
      *
-     * <p>This command updates the client's internal desired subscription state and waits
-     * for server confirmation.
+     * <p>This command updates the client's internal desired subscription state and waits for server
+     * confirmation.
      *
      * @param patterns A set of glob patterns to unsubscribe from
-     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation.
-     *                  A value of 0 blocks indefinitely until confirmation.
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation. A value
+     *     of 0 blocks indefinitely until confirmation.
      * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or
      *     times out
      * @example

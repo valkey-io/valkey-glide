@@ -2653,6 +2653,7 @@ func (client *ClusterClient) UnwatchWithOptions(ctx context.Context, route optio
 // Example:
 //
 //	err := client.SSubscribe(ctx, []string{"shard_channel1"}, 5000)
+//
 // SSubscribe subscribes the client to the specified sharded channels (blocking).
 // This command updates the client's internal desired subscription state and waits
 // for server confirmation.
@@ -2700,6 +2701,7 @@ func (client *ClusterClient) SSubscribe(ctx context.Context, channels []string, 
 // Example:
 //
 //	err := client.SSubscribeLazy(ctx, []string{"shard_channel1"})
+//
 // SSubscribeLazy subscribes the client to the specified sharded channels (non-blocking).
 // This command updates the client's internal desired subscription state without waiting
 // for server confirmation. It returns immediately after updating the local state.

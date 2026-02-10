@@ -702,7 +702,7 @@ func (suite *GlideTestSuite) TestReconciliationIntervalSupport() {
 	clientConfig := suite.defaultClientConfig().
 		WithSubscriptionConfig(sConfig).
 		WithAdvancedConfiguration(advancedConfig)
-	
+
 	client, err := suite.client(clientConfig)
 	require.NoError(t, err)
 	defer client.Close()

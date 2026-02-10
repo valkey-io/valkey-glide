@@ -66,6 +66,10 @@ EXCLUDED_TESTS = {
         "decode_pubsub_msg",
         "assert_pubsub_messages",
         "poll_for_timestamp_change",
+        # Tests removed from sync as redundant (covered by async)
+        "test_resubscribe_after_connection_kill_many_exact_channels",
+        "test_resubscribe_after_connection_kill_sharded",
+        "test_subscription_metrics_repeated_reconciliation_failures",
         # OpenTelemetry async helper function
         "wait_for_spans_to_be_flushed",
     ],
@@ -83,6 +87,8 @@ EXCLUDED_TESTS = {
         "create_two_clients_with_pubsub",
         "get_message_by_method",
         "wait_for_subscription_state",
+        "poll_for_timestamp_change",
+        "sync_subscribe_by_method",
     ],
 }
 
