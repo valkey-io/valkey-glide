@@ -4251,4 +4251,425 @@ public class JedisTest {
         // Cleanup
         jedis.del(key);
     }
+
+    @Test
+    void sortedset_zrangestore() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String sourceKey = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
+
+        // Setup source sorted set
+        jedis.zadd(sourceKey, 1.0, "one");
+        jedis.zadd(sourceKey, 2.0, "two");
+        jedis.zadd(sourceKey, 3.0, "three");
+
+        // Store range in destination
+        Long count = jedis.zrangestore(destKey, sourceKey, 0, 1);
+        assertEquals(2L, count, "Should store 2 elements");
+
+        // Verify destination
+        List<String> result = jedis.zrange(destKey, 0, -1);
+        assertEquals(2, result.size());
+        assertEquals("one", result.get(0));
+        assertEquals("two", result.get(1));
+
+        // Cleanup
+        jedis.del(sourceKey, destKey);
+    }
+
+    @Test
+    void sortedset_zrangestore_binary() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        byte[] sourceKey = UUID.randomUUID().toString().getBytes();
+        byte[] destKey = UUID.randomUUID().toString().getBytes();
+
+        jedis.zadd(sourceKey, 1.0, "one".getBytes());
+        jedis.zadd(sourceKey, 2.0, "two".getBytes());
+
+        Long count = jedis.zrangestore(destKey, sourceKey, 0, 1);
+        assertEquals(2L, count);
+
+        jedis.del(sourceKey, destKey);
+    }
+
+    @Test
+    void sortedset_zrankWithScore() {
+        String minVersion = "7.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        List<Object> result = jedis.zrankWithScore(key, "two");
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertEquals(1L, result.get(0));
+        assertEquals(2.0, (Double) result.get(1), 0.001);
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrevrankWithScore() {
+        String minVersion = "7.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        List<Object> result = jedis.zrevrankWithScore(key, "two");
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertEquals(1L, result.get(0));
+        assertEquals(2.0, (Double) result.get(1), 0.001);
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zlexcount() {
+        String key = UUID.randomUUID().toString();
+
+        // Add members with same score for lexicographical ordering
+        jedis.zadd(key, 0.0, "a");
+        jedis.zadd(key, 0.0, "b");
+        jedis.zadd(key, 0.0, "c");
+        jedis.zadd(key, 0.0, "d");
+
+        Long count = jedis.zlexcount(key, "[a", "[c");
+        assertEquals(3L, count, "Should count 3 members (a, b, c)");
+
+        count = jedis.zlexcount(key, "(a", "(d");
+        assertEquals(2L, count, "Should count 2 members (b, c)");
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zlexcount_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        jedis.zadd(key, 0.0, "a".getBytes());
+        jedis.zadd(key, 0.0, "b".getBytes());
+        jedis.zadd(key, 0.0, "c".getBytes());
+
+        Long count = jedis.zlexcount(key, "[a".getBytes(), "[c".getBytes());
+        assertEquals(3L, count);
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zdiff() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key1, 3.0, "three");
+
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 2.0, "two");
+
+        List<String> diff = jedis.zdiff(key1, key2);
+        assertEquals(1, diff.size());
+        assertEquals("three", diff.get(0));
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zdiffWithScores() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key1, 3.0, "three");
+
+        jedis.zadd(key2, 1.0, "one");
+
+        Map<String, Double> diff = jedis.zdiffWithScores(key1, key2);
+        assertEquals(2, diff.size());
+        assertTrue(diff.containsKey("two"));
+        assertTrue(diff.containsKey("three"));
+        assertEquals(2.0, diff.get("two"), 0.001);
+        assertEquals(3.0, diff.get("three"), 0.001);
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zdiffstore() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+
+        Long count = jedis.zdiffstore(destKey, key1, key2);
+        assertEquals(1L, count);
+
+        List<String> result = jedis.zrange(destKey, 0, -1);
+        assertEquals(1, result.size());
+        assertEquals("two", result.get(0));
+
+        jedis.del(key1, key2, destKey);
+    }
+
+    @Test
+    void sortedset_zunion() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 3.0, "three");
+
+        List<String> union = jedis.zunion(key1, key2);
+        assertEquals(3, union.size());
+        assertTrue(union.contains("one"));
+        assertTrue(union.contains("two"));
+        assertTrue(union.contains("three"));
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zunionWithScores() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 3.0, "three");
+
+        Map<String, Double> union = jedis.zunionWithScores(key1, key2);
+        assertEquals(3, union.size());
+        assertEquals(2.0, union.get("one"), 0.001); // 1.0 + 1.0
+        assertEquals(2.0, union.get("two"), 0.001);
+        assertEquals(3.0, union.get("three"), 0.001);
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zinter() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 3.0, "three");
+
+        List<String> inter = jedis.zinter(key1, key2);
+        assertEquals(1, inter.size());
+        assertEquals("one", inter.get(0));
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zinterWithScores() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 3.0, "three");
+
+        Map<String, Double> inter = jedis.zinterWithScores(key1, key2);
+        assertEquals(1, inter.size());
+        assertEquals(2.0, inter.get("one"), 0.001); // 1.0 + 1.0
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zintercard() {
+        String minVersion = "7.0.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key1, 3.0, "three");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 2.0, "two");
+
+        Long cardinality = jedis.zintercard(key1, key2);
+        assertEquals(2L, cardinality);
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zmpop() {
+        String minVersion = "7.0.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 3.0, "three");
+
+        // Pop min from first non-empty key
+        Map<String, List<List<Object>>> result = jedis.zmpop(true, key1, key2);
+        assertNotNull(result);
+        assertTrue(result.containsKey(key1));
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zremrangebylex() {
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 0.0, "a");
+        jedis.zadd(key, 0.0, "b");
+        jedis.zadd(key, 0.0, "c");
+        jedis.zadd(key, 0.0, "d");
+
+        Long removed = jedis.zremrangebylex(key, "[a", "[c");
+        assertEquals(3L, removed, "Should remove 3 members (a, b, c)");
+
+        Long remaining = jedis.zcard(key);
+        assertEquals(1L, remaining, "Should have 1 member remaining");
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrandmember() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        String member = jedis.zrandmember(key);
+        assertNotNull(member);
+        assertTrue(List.of("one", "two", "three").contains(member));
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrandmemberWithCount() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        List<String> members = jedis.zrandmemberWithCount(key, 2);
+        assertNotNull(members);
+        assertEquals(2, members.size());
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrandmemberWithCountWithScores() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        List<List<Object>> membersWithScores = jedis.zrandmemberWithCountWithScores(key, 2);
+        assertNotNull(membersWithScores);
+        assertEquals(2, membersWithScores.size());
+
+        // Each entry should have 2 elements: member and score
+        for (List<Object> entry : membersWithScores) {
+            assertEquals(2, entry.size());
+            assertNotNull(entry.get(0)); // member
+            assertNotNull(entry.get(1)); // score
+        }
+
+        jedis.del(key);
+    }
 }
