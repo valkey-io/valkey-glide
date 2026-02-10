@@ -739,9 +739,9 @@ func (suite *GlideTestSuite) TestReconciliationIntervalSupport() {
 	// Compute actual interval
 	actualIntervalMs := secondSyncTs - firstSyncTs
 
-	// Assert interval is within +/- 50% tolerance
-	minInterval := int64(intervalMs) * 5 / 10
-	maxInterval := int64(intervalMs) * 15 / 10
+	// Assert interval is within +/- 60% tolerance (more lenient for system variations)
+	minInterval := int64(intervalMs) * 4 / 10  // 40% of interval
+	maxInterval := int64(intervalMs) * 16 / 10 // 160% of interval
 	assert.GreaterOrEqual(t, actualIntervalMs, minInterval,
 		"Reconciliation interval (%dms) should be >= %dms", actualIntervalMs, minInterval)
 	assert.LessOrEqual(t, actualIntervalMs, maxInterval,

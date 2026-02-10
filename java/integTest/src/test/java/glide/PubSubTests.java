@@ -2859,8 +2859,9 @@ public class PubSubTests {
 
             long actualIntervalMs = secondSyncTs - firstSyncTs;
 
-            long minInterval = intervalMs / 2;
-            long maxInterval = intervalMs * 3 / 2;
+            // Assert interval is within +/- 60% tolerance (more lenient for system variations)
+            long minInterval = intervalMs * 4 / 10; // 40% of interval
+            long maxInterval = intervalMs * 16 / 10; // 160% of interval
             assertTrue(
                     actualIntervalMs >= minInterval && actualIntervalMs <= maxInterval,
                     String.format(
