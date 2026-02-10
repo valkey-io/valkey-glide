@@ -2052,7 +2052,7 @@ public class GlideClientTest {
     @SneakyThrows
     @Test
     public void mget_string_with_large_values_returns_null_for_missing_keys() {
-        // Test for issue #5275: String version should also handle null correctly with large data
+        // String version should also handle null correctly with large data
 
         // Create 16KB string to trigger DirectByteBuffer path
         String largeString = "x".repeat(16 * 1024);

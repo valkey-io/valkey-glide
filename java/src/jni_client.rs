@@ -680,7 +680,7 @@ fn serialize_array_to_bytes(
         match value {
             redis::Value::Nil => {
                 bytes.push(b'$'); // Bulk string marker
-                bytes.extend_from_slice(&(-1i32 as u32).to_be_bytes()); // -1 indicates null
+                bytes.extend_from_slice(&(-1i32).to_be_bytes()); // -1 indicates null in RESP
             }
             redis::Value::BulkString(data) => {
                 bytes.push(b'$'); // Bulk string marker

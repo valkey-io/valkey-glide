@@ -684,8 +684,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void mget_with_large_binary_values_returns_null_for_missing_keys(BaseClient client) {
-        // Test for issue #5275: large binary data causes MGET to yield GlideString "nil" instead
-        // of null for missing key. This tests the DirectByteBuffer serialization path (>16KB).
+        // Large binary data causes MGET to yield GlideString "nil" instead of null for missing
+        // key. This tests the DirectByteBuffer serialization path (>16KB).
 
         // Create 16KB of data to trigger DirectByteBuffer path
         byte[] largeData = new byte[16 * 1024];
@@ -715,7 +715,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void mget_string_with_large_values_returns_null_for_missing_keys(BaseClient client) {
-        // Test for issue #5275: String version should also handle null correctly with large data
+        // String version should also handle null correctly with large data
 
         // Create 16KB string to trigger DirectByteBuffer path
         String largeString = "x".repeat(16 * 1024);
