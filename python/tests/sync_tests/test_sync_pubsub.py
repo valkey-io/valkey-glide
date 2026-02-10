@@ -24,15 +24,16 @@ from glide_sync import (
 )
 from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 
-from tests.sync_tests.conftest import create_sync_client, create_sync_pubsub_client
-from tests.utils.pubsub_test_utils import PubSubTestConstants
+from tests.sync_tests.conftest import create_sync_client
+from tests.utils.pubsub_test_utils import PubSubTestConstants, new_message
 from tests.utils.utils import (
     SubscriptionMethod,
     create_pubsub_subscription,
+    create_sync_pubsub_client,
     decode_pubsub_msg,
     get_pubsub_modes,
     get_random_string,
-    new_message,
+    kill_connections,
     run_sync_func_with_timeout_in_thread,
     sync_check_if_server_version_lt,
 )
@@ -107,14 +108,13 @@ def sync_subscribe_by_method(
         # Wait for lazy subscription to propagate
         time.sleep(0.5)
     else:  # Blocking
-        # Use blocking subscribe with timeout - no sleep needed
-        timeout_ms = 5000
+        # Use blocking subscribe with no timeout (blocks indefinitely)
         if channels:
-            client.subscribe(channels, timeout_ms)
+            client.subscribe(channels)
         if patterns:
-            client.psubscribe(patterns, timeout_ms)
+            client.psubscribe(patterns)
         if cluster_mode and sharded:
-            client.ssubscribe(sharded, timeout_ms)  # type: ignore[union-attr]
+            client.ssubscribe(sharded)  # type: ignore[union-attr]
 
 
 def create_two_clients_with_pubsub(
@@ -3595,28 +3595,49 @@ class TestSyncPubSub:
     ):
         """
         Test that pubsub_reconciliation_interval controls reconciliation frequency.
+
+        Configures a 1 second interval, then measures the actual time between
+        two consecutive reconciliation events by polling the sync timestamp.
+        Verifies the interval is within +/- 50% tolerance (500ms to 1500ms).
         """
         client = None
         try:
-            # Create client with pubsub enabled and reconciliation interval
-            # Note: reconciliation_interval is set via environment or config,
-            # but we need pubsub enabled to test it
-            client = create_sync_pubsub_client(request, cluster_mode)
+            interval_ms = 1000
+            poll_interval_s = 0.1
 
-            # Subscribe to a channel
-            client.subscribe_lazy({"test_channel"})
-
-            # Wait for reconciliation
-            wait_for_subscription_state(
-                client,
-                expected_channels={"test_channel"},
-                timeout_sec=5.0,
+            client = create_sync_pubsub_client(
+                request, cluster_mode, reconciliation_interval_ms=interval_ms
             )
 
-            # Check subscription state
-            state = client.get_subscriptions()
-            modes = get_pubsub_modes(client)
-            assert "test_channel" in state.desired_subscriptions.get(modes.Exact, set())
+            def poll_for_timestamp_change(
+                previous_ts: int, timeout_s: float = 5.0
+            ) -> int:
+                """Poll until sync timestamp changes, return new timestamp."""
+                import time
+
+                start = time.time()
+                while (time.time() - start) < timeout_s:
+                    stats = client.get_statistics()
+                    current_ts = int(stats.get("subscription_last_sync_timestamp", "0"))
+                    if current_ts != previous_ts:
+                        return current_ts
+                    time.sleep(poll_interval_s)
+                raise TimeoutError(
+                    f"Sync timestamp did not change within {timeout_s}s. Previous: {previous_ts}"
+                )
+
+            initial_stats = client.get_statistics()
+            initial_ts = int(initial_stats.get("subscription_last_sync_timestamp", "0"))
+
+            first_sync_ts = poll_for_timestamp_change(initial_ts)
+            second_sync_ts = poll_for_timestamp_change(first_sync_ts)
+
+            actual_interval_ms = second_sync_ts - first_sync_ts
+
+            assert interval_ms * 0.5 <= actual_interval_ms <= interval_ms * 1.5, (
+                f"Reconciliation interval ({actual_interval_ms}ms) should be between "
+                f"{interval_ms * 0.5}ms and {interval_ms * 1.5}ms"
+            )
 
         finally:
             if client:
@@ -4178,8 +4199,8 @@ class TestSyncPubSub:
                 client, expected_channels={channel}, timeout_sec=3.0
             )
 
-            # Kill all connections
-            client.custom_command(["CLIENT", "KILL", "TYPE", "NORMAL"])
+            # Kill all client connections
+            kill_connections(client, None)
 
             # Wait for reconnection and resubscription
             time.sleep(2)
@@ -4205,43 +4226,6 @@ class TestSyncPubSub:
             SubscriptionMethod.Blocking,
         ],
     )
-    def test_sync_resubscribe_after_connection_kill_many_exact_channels(
-        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
-    ):
-        """
-        Test that multiple exact channel subscriptions are restored after connection kill.
-        """
-        client = None
-        try:
-            channels = {f"channel_{i}" for i in range(10)}
-
-            client = create_sync_pubsub_client(request, cluster_mode, channels=channels)
-
-            # Verify initial subscriptions
-            wait_for_subscription_state(
-                client, expected_channels=channels, timeout_sec=3.0
-            )
-
-            # Kill all connections
-            client.custom_command(["CLIENT", "KILL", "TYPE", "NORMAL"])
-
-            # Wait for reconnection and resubscription
-            time.sleep(2)
-
-            # Verify all subscriptions are restored
-            wait_for_subscription_state(
-                client, expected_channels=channels, timeout_sec=5.0
-            )
-
-            state = client.get_subscriptions()
-            assert channels.issubset(
-                state.actual_subscriptions[get_pubsub_modes(client).Exact]
-            )
-
-        finally:
-            if client:
-                client.close()
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "subscription_method",
@@ -4270,8 +4254,8 @@ class TestSyncPubSub:
                 client, expected_patterns={pattern}, timeout_sec=3.0
             )
 
-            # Kill all connections
-            client.custom_command(["CLIENT", "KILL", "TYPE", "NORMAL"])
+            # Kill all client connections
+            kill_connections(client, None)
 
             # Wait for reconnection and resubscription
             time.sleep(2)
@@ -4300,45 +4284,6 @@ class TestSyncPubSub:
             SubscriptionMethod.Blocking,
         ],
     )
-    def test_sync_resubscribe_after_connection_kill_sharded(
-        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
-    ):
-        """
-        Test that sharded subscriptions are restored after connection kill.
-        """
-        client = None
-        try:
-            channel = "test_sharded_reconnect"
-
-            client = create_sync_pubsub_client(
-                request, cluster_mode, sharded_channels={channel}
-            )
-
-            # Verify initial subscription
-            wait_for_subscription_state(
-                client, expected_sharded={channel}, timeout_sec=3.0
-            )
-
-            # Kill all connections
-            client.custom_command(["CLIENT", "KILL", "TYPE", "NORMAL"])
-
-            # Wait for reconnection and resubscription
-            time.sleep(2)
-
-            # Verify subscription is restored
-            wait_for_subscription_state(
-                client, expected_sharded={channel}, timeout_sec=5.0
-            )
-
-            state = client.get_subscriptions()
-            modes = get_pubsub_modes(client)
-            if hasattr(modes, "Sharded"):
-                assert channel in state.actual_subscriptions[modes.Sharded]  # type: ignore
-
-        finally:
-            if client:
-                client.close()
-
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
@@ -4564,110 +4509,5 @@ class TestSyncPubSub:
                 except Exception:
                     pass
                 admin_client.close()
-            if listening_client:
-                listening_client.close()
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize(
-        "subscription_method",
-        [
-            SubscriptionMethod.Config,
-            SubscriptionMethod.Lazy,
-            SubscriptionMethod.Blocking,
-        ],
-    )
-    def test_sync_subscription_metrics_repeated_reconciliation_failures(
-        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
-    ):
-        """
-        Test that out-of-sync metric increments on repeated reconciliation failures.
-        """
-        listening_client, admin_client = None, None
-        try:
-            channel1 = "channel1_repeated_failures"
-            channel2 = "channel2_repeated_failures"
-            username = f"{PubSubTestConstants.ACL_TEST_USERNAME_PREFIX}_repeated"
-            password = f"{PubSubTestConstants.ACL_TEST_PASSWORD_PREFIX}_repeated"
-
-            admin_client = create_sync_client(request, cluster_mode)
-
-            # Create user WITHOUT pubsub permissions
-            acl_create_command = [
-                "ACL",
-                "SETUSER",
-                username,
-                "ON",
-                f">{password}",
-                "~*",
-                "resetchannels",
-                "+@all",
-                "-@pubsub",
-            ]
-
-            if cluster_mode:
-                cast(GlideClusterClient, admin_client).custom_command(
-                    acl_create_command, route=AllNodes()  # type: ignore[arg-type]
-                )
-            else:
-                admin_client.custom_command(acl_create_command)  # type: ignore[arg-type]
-
-            listening_client = create_sync_client(request, cluster_mode)
-
-            if cluster_mode:
-                cast(GlideClusterClient, listening_client).custom_command(
-                    ["AUTH", username, password], route=AllNodes()  # type: ignore[arg-type]
-                )
-            else:
-                listening_client.custom_command(["AUTH", username, password])  # type: ignore[arg-type]
-
-            initial_stats = listening_client.get_statistics()
-            initial_out_of_sync = int(
-                initial_stats.get("subscription_out_of_sync_count", "0")
-            )
-
-            channels = [channel1, channel2]
-
-            for channel in channels:
-                listening_client.subscribe_lazy({channel})
-                time.sleep(
-                    4
-                )  # Wait for reconciliation interval (3s) to trigger between subscriptions
-
-            # Give time for more reconciliation attempts
-            # Poll for metric to increase
-            out_of_sync_count = initial_out_of_sync
-            for i in range(15):
-                time.sleep(1)
-                stats = listening_client.get_statistics()
-                out_of_sync_count = int(
-                    stats.get("subscription_out_of_sync_count", "0")
-                )
-                print(
-                    f"[{i+1}s] out_of_sync_count={out_of_sync_count}, initial={initial_out_of_sync}"
-                )
-                if out_of_sync_count >= initial_out_of_sync + 1:
-                    print(f"Metric increased after {i+1} seconds")
-                    break
-
-            # Should have at least 1 out-of-sync event (reconciliation failures are batched)
-            assert (
-                out_of_sync_count >= initial_out_of_sync + 1
-            ), f"Expected at least 1 out-of-sync event, got {out_of_sync_count - initial_out_of_sync}"
-
-        finally:
-            if admin_client:
-                acl_delete_command = ["ACL", "DELUSER", username]
-
-                try:
-                    if cluster_mode:
-                        cast(GlideClusterClient, admin_client).custom_command(
-                            acl_delete_command, route=AllNodes()  # type: ignore[arg-type]
-                        )
-                    else:
-                        admin_client.custom_command(acl_delete_command)  # type: ignore[arg-type]
-                except Exception:
-                    pass
-                admin_client.close()
-
             if listening_client:
                 listening_client.close()

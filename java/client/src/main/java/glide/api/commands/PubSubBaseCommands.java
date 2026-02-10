@@ -191,29 +191,32 @@ public interface PubSubBaseCommands {
     /**
      * Subscribes the client to the specified channels.
      *
-     * <p>This is a non-blocking operation that adds the channels to the desired subscription state.
-     * Messages published to these channels will be received via the configured callback or message
-     * queue.
+     * <p>This command updates the client's internal desired subscription state without waiting
+     * for server confirmation. It returns immediately after updating the local state.
+     * The client will attempt to subscribe asynchronously in the background.
+     *
+     * <p>Note: Use {@code getSubscriptions()} to verify the actual server-side subscription state.
      *
      * @param channels A set of channel names to subscribe to
      * @return A {@link CompletableFuture} that completes when the subscription request is processed
      * @example
      *     <pre>{@code
-     * client.subscribe(Set.of("news", "updates")).get();
+     * client.subscribeLazy(Set.of("news", "updates")).get();
      * }</pre>
      *
      * @see <a href="https://valkey.io/commands/subscribe/">valkey.io</a> for details
      */
-    CompletableFuture<Void> subscribe(Set<String> channels);
+    CompletableFuture<Void> subscribeLazy(Set<String> channels);
 
     /**
      * Subscribes the client to the specified channels with a timeout.
      *
-     * <p>This is a blocking operation that waits up to {@code timeoutMs} for the subscription to be
-     * confirmed by the server.
+     * <p>This command updates the client's internal desired subscription state and waits
+     * for server confirmation.
      *
      * @param channels A set of channel names to subscribe to
-     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation
+     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation.
+     *                  A value of 0 blocks indefinitely until confirmation.
      * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times
      *     out
      * @example
@@ -228,6 +231,10 @@ public interface PubSubBaseCommands {
     /**
      * Subscribes the client to channels matching the specified patterns.
      *
+     * <p>This command updates the client's internal desired subscription state without waiting
+     * for server confirmation. It returns immediately after updating the local state.
+     * The client will attempt to subscribe asynchronously in the background.
+     *
      * <p>Patterns use glob-style matching:
      *
      * <ul>
@@ -236,25 +243,28 @@ public interface PubSubBaseCommands {
      *   <li>{@code [abc]} matches one character from the set
      * </ul>
      *
+     * <p>Note: Use {@code getSubscriptions()} to verify the actual server-side subscription state.
+     *
      * @param patterns A set of glob patterns to subscribe to
      * @return A {@link CompletableFuture} that completes when the subscription request is processed
      * @example
      *     <pre>{@code
-     * client.psubscribe(Set.of("news.*", "updates.*")).get();
+     * client.psubscribeLazy(Set.of("news.*", "updates.*")).get();
      * }</pre>
      *
      * @see <a href="https://valkey.io/commands/psubscribe/">valkey.io</a> for details
      */
-    CompletableFuture<Void> psubscribe(Set<String> patterns);
+    CompletableFuture<Void> psubscribeLazy(Set<String> patterns);
 
     /**
      * Subscribes the client to channels matching the specified patterns with a timeout.
      *
-     * <p>This is a blocking operation that waits up to {@code timeoutMs} for the subscription to be
-     * confirmed by the server.
+     * <p>This command updates the client's internal desired subscription state and waits
+     * for server confirmation.
      *
      * @param patterns A set of glob patterns to subscribe to
-     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation
+     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation.
+     *                  A value of 0 blocks indefinitely until confirmation.
      * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times
      *     out
      * @example
@@ -296,8 +306,12 @@ public interface PubSubBaseCommands {
     /**
      * Unsubscribes the client from the specified channels with a timeout.
      *
+     * <p>This command updates the client's internal desired subscription state and waits
+     * for server confirmation.
+     *
      * @param channels A set of channel names to unsubscribe from
-     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation.
+     *                  A value of 0 blocks indefinitely until confirmation.
      * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or
      *     times out
      * @example
@@ -354,8 +368,12 @@ public interface PubSubBaseCommands {
     /**
      * Unsubscribes the client from the specified patterns with a timeout.
      *
+     * <p>This command updates the client's internal desired subscription state and waits
+     * for server confirmation.
+     *
      * @param patterns A set of glob patterns to unsubscribe from
-     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation.
+     *                  A value of 0 blocks indefinitely until confirmation.
      * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or
      *     times out
      * @example

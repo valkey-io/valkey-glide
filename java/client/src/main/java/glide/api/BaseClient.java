@@ -6251,7 +6251,7 @@ public abstract class BaseClient
                 AclWhoami, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
-    public CompletableFuture<Void> subscribe(Set<String> channels) {
+    public CompletableFuture<Void> subscribeLazy(Set<String> channels) {
         return commandManager.submitNewCommand(
                 Subscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
@@ -6269,7 +6269,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(SubscribeBlocking, args, response -> null);
     }
 
-    public CompletableFuture<Void> psubscribe(Set<String> patterns) {
+    public CompletableFuture<Void> psubscribeLazy(Set<String> patterns) {
         return commandManager.submitNewCommand(
                 PSubscribe, patterns.toArray(EMPTY_STRING_ARRAY), response -> null);
     }

@@ -19,7 +19,7 @@ from glide_shared.exceptions import TimeoutError as GlideTimeoutError
 from glide_shared.routes import AllNodes
 
 from tests.async_tests.conftest import create_client
-from tests.utils.pubsub_test_utils import PubSubTestConstants
+from tests.utils.pubsub_test_utils import PubSubTestConstants, new_message
 from tests.utils.utils import (
     MessageReadMethod,
     SubscriptionMethod,
@@ -30,7 +30,6 @@ from tests.utils.utils import (
     get_message_by_method,
     get_pubsub_modes,
     kill_connections,
-    new_message,
     psubscribe_by_method,
     pubsub_client_cleanup,
     punsubscribe_by_method,

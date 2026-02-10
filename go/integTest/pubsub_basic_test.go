@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
@@ -207,11 +209,9 @@ func (suite *GlideTestSuite) TestUnsubscribeSpecificChannels() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), 3, len(state.ActualSubscriptions[models.Exact]))
 
-	// Unsubscribe from one
+	// Unsubscribe from one (blocking - no sleep needed)
 	err = client.Unsubscribe(ctx, []string{channel1}, 5000)
 	assert.NoError(suite.T(), err)
-
-	time.Sleep(200 * time.Millisecond)
 
 	// Verify only 2 remain
 	state, err = client.GetSubscriptions(ctx)
@@ -240,11 +240,9 @@ func (suite *GlideTestSuite) TestPUnsubscribeSpecificPatterns() {
 
 	client := receiver.(*glide.Client)
 
-	// Unsubscribe from one pattern
+	// Unsubscribe from one pattern (blocking - no sleep needed)
 	err := client.PUnsubscribe(ctx, []string{pattern1}, 5000)
 	assert.NoError(suite.T(), err)
-
-	time.Sleep(200 * time.Millisecond)
 
 	// Verify only pattern2 remains
 	state, err := client.GetSubscriptions(ctx)
@@ -276,8 +274,6 @@ func (suite *GlideTestSuite) TestSUnsubscribeSpecificShardedChannels() {
 	// Unsubscribe from one
 	err := clusterClient.SUnsubscribe(ctx, []string{channel1}, 5000)
 	assert.NoError(suite.T(), err)
-
-	time.Sleep(200 * time.Millisecond)
 
 	// Verify only channel2 remains
 	state, err := clusterClient.GetSubscriptions(ctx)
@@ -694,7 +690,60 @@ func (suite *GlideTestSuite) TestCallbackOnlyRaisesErrorOnGetMethods() {
 }
 
 func (suite *GlideTestSuite) TestReconciliationIntervalSupport() {
-	// This is tested implicitly by all reconnection tests
-	// The reconciliation interval determines how often the client checks subscription state
-	suite.T().Log("Reconciliation interval is supported and tested via reconnection tests")
+	t := suite.T()
+	intervalMs := 1000
+	pollIntervalMs := 100
+	timeoutSec := 5.0
+
+	// Create client with configured reconciliation interval
+	sConfig := config.NewStandaloneSubscriptionConfig()
+	advancedConfig := config.NewAdvancedClientConfiguration().
+		WithPubSubReconciliationIntervalMs(intervalMs)
+	clientConfig := suite.defaultClientConfig().
+		WithSubscriptionConfig(sConfig).
+		WithAdvancedConfiguration(advancedConfig)
+	
+	client, err := suite.client(clientConfig)
+	require.NoError(t, err)
+	defer client.Close()
+
+	pollForTimestampChange := func(previousTs int64) (int64, error) {
+		start := time.Now()
+		for time.Since(start).Seconds() < timeoutSec {
+			stats := client.GetStatistics()
+			currentTs, ok := stats["subscription_last_sync_timestamp"]
+			if !ok {
+				time.Sleep(time.Duration(pollIntervalMs) * time.Millisecond)
+				continue
+			}
+			if int64(currentTs) != previousTs {
+				return int64(currentTs), nil
+			}
+			time.Sleep(time.Duration(pollIntervalMs) * time.Millisecond)
+		}
+		return 0, fmt.Errorf("sync timestamp did not change within %.1fs. Previous: %d", timeoutSec, previousTs)
+	}
+
+	// Get initial timestamp
+	initialStats := client.GetStatistics()
+	initialTs := int64(initialStats["subscription_last_sync_timestamp"])
+
+	// Wait for first sync event
+	firstSyncTs, err := pollForTimestampChange(initialTs)
+	require.NoError(t, err)
+
+	// Wait for second sync event
+	secondSyncTs, err := pollForTimestampChange(firstSyncTs)
+	require.NoError(t, err)
+
+	// Compute actual interval
+	actualIntervalMs := secondSyncTs - firstSyncTs
+
+	// Assert interval is within +/- 50% tolerance
+	minInterval := int64(intervalMs) * 5 / 10
+	maxInterval := int64(intervalMs) * 15 / 10
+	assert.GreaterOrEqual(t, actualIntervalMs, minInterval,
+		"Reconciliation interval (%dms) should be >= %dms", actualIntervalMs, minInterval)
+	assert.LessOrEqual(t, actualIntervalMs, maxInterval,
+		"Reconciliation interval (%dms) should be <= %dms", actualIntervalMs, maxInterval)
 }

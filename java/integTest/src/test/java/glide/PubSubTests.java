@@ -24,6 +24,7 @@ import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.commands.batch.ClusterBatchOptions;
+import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.ChannelMode;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
@@ -2826,5 +2827,80 @@ public class PubSubTests {
             assertNotNull(stats.get("subscription_out_of_sync_count"));
             assertNotNull(stats.get("subscription_last_sync_timestamp"));
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @SneakyThrows
+    public void test_pubsub_reconciliation_interval_config(boolean isStandalone) {
+        int intervalMs = 1000;
+        int pollIntervalMs = 100;
+        double timeoutSec = 5.0;
+
+        BaseClient client;
+        if (isStandalone) {
+            client =
+                    GlideClient.createClient(
+                                    commonClientConfig()
+                                            .subscriptionConfiguration(
+                                                    StandaloneSubscriptionConfiguration.builder().build())
+                                            .advancedConfiguration(
+                                                    AdvancedBaseClientConfiguration.builder()
+                                                            .pubsubReconciliationIntervalMs(intervalMs)
+                                                            .build())
+                                            .build())
+                            .get();
+        } else {
+            client =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig()
+                                            .subscriptionConfiguration(
+                                                    ClusterSubscriptionConfiguration.builder().build())
+                                            .advancedConfiguration(
+                                                    AdvancedBaseClientConfiguration.builder()
+                                                            .pubsubReconciliationIntervalMs(intervalMs)
+                                                            .build())
+                                            .build())
+                            .get();
+        }
+        listeners.put(client, Map.of());
+
+        try {
+            Map<String, String> initialStats = client.getStatistics();
+            long initialTs = Long.parseLong(initialStats.get("subscription_last_sync_timestamp"));
+
+            long firstSyncTs = pollForTimestampChange(client, initialTs, timeoutSec, pollIntervalMs);
+            long secondSyncTs = pollForTimestampChange(client, firstSyncTs, timeoutSec, pollIntervalMs);
+
+            long actualIntervalMs = secondSyncTs - firstSyncTs;
+
+            long minInterval = intervalMs / 2;
+            long maxInterval = intervalMs * 3 / 2;
+            assertTrue(
+                    actualIntervalMs >= minInterval && actualIntervalMs <= maxInterval,
+                    String.format(
+                            "Reconciliation interval (%dms) should be between %dms and %dms",
+                            actualIntervalMs, minInterval, maxInterval));
+        } finally {
+            client.close();
+        }
+    }
+
+    private long pollForTimestampChange(
+            BaseClient client, long previousTs, double timeoutSec, int pollIntervalMs)
+            throws Exception {
+        long startMs = System.currentTimeMillis();
+        while ((System.currentTimeMillis() - startMs) / 1000.0 < timeoutSec) {
+            Map<String, String> stats = client.getStatistics();
+            long currentTs = Long.parseLong(stats.get("subscription_last_sync_timestamp"));
+            if (currentTs != previousTs) {
+                return currentTs;
+            }
+            Thread.sleep(pollIntervalMs);
+        }
+        throw new TimeoutException(
+                String.format(
+                        "Sync timestamp did not change within %.1fs. Previous: %d",
+                        timeoutSec, previousTs));
     }
 }

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -849,7 +850,9 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 
 	switch clientType {
 	case StandaloneClient:
-		if len(channels) > 0 && channels[0].Mode == ShardedMode {
+		if len(channels) > 0 && slices.IndexFunc(channels, func(channel ChannelDefn) bool {
+			return channel.Mode == ShardedMode
+		}) >= 0 {
 			t.Fatalf("Sharded mode is not supported for standalone client")
 			return nil
 		}
@@ -871,13 +874,14 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 			require.NoError(t, err)
 			client = baseClient.(*glide.Client)
 		} else {
-			// For Lazy/Blocking, create client with empty config
-			sConfig := config.NewStandaloneSubscriptionConfig()
-			if withCallback {
-				sConfig = sConfig.WithCallback(callback, &callbackCtx)
-			}
+			// For Lazy/Blocking, create client with empty config only if callback is provided
 			var baseClient interfaces.BaseClientCommands
-			baseClient, err = suite.createAnyClientWithTesting(StandaloneClient, sConfig)
+			if withCallback {
+				sConfig := config.NewStandaloneSubscriptionConfig().WithCallback(callback, &callbackCtx)
+				baseClient, err = suite.createAnyClientWithTesting(StandaloneClient, sConfig)
+			} else {
+				baseClient, err = suite.createAnyClientWithTesting(StandaloneClient, nil)
+			}
 			require.NoError(t, err)
 			client = baseClient.(*glide.Client)
 
@@ -904,13 +908,14 @@ func (suite *GlideTestSuite) CreatePubSubReceiver(
 			require.NoError(t, err)
 			client = baseClient.(*glide.ClusterClient)
 		} else {
-			// For Lazy/Blocking, create client with empty config
-			cConfig := config.NewClusterSubscriptionConfig()
-			if withCallback {
-				cConfig = cConfig.WithCallback(callback, &callbackCtx)
-			}
+			// For Lazy/Blocking, create client with empty config only if callback is provided
 			var baseClient interfaces.BaseClientCommands
-			baseClient, err = suite.createAnyClientWithTesting(ClusterClient, cConfig)
+			if withCallback {
+				cConfig := config.NewClusterSubscriptionConfig().WithCallback(callback, &callbackCtx)
+				baseClient, err = suite.createAnyClientWithTesting(ClusterClient, cConfig)
+			} else {
+				baseClient, err = suite.createAnyClientWithTesting(ClusterClient, nil)
+			}
 			require.NoError(t, err)
 			client = baseClient.(*glide.ClusterClient)
 
@@ -936,7 +941,7 @@ func (suite *GlideTestSuite) subscribeByMethod(
 	}
 
 	ctx := context.Background()
-	timeoutMs := 5000
+	timeoutMs := 0
 
 	// Group channels by mode
 	exactChannels := []string{}

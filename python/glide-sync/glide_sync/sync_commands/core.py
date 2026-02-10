@@ -7806,7 +7806,17 @@ class CoreCommands(Protocol):
         self._execute_command(RequestType.PUnsubscribe, args)
 
     def subscribe(self, channels: Set[str], timeout_ms: int = 0) -> None:
-        """Subscribe to exact channels (blocking)."""
+        """
+        Subscribe to exact channels (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
+
+        Args:
+            channels: A set of channel names to subscribe to.
+            timeout_ms: Maximum time in milliseconds to wait for server confirmation.
+                    A value of 0 blocks indefinitely.
+        """
         if timeout_ms < 0:
             raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args: List[Union[str, bytes]] = cast(
@@ -7815,7 +7825,17 @@ class CoreCommands(Protocol):
         self._execute_command(RequestType.SubscribeBlocking, args)
 
     def psubscribe(self, patterns: Set[str], timeout_ms: int = 0) -> None:
-        """Subscribe to channel patterns (blocking)."""
+        """
+        Subscribe to channel patterns (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
+
+        Args:
+            patterns: A set of patterns to subscribe to.
+            timeout_ms: Maximum time in milliseconds to wait for server confirmation.
+                    A value of 0 blocks indefinitely.
+        """
         if timeout_ms < 0:
             raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args: List[Union[str, bytes]] = cast(
@@ -7828,6 +7848,9 @@ class CoreCommands(Protocol):
     ) -> None:
         """
         Unsubscribe from exact channels (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
 
         Args:
             channels: A set of channel names to unsubscribe from.
@@ -7849,6 +7872,9 @@ class CoreCommands(Protocol):
     ) -> None:
         """
         Unsubscribe from channel patterns (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
 
         Args:
             patterns: A set of patterns to unsubscribe from.

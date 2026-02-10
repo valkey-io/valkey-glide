@@ -2653,6 +2653,26 @@ func (client *ClusterClient) UnwatchWithOptions(ctx context.Context, route optio
 // Example:
 //
 //	err := client.SSubscribe(ctx, []string{"shard_channel1"}, 5000)
+// SSubscribe subscribes the client to the specified sharded channels (blocking).
+// This command updates the client's internal desired subscription state and waits
+// for server confirmation.
+//
+// Sharded pubsub is only available in cluster mode and requires Valkey 7.0+.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	channels - A slice of sharded channel names to subscribe to.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.SSubscribe(ctx, []string{"shard_channel1"}, 0)
 func (client *ClusterClient) SSubscribe(ctx context.Context, channels []string, timeoutMs int) error {
 	if timeoutMs < 0 {
 		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
@@ -2680,12 +2700,35 @@ func (client *ClusterClient) SSubscribe(ctx context.Context, channels []string, 
 // Example:
 //
 //	err := client.SSubscribeLazy(ctx, []string{"shard_channel1"})
+// SSubscribeLazy subscribes the client to the specified sharded channels (non-blocking).
+// This command updates the client's internal desired subscription state without waiting
+// for server confirmation. It returns immediately after updating the local state.
+// The client will attempt to subscribe asynchronously in the background.
+//
+// Sharded pubsub is only available in cluster mode and requires Valkey 7.0+.
+//
+// Note: Use GetSubscriptions() to verify the actual server-side subscription state.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	channels - A slice of sharded channel names to subscribe to.
+//
+// Return value:
+//
+//	An error if the operation fails.
+//
+// Example:
+//
+//	err := client.SSubscribeLazy(ctx, []string{"shard_channel1"})
 func (client *ClusterClient) SSubscribeLazy(ctx context.Context, channels []string) error {
 	_, err := client.executeCommand(ctx, C.SSubscribe, channels)
 	return err
 }
 
 // SUnsubscribe unsubscribes the client from the specified sharded channels (blocking).
+// This command updates the client's internal desired subscription state and waits
+// for server confirmation.
 // If no channels are specified (nil or empty slice), unsubscribes from all sharded channels.
 //
 // Parameters:
@@ -2713,6 +2756,8 @@ func (client *ClusterClient) SUnsubscribe(ctx context.Context, channels []string
 }
 
 // SUnsubscribeLazy unsubscribes the client from the specified sharded channels (non-blocking).
+// This command updates the client's internal desired subscription state without waiting
+// for server confirmation. It returns immediately after updating the local state.
 // If no channels are specified (nil), unsubscribes from all sharded channels.
 //
 // Parameters:

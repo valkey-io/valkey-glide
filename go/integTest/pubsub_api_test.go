@@ -118,11 +118,9 @@ func (suite *GlideTestSuite) TestUnsubscribeAllChannels() {
 		suite.T().Fatal("Failed to receive on channel1")
 	}
 
-	// Unsubscribe from all exact channels using nil
+	// Unsubscribe from all exact channels using nil (blocking - no sleep needed)
 	err = receiver.(*glide.Client).Unsubscribe(ctx, nil, 5000)
 	assert.NoError(suite.T(), err)
-
-	time.Sleep(200 * time.Millisecond)
 
 	// Verify exact channels don't receive, but pattern still does
 	_, err = publisher.Publish(ctx, channel1, "should_not_receive")
@@ -143,8 +141,6 @@ func (suite *GlideTestSuite) TestUnsubscribeAllChannels() {
 	// Unsubscribe from all patterns using nil
 	err = receiver.(*glide.Client).PUnsubscribe(ctx, nil, 5000)
 	assert.NoError(suite.T(), err)
-
-	time.Sleep(200 * time.Millisecond)
 
 	// Verify no messages received
 	_, err = publisher.Publish(ctx, "unsub_pattern_test2", "should_not_receive")

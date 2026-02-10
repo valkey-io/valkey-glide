@@ -1506,7 +1506,17 @@ class ClusterCommands(CoreCommands):
         self._execute_command(RequestType.SUnsubscribe, args)
 
     def ssubscribe(self, channels: Set[str], timeout_ms: int = 0) -> None:
-        """Subscribe to sharded channels (blocking)."""
+        """
+        Subscribe to sharded channels (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
+
+        Args:
+            channels: A set of sharded channel names to subscribe to.
+            timeout_ms: Maximum time in milliseconds to wait for server confirmation.
+                    A value of 0 blocks indefinitely.
+        """
         if timeout_ms < 0:
             raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args: List[Union[str, bytes]] = cast(
@@ -1519,6 +1529,9 @@ class ClusterCommands(CoreCommands):
     ) -> None:
         """
         Unsubscribe from sharded channels (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
 
         Args:
             channels: A set of sharded channel names to unsubscribe from.

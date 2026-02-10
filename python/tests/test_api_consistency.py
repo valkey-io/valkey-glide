@@ -64,7 +64,6 @@ EXCLUDED_TESTS = {
         "get_pubsub_channel_modes_from_client",
         "create_pubsub_subscription",
         "decode_pubsub_msg",
-        "new_message",
         "assert_pubsub_messages",
         "poll_for_timestamp_change",
         # OpenTelemetry async helper function
