@@ -1,3 +1,4 @@
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package com.company.glide.lambda;
 
 import com.amazonaws.services.lambda.runtime.Context;
@@ -5,7 +6,6 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import glide.api.GlideClusterClient;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -20,18 +20,20 @@ public class ValkeyLambda implements RequestHandler<Map<String, String>, Map<Str
     static {
         try {
             System.out.println("Initializing Valkey client...");
-            String host = System.getenv("VALKEY_HOST") != null ? System.getenv("VALKEY_HOST") : "localhost";
-            int port = System.getenv("VALKEY_PORT") != null ? Integer.parseInt(System.getenv("VALKEY_PORT")) : 7001;
+            String host =
+                    System.getenv("VALKEY_HOST") != null ? System.getenv("VALKEY_HOST") : "localhost";
+            int port =
+                    System.getenv("VALKEY_PORT") != null
+                            ? Integer.parseInt(System.getenv("VALKEY_PORT"))
+                            : 7001;
             System.out.println("Using Valkey host: " + host + ":" + port);
-            GlideClusterClientConfiguration config = GlideClusterClientConfiguration.builder()
-                    .address(NodeAddress.builder()
-                            .host(host)
-                            .port(port)
-                            .build())
-                    .useTLS(false)
-                    .requestTimeout(30000)
-                    .readFrom(glide.api.models.configuration.ReadFrom.PRIMARY)
-                    .build();
+            GlideClusterClientConfiguration config =
+                    GlideClusterClientConfiguration.builder()
+                            .address(NodeAddress.builder().host(host).port(port).build())
+                            .useTLS(false)
+                            .requestTimeout(30000)
+                            .readFrom(glide.api.models.configuration.ReadFrom.PRIMARY)
+                            .build();
             valkey = GlideClusterClient.createClient(config).get();
             System.out.println("Valkey client initialized successfully");
 
@@ -65,7 +67,7 @@ public class ValkeyLambda implements RequestHandler<Map<String, String>, Map<Str
             long startSet = System.currentTimeMillis();
             valkey.set(testKey, testValue).get();
             System.out.println("Set completed in " + (System.currentTimeMillis() - startSet) + "ms");
-            
+
             System.out.println("Getting key...");
             long startGet = System.currentTimeMillis();
             CompletableFuture<String> getFuture = valkey.get(testKey);
@@ -88,7 +90,7 @@ public class ValkeyLambda implements RequestHandler<Map<String, String>, Map<Str
                 response.put("message", "Values don't match");
             }
 
-            valkey.del(new String[]{testKey}).get();
+            valkey.del(new String[] {testKey}).get();
         } catch (ExecutionException | InterruptedException e) {
             System.err.println("Exception occurred: " + e.getMessage());
             e.printStackTrace();
