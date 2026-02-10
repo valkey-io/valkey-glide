@@ -4275,16 +4275,6 @@ class TestSyncPubSub:
             SubscriptionMethod.Blocking,
         ],
     )
-    @pytest.mark.skip_if_version_below("7.0.0")
-    @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize(
-        "subscription_method",
-        [
-            SubscriptionMethod.Config,
-            SubscriptionMethod.Lazy,
-            SubscriptionMethod.Blocking,
-        ],
-    )
     def test_sync_ssubscribe_channels_different_slots(
         self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
     ):
