@@ -7624,10 +7624,13 @@ public final class Jedis implements Closeable {
                 Object[] membersArray = (Object[]) membersObj;
                 List<byte[]> members = new ArrayList<>();
                 for (Object m : membersArray) {
-                    members.add(
-                            m != null && m instanceof GlideString
-                                    ? ((GlideString) m).getBytes()
-                                    : (m != null ? m.toString().getBytes(VALKEY_CHARSET) : null));
+                    if (m == null) {
+                        members.add(null);
+                    } else if (m instanceof GlideString) {
+                        members.add(((GlideString) m).getBytes());
+                    } else {
+                        members.add(m.toString().getBytes(VALKEY_CHARSET));
+                    }
                 }
                 return new ScanResult<>(newCursor, members);
             }
