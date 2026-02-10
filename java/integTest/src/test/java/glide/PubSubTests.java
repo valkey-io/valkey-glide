@@ -25,6 +25,8 @@ import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.configuration.AdvancedBaseClientConfiguration;
+import glide.api.models.configuration.AdvancedGlideClientConfiguration;
+import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.ChannelMode;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
@@ -259,7 +261,7 @@ public class PubSubTests {
             Set<String> channels =
                     exactChannels.stream().map(GlideString::getString).collect(Collectors.toSet());
             if (method == SubscriptionMethod.Lazy) {
-                client.subscribe(channels).get();
+                client.subscribeLazy(channels).get();
                 Thread.sleep(MESSAGE_DELIVERY_DELAY);
             } else {
                 client.subscribe(channels, 5000).get();
@@ -277,7 +279,7 @@ public class PubSubTests {
             Set<String> patterns =
                     patternChannels.stream().map(GlideString::getString).collect(Collectors.toSet());
             if (method == SubscriptionMethod.Lazy) {
-                client.psubscribe(patterns).get();
+                client.psubscribeLazy(patterns).get();
                 Thread.sleep(MESSAGE_DELIVERY_DELAY);
             } else {
                 client.psubscribe(patterns, 5000).get();
@@ -296,7 +298,7 @@ public class PubSubTests {
                 Set<String> channels =
                         shardedChannels.stream().map(GlideString::getString).collect(Collectors.toSet());
                 if (method == SubscriptionMethod.Lazy) {
-                    ((GlideClusterClient) client).ssubscribe(channels).get();
+                    ((GlideClusterClient) client).ssubscribeLazy(channels).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
                 } else {
                     ((GlideClusterClient) client).ssubscribe(channels, 5000).get();
@@ -2037,7 +2039,7 @@ public class PubSubTests {
 
                     // Dynamic subscribe (lazy)
                     Set<String> channels = Set.of(channel);
-                    listener.subscribe(channels).get();
+                    listener.subscribeLazy(channels).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Publish message
@@ -2064,7 +2066,7 @@ public class PubSubTests {
 
                     // Dynamic psubscribe (lazy)
                     Set<String> patterns = Set.of(pattern);
-                    listener.psubscribe(patterns).get();
+                    listener.psubscribeLazy(patterns).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Publish message
@@ -2092,7 +2094,7 @@ public class PubSubTests {
 
                     // Subscribe
                     Set<String> channels = Set.of(channel);
-                    listener.subscribe(channels).get();
+                    listener.subscribeLazy(channels).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Unsubscribe
@@ -2121,7 +2123,7 @@ public class PubSubTests {
 
                     // Dynamic ssubscribe (lazy)
                     Set<String> channels = Set.of(channel);
-                    listener.ssubscribe(channels).get();
+                    listener.ssubscribeLazy(channels).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Publish message
@@ -2147,7 +2149,7 @@ public class PubSubTests {
 
                     // Subscribe
                     Set<String> channels = Set.of(channel);
-                    listener.ssubscribe(channels).get();
+                    listener.ssubscribeLazy(channels).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Unsubscribe
@@ -2273,7 +2275,7 @@ public class PubSubTests {
 
             // Subscribe to a channel
             Set<String> channels = Set.of(channel);
-            client.subscribe(channels).get();
+            client.subscribeLazy(channels).get();
 
             // Wait for reconciliation
             Thread.sleep(MESSAGE_DELIVERY_DELAY);
@@ -2318,7 +2320,7 @@ public class PubSubTests {
 
         try {
             // Subscribe to multiple channels
-            client.subscribe(Set.of(channel1, channel2)).get();
+            client.subscribeLazy(Set.of(channel1, channel2)).get();
             Thread.sleep(500);
             Thread.sleep(500);
 
@@ -2328,7 +2330,7 @@ public class PubSubTests {
             Thread.sleep(500);
 
             // Verify we can subscribe again (proves unsubscribe worked)
-            client.subscribe(Set.of(channel1)).get();
+            client.subscribeLazy(Set.of(channel1)).get();
             Thread.sleep(500);
         } finally {
             client.close();
@@ -2346,7 +2348,7 @@ public class PubSubTests {
 
         try {
             // Subscribe to multiple channels
-            client.subscribe(Set.of(channel1, channel2)).get();
+            client.subscribeLazy(Set.of(channel1, channel2)).get();
             Thread.sleep(500);
             Thread.sleep(500);
 
@@ -2380,7 +2382,7 @@ public class PubSubTests {
 
         try {
             // Subscribe to multiple patterns
-            client.psubscribe(Set.of(pattern1, pattern2)).get();
+            client.psubscribeLazy(Set.of(pattern1, pattern2)).get();
             Thread.sleep(500);
 
             // Verify subscriptions
@@ -2418,7 +2420,7 @@ public class PubSubTests {
 
         try {
             // Subscribe to multiple sharded channels
-            client.ssubscribe(Set.of(channel1, channel2)).get();
+            client.ssubscribeLazy(Set.of(channel1, channel2)).get();
             Thread.sleep(500);
 
             // Verify subscriptions
@@ -2507,7 +2509,7 @@ public class PubSubTests {
         GlideClusterClient publisher = createClusterClient();
 
         // Subscribe to channels in different slots
-        client.ssubscribe(Set.of(channel1, channel2)).get();
+        client.ssubscribeLazy(Set.of(channel1, channel2)).get();
         Thread.sleep(500);
 
         // Verify both subscriptions
@@ -2541,7 +2543,7 @@ public class PubSubTests {
         GlideClusterClient client = createClusterClientWithEmptySubscriptions();
 
         // Subscribe to channels in different slots
-        client.ssubscribe(Set.of(channel1, channel2)).get();
+        client.ssubscribeLazy(Set.of(channel1, channel2)).get();
         Thread.sleep(500);
 
         // Unsubscribe from one channel
@@ -2570,9 +2572,9 @@ public class PubSubTests {
         GlideClient client = createStandaloneClientWithEmptySubscriptions();
 
         // Subscribe to both exact and pattern
-        client.subscribe(Set.of(channel)).get();
+        client.subscribeLazy(Set.of(channel)).get();
         Thread.sleep(500);
-        client.psubscribe(Set.of(pattern)).get();
+        client.psubscribeLazy(Set.of(pattern)).get();
         Thread.sleep(500);
 
         // Verify both subscriptions
@@ -2615,11 +2617,11 @@ public class PubSubTests {
         GlideClusterClient client = createClusterClientWithEmptySubscriptions();
 
         // Subscribe to exact, pattern, and sharded
-        client.subscribe(Set.of(channel)).get();
+        client.subscribeLazy(Set.of(channel)).get();
         Thread.sleep(500);
-        client.psubscribe(Set.of(pattern)).get();
+        client.psubscribeLazy(Set.of(pattern)).get();
         Thread.sleep(500);
-        client.ssubscribe(Set.of(sharded)).get();
+        client.ssubscribeLazy(Set.of(sharded)).get();
         Thread.sleep(500);
 
         // Verify all subscriptions
@@ -2688,7 +2690,7 @@ public class PubSubTests {
                     Long.parseLong(initialStats.getOrDefault("subscription_out_of_sync_count", "0"));
 
             // Subscribe (will fail due to ACL)
-            listeningClient.subscribe(Set.of(channel)).get();
+            listeningClient.subscribeLazy(Set.of(channel)).get();
             Thread.sleep(500);
 
             // Poll for metric increment
@@ -2766,7 +2768,7 @@ public class PubSubTests {
                     Long.parseLong(initialStats.getOrDefault("subscription_out_of_sync_count", "0"));
 
             // Subscribe (will fail due to ACL)
-            listeningClient.subscribe(Set.of(channel)).get();
+            listeningClient.subscribeLazy(Set.of(channel)).get();
             Thread.sleep(500);
 
             // Poll for metric increment
@@ -2845,7 +2847,7 @@ public class PubSubTests {
                                             .subscriptionConfiguration(
                                                     StandaloneSubscriptionConfiguration.builder().build())
                                             .advancedConfiguration(
-                                                    AdvancedBaseClientConfiguration.builder()
+                                                    AdvancedGlideClientConfiguration.builder()
                                                             .pubsubReconciliationIntervalMs(intervalMs)
                                                             .build())
                                             .build())
@@ -2857,7 +2859,7 @@ public class PubSubTests {
                                             .subscriptionConfiguration(
                                                     ClusterSubscriptionConfiguration.builder().build())
                                             .advancedConfiguration(
-                                                    AdvancedBaseClientConfiguration.builder()
+                                                    AdvancedGlideClusterClientConfiguration.builder()
                                                             .pubsubReconciliationIntervalMs(intervalMs)
                                                             .build())
                                             .build())
