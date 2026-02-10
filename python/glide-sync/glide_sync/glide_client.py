@@ -766,11 +766,6 @@ class BaseClient(CoreCommands):
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
 
-        if not self._config._is_pubsub_configured():
-            raise ConfigurationError(
-                "The operation will never succeed since there was no pubsbub subscriptions applied to the client."
-            )
-
         if self._config._get_pubsub_callback_and_context()[0] is not None:
             raise ConfigurationError(
                 "The operation will never succeed since messages will be passed to the configured callback."
@@ -788,9 +783,6 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-
-        if not self._config._is_pubsub_configured():
-            raise ConfigurationError("No pubsub subscriptions configured")
 
         if self._config._get_pubsub_callback_and_context()[0] is not None:
             raise ConfigurationError(

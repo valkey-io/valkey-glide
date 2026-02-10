@@ -161,28 +161,9 @@ public class PubSubTests {
 
     @SneakyThrows
     private BaseClient createClientWithEmptySubscriptionConfig(boolean standalone) {
-        BaseClient client =
-                standalone ? createStandaloneClientWithEmptyConfig() : createClusterClientWithEmptyConfig();
+        BaseClient client = standalone ? createStandaloneClient() : createClusterClient();
         senders.add(client);
         return client;
-    }
-
-    @SneakyThrows
-    private GlideClient createStandaloneClientWithEmptyConfig() {
-        return GlideClient.createClient(
-                        commonClientConfig()
-                                .subscriptionConfiguration(StandaloneSubscriptionConfiguration.builder().build())
-                                .build())
-                .get();
-    }
-
-    @SneakyThrows
-    private GlideClusterClient createClusterClientWithEmptyConfig() {
-        return GlideClusterClient.createClient(
-                        commonClusterClientConfig()
-                                .subscriptionConfiguration(ClusterSubscriptionConfiguration.builder().build())
-                                .build())
-                .get();
     }
 
     @SneakyThrows
@@ -202,14 +183,14 @@ public class PubSubTests {
 
     @SneakyThrows
     private GlideClient createStandaloneClientWithEmptySubscriptions() {
-        GlideClient client = createStandaloneClientWithEmptyConfig();
+        GlideClient client = createStandaloneClient();
         listeners.put(client, Map.of());
         return client;
     }
 
     @SneakyThrows
     private GlideClusterClient createClusterClientWithEmptySubscriptions() {
-        GlideClusterClient client = createClusterClientWithEmptyConfig();
+        GlideClusterClient client = createClusterClient();
         listeners.put(client, Map.of());
         return client;
     }
@@ -477,7 +458,7 @@ public class PubSubTests {
 
         return withCallback
                 ? createClientWithCallbackOnly(standalone, callback)
-                : createClientWithEmptySubscriptionConfig(standalone);
+                : (standalone ? createStandaloneClient() : createClusterClient());
     }
 
     @SneakyThrows
