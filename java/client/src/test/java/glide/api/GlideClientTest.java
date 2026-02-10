@@ -2023,6 +2023,35 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
+    public void mget_binary_with_large_values_returns_null_for_missing_keys() {
+        // Test for issue #5275: large binary data causes MGET to yield GlideString "nil" instead
+        // of null for missing key
+        
+        // Create 16KB of data to trigger DirectByteBuffer path
+        byte[] largeData = new byte[16 * 1024];
+        java.util.Arrays.fill(largeData, (byte) 0x00);
+
+        GlideString[] keys = {gs("key1"), gs("missing"), gs("key2")};
+        GlideString[] values = {gs("value1"), null, gs(largeData)};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(values);
+
+        when(commandManager.<GlideString[]>submitNewCommand(eq(MGet), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        CompletableFuture<GlideString[]> response = service.mget(keys);
+        GlideString[] payload = response.get();
+
+        assertEquals(testResponse, response);
+        assertEquals(3, payload.length);
+        assertEquals(gs("value1"), payload[0]);
+        assertNull(payload[1], "Missing key should return null, not GlideString('nil')");
+        assertArrayEquals(largeData, payload[2].getBytes());
+    }
+
+    @SneakyThrows
+    @Test
     public void mset_returns_success() {
         // setup
         Map<String, String> keyValueMap = new LinkedHashMap<>();
