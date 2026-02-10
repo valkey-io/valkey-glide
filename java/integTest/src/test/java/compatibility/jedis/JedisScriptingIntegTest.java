@@ -6,7 +6,6 @@ import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -98,7 +97,9 @@ public class JedisScriptingIntegTest {
     void testEvalWithKeysAndArgs() {
         Object result =
                 jedis.eval(
-                        "return {KEYS[1], ARGV[1]}", Collections.singletonList("mykey"), Collections.singletonList("myarg"));
+                        "return {KEYS[1], ARGV[1]}",
+                        Collections.singletonList("mykey"),
+                        Collections.singletonList("myarg"));
         assertTrue(result instanceof Object[]);
         Object[] arr = (Object[]) result;
         assertEquals(2, arr.length);
@@ -216,12 +217,12 @@ public class JedisScriptingIntegTest {
                 "Valkey version 7.0 or higher is required for functions");
 
         String lib =
-                "#!lua name=mylib\nredis.register_function('myfunc', function(keys, args) return args[1] end)";
+                "#!lua name=mylib\n"
+                        + "redis.register_function('myfunc', function(keys, args) return args[1] end)";
         String libName = jedis.functionLoad(lib);
         assertEquals("mylib", libName);
 
-        Object result =
-                jedis.fcall("myfunc", Collections.emptyList(), Collections.singletonList("42"));
+        Object result = jedis.fcall("myfunc", Collections.emptyList(), Collections.singletonList("42"));
         assertEquals("42", result);
 
         // Clean up
@@ -236,16 +237,17 @@ public class JedisScriptingIntegTest {
                 "Valkey version 7.0 or higher is required for functions");
 
         String lib1 =
-                "#!lua name=replacelib\nredis.register_function('func1', function(keys, args) return 1 end)";
+                "#!lua name=replacelib\n"
+                        + "redis.register_function('func1', function(keys, args) return 1 end)";
         jedis.functionLoad(lib1);
 
         String lib2 =
-                "#!lua name=replacelib\nredis.register_function('func2', function(keys, args) return 2 end)";
+                "#!lua name=replacelib\n"
+                        + "redis.register_function('func2', function(keys, args) return 2 end)";
         String libName = jedis.functionLoadReplace(lib2);
         assertEquals("replacelib", libName);
 
-        Object result =
-                jedis.fcall("func2", Collections.emptyList(), Collections.emptyList());
+        Object result = jedis.fcall("func2", Collections.emptyList(), Collections.emptyList());
         assertEquals(2L, result);
 
         // Clean up
@@ -260,7 +262,8 @@ public class JedisScriptingIntegTest {
                 "Valkey version 7.0 or higher is required for functions");
 
         String lib =
-                "#!lua name=listlib\nredis.register_function('listfunc', function(keys, args) return 1 end)";
+                "#!lua name=listlib\n"
+                        + "redis.register_function('listfunc', function(keys, args) return 1 end)";
         jedis.functionLoad(lib);
 
         List<Object> functions = jedis.functionList();
@@ -279,7 +282,8 @@ public class JedisScriptingIntegTest {
                 "Valkey version 7.0 or higher is required for functions");
 
         String lib =
-                "#!lua name=patternlib\nredis.register_function('patternfunc', function(keys, args) return 1 end)";
+                "#!lua name=patternlib\n"
+                        + "redis.register_function('patternfunc', function(keys, args) return 1 end)";
         jedis.functionLoad(lib);
 
         List<Object> functions = jedis.functionList("pattern*");
@@ -297,7 +301,8 @@ public class JedisScriptingIntegTest {
                 "Valkey version 7.0 or higher is required for functions");
 
         String lib =
-                "#!lua name=codelib\nredis.register_function('codefunc', function(keys, args) return 1 end)";
+                "#!lua name=codelib\n"
+                        + "redis.register_function('codefunc', function(keys, args) return 1 end)";
         jedis.functionLoad(lib);
 
         List<Object> functions = jedis.functionListWithCode();
@@ -316,7 +321,8 @@ public class JedisScriptingIntegTest {
                 "Valkey version 7.0 or higher is required for functions");
 
         String lib =
-                "#!lua name=dumplib\nredis.register_function('dumpfunc', function(keys, args) return 1 end)";
+                "#!lua name=dumplib\n"
+                        + "redis.register_function('dumpfunc', function(keys, args) return 1 end)";
         jedis.functionLoad(lib);
 
         byte[] dump = jedis.functionDump();
@@ -329,8 +335,7 @@ public class JedisScriptingIntegTest {
         assertEquals("OK", result);
 
         // Verify function is restored
-        Object callResult =
-                jedis.fcall("dumpfunc", Collections.emptyList(), Collections.emptyList());
+        Object callResult = jedis.fcall("dumpfunc", Collections.emptyList(), Collections.emptyList());
         assertEquals(1L, callResult);
 
         // Clean up
@@ -345,7 +350,8 @@ public class JedisScriptingIntegTest {
                 "Valkey version 7.0 or higher is required for functions");
 
         String lib =
-                "#!lua name=policylib\nredis.register_function('policyfunc', function(keys, args) return 1 end)";
+                "#!lua name=policylib\n"
+                        + "redis.register_function('policyfunc', function(keys, args) return 1 end)";
         jedis.functionLoad(lib);
 
         byte[] dump = jedis.functionDump();
@@ -366,7 +372,8 @@ public class JedisScriptingIntegTest {
                 "Valkey version 7.0 or higher is required for functions");
 
         String lib =
-                "#!lua name=flushlib\nredis.register_function('flushfunc', function(keys, args) return 1 end)";
+                "#!lua name=flushlib\n"
+                        + "redis.register_function('flushfunc', function(keys, args) return 1 end)";
         jedis.functionLoad(lib);
 
         String result = jedis.functionFlush();
@@ -384,7 +391,8 @@ public class JedisScriptingIntegTest {
                 "Valkey version 7.0 or higher is required for functions");
 
         String lib =
-                "#!lua name=flushmodelib\nredis.register_function('flushmodefunc', function(keys, args) return 1 end)";
+                "#!lua name=flushmodelib\n"
+                        + "redis.register_function('flushmodefunc', function(keys, args) return 1 end)";
         jedis.functionLoad(lib);
 
         String result = jedis.functionFlush(FlushMode.SYNC);
@@ -399,7 +407,8 @@ public class JedisScriptingIntegTest {
                 "Valkey version 7.0 or higher is required for functions");
 
         String lib =
-                "#!lua name=deletelib\nredis.register_function('deletefunc', function(keys, args) return 1 end)";
+                "#!lua name=deletelib\n"
+                        + "redis.register_function('deletefunc', function(keys, args) return 1 end)";
         jedis.functionLoad(lib);
 
         String result = jedis.functionDelete("deletelib");
@@ -425,11 +434,14 @@ public class JedisScriptingIntegTest {
                 "Valkey version 7.0 or higher is required for functions");
 
         String lib =
-                "#!lua name=rolib\nredis.register_function{function_name='rofunc', callback=function(keys, args) return args[1] end, flags={'no-writes'}}";
+                "#!lua name=rolib\n"
+                        + "redis.register_function{function_name='rofunc', callback=function(keys, args) return"
+                        + " args[1] end, flags={'no-writes'}}";
         jedis.functionLoad(lib);
 
         Object result =
-                jedis.fcallReadonly("rofunc", Collections.emptyList(), Collections.singletonList("readonly"));
+                jedis.fcallReadonly(
+                        "rofunc", Collections.emptyList(), Collections.singletonList("readonly"));
         assertEquals("readonly", result);
 
         // Clean up

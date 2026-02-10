@@ -159,8 +159,7 @@ public class JedisMethodsTest {
 
         // Test evalsha(String, List, List) exists
         Method evalshaWithLists =
-                jedisClass.getMethod(
-                        "evalsha", String.class, java.util.List.class, java.util.List.class);
+                jedisClass.getMethod("evalsha", String.class, java.util.List.class, java.util.List.class);
         assertEquals(Object.class, evalshaWithLists.getReturnType());
     }
 
@@ -250,9 +249,7 @@ public class JedisMethodsTest {
         // Test functionRestore(byte[], FunctionRestorePolicy) exists
         Method functionRestoreWithPolicy =
                 jedisClass.getMethod(
-                        "functionRestore",
-                        byte[].class,
-                        redis.clients.jedis.args.FunctionRestorePolicy.class);
+                        "functionRestore", byte[].class, redis.clients.jedis.args.FunctionRestorePolicy.class);
         assertEquals(String.class, functionRestoreWithPolicy.getReturnType());
 
         // Test functionFlush() exists

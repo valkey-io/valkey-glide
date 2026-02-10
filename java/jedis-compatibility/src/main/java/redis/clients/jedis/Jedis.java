@@ -9,7 +9,6 @@ import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ScriptOptions;
-import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
@@ -7095,10 +7094,9 @@ public final class Jedis implements Closeable {
      * Executes a Lua script by its SHA1 digest with keys and arguments.
      *
      * <p><b>Implementation Note:</b> This method uses {@code customCommand} because GLIDE Java does
-     * not currently expose a type-safe {@code evalsha} API for non-read-only operations. While
-     * GLIDE provides {@link #evalshaReadonly(String, List, List)} for read-only scripts, the
-     * standard {@code EVALSHA} command (which allows writes) must be sent using {@code
-     * customCommand}.
+     * not currently expose a type-safe {@code evalsha} API for non-read-only operations. While GLIDE
+     * provides {@link #evalshaReadonly(String, List, List)} for read-only scripts, the standard
+     * {@code EVALSHA} command (which allows writes) must be sent using {@code customCommand}.
      *
      * @param sha1 the SHA1 digest of the script
      * @param keys the keys accessed by the script
@@ -7223,8 +7221,7 @@ public final class Jedis implements Closeable {
      */
     public String scriptFlush(FlushMode flushMode) {
         return executeCommandWithGlide(
-                "SCRIPT FLUSH",
-                () -> glideClient.scriptFlush(flushMode.toGlideFlushMode()).get());
+                "SCRIPT FLUSH", () -> glideClient.scriptFlush(flushMode.toGlideFlushMode()).get());
     }
 
     /**
@@ -7424,8 +7421,7 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "FUNCTION LIST",
                 () -> {
-                    Map<String, Object>[] result =
-                            glideClient.functionList(libraryNamePattern, false).get();
+                    Map<String, Object>[] result = glideClient.functionList(libraryNamePattern, false).get();
                     return Arrays.asList((Object[]) result);
                 });
     }
@@ -7460,8 +7456,7 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "FUNCTION LIST",
                 () -> {
-                    Map<String, Object>[] result =
-                            glideClient.functionList(libraryNamePattern, true).get();
+                    Map<String, Object>[] result = glideClient.functionList(libraryNamePattern, true).get();
                     return Arrays.asList((Object[]) result);
                 });
     }
@@ -7475,8 +7470,7 @@ public final class Jedis implements Closeable {
      * @since Valkey 7.0 and above
      */
     public Object functionStats() {
-        return executeCommandWithGlide(
-                "FUNCTION STATS", () -> glideClient.functionStats().get());
+        return executeCommandWithGlide("FUNCTION STATS", () -> glideClient.functionStats().get());
     }
 
     // Static initialization block for cleanup hooks
