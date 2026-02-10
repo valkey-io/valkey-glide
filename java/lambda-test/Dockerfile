@@ -4,4 +4,5 @@ FROM public.ecr.aws/lambda/java:21-arm64
 COPY build/libs/lambda-test-1.0-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/lib/
 
 # Set the Lambda handler
+USER non-root
 CMD ["com.company.glide.lambda.ValkeyLambda::handleRequest"]
