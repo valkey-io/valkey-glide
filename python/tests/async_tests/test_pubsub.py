@@ -4576,10 +4576,12 @@ class TestPubSub:
             # Compute the actual interval between syncs (timestamps are in milliseconds)
             actual_interval_ms = second_sync_ts - first_sync_ts
 
-            # Assert interval is within +/- 50% tolerance
-            assert interval_ms * 0.5 <= actual_interval_ms <= interval_ms * 1.5, (
-                f"Reconciliation interval ({actual_interval_ms}ms) should be between "
-                f"{interval_ms * 0.5}ms and {interval_ms * 1.5}ms"
+            # Assert interval is positive and at most 1.5x the configured interval
+            # Note: Reconciliation can be triggered immediately by subscription changes,
+            # so we only enforce an upper bound based on the timer interval
+            assert 0 < actual_interval_ms <= interval_ms * 1.5, (
+                f"Reconciliation interval ({actual_interval_ms}ms) should be positive "
+                f"and at most {interval_ms * 1.5}ms"
             )
 
         finally:

@@ -624,6 +624,14 @@ class TestSyncPubSub:
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_sharded_pubsub(
         self,
         request,
@@ -841,6 +849,14 @@ class TestSyncPubSub:
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_pattern(
         self,
         request,
@@ -965,6 +981,14 @@ class TestSyncPubSub:
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_pattern_many_channels(
         self,
         request,
@@ -1030,6 +1054,14 @@ class TestSyncPubSub:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
     )
     def test_sync_pubsub_combined_exact_and_pattern_one_client(
         self,
@@ -1311,6 +1343,14 @@ class TestSyncPubSub:
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_combined_exact_pattern_and_sharded_one_client(
         self,
         request,
@@ -1443,6 +1483,14 @@ class TestSyncPubSub:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
     )
     def test_sync_pubsub_combined_exact_pattern_and_sharded_multi_client(
         self,
@@ -1670,6 +1718,14 @@ class TestSyncPubSub:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
     )
     def test_sync_pubsub_combined_different_channels_with_same_name(
         self,
@@ -1940,6 +1996,14 @@ class TestSyncPubSub:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
     )
     def test_sync_pubsub_three_publishing_clients_same_name_with_sharded(
         self,
@@ -3681,11 +3745,12 @@ class TestSyncPubSub:
 
             actual_interval_ms = second_sync_ts - first_sync_ts
 
-            # Assert interval is within tolerance: minimum 100ms, maximum 1.5x interval
-            # Matches async Python behavior but with Go/Java minimum bound
-            assert 100 <= actual_interval_ms <= interval_ms * 1.5, (
-                f"Reconciliation interval ({actual_interval_ms}ms) should be between "
-                f"100ms and {interval_ms * 1.5}ms"
+            # Assert interval is positive and at most 1.5x the configured interval
+            # Note: Reconciliation can be triggered immediately by subscription changes,
+            # so we only enforce an upper bound based on the timer interval
+            assert 0 < actual_interval_ms <= interval_ms * 1.5, (
+                f"Reconciliation interval ({actual_interval_ms}ms) should be positive "
+                f"and at most {interval_ms * 1.5}ms"
             )
 
         finally:

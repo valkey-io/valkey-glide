@@ -2859,15 +2859,15 @@ public class PubSubTests {
 
             long actualIntervalMs = secondSyncTs - firstSyncTs;
 
-            // Assert interval is at least 100ms and at most 2x the configured interval
-            // Lower bound accounts for system timing variations and race conditions
-            long minInterval = 100; // Minimum 100ms regardless of configured interval
+            // Assert interval is positive and at most 2x the configured interval
+            // Note: Reconciliation can be triggered immediately by subscription changes,
+            // so we only enforce an upper bound based on the timer interval
             long maxInterval = intervalMs * 2; // Maximum 2x the configured interval
             assertTrue(
-                    actualIntervalMs >= minInterval && actualIntervalMs <= maxInterval,
+                    actualIntervalMs > 0 && actualIntervalMs <= maxInterval,
                     String.format(
-                            "Reconciliation interval (%dms) should be between %dms and %dms",
-                            actualIntervalMs, minInterval, maxInterval));
+                            "Reconciliation interval (%dms) should be positive and at most %dms",
+                            actualIntervalMs, maxInterval));
         } finally {
             client.close();
         }
