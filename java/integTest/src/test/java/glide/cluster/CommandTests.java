@@ -1864,13 +1864,13 @@ public class CommandTests {
 
         // Wait for function to replicate to replica, retrying if needed
         ExecutionException fcallReplicaException = null;
-        for (int i = 0; i < 10 && fcallReplicaException == null; i++) {
+        for (int i = 0; i < 20 && fcallReplicaException == null; i++) {
             try {
                 clusterClient.fcall(funcName, replicaRoute).get();
                 Thread.sleep(100); // Function not yet on replica, wait and retry
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof RequestException
-                        && e.getMessage().toLowerCase().contains("readonly")) {
+                        && e.getCause().getMessage().toLowerCase().contains("readonly")) {
                     fcallReplicaException = e;
                 }
             }
@@ -1932,13 +1932,13 @@ public class CommandTests {
 
         // Wait for function to replicate to replica, retrying if needed
         ExecutionException fcallReplicaException = null;
-        for (int i = 0; i < 10 && fcallReplicaException == null; i++) {
+        for (int i = 0; i < 20 && fcallReplicaException == null; i++) {
             try {
                 clusterClient.fcall(funcName, replicaRoute).get();
                 Thread.sleep(100); // Function not yet on replica, wait and retry
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof RequestException
-                        && e.getMessage().toLowerCase().contains("readonly")) {
+                        && e.getCause().getMessage().toLowerCase().contains("readonly")) {
                     fcallReplicaException = e;
                 }
             }
