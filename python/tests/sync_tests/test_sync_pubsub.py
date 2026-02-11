@@ -3496,7 +3496,6 @@ class TestSyncPubSub:
             SubscriptionMethod.Blocking,
         ],
     )
-
     def _publish_messages(
         self,
         publishing_client,
