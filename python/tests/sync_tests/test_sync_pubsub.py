@@ -3496,6 +3496,72 @@ class TestSyncPubSub:
             SubscriptionMethod.Blocking,
         ],
     )
+
+    def _publish_messages(
+        self,
+        publishing_client,
+        channel: str,
+        pattern_channel: str,
+        sharded_channel: Optional[str],
+        cluster_mode: bool,
+    ):
+        """Helper to publish messages to all channels."""
+        publishing_client.publish("msg1", channel)
+        time.sleep(0.5)
+
+        publishing_client.publish("msg2", pattern_channel)
+        time.sleep(0.5)
+
+        if cluster_mode and sharded_channel:
+            cast(GlideClusterClient, publishing_client).publish(
+                "msg3", sharded_channel, sharded=True
+            )
+            time.sleep(0.5)
+
+    def _verify_messages(
+        self,
+        listening_client,
+        method: MethodTesting,
+        callback_messages: List[PubSubMsg],
+        cluster_mode: bool,
+        sharded_channel: Optional[str],
+    ):
+        """Helper to verify messages were received."""
+        if method == MethodTesting.Callback:
+            expected_count = 3 if (cluster_mode and sharded_channel) else 2
+            assert len(callback_messages) >= expected_count
+        else:
+            msg1 = (
+                listening_client.try_get_pubsub_message()
+                if method == MethodTesting.Sync
+                else listening_client.get_pubsub_message()
+            )
+            assert msg1 is not None
+
+            msg2 = (
+                listening_client.try_get_pubsub_message()
+                if method == MethodTesting.Sync
+                else listening_client.get_pubsub_message()
+            )
+            assert msg2 is not None
+
+            # Read third message if sharded channel was used
+            if cluster_mode and sharded_channel:
+                msg3 = (
+                    listening_client.try_get_pubsub_message()
+                    if method == MethodTesting.Sync
+                    else listening_client.get_pubsub_message()
+                )
+                assert msg3 is not None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [SubscriptionMethod.Lazy, SubscriptionMethod.Blocking],
+    )
     def test_sync_lazy_client_multiple_subscription_types(
         self,
         request,
@@ -3533,73 +3599,32 @@ class TestSyncPubSub:
             )
             publishing_client = create_sync_client(request, cluster_mode)
 
-            # Subscribe to exact channel
-            if subscription_method == SubscriptionMethod.Lazy:
-                listening_client.subscribe_lazy({channel})
-            else:
-                listening_client.subscribe({channel}, timeout_ms=5000)
-
-            # Subscribe to pattern
-            if subscription_method == SubscriptionMethod.Lazy:
-                listening_client.psubscribe_lazy({pattern})
-            else:
-                listening_client.psubscribe({pattern}, timeout_ms=5000)
-
-            # Subscribe to sharded (if supported)
-            if cluster_mode and sharded_channel:
-                if subscription_method == SubscriptionMethod.Lazy:
-                    cast(GlideClusterClient, listening_client).ssubscribe_lazy(
-                        {sharded_channel}
-                    )
-                else:
-                    cast(GlideClusterClient, listening_client).ssubscribe(
-                        {sharded_channel}, timeout_ms=5000
-                    )
+            sync_subscribe_by_method(
+                listening_client,
+                subscription_method,
+                cluster_mode,
+                channels={channel},
+                patterns={pattern},
+                sharded={sharded_channel} if sharded_channel else None,
+            )
 
             time.sleep(1)
 
-            # Publish to exact channel
-            publishing_client.publish("msg1", channel)
-            time.sleep(0.5)
+            self._publish_messages(
+                publishing_client,
+                channel,
+                pattern_channel,
+                sharded_channel,
+                cluster_mode,
+            )
 
-            # Publish to pattern
-            publishing_client.publish("msg2", pattern_channel)
-            time.sleep(0.5)
-
-            # Publish to sharded (if supported)
-            if cluster_mode and sharded_channel:
-                cast(GlideClusterClient, publishing_client).publish(
-                    "msg3", sharded_channel, sharded=True
-                )
-                time.sleep(0.5)
-
-            # Verify messages received
-            if method == MethodTesting.Callback:
-                expected_count = 3 if (cluster_mode and sharded_channel) else 2
-                assert len(callback_messages) >= expected_count
-            else:
-                msg1 = (
-                    listening_client.try_get_pubsub_message()
-                    if method == MethodTesting.Sync
-                    else listening_client.get_pubsub_message()
-                )
-                assert msg1 is not None
-
-                msg2 = (
-                    listening_client.try_get_pubsub_message()
-                    if method == MethodTesting.Sync
-                    else listening_client.get_pubsub_message()
-                )
-                assert msg2 is not None
-
-                # Read third message if sharded channel was used
-                if cluster_mode and sharded_channel:
-                    msg3 = (
-                        listening_client.try_get_pubsub_message()
-                        if method == MethodTesting.Sync
-                        else listening_client.get_pubsub_message()
-                    )
-                    assert msg3 is not None
+            self._verify_messages(
+                listening_client,
+                method,
+                callback_messages,
+                cluster_mode,
+                sharded_channel,
+            )
 
         finally:
             if listening_client:
