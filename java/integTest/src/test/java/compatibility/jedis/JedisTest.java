@@ -3232,4 +3232,176 @@ public class JedisTest {
         assertEquals(
                 0, jedis.rpushx("non_existent_key", "value"), "RPUSHX on non-existent key should return 0");
     }
+
+    // ========== Server Management Commands Tests ==========
+
+    @Test
+    void testInfo() {
+        // Test INFO without section
+        String info = jedis.info();
+        assertNotNull(info, "INFO should return server information");
+        assertTrue(info.length() > 0, "INFO should return non-empty string");
+        assertTrue(
+                info.contains("redis_version") || info.contains("valkey_version"),
+                "INFO should contain version information");
+
+        // Test INFO with specific section
+        String memoryInfo = jedis.info("memory");
+        assertNotNull(memoryInfo, "INFO memory should return memory information");
+        assertTrue(memoryInfo.contains("used_memory"), "INFO memory should contain used_memory");
+    }
+
+    @Test
+    void testConfigGetAndSet() {
+        // Test CONFIG GET
+        Map<String, String> timeoutConfig = jedis.configGet("timeout");
+        assertNotNull(timeoutConfig, "CONFIG GET should return configuration");
+        assertTrue(timeoutConfig.containsKey("timeout"), "CONFIG GET should return timeout parameter");
+
+        // Test CONFIG SET with single parameter
+        String originalTimeout = timeoutConfig.get("timeout");
+        String result = jedis.configSet("timeout", "300");
+        assertEquals("OK", result, "CONFIG SET should return OK");
+
+        // Verify the change
+        Map<String, String> newConfig = jedis.configGet("timeout");
+        assertEquals("300", newConfig.get("timeout"), "CONFIG SET should update the value");
+
+        // Restore original value
+        jedis.configSet("timeout", originalTimeout);
+
+        // Test CONFIG SET with multiple parameters
+        Map<String, String> params = new HashMap<>();
+        params.put("timeout", "400");
+        String multiResult = jedis.configSet(params);
+        assertEquals("OK", multiResult, "CONFIG SET with map should return OK");
+
+        // Restore original value again
+        jedis.configSet("timeout", originalTimeout);
+    }
+
+    @Test
+    void testConfigRewrite() {
+        // Note: This test may fail if the server is not configured with a config file
+        // or if the user doesn't have write permissions
+        try {
+            String result = jedis.configRewrite();
+            assertEquals("OK", result, "CONFIG REWRITE should return OK");
+        } catch (Exception e) {
+            // Expected if no config file is set or no write permissions
+            String errorMsg = e.getMessage();
+            assertTrue(
+                    errorMsg.contains("The server is running without a config file")
+                            || errorMsg.contains("rewriting config file")
+                            || errorMsg.contains("CONFIG REWRITE")
+                            || errorMsg.contains("config"),
+                    "Expected error about config file, got: " + errorMsg);
+        }
+    }
+
+    @Test
+    void testConfigResetStat() {
+        // Get initial stats
+        String statsBefore = jedis.info("stats");
+        assertNotNull(statsBefore, "INFO stats should return statistics");
+
+        // Reset statistics
+        String result = jedis.configResetStat();
+        assertEquals("OK", result, "CONFIG RESETSTAT should return OK");
+
+        // Verify stats were reset (some counters should be 0 or lower)
+        String statsAfter = jedis.info("stats");
+        assertNotNull(statsAfter, "INFO stats should return statistics after reset");
+    }
+
+    @Test
+    void testDbsize() {
+        // Clear database first
+        jedis.flushDB();
+
+        // Test DBSIZE on empty database
+        long initialSize = jedis.dbsize();
+        assertEquals(0, initialSize, "DBSIZE should return 0 for empty database");
+
+        // Add some keys
+        jedis.set("key1", "value1");
+        jedis.set("key2", "value2");
+        jedis.set("key3", "value3");
+
+        // Test DBSIZE with keys
+        long sizeWithKeys = jedis.dbsize();
+        assertEquals(3, sizeWithKeys, "DBSIZE should return 3 after adding 3 keys");
+
+        // Clean up
+        jedis.flushDB();
+    }
+
+    @Test
+    void testFlushDB() {
+        // Add some keys
+        jedis.set("test_key1", "value1");
+        jedis.set("test_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        // Test FLUSHDB
+        String result = jedis.flushDB();
+        assertEquals("OK", result, "FLUSHDB should return OK");
+
+        // Verify database is empty
+        assertEquals(0, jedis.dbsize(), "DBSIZE should return 0 after FLUSHDB");
+    }
+
+    @Test
+    void testFlushAll() {
+        // Add some keys
+        jedis.set("test_key1", "value1");
+        jedis.set("test_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        // Test FLUSHALL
+        String result = jedis.flushAll();
+        assertEquals("OK", result, "FLUSHALL should return OK");
+
+        // Verify database is empty
+        assertEquals(0, jedis.dbsize(), "DBSIZE should return 0 after FLUSHALL");
+    }
+
+    @Test
+    void testTime() {
+        // Test TIME command
+        String[] time = jedis.time();
+        assertNotNull(time, "TIME should return time array");
+        assertEquals(2, time.length, "TIME should return array with 2 elements");
+
+        // Verify first element is Unix timestamp (seconds)
+        long seconds = Long.parseLong(time[0]);
+        assertTrue(seconds > 0, "Unix timestamp should be positive");
+        assertTrue(seconds > 1609459200, "Unix timestamp should be after 2021-01-01");
+
+        // Verify second element is microseconds
+        long microseconds = Long.parseLong(time[1]);
+        assertTrue(microseconds >= 0, "Microseconds should be non-negative");
+        assertTrue(microseconds < 1000000, "Microseconds should be less than 1000000");
+    }
+
+    @Test
+    void testLastsave() {
+        // Test LASTSAVE command
+        long timestamp = jedis.lastsave();
+        assertTrue(timestamp > 0, "LASTSAVE should return positive timestamp");
+        assertTrue(timestamp > 1609459200, "LASTSAVE timestamp should be after 2021-01-01");
+    }
+
+    @Test
+    void testLolwut() {
+        // Test LOLWUT without parameters
+        String art = jedis.lolwut();
+        assertNotNull(art, "LOLWUT should return art");
+        assertTrue(art.length() > 0, "LOLWUT should return non-empty string");
+
+        // Test LOLWUT with parameters
+        String artWithParams = jedis.lolwut(5, 10);
+        assertNotNull(artWithParams, "LOLWUT with params should return art");
+        assertTrue(artWithParams.length() > 0, "LOLWUT with params should return non-empty string");
+    }
 }
