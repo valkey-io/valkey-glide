@@ -104,6 +104,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -159,9 +162,13 @@ public class CommandTests {
                             "Cluster",
                             "Keyspace");
 
+    private static List<Arguments> clients;
+
+    @BeforeAll
     @SneakyThrows
-    public static Stream<Arguments> getClients() {
-        return Stream.of(
+    public static void init() {
+        clients = new ArrayList<>();
+        clients.add(
                 Arguments.of(
                         named(
                                 "RESP2",
@@ -174,7 +181,8 @@ public class CommandTests {
                                                                         .build())
                                                         .protocol(ProtocolVersion.RESP2)
                                                         .build())
-                                        .get())),
+                                        .get())));
+        clients.add(
                 Arguments.of(
                         named(
                                 "RESP3",
@@ -188,6 +196,20 @@ public class CommandTests {
                                                         .protocol(ProtocolVersion.RESP3)
                                                         .build())
                                         .get())));
+    }
+
+    @AfterAll
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public static void teardown() {
+        for (var client : clients) {
+            ((Named<GlideClusterClient>) client.get()[0]).getPayload().close();
+        }
+    }
+
+    @SneakyThrows
+    public static Stream<Arguments> getClients() {
+        return clients.stream();
     }
 
     private static Stream<Arguments> getTestScenarios() {

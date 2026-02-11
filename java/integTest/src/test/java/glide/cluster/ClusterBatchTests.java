@@ -32,11 +32,16 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -45,9 +50,13 @@ import org.junit.jupiter.params.provider.MethodSource;
 @Timeout(10) // seconds
 public class ClusterBatchTests {
 
+    private static List<Arguments> clients;
+
+    @BeforeAll
     @SneakyThrows
-    public static Stream<Arguments> getClients() {
-        return Stream.of(
+    public static void init() {
+        clients = new ArrayList<>();
+        clients.add(
                 Arguments.of(
                         named(
                                 "RESP2",
@@ -56,7 +65,8 @@ public class ClusterBatchTests {
                                                         .requestTimeout(7000)
                                                         .protocol(ProtocolVersion.RESP2)
                                                         .build())
-                                        .get())),
+                                        .get())));
+        clients.add(
                 Arguments.of(
                         named(
                                 "RESP3",
@@ -66,6 +76,20 @@ public class ClusterBatchTests {
                                                         .protocol(ProtocolVersion.RESP3)
                                                         .build())
                                         .get())));
+    }
+
+    @AfterAll
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public static void teardown() {
+        for (var client : clients) {
+            ((Named<GlideClusterClient>) client.get()[0]).getPayload().close();
+        }
+    }
+
+    @SneakyThrows
+    public static Stream<Arguments> getClients() {
+        return clients.stream();
     }
 
     @SneakyThrows

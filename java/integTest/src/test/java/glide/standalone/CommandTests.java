@@ -70,6 +70,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -80,9 +83,13 @@ public class CommandTests {
 
     private static final String INITIAL_VALUE = "VALUE";
 
+    private static List<Arguments> clients;
+
+    @BeforeAll
     @SneakyThrows
-    public static Stream<Arguments> getClients() {
-        return Stream.of(
+    public static void init() {
+        clients = new ArrayList<>();
+        clients.add(
                 Arguments.of(
                         named(
                                 "RESP2",
@@ -91,7 +98,8 @@ public class CommandTests {
                                                         .requestTimeout(7000)
                                                         .protocol(ProtocolVersion.RESP2)
                                                         .build())
-                                        .get())),
+                                        .get())));
+        clients.add(
                 Arguments.of(
                         named(
                                 "RESP3",
@@ -101,6 +109,20 @@ public class CommandTests {
                                                         .protocol(ProtocolVersion.RESP3)
                                                         .build())
                                         .get())));
+    }
+
+    @AfterAll
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public static void teardown() {
+        for (var client : clients) {
+            ((Named<GlideClient>) client.get()[0]).getPayload().close();
+        }
+    }
+
+    @SneakyThrows
+    public static Stream<Arguments> getClients() {
+        return clients.stream();
     }
 
     @ParameterizedTest
