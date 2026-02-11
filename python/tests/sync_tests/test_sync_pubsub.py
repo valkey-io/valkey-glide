@@ -2147,6 +2147,10 @@ class TestSyncPubSub:
             client_cleanup(client_sharded, pub_sub_sharded if cluster_mode else None)
             client_cleanup(client_dont_care, None)
 
+    @pytest.mark.skip(
+        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
+        + "to vary across platforms and server versions"
+    )
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "subscription_method",
