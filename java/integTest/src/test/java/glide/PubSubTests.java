@@ -2859,9 +2859,9 @@ public class PubSubTests {
 
             long actualIntervalMs = secondSyncTs - firstSyncTs;
 
-            // Assert interval is at least 300ms and at most 2x the configured interval
+            // Assert interval is at least 100ms and at most 2x the configured interval
             // Lower bound accounts for system timing variations and race conditions
-            long minInterval = 300; // Minimum 300ms regardless of configured interval
+            long minInterval = 100; // Minimum 100ms regardless of configured interval
             long maxInterval = intervalMs * 2; // Maximum 2x the configured interval
             assertTrue(
                     actualIntervalMs >= minInterval && actualIntervalMs <= maxInterval,

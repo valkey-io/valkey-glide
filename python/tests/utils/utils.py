@@ -2029,8 +2029,10 @@ def create_sync_pubsub_client(
                 reconciliation_interval_ms=reconciliation_interval_ms,
             )
     else:
-        # No pubsub config
-        return create_sync_client(request, cluster_mode)
+        # No pubsub config - still pass reconciliation_interval_ms if provided
+        return create_sync_client(
+            request, cluster_mode, reconciliation_interval_ms=reconciliation_interval_ms
+        )
 
 
 async def subscribe_by_method(
@@ -2322,12 +2324,19 @@ async def wait_for_subscription_state_if_needed(
 
 
 def decode_pubsub_msg(msg: Optional[PubSubMsg]) -> PubSubMsg:
-    """Decode a PubSubMsg with bytes to one with strings."""
+    """Decode a PubSubMsg with bytes to one with strings. If already strings, return as-is."""
     if not msg:
         return PubSubMsg("", "", None)
-    string_msg = cast(bytes, msg.message).decode()
-    string_channel = cast(bytes, msg.channel).decode()
-    string_pattern = cast(bytes, msg.pattern).decode() if msg.pattern else None
+    # Handle both bytes (async) and strings (sync)
+    string_msg = msg.message.decode() if isinstance(msg.message, bytes) else msg.message
+    string_channel = (
+        msg.channel.decode() if isinstance(msg.channel, bytes) else msg.channel
+    )
+    string_pattern = (
+        msg.pattern.decode()
+        if isinstance(msg.pattern, bytes) and msg.pattern
+        else msg.pattern
+    )
     return PubSubMsg(string_msg, string_channel, string_pattern)
 
 

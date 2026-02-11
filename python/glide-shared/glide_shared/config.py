@@ -954,8 +954,10 @@ class GlideClientConfiguration(BaseClientConfiguration):
         assert cluster_mode is False
         request = super()._create_a_protobuf_conn_request(cluster_mode)
 
-        # Always enable pubsub to support dynamic subscriptions
-        # Even if no initial subscriptions are configured
+        # Always initialize pubsub_subscriptions to support dynamic subscriptions
+        # We need to explicitly touch a field inside it to mark it as "present"
+        request.pubsub_subscriptions.SetInParent()
+
         if self.pubsub_subscriptions:
             if self.protocol == ProtocolVersion.RESP2:
                 raise ConfigurationError(
@@ -977,8 +979,6 @@ class GlideClientConfiguration(BaseClientConfiguration):
                 ]
                 for channel_pattern in channels_patterns:
                     entry.channels_or_patterns.append(str.encode(channel_pattern))
-        # else: Create empty pubsub subscriptions to enable dynamic subscriptions
-        # The protobuf field exists by default, just leave it empty
 
         return request
 
@@ -1190,6 +1190,10 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             )
         elif self.periodic_checks == PeriodicChecksStatus.DISABLED:
             request.periodic_checks_disabled.SetInParent()
+
+        # Always initialize pubsub_subscriptions to support dynamic subscriptions
+        # We need to explicitly touch a field inside it to mark it as "present"
+        request.pubsub_subscriptions.SetInParent()
 
         if self.pubsub_subscriptions:
             if self.protocol == ProtocolVersion.RESP2:

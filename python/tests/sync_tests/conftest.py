@@ -390,6 +390,7 @@ def sync_pubsub_test_clients(
                 channels=channels,
                 patterns=patterns,
                 sharded=sharded,
+                timeout_ms=timeout if timeout else 5000,
             )
 
         yield listening_client, publishing_client

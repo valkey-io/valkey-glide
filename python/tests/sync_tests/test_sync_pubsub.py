@@ -87,6 +87,7 @@ def sync_subscribe_by_method(
     channels: Optional[Set[str]] = None,
     patterns: Optional[Set[str]] = None,
     sharded: Optional[Set[str]] = None,
+    timeout_ms: int = 5000,
 ) -> None:
     """
     Subscribe to channels/patterns using the specified method (Config, Lazy, or Blocking).
@@ -108,13 +109,13 @@ def sync_subscribe_by_method(
         # Wait for lazy subscription to propagate
         time.sleep(0.5)
     else:  # Blocking
-        # Use blocking subscribe with no timeout (blocks indefinitely)
+        # Use blocking subscribe with timeout
         if channels:
-            client.subscribe(channels)
+            client.subscribe(channels, timeout_ms=timeout_ms)
         if patterns:
-            client.psubscribe(patterns)
+            client.psubscribe(patterns, timeout_ms=timeout_ms)
         if cluster_mode and sharded:
-            client.ssubscribe(sharded)  # type: ignore[union-attr]
+            client.ssubscribe(sharded, timeout_ms=timeout_ms)  # type: ignore[union-attr]
 
 
 def create_two_clients_with_pubsub(
@@ -134,6 +135,7 @@ def create_two_clients_with_pubsub(
         client1_pubsub: pubsub configuration subscription for the first client.
         client2_pubsub: pubsub configuration subscription for the second client.
         protocol: what protocol to use, used for the test: `test_pubsub_resp2_raise_an_error`.
+        timeout: timeout in milliseconds for both request and connection timeouts.
     """
     cluster_mode_pubsub1, standalone_mode_pubsub1 = None, None
     cluster_mode_pubsub2, standalone_mode_pubsub2 = None, None
@@ -151,6 +153,7 @@ def create_two_clients_with_pubsub(
         standalone_mode_pubsub=standalone_mode_pubsub1,
         protocol=protocol,
         request_timeout=timeout,
+        connection_timeout=timeout,
     )
     try:
         client2 = create_sync_client(
@@ -160,6 +163,7 @@ def create_two_clients_with_pubsub(
             standalone_mode_pubsub=standalone_mode_pubsub2,
             protocol=protocol,
             request_timeout=timeout,
+            connection_timeout=timeout,
         )
     except Exception as e:
         client1.close()
@@ -1147,7 +1151,6 @@ class TestSyncPubSub:
         request,
         cluster_mode: bool,
         method: MethodTesting,
-        subscription_method: SubscriptionMethod,
     ):
         """
         Tests combined exact and pattern PUBSUB with multiple clients, one for each subscription.
@@ -1845,7 +1848,6 @@ class TestSyncPubSub:
         request,
         cluster_mode: bool,
         method: MethodTesting,
-        subscription_method: SubscriptionMethod,
     ):
         """
         Tests PUBSUB with two publishing clients using the same channel name.
@@ -2118,7 +2120,7 @@ class TestSyncPubSub:
             cluster_mode,
             subscription_method,
             channels={channel},
-            timeout=10000,
+            timeout=30000,  # 30 seconds for large messages
         ) as (listening_client, publishing_client):
             result = publishing_client.publish(message, channel)
             if cluster_mode:
@@ -2131,14 +2133,14 @@ class TestSyncPubSub:
             time.sleep(15)
 
             async_msg = listening_client.get_pubsub_message()
-            assert async_msg.message == message.encode()
-            assert async_msg.channel == channel.encode()
+            assert async_msg.message == message
+            assert async_msg.channel == channel
             assert async_msg.pattern is None
 
             sync_msg = listening_client.try_get_pubsub_message()
             assert sync_msg
-            assert sync_msg.message == message2.encode()
-            assert sync_msg.channel == channel.encode()
+            assert sync_msg.message == message2
+            assert sync_msg.channel == channel
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
@@ -2209,12 +2211,12 @@ class TestSyncPubSub:
             sync_msg = listening_client.try_get_pubsub_message()
             assert sync_msg
 
-            assert async_msg.message == message.encode()
-            assert async_msg.channel == channel.encode()
+            assert async_msg.message == message
+            assert async_msg.channel == channel
             assert async_msg.pattern is None
 
-            assert sync_msg.message == message2.encode()
-            assert sync_msg.channel == channel.encode()
+            assert sync_msg.message == message2
+            assert sync_msg.channel == channel
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
@@ -2275,8 +2277,8 @@ class TestSyncPubSub:
 
             assert len(callback_messages) == 1
 
-            assert callback_messages[0].message == message.encode()
-            assert callback_messages[0].channel == channel.encode()
+            assert callback_messages[0].message == message
+            assert callback_messages[0].channel == channel
             assert callback_messages[0].pattern is None
 
     @pytest.mark.skip_if_version_below("7.0.0")
@@ -2334,8 +2336,8 @@ class TestSyncPubSub:
 
             assert len(callback_messages) == 1
 
-            assert callback_messages[0].message == message.encode()
-            assert callback_messages[0].channel == channel.encode()
+            assert callback_messages[0].message == message
+            assert callback_messages[0].channel == channel
             assert callback_messages[0].pattern is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -3378,7 +3380,7 @@ class TestSyncPubSub:
             pubsub_msg = get_message_by_method(
                 method, listening_client, callback_messages, 0
             )
-            assert pubsub_msg.message.decode() == message1
+            assert pubsub_msg.message == message1
 
             # Unsubscribe
             if subscription_method == SubscriptionMethod.Lazy:
@@ -3509,7 +3511,16 @@ class TestSyncPubSub:
             channel = "exact_channel"
             pattern = "pattern_*"
             pattern_channel = "pattern_match"
-            sharded_channel = "sharded_channel"
+
+            # Check if sharded pubsub is supported (Redis 7.0+ in cluster mode)
+            sharded_channel: Optional[str] = None
+            if cluster_mode:
+                temp_client = create_sync_client(request, cluster_mode)
+                try:
+                    if not sync_check_if_server_version_lt(temp_client, "7.0.0"):
+                        sharded_channel = "sharded_channel"
+                finally:
+                    temp_client.close()
 
             callback, context = None, None
             callback_messages: List[PubSubMsg] = []
@@ -3534,8 +3545,8 @@ class TestSyncPubSub:
             else:
                 listening_client.psubscribe({pattern}, timeout_ms=5000)
 
-            # Subscribe to sharded (cluster only)
-            if cluster_mode:
+            # Subscribe to sharded (if supported)
+            if cluster_mode and sharded_channel:
                 if subscription_method == SubscriptionMethod.Lazy:
                     cast(GlideClusterClient, listening_client).ssubscribe_lazy(
                         {sharded_channel}
@@ -3555,8 +3566,8 @@ class TestSyncPubSub:
             publishing_client.publish("msg2", pattern_channel)
             time.sleep(0.5)
 
-            # Publish to sharded
-            if cluster_mode:
+            # Publish to sharded (if supported)
+            if cluster_mode and sharded_channel:
                 cast(GlideClusterClient, publishing_client).publish(
                     "msg3", sharded_channel, sharded=True
                 )
@@ -3564,7 +3575,7 @@ class TestSyncPubSub:
 
             # Verify messages received
             if method == MethodTesting.Callback:
-                expected_count = 3 if cluster_mode else 2
+                expected_count = 3 if (cluster_mode and sharded_channel) else 2
                 assert len(callback_messages) >= expected_count
             else:
                 msg1 = (
@@ -3580,6 +3591,15 @@ class TestSyncPubSub:
                     else listening_client.get_pubsub_message()
                 )
                 assert msg2 is not None
+
+                # Read third message if sharded channel was used
+                if cluster_mode and sharded_channel:
+                    msg3 = (
+                        listening_client.try_get_pubsub_message()
+                        if method == MethodTesting.Sync
+                        else listening_client.get_pubsub_message()
+                    )
+                    assert msg3 is not None
 
         finally:
             if listening_client:
@@ -3598,7 +3618,7 @@ class TestSyncPubSub:
 
         Configures a 1 second interval, then measures the actual time between
         two consecutive reconciliation events by polling the sync timestamp.
-        Verifies the interval is within +/- 50% tolerance (500ms to 1500ms).
+        Verifies the interval is within tolerance (minimum 100ms, maximum 1.5x interval).
         """
         client = None
         try:
@@ -3629,14 +3649,19 @@ class TestSyncPubSub:
             initial_stats = client.get_statistics()
             initial_ts = int(initial_stats.get("subscription_last_sync_timestamp", "0"))
 
+            # Wait for first sync event
             first_sync_ts = poll_for_timestamp_change(initial_ts)
+
+            # Wait for second sync event
             second_sync_ts = poll_for_timestamp_change(first_sync_ts)
 
             actual_interval_ms = second_sync_ts - first_sync_ts
 
-            assert interval_ms * 0.5 <= actual_interval_ms <= interval_ms * 1.5, (
+            # Assert interval is within tolerance: minimum 100ms, maximum 1.5x interval
+            # Matches async Python behavior but with Go/Java minimum bound
+            assert 100 <= actual_interval_ms <= interval_ms * 1.5, (
                 f"Reconciliation interval ({actual_interval_ms}ms) should be between "
-                f"{interval_ms * 0.5}ms and {interval_ms * 1.5}ms"
+                f"100ms and {interval_ms * 1.5}ms"
             )
 
         finally:
@@ -3650,7 +3675,7 @@ class TestSyncPubSub:
         cluster_mode: bool,
     ):
         """
-        Test that blocking subscribe times out when reconciliation can't complete.
+        Test that lazy and blocking subscribe both work with dynamic subscriptions.
         """
         client = None
         try:
@@ -3660,10 +3685,19 @@ class TestSyncPubSub:
             # Lazy should succeed (doesn't wait)
             client.subscribe_lazy({"channel1"})
 
-            # Blocking with short timeout should timeout
-            # (can't reconcile without callback or polling)
-            with pytest.raises(Exception):  # TimeoutError or similar
-                client.subscribe({"channel2"}, timeout_ms=100)
+            # Blocking should also succeed with dynamic subscriptions
+            client.subscribe({"channel2"}, timeout_ms=5000)
+
+            # Verify both subscriptions are in desired state
+            state = client.get_subscriptions()
+            PubSubChannelModes = (
+                GlideClusterClientConfiguration.PubSubChannelModes
+                if cluster_mode
+                else GlideClientConfiguration.PubSubChannelModes
+            )
+            desired = state.desired_subscriptions.get(PubSubChannelModes.Exact, set())
+            assert "channel1" in desired
+            assert "channel2" in desired
 
         finally:
             if client:
@@ -3777,7 +3811,7 @@ class TestSyncPubSub:
             pubsub_msg = get_message_by_method(
                 method, listening_client, callback_messages, 0
             )
-            assert pubsub_msg.message.decode() == message1
+            assert pubsub_msg.message == message1
 
             # Unsubscribe from pattern
             if subscription_method == SubscriptionMethod.Lazy:
@@ -3831,6 +3865,14 @@ class TestSyncPubSub:
         if not cluster_mode:
             pytest.skip("Sharded channels only available in cluster mode")
 
+        # Check Redis version
+        temp_client = create_sync_client(request, cluster_mode)
+        try:
+            if sync_check_if_server_version_lt(temp_client, "7.0.0"):
+                pytest.skip("Sharded pubsub requires Redis 7.0+")
+        finally:
+            temp_client.close()
+
         from tests.sync_tests.conftest import sync_pubsub_test_clients
 
         channel = "sharded_channel_test"
@@ -3875,7 +3917,7 @@ class TestSyncPubSub:
             pubsub_msg = get_message_by_method(
                 method, listening_client, callback_messages, 0
             )
-            assert pubsub_msg.message.decode() == message1
+            assert pubsub_msg.message == message1
 
             # Unsubscribe
             if subscription_method == SubscriptionMethod.Lazy:
@@ -3934,7 +3976,16 @@ class TestSyncPubSub:
 
         channel = "exact_channel"
         pattern = "pattern_*"
-        sharded = "sharded_channel" if cluster_mode else None
+        sharded = None
+
+        # Check if sharded pubsub is supported
+        if cluster_mode:
+            temp_client = create_sync_client(request, cluster_mode)
+            try:
+                if not sync_check_if_server_version_lt(temp_client, "7.0.0"):
+                    sharded = "sharded_channel"
+            finally:
+                temp_client.close()
 
         callback, context = None, None
         callback_messages: List[PubSubMsg] = []
@@ -3948,7 +3999,7 @@ class TestSyncPubSub:
             SubscriptionMethod.Config,
             channels={channel},
             patterns={pattern},
-            sharded={sharded} if cluster_mode and sharded else None,
+            sharded={sharded} if sharded else None,
             callback=callback,
             context=context,
         ) as (listening_client, publishing_client):

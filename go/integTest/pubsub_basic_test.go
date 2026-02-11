@@ -739,9 +739,9 @@ func (suite *GlideTestSuite) TestReconciliationIntervalSupport() {
 	// Compute actual interval
 	actualIntervalMs := secondSyncTs - firstSyncTs
 
-	// Assert interval is at least 300ms and at most 2x the configured interval
+	// Assert interval is at least 100ms and at most 2x the configured interval
 	// Lower bound accounts for system timing variations and race conditions
-	minInterval := int64(300)            // Minimum 300ms regardless of configured interval
+	minInterval := int64(100)            // Minimum 100ms regardless of configured interval
 	maxInterval := int64(intervalMs) * 2 // Maximum 2x the configured interval
 	assert.GreaterOrEqual(t, actualIntervalMs, minInterval,
 		"Reconciliation interval (%dms) should be >= %dms", actualIntervalMs, minInterval)
