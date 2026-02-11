@@ -141,6 +141,7 @@ import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
@@ -185,6 +186,21 @@ public class SharedCommandTests {
     public static void teardown() {
         for (var client : clients) {
             ((Named<BaseClient>) client.get()[0]).getPayload().close();
+        }
+    }
+
+    @AfterEach
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public void cleanup() {
+        // Flush all databases to ensure clean state between tests
+        for (var client : clients) {
+            BaseClient baseClient = ((Named<BaseClient>) client.get()[0]).getPayload();
+            if (baseClient instanceof GlideClient) {
+                ((GlideClient) baseClient).flushall().get();
+            } else if (baseClient instanceof GlideClusterClient) {
+                ((GlideClusterClient) baseClient).flushall().get();
+            }
         }
     }
 

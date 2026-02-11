@@ -48,6 +48,7 @@ import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Timeout;
@@ -91,6 +92,16 @@ public class BatchTests {
     public static void teardown() {
         for (var client : clients) {
             ((Named<GlideClient>) client.get()[0]).getPayload().close();
+        }
+    }
+
+    @AfterEach
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public void cleanup() {
+        // Flush all databases to ensure clean state between tests
+        for (var client : clients) {
+            ((Named<GlideClient>) client.get()[0]).getPayload().flushall().get();
         }
     }
 

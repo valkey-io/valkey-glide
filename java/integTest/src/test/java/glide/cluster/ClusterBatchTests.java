@@ -39,6 +39,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Timeout;
@@ -82,6 +83,16 @@ public class ClusterBatchTests {
     public static void teardown() {
         for (var client : clients) {
             ((Named<GlideClusterClient>) client.get()[0]).getPayload().close();
+        }
+    }
+
+    @AfterEach
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public void cleanup() {
+        // Flush all databases to ensure clean state between tests
+        for (var client : clients) {
+            ((Named<GlideClusterClient>) client.get()[0]).getPayload().flushall().get();
         }
     }
 
