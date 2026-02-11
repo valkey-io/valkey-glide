@@ -118,6 +118,8 @@ public class CommandTests {
 
     private static final String INITIAL_VALUE = "VALUE";
 
+    private static final List<Arguments> clients = new ArrayList<>();
+
     public static final List<String> DEFAULT_INFO_SECTIONS =
             List.of(
                     "Server",
@@ -162,15 +164,12 @@ public class CommandTests {
                             "Cluster",
                             "Keyspace");
 
-    private static List<Arguments> clients;
-
     @BeforeAll
     @SneakyThrows
     public static void init() {
-        clients = new ArrayList<>();
         clients.add(
                 Arguments.of(
-                        named(
+                        Named.of(
                                 "RESP2",
                                 GlideClusterClient.createClient(
                                                 commonClusterClientConfig()
@@ -184,7 +183,7 @@ public class CommandTests {
                                         .get())));
         clients.add(
                 Arguments.of(
-                        named(
+                        Named.of(
                                 "RESP3",
                                 GlideClusterClient.createClient(
                                                 commonClusterClientConfig()
@@ -207,7 +206,6 @@ public class CommandTests {
         }
     }
 
-    @SneakyThrows
     public static Stream<Arguments> getClients() {
         return clients.stream();
     }
@@ -231,7 +229,7 @@ public class CommandTests {
                                         Arguments.of(clientArg.get()[0], "xyz")));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void custom_command_info(GlideClusterClient clusterClient) {
@@ -242,7 +240,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void custom_command_info_binary(GlideClusterClient clusterClient) {
@@ -254,7 +252,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void custom_command_ping(GlideClusterClient clusterClient) {
@@ -262,7 +260,7 @@ public class CommandTests {
         assertEquals("PONG", data.getSingleValue());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void custom_command_ping_binary(GlideClusterClient clusterClient) {
@@ -270,7 +268,7 @@ public class CommandTests {
         assertEquals(gs("PONG"), data.getSingleValue());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void custom_command_dbsize(GlideClusterClient clusterClient) {
@@ -285,7 +283,7 @@ public class CommandTests {
         assertTrue((Long) data.getSingleValue() >= 0);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     @SuppressWarnings("unchecked")
@@ -318,7 +316,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void custom_command_binary_with_route(GlideClusterClient clusterClient) {
@@ -334,7 +332,7 @@ public class CommandTests {
         assertTrue(data.getSingleValue().toString().contains("# Stats"));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void custom_command_del_returns_a_number(GlideClusterClient clusterClient) {
@@ -346,7 +344,7 @@ public class CommandTests {
         assertNull(data);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void ping(GlideClusterClient clusterClient) {
@@ -354,7 +352,7 @@ public class CommandTests {
         assertEquals("PONG", data);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void ping_with_message(GlideClusterClient clusterClient) {
@@ -362,7 +360,7 @@ public class CommandTests {
         assertEquals("H3LL0", data);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void ping_binary_with_message(GlideClusterClient clusterClient) {
@@ -370,7 +368,7 @@ public class CommandTests {
         assertEquals(gs("H3LL0"), data);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void ping_with_route(GlideClusterClient clusterClient) {
@@ -378,7 +376,7 @@ public class CommandTests {
         assertEquals("PONG", data);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void ping_with_message_with_route(GlideClusterClient clusterClient) {
@@ -386,7 +384,7 @@ public class CommandTests {
         assertEquals("H3LL0", data);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void ping_binary_with_message_with_route(GlideClusterClient clusterClient) {
@@ -394,7 +392,7 @@ public class CommandTests {
         assertEquals(gs("H3LL0"), data);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void info_without_options(GlideClusterClient clusterClient) {
@@ -407,7 +405,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void info_with_single_node_route(GlideClusterClient clusterClient) {
@@ -419,7 +417,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void info_with_multi_node_route(GlideClusterClient clusterClient) {
@@ -432,7 +430,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void info_with_multiple_options(GlideClusterClient clusterClient) {
@@ -450,7 +448,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void info_with_everything_option(GlideClusterClient clusterClient) {
@@ -463,7 +461,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void info_with_single_node_route_and_options(GlideClusterClient clusterClient) {
@@ -495,7 +493,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void info_with_multi_node_route_and_options(GlideClusterClient clusterClient) {
@@ -514,7 +512,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void clientId(GlideClusterClient clusterClient) {
@@ -522,7 +520,7 @@ public class CommandTests {
         assertTrue(id > 0);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void clientId_with_single_node_route(GlideClusterClient clusterClient) {
@@ -530,7 +528,7 @@ public class CommandTests {
         assertTrue(data.getSingleValue() > 0L);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void clientId_with_multi_node_route(GlideClusterClient clusterClient) {
@@ -538,7 +536,7 @@ public class CommandTests {
         data.getMultiValue().values().forEach(id -> assertTrue(id > 0));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void clientGetName(GlideClusterClient clusterClient) {
@@ -550,7 +548,7 @@ public class CommandTests {
         assertEquals("clientGetName", name);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void clientGetName_with_single_node_route(GlideClusterClient clusterClient) {
@@ -565,7 +563,7 @@ public class CommandTests {
         assertEquals("clientGetName_with_single_node_route", name.getSingleValue());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void clientGetName_with_multi_node_route(GlideClusterClient clusterClient) {
@@ -580,7 +578,7 @@ public class CommandTests {
         assertEquals("clientGetName_with_multi_node_route", getFirstEntryFromMultiValue(name));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void config_reset_stat(GlideClusterClient clusterClient) {
@@ -610,7 +608,7 @@ public class CommandTests {
                                 valueAfter, valueBefore));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void config_rewrite_non_existent_config_file(GlideClusterClient clusterClient) {
@@ -636,7 +634,7 @@ public class CommandTests {
                 .orElse(null);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void configGet_with_no_args_returns_error(GlideClusterClient clusterClient) {
@@ -646,7 +644,7 @@ public class CommandTests {
         assertInstanceOf(GlideException.class, exception.getCause());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void configGet_with_wildcard(GlideClusterClient clusterClient) {
@@ -656,7 +654,7 @@ public class CommandTests {
         assertTrue(data.containsKey("logfile"));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void configGet_with_multiple_params(GlideClusterClient clusterClient) {
@@ -668,7 +666,7 @@ public class CommandTests {
                 () -> assertTrue(data.containsKey("logfile")));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void configGet_with_wildcard_and_multi_node_route(GlideClusterClient clusterClient) {
@@ -683,7 +681,7 @@ public class CommandTests {
                 () -> assertTrue(config.containsKey("logfile")));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void configSet_a_parameter(GlideClusterClient clusterClient) {
@@ -698,7 +696,7 @@ public class CommandTests {
         assertEquals(OK, response);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void configSet_a_parameter_with_routing(GlideClusterClient clusterClient) {
@@ -719,7 +717,7 @@ public class CommandTests {
         assertEquals(OK, response);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void cluster_route_by_address_reaches_correct_node(GlideClusterClient clusterClient) {
@@ -757,7 +755,7 @@ public class CommandTests {
         assertEquals(initialNode, specifiedClusterNode2);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void cluster_fail_routing_by_address_if_no_port_is_provided(
@@ -766,7 +764,7 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void echo(GlideClusterClient clusterClient) {
         String message = "GLIDE";
@@ -775,7 +773,7 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void echo_with_route(GlideClusterClient clusterClient) {
         String message = "GLIDE";
@@ -788,7 +786,7 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void echo_gs(GlideClusterClient clusterClient) {
         byte[] message = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
@@ -797,7 +795,7 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void echo_gs_with_route(GlideClusterClient clusterClient) {
         byte[] message = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
@@ -809,7 +807,7 @@ public class CommandTests {
         multiPayload.forEach((key, value) -> assertEquals(gs(message), value));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void time(GlideClusterClient clusterClient) {
@@ -823,7 +821,7 @@ public class CommandTests {
         assertTrue(Long.parseLong(result[1]) < 1000000);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void time_with_route(GlideClusterClient clusterClient) {
@@ -845,7 +843,7 @@ public class CommandTests {
         assertTrue(Long.parseLong((String) serverTime[1]) < 1000000);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void lastsave(GlideClusterClient clusterClient) {
@@ -860,7 +858,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void lolwut_lolwut(GlideClusterClient clusterClient) {
@@ -934,7 +932,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void dbsize_and_flushdb(GlideClusterClient clusterClient) {
@@ -989,7 +987,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void objectFreq(GlideClusterClient clusterClient) {
@@ -1237,7 +1235,7 @@ public class CommandTests {
         future.get();
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void flushall(GlideClusterClient clusterClient) {
@@ -1286,7 +1284,7 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getTestScenarios")
     public void function_commands_without_keys_with_route(
             GlideClusterClient clusterClient, boolean singleNodeRoute) {
@@ -1436,7 +1434,7 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getTestScenarios")
     public void function_commands_without_keys_with_route_binary(
             GlideClusterClient clusterClient, boolean singleNodeRoute) {
@@ -1595,7 +1593,7 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void function_commands_without_keys_and_without_route(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
@@ -1679,7 +1677,7 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void function_commands_without_keys_and_without_route_binary(
             GlideClusterClient clusterClient) {
@@ -1773,7 +1771,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionFlush(ASYNC).get());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsAndPrefixes")
     @SneakyThrows
     public void fcall_with_keys(GlideClusterClient clusterClient, String prefix) {
@@ -1815,7 +1813,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsAndPrefixes")
     @SneakyThrows
     public void fcall_binary_with_keys(GlideClusterClient clusterClient, String prefix) {
@@ -1865,7 +1863,7 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void fcall_readonly_function(GlideClusterClient clusterClient) {
         // TODO: Remove the skip after fixing Windows Replicas issues
@@ -1932,7 +1930,7 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void fcall_readonly_binary_function(GlideClusterClient clusterClient) {
         // TODO: Remove the skip after fixing Windows Replicas issues
@@ -2000,7 +1998,7 @@ public class CommandTests {
     }
 
     @Timeout(20)
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void functionKill_no_write_without_route(GlideClusterClient clusterClient) {
@@ -2055,7 +2053,7 @@ public class CommandTests {
     }
 
     @Timeout(20)
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void functionKillBinary_no_write_without_route(GlideClusterClient clusterClient) {
@@ -2111,7 +2109,7 @@ public class CommandTests {
     }
 
     @Timeout(20)
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getTestScenarios")
     @SneakyThrows
     public void functionKill_no_write_with_route(
@@ -2164,7 +2162,7 @@ public class CommandTests {
     }
 
     @Timeout(20)
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getTestScenarios")
     @SneakyThrows
     public void functionKillBinary_no_write_with_route(
@@ -2219,7 +2217,7 @@ public class CommandTests {
     }
 
     @Timeout(20)
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void functionKill_key_based_write_function(GlideClusterClient clusterClient) {
@@ -2286,7 +2284,7 @@ public class CommandTests {
     }
 
     @Timeout(20)
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void functionKillBinary_key_based_write_function(GlideClusterClient clusterClient) {
@@ -2354,7 +2352,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void functionStats_without_route(GlideClusterClient clusterClient) {
@@ -2393,7 +2391,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void functionStatsBinary_without_route(GlideClusterClient clusterClient) {
@@ -2437,7 +2435,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getTestScenarios")
     @SneakyThrows
     public void functionStats_with_route(GlideClusterClient clusterClient, boolean singleNodeRoute) {
@@ -2490,7 +2488,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getTestScenarios")
     @SneakyThrows
     public void functionStatsBinary_with_route(
@@ -2550,7 +2548,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void function_dump_and_restore(GlideClusterClient clusterClient) {
@@ -2633,7 +2631,7 @@ public class CommandTests {
                 2L, clusterClient.fcallReadOnly(name2, new String[0], new String[] {"meow", "woem"}).get());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void randomKey(GlideClusterClient clusterClient) {
@@ -2656,7 +2654,7 @@ public class CommandTests {
         assertNull(clusterClient.randomKey().get());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void randomKeyBinary(GlideClusterClient clusterClient) {
@@ -2679,7 +2677,7 @@ public class CommandTests {
         assertNull(clusterClient.randomKey().get());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void sort(GlideClusterClient clusterClient) {
@@ -2761,7 +2759,7 @@ public class CommandTests {
         assertArrayEquals(key2DescendingListSubset, clusterClient.lrange(key3, 0, -1).get());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void sort_binary(GlideClusterClient clusterClient) {
@@ -2855,7 +2853,7 @@ public class CommandTests {
     }
 
     @Timeout(20)
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void test_cluster_scan_simple(GlideClusterClient clusterClient) {
@@ -2887,7 +2885,7 @@ public class CommandTests {
     }
 
     @Timeout(20)
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void test_cluster_scan_binary_simple(GlideClusterClient clusterClient) {
@@ -2919,7 +2917,7 @@ public class CommandTests {
     }
 
     @Timeout(20)
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void test_cluster_scan_with_object_type_and_pattern(GlideClusterClient clusterClient) {
@@ -2977,7 +2975,7 @@ public class CommandTests {
     }
 
     @Timeout(20)
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void test_cluster_scan_with_count(GlideClusterClient clusterClient) {
@@ -3027,7 +3025,7 @@ public class CommandTests {
     }
 
     @Timeout(20)
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void test_cluster_scan_with_match(GlideClusterClient clusterClient) {
@@ -3062,7 +3060,7 @@ public class CommandTests {
     }
 
     @Timeout(20)
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void test_cluster_scan_cleaning_cursor(GlideClusterClient clusterClient) {
@@ -3089,7 +3087,7 @@ public class CommandTests {
         assertTrue(exception.getCause().getMessage().contains("Invalid scan_state_cursor id"));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void test_cluster_scan_all_strings(GlideClusterClient clusterClient) {
@@ -3119,7 +3117,7 @@ public class CommandTests {
         assertEquals(stringData.keySet(), results);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void test_cluster_scan_all_set(GlideClusterClient clusterClient) {
@@ -3151,7 +3149,7 @@ public class CommandTests {
         assertEquals(setData.keySet(), results);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void test_cluster_scan_all_hash(GlideClusterClient clusterClient) {
@@ -3183,7 +3181,7 @@ public class CommandTests {
         assertEquals(hashData.keySet(), results);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void test_cluster_scan_all_list(GlideClusterClient clusterClient) {
@@ -3215,7 +3213,7 @@ public class CommandTests {
         assertEquals(listData.keySet(), results);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void test_cluster_scan_all_sorted_set(GlideClusterClient clusterClient) {
@@ -3248,7 +3246,7 @@ public class CommandTests {
         assertEquals(zSetData.keySet(), results);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void test_cluster_scan_all_stream(GlideClusterClient clusterClient) {
@@ -3282,7 +3280,7 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void invokeScript_test(GlideClusterClient clusterClient) {
         String key1 = UUID.randomUUID().toString();
@@ -3322,7 +3320,7 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void script_large_keys_and_or_args(GlideClusterClient clusterClient) {
         String str1 = "0".repeat(1 << 12); // 4k
@@ -3366,7 +3364,7 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void invokeScript_gs_test(GlideClusterClient clusterClient) {
         GlideString key1 = gs(UUID.randomUUID().toString());
@@ -3409,7 +3407,7 @@ public class CommandTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void scriptExists(GlideClusterClient clusterClient) {
@@ -3444,7 +3442,7 @@ public class CommandTests {
         script3.close();
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void scriptExistsBinary(GlideClusterClient clusterClient) {
@@ -3481,7 +3479,7 @@ public class CommandTests {
         script3.close();
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void scriptFlush(GlideClusterClient clusterClient) {
@@ -3511,7 +3509,7 @@ public class CommandTests {
         script.close();
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void scriptKill_with_route(GlideClusterClient clusterClient) {
@@ -3573,7 +3571,7 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void scriptKill_unkillable(GlideClusterClient clusterClient) {
         // Ensure no script is blocking the cluster from a previous test
@@ -3635,7 +3633,7 @@ public class CommandTests {
      * instance with the same hash still exists, even after the original reference is dropped and the
      * server cache is flushed.
      */
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void test_script_is_not_removed_while_another_instance_exists(
@@ -3678,7 +3676,7 @@ public class CommandTests {
                 "Expected NOSCRIPT error after script is fully released and flushed");
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void simple_select_test(GlideClusterClient clusterClient) {

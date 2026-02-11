@@ -16,7 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
-import static org.junit.jupiter.api.Named.named;
 
 import glide.BatchTestUtilities.BatchBuilder;
 import glide.api.GlideClusterClient;
@@ -50,15 +49,14 @@ import org.junit.jupiter.params.provider.MethodSource;
 @Timeout(10) // seconds
 public class ClusterBatchTests {
 
-    private static List<Arguments> clients;
+    private static final List<Arguments> clients = new ArrayList<>();
 
     @BeforeAll
     @SneakyThrows
     public static void init() {
-        clients = new ArrayList<>();
         clients.add(
                 Arguments.of(
-                        named(
+                        Named.of(
                                 "RESP2",
                                 GlideClusterClient.createClient(
                                                 commonClusterClientConfig()
@@ -68,7 +66,7 @@ public class ClusterBatchTests {
                                         .get())));
         clients.add(
                 Arguments.of(
-                        named(
+                        Named.of(
                                 "RESP3",
                                 GlideClusterClient.createClient(
                                                 commonClusterClientConfig()
@@ -87,7 +85,6 @@ public class ClusterBatchTests {
         }
     }
 
-    @SneakyThrows
     public static Stream<Arguments> getClients() {
         return clients.stream();
     }
@@ -99,7 +96,7 @@ public class ClusterBatchTests {
                         args -> Stream.of(true, false).map(isAtomic -> Arguments.of(args.get()[0], isAtomic)));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void custom_command_info(GlideClusterClient clusterClient) {
@@ -108,7 +105,7 @@ public class ClusterBatchTests {
         assertTrue(((String) result[0]).contains("# Stats"));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void custom_command_info(GlideClusterClient clusterClient, boolean isAtomic) {
@@ -117,7 +114,7 @@ public class ClusterBatchTests {
         assertEquals(result[0], "PONG");
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void info_simple_route_test(GlideClusterClient clusterClient, boolean isAtomic) {
@@ -196,7 +193,7 @@ public class ClusterBatchTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     public void test_batch_large_values(GlideClusterClient clusterClient, boolean isAtomic) {
         // Skip on macOS - the macOS tests run on self hosted VMs which have resource limits
@@ -224,7 +221,7 @@ public class ClusterBatchTests {
         assertArrayEquals(expectedResult, result);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void lastsave(GlideClusterClient clusterClient, boolean isAtomic) {
@@ -233,7 +230,7 @@ public class ClusterBatchTests {
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void objectFreq(GlideClusterClient clusterClient, boolean isAtomic) {
@@ -255,7 +252,7 @@ public class ClusterBatchTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void objectIdletime(GlideClusterClient clusterClient, boolean isAtomic) {
@@ -268,7 +265,7 @@ public class ClusterBatchTests {
         assertTrue((long) response[1] >= 0L);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void objectRefcount(GlideClusterClient clusterClient, boolean isAtomic) {
@@ -281,7 +278,7 @@ public class ClusterBatchTests {
         assertTrue((long) response[1] >= 0L);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void zrank_zrevrank_withscores(GlideClusterClient clusterClient) {
@@ -298,7 +295,7 @@ public class ClusterBatchTests {
         assertArrayEquals(new Object[] {2L, 1.0}, (Object[]) result[2]);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void watch(GlideClusterClient clusterClient) {
@@ -355,7 +352,7 @@ public class ClusterBatchTests {
         // assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void unwatch(GlideClusterClient clusterClient) {
@@ -381,7 +378,7 @@ public class ClusterBatchTests {
         assertEquals(foobarString, clusterClient.get(key2).get());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void spublish(GlideClusterClient clusterClient, boolean isAtomic) {
@@ -391,7 +388,7 @@ public class ClusterBatchTests {
         assertArrayEquals(new Object[] {0L}, clusterClient.exec(batch, true).get());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void sort(GlideClusterClient clusterClient, boolean isAtomic) {
@@ -490,7 +487,7 @@ public class ClusterBatchTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     public void waitTest(GlideClusterClient clusterClient, boolean isAtomic) {
         // setup
@@ -510,7 +507,7 @@ public class ClusterBatchTests {
         assertTrue((Long) expectedResult[1] <= (Long) results[1]);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void test_batch_function_dump_restore(GlideClusterClient clusterClient, boolean isAtomic) {
@@ -540,7 +537,7 @@ public class ClusterBatchTests {
         assertEquals(OK, response[0]);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void test_batch_xinfoStream(GlideClusterClient clusterClient, boolean isAtomic) {
@@ -596,7 +593,7 @@ public class ClusterBatchTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     public void binary_strings(GlideClusterClient clusterClient, boolean isAtomic) {
         String key = UUID.randomUUID().toString();
