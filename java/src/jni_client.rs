@@ -670,6 +670,8 @@ fn serialize_array_to_bytes(
     arr: Vec<ServerValue>,
     _encoding_utf8: bool,
 ) -> Result<Vec<u8>, crate::errors::FFIError> {
+    const NULL_VALUE: i32 = -1;
+
     let mut bytes = Vec::new();
 
     // Write array marker and length
@@ -680,7 +682,7 @@ fn serialize_array_to_bytes(
         match value {
             redis::Value::Nil => {
                 bytes.push(b'$'); // Bulk string marker
-                bytes.extend_from_slice(&(-1i32).to_be_bytes()); // -1 indicates null in RESP
+                bytes.extend_from_slice(&NULL_VALUE.to_be_bytes()); // -1 indicates null in binary format
             }
             redis::Value::BulkString(data) => {
                 bytes.push(b'$'); // Bulk string marker
