@@ -363,7 +363,11 @@ def sync_pubsub_test_clients(
                         )
                     )
                     listening_client = create_sync_client(
-                        request, cluster_mode, cluster_mode_pubsub=cluster_pubsub_config
+                        request,
+                        cluster_mode,
+                        cluster_mode_pubsub=cluster_pubsub_config,
+                        request_timeout=timeout,
+                        connection_timeout=timeout,
                     )
                 else:
                     standalone_pubsub_config = (
@@ -377,12 +381,24 @@ def sync_pubsub_test_clients(
                         request,
                         cluster_mode,
                         standalone_mode_pubsub=standalone_pubsub_config,
+                        request_timeout=timeout,
+                        connection_timeout=timeout,
                     )
             else:
                 # No callback - create client with no pubsub config
-                listening_client = create_sync_client(request, cluster_mode)
+                listening_client = create_sync_client(
+                    request,
+                    cluster_mode,
+                    request_timeout=timeout,
+                    connection_timeout=timeout,
+                )
 
-            publishing_client = create_sync_client(request, cluster_mode)
+            publishing_client = create_sync_client(
+                request,
+                cluster_mode,
+                request_timeout=timeout,
+                connection_timeout=timeout,
+            )
             sync_subscribe_by_method(
                 listening_client,
                 subscription_method,

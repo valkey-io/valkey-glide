@@ -2197,14 +2197,14 @@ class TestSyncPubSub:
             time.sleep(15)
 
             async_msg = listening_client.get_pubsub_message()
-            assert async_msg.message == message
-            assert async_msg.channel == channel
+            assert async_msg.message == message.encode()
+            assert async_msg.channel == channel.encode()
             assert async_msg.pattern is None
 
             sync_msg = listening_client.try_get_pubsub_message()
             assert sync_msg
-            assert sync_msg.message == message2
-            assert sync_msg.channel == channel
+            assert sync_msg.message == message2.encode()
+            assert sync_msg.channel == channel.encode()
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
@@ -2341,8 +2341,8 @@ class TestSyncPubSub:
 
             assert len(callback_messages) == 1
 
-            assert callback_messages[0].message == message
-            assert callback_messages[0].channel == channel
+            assert callback_messages[0].message == message.encode()
+            assert callback_messages[0].channel == channel.encode()
             assert callback_messages[0].pattern is None
 
     @pytest.mark.skip_if_version_below("7.0.0")
@@ -2400,8 +2400,8 @@ class TestSyncPubSub:
 
             assert len(callback_messages) == 1
 
-            assert callback_messages[0].message == message
-            assert callback_messages[0].channel == channel
+            assert callback_messages[0].message == message.encode()
+            assert callback_messages[0].channel == channel.encode()
             assert callback_messages[0].pattern is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
