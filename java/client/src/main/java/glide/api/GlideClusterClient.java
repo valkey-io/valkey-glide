@@ -173,16 +173,18 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(@NonNull String[] args) {
-        // TODO if a command returns a map as a single value, ClusterValue misleads user
-        return commandManager.submitCustomCommand(
-                args, response -> ClusterValue.of(handleObjectOrNullResponse(response)));
+        return commandManager.submitNewCommand(
+                CustomCommand,
+                args,
+                response -> ClusterValue.of(handleObjectOrNullResponse(response)));
     }
 
     @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(@NonNull GlideString[] args) {
-        // TODO if a command returns a map as a single value, ClusterValue misleads user
-        return commandManager.submitCustomCommand(
-                args, response -> ClusterValue.of(handleBinaryObjectOrNullResponse(response)));
+        return commandManager.submitNewCommand(
+                CustomCommand,
+                args,
+                response -> ClusterValue.of(handleBinaryObjectOrNullResponse(response)));
     }
 
     @Override
@@ -201,33 +203,21 @@ public class GlideClusterClient extends BaseClient
 
     @SuppressWarnings("unchecked")
     protected ClusterValue<Object> handleCustomCommandResponse(Route route, Response response) {
-        if (route instanceof SingleNodeRoute) {
-            return ClusterValue.ofSingleValue(handleObjectOrNullResponse(response));
-        }
         if (response.hasConstantResponse()) {
             return ClusterValue.ofSingleValue(handleStringResponse(response));
         }
         var data =
                 handleValkeyResponse(Object.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
-        if (data instanceof Map) {
-            return ClusterValue.ofMultiValue((Map<String, Object>) data);
-        }
-        return ClusterValue.ofSingleValue(data);
+        return ClusterValue.of(data, route instanceof SingleNodeRoute);
     }
 
     @SuppressWarnings("unchecked")
     protected ClusterValue<Object> handleCustomCommandBinaryResponse(Route route, Response response) {
-        if (route instanceof SingleNodeRoute) {
-            return ClusterValue.ofSingleValue(handleBinaryObjectOrNullResponse(response));
-        }
         if (response.hasConstantResponse()) {
             return ClusterValue.ofSingleValue(handleStringResponse(response));
         }
         var data = handleValkeyResponse(Object.class, EnumSet.noneOf(ResponseFlags.class), response);
-        if (data instanceof Map) {
-            return ClusterValue.ofMultiValueBinary((Map<GlideString, Object>) data);
-        }
-        return ClusterValue.ofSingleValue(data);
+        return ClusterValue.of(data, route instanceof SingleNodeRoute);
     }
 
     @Deprecated
@@ -316,7 +306,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<String>> info() {
         return commandManager.submitNewCommand(
-                Info, new String[0], response -> ClusterValue.of(handleMapResponse(response)));
+                Info, new String[0], response -> ClusterValue.of(handleMapResponse(response), false));
     }
 
     public CompletableFuture<ClusterValue<String>> info(@NonNull Route route) {
@@ -324,10 +314,12 @@ public class GlideClusterClient extends BaseClient
                 Info,
                 new String[0],
                 route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.of(handleStringResponse(response))
-                                : ClusterValue.of(handleMapResponse(response)));
+                response -> {
+                    boolean isSingleNode = route instanceof SingleNodeRoute;
+                    return ClusterValue.of(
+                            isSingleNode ? handleStringResponse(response) : handleMapResponse(response),
+                            isSingleNode);
+                });
     }
 
     @Override
@@ -335,7 +327,7 @@ public class GlideClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 Info,
                 Stream.of(sections).map(Enum::toString).toArray(String[]::new),
-                response -> ClusterValue.of(handleMapResponse(response)));
+                response -> ClusterValue.of(handleMapResponse(response), false));
     }
 
     @Override
@@ -351,10 +343,12 @@ public class GlideClusterClient extends BaseClient
                 Info,
                 Stream.of(sections).map(Enum::toString).toArray(String[]::new),
                 route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.of(handleStringResponse(response))
-                                : ClusterValue.of(handleMapResponse(response)));
+                response -> {
+                    boolean isSingleNode = route instanceof SingleNodeRoute;
+                    return ClusterValue.of(
+                            isSingleNode ? handleStringResponse(response) : handleMapResponse(response),
+                            isSingleNode);
+                });
     }
 
     @Override
@@ -368,10 +362,12 @@ public class GlideClusterClient extends BaseClient
                 ClientId,
                 new String[0],
                 route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.of(handleLongResponse(response))
-                                : ClusterValue.of(handleMapResponse(response)));
+                response -> {
+                    boolean isSingleNode = route instanceof SingleNodeRoute;
+                    return ClusterValue.of(
+                            isSingleNode ? handleLongResponse(response) : handleMapResponse(response),
+                            isSingleNode);
+                });
     }
 
     @Override
@@ -386,10 +382,12 @@ public class GlideClusterClient extends BaseClient
                 ClientGetName,
                 new String[0],
                 route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.of(handleStringOrNullResponse(response))
-                                : ClusterValue.of(handleMapResponse(response)));
+                response -> {
+                    boolean isSingleNode = route instanceof SingleNodeRoute;
+                    return ClusterValue.of(
+                            isSingleNode ? handleStringOrNullResponse(response) : handleMapResponse(response),
+                            isSingleNode);
+                });
     }
 
     @Override
@@ -515,10 +513,12 @@ public class GlideClusterClient extends BaseClient
                 LastSave,
                 new String[0],
                 route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.of(handleLongResponse(response))
-                                : ClusterValue.of(handleMapResponse(response)));
+                response -> {
+                    boolean isSingleNode = route instanceof SingleNodeRoute;
+                    return ClusterValue.of(
+                            isSingleNode ? handleLongResponse(response) : handleMapResponse(response),
+                            isSingleNode);
+                });
     }
 
     @Override

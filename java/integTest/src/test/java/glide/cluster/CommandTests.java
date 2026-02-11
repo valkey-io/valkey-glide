@@ -327,6 +327,56 @@ public class CommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public void custom_command_hgetall_single_node_returns_map(GlideClusterClient clusterClient) {
+        // Test for issue #4963: HGETALL with single-node route should work with getSingleValue()
+        String key = UUID.randomUUID().toString();
+        Map<String, String> fieldValues = Map.of("field1", "value1", "field2", "value2");
+        clusterClient.hset(key, fieldValues).get();
+
+        // Test with SingleNodeRoute - should return Map as single value
+        ClusterValue<Object> result =
+                clusterClient
+                        .customCommand(new String[] {"HGETALL", key}, new SlotKeyRoute(key, PRIMARY))
+                        .get();
+        assertTrue(result.hasSingleData());
+        Map<String, String> map = (Map<String, String>) result.getSingleValue();
+        assertEquals(fieldValues, map);
+
+        // Backward compatibility: getMultiValue() should also work
+        assertTrue(result.hasMultiData());
+        assertEquals(fieldValues, result.getMultiValue());
+
+        clusterClient.del(new String[] {key}).get();
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public void custom_command_hgetall_binary_single_node_returns_map(
+            GlideClusterClient clusterClient) {
+        // Test binary version of HGETALL with single-node route
+        GlideString key = gs(UUID.randomUUID().toString());
+        Map<GlideString, GlideString> fieldValues =
+                Map.of(gs("field1"), gs("value1"), gs("field2"), gs("value2"));
+        clusterClient.hset(key, fieldValues).get();
+
+        ClusterValue<Object> result =
+                clusterClient
+                        .customCommand(
+                                new GlideString[] {gs("HGETALL"), key}, new SlotKeyRoute(key.toString(), PRIMARY))
+                        .get();
+        assertTrue(result.hasSingleData());
+        Map<String, GlideString> map = (Map<String, GlideString>) result.getSingleValue();
+        assertEquals(2, map.size());
+
+        clusterClient.del(new GlideString[] {key}).get();
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
     public void ping(GlideClusterClient clusterClient) {
         String data = clusterClient.ping().get();
         assertEquals("PONG", data);
