@@ -2219,6 +2219,10 @@ class TestSyncPubSub:
 
             assert listening_client.try_get_pubsub_message() is None
 
+    @pytest.mark.skip(
+        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
+        + "to vary across platforms and server versions"
+    )
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
