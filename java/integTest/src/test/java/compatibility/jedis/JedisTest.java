@@ -1658,6 +1658,12 @@ public class JedisTest {
         jedis.sadd(keyBytes, m1, m2);
         Set<byte[]> binaryMembers = jedis.smembers(keyBytes);
         assertEquals(2, binaryMembers.size(), "SMEMBERS binary should return 2 members");
+        Set<String> memberStrings = new HashSet<>();
+        for (byte[] member : binaryMembers) {
+            memberStrings.add(new String(member, StandardCharsets.UTF_8));
+        }
+        Set<String> expectedBinaryMembers = new HashSet<>(Arrays.asList("m1", "m2"));
+        assertEquals(expectedBinaryMembers, memberStrings, "SMEMBERS binary should contain m1 and m2");
     }
 
     @Test
@@ -1676,7 +1682,8 @@ public class JedisTest {
 
         String popped = jedis.spop(key);
         assertNotNull(popped, "SPOP should return a member");
-        assertTrue(Set.of("a", "b", "c").contains(popped), "SPOP should return one of a,b,c");
+        Set<String> expectedMembers = new HashSet<>(Arrays.asList("a", "b", "c"));
+        assertTrue(expectedMembers.contains(popped), "SPOP should return one of a,b,c");
         assertEquals(2L, jedis.scard(key), "SCARD should be 2 after spop");
 
         String rand = jedis.srandmember(key);
@@ -1703,7 +1710,8 @@ public class JedisTest {
         jedis.sadd(key2, "b", "c", "d");
 
         Set<String> inter = jedis.sinter(key1, key2);
-        assertEquals(Set.of("b", "c"), inter, "SINTER should return b,c");
+        Set<String> expectedInter = new HashSet<>(Arrays.asList("b", "c"));
+        assertEquals(expectedInter, inter, "SINTER should return b,c");
 
         // SINTERCARD was added in Redis 7.0
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -1713,22 +1721,26 @@ public class JedisTest {
 
         long interStoreLen = jedis.sinterstore(dest, key1, key2);
         assertEquals(2L, interStoreLen, "SINTERSTORE should store 2 elements");
-        assertEquals(Set.of("b", "c"), jedis.smembers(dest), "SINTERSTORE result should be b,c");
+        Set<String> expectedInterStore = new HashSet<>(Arrays.asList("b", "c"));
+        assertEquals(expectedInterStore, jedis.smembers(dest), "SINTERSTORE result should be b,c");
 
         Set<String> union = jedis.sunion(key1, key2);
-        assertEquals(Set.of("a", "b", "c", "d"), union, "SUNION should return a,b,c,d");
+        Set<String> expectedUnion = new HashSet<>(Arrays.asList("a", "b", "c", "d"));
+        assertEquals(expectedUnion, union, "SUNION should return a,b,c,d");
 
         String destUnion = UUID.randomUUID().toString();
         long unionStoreLen = jedis.sunionstore(destUnion, key1, key2);
         assertEquals(4L, unionStoreLen, "SUNIONSTORE should store 4 elements");
 
         Set<String> diff = jedis.sdiff(key1, key2);
-        assertEquals(Set.of("a"), diff, "SDIFF key1-key2 should return a");
+        Set<String> expectedDiff = new HashSet<>(Arrays.asList("a"));
+        assertEquals(expectedDiff, diff, "SDIFF key1-key2 should return a");
 
         String destDiff = UUID.randomUUID().toString();
         long diffStoreLen = jedis.sdiffstore(destDiff, key1, key2);
         assertEquals(1L, diffStoreLen, "SDIFFSTORE should store 1 element");
-        assertEquals(Set.of("a"), jedis.smembers(destDiff), "SDIFFSTORE result should be a");
+        Set<String> expectedDiffStore = new HashSet<>(Arrays.asList("a"));
+        assertEquals(expectedDiffStore, jedis.smembers(destDiff), "SDIFFSTORE result should be a");
     }
 
     @Test
@@ -1742,9 +1754,18 @@ public class JedisTest {
         assertTrue(
                 result.getResult().size() >= 1 && result.getResult().size() <= 3,
                 "SSCAN should return 1-3 members in first iteration");
+        Set<String> expectedMembers = new HashSet<>(Arrays.asList("m1", "m2", "m3"));
+        for (String member : result.getResult()) {
+            assertTrue(expectedMembers.contains(member), "SSCAN should return valid members: " + member);
+        }
 
         ScanResult<String> withParams = jedis.sscan(key, "0", new ScanParams().count(10));
         assertNotNull(withParams.getResult(), "SSCAN with params should return result");
+        for (String member : withParams.getResult()) {
+            assertTrue(
+                    expectedMembers.contains(member),
+                    "SSCAN with params should return valid members: " + member);
+        }
     }
 
     @Test

@@ -2447,6 +2447,15 @@ public final class Jedis implements Closeable {
         return glideStrings;
     }
 
+    /** Helper method to convert Set of GlideString to Set of byte arrays. */
+    private static Set<byte[]> convertGlideStringsToByteArraySet(Set<GlideString> glideStrings) {
+        Set<byte[]> result = new HashSet<>();
+        for (GlideString gs : glideStrings) {
+            result.add(gs.getBytes());
+        }
+        return result;
+    }
+
     private static ScanResult<String> convertToScanResult(Object[] result) {
         if (result != null && result.length >= 2) {
             String newCursor = result[0].toString();
@@ -7062,11 +7071,7 @@ public final class Jedis implements Closeable {
                 "SMEMBERS",
                 () -> {
                     Set<GlideString> result = glideClient.smembers(GlideString.of(key)).get();
-                    Set<byte[]> out = new HashSet<>();
-                    for (GlideString gs : result) {
-                        out.add(gs.getBytes());
-                    }
-                    return out;
+                    return convertGlideStringsToByteArraySet(result);
                 });
     }
 
@@ -7195,11 +7200,7 @@ public final class Jedis implements Closeable {
                 "SPOP",
                 () -> {
                     Set<GlideString> result = glideClient.spopCount(GlideString.of(key), count).get();
-                    Set<byte[]> out = new HashSet<>();
-                    for (GlideString gs : result) {
-                        out.add(gs.getBytes());
-                    }
-                    return out;
+                    return convertGlideStringsToByteArraySet(result);
                 });
     }
 
@@ -7322,11 +7323,7 @@ public final class Jedis implements Closeable {
                 () -> {
                     GlideString[] glideKeys = convertToGlideStringArray(keys);
                     Set<GlideString> result = glideClient.sinter(glideKeys).get();
-                    Set<byte[]> out = new HashSet<>();
-                    for (GlideString gs : result) {
-                        out.add(gs.getBytes());
-                    }
-                    return out;
+                    return convertGlideStringsToByteArraySet(result);
                 });
     }
 
@@ -7437,11 +7434,7 @@ public final class Jedis implements Closeable {
                 () -> {
                     GlideString[] glideKeys = convertToGlideStringArray(keys);
                     Set<GlideString> result = glideClient.sunion(glideKeys).get();
-                    Set<byte[]> out = new HashSet<>();
-                    for (GlideString gs : result) {
-                        out.add(gs.getBytes());
-                    }
-                    return out;
+                    return convertGlideStringsToByteArraySet(result);
                 });
     }
 
@@ -7498,11 +7491,7 @@ public final class Jedis implements Closeable {
                 () -> {
                     GlideString[] glideKeys = convertToGlideStringArray(keys);
                     Set<GlideString> result = glideClient.sdiff(glideKeys).get();
-                    Set<byte[]> out = new HashSet<>();
-                    for (GlideString gs : result) {
-                        out.add(gs.getBytes());
-                    }
-                    return out;
+                    return convertGlideStringsToByteArraySet(result);
                 });
     }
 
