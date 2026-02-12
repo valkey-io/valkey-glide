@@ -46,24 +46,11 @@ def create_simple_pubsub_config(
     sharded: Optional[Set[str]] = None,
 ):
     """Helper to create pubsub config from simple sets."""
-    modes = (
-        GlideClusterClientConfiguration.PubSubChannelModes
-        if cluster_mode
-        else GlideClientConfiguration.PubSubChannelModes
-    )
-
-    channels_dict = {}
-    if channels:
-        channels_dict[modes.Exact] = channels
-    if patterns:
-        channels_dict[modes.Pattern] = patterns
-    if cluster_mode and sharded:
-        channels_dict[modes.Sharded] = sharded  # type: ignore[union-attr,arg-type]
-
     return create_pubsub_subscription(
         cluster_mode,
-        channels_dict if cluster_mode else {},  # type: ignore[union-attr,arg-type]
-        channels_dict if not cluster_mode else {},  # type: ignore[union-attr,arg-type]
+        channels=channels,
+        patterns=patterns,
+        sharded_channels=sharded,
     )
 
 
@@ -1114,20 +1101,8 @@ class TestSyncPubSub:
             # Setup PUBSUB for exact channels
             pub_sub_exact = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: set(
-                        exact_channels_and_messages.keys()
-                    ),
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {
-                        PATTERN
-                    },
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Exact: set(
-                        exact_channels_and_messages.keys()
-                    ),
-                    GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN},
-                },
+                channels=set(exact_channels_and_messages.keys()),
+                patterns={PATTERN},
                 callback=callback,
                 context=context,
             )
@@ -1235,16 +1210,7 @@ class TestSyncPubSub:
             # Setup PUBSUB for exact channels
             pub_sub_exact = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: set(
-                        exact_channels_and_messages.keys()
-                    )
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Exact: set(
-                        exact_channels_and_messages.keys()
-                    )
-                },
+                channels=set(exact_channels_and_messages.keys()),
                 callback=callback,
                 context=context,
             )
@@ -1266,8 +1232,7 @@ class TestSyncPubSub:
             # Setup PUBSUB for pattern channels
             pub_sub_pattern = create_pubsub_subscription(
                 cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-                {GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
+                patterns={PATTERN},
                 callback=callback,
                 context=context,
             )
@@ -1405,18 +1370,9 @@ class TestSyncPubSub:
             # Setup PUBSUB for exact channels
             pub_sub_exact = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: set(
-                        exact_channels_and_messages.keys()
-                    ),
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {
-                        PATTERN
-                    },
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: set(
-                        sharded_channels_and_messages.keys()
-                    ),
-                },
-                {},
+                channels=set(exact_channels_and_messages.keys()),
+                patterns={PATTERN},
+                sharded_channels=set(sharded_channels_and_messages.keys()),
                 callback=callback,
                 context=context,
             )
@@ -1562,16 +1518,7 @@ class TestSyncPubSub:
             # Setup PUBSUB for exact channels
             pub_sub_exact = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: set(
-                        exact_channels_and_messages.keys()
-                    )
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Exact: set(
-                        exact_channels_and_messages.keys()
-                    )
-                },
+                channels=set(exact_channels_and_messages.keys()),
                 callback=callback,
                 context=context,
             )
@@ -1591,8 +1538,7 @@ class TestSyncPubSub:
             # Setup PUBSUB for pattern channels
             pub_sub_pattern = create_pubsub_subscription(
                 cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-                {GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
+                patterns={PATTERN},
                 callback=callback,
                 context=context,
             )
@@ -1602,12 +1548,7 @@ class TestSyncPubSub:
 
             pub_sub_sharded = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: set(
-                        sharded_channels_and_messages.keys()
-                    )
-                },
-                {},
+                sharded_channels=set(sharded_channels_and_messages.keys()),
                 callback=callback,
                 context=context,
             )
@@ -1780,12 +1721,7 @@ class TestSyncPubSub:
             # Setup PUBSUB for exact channel
             pub_sub_exact = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        CHANNEL_NAME
-                    }
-                },
-                {GlideClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
+                channels={CHANNEL_NAME},
                 callback=callback,
                 context=context,
             )
@@ -1806,12 +1742,7 @@ class TestSyncPubSub:
             # Setup PUBSUB for pattern channels
             pub_sub_pattern = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {
-                        CHANNEL_NAME
-                    }
-                },
-                {GlideClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
+                patterns={CHANNEL_NAME},
                 callback=callback,
                 context=context,
             )
@@ -1821,12 +1752,7 @@ class TestSyncPubSub:
 
             pub_sub_sharded = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        CHANNEL_NAME
-                    }
-                },
-                {},
+                sharded_channels={CHANNEL_NAME},
                 callback=callback,
                 context=context,
             )
@@ -1936,24 +1862,14 @@ class TestSyncPubSub:
             # Setup PUBSUB for exact channel
             pub_sub_exact = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        CHANNEL_NAME
-                    }
-                },
-                {GlideClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
+                channels={CHANNEL_NAME},
                 callback=callback,
                 context=context_exact,
             )
             # Setup PUBSUB for pattern channels
             pub_sub_pattern = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {
-                        CHANNEL_NAME
-                    }
-                },
-                {GlideClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
+                patterns={CHANNEL_NAME},
                 callback=callback,
                 context=context_pattern,
             )
@@ -2057,36 +1973,21 @@ class TestSyncPubSub:
             # Setup PUBSUB for exact channel
             pub_sub_exact = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        CHANNEL_NAME
-                    }
-                },
-                {GlideClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
+                channels={CHANNEL_NAME},
                 callback=callback,
                 context=context_exact,
             )
             # Setup PUBSUB for pattern channels
             pub_sub_pattern = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {
-                        CHANNEL_NAME
-                    }
-                },
-                {GlideClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
+                patterns={CHANNEL_NAME},
                 callback=callback,
                 context=context_pattern,
             )
             # Setup PUBSUB for pattern channels
             pub_sub_sharded = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        CHANNEL_NAME
-                    }
-                },
-                {},
+                sharded_channels={CHANNEL_NAME},
                 callback=callback,
                 context=context_sharded,
             )
@@ -2419,8 +2320,7 @@ class TestSyncPubSub:
 
         pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
-            {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-            {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
+            channels={channel},
         )
 
         with pytest.raises(ConfigurationError):
@@ -2437,8 +2337,7 @@ class TestSyncPubSub:
         context: List[PubSubMsg] = []
         pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
-            {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-            {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
+            channels={channel},
             context=context,
         )
 
@@ -2466,20 +2365,7 @@ class TestSyncPubSub:
 
             pub_sub = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        channel1,
-                        channel2,
-                        channel3,
-                    }
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Exact: {
-                        channel1,
-                        channel2,
-                        channel3,
-                    }
-                },
+                channels={channel1, channel2, channel3},
             )
 
             channel1_bytes = channel1.encode()
@@ -2527,18 +2413,7 @@ class TestSyncPubSub:
             # Set up subscriptions with patterns
             pub_sub = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {
-                        pattern1,
-                        pattern2,
-                    }
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Pattern: {
-                        pattern1,
-                        pattern2,
-                    }
-                },
+                patterns={pattern1, pattern2},
             )
 
             client1, client2 = create_two_clients_with_pubsub(
@@ -2572,40 +2447,15 @@ class TestSyncPubSub:
             # Set up subscriptions
             pub_sub1 = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        channel1,
-                        channel2,
-                        channel3,
-                    }
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Exact: {
-                        channel1,
-                        channel2,
-                        channel3,
-                    }
-                },
+                channels={channel1, channel2, channel3},
             )
             pub_sub2 = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        channel2,
-                        channel3,
-                    }
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Exact: {
-                        channel2,
-                        channel3,
-                    }
-                },
+                channels={channel2, channel3},
             )
             pub_sub3 = create_pubsub_subscription(
                 cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {channel3}},
-                {GlideClientConfiguration.PubSubChannelModes.Exact: {channel3}},
+                channels={channel3},
             )
 
             channel1_bytes = channel1.encode()
@@ -2673,14 +2523,7 @@ class TestSyncPubSub:
 
             pub_sub = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        channel1,
-                        channel2,
-                        channel3,
-                    }
-                },
-                {},  # Empty dict for non-cluster mode as sharded channels are not supported
+                sharded_channels={channel1, channel2, channel3},
             )
 
             channel1_bytes = channel1.encode()
@@ -2728,33 +2571,15 @@ class TestSyncPubSub:
             # Set up subscriptions
             pub_sub1 = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        channel1,
-                        channel2,
-                        channel3,
-                    }
-                },
-                {},
+                sharded_channels={channel1, channel2, channel3},
             )
             pub_sub2 = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        channel2,
-                        channel3,
-                    }
-                },
-                {},
+                sharded_channels={channel2, channel3},
             )
             pub_sub3 = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        channel3
-                    }
-                },
-                {},
+                sharded_channels={channel3},
             )
 
             channel1_bytes = channel1.encode()
@@ -2820,15 +2645,8 @@ class TestSyncPubSub:
 
             pub_sub = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        regular_channel
-                    },
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        shard_channel
-                    },
-                },
-                {GlideClientConfiguration.PubSubChannelModes.Exact: {regular_channel}},
+                channels={regular_channel},
+                sharded_channels={shard_channel},
             )
 
             regular_channel_bytes, shard_channel_bytes = (
@@ -2867,27 +2685,13 @@ class TestSyncPubSub:
 
             pub_sub1 = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        regular_channel
-                    },
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        shard_channel
-                    },
-                },
-                {},
+                channels={regular_channel},
+                sharded_channels={shard_channel},
             )
             pub_sub2 = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        regular_channel
-                    },
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        shard_channel
-                    },
-                },
-                {},
+                channels={regular_channel},
+                sharded_channels={shard_channel},
             )
 
             regular_channel_bytes: bytes = regular_channel.encode()

@@ -1842,10 +1842,44 @@ def get_pubsub_modes(
     return GlideClientConfiguration.PubSubChannelModes
 
 
+def _build_channels_dict(
+    cluster_mode: bool,
+    channels: Optional[Set[str]],
+    patterns: Optional[Set[str]],
+    sharded_channels: Optional[Set[str]],
+) -> Union[Dict[ClusterPubSubModes, Set[str]], Dict[StandalonePubSubModes, Set[str]]]:
+    """Build channels_and_patterns dict for cluster or standalone mode."""
+    if cluster_mode:
+        result: Dict[ClusterPubSubModes, Set[str]] = {}
+        if channels:
+            result[GlideClusterClientConfiguration.PubSubChannelModes.Exact] = channels
+        if patterns:
+            result[GlideClusterClientConfiguration.PubSubChannelModes.Pattern] = (
+                patterns
+            )
+        if sharded_channels:
+            result[GlideClusterClientConfiguration.PubSubChannelModes.Sharded] = (
+                sharded_channels
+            )
+        return result
+    else:
+        result_standalone: Dict[StandalonePubSubModes, Set[str]] = {}
+        if channels:
+            result_standalone[GlideClientConfiguration.PubSubChannelModes.Exact] = (
+                channels
+            )
+        if patterns:
+            result_standalone[GlideClientConfiguration.PubSubChannelModes.Pattern] = (
+                patterns
+            )
+        return result_standalone
+
+
 def create_pubsub_subscription(
     cluster_mode: bool,
-    cluster_channels_and_patterns: Dict[ClusterPubSubModes, Set[str]],
-    standalone_channels_and_patterns: Dict[StandalonePubSubModes, Set[str]],
+    channels: Optional[Set[str]] = None,
+    patterns: Optional[Set[str]] = None,
+    sharded_channels: Optional[Set[str]] = None,
     callback: Optional[Callable[[PubSubMsg, Any], None]] = None,
     context: Optional[Any] = None,
 ) -> Union[
@@ -1853,14 +1887,17 @@ def create_pubsub_subscription(
     GlideClientConfiguration.PubSubSubscriptions,
 ]:
     """Create a PubSubSubscriptions object for the given mode."""
+    channels_dict = _build_channels_dict(
+        cluster_mode, channels, patterns, sharded_channels
+    )
     if cluster_mode:
         return GlideClusterClientConfiguration.PubSubSubscriptions(
-            channels_and_patterns=cluster_channels_and_patterns,
+            channels_and_patterns=channels_dict,  # type: ignore[arg-type]
             callback=callback,
             context=context,
         )
     return GlideClientConfiguration.PubSubSubscriptions(
-        channels_and_patterns=standalone_channels_and_patterns,
+        channels_and_patterns=channels_dict,  # type: ignore[arg-type]
         callback=callback,
         context=context,
     )
@@ -1885,37 +1922,11 @@ async def create_pubsub_client(
     has_callback = callback is not None
 
     if has_subscriptions or has_callback:
-        # Build subscription dictionaries
-        cluster_channels_dict = {}
-        standalone_channels_dict = {}
-
-        if cluster_mode:
-            if channels:
-                cluster_channels_dict[
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact
-                ] = channels
-            if patterns:
-                cluster_channels_dict[
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern
-                ] = patterns
-            if sharded_channels:
-                cluster_channels_dict[
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded
-                ] = sharded_channels
-        else:
-            if channels:
-                standalone_channels_dict[
-                    GlideClientConfiguration.PubSubChannelModes.Exact
-                ] = channels
-            if patterns:
-                standalone_channels_dict[
-                    GlideClientConfiguration.PubSubChannelModes.Pattern
-                ] = patterns
-
         pubsub_subscription = create_pubsub_subscription(
             cluster_mode,
-            cluster_channels_dict,
-            standalone_channels_dict,
+            channels=channels,
+            patterns=patterns,
+            sharded_channels=sharded_channels,
             callback=callback,
             context=context,
         )
@@ -1977,37 +1988,11 @@ def create_sync_pubsub_client(
     has_callback = callback is not None
 
     if has_subscriptions or has_callback:
-        # Build subscription dictionaries
-        cluster_channels_dict = {}
-        standalone_channels_dict = {}
-
-        if cluster_mode:
-            if channels:
-                cluster_channels_dict[
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact
-                ] = channels
-            if patterns:
-                cluster_channels_dict[
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern
-                ] = patterns
-            if sharded_channels:
-                cluster_channels_dict[
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded
-                ] = sharded_channels
-        else:
-            if channels:
-                standalone_channels_dict[
-                    GlideClientConfiguration.PubSubChannelModes.Exact
-                ] = channels
-            if patterns:
-                standalone_channels_dict[
-                    GlideClientConfiguration.PubSubChannelModes.Pattern
-                ] = patterns
-
         pubsub_subscription = create_pubsub_subscription(
             cluster_mode,
-            cluster_channels_dict,
-            standalone_channels_dict,
+            channels=channels,
+            patterns=patterns,
+            sharded_channels=sharded_channels,
             callback=callback,
             context=context,
         )

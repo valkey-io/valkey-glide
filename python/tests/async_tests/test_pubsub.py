@@ -2376,8 +2376,7 @@ class TestPubSub:
 
         pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
-            {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-            {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
+            channels={channel},
         )
 
         with pytest.raises(ConfigurationError):
@@ -2409,8 +2408,7 @@ class TestPubSub:
         context: List[PubSubMsg] = []
         pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
-            {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-            {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
+            channels={channel},
             context=context,
         )
 

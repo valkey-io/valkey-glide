@@ -313,37 +313,11 @@ def sync_pubsub_test_clients(
 
     try:
         if subscription_method.value == 0:  # Config
-            # Build subscription dictionaries
-            cluster_channels_dict = {}
-            standalone_channels_dict = {}
-
-            if cluster_mode:
-                if channels:
-                    cluster_channels_dict[
-                        GlideClusterClientConfiguration.PubSubChannelModes.Exact
-                    ] = channels
-                if patterns:
-                    cluster_channels_dict[
-                        GlideClusterClientConfiguration.PubSubChannelModes.Pattern
-                    ] = patterns
-                if sharded:
-                    cluster_channels_dict[
-                        GlideClusterClientConfiguration.PubSubChannelModes.Sharded
-                    ] = sharded
-            else:
-                if channels:
-                    standalone_channels_dict[
-                        GlideClientConfiguration.PubSubChannelModes.Exact
-                    ] = channels
-                if patterns:
-                    standalone_channels_dict[
-                        GlideClientConfiguration.PubSubChannelModes.Pattern
-                    ] = patterns
-
             pub_sub = create_pubsub_subscription(
                 cluster_mode,
-                cluster_channels_dict,
-                standalone_channels_dict,
+                channels=channels,
+                patterns=patterns,
+                sharded_channels=sharded,
                 callback=callback,
                 context=context,
             )
