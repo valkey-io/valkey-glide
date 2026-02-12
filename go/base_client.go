@@ -9776,15 +9776,15 @@ func (client *baseClient) GetStatistics() map[string]uint64 {
 }
 
 // AllChannels represents "unsubscribe from all channels".
-// Pass nil to Unsubscribe to unsubscribe from all channels.
+// Pass nil to Unsubscribe or UnsubscribeLazy to unsubscribe from all channels.
 var AllChannels []string = nil
 
 // AllPatterns represents "unsubscribe from all patterns".
-// Pass nil to PUnsubscribe to unsubscribe from all patterns.
+// Pass nil to PUnsubscribe or PUnsubscribeLazy to unsubscribe from all patterns.
 var AllPatterns []string = nil
 
 // AllShardedChannels represents "unsubscribe from all sharded channels".
-// Pass nil to SUnsubscribe to unsubscribe from all sharded channels.
+// Pass nil to SUnsubscribe or SUnsubscribeLazy to unsubscribe from all sharded channels.
 var AllShardedChannels []string = nil
 
 // Subscribe subscribes the client to the specified channels (blocking).

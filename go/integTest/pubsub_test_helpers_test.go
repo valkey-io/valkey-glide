@@ -17,7 +17,6 @@ type PubSubTestCase struct {
 	Name           string
 	ClientType     ClientType
 	ReadMethod     MessageReadMethod
-	UseCallback    bool
 	Sharded        bool
 	ChannelName    string
 	MessageContent string
@@ -28,7 +27,6 @@ type PatternTestCase struct {
 	Name           string
 	ClientType     ClientType
 	ReadMethod     MessageReadMethod
-	UseCallback    bool
 	Pattern        string
 	Channels       []string
 	MessageContent string
@@ -52,14 +50,11 @@ func CreateStandardTestCases(channelName, messageContent string, includeSharded 
 
 	for _, clientType := range clientTypes {
 		for _, readMethod := range readMethods {
-			useCallback := readMethod == CallbackMethod
-
 			// Regular case
 			cases = append(cases, PubSubTestCase{
 				Name:           clientType.String() + " with " + readMethod.String(),
 				ClientType:     clientType,
 				ReadMethod:     readMethod,
-				UseCallback:    useCallback,
 				Sharded:        false,
 				ChannelName:    channelName,
 				MessageContent: messageContent,
@@ -71,7 +66,6 @@ func CreateStandardTestCases(channelName, messageContent string, includeSharded 
 					Name:           clientType.String() + " with " + readMethod.String() + " Sharded",
 					ClientType:     clientType,
 					ReadMethod:     readMethod,
-					UseCallback:    useCallback,
 					Sharded:        true,
 					ChannelName:    channelName,
 					MessageContent: messageContent,
@@ -101,7 +95,7 @@ func (suite *GlideTestSuite) SetupPubSubTest(testCase PubSubTestCase, t *testing
 	var receiver interfaces.BaseClientCommands
 	var queue *glide.PubSubMessageQueue
 
-	if !testCase.UseCallback {
+	if testCase.ReadMethod != CallbackMethod {
 		receiver = suite.CreatePubSubReceiver(testCase.ClientType, channels, 1, false, ConfigMethod, t)
 		q, err := receiver.(PubSubQueuer).GetQueue()
 		assert.Nil(t, err)
@@ -144,7 +138,7 @@ func (suite *GlideTestSuite) SetupMultiSubscriberTest(
 	queues := make(map[int]*glide.PubSubMessageQueue)
 
 	for i := 0; i < numSubscribers; i++ {
-		if !testCase.UseCallback {
+		if testCase.ReadMethod != CallbackMethod {
 			receiver := suite.CreatePubSubReceiver(testCase.ClientType, channels, i+1, false, ConfigMethod, t)
 			queue, err := receiver.(PubSubQueuer).GetQueue()
 			assert.Nil(t, err)
@@ -194,13 +188,11 @@ func CreatePatternTestCases(pattern string, channels []string, messageContent st
 
 	for _, clientType := range clientTypes {
 		for _, readMethod := range readMethods {
-			useCallback := readMethod == CallbackMethod
 
 			cases = append(cases, PatternTestCase{
 				Name:           clientType.String() + " with " + readMethod.String(),
 				ClientType:     clientType,
 				ReadMethod:     readMethod,
-				UseCallback:    useCallback,
 				Pattern:        pattern,
 				Channels:       channels,
 				MessageContent: messageContent,
@@ -225,7 +217,7 @@ func (suite *GlideTestSuite) SetupPatternTest(testCase PatternTestCase, t *testi
 	var receiver interfaces.BaseClientCommands
 	var queue *glide.PubSubMessageQueue
 
-	if !testCase.UseCallback {
+	if testCase.ReadMethod != CallbackMethod {
 		receiver = suite.CreatePubSubReceiver(testCase.ClientType, channels, 1, false, ConfigMethod, t)
 		q, err := receiver.(PubSubQueuer).GetQueue()
 		assert.Nil(t, err)
@@ -293,14 +285,12 @@ func CreateMultiChannelTestCases(channelNames []string, messageContent string, i
 
 	for _, clientType := range clientTypes {
 		for _, readMethod := range readMethods {
-			useCallback := readMethod == CallbackMethod
 
 			// Regular case
 			cases = append(cases, MultiChannelTestCase{
 				Name:           clientType.String() + " with " + readMethod.String(),
 				ClientType:     clientType,
 				ReadMethod:     readMethod,
-				UseCallback:    useCallback,
 				Sharded:        false,
 				ChannelNames:   channelNames,
 				MessageContent: messageContent,
@@ -312,7 +302,6 @@ func CreateMultiChannelTestCases(channelNames []string, messageContent string, i
 					Name:           clientType.String() + " with " + readMethod.String() + " Sharded",
 					ClientType:     clientType,
 					ReadMethod:     readMethod,
-					UseCallback:    useCallback,
 					Sharded:        true,
 					ChannelNames:   channelNames,
 					MessageContent: messageContent,
@@ -347,7 +336,7 @@ func (suite *GlideTestSuite) ExecuteAndVerifyMultiChannelTest(testCase MultiChan
 
 	var receiver interfaces.BaseClientCommands
 	queues := make(map[int]*glide.PubSubMessageQueue)
-	if !testCase.UseCallback {
+	if testCase.ReadMethod != CallbackMethod {
 		receiver = suite.CreatePubSubReceiver(testCase.ClientType, channels, 1, false, ConfigMethod, t)
 		defer receiver.Close()
 		queue, err := receiver.(PubSubQueuer).GetQueue()
@@ -399,13 +388,11 @@ func CreateCombinedTestCases(
 
 	for _, clientType := range clientTypes {
 		for _, readMethod := range readMethods {
-			useCallback := readMethod == CallbackMethod
 
 			cases = append(cases, CombinedTestCase{
 				Name:            clientType.String() + " with " + readMethod.String(),
 				ClientType:      clientType,
 				ReadMethod:      readMethod,
-				UseCallback:     useCallback,
 				ExactChannel:    exactChannel,
 				Pattern:         pattern,
 				PatternChannels: patternChannels,
@@ -435,7 +422,7 @@ func (suite *GlideTestSuite) ExecuteAndVerifyCombinedTest(testCase CombinedTestC
 
 	var receiver interfaces.BaseClientCommands
 	queues := make(map[int]*glide.PubSubMessageQueue)
-	if !testCase.UseCallback {
+	if testCase.ReadMethod != CallbackMethod {
 		receiver = suite.CreatePubSubReceiver(testCase.ClientType, channels, 1, false, ConfigMethod, t)
 		defer receiver.Close()
 		queue, err := receiver.(PubSubQueuer).GetQueue()
