@@ -4273,7 +4273,7 @@ describe("PubSub", () => {
 
             try {
                 const pattern = `${getRandomKey()}*`;
-                const channel = pattern.replace("*", getRandomKey());
+                const channel = pattern.replace(/\*/g, getRandomKey());
                 const message = getRandomKey();
 
                 // Create clients WITHOUT any subscription configuration
