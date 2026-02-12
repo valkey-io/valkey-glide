@@ -445,6 +445,7 @@ impl Client {
             con,
             response_timeout,
             glide_connection_options,
+            socket_addr,
         )
         .await
         .map(|res| (res.0, res.1, ip))
