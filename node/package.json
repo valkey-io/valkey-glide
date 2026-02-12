@@ -103,7 +103,7 @@
         "typedoc": "0.28",
         "typedoc-plugin-markdown": "4",
         "typescript": "5",
-        "uuid": "11"
+        "uuid": "13"
     },
     "lint-staged": {
         "*.@(js|ts|tsx)": [
