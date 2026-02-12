@@ -1652,13 +1652,12 @@ export class BaseClient {
             );
         }
 
-        if (!this.isPubsubConfigured(this.config!)) {
-            throw new ConfigurationError(
-                "The operation will never complete since there was no pubsbub subscriptions applied to the client.",
-            );
-        }
-
-        if (this.getPubsubCallbackAndContext(this.config!)[0]) {
+        // Match Java's validation: only throw error if BOTH config exists AND callback exists
+        // Java: if (subscriptionConfiguration.isPresent() && subscriptionConfiguration.get().getCallback().isPresent())
+        if (
+            this.isPubsubConfigured(this.config!) &&
+            this.getPubsubCallbackAndContext(this.config!)[0]
+        ) {
             throw new ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback.",
             );
@@ -1677,13 +1676,12 @@ export class BaseClient {
             );
         }
 
-        if (!this.isPubsubConfigured(this.config!)) {
-            throw new ConfigurationError(
-                "The operation will never complete since there was no pubsbub subscriptions applied to the client.",
-            );
-        }
-
-        if (this.getPubsubCallbackAndContext(this.config!)[0]) {
+        // Match Java's validation: only throw error if BOTH config exists AND callback exists
+        // Java: if (subscriptionConfiguration.isPresent() && subscriptionConfiguration.get().getCallback().isPresent())
+        if (
+            this.isPubsubConfigured(this.config!) &&
+            this.getPubsubCallbackAndContext(this.config!)[0]
+        ) {
             throw new ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback.",
             );
