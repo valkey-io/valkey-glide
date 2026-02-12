@@ -780,7 +780,17 @@ pub fn get_optional_string_param_raw(env: &mut JNIEnv, param: jstring) -> Option
     }
 }
 
-/// JNI init hook to cache JVM and GlideCoreClient class/methods with correct classloader context
+/// JNI init hook to cache JVM and GlideCoreClient class/methods with correct classloader context.
+///
+/// This is called from `GlideCoreClient`'s static initializer in Java. We cache the class and
+/// method IDs here rather than in `JNI_OnLoad` because `GlideCoreClient` may not be findable
+/// via `env.find_class()` during `JNI_OnLoad` in environments with non-standard classloaders
+/// (AWS Lambda, Spring Boot with nested JARs). The `class` parameter passed by JNI is already
+/// loaded by the application classloader, bypassing `find_class` issues entirely.
+///
+/// Other caches (`MethodCache`, `JavaValueConversionCache`) are safe to initialize in
+/// `JNI_OnLoad` because they only reference standard Java classes (`java/lang/Long`,
+/// `java/util/HashMap`, etc.) which are always available from the bootstrap classloader.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideCoreClient_onNativeInit(
     mut env: JNIEnv,
@@ -834,18 +844,41 @@ struct GlideCoreClientCache {
 static GLIDE_CORE_CLIENT_CACHE: std::sync::OnceLock<Mutex<Option<GlideCoreClientCache>>> =
     std::sync::OnceLock::new();
 
-/// Get GLIDE core client cache using correct classloader context
-fn get_glide_core_client_cache_safe(_env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
-    get_glide_core_client_cache(_env)
-}
+/// Get GlideCoreClient cache, with fallback dynamic initialization.
+///
+/// Preferred path: return the cache populated by `onNativeInit` (correct classloader context).
+/// Fallback: if `onNativeInit` wasn't called or failed, attempt `find_class` with the provided
+/// `env`. This may fail in non-standard classloader environments but keeps the client resilient
+/// in standard JVM setups.
+fn get_glide_core_client_cache_safe(env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
+    let cache_mutex = GLIDE_CORE_CLIENT_CACHE.get_or_init(|| Mutex::new(None));
+    {
+        let guard = cache_mutex.lock();
+        if let Some(ref cache) = *guard {
+            return Ok(cache.clone());
+        }
+    }
 
-fn get_glide_core_client_cache(_env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
-    let cache_mutex = GLIDE_CORE_CLIENT_CACHE.get().ok_or_else(|| {
-        anyhow::anyhow!("GlideCoreClient cache not initialized - onNativeInit not called")
-    })?;
-    let guard = cache_mutex.lock();
-    guard
-        .as_ref()
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("GlideCoreClient cache is empty"))
+    // Fallback: try to initialize dynamically using the provided env
+    let class = env.find_class("glide/internal/GlideCoreClient")?;
+    let global = env.new_global_ref(&class)?;
+    let on_native_push = env.get_static_method_id(&class, "onNativePush", "(J[B[B[B)V")?;
+    let register_cleaner = env.get_static_method_id(
+        &class,
+        "registerNativeBufferCleaner",
+        "(Ljava/nio/ByteBuffer;J)V",
+    )?;
+
+    let cache = GlideCoreClientCache {
+        class: global,
+        on_native_push,
+        register_native_buffer_cleaner: register_cleaner,
+    };
+
+    let mut guard = cache_mutex.lock();
+    if guard.is_none() {
+        *guard = Some(cache);
+    }
+
+    Ok(guard.as_ref().cloned().unwrap())
 }
