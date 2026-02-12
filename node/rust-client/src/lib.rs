@@ -600,8 +600,9 @@ pub fn create_direct_client<'a>(
     // Create channel for sending commands to the worker thread
     let (command_tx, mut command_rx) = mpsc::unbounded_channel::<WorkerMessage>();
 
-    // Clone wake callback for the worker
-    let wake_tsfn_worker = Arc::clone(&wake_tsfn);
+    // Share wake callback with worker as a weak handle so
+    // in-flight tasks do not keep the JS callback alive after close().
+    let wake_tsfn_worker = Arc::downgrade(&wake_tsfn);
 
     // Acquire a reference to the worker pool (increments client count).
     // The pool will be released when the GlideClientHandle is dropped.
@@ -610,7 +611,7 @@ pub fn create_direct_client<'a>(
     // Create push notification channel for pub/sub
     let (push_sender, mut push_receiver) = mpsc::unbounded_channel::<PushInfo>();
     let response_buffer_push = Arc::clone(&response_buffer);
-    let wake_tsfn_push = Arc::clone(&wake_tsfn);
+    let wake_tsfn_push = Arc::downgrade(&wake_tsfn);
 
     // Spawn a pinned worker task that owns the Client and processes commands
     // This task will run on a dedicated thread and never migrate
@@ -653,7 +654,8 @@ pub fn create_direct_client<'a>(
         // These are cloned ONCE here and reused for all commands
         let worker_inflight = inflight_counter;
 
-        // Spawn a local task to listen for push notifications (pub/sub)
+        // Spawn a local task to listen for push notifications (pub/sub).
+        // Use a weak wake handle to avoid extending callback lifetime after close().
         // Push messages arrive from glide-core via the push_receiver channel
         task::spawn_local(async move {
             while let Some(push_info) = push_receiver.recv().await {
@@ -672,8 +674,10 @@ pub fn create_direct_client<'a>(
                     closing_error: None,
                     is_push: true,
                 };
-                if response_buffer_push.push(response) {
-                    wake_tsfn_push.call((), ThreadsafeFunctionCallMode::NonBlocking);
+                if response_buffer_push.push(response)
+                    && let Some(wake_callback) = wake_tsfn_push.upgrade()
+                {
+                    wake_callback.call((), ThreadsafeFunctionCallMode::NonBlocking);
                 }
             }
         });
@@ -689,15 +693,17 @@ pub fn create_direct_client<'a>(
                     let routing = cmd_msg.routing;
                     let inflight = Arc::clone(&worker_inflight);
                     let buffer = Arc::clone(&response_buffer_worker);
-                    let wake = Arc::clone(&wake_tsfn_worker);
+                    let wake = wake_tsfn_worker.clone();
 
                     // Spawn local task for this command
                     task::spawn_local(async move {
                         let result = client_clone.send_command(&mut cmd, routing).await;
                         let response = build_response(callback_idx, result);
                         inflight.fetch_add(1, Ordering::Release);
-                        if buffer.push(response) {
-                            wake.call((), ThreadsafeFunctionCallMode::NonBlocking);
+                        if buffer.push(response)
+                            && let Some(wake_callback) = wake.upgrade()
+                        {
+                            wake_callback.call((), ThreadsafeFunctionCallMode::NonBlocking);
                         }
                     });
                 }
@@ -706,7 +712,7 @@ pub fn create_direct_client<'a>(
                     let callback_idx = batch_msg.callback_idx;
                     let inflight = Arc::clone(&worker_inflight);
                     let buffer = Arc::clone(&response_buffer_worker);
-                    let wake = Arc::clone(&wake_tsfn_worker);
+                    let wake = wake_tsfn_worker.clone();
 
                     // Spawn local task for batch execution
                     task::spawn_local(async move {
@@ -723,8 +729,10 @@ pub fn create_direct_client<'a>(
                         .await;
                         let response = build_response(callback_idx, result);
                         inflight.fetch_add(1, Ordering::Release);
-                        if buffer.push(response) {
-                            wake.call((), ThreadsafeFunctionCallMode::NonBlocking);
+                        if buffer.push(response)
+                            && let Some(wake_callback) = wake.upgrade()
+                        {
+                            wake_callback.call((), ThreadsafeFunctionCallMode::NonBlocking);
                         }
                     });
                 }
@@ -733,7 +741,7 @@ pub fn create_direct_client<'a>(
                     let callback_idx = script_msg.callback_idx;
                     let inflight = Arc::clone(&worker_inflight);
                     let buffer = Arc::clone(&response_buffer_worker);
-                    let wake = Arc::clone(&wake_tsfn_worker);
+                    let wake = wake_tsfn_worker.clone();
 
                     task::spawn_local(async move {
                         let keys: Vec<&[u8]> = script_msg.keys.iter().map(|k| k.as_ref()).collect();
@@ -743,8 +751,10 @@ pub fn create_direct_client<'a>(
                             .await;
                         let response = build_response(callback_idx, result);
                         inflight.fetch_add(1, Ordering::Release);
-                        if buffer.push(response) {
-                            wake.call((), ThreadsafeFunctionCallMode::NonBlocking);
+                        if buffer.push(response)
+                            && let Some(wake_callback) = wake.upgrade()
+                        {
+                            wake_callback.call((), ThreadsafeFunctionCallMode::NonBlocking);
                         }
                     });
                 }
@@ -753,7 +763,7 @@ pub fn create_direct_client<'a>(
                     let callback_idx = scan_msg.callback_idx;
                     let inflight = Arc::clone(&worker_inflight);
                     let buffer = Arc::clone(&response_buffer_worker);
-                    let wake = Arc::clone(&wake_tsfn_worker);
+                    let wake = wake_tsfn_worker.clone();
 
                     task::spawn_local(async move {
                         // Get or create scan cursor
@@ -785,8 +795,10 @@ pub fn create_direct_client<'a>(
                         };
                         let response = build_response(callback_idx, result);
                         inflight.fetch_add(1, Ordering::Release);
-                        if buffer.push(response) {
-                            wake.call((), ThreadsafeFunctionCallMode::NonBlocking);
+                        if buffer.push(response)
+                            && let Some(wake_callback) = wake.upgrade()
+                        {
+                            wake_callback.call((), ThreadsafeFunctionCallMode::NonBlocking);
                         }
                     });
                 }
@@ -795,7 +807,7 @@ pub fn create_direct_client<'a>(
                     let callback_idx = pwd_msg.callback_idx;
                     let inflight = Arc::clone(&worker_inflight);
                     let buffer = Arc::clone(&response_buffer_worker);
-                    let wake = Arc::clone(&wake_tsfn_worker);
+                    let wake = wake_tsfn_worker.clone();
 
                     task::spawn_local(async move {
                         let result = client_clone
@@ -803,8 +815,10 @@ pub fn create_direct_client<'a>(
                             .await;
                         let response = build_response(callback_idx, result);
                         inflight.fetch_add(1, Ordering::Release);
-                        if buffer.push(response) {
-                            wake.call((), ThreadsafeFunctionCallMode::NonBlocking);
+                        if buffer.push(response)
+                            && let Some(wake_callback) = wake.upgrade()
+                        {
+                            wake_callback.call((), ThreadsafeFunctionCallMode::NonBlocking);
                         }
                     });
                 }
@@ -813,14 +827,16 @@ pub fn create_direct_client<'a>(
                     let callback_idx = iam_msg.callback_idx;
                     let inflight = Arc::clone(&worker_inflight);
                     let buffer = Arc::clone(&response_buffer_worker);
-                    let wake = Arc::clone(&wake_tsfn_worker);
+                    let wake = wake_tsfn_worker.clone();
 
                     task::spawn_local(async move {
                         let result = client_clone.refresh_iam_token().await.map(|()| Value::Okay);
                         let response = build_response(callback_idx, result);
                         inflight.fetch_add(1, Ordering::Release);
-                        if buffer.push(response) {
-                            wake.call((), ThreadsafeFunctionCallMode::NonBlocking);
+                        if buffer.push(response)
+                            && let Some(wake_callback) = wake.upgrade()
+                        {
+                            wake_callback.call((), ThreadsafeFunctionCallMode::NonBlocking);
                         }
                     });
                 }
