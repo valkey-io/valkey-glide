@@ -160,13 +160,6 @@ public class PubSubTests {
     }
 
     @SneakyThrows
-    private BaseClient createClientWithEmptySubscriptionConfig(boolean standalone) {
-        BaseClient client = standalone ? createStandaloneClient() : createClusterClient();
-        senders.add(client);
-        return client;
-    }
-
-    @SneakyThrows
     private GlideClient createStandaloneClient() {
         GlideClient client = GlideClient.createClient(commonClientConfig().build()).get();
         senders.add(client);
@@ -182,21 +175,21 @@ public class PubSubTests {
     }
 
     @SneakyThrows
-    private GlideClient createStandaloneClientWithEmptySubscriptions() {
+    private GlideClient createStandaloneListenerClient() {
         GlideClient client = createStandaloneClient();
         listeners.put(client, Map.of());
         return client;
     }
 
     @SneakyThrows
-    private GlideClusterClient createClusterClientWithEmptySubscriptions() {
+    private GlideClusterClient createClusterListenerClient() {
         GlideClusterClient client = createClusterClient();
         listeners.put(client, Map.of());
         return client;
     }
 
     @SneakyThrows
-    private GlideClient createStandaloneClientWithSubscriptions(
+    private GlideClient createStandaloneListenerClient(
             Map<PubSubChannelMode, Set<GlideString>> subscriptions) {
         GlideClient client =
                 createStandaloneClientWithConfig(subscriptions, Optional.empty(), Optional.empty());
@@ -205,7 +198,7 @@ public class PubSubTests {
     }
 
     @SneakyThrows
-    private GlideClusterClient createClusterClientWithSubscriptions(
+    private GlideClusterClient createClusterListenerClient(
             Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions) {
         GlideClusterClient client =
                 createClusterClientWithConfig(subscriptions, Optional.empty(), Optional.empty());
@@ -2295,7 +2288,7 @@ public class PubSubTests {
         String channel1 = "channel1_" + UUID.randomUUID();
         String channel2 = "channel2_" + UUID.randomUUID();
 
-        GlideClient client = createStandaloneClientWithEmptySubscriptions();
+        GlideClient client = createStandaloneListenerClient();
         GlideClient publisher = createStandaloneClient();
 
         try {
@@ -2324,7 +2317,7 @@ public class PubSubTests {
         String channel1 = "channel1_" + UUID.randomUUID();
         String channel2 = "channel2_" + UUID.randomUUID();
 
-        GlideClusterClient client = createClusterClientWithEmptySubscriptions();
+        GlideClusterClient client = createClusterListenerClient();
 
         try {
             // Subscribe to multiple channels
@@ -2358,7 +2351,7 @@ public class PubSubTests {
         String pattern1 = "pattern1_*";
         String pattern2 = "pattern2_*";
 
-        GlideClient client = createStandaloneClientWithEmptySubscriptions();
+        GlideClient client = createStandaloneListenerClient();
 
         try {
             // Subscribe to multiple patterns
@@ -2396,7 +2389,7 @@ public class PubSubTests {
         String channel1 = "{slot}channel1_" + UUID.randomUUID();
         String channel2 = "{slot}channel2_" + UUID.randomUUID();
 
-        GlideClusterClient client = createClusterClientWithEmptySubscriptions();
+        GlideClusterClient client = createClusterListenerClient();
 
         try {
             // Subscribe to multiple sharded channels
@@ -2429,7 +2422,7 @@ public class PubSubTests {
     public void test_subscribe_with_timeout_standalone() {
         String channel = "timeout_channel_" + UUID.randomUUID();
 
-        GlideClient client = createStandaloneClientWithEmptySubscriptions();
+        GlideClient client = createStandaloneListenerClient();
         GlideClient publisher = createStandaloneClient();
 
         try {
@@ -2454,7 +2447,7 @@ public class PubSubTests {
     public void test_subscribe_with_timeout_cluster() {
         String channel = "timeout_channel_" + UUID.randomUUID();
 
-        GlideClusterClient client = createClusterClientWithEmptySubscriptions();
+        GlideClusterClient client = createClusterListenerClient();
         GlideClusterClient publisher = createClusterClient();
 
         try {
@@ -2485,7 +2478,7 @@ public class PubSubTests {
         String channel1 = "{slot1}channel_" + UUID.randomUUID();
         String channel2 = "{slot2}channel_" + UUID.randomUUID();
 
-        GlideClusterClient client = createClusterClientWithEmptySubscriptions();
+        GlideClusterClient client = createClusterListenerClient();
         GlideClusterClient publisher = createClusterClient();
 
         // Subscribe to channels in different slots
@@ -2520,7 +2513,7 @@ public class PubSubTests {
         String channel1 = "{slot1}channel_" + UUID.randomUUID();
         String channel2 = "{slot2}channel_" + UUID.randomUUID();
 
-        GlideClusterClient client = createClusterClientWithEmptySubscriptions();
+        GlideClusterClient client = createClusterListenerClient();
 
         // Subscribe to channels in different slots
         client.ssubscribeLazy(Set.of(channel1, channel2)).get();
@@ -2549,7 +2542,7 @@ public class PubSubTests {
         String channel = "channel_" + UUID.randomUUID();
         String pattern = "pattern_*";
 
-        GlideClient client = createStandaloneClientWithEmptySubscriptions();
+        GlideClient client = createStandaloneListenerClient();
 
         // Subscribe to both exact and pattern
         client.subscribeLazy(Set.of(channel)).get();
@@ -2594,7 +2587,7 @@ public class PubSubTests {
         String pattern = "pattern_*";
         String sharded = "{slot}sharded_" + UUID.randomUUID();
 
-        GlideClusterClient client = createClusterClientWithEmptySubscriptions();
+        GlideClusterClient client = createClusterListenerClient();
 
         // Subscribe to exact, pattern, and sharded
         client.subscribeLazy(Set.of(channel)).get();
@@ -2661,7 +2654,7 @@ public class PubSubTests {
 
         try {
             // Create listening client with empty subscription config and authenticate
-            GlideClient listeningClient = createStandaloneClientWithEmptySubscriptions();
+            GlideClient listeningClient = createStandaloneListenerClient();
             listeningClient.customCommand(new String[] {"AUTH", username, password}).get();
 
             // Get initial metrics
@@ -2734,7 +2727,7 @@ public class PubSubTests {
 
         try {
             // Create listening client with empty subscription config and authenticate
-            GlideClusterClient listeningClient = createClusterClientWithEmptySubscriptions();
+            GlideClusterClient listeningClient = createClusterListenerClient();
             listeningClient
                     .customCommand(
                             new String[] {"AUTH", username, password},
@@ -2795,7 +2788,7 @@ public class PubSubTests {
         if (isStandalone) {
             Map<PubSubChannelMode, Set<GlideString>> subscriptions = new HashMap<>();
             subscriptions.put(PubSubChannelMode.EXACT, Set.of(GlideString.gs(channel)));
-            GlideClient client = createStandaloneClientWithSubscriptions(subscriptions);
+            GlideClient client = createStandaloneListenerClient(subscriptions);
 
             Map<String, String> stats = client.getStatistics();
             assertNotNull(stats.get("subscription_out_of_sync_count"));
@@ -2803,7 +2796,7 @@ public class PubSubTests {
         } else {
             Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions = new HashMap<>();
             subscriptions.put(PubSubClusterChannelMode.EXACT, Set.of(GlideString.gs(channel)));
-            GlideClusterClient client = createClusterClientWithSubscriptions(subscriptions);
+            GlideClusterClient client = createClusterListenerClient(subscriptions);
 
             Map<String, String> stats = client.getStatistics();
             assertNotNull(stats.get("subscription_out_of_sync_count"));
