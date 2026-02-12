@@ -125,4 +125,227 @@ public class JedisMethodsTest {
         Method closeMethod = jedisClass.getMethod("close");
         assertEquals(void.class, closeMethod.getReturnType());
     }
+
+    @Test
+    public void testSetMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        Method saddString = jedisClass.getMethod("sadd", String.class, String[].class);
+        assertEquals(long.class, saddString.getReturnType());
+
+        Method saddBinary = jedisClass.getMethod("sadd", byte[].class, byte[][].class);
+        assertEquals(long.class, saddBinary.getReturnType());
+
+        Method sremString = jedisClass.getMethod("srem", String.class, String[].class);
+        assertEquals(long.class, sremString.getReturnType());
+
+        Method sremBinary = jedisClass.getMethod("srem", byte[].class, byte[][].class);
+        assertEquals(long.class, sremBinary.getReturnType());
+
+        Method smembersString = jedisClass.getMethod("smembers", String.class);
+        assertEquals(Set.class, smembersString.getReturnType());
+
+        Method smembersBinary = jedisClass.getMethod("smembers", byte[].class);
+        assertEquals(Set.class, smembersBinary.getReturnType());
+    }
+
+    @Test
+    public void saddStringSignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("sadd", String.class, String[].class);
+        assertEquals(long.class, m.getReturnType());
+        assertEquals(2, m.getParameterCount());
+        assertEquals(String.class, m.getParameterTypes()[0]);
+        assertEquals(String[].class, m.getParameterTypes()[1]);
+    }
+
+    @Test
+    public void saddBinarySignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("sadd", byte[].class, byte[][].class);
+        assertEquals(long.class, m.getReturnType());
+        assertEquals(2, m.getParameterCount());
+        assertEquals(byte[].class, m.getParameterTypes()[0]);
+        assertEquals(byte[][].class, m.getParameterTypes()[1]);
+    }
+
+    @Test
+    public void sremStringSignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("srem", String.class, String[].class);
+        assertEquals(long.class, m.getReturnType());
+        assertEquals(2, m.getParameterCount());
+        assertEquals(String.class, m.getParameterTypes()[0]);
+        assertEquals(String[].class, m.getParameterTypes()[1]);
+    }
+
+    @Test
+    public void sremBinarySignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("srem", byte[].class, byte[][].class);
+        assertEquals(long.class, m.getReturnType());
+        assertEquals(2, m.getParameterCount());
+        assertEquals(byte[].class, m.getParameterTypes()[0]);
+        assertEquals(byte[][].class, m.getParameterTypes()[1]);
+    }
+
+    @Test
+    public void smembersStringSignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("smembers", String.class);
+        assertEquals(Set.class, m.getReturnType());
+        assertEquals(1, m.getParameterCount());
+        assertEquals(String.class, m.getParameterTypes()[0]);
+    }
+
+    @Test
+    public void smembersBinarySignatureAndReturnType() throws NoSuchMethodException {
+        Method m = Jedis.class.getMethod("smembers", byte[].class);
+        assertEquals(Set.class, m.getReturnType());
+        assertEquals(1, m.getParameterCount());
+        assertEquals(byte[].class, m.getParameterTypes()[0]);
+    }
+
+    @Test
+    public void scardMethodsExist() throws NoSuchMethodException {
+        assertNotNull(Jedis.class.getMethod("scard", String.class));
+        assertNotNull(Jedis.class.getMethod("scard", byte[].class));
+        assertEquals(long.class, Jedis.class.getMethod("scard", String.class).getReturnType());
+        assertEquals(long.class, Jedis.class.getMethod("scard", byte[].class).getReturnType());
+    }
+
+    @Test
+    public void sismemberMethodsExist() throws NoSuchMethodException {
+        assertNotNull(Jedis.class.getMethod("sismember", String.class, String.class));
+        assertNotNull(Jedis.class.getMethod("sismember", byte[].class, byte[].class));
+        assertEquals(
+                boolean.class,
+                Jedis.class.getMethod("sismember", String.class, String.class).getReturnType());
+        assertEquals(
+                boolean.class,
+                Jedis.class.getMethod("sismember", byte[].class, byte[].class).getReturnType());
+    }
+
+    @Test
+    public void smismemberMethodsExist() throws NoSuchMethodException {
+        assertNotNull(Jedis.class.getMethod("smismember", String.class, String[].class));
+        assertNotNull(Jedis.class.getMethod("smismember", byte[].class, byte[][].class));
+        assertEquals(
+                java.util.List.class,
+                Jedis.class.getMethod("smismember", String.class, String[].class).getReturnType());
+        assertEquals(
+                java.util.List.class,
+                Jedis.class.getMethod("smismember", byte[].class, byte[][].class).getReturnType());
+    }
+
+    @Test
+    public void spopMethodsExist() throws NoSuchMethodException {
+        assertNotNull(Jedis.class.getMethod("spop", String.class));
+        assertNotNull(Jedis.class.getMethod("spop", byte[].class));
+        assertNotNull(Jedis.class.getMethod("spop", String.class, long.class));
+        assertNotNull(Jedis.class.getMethod("spop", byte[].class, long.class));
+    }
+
+    @Test
+    public void srandmemberMethodsExist() throws NoSuchMethodException {
+        assertNotNull(Jedis.class.getMethod("srandmember", String.class));
+        assertNotNull(Jedis.class.getMethod("srandmember", byte[].class));
+        assertNotNull(Jedis.class.getMethod("srandmember", String.class, int.class));
+        assertNotNull(Jedis.class.getMethod("srandmember", byte[].class, int.class));
+    }
+
+    @Test
+    public void smoveMethodsExist() throws NoSuchMethodException {
+        assertNotNull(Jedis.class.getMethod("smove", String.class, String.class, String.class));
+        assertNotNull(Jedis.class.getMethod("smove", byte[].class, byte[].class, byte[].class));
+        assertEquals(
+                long.class,
+                Jedis.class.getMethod("smove", String.class, String.class, String.class).getReturnType());
+        assertEquals(
+                long.class,
+                Jedis.class.getMethod("smove", byte[].class, byte[].class, byte[].class).getReturnType());
+    }
+
+    @Test
+    public void sinterMethodsExist() throws NoSuchMethodException {
+        assertNotNull(Jedis.class.getMethod("sinter", String[].class));
+        assertNotNull(Jedis.class.getMethod("sinter", byte[][].class));
+        assertEquals(Set.class, Jedis.class.getMethod("sinter", String[].class).getReturnType());
+        assertEquals(Set.class, Jedis.class.getMethod("sinter", byte[][].class).getReturnType());
+    }
+
+    @Test
+    public void sunionMethodsExist() throws NoSuchMethodException {
+        assertNotNull(Jedis.class.getMethod("sunion", String[].class));
+        assertNotNull(Jedis.class.getMethod("sunion", byte[][].class));
+        assertEquals(Set.class, Jedis.class.getMethod("sunion", String[].class).getReturnType());
+        assertEquals(Set.class, Jedis.class.getMethod("sunion", byte[][].class).getReturnType());
+    }
+
+    @Test
+    public void sdiffMethodsExist() throws NoSuchMethodException {
+        assertNotNull(Jedis.class.getMethod("sdiff", String[].class));
+        assertNotNull(Jedis.class.getMethod("sdiff", byte[][].class));
+        assertEquals(Set.class, Jedis.class.getMethod("sdiff", String[].class).getReturnType());
+        assertEquals(Set.class, Jedis.class.getMethod("sdiff", byte[][].class).getReturnType());
+    }
+
+    @Test
+    public void sintercardMethodsExist() throws NoSuchMethodException {
+        assertNotNull(Jedis.class.getMethod("sintercard", String[].class));
+        assertNotNull(Jedis.class.getMethod("sintercard", long.class, String[].class));
+        assertNotNull(Jedis.class.getMethod("sintercard", byte[][].class));
+        assertNotNull(Jedis.class.getMethod("sintercard", long.class, byte[][].class));
+        assertEquals(long.class, Jedis.class.getMethod("sintercard", String[].class).getReturnType());
+        assertEquals(
+                long.class,
+                Jedis.class.getMethod("sintercard", long.class, String[].class).getReturnType());
+        assertEquals(long.class, Jedis.class.getMethod("sintercard", byte[][].class).getReturnType());
+        assertEquals(
+                long.class,
+                Jedis.class.getMethod("sintercard", long.class, byte[][].class).getReturnType());
+    }
+
+    @Test
+    public void sinterstoreMethodsExist() throws NoSuchMethodException {
+        assertNotNull(Jedis.class.getMethod("sinterstore", String.class, String[].class));
+        assertNotNull(Jedis.class.getMethod("sinterstore", byte[].class, byte[][].class));
+        assertEquals(
+                long.class,
+                Jedis.class.getMethod("sinterstore", String.class, String[].class).getReturnType());
+        assertEquals(
+                long.class,
+                Jedis.class.getMethod("sinterstore", byte[].class, byte[][].class).getReturnType());
+    }
+
+    @Test
+    public void sunionstoreMethodsExist() throws NoSuchMethodException {
+        assertNotNull(Jedis.class.getMethod("sunionstore", String.class, String[].class));
+        assertNotNull(Jedis.class.getMethod("sunionstore", byte[].class, byte[][].class));
+        assertEquals(
+                long.class,
+                Jedis.class.getMethod("sunionstore", String.class, String[].class).getReturnType());
+        assertEquals(
+                long.class,
+                Jedis.class.getMethod("sunionstore", byte[].class, byte[][].class).getReturnType());
+    }
+
+    @Test
+    public void sdiffstoreMethodsExist() throws NoSuchMethodException {
+        assertNotNull(Jedis.class.getMethod("sdiffstore", String.class, String[].class));
+        assertNotNull(Jedis.class.getMethod("sdiffstore", byte[].class, byte[][].class));
+        assertEquals(
+                long.class,
+                Jedis.class.getMethod("sdiffstore", String.class, String[].class).getReturnType());
+        assertEquals(
+                long.class,
+                Jedis.class.getMethod("sdiffstore", byte[].class, byte[][].class).getReturnType());
+    }
+
+    @Test
+    public void sscanMethodsExist() throws NoSuchMethodException {
+        assertNotNull(Jedis.class.getMethod("sscan", String.class, String.class));
+        assertNotNull(
+                Jedis.class.getMethod(
+                        "sscan", String.class, String.class, redis.clients.jedis.params.ScanParams.class));
+        assertNotNull(Jedis.class.getMethod("sscan", byte[].class, byte[].class));
+        assertNotNull(
+                Jedis.class.getMethod(
+                        "sscan", byte[].class, byte[].class, redis.clients.jedis.params.ScanParams.class));
+    }
 }
