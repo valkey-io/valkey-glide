@@ -188,7 +188,6 @@ func CreatePatternTestCases(pattern string, channels []string, messageContent st
 
 	for _, clientType := range clientTypes {
 		for _, readMethod := range readMethods {
-
 			cases = append(cases, PatternTestCase{
 				Name:           clientType.String() + " with " + readMethod.String(),
 				ClientType:     clientType,
@@ -388,7 +387,6 @@ func CreateCombinedTestCases(
 
 	for _, clientType := range clientTypes {
 		for _, readMethod := range readMethods {
-
 			cases = append(cases, CombinedTestCase{
 				Name:            clientType.String() + " with " + readMethod.String(),
 				ClientType:      clientType,
