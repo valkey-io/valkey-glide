@@ -36,6 +36,8 @@ import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.HScanOptionsBinary;
+import glide.api.models.commands.scan.SScanOptions;
+import glide.api.models.commands.scan.SScanOptionsBinary;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
 import java.io.Closeable;
@@ -2459,6 +2461,15 @@ public final class Jedis implements Closeable {
             glideStrings[i] = GlideString.of(bytes[i]);
         }
         return glideStrings;
+    }
+
+    /** Helper method to convert Set of GlideString to Set of byte arrays. */
+    private static Set<byte[]> convertGlideStringsToByteArraySet(Set<GlideString> glideStrings) {
+        Set<byte[]> result = new HashSet<>();
+        for (GlideString gs : glideStrings) {
+            result.add(gs.getBytes());
+        }
+        return result;
     }
 
     private static ScanResult<String> convertToScanResult(Object[] result) {
@@ -7173,6 +7184,33 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Adds the specified members to the set stored at key.
+     *
+     * @param key the key of the set
+     * @param members the members to add
+     * @return the number of elements that were added to the set
+     */
+    public long sadd(String key, String... members) {
+        return executeCommandWithGlide("SADD", () -> glideClient.sadd(key, members).get());
+    }
+
+    /**
+     * Adds the specified members to the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param members the members to add
+     * @return the number of elements that were added to the set
+     */
+    public long sadd(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "SADD",
+                () -> {
+                    GlideString[] glideMembers = convertToGlideStringArray(members);
+                    return glideClient.sadd(GlideString.of(key), glideMembers).get();
+                });
+    }
+
+    /**
      * Returns the number of members in a sorted set.
      *
      * @param key the key of the sorted set
@@ -7250,6 +7288,33 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Removes the specified members from the set stored at key.
+     *
+     * @param key the key of the set
+     * @param members the members to remove
+     * @return the number of elements that were removed from the set
+     */
+    public long srem(String key, String... members) {
+        return executeCommandWithGlide("SREM", () -> glideClient.srem(key, members).get());
+    }
+
+    /**
+     * Removes the specified members from the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param members the members to remove
+     * @return the number of elements that were removed from the set
+     */
+    public long srem(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "SREM",
+                () -> {
+                    GlideString[] glideMembers = convertToGlideStringArray(members);
+                    return glideClient.srem(GlideString.of(key), glideMembers).get();
+                });
+    }
+
+    /**
      * Returns the specified range of elements in a sorted set, by index.
      *
      * @param key the key of the sorted set
@@ -7269,6 +7334,31 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Returns all the members of the set value stored at key.
+     *
+     * @param key the key of the set
+     * @return all members of the set, or an empty set when key does not exist
+     */
+    public Set<String> smembers(String key) {
+        return executeCommandWithGlide("SMEMBERS", () -> glideClient.smembers(key).get());
+    }
+
+    /**
+     * Returns all the members of the set value stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @return all members of the set, or an empty set when key does not exist
+     */
+    public Set<byte[]> smembers(final byte[] key) {
+        return executeCommandWithGlide(
+                "SMEMBERS",
+                () -> {
+                    Set<GlideString> result = glideClient.smembers(GlideString.of(key)).get();
+                    return convertGlideStringsToByteArraySet(result);
+                });
+    }
+
+    /**
      * Returns the specified range of elements in a sorted set, by index (binary version).
      *
      * @param key the key of the sorted set
@@ -7283,6 +7373,66 @@ public final class Jedis implements Closeable {
                     RangeOptions.RangeByIndex rangeQuery = new RangeOptions.RangeByIndex(start, stop);
                     GlideString[] result = glideClient.zrange(GlideString.of(key), rangeQuery).get();
                     return Arrays.stream(result).map(GlideString::getBytes).collect(Collectors.toList());
+                });
+    }
+
+    /**
+     * Returns the set cardinality (number of elements) of the set stored at key.
+     *
+     * @param key the key of the set
+     * @return the cardinality of the set, or 0 if key does not exist
+     */
+    public long scard(String key) {
+        return executeCommandWithGlide("SCARD", () -> glideClient.scard(key).get());
+    }
+
+    /**
+     * Returns the set cardinality (number of elements) of the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @return the cardinality of the set, or 0 if key does not exist
+     */
+    public long scard(final byte[] key) {
+        return executeCommandWithGlide("SCARD", () -> glideClient.scard(GlideString.of(key)).get());
+    }
+
+    /**
+     * Returns if member is a member of the set stored at key.
+     *
+     * @param key the key of the set
+     * @param member the member to check
+     * @return true if the element is a member of the set, false otherwise
+     */
+    public boolean sismember(String key, String member) {
+        return executeCommandWithGlide("SISMEMBER", () -> glideClient.sismember(key, member).get());
+    }
+
+    /**
+     * Returns if member is a member of the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param member the member to check
+     * @return true if the element is a member of the set, false otherwise
+     */
+    public boolean sismember(final byte[] key, final byte[] member) {
+        return executeCommandWithGlide(
+                "SISMEMBER",
+                () -> glideClient.sismember(GlideString.of(key), GlideString.of(member)).get());
+    }
+
+    /**
+     * Returns whether each member is a member of the set stored at key.
+     *
+     * @param key the key of the set
+     * @param members the members to check
+     * @return list of Boolean values, one for each member
+     */
+    public List<Boolean> smismember(String key, String... members) {
+        return executeCommandWithGlide(
+                "SMISMEMBER",
+                () -> {
+                    Boolean[] result = glideClient.smismember(key, members).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
                 });
     }
 
@@ -7307,6 +7457,23 @@ public final class Jedis implements Closeable {
                         tuples.add(new Tuple(entry.getKey(), entry.getValue()));
                     }
                     return tuples;
+                });
+    }
+
+    /**
+     * Returns whether each member is a member of the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param members the members to check
+     * @return list of Boolean values, one for each member
+     */
+    public List<Boolean> smismember(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "SMISMEMBER",
+                () -> {
+                    GlideString[] glideMembers = convertToGlideStringArray(members);
+                    Boolean[] result = glideClient.smismember(GlideString.of(key), glideMembers).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
                 });
     }
 
@@ -8863,6 +9030,31 @@ public final class Jedis implements Closeable {
     }
 
     /**
+    * Removes and returns one or more random members from the set stored at key.
+     *
+     * @param key the key of the set
+     * @return the popped member, or null when key does not exist
+     */
+    public String spop(String key) {
+        return executeCommandWithGlide("SPOP", () -> glideClient.spop(key).get());
+    }
+
+    /**
+     * Removes and returns one or more random members from the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @return the popped member, or null when key does not exist
+     */
+    public byte[] spop(final byte[] key) {
+        return executeCommandWithGlide(
+                "SPOP",
+                () -> {
+                    GlideString result = glideClient.spop(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
      * Returns random members from the sorted set.
      *
      * @param key the key of the sorted set
@@ -8893,6 +9085,33 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Removes and returns up to count random members from the set stored at key.
+     *
+     * @param key the key of the set
+     * @param count the number of members to pop
+     * @return the popped members, or an empty set when key does not exist
+     */
+    public Set<String> spop(String key, long count) {
+        return executeCommandWithGlide("SPOP", () -> glideClient.spopCount(key, count).get());
+    }
+
+    /**
+     * Removes and returns up to count random members from the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param count the number of members to pop
+     * @return the popped members, or an empty set when key does not exist
+     */
+    public Set<byte[]> spop(final byte[] key, final long count) {
+        return executeCommandWithGlide(
+                "SPOP",
+                () -> {
+                    Set<GlideString> result = glideClient.spopCount(GlideString.of(key), count).get();
+                    return convertGlideStringsToByteArraySet(result);
+                });
+    }
+
+    /**
      * Returns random members from the sorted set with their scores.
      *
      * @param key the key of the sorted set
@@ -8917,6 +9136,70 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Returns one or more random members from the set stored at key.
+     *
+     * @param key the key of the set
+     * @return the random member, or null when key does not exist or set is empty
+     */
+    public String srandmember(String key) {
+        return executeCommandWithGlide("SRANDMEMBER", () -> glideClient.srandmember(key).get());
+    }
+
+    /**
+     * Returns one or more random members from the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @return the random member, or null when key does not exist or set is empty
+     */
+    public byte[] srandmember(final byte[] key) {
+        return executeCommandWithGlide(
+                "SRANDMEMBER",
+                () -> {
+                    GlideString result = glideClient.srandmember(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Returns one or more random members from the set stored at key.
+     *
+     * @param key the key of the set
+     * @param count the number of members to return (positive: unique, negative: may repeat)
+     * @return list of random members
+     */
+    public List<String> srandmember(String key, int count) {
+        return executeCommandWithGlide(
+                "SRANDMEMBER",
+                () -> {
+                    String[] result = glideClient.srandmember(key, count).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Returns one or more random members from the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param count the number of members to return (positive: unique, negative: may repeat)
+     * @return list of random members
+     */
+    public List<byte[]> srandmember(final byte[] key, final int count) {
+        return executeCommandWithGlide(
+                "SRANDMEMBER",
+                () -> {
+                    GlideString[] result = glideClient.srandmember(GlideString.of(key), count).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<byte[]> out = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        out.add(gs.getBytes());
+                    }
+                    return out;
+                });
+    }
+
+    /**
      * Returns random members from the sorted set with their scores (binary version).
      *
      * @param key the key of the sorted set
@@ -8937,6 +9220,377 @@ public final class Jedis implements Closeable {
                     }
                     return tuples;
                 });
+    }
+
+    /**
+     * Moves member from the set at source to the set at destination.
+     *
+     * @param srckey the key of the source set
+     * @param dstkey the key of the destination set
+     * @param member the member to move
+     * @return 1 if the element was moved, 0 if the element is not a member of source
+     */
+    public long smove(String srckey, String dstkey, String member) {
+        return executeCommandWithGlide(
+                "SMOVE", () -> glideClient.smove(srckey, dstkey, member).get() ? 1L : 0L);
+    }
+
+    /**
+     * Moves member from the set at source to the set at destination (binary version).
+     *
+     * @param srckey the key of the source set
+     * @param dstkey the key of the destination set
+     * @param member the member to move
+     * @return 1 if the element was moved, 0 if the element is not a member of source
+     */
+    public long smove(final byte[] srckey, final byte[] dstkey, final byte[] member) {
+        return executeCommandWithGlide(
+                "SMOVE",
+                () ->
+                        glideClient
+                                        .smove(GlideString.of(srckey), GlideString.of(dstkey), GlideString.of(member))
+                                        .get()
+                                ? 1L
+                                : 0L);
+    }
+
+    /**
+     * Returns the members of the set resulting from the intersection of all the given sets.
+     *
+     * @param keys the keys of the sets
+     * @return set with members of the intersection
+     */
+    public Set<String> sinter(String... keys) {
+        return executeCommandWithGlide("SINTER", () -> glideClient.sinter(keys).get());
+    }
+
+    /**
+     * Returns the members of the set resulting from the intersection of all the given sets (binary
+     * version).
+     *
+     * @param keys the keys of the sets
+     * @return set with members of the intersection
+     */
+    public Set<byte[]> sinter(final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SINTER",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    Set<GlideString> result = glideClient.sinter(glideKeys).get();
+                    return convertGlideStringsToByteArraySet(result);
+                });
+    }
+
+    /**
+     * Returns the cardinality of the set resulting from the intersection of all the given sets.
+     *
+     * @param keys the keys of the sets
+     * @return the cardinality of the intersection
+     */
+    public long sintercard(String... keys) {
+        return executeCommandWithGlide("SINTERCARD", () -> glideClient.sintercard(keys).get());
+    }
+
+    /**
+     * Returns the cardinality of the set resulting from the intersection of all the given sets, with
+     * limit.
+     *
+     * @param limit the maximum cardinality to compute
+     * @param keys the keys of the sets
+     * @return the cardinality of the intersection (capped at limit)
+     */
+    public long sintercard(long limit, String... keys) {
+        return executeCommandWithGlide("SINTERCARD", () -> glideClient.sintercard(keys, limit).get());
+    }
+
+    /**
+     * Returns the cardinality of the set resulting from the intersection of all the given sets
+     * (binary version).
+     *
+     * @param keys the keys of the sets
+     * @return the cardinality of the intersection
+     */
+    public long sintercard(final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SINTERCARD",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.sintercard(glideKeys).get();
+                });
+    }
+
+    /**
+     * Returns the cardinality of the set resulting from the intersection of all the given sets, with
+     * limit (binary version).
+     *
+     * @param limit the maximum cardinality to compute
+     * @param keys the keys of the sets
+     * @return the cardinality of the intersection (capped at limit)
+     */
+    public long sintercard(long limit, final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SINTERCARD",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.sintercard(glideKeys, limit).get();
+                });
+    }
+
+    /**
+     * Stores the members of the set resulting from the intersection of all the given sets into
+     * destination.
+     *
+     * @param destination the key of the destination set
+     * @param keys the keys of the sets
+     * @return the number of elements in the resulting set
+     */
+    public long sinterstore(String destination, String... keys) {
+        return executeCommandWithGlide(
+                "SINTERSTORE", () -> glideClient.sinterstore(destination, keys).get());
+    }
+
+    /**
+     * Stores the members of the set resulting from the intersection of all the given sets into
+     * destination (binary version).
+     *
+     * @param destination the key of the destination set
+     * @param keys the keys of the sets
+     * @return the number of elements in the resulting set
+     */
+    public long sinterstore(final byte[] destination, final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SINTERSTORE",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.sinterstore(GlideString.of(destination), glideKeys).get();
+                });
+    }
+
+    /**
+     * Returns the members of the set resulting from the union of all the given sets.
+     *
+     * @param keys the keys of the sets
+     * @return set with members of the union
+     */
+    public Set<String> sunion(String... keys) {
+        return executeCommandWithGlide("SUNION", () -> glideClient.sunion(keys).get());
+    }
+
+    /**
+     * Returns the members of the set resulting from the union of all the given sets (binary version).
+     *
+     * @param keys the keys of the sets
+     * @return set with members of the union
+     */
+    public Set<byte[]> sunion(final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SUNION",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    Set<GlideString> result = glideClient.sunion(glideKeys).get();
+                    return convertGlideStringsToByteArraySet(result);
+                });
+    }
+
+    /**
+     * Stores the members of the set resulting from the union of all the given sets into destination.
+     *
+     * @param destination the key of the destination set
+     * @param keys the keys of the sets
+     * @return the number of elements in the resulting set
+     */
+    public long sunionstore(String destination, String... keys) {
+        return executeCommandWithGlide(
+                "SUNIONSTORE", () -> glideClient.sunionstore(destination, keys).get());
+    }
+
+    /**
+     * Stores the members of the set resulting from the union of all the given sets into destination
+     * (binary version).
+     *
+     * @param destination the key of the destination set
+     * @param keys the keys of the sets
+     * @return the number of elements in the resulting set
+     */
+    public long sunionstore(final byte[] destination, final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SUNIONSTORE",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.sunionstore(GlideString.of(destination), glideKeys).get();
+                });
+    }
+
+    /**
+     * Returns the members of the set resulting from the difference between the first set and all the
+     * successive sets.
+     *
+     * @param keys the keys of the sets
+     * @return set with members of the difference
+     */
+    public Set<String> sdiff(String... keys) {
+        return executeCommandWithGlide("SDIFF", () -> glideClient.sdiff(keys).get());
+    }
+
+    /**
+     * Returns the members of the set resulting from the difference between the first set and all the
+     * successive sets (binary version).
+     *
+     * @param keys the keys of the sets
+     * @return set with members of the difference
+     */
+    public Set<byte[]> sdiff(final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SDIFF",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    Set<GlideString> result = glideClient.sdiff(glideKeys).get();
+                    return convertGlideStringsToByteArraySet(result);
+                });
+    }
+
+    /**
+     * Stores the members of the set resulting from the difference between the first set and all the
+     * successive sets into destination.
+     *
+     * @param destination the key of the destination set
+     * @param keys the keys of the sets
+     * @return the number of elements in the resulting set
+     */
+    public long sdiffstore(String destination, String... keys) {
+        return executeCommandWithGlide(
+                "SDIFFSTORE", () -> glideClient.sdiffstore(destination, keys).get());
+    }
+
+    /**
+     * Stores the members of the set resulting from the difference between the first set and all the
+     * successive sets into destination (binary version).
+     *
+     * @param destination the key of the destination set
+     * @param keys the keys of the sets
+     * @return the number of elements in the resulting set
+     */
+    public long sdiffstore(final byte[] destination, final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SDIFFSTORE",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.sdiffstore(GlideString.of(destination), glideKeys).get();
+                });
+    }
+
+    /**
+     * Incrementally iterates over the set stored at key.
+     *
+     * @param key the key of the set
+     * @param cursor the cursor (use "0" to start)
+     * @return scan result with next cursor and set of members
+     */
+    public ScanResult<String> sscan(String key, String cursor) {
+        return executeCommandWithGlide(
+                "SSCAN",
+                () -> {
+                    Object[] result = glideClient.sscan(key, cursor).get();
+                    return convertToScanResult(result);
+                });
+    }
+
+    /**
+     * Incrementally iterates over the set stored at key with scan parameters.
+     *
+     * @param key the key of the set
+     * @param cursor the cursor (use "0" to start)
+     * @param params the scan parameters
+     * @return scan result with next cursor and set of members
+     */
+    public ScanResult<String> sscan(String key, String cursor, ScanParams params) {
+        return executeCommandWithGlide(
+                "SSCAN",
+                () -> {
+                    SScanOptions options = convertScanParamsToSScanOptions(params);
+                    Object[] result = glideClient.sscan(key, cursor, options).get();
+                    return convertToScanResult(result);
+                });
+    }
+
+    /**
+     * Incrementally iterates over the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param cursor the cursor (use "0" to start)
+     * @return scan result with next cursor and set of members
+     */
+    public ScanResult<byte[]> sscan(final byte[] key, final byte[] cursor) {
+        return executeCommandWithGlide(
+                "SSCAN",
+                () -> {
+                    Object[] result = glideClient.sscan(GlideString.of(key), GlideString.of(cursor)).get();
+                    return convertToSscanResultBinary(result);
+                });
+    }
+
+    /**
+     * Incrementally iterates over the set stored at key with scan parameters (binary version).
+     *
+     * @param key the key of the set
+     * @param cursor the cursor (use "0" to start)
+     * @param params the scan parameters
+     * @return scan result with next cursor and set of members
+     */
+    public ScanResult<byte[]> sscan(final byte[] key, final byte[] cursor, final ScanParams params) {
+        return executeCommandWithGlide(
+                "SSCAN",
+                () -> {
+                    Object[] result =
+                            glideClient
+                                    .sscan(
+                                            GlideString.of(key),
+                                            GlideString.of(cursor),
+                                            SScanOptionsBinary.builder()
+                                                    .matchPattern(
+                                                            params.getMatchPattern() != null
+                                                                    ? GlideString.of(params.getMatchPattern())
+                                                                    : null)
+                                                    .count(params.getCount())
+                                                    .build())
+                                    .get();
+                    return convertToSscanResultBinary(result);
+                });
+    }
+
+    /** Convert GLIDE SSCAN result to ScanResult with byte[] members. */
+    private static ScanResult<byte[]> convertToSscanResultBinary(Object[] result) {
+        if (result != null && result.length >= 2) {
+            String newCursor = result[0].toString();
+            Object membersObj = result[1];
+            if (membersObj instanceof Object[]) {
+                Object[] membersArray = (Object[]) membersObj;
+                List<byte[]> members = new ArrayList<>();
+                for (Object m : membersArray) {
+                    if (m == null) {
+                        members.add(null);
+                    } else if (m instanceof GlideString) {
+                        members.add(((GlideString) m).getBytes());
+                    } else {
+                        members.add(m.toString().getBytes(VALKEY_CHARSET));
+                    }
+                }
+                return new ScanResult<>(newCursor, members);
+            }
+        }
+        return new ScanResult<>("0", Collections.emptyList());
+    }
+
+    /** Convert ScanParams to GLIDE SScanOptions. */
+    private static SScanOptions convertScanParamsToSScanOptions(ScanParams params) {
+        SScanOptions.SScanOptionsBuilder builder = SScanOptions.builder();
+        if (params.getMatchPattern() != null) {
+            builder.matchPattern(params.getMatchPattern());
+        }
+        if (params.getCount() != null) {
+            builder.count(params.getCount());
+        }
+        return builder.build();
     }
 
     // Static initialization block for cleanup hooks

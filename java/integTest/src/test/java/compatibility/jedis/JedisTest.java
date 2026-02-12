@@ -10,6 +10,7 @@ import glide.api.GlideClient;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import java.lang.reflect.Constructor;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1626,6 +1627,145 @@ public class JedisTest {
         assertTrue(resultSet.contains(member1), "SMEMBERS result should contain member1");
         assertTrue(resultSet.contains(member2), "SMEMBERS result should contain member2");
         assertTrue(resultSet.contains(member3), "SMEMBERS result should contain member3");
+    }
+
+    @Test
+    void sadd_srem_smembers_command() {
+        String key = UUID.randomUUID().toString();
+        String member1 = "member1";
+        String member2 = "member2";
+        String member3 = "member3";
+
+        long added = jedis.sadd(key, member1, member2, member3);
+        assertEquals(3L, added, "SADD should return 3 for three new members");
+
+        Set<String> members = jedis.smembers(key);
+        assertEquals(3, members.size(), "SMEMBERS should return 3 members");
+        assertTrue(members.contains(member1));
+        assertTrue(members.contains(member2));
+        assertTrue(members.contains(member3));
+
+        long removed = jedis.srem(key, member1);
+        assertEquals(1L, removed, "SREM should return 1 for one removed member");
+
+        members = jedis.smembers(key);
+        assertEquals(2, members.size(), "SMEMBERS should return 2 members after srem");
+
+        String keyBinary = UUID.randomUUID().toString();
+        byte[] keyBytes = keyBinary.getBytes(StandardCharsets.UTF_8);
+        byte[] m1 = "m1".getBytes(StandardCharsets.UTF_8);
+        byte[] m2 = "m2".getBytes(StandardCharsets.UTF_8);
+        jedis.sadd(keyBytes, m1, m2);
+        Set<byte[]> binaryMembers = jedis.smembers(keyBytes);
+        assertEquals(2, binaryMembers.size(), "SMEMBERS binary should return 2 members");
+        Set<String> memberStrings = new HashSet<>();
+        for (byte[] member : binaryMembers) {
+            memberStrings.add(new String(member, StandardCharsets.UTF_8));
+        }
+        Set<String> expectedBinaryMembers = new HashSet<>(Arrays.asList("m1", "m2"));
+        assertEquals(expectedBinaryMembers, memberStrings, "SMEMBERS binary should contain m1 and m2");
+    }
+
+    @Test
+    void set_commands_scard_sismember_smismember_spop_srandmember_smove() {
+        String key = UUID.randomUUID().toString();
+        jedis.sadd(key, "a", "b", "c");
+        assertEquals(3L, jedis.scard(key), "SCARD should return 3");
+        assertTrue(jedis.sismember(key, "a"), "SISMEMBER a should be true");
+        assertFalse(jedis.sismember(key, "z"), "SISMEMBER z should be false");
+
+        List<Boolean> smismember = jedis.smismember(key, "a", "b", "z");
+        assertEquals(
+                Arrays.asList(true, true, false),
+                smismember,
+                "SMISMEMBER should return [true, true, false]");
+
+        String popped = jedis.spop(key);
+        assertNotNull(popped, "SPOP should return a member");
+        Set<String> expectedMembers = new HashSet<>(Arrays.asList("a", "b", "c"));
+        assertTrue(expectedMembers.contains(popped), "SPOP should return one of a,b,c");
+        assertEquals(2L, jedis.scard(key), "SCARD should be 2 after spop");
+
+        String rand = jedis.srandmember(key);
+        assertNotNull(rand, "SRANDMEMBER should return a member");
+        List<String> randList = jedis.srandmember(key, 2);
+        assertEquals(2, randList.size(), "SRANDMEMBER count 2 should return 2");
+
+        String srcKey = UUID.randomUUID().toString();
+        String dstKey = UUID.randomUUID().toString();
+        jedis.sadd(srcKey, "x", "y");
+        jedis.sadd(dstKey, "z");
+        long moved = jedis.smove(srcKey, dstKey, "x");
+        assertEquals(1L, moved, "SMOVE should return 1");
+        assertFalse(jedis.sismember(srcKey, "x"), "x should be removed from source");
+        assertTrue(jedis.sismember(dstKey, "x"), "x should be in destination");
+    }
+
+    @Test
+    void set_commands_sinter_sintercard_sinterstore_sunion_sunionstore_sdiff_sdiffstore() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String dest = UUID.randomUUID().toString();
+        jedis.sadd(key1, "a", "b", "c");
+        jedis.sadd(key2, "b", "c", "d");
+
+        Set<String> inter = jedis.sinter(key1, key2);
+        Set<String> expectedInter = new HashSet<>(Arrays.asList("b", "c"));
+        assertEquals(expectedInter, inter, "SINTER should return b,c");
+
+        // SINTERCARD was added in Redis 7.0
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            long interCard = jedis.sintercard(key1, key2);
+            assertEquals(2L, interCard, "SINTERCARD should return 2");
+        }
+
+        long interStoreLen = jedis.sinterstore(dest, key1, key2);
+        assertEquals(2L, interStoreLen, "SINTERSTORE should store 2 elements");
+        Set<String> expectedInterStore = new HashSet<>(Arrays.asList("b", "c"));
+        assertEquals(expectedInterStore, jedis.smembers(dest), "SINTERSTORE result should be b,c");
+
+        Set<String> union = jedis.sunion(key1, key2);
+        Set<String> expectedUnion = new HashSet<>(Arrays.asList("a", "b", "c", "d"));
+        assertEquals(expectedUnion, union, "SUNION should return a,b,c,d");
+
+        String destUnion = UUID.randomUUID().toString();
+        long unionStoreLen = jedis.sunionstore(destUnion, key1, key2);
+        assertEquals(4L, unionStoreLen, "SUNIONSTORE should store 4 elements");
+
+        Set<String> diff = jedis.sdiff(key1, key2);
+        Set<String> expectedDiff = new HashSet<>(Arrays.asList("a"));
+        assertEquals(expectedDiff, diff, "SDIFF key1-key2 should return a");
+
+        String destDiff = UUID.randomUUID().toString();
+        long diffStoreLen = jedis.sdiffstore(destDiff, key1, key2);
+        assertEquals(1L, diffStoreLen, "SDIFFSTORE should store 1 element");
+        Set<String> expectedDiffStore = new HashSet<>(Arrays.asList("a"));
+        assertEquals(expectedDiffStore, jedis.smembers(destDiff), "SDIFFSTORE result should be a");
+    }
+
+    @Test
+    void set_commands_sscan() {
+        String key = UUID.randomUUID().toString();
+        jedis.sadd(key, "m1", "m2", "m3");
+        ScanResult<String> result = jedis.sscan(key, "0");
+        assertNotNull(result, "SSCAN result should not be null");
+        assertNotNull(result.getCursor(), "SSCAN cursor should not be null");
+        assertNotNull(result.getResult(), "SSCAN result list should not be null");
+        assertTrue(
+                result.getResult().size() >= 1 && result.getResult().size() <= 3,
+                "SSCAN should return 1-3 members in first iteration");
+        Set<String> expectedMembers = new HashSet<>(Arrays.asList("m1", "m2", "m3"));
+        for (String member : result.getResult()) {
+            assertTrue(expectedMembers.contains(member), "SSCAN should return valid members: " + member);
+        }
+
+        ScanResult<String> withParams = jedis.sscan(key, "0", new ScanParams().count(10));
+        assertNotNull(withParams.getResult(), "SSCAN with params should return result");
+        for (String member : withParams.getResult()) {
+            assertTrue(
+                    expectedMembers.contains(member),
+                    "SSCAN with params should return valid members: " + member);
+        }
     }
 
     @Test
