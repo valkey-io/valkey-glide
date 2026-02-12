@@ -10359,6 +10359,11 @@ public class SharedCommandTests {
         assertEquals(streamid_1, pending_results_extended[0][0]);
         assertEquals(consumer1, pending_results_extended[0][1]);
 
+        // Small delay to ensure all XCLAIM and XACK operations are fully processed
+        // This addresses a race condition in standalone RESP2 mode where the final
+        // XPENDING call might not see all expected pending messages immediately
+        Thread.sleep(5);
+
         pending_results_extended =
                 client
                         .xpending(
