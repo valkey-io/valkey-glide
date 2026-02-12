@@ -12,9 +12,9 @@ crate-type = ["cdylib"]
 
 [dependencies]
 redis = { path = "../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
-glide-core = { path = "../../glide-core", features = ["socket-layer"] }
+glide-core = { path = "../../glide-core", features = ["proto"] }
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "sync"] }
-tokio-util = "0.7"
+tokio-util = { version = "0.7", features = ["rt"] }
 napi = { version = "3.5", default-features = false, features = ["napi8"] }
 napi-derive = "3.5"
 logger_core = { path = "../../logger_core" }
@@ -24,10 +24,10 @@ num-traits = "0.2"
 num_cpus = "1.16"
 parking_lot = "0.12"
 protobuf = { version = "3", features = ["bytes", "with-bytes"] }
+num-bigint = { version = "0.4", optional = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 tikv-jemallocator = { version = "0.6", features = ["disable_initial_exec_tls"] }
-num-bigint = { version = "0.4", optional = true }
 
 [build-dependencies]
 napi-build = "2"

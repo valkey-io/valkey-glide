@@ -18,7 +18,9 @@ static GLOBAL: Jemalloc = Jemalloc;
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
-use glide_core::MAX_REQUEST_ARGS_LENGTH;
+/// Maximum number of request args per command (2^12 = 4096).
+/// Defined locally since it was previously imported from the socket listener layer.
+const MAX_REQUEST_ARGS_LENGTH: usize = 2_usize.pow(12);
 use glide_core::client::ConnectionRequest;
 use glide_core::client::{Client, ConnectionError, get_or_init_runtime};
 use glide_core::command_request::{
