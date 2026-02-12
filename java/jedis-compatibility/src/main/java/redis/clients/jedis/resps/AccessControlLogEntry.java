@@ -37,8 +37,10 @@ public class AccessControlLogEntry implements Serializable {
     private final long timestampCreated;
     private final long timestampLastUpdated;
 
+    private static final long DEFAULT_LONG_VALUE = 0L;
+
     public AccessControlLogEntry(Map<String, Object> map) {
-        count = toLong(map.get(COUNT), 0L);
+        count = toLong(map.get(COUNT));
         reason = (String) map.get(REASON);
         context = (String) map.get(CONTEXT);
         object = (String) map.get(OBJECT);
@@ -46,9 +48,9 @@ public class AccessControlLogEntry implements Serializable {
         ageSeconds = (String) map.get(AGE_SECONDS);
         clientInfo = getMapFromRawClientInfo((String) map.get(CLIENT_INFO));
         logEntry = map;
-        entryId = toLong(map.get(ENTRY_ID), 0L);
-        timestampCreated = toLong(map.get(TIMESTAMP_CREATED), 0L);
-        timestampLastUpdated = toLong(map.get(TIMESTAMP_LAST_UPDATED), 0L);
+        entryId = toLong(map.get(ENTRY_ID));
+        timestampCreated = toLong(map.get(TIMESTAMP_CREATED));
+        timestampLastUpdated = toLong(map.get(TIMESTAMP_LAST_UPDATED));
     }
 
     /**
@@ -58,12 +60,11 @@ public class AccessControlLogEntry implements Serializable {
      * representations of numbers.
      *
      * @param o The object to convert to long
-     * @param defaultValue The default value to return if conversion fails or object is null
-     * @return The long value or defaultValue if conversion fails
+     * @return The long value or DEFAULT_LONG_VALUE if conversion fails
      */
-    private static long toLong(Object o, long defaultValue) {
+    private static long toLong(Object o) {
         if (o == null) {
-            return defaultValue;
+            return DEFAULT_LONG_VALUE;
         }
         if (o instanceof Number) {
             return ((Number) o).longValue();
@@ -71,7 +72,7 @@ public class AccessControlLogEntry implements Serializable {
         try {
             return Long.parseLong(o.toString());
         } catch (NumberFormatException e) {
-            return defaultValue;
+            return DEFAULT_LONG_VALUE;
         }
     }
 

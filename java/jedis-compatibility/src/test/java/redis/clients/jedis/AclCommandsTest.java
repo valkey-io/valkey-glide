@@ -4,7 +4,6 @@ package redis.clients.jedis;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.resps.AccessControlLogEntry;
@@ -82,10 +81,10 @@ public class AclCommandsTest {
         user.setCommands("+@all");
         user.addKey("*");
         user.addChannel("*");
-        assertEquals(List.of("on", "allkeys"), user.getFlags());
-        assertEquals(List.of("xxx"), user.getPassword());
+        assertEquals(java.util.Arrays.asList("on", "allkeys"), user.getFlags());
+        assertEquals(java.util.Arrays.asList("xxx"), user.getPassword());
         assertEquals("+@all", user.getCommands());
-        assertEquals(List.of("*"), user.getKeys());
-        assertEquals(List.of("*"), user.getChannels());
+        assertEquals(java.util.Arrays.asList("*"), user.getKeys());
+        assertEquals(java.util.Arrays.asList("*"), user.getChannels());
     }
 }
