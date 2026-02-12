@@ -9208,6 +9208,11 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(suite.T(), streamid_1, pendingResultExtended[0].Id)
 		assert.Equal(suite.T(), consumer1, pendingResultExtended[0].ConsumerName)
 
+		// Small delay to ensure all XCLAIM and XACK operations are fully processed
+		// This addresses a race condition where the final XPENDING call with minIdleTime
+		// might not see all expected pending messages immediately after XCLAIM resets idle time
+		time.Sleep(5 * time.Millisecond)
+
 		pendingResultExtended, err = client.XPendingWithOptions(context.Background(),
 			key,
 			groupName,
