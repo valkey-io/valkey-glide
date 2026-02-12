@@ -1634,17 +1634,17 @@ public class JedisTest {
         String channel = "ch:" + UUID.randomUUID();
         String message = "msg";
 
-        long received = jedis.publish(channel, message);
+        Long received = jedis.publish(channel, message);
         assertEquals(
                 0L,
                 received,
                 "PUBLISH via Jedis compatibility uses GLIDE and returns 0 (subscriber count not provided)");
 
-        Set<String> channels = jedis.pubsubChannels();
-        assertNotNull(channels, "PUBSUB CHANNELS should return a set");
+        List<String> channels = jedis.pubsubChannels();
+        assertNotNull(channels, "PUBSUB CHANNELS should return a list");
 
-        Set<String> channelsWithPattern = jedis.pubsubChannels(channel);
-        assertNotNull(channelsWithPattern, "PUBSUB CHANNELS pattern should return a set");
+        List<String> channelsWithPattern = jedis.pubsubChannels(channel);
+        assertNotNull(channelsWithPattern, "PUBSUB CHANNELS pattern should return a list");
 
         long numPat = jedis.pubsubNumPat();
         assertTrue(numPat >= 0, "PUBSUB NUMPAT should return non-negative");
@@ -1657,15 +1657,15 @@ public class JedisTest {
 
         byte[] channelBytes = channel.getBytes(StandardCharsets.UTF_8);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
-        long receivedBinary = jedis.publish(channelBytes, messageBytes);
+        Long receivedBinary = jedis.publish(channelBytes, messageBytes);
         assertEquals(
                 0L,
                 receivedBinary,
                 "PUBLISH binary via Jedis compatibility uses GLIDE and returns 0 (subscriber count not"
                         + " provided)");
 
-        Set<byte[]> channelsBinary = jedis.pubsubChannels(channelBytes);
-        assertNotNull(channelsBinary, "PUBSUB CHANNELS binary should return a set");
+        List<byte[]> channelsBinary = jedis.pubsubChannels(channelBytes);
+        assertNotNull(channelsBinary, "PUBSUB CHANNELS binary should return a list");
 
         Map<byte[], Long> numSubBinary = jedis.pubsubNumSub(channelBytes);
         assertNotNull(numSubBinary, "PUBSUB NUMSUB binary should return a map");

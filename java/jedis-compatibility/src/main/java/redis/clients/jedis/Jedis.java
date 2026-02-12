@@ -2,6 +2,7 @@
 package redis.clients.jedis;
 
 import glide.api.GlideClient;
+import glide.api.GlideClusterClient;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
@@ -795,6 +796,11 @@ public final class Jedis implements Closeable {
         T execute() throws InterruptedException, ExecutionException;
     }
 
+    @FunctionalInterface
+    private interface GlideClusterOperation<T> {
+        T execute(GlideClusterClient clusterClient) throws InterruptedException, ExecutionException;
+    }
+
     /**
      * Helper method that encapsulates the common try/catch pattern with connection checks. This
      * method handles the standard flow: checkNotClosed() -> ensureInitialized() -> execute operation
@@ -814,6 +820,22 @@ public final class Jedis implements Closeable {
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException(operationName + " operation failed", e);
         }
+    }
+
+    /**
+     * Helper method to execute GLIDE cluster operations. Since Jedis class is for standalone
+     * connections only, this method always throws an exception directing users to use JedisCluster.
+     *
+     * @param operationName the name of the operation for error messages
+     * @param operation the lambda containing the GLIDE cluster client operation
+     * @param <T> the return type of the operation
+     * @return never returns (always throws exception)
+     * @throws JedisException always, as cluster operations are not supported in standalone mode
+     */
+    private <T> T executeCommandWithGlideCluster(
+            String operationName, GlideClusterOperation<T> operation) {
+        throw new JedisException(
+                operationName + " is only available in cluster mode. Use JedisCluster instead.");
     }
 
     /**
@@ -6993,7 +7015,7 @@ public final class Jedis implements Closeable {
      * @return the number of clients that received the message, or 0 when using the GLIDE client
      *     (subscriber count not provided by the underlying API)
      */
-    public long publish(String channel, String message) {
+    public Long publish(String channel, String message) {
         return executeCommandWithGlide(
                 "PUBLISH",
                 () -> {
@@ -7010,7 +7032,7 @@ public final class Jedis implements Closeable {
      * @return the number of clients that received the message, or 0 when using the GLIDE client
      *     (subscriber count not provided by the underlying API)
      */
-    public long publish(final byte[] channel, final byte[] message) {
+    public Long publish(final byte[] channel, final byte[] message) {
         return executeCommandWithGlide(
                 "PUBLISH",
                 () -> {
@@ -7052,8 +7074,9 @@ public final class Jedis implements Closeable {
      *
      * @see <a href="https://valkey.io/commands/subscribe/">valkey.io</a> for details.
      * @param channels the channels to subscribe to
-     * @apiNote For production use, configure PubSub callbacks via GLIDE's native subscription
-     *     configuration at client creation time.
+     * @apiNote For production use, configure PubSub callbacks via {@link
+     *     glide.api.models.configuration.StandaloneSubscriptionConfiguration} or {@link
+     *     glide.api.models.configuration.ClusterSubscriptionConfiguration} at client creation time.
      * @since Valkey 1.0.0
      */
     public void subscribe(byte[]... channels) {
@@ -7079,8 +7102,9 @@ public final class Jedis implements Closeable {
      *
      * @see <a href="https://valkey.io/commands/psubscribe/">valkey.io</a> for details.
      * @param patterns the channel patterns to subscribe to
-     * @apiNote For production use, configure PubSub callbacks via GLIDE's native subscription
-     *     configuration at client creation time.
+     * @apiNote For production use, configure PubSub callbacks via {@link
+     *     glide.api.models.configuration.StandaloneSubscriptionConfiguration} or {@link
+     *     glide.api.models.configuration.ClusterSubscriptionConfiguration} at client creation time.
      * @since Valkey 1.0.0
      */
     public void psubscribe(String... patterns) {
@@ -7102,8 +7126,9 @@ public final class Jedis implements Closeable {
      *
      * @see <a href="https://valkey.io/commands/psubscribe/">valkey.io</a> for details.
      * @param patterns the channel patterns to subscribe to
-     * @apiNote For production use, configure PubSub callbacks via GLIDE's native subscription
-     *     configuration at client creation time.
+     * @apiNote For production use, configure PubSub callbacks via {@link
+     *     glide.api.models.configuration.StandaloneSubscriptionConfiguration} or {@link
+     *     glide.api.models.configuration.ClusterSubscriptionConfiguration} at client creation time.
      * @since Valkey 1.0.0
      */
     public void psubscribe(byte[]... patterns) {
@@ -7122,24 +7147,24 @@ public final class Jedis implements Closeable {
     /**
      * Subscribes to one or more sharded channels. Sharded PubSub is only available in cluster mode.
      *
-     * <p><b>Note:</b> This is a low-level implementation that sends the subscription command but does
-     * not handle incoming messages. For full PubSub functionality with message callbacks, use GLIDE's
-     * native subscription configuration at client creation time.
+     * <p>This is a non-blocking operation that adds the sharded channels to the desired subscription
+     * state. Messages published to these channels will be received via the configured callback or
+     * message queue.
      *
      * @see <a href="https://valkey.io/commands/ssubscribe/">valkey.io</a> for details.
      * @param channels the sharded channels to subscribe to
-     * @apiNote Only available in cluster mode. For production use, consider using GLIDE's native
-     *     subscription configuration.
+     * @apiNote For production use, configure PubSub callbacks via {@link
+     *     glide.api.models.configuration.StandaloneSubscriptionConfiguration} or {@link
+     *     glide.api.models.configuration.ClusterSubscriptionConfiguration} at client creation time.
+     * @since Valkey 1.0.0
      * @since Valkey 7.0.0
      */
     public void ssubscribe(String... channels) {
-        executeCommandWithGlide(
+        executeCommandWithGlideCluster(
                 "SSUBSCRIBE",
-                () -> {
-                    String[] args = new String[channels.length + 1];
-                    args[0] = "SSUBSCRIBE";
-                    System.arraycopy(channels, 0, args, 1, channels.length);
-                    glideClient.customCommand(args).get();
+                (clusterClient) -> {
+                    Set<String> channelSet = new HashSet<>(Arrays.asList(channels));
+                    clusterClient.ssubscribe(channelSet).get();
                     return null;
                 });
     }
@@ -7147,26 +7172,26 @@ public final class Jedis implements Closeable {
     /**
      * Subscribes to one or more sharded channels (binary version).
      *
-     * <p><b>Note:</b> This is a low-level implementation that sends the subscription command but does
-     * not handle incoming messages. For full PubSub functionality with message callbacks, use GLIDE's
-     * native subscription configuration at client creation time.
+     * <p>This is a non-blocking operation that adds the sharded channels to the desired subscription
+     * state. Messages published to these channels will be received via the configured callback or
+     * message queue.
      *
      * @see <a href="https://valkey.io/commands/ssubscribe/">valkey.io</a> for details.
      * @param channels the sharded channels to subscribe to
-     * @apiNote Only available in cluster mode. For production use, consider using GLIDE's native
-     *     subscription configuration.
+     * @apiNote Only available in cluster mode. For production use, configure PubSub callbacks via
+     *     {@link glide.api.models.configuration.ClusterSubscriptionConfiguration} at client creation
+     *     time.
      * @since Valkey 7.0.0
      */
     public void ssubscribe(byte[]... channels) {
-        executeCommandWithGlide(
+        executeCommandWithGlideCluster(
                 "SSUBSCRIBE",
-                () -> {
-                    GlideString[] args = new GlideString[channels.length + 1];
-                    args[0] = GlideString.of("SSUBSCRIBE");
-                    for (int i = 0; i < channels.length; i++) {
-                        args[i + 1] = GlideString.of(channels[i]);
+                (clusterClient) -> {
+                    Set<String> channelSet = new HashSet<>();
+                    for (byte[] channel : channels) {
+                        channelSet.add(new String(channel, VALKEY_CHARSET));
                     }
-                    glideClient.customCommand(args).get();
+                    clusterClient.ssubscribe(channelSet).get();
                     return null;
                 });
     }
@@ -7279,8 +7304,8 @@ public final class Jedis implements Closeable {
      * Unsubscribes from one or more sharded channels. If no channels are specified, unsubscribes from
      * all sharded channels.
      *
-     * <p><b>Note:</b> This is a low-level implementation that sends the unsubscribe command. For full
-     * PubSub functionality, use GLIDE's native subscription configuration at client creation time.
+     * <p>This is a non-blocking operation that removes the sharded channels from the desired
+     * subscription state.
      *
      * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details.
      * @param channels the sharded channels to unsubscribe from (empty array unsubscribes from all)
@@ -7288,13 +7313,15 @@ public final class Jedis implements Closeable {
      * @since Valkey 7.0.0
      */
     public void sunsubscribe(String... channels) {
-        executeCommandWithGlide(
+        executeCommandWithGlideCluster(
                 "SUNSUBSCRIBE",
-                () -> {
-                    String[] args = new String[channels.length + 1];
-                    args[0] = "SUNSUBSCRIBE";
-                    System.arraycopy(channels, 0, args, 1, channels.length);
-                    glideClient.customCommand(args).get();
+                (clusterClient) -> {
+                    if (channels.length == 0) {
+                        clusterClient.sunsubscribe().get();
+                    } else {
+                        Set<String> channelSet = new HashSet<>(Arrays.asList(channels));
+                        clusterClient.sunsubscribe(channelSet).get();
+                    }
                     return null;
                 });
     }
@@ -7302,8 +7329,8 @@ public final class Jedis implements Closeable {
     /**
      * Unsubscribes from one or more sharded channels (binary version).
      *
-     * <p><b>Note:</b> This is a low-level implementation that sends the unsubscribe command. For full
-     * PubSub functionality, use GLIDE's native subscription configuration at client creation time.
+     * <p>This is a non-blocking operation that removes the sharded channels from the desired
+     * subscription state.
      *
      * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details.
      * @param channels the sharded channels to unsubscribe from (empty array unsubscribes from all)
@@ -7311,15 +7338,18 @@ public final class Jedis implements Closeable {
      * @since Valkey 7.0.0
      */
     public void sunsubscribe(byte[]... channels) {
-        executeCommandWithGlide(
+        executeCommandWithGlideCluster(
                 "SUNSUBSCRIBE",
-                () -> {
-                    GlideString[] args = new GlideString[channels.length + 1];
-                    args[0] = GlideString.of("SUNSUBSCRIBE");
-                    for (int i = 0; i < channels.length; i++) {
-                        args[i + 1] = GlideString.of(channels[i]);
+                (clusterClient) -> {
+                    if (channels.length == 0) {
+                        clusterClient.sunsubscribe().get();
+                    } else {
+                        Set<String> channelSet = new HashSet<>();
+                        for (byte[] channel : channels) {
+                            channelSet.add(new String(channel, VALKEY_CHARSET));
+                        }
+                        clusterClient.sunsubscribe(channelSet).get();
                     }
-                    glideClient.customCommand(args).get();
                     return null;
                 });
     }
@@ -7327,14 +7357,14 @@ public final class Jedis implements Closeable {
     /**
      * Returns the list of currently active channels.
      *
-     * @return set of channel names
+     * @return list of channel names
      */
-    public Set<String> pubsubChannels() {
+    public List<String> pubsubChannels() {
         return executeCommandWithGlide(
                 "PUBSUB CHANNELS",
                 () -> {
                     String[] arr = glideClient.pubsubChannels().get();
-                    return arr != null ? new HashSet<>(Arrays.asList(arr)) : new HashSet<>();
+                    return arr != null ? Arrays.asList(arr) : Collections.emptyList();
                 });
     }
 
@@ -7342,23 +7372,24 @@ public final class Jedis implements Closeable {
      * Returns the list of currently active channels matching the given pattern.
      *
      * @param pattern glob-style pattern
-     * @return set of channel names
+     * @return list of channel names
      */
-    public Set<String> pubsubChannels(String pattern) {
+    public List<String> pubsubChannels(String pattern) {
         return executeCommandWithGlide(
                 "PUBSUB CHANNELS",
                 () -> {
                     String[] arr = glideClient.pubsubChannels(pattern).get();
-                    return arr != null ? new HashSet<>(Arrays.asList(arr)) : new HashSet<>();
+                    return arr != null ? Arrays.asList(arr) : Collections.emptyList();
                 });
     }
 
     /**
      * Returns the list of currently active channels (binary version).
      *
-     * @return set of channel names
+     * @param pattern glob-style pattern (pass null or empty array for all channels)
+     * @return list of channel names
      */
-    public Set<byte[]> pubsubChannels(final byte[] pattern) {
+    public List<byte[]> pubsubChannels(final byte[] pattern) {
         return executeCommandWithGlide(
                 "PUBSUB CHANNELS",
                 () -> {
@@ -7366,7 +7397,7 @@ public final class Jedis implements Closeable {
                             pattern == null || pattern.length == 0
                                     ? glideClient.pubsubChannelsBinary().get()
                                     : glideClient.pubsubChannels(GlideString.of(pattern)).get();
-                    Set<byte[]> out = new HashSet<>();
+                    List<byte[]> out = new ArrayList<>();
                     if (arr != null) {
                         for (GlideString gs : arr) {
                             out.add(gs.getBytes());
@@ -7408,10 +7439,8 @@ public final class Jedis implements Closeable {
                     GlideString[] glideChannels = convertToGlideStringArray(channels);
                     Map<GlideString, Long> result = glideClient.pubsubNumSub(glideChannels).get();
                     Map<byte[], Long> out = new HashMap<>();
-                    if (result != null) {
-                        for (Map.Entry<GlideString, Long> e : result.entrySet()) {
-                            out.put(e.getKey().getBytes(), e.getValue());
-                        }
+                    for (Map.Entry<GlideString, Long> e : result.entrySet()) {
+                        out.put(e.getKey().getBytes(), e.getValue());
                     }
                     return out;
                 });
