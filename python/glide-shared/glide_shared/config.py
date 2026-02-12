@@ -793,10 +793,6 @@ class BaseClientConfiguration:
             request.compression_config.CopyFrom(self.compression._to_protobuf())
         return request
 
-    # TODO: remove this function once dynamic pubsub is implemented for the python wrappers
-    def _is_pubsub_configured(self) -> bool:
-        return False
-
     def _get_pubsub_callback_and_context(
         self,
     ) -> Tuple[Optional[Callable[[PubSubMsg, Any], None]], Any]:
@@ -981,10 +977,6 @@ class GlideClientConfiguration(BaseClientConfiguration):
                     entry.channels_or_patterns.append(str.encode(channel_pattern))
 
         return request
-
-    # TODO: remove this function once dynamic pubsub is implemented for the python wrappers
-    def _is_pubsub_configured(self) -> bool:
-        return self.pubsub_subscriptions is not None
 
     def _get_pubsub_callback_and_context(
         self,
@@ -1220,10 +1212,6 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         if self.lazy_connect is not None:
             request.lazy_connect = self.lazy_connect
         return request
-
-    # TODO: remove this function once dynamic pubsub is implemented for the python wrappers
-    def _is_pubsub_configured(self) -> bool:
-        return self.pubsub_subscriptions is not None
 
     def _get_pubsub_callback_and_context(
         self,
