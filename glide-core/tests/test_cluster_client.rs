@@ -5,6 +5,7 @@ mod utilities;
 #[cfg(test)]
 mod cluster_client_tests {
     use std::collections::HashMap;
+    use std::time::{Duration, Instant};
 
     use super::*;
     use cluster::{LONG_CLUSTER_TEST_TIMEOUT, setup_cluster_with_replicas};
@@ -64,6 +65,97 @@ mod cluster_client_tests {
             let (primaries, replicas) = count_primaries_and_replicas(info);
             assert_eq!(primaries, 3);
             assert_eq!(replicas, 0);
+        });
+    }
+
+    /// Test for #4990: Failover causes near-zero throughput
+    /// See: https://github.com/valkey-io/valkey-glide/issues/4990
+    #[rstest]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_failover_doesnt_block_healthy_shards() {
+        block_on_all(async {
+            const NUM_KEYS: usize = 100;
+            const MEASUREMENT_DURATION_SECS: u64 = 10;
+
+            // Start cluster with replicas
+            let mut test_basics = setup_cluster_with_replicas(
+                TestConfiguration {
+                    cluster_mode: ClusterMode::Enabled,
+                    shared_server: false,
+                    ..Default::default()
+                },
+                1,
+                3,
+            )
+            .await;
+
+            // Find a replica in cluster (after primaries)
+            let cluster = test_basics.cluster.unwrap();
+            let addresses = cluster.get_server_addresses();
+
+            // Set keys on all shards to establish connections
+            for i in 0..NUM_KEYS {
+                let key = format!("key_{}", i);
+                let mut cmd = redis::cmd("SET");
+                cmd.arg(&key).arg("value");
+                test_basics.client.send_command(&mut cmd, None).await.unwrap();
+            }
+
+            // Measure baseline throughput across all shards (queries/second)
+            let baseline_start = Instant::now();
+            let mut baseline_count = 0;
+            while baseline_start.elapsed() < Duration::from_secs(MEASUREMENT_DURATION_SECS) {
+                // Gets keys across all shards
+                for i in 0..NUM_KEYS {
+                    let mut cmd = redis::cmd("GET");
+                    cmd.arg(format!("key_{}", i));
+                    let _ = test_basics.client.send_command(&mut cmd, None).await;
+                    baseline_count += 1;
+                }
+            }
+            let baseline_qps = baseline_count / MEASUREMENT_DURATION_SECS;
+
+            // Kill the first primary (simulate crash)
+            let primary_addr = &addresses[0];
+            let (host, port) = match primary_addr {
+                redis::ConnectionAddr::Tcp(h, p) => (h.clone(), *p),
+                redis::ConnectionAddr::TcpTls { host: h, port: p, .. } => (h.clone(), *p),
+                _ => panic!("Unexpected connection type"),
+            };
+            let mut shutdown_cmd = redis::cmd("SHUTDOWN");
+            shutdown_cmd.arg("NOSAVE");
+            let routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress { host, port });
+            let _ = test_basics.client.send_command(&mut shutdown_cmd, Some(routing)).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+
+            // Wait for recovery - for manual testing only (also set #[timeout(Duration::from_secs(120))])
+            // tokio::time::sleep(Duration::from_secs(45)).await;
+
+            // Measure failover throughput across all shards (queries/second)
+            let failover_start = Instant::now();
+            let mut failover_count = 0;
+            let mut error_count = 0;
+            while failover_start.elapsed() < Duration::from_secs(MEASUREMENT_DURATION_SECS) {
+                // Gets keys across all shards
+                for i in 0..NUM_KEYS {
+                    let mut cmd = redis::cmd("GET");
+                    cmd.arg(format!("key_{}", i));
+                    match test_basics.client.send_command(&mut cmd, None).await {
+                        Ok(_) => failover_count += 1,
+                        Err(_) => error_count += 1,
+                    }
+                }
+            }
+            let failover_qps = failover_count / MEASUREMENT_DURATION_SECS;
+
+            // Expect at least 90% throughput
+            println!("Baseline QPS: {}, Failover QPS: {}, Errors: {}", baseline_qps, failover_qps, error_count);
+            assert!(
+                failover_qps > (baseline_qps * 90 / 100),
+                "Throughput dropped too much during failover: {} vs baseline {} (expected >90%)",
+                failover_qps,
+                baseline_qps
+            );
         });
     }
 
