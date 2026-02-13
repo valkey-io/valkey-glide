@@ -13,6 +13,7 @@ import org.junit.jupiter.api.*;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.args.FlushMode;
 import redis.clients.jedis.args.FunctionRestorePolicy;
+import redis.clients.jedis.resps.LibraryInfo;
 
 /**
  * Integration tests for Jedis scripting and function commands. Tests EVAL, EVALSHA, SCRIPT
@@ -266,7 +267,7 @@ public class JedisScriptingIntegTest {
                         + "redis.register_function('listfunc', function(keys, args) return 1 end)";
         jedis.functionLoad(lib);
 
-        List<Object> functions = jedis.functionList();
+        List<LibraryInfo> functions = jedis.functionList();
         assertNotNull(functions);
         assertTrue(functions.size() > 0);
 
@@ -286,7 +287,7 @@ public class JedisScriptingIntegTest {
                         + "redis.register_function('patternfunc', function(keys, args) return 1 end)";
         jedis.functionLoad(lib);
 
-        List<Object> functions = jedis.functionList("pattern*");
+        List<LibraryInfo> functions = jedis.functionList("pattern*");
         assertNotNull(functions);
 
         // Clean up
@@ -305,7 +306,7 @@ public class JedisScriptingIntegTest {
                         + "redis.register_function('codefunc', function(keys, args) return 1 end)";
         jedis.functionLoad(lib);
 
-        List<Object> functions = jedis.functionListWithCode();
+        List<LibraryInfo> functions = jedis.functionListWithCode();
         assertNotNull(functions);
         assertTrue(functions.size() > 0);
 
@@ -379,7 +380,7 @@ public class JedisScriptingIntegTest {
         String result = jedis.functionFlush();
         assertEquals("OK", result);
 
-        List<Object> functions = jedis.functionList();
+        List<LibraryInfo> functions = jedis.functionList();
         assertEquals(0, functions.size());
     }
 
