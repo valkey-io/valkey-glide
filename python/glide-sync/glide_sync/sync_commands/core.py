@@ -7179,6 +7179,132 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.Watch, keys),
         )
 
+    def multi(self) -> TOK:
+        """
+        Marks the start of a transaction block. Subsequent commands will be queued for atomic execution using `EXEC`.
+
+        See [valkey.io](https://valkey.io/commands/multi) for more details.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> client.multi()
+                'OK'
+            >>> client.set("key", "value")
+                'QUEUED'
+            >>> client.get("key")
+                'QUEUED'
+            >>> client.exec()
+                ['OK', b'value']
+        """
+        return cast(
+            TOK,
+            self._execute_command(RequestType.Multi, []),
+        )
+
+    def exec(self) -> Optional[List[TResult]]:
+        """
+        Executes all previously queued commands in a transaction and restores the connection state to normal.
+        When using `WATCH`, `EXEC` will execute commands only if the watched keys were not modified,
+        otherwise returns `None`.
+
+        See [valkey.io](https://valkey.io/commands/exec) for more details.
+
+        Returns:
+            Optional[List[TResult]]: An array of results from the executed commands, or `None` if the transaction was aborted due to a `WATCH` condition.
+
+        Examples:
+            >>> client.multi()
+                'OK'
+            >>> client.set("key", "value")
+                'QUEUED'
+            >>> client.get("key")
+                'QUEUED'
+            >>> client.exec()
+                ['OK', b'value']
+
+            >>> client.watch("watched_key")
+                'OK'
+            >>> client.multi()
+                'OK'
+            >>> client.set("key", "value")
+                'QUEUED'
+            >>> # If watched_key is modified by another client here, exec returns None
+            >>> client.exec()
+                None
+        """
+        return cast(
+            Optional[List[TResult]],
+            self._execute_command(RequestType.Exec, []),
+        )
+
+    def discard(self) -> TOK:
+        """
+        Flushes all previously queued commands in a transaction and restores the connection state to normal.
+
+        See [valkey.io](https://valkey.io/commands/discard) for more details.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> client.multi()
+                'OK'
+            >>> client.set("key", "value")
+                'QUEUED'
+            >>> client.discard()
+                'OK'
+            >>> client.get("key")
+                None  # The SET command was discarded
+        """
+        return cast(
+            TOK,
+            self._execute_command(RequestType.Discard, []),
+        )
+
+    def keys(self, pattern: TEncodable = "*") -> List[bytes]:
+        """
+        Returns all keys matching the given pattern.
+
+        See [valkey.io](https://valkey.io/commands/keys) for more details.
+
+        Warning:
+            This command is intended for debugging and special operations, such as changing
+            your keyspace layout. Don't use KEYS in your regular application code.
+            If you're looking for a way to find keys in a subset of your keyspace, consider
+            using SCAN or sets.
+
+        Args:
+            pattern (TEncodable): The pattern to match keys against. Defaults to "*" (all keys).
+                Supported glob-style patterns:
+                - h?llo matches hello, hallo and hxllo
+                - h*llo matches hllo and heeeello  
+                - h[ae]llo matches hello and hallo, but not hillo
+                - h[^e]llo matches hallo, hbllo, ... but not hello
+                - h[a-b]llo matches hallo and hbllo
+                Use \\ to escape special characters if you want to match them verbatim.
+
+        Returns:
+            List[bytes]: A list of keys matching the pattern.
+
+        Examples:
+            >>> client.set("key1", "value1")
+                'OK'
+            >>> client.set("key2", "value2")
+                'OK'
+            >>> client.keys("*")
+                [b'key1', b'key2']
+            >>> client.keys("key1")
+                [b'key1']
+            >>> client.keys("nonexistent*")
+                []
+        """
+        return cast(
+            List[bytes],
+            self._execute_command(RequestType.Keys, [pattern]),
+        )
+
     def lcs(
         self,
         key1: TEncodable,
