@@ -65,13 +65,25 @@ import {
     createScriptExists,
     createScriptFlush,
     createScriptKill,
+    createSSubscribeLazy,
     createSSubscribe,
-    createSSubscribeBlocking,
+    createSUnsubscribeLazy,
     createSUnsubscribe,
-    createSUnsubscribeBlocking,
     createTime,
     createUnWatch,
 } from "./Commands";
+
+/**
+ * Constant representing all sharded channels.
+ * Use this with unsubscribe methods to unsubscribe from all sharded channels.
+ *
+ * @example
+ * ```typescript
+ * await client.sunsubscribeLazy(ALL_SHARDED_CHANNELS);
+ * ```
+ */
+export const ALL_SHARDED_CHANNELS = null;
+
 /** An extension to command option types with {@link Routes}. */
 export interface RouteOption {
     /**
@@ -2023,82 +2035,122 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
-     * Subscribes the client to the specified sharded channels.
+     * Subscribes the client to the specified sharded channels (non-blocking).
+     * Returns immediately without waiting for subscription confirmation.
      * Available since Valkey 7.0.
      *
      * @see {@link https://valkey.io/commands/ssubscribe/|valkey.io} for details.
      *
      * @param channels - A set of sharded channel names to subscribe to.
-     * @param options - (Optional) Additional parameters:
-     *   - timeout: Maximum time in milliseconds to wait for subscription confirmation.
-     *   - decoder: See {@link DecoderOption}.
-     * @returns A promise that resolves when the subscription is complete.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves immediately.
      *
      * @example
      * ```typescript
-     * await clusterClient.ssubscribe(new Set(["shard-channel-1"]));
+     * await clusterClient.ssubscribeLazy(new Set(["shard-channel-1"]));
+     * ```
+     */
+    public async ssubscribeLazy(
+        channels: Set<GlideString>,
+        options?: DecoderOption,
+    ): Promise<void> {
+        const channelsArray = Array.from(channels);
+        return this.createWritePromise(
+            createSSubscribeLazy(channelsArray),
+            options,
+        );
+    }
+
+    /**
+     * Subscribes the client to the specified sharded channels (blocking).
+     * Waits for subscription confirmation or until timeout.
+     * Available since Valkey 7.0.
+     *
+     * @see {@link https://valkey.io/commands/ssubscribe/|valkey.io} for details.
+     *
+     * @param channels - A set of sharded channel names to subscribe to.
+     * @param timeoutMs - Maximum time in milliseconds to wait. Use 0 for indefinite wait.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves when subscription is confirmed or timeout occurs.
+     *
+     * @example
+     * ```typescript
+     * // Wait up to 5 seconds
+     * await clusterClient.ssubscribe(new Set(["shard-channel-1"]), 5000);
+     * // Wait indefinitely
+     * await clusterClient.ssubscribe(new Set(["shard-channel-1"]), 0);
      * ```
      */
     public async ssubscribe(
         channels: Set<GlideString>,
-        options?: { timeout?: number } & DecoderOption,
+        timeoutMs: number,
+        options?: DecoderOption,
     ): Promise<void> {
         const channelsArray = Array.from(channels);
-
-        if (options?.timeout !== undefined) {
-            return this.createWritePromise(
-                createSSubscribeBlocking(channelsArray, options.timeout),
-                options,
-            );
-        } else {
-            return this.createWritePromise(
-                createSSubscribe(channelsArray),
-                options,
-            );
-        }
+        return this.createWritePromise(
+            createSSubscribe(channelsArray, timeoutMs),
+            options,
+        );
     }
 
     /**
-     * Unsubscribes the client from the specified sharded channels.
-     * If no channels are provided, unsubscribes from all sharded channels.
+     * Unsubscribes the client from the specified sharded channels (non-blocking).
+     * Pass null to unsubscribe from all sharded channels.
      * Available since Valkey 7.0.
      *
      * @see {@link https://valkey.io/commands/sunsubscribe/|valkey.io} for details.
      *
-     * @param channels - (Optional) A set of sharded channel names to unsubscribe from.
-     * @param options - (Optional) Additional parameters:
-     *   - timeout: Maximum time in milliseconds to wait for unsubscription confirmation.
-     *   - decoder: See {@link DecoderOption}.
-     * @returns A promise that resolves when the unsubscription is complete.
+     * @param channels - Sharded channel names to unsubscribe from, or null for all channels.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves immediately.
      *
      * @example
      * ```typescript
-     * await clusterClient.sunsubscribe(new Set(["shard-channel-1"]));
+     * await clusterClient.sunsubscribeLazy(new Set(["shard-channel-1"]));
      * // Unsubscribe from all sharded channels
-     * await clusterClient.sunsubscribe();
+     * await clusterClient.sunsubscribeLazy(ALL_SHARDED_CHANNELS);
+     * ```
+     */
+    public async sunsubscribeLazy(
+        channels?: Set<GlideString> | null,
+        options?: DecoderOption,
+    ): Promise<void> {
+        const channelsArray = channels ? Array.from(channels) : undefined;
+        return this.createWritePromise(
+            createSUnsubscribeLazy(channelsArray),
+            options,
+        );
+    }
+
+    /**
+     * Unsubscribes the client from the specified sharded channels (blocking).
+     * Pass null to unsubscribe from all sharded channels.
+     * Available since Valkey 7.0.
+     *
+     * @see {@link https://valkey.io/commands/sunsubscribe/|valkey.io} for details.
+     *
+     * @param channels - Sharded channel names to unsubscribe from, or null for all channels.
+     * @param timeoutMs - Maximum time in milliseconds to wait. Use 0 for indefinite wait.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves when unsubscription is confirmed or timeout occurs.
+     *
+     * @example
+     * ```typescript
+     * await clusterClient.sunsubscribe(new Set(["shard-channel-1"]), 5000);
+     * // Unsubscribe from all sharded channels with timeout
+     * await clusterClient.sunsubscribe(ALL_SHARDED_CHANNELS, 5000);
      * ```
      */
     public async sunsubscribe(
-        channels?: Set<GlideString>,
-        options?: { timeout?: number } & DecoderOption,
+        channels: Set<GlideString> | null,
+        timeoutMs: number,
+        options?: DecoderOption,
     ): Promise<void> {
         const channelsArray = channels ? Array.from(channels) : undefined;
-
-        if (options?.timeout !== undefined) {
-            // For blocking sunsubscribe, we need to provide channels (empty array if none)
-            return this.createWritePromise(
-                createSUnsubscribeBlocking(
-                    channelsArray ?? [],
-                    options.timeout,
-                ),
-                options,
-            );
-        } else {
-            return this.createWritePromise(
-                createSUnsubscribe(channelsArray),
-                options,
-            );
-        }
+        return this.createWritePromise(
+            createSUnsubscribe(channelsArray ?? [], timeoutMs),
+            options,
+        );
     }
 
     /**

@@ -186,13 +186,13 @@ import {
     createPubSubNumPat,
     createPubSubNumSub,
     createPSubscribe,
-    createPSubscribeBlocking,
+    createPSubscribeLazy,
     createPUnsubscribe,
-    createPUnsubscribeBlocking,
+    createPUnsubscribeLazy,
     createSubscribe,
-    createSubscribeBlocking,
+    createSubscribeLazy,
     createUnsubscribe,
-    createUnsubscribeBlocking,
+    createUnsubscribeLazy,
     createRPop,
     createRPush,
     createRPushX,
@@ -397,6 +397,28 @@ export type StreamEntryDataType = Record<string, [GlideString, GlideString][]>;
  * Union type that can store either a number or positive/negative infinity.
  */
 export type Score = number | "+inf" | "-inf";
+
+/**
+ * Constant representing "all channels" for unsubscribe operations.
+ * Use this to unsubscribe from all exact channels at once.
+ *
+ * @example
+ * ```typescript
+ * await client.unsubscribeLazy(ALL_CHANNELS);
+ * ```
+ */
+export const ALL_CHANNELS = null;
+
+/**
+ * Constant representing "all patterns" for punsubscribe operations.
+ * Use this to unsubscribe from all pattern subscriptions at once.
+ *
+ * @example
+ * ```typescript
+ * await client.punsubscribeLazy(ALL_PATTERNS);
+ * ```
+ */
+export const ALL_PATTERNS = null;
 
 /**
  * Data type which represents sorted sets data for input parameter of ZADD command,
@@ -9512,156 +9534,230 @@ export class BaseClient {
     }
 
     /**
-     * Subscribes the client to the specified channels.
+     * Subscribes the client to the specified channels (non-blocking).
+     * Returns immediately without waiting for subscription confirmation.
      *
      * @see {@link https://valkey.io/commands/subscribe/|valkey.io} for details.
      *
      * @param channels - A set of channel names to subscribe to.
-     * @param options - (Optional) Additional parameters:
-     *   - timeout: Maximum time in milliseconds to wait for subscription confirmation.
-     *   - decoder: See {@link DecoderOption}.
-     * @returns A promise that resolves when the subscription is complete.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves immediately.
      *
      * @example
      * ```typescript
-     * await client.subscribe(new Set(["news", "updates"]));
-     * // With timeout
-     * await client.subscribe(new Set(["news"]), { timeout: 5000 });
+     * await client.subscribeLazy(new Set(["news", "updates"]));
+     * ```
+     */
+    public async subscribeLazy(
+        channels: Set<GlideString>,
+        options?: DecoderOption,
+    ): Promise<void> {
+        const channelsArray = Array.from(channels);
+        return this.createWritePromise(
+            createSubscribeLazy(channelsArray),
+            options,
+        );
+    }
+
+    /**
+     * Subscribes the client to the specified channels (blocking).
+     * Waits for subscription confirmation or until timeout.
+     *
+     * @see {@link https://valkey.io/commands/subscribe/|valkey.io} for details.
+     *
+     * @param channels - A set of channel names to subscribe to.
+     * @param timeoutMs - Maximum time in milliseconds to wait. Use 0 for indefinite wait.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves when subscription is confirmed or timeout occurs.
+     *
+     * @example
+     * ```typescript
+     * // Wait up to 5 seconds
+     * await client.subscribe(new Set(["news"]), 5000);
+     * // Wait indefinitely
+     * await client.subscribe(new Set(["news"]), 0);
      * ```
      */
     public async subscribe(
         channels: Set<GlideString>,
-        options?: { timeout?: number } & DecoderOption,
+        timeoutMs: number,
+        options?: DecoderOption,
     ): Promise<void> {
         const channelsArray = Array.from(channels);
-
-        if (options?.timeout !== undefined) {
-            return this.createWritePromise(
-                createSubscribeBlocking(channelsArray, options.timeout),
-                options,
-            );
-        } else {
-            return this.createWritePromise(
-                createSubscribe(channelsArray),
-                options,
-            );
-        }
+        return this.createWritePromise(
+            createSubscribe(channelsArray, timeoutMs),
+            options,
+        );
     }
 
     /**
-     * Subscribes the client to the specified patterns.
+     * Subscribes the client to the specified patterns (non-blocking).
+     * Returns immediately without waiting for subscription confirmation.
      *
      * @see {@link https://valkey.io/commands/psubscribe/|valkey.io} for details.
      *
      * @param patterns - A set of glob-style patterns to subscribe to.
-     * @param options - (Optional) Additional parameters:
-     *   - timeout: Maximum time in milliseconds to wait for subscription confirmation.
-     *   - decoder: See {@link DecoderOption}.
-     * @returns A promise that resolves when the subscription is complete.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves immediately.
      *
      * @example
      * ```typescript
-     * await client.psubscribe(new Set(["news.*", "updates.*"]));
+     * await client.psubscribeLazy(new Set(["news.*", "updates.*"]));
+     * ```
+     */
+    public async psubscribeLazy(
+        patterns: Set<GlideString>,
+        options?: DecoderOption,
+    ): Promise<void> {
+        const patternsArray = Array.from(patterns);
+        return this.createWritePromise(
+            createPSubscribeLazy(patternsArray),
+            options,
+        );
+    }
+
+    /**
+     * Subscribes the client to the specified patterns (blocking).
+     * Waits for subscription confirmation or until timeout.
+     *
+     * @see {@link https://valkey.io/commands/psubscribe/|valkey.io} for details.
+     *
+     * @param patterns - A set of glob-style patterns to subscribe to.
+     * @param timeoutMs - Maximum time in milliseconds to wait. Use 0 for indefinite wait.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves when subscription is confirmed or timeout occurs.
+     *
+     * @example
+     * ```typescript
+     * await client.psubscribe(new Set(["news.*"]), 5000);
      * ```
      */
     public async psubscribe(
         patterns: Set<GlideString>,
-        options?: { timeout?: number } & DecoderOption,
+        timeoutMs: number,
+        options?: DecoderOption,
     ): Promise<void> {
         const patternsArray = Array.from(patterns);
-
-        if (options?.timeout !== undefined) {
-            return this.createWritePromise(
-                createPSubscribeBlocking(patternsArray, options.timeout),
-                options,
-            );
-        } else {
-            return this.createWritePromise(
-                createPSubscribe(patternsArray),
-                options,
-            );
-        }
+        return this.createWritePromise(
+            createPSubscribe(patternsArray, timeoutMs),
+            options,
+        );
     }
 
     /**
-     * Unsubscribes the client from the specified channels.
-     * If no channels are provided, unsubscribes from all exact channels.
+     * Unsubscribes the client from the specified channels (non-blocking).
+     * Pass null to unsubscribe from all exact channels.
      *
      * @see {@link https://valkey.io/commands/unsubscribe/|valkey.io} for details.
      *
-     * @param channels - (Optional) A set of channel names to unsubscribe from.
-     * @param options - (Optional) Additional parameters:
-     *   - timeout: Maximum time in milliseconds to wait for unsubscription confirmation.
-     *   - decoder: See {@link DecoderOption}.
-     * @returns A promise that resolves when the unsubscription is complete.
+     * @param channels - Channel names to unsubscribe from, or null for all channels.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves immediately.
      *
      * @example
      * ```typescript
-     * await client.unsubscribe(new Set(["news"]));
+     * await client.unsubscribeLazy(new Set(["news"]));
      * // Unsubscribe from all channels
-     * await client.unsubscribe();
+     * await client.unsubscribeLazy(ALL_CHANNELS);
      * ```
      */
-    public async unsubscribe(
-        channels?: Set<GlideString>,
-        options?: { timeout?: number } & DecoderOption,
+    public async unsubscribeLazy(
+        channels?: Set<GlideString> | null,
+        options?: DecoderOption,
     ): Promise<void> {
         const channelsArray = channels ? Array.from(channels) : undefined;
-
-        if (options?.timeout !== undefined) {
-            // For blocking unsubscribe, we need to provide channels (empty array if none)
-            return this.createWritePromise(
-                createUnsubscribeBlocking(channelsArray ?? [], options.timeout),
-                options,
-            );
-        } else {
-            return this.createWritePromise(
-                createUnsubscribe(channelsArray),
-                options,
-            );
-        }
+        return this.createWritePromise(
+            createUnsubscribeLazy(channelsArray),
+            options,
+        );
     }
 
     /**
-     * Unsubscribes the client from the specified patterns.
-     * If no patterns are provided, unsubscribes from all patterns.
+     * Unsubscribes the client from the specified channels (blocking).
+     * Pass null to unsubscribe from all exact channels.
      *
-     * @see {@link https://valkey.io/commands/punsubscribe/|valkey.io} for details.
+     * @see {@link https://valkey.io/commands/unsubscribe/|valkey.io} for details.
      *
-     * @param patterns - (Optional) A set of patterns to unsubscribe from.
-     * @param options - (Optional) Additional parameters:
-     *   - timeout: Maximum time in milliseconds to wait for unsubscription confirmation.
-     *   - decoder: See {@link DecoderOption}.
-     * @returns A promise that resolves when the unsubscription is complete.
+     * @param channels - Channel names to unsubscribe from, or null for all channels.
+     * @param timeoutMs - Maximum time in milliseconds to wait. Use 0 for indefinite wait.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves when unsubscription is confirmed or timeout occurs.
      *
      * @example
      * ```typescript
-     * await client.punsubscribe(new Set(["news.*"]));
+     * await client.unsubscribe(new Set(["news"]), 5000);
+     * // Unsubscribe from all channels with timeout
+     * await client.unsubscribe(ALL_CHANNELS, 5000);
+     * ```
+     */
+    public async unsubscribe(
+        channels: Set<GlideString> | null,
+        timeoutMs: number,
+        options?: DecoderOption,
+    ): Promise<void> {
+        const channelsArray = channels ? Array.from(channels) : undefined;
+        return this.createWritePromise(
+            createUnsubscribe(channelsArray ?? [], timeoutMs),
+            options,
+        );
+    }
+
+    /**
+     * Unsubscribes the client from the specified patterns (non-blocking).
+     * Pass null to unsubscribe from all patterns.
+     *
+     * @see {@link https://valkey.io/commands/punsubscribe/|valkey.io} for details.
+     *
+     * @param patterns - Pattern names to unsubscribe from, or null for all patterns.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves immediately.
+     *
+     * @example
+     * ```typescript
+     * await client.punsubscribeLazy(new Set(["news.*"]));
      * // Unsubscribe from all patterns
-     * await client.punsubscribe();
+     * await client.punsubscribeLazy(ALL_PATTERNS);
+     * ```
+     */
+    public async punsubscribeLazy(
+        patterns?: Set<GlideString> | null,
+        options?: DecoderOption,
+    ): Promise<void> {
+        const patternsArray = patterns ? Array.from(patterns) : undefined;
+        return this.createWritePromise(
+            createPUnsubscribeLazy(patternsArray),
+            options,
+        );
+    }
+
+    /**
+     * Unsubscribes the client from the specified patterns (blocking).
+     * Pass null to unsubscribe from all patterns.
+     *
+     * @see {@link https://valkey.io/commands/punsubscribe/|valkey.io} for details.
+     *
+     * @param patterns - Pattern names to unsubscribe from, or null for all patterns.
+     * @param timeoutMs - Maximum time in milliseconds to wait. Use 0 for indefinite wait.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves when unsubscription is confirmed or timeout occurs.
+     *
+     * @example
+     * ```typescript
+     * await client.punsubscribe(new Set(["news.*"]), 5000);
+     * // Unsubscribe from all patterns with timeout
+     * await client.punsubscribe(ALL_PATTERNS, 5000);
      * ```
      */
     public async punsubscribe(
-        patterns?: Set<GlideString>,
-        options?: { timeout?: number } & DecoderOption,
+        patterns: Set<GlideString> | null,
+        timeoutMs: number,
+        options?: DecoderOption,
     ): Promise<void> {
         const patternsArray = patterns ? Array.from(patterns) : undefined;
-
-        if (options?.timeout !== undefined) {
-            // For blocking punsubscribe, we need to provide patterns (empty array if none)
-            return this.createWritePromise(
-                createPUnsubscribeBlocking(
-                    patternsArray ?? [],
-                    options.timeout,
-                ),
-                options,
-            );
-        } else {
-            return this.createWritePromise(
-                createPUnsubscribe(patternsArray),
-                options,
-            );
-        }
+        return this.createWritePromise(
+            createPUnsubscribe(patternsArray ?? [], timeoutMs),
+            options,
+        );
     }
 
     /**

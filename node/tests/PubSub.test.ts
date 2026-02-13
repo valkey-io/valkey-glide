@@ -4225,8 +4225,8 @@ describe("PubSub", () => {
                     );
                 }
 
-                // Dynamically subscribe to channel
-                await listener.subscribe(new Set([channel]));
+                // Dynamically subscribe to channel (non-blocking)
+                await listener.subscribeLazy(new Set([channel]));
 
                 // Allow time for subscription to propagate
                 await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -4293,8 +4293,8 @@ describe("PubSub", () => {
                     );
                 }
 
-                // Dynamically subscribe to pattern
-                await listener.psubscribe(new Set([pattern]));
+                // Dynamically subscribe to pattern (non-blocking)
+                await listener.psubscribeLazy(new Set([pattern]));
 
                 // Allow time for subscription to propagate
                 await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -4358,15 +4358,15 @@ describe("PubSub", () => {
                     );
                 }
 
-                // Subscribe
+                // Subscribe (non-blocking)
                 const channels = new Set([channel]);
-                await listener.subscribe(channels);
+                await listener.subscribeLazy(channels);
 
                 // Wait for subscription to be established
                 await new Promise((resolve) => setTimeout(resolve, 2000));
 
                 // Unsubscribe (blocking - waits for reconciliation)
-                await listener.unsubscribe(channels, { timeout: 30000 });
+                await listener.unsubscribe(channels, 30000);
 
                 // Wait longer for unsubscribe to fully propagate across all cluster nodes
                 // In a 3-primary cluster, this can take time
@@ -4428,17 +4428,18 @@ describe("PubSub", () => {
                     getOptions(clusterMode),
                 );
 
-                // Subscribe to sharded channel
+                // Subscribe to sharded channel (non-blocking)
                 const channels = new Set([channel]);
-                await (listener as GlideClusterClient).ssubscribe(channels);
+                await (listener as GlideClusterClient).ssubscribeLazy(channels);
 
                 // Wait for subscription to be established
                 await new Promise((resolve) => setTimeout(resolve, 2000));
 
                 // Unsubscribe from sharded channel (blocking)
-                await (listener as GlideClusterClient).sunsubscribe(channels, {
-                    timeout: 30000,
-                });
+                await (listener as GlideClusterClient).sunsubscribe(
+                    channels,
+                    30000,
+                );
 
                 // Wait for unsubscribe to propagate
                 await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -4503,8 +4504,8 @@ describe("PubSub", () => {
                     getOptions(clusterMode),
                 );
 
-                // Dynamically subscribe to sharded channel
-                await (listener as GlideClusterClient).ssubscribe(
+                // Dynamically subscribe to sharded channel (non-blocking)
+                await (listener as GlideClusterClient).ssubscribeLazy(
                     new Set([channel]),
                 );
 
@@ -4574,8 +4575,8 @@ describe("PubSub", () => {
                     getOptions(clusterMode),
                 );
 
-                // Dynamically subscribe to sharded channel
-                await (listener as GlideClusterClient).ssubscribe(
+                // Dynamically subscribe to sharded channel (non-blocking)
+                await (listener as GlideClusterClient).ssubscribeLazy(
                     new Set([channel]),
                 );
 
@@ -4599,8 +4600,8 @@ describe("PubSub", () => {
                 expect(pubsubMsg1.message).toEqual(message1);
                 expect(pubsubMsg1.channel).toEqual(channel);
 
-                // Dynamically unsubscribe from sharded channel
-                await (listener as GlideClusterClient).sunsubscribe(
+                // Dynamically unsubscribe from sharded channel (non-blocking)
+                await (listener as GlideClusterClient).sunsubscribeLazy(
                     new Set([channel]),
                 );
 
@@ -4701,8 +4702,8 @@ describe("PubSub", () => {
                 expect(pubsubMsg1.message).toEqual(message1);
                 expect(pubsubMsg1.channel).toEqual(channel);
 
-                // Dynamically unsubscribe from pre-configured channel
-                await listener.unsubscribe(new Set([channel]));
+                // Dynamically unsubscribe from pre-configured channel (non-blocking)
+                await listener.unsubscribeLazy(new Set([channel]));
 
                 // Drain any pending messages that were published before unsubscribe
                 while (listener.tryGetPubSubMessage() !== null) {
@@ -4758,8 +4759,8 @@ describe("PubSub", () => {
                     );
                 }
 
-                // Dynamically subscribe to channel
-                await client.subscribe(new Set([channel]));
+                // Dynamically subscribe to channel (non-blocking)
+                await client.subscribeLazy(new Set([channel]));
 
                 // Allow time for subscription to propagate
                 await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -4831,8 +4832,8 @@ describe("PubSub", () => {
                     statsBefore["subscription_last_sync_timestamp"],
                 );
 
-                // Dynamically subscribe to channel
-                await client.subscribe(new Set([channel]));
+                // Dynamically subscribe to channel (non-blocking)
+                await client.subscribeLazy(new Set([channel]));
 
                 // Allow time for subscription to propagate
                 await new Promise((resolve) => setTimeout(resolve, 1000));

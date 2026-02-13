@@ -4546,7 +4546,7 @@ export function createPubSubShardNumSub(
 /**
  * @internal
  */
-export function createSubscribe(
+export function createSubscribeLazy(
     channels: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.Subscribe, channels);
@@ -4555,7 +4555,7 @@ export function createSubscribe(
 /**
  * @internal
  */
-export function createSubscribeBlocking(
+export function createSubscribe(
     channels: GlideString[],
     timeout: number,
 ): command_request.Command {
@@ -4568,7 +4568,7 @@ export function createSubscribeBlocking(
 /**
  * @internal
  */
-export function createPSubscribe(
+export function createPSubscribeLazy(
     patterns: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.PSubscribe, patterns);
@@ -4577,7 +4577,7 @@ export function createPSubscribe(
 /**
  * @internal
  */
-export function createPSubscribeBlocking(
+export function createPSubscribe(
     patterns: GlideString[],
     timeout: number,
 ): command_request.Command {
@@ -4590,7 +4590,7 @@ export function createPSubscribeBlocking(
 /**
  * @internal
  */
-export function createUnsubscribe(
+export function createUnsubscribeLazy(
     channels?: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.Unsubscribe, channels ? channels : []);
@@ -4599,7 +4599,7 @@ export function createUnsubscribe(
 /**
  * @internal
  */
-export function createUnsubscribeBlocking(
+export function createUnsubscribe(
     channels: GlideString[],
     timeout: number,
 ): command_request.Command {
@@ -4612,7 +4612,7 @@ export function createUnsubscribeBlocking(
 /**
  * @internal
  */
-export function createPUnsubscribe(
+export function createPUnsubscribeLazy(
     patterns?: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.PUnsubscribe, patterns ? patterns : []);
@@ -4621,7 +4621,7 @@ export function createPUnsubscribe(
 /**
  * @internal
  */
-export function createPUnsubscribeBlocking(
+export function createPUnsubscribe(
     patterns: GlideString[],
     timeout: number,
 ): command_request.Command {
@@ -4634,7 +4634,7 @@ export function createPUnsubscribeBlocking(
 /**
  * @internal
  */
-export function createSSubscribe(
+export function createSSubscribeLazy(
     channels: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.SSubscribe, channels);
@@ -4643,7 +4643,7 @@ export function createSSubscribe(
 /**
  * @internal
  */
-export function createSSubscribeBlocking(
+export function createSSubscribe(
     channels: GlideString[],
     timeout: number,
 ): command_request.Command {
@@ -4656,7 +4656,7 @@ export function createSSubscribeBlocking(
 /**
  * @internal
  */
-export function createSUnsubscribe(
+export function createSUnsubscribeLazy(
     channels?: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.SUnsubscribe, channels ? channels : []);
@@ -4665,7 +4665,7 @@ export function createSUnsubscribe(
 /**
  * @internal
  */
-export function createSUnsubscribeBlocking(
+export function createSUnsubscribe(
     channels: GlideString[],
     timeout: number,
 ): command_request.Command {
