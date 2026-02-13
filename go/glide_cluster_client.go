@@ -2950,34 +2950,6 @@ func (client *ClusterClient) ClusterShardsWithRoute(
 	return models.CreateClusterSingleValue[[]map[string]any](data), nil
 }
 
-// ClusterSlots returns information about the cluster slots mapping.
-// The command will be routed to a random node.
-//
-// Deprecated: Use ClusterShards for Valkey 7.0 and above.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	ctx - The context for controlling the command execution.
-//
-// Return value:
-//
-//	An array of slot ranges. Each slot range is an array containing:
-//	- Start slot (int64)
-//	- End slot (int64)
-//	- Primary node info array [endpoint, port, node_id, metadata_map]
-//	- Replica node info arrays (zero or more)
-//
-// [valkey.io]: https://valkey.io/commands/cluster-slots/
-func (client *ClusterClient) ClusterSlots(ctx context.Context) ([][]any, error) {
-	result, err := client.executeCommand(ctx, C.ClusterSlots, []string{})
-	if err != nil {
-		return nil, err
-	}
-	return handleArrayOfArraysResponse(result)
-}
-
 // ClusterKeySlot returns the hash slot for a given key.
 //
 // See [valkey.io] for details.

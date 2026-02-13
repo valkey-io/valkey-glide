@@ -101,25 +101,6 @@ type ClusterManagementCommands interface {
 	// [valkey.io]: https://valkey.io/commands/cluster-shards/
 	ClusterShardsWithRoute(ctx context.Context, route options.RouteOption) (models.ClusterValue[[]map[string]any], error)
 
-	// ClusterSlots returns information about the cluster slots mapping.
-	//
-	// Deprecated: Use ClusterShards for Valkey 7.0 and above.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//   ctx - The context for controlling the command execution.
-	//
-	// Return value:
-	//   An array of slot ranges. Each slot range is an array containing:
-	//   - Start slot (int64)
-	//   - End slot (int64)
-	//   - Primary node info array [endpoint, port, node_id, metadata_map]
-	//   - Replica node info arrays (zero or more)
-	//
-	// [valkey.io]: https://valkey.io/commands/cluster-slots/
-	ClusterSlots(ctx context.Context) ([][]any, error)
-
 	// ClusterKeySlot returns the hash slot for a given key.
 	//
 	// See [valkey.io] for details.
