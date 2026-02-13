@@ -8,7 +8,7 @@ excludes:
       reason: "TEST_OF"
       comment: >-
         Licenses contained in this directory are used for testing and do not apply to the OSS Review Toolkit.
-    - pattern: "java/lambda-test/**"
+    - pattern: "java/e2e/**"
       reason: "TEST_OF"
       comment: >-
         Licenses contained in this directory are used for Lambda testing and do not apply to the OSS Review Toolkit.
