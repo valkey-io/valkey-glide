@@ -699,6 +699,46 @@ impl StandaloneClient {
         Ok(Value::Okay)
     }
 
+    /// Update the username used to authenticate with the servers.
+    ///
+    /// This method updates the username for all connections and stores it for future reconnections.
+    /// Typically called after a successful AUTH command with a username parameter.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_username` - The username to use for authentication (None to clear)
+    ///
+    pub async fn update_connection_username(
+        &self,
+        new_username: Option<String>,
+    ) -> RedisResult<Value> {
+        for node in self.inner.nodes.iter() {
+            node.update_connection_username(new_username.clone());
+        }
+
+        Ok(Value::Okay)
+    }
+
+    /// Update the protocol version used for connections.
+    ///
+    /// This method updates the protocol version for all connections and stores it for future reconnections.
+    /// Typically called after a successful HELLO command that changes the protocol version.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_protocol` - The protocol version to use (RESP2 or RESP3)
+    ///
+    pub async fn update_connection_protocol(
+        &self,
+        new_protocol: redis::ProtocolVersion,
+    ) -> RedisResult<Value> {
+        for node in self.inner.nodes.iter() {
+            node.update_connection_protocol(new_protocol);
+        }
+
+        Ok(Value::Okay)
+    }
+
     /// Retrieve the username used to authenticate with the server.
     pub fn get_username(&self) -> Option<String> {
         // All nodes in the client should have the same username configured, thus any connection would work here.
