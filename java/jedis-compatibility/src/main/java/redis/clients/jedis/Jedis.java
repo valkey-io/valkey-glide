@@ -6302,6 +6302,16 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide("XLEN", () -> glideClient.xlen(key).get());
     }
 
+    /**
+     * Returns the number of entries in the stream - binary version. Uses GLIDE xlen.
+     *
+     * @param key stream key
+     * @return number of entries in the stream
+     */
+    public long xlen(byte[] key) {
+        return executeCommandWithGlide("XLEN", () -> glideClient.xlen(new String(key)).get());
+    }
+
     /** Removes entries by id from the stream. Uses GLIDE xdel. */
     public long xdel(String key, String... ids) {
         return executeCommandWithGlide("XDEL", () -> glideClient.xdel(key, ids).get());
@@ -6314,6 +6324,21 @@ public final class Jedis implements Closeable {
             idStrs[i] = ids[i].toString();
         }
         return executeCommandWithGlide("XDEL", () -> glideClient.xdel(key, idStrs).get());
+    }
+
+    /**
+     * Removes entries by id from the stream - binary version. Uses GLIDE xdel.
+     *
+     * @param key stream key
+     * @param ids entry IDs to delete
+     * @return number of entries deleted
+     */
+    public long xdel(byte[] key, byte[]... ids) {
+        String[] idStrs = new String[ids.length];
+        for (int i = 0; i < ids.length; i++) {
+            idStrs[i] = new String(ids[i]);
+        }
+        return executeCommandWithGlide("XDEL", () -> glideClient.xdel(new String(key), idStrs).get());
     }
 
     /**
@@ -6376,6 +6401,58 @@ public final class Jedis implements Closeable {
                     Map<String, String[][]> raw = glideClient.xrevrange(key, e, s, count).get();
                     return raw == null ? Collections.emptyList() : toStreamEntryList(raw);
                 });
+    }
+
+    /**
+     * Returns entries in the stream in range [start, end] - binary version. Uses GLIDE xrange.
+     *
+     * @param key stream key
+     * @param start start id
+     * @param end end id
+     * @return list of stream entries
+     */
+    public List<StreamEntry> xrange(byte[] key, byte[] start, byte[] end) {
+        return xrange(new String(key), new String(start), new String(end));
+    }
+
+    /**
+     * Returns up to count entries in the stream in range [start, end] - binary version. Uses GLIDE
+     * xrange.
+     *
+     * @param key stream key
+     * @param start start id
+     * @param end end id
+     * @param count maximum number of entries
+     * @return list of stream entries
+     */
+    public List<StreamEntry> xrange(byte[] key, byte[] start, byte[] end, int count) {
+        return xrange(new String(key), new String(start), new String(end), count);
+    }
+
+    /**
+     * Returns entries in the stream in reverse order [end, start] - binary version. Uses GLIDE
+     * xrevrange.
+     *
+     * @param key stream key
+     * @param end end id
+     * @param start start id
+     * @return list of stream entries
+     */
+    public List<StreamEntry> xrevrange(byte[] key, byte[] end, byte[] start) {
+        return xrevrange(new String(key), new String(end), new String(start));
+    }
+
+    /**
+     * Returns up to count entries in reverse order - binary version. Uses GLIDE xrevrange.
+     *
+     * @param key stream key
+     * @param end end id
+     * @param start start id
+     * @param count maximum number of entries
+     * @return list of stream entries
+     */
+    public List<StreamEntry> xrevrange(byte[] key, byte[] end, byte[] start, int count) {
+        return xrevrange(new String(key), new String(end), new String(start), count);
     }
 
     /**

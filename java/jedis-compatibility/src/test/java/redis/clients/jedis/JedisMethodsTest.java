@@ -247,6 +247,9 @@ public class JedisMethodsTest {
 
         Method xinfoConsumers = jedisClass.getMethod("xinfoConsumers", String.class, String.class);
         assertEquals(List.class, xinfoConsumers.getReturnType());
+    }
+
+    @Test
     public void testAclMethodSignatures() throws NoSuchMethodException {
         Class<Jedis> jedisClass = Jedis.class;
 
@@ -301,5 +304,154 @@ public class JedisMethodsTest {
         Method aclDryRun =
                 jedisClass.getMethod("aclDryRun", String.class, String.class, String[].class);
         assertEquals(String.class, aclDryRun.getReturnType());
+    }
+
+    @Test
+    public void testStreamBinaryMethodSignaturesExist() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // XADD binary with XAddParams
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xadd",
+                        byte[].class,
+                        redis.clients.jedis.params.XAddParams.class,
+                        Map.class));
+
+        // XLEN binary
+        assertNotNull(jedisClass.getMethod("xlen", byte[].class));
+
+        // XDEL binary
+        assertNotNull(jedisClass.getMethod("xdel", byte[].class, byte[][].class));
+
+        // XRANGE binary
+        assertNotNull(jedisClass.getMethod("xrange", byte[].class, byte[].class, byte[].class));
+        assertNotNull(
+                jedisClass.getMethod("xrange", byte[].class, byte[].class, byte[].class, int.class));
+
+        // XREVRANGE binary
+        assertNotNull(jedisClass.getMethod("xrevrange", byte[].class, byte[].class, byte[].class));
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xrevrange", byte[].class, byte[].class, byte[].class, int.class));
+
+        // XTRIM binary
+        assertNotNull(jedisClass.getMethod("xtrim", byte[].class, long.class));
+        assertNotNull(jedisClass.getMethod("xtrim", byte[].class, long.class, boolean.class));
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xtrim", byte[].class, redis.clients.jedis.params.XTrimParams.class));
+    }
+
+    @Test
+    public void testStreamBinaryMethodReturnTypes() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // XADD binary returns byte[]
+        Method xaddBinary =
+                jedisClass.getMethod(
+                        "xadd",
+                        byte[].class,
+                        redis.clients.jedis.params.XAddParams.class,
+                        Map.class);
+        assertEquals(byte[].class, xaddBinary.getReturnType());
+
+        // XLEN binary returns long
+        Method xlenBinary = jedisClass.getMethod("xlen", byte[].class);
+        assertEquals(long.class, xlenBinary.getReturnType());
+
+        // XDEL binary returns long
+        Method xdelBinary = jedisClass.getMethod("xdel", byte[].class, byte[][].class);
+        assertEquals(long.class, xdelBinary.getReturnType());
+
+        // XRANGE binary returns List
+        Method xrangeBinary = jedisClass.getMethod("xrange", byte[].class, byte[].class, byte[].class);
+        assertEquals(List.class, xrangeBinary.getReturnType());
+
+        // XREVRANGE binary returns List
+        Method xrevrangeBinary =
+                jedisClass.getMethod("xrevrange", byte[].class, byte[].class, byte[].class);
+        assertEquals(List.class, xrevrangeBinary.getReturnType());
+
+        // XTRIM binary returns long
+        Method xtrimBinary = jedisClass.getMethod("xtrim", byte[].class, long.class);
+        assertEquals(long.class, xtrimBinary.getReturnType());
+    }
+
+    @Test
+    public void testXAddParamsMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // XADD with XAddParams for String keys
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xadd", String.class, redis.clients.jedis.params.XAddParams.class, Map.class));
+
+        Method xaddWithParams =
+                jedisClass.getMethod(
+                        "xadd", String.class, redis.clients.jedis.params.XAddParams.class, Map.class);
+        assertEquals(StreamEntryID.class, xaddWithParams.getReturnType());
+    }
+
+    @Test
+    public void testXTrimParamsMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // XTRIM with XTrimParams for String keys
+        assertNotNull(
+                jedisClass.getMethod(
+                        "xtrim", String.class, redis.clients.jedis.params.XTrimParams.class));
+
+        Method xtrimWithParams =
+                jedisClass.getMethod(
+                        "xtrim", String.class, redis.clients.jedis.params.XTrimParams.class);
+        assertEquals(long.class, xtrimWithParams.getReturnType());
+    }
+
+    @Test
+    public void testXAddParamsClassExists() {
+        // Test that XAddParams class exists and has expected methods
+        assertDoesNotThrow(
+                () -> {
+                    Class<?> xAddParamsClass = redis.clients.jedis.params.XAddParams.class;
+                    assertNotNull(xAddParamsClass);
+
+                    // Check factory method exists
+                    assertNotNull(xAddParamsClass.getMethod("xAddParams"));
+
+                    // Check builder methods exist
+                    assertNotNull(xAddParamsClass.getMethod("id", String.class));
+                    assertNotNull(xAddParamsClass.getMethod("id", StreamEntryID.class));
+                    assertNotNull(xAddParamsClass.getMethod("noMkStream"));
+                    assertNotNull(xAddParamsClass.getMethod("maxLen", long.class));
+                    assertNotNull(xAddParamsClass.getMethod("maxLenExact", long.class));
+                    assertNotNull(xAddParamsClass.getMethod("minId", String.class));
+                    assertNotNull(xAddParamsClass.getMethod("minId", StreamEntryID.class));
+                    assertNotNull(xAddParamsClass.getMethod("minIdExact", String.class));
+                    assertNotNull(xAddParamsClass.getMethod("minIdExact", StreamEntryID.class));
+                    assertNotNull(xAddParamsClass.getMethod("limit", long.class));
+                });
+    }
+
+    @Test
+    public void testXTrimParamsClassExists() {
+        // Test that XTrimParams class exists and has expected methods
+        assertDoesNotThrow(
+                () -> {
+                    Class<?> xTrimParamsClass = redis.clients.jedis.params.XTrimParams.class;
+                    assertNotNull(xTrimParamsClass);
+
+                    // Check factory method exists
+                    assertNotNull(xTrimParamsClass.getMethod("xTrimParams"));
+
+                    // Check builder methods exist
+                    assertNotNull(xTrimParamsClass.getMethod("maxLen", long.class));
+                    assertNotNull(xTrimParamsClass.getMethod("maxLenExact", long.class));
+                    assertNotNull(xTrimParamsClass.getMethod("minId", String.class));
+                    assertNotNull(xTrimParamsClass.getMethod("minId", StreamEntryID.class));
+                    assertNotNull(xTrimParamsClass.getMethod("minIdExact", String.class));
+                    assertNotNull(xTrimParamsClass.getMethod("minIdExact", StreamEntryID.class));
+                    assertNotNull(xTrimParamsClass.getMethod("limit", long.class));
+                });
     }
 }

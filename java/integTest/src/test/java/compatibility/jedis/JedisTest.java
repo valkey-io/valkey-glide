@@ -3551,6 +3551,132 @@ public class JedisTest {
         List<StreamConsumerInfo> consumers = jedis.xinfoConsumers(key, group);
         assertNotNull(consumers);
         assertFalse(consumers.isEmpty(), "XINFO CONSUMERS should return at least one consumer");
+    }
+
+    @Test
+    void stream_binary_xlen_xdel() {
+        byte[] key = ("stream:" + UUID.randomUUID()).getBytes();
+        Map<byte[], byte[]> hash = new HashMap<>();
+        hash.put("f1".getBytes(), "v1".getBytes());
+        hash.put("f2".getBytes(), "v2".getBytes());
+
+        // Use XAddParams to add entry
+        redis.clients.jedis.params.XAddParams params =
+                redis.clients.jedis.params.XAddParams.xAddParams();
+        byte[] id = jedis.xadd(key, params, hash);
+        assertNotNull(id, "Binary XADD should return entry ID");
+
+        long len = jedis.xlen(key);
+        assertEquals(1, len, "Binary XLEN should be 1 after one XADD");
+
+        long del = jedis.xdel(key, id);
+        assertEquals(1, del, "Binary XDEL should return 1");
+        assertEquals(0, jedis.xlen(key), "Binary XLEN should be 0 after XDEL");
+    }
+
+    @Test
+    void stream_binary_xrange_xrevrange() {
+        byte[] key = ("stream:" + UUID.randomUUID()).getBytes();
+        
+        // Add entries using XAddParams
+        redis.clients.jedis.params.XAddParams params =
+                redis.clients.jedis.params.XAddParams.xAddParams();
+        Map<byte[], byte[]> hash1 = Map.of("a".getBytes(), "1".getBytes());
+        Map<byte[], byte[]> hash2 = Map.of("b".getBytes(), "2".getBytes());
+        Map<byte[], byte[]> hash3 = Map.of("c".getBytes(), "3".getBytes());
+        
+        jedis.xadd(key, params, hash1);
+        jedis.xadd(key, params, hash2);
+        jedis.xadd(key, params, hash3);
+
+        List<StreamEntry> range = jedis.xrange(key, "-".getBytes(), "+".getBytes());
+        assertNotNull(range);
+        assertTrue(range.size() >= 3, "Binary XRANGE should return at least 3 entries");
+
+        List<StreamEntry> rev = jedis.xrevrange(key, "+".getBytes(), "-".getBytes());
+        assertNotNull(rev);
+        assertTrue(rev.size() >= 3, "Binary XREVRANGE should return at least 3 entries");
+
+        List<StreamEntry> limited = jedis.xrange(key, "-".getBytes(), "+".getBytes(), 2);
+        assertNotNull(limited);
+        assertEquals(2, limited.size(), "Binary XRANGE with COUNT 2 should return 2 entries");
+    }
+
+    @Test
+    void stream_binary_xtrim() {
+        byte[] key = ("stream:" + UUID.randomUUID()).getBytes();
+        redis.clients.jedis.params.XAddParams addParams =
+                redis.clients.jedis.params.XAddParams.xAddParams();
+        
+        for (int i = 0; i < 10; i++) {
+            Map<byte[], byte[]> hash = Map.of("i".getBytes(), String.valueOf(i).getBytes());
+            jedis.xadd(key, addParams, hash);
+        }
+        long lenBefore = jedis.xlen(key);
+        assertTrue(lenBefore >= 10, "Stream should have at least 10 entries");
+
+        long trimmed = jedis.xtrim(key, 5L);
+        assertTrue(trimmed >= 0, "Binary XTRIM should return non-negative count");
+        long lenAfter = jedis.xlen(key);
+        assertTrue(lenAfter <= 5, "Stream length after binary XTRIM MAXLEN 5 should be <= 5");
+    }
+
+    @Test
+    void stream_xadd_with_xaddparams() {
+        String key = "stream:" + UUID.randomUUID();
+        Map<String, String> hash = Map.of("field", "value");
+
+        // Test with custom ID
+        redis.clients.jedis.params.XAddParams params =
+                redis.clients.jedis.params.XAddParams.xAddParams().id("1000-0");
+        StreamEntryID id = jedis.xadd(key, params, hash);
+        assertNotNull(id);
+        assertEquals("1000-0", id.toString());
+
+        // Test with NOMKSTREAM
+        String nonExistentKey = "stream:" + UUID.randomUUID();
+        params = redis.clients.jedis.params.XAddParams.xAddParams().noMkStream();
+        StreamEntryID result = jedis.xadd(nonExistentKey, params, hash);
+        assertNull(result, "XADD with NOMKSTREAM should return null for non-existent stream");
+
+        // Test with MAXLEN trimming
+        String trimKey = "stream:" + UUID.randomUUID();
+        for (int i = 0; i < 5; i++) {
+            jedis.xadd(trimKey, Map.of("i", String.valueOf(i)));
+        }
+        params = redis.clients.jedis.params.XAddParams.xAddParams().maxLen(3);
+        jedis.xadd(trimKey, params, Map.of("new", "entry"));
+        long len = jedis.xlen(trimKey);
+        assertTrue(len <= 4, "Stream should be trimmed to approximately 3 entries");
+    }
+
+    @Test
+    void stream_xtrim_with_xtrimparams() {
+        String key = "stream:" + UUID.randomUUID();
+        for (int i = 0; i < 10; i++) {
+            jedis.xadd(key, Map.of("i", String.valueOf(i)));
+        }
+
+        // Test MAXLEN with XTrimParams
+        redis.clients.jedis.params.XTrimParams params =
+                redis.clients.jedis.params.XTrimParams.xTrimParams().maxLen(5);
+        long trimmed = jedis.xtrim(key, params);
+        assertTrue(trimmed >= 0, "XTRIM with XTrimParams should return non-negative count");
+        long len = jedis.xlen(key);
+        assertTrue(len <= 5, "Stream should be trimmed to approximately 5 entries");
+
+        // Test MINID with XTrimParams
+        String key2 = "stream:" + UUID.randomUUID();
+        StreamEntryID firstId = jedis.xadd(key2, Map.of("a", "1"));
+        jedis.xadd(key2, Map.of("b", "2"));
+        StreamEntryID thirdId = jedis.xadd(key2, Map.of("c", "3"));
+
+        params = redis.clients.jedis.params.XTrimParams.xTrimParams().minId(thirdId);
+        jedis.xtrim(key2, params);
+        len = jedis.xlen(key2);
+        assertTrue(len <= 1, "Stream should be trimmed to entries >= minId");
+    }
+
     // --- ACL command integration tests ---
 
     @Test
