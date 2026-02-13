@@ -4,10 +4,10 @@ package redis.clients.jedis.args;
 /**
  * Flush mode for FLUSHDB, FLUSHALL, FUNCTION FLUSH, and SCRIPT FLUSH commands.
  *
- * @see <a href="https://redis.io/commands/flushall/">FLUSHALL</a>
- * @see <a href="https://redis.io/commands/flushdb/">FLUSHDB</a>
- * @see <a href="https://redis.io/commands/function-flush/">FUNCTION FLUSH</a>
- * @see <a href="https://redis.io/commands/script-flush/">SCRIPT FLUSH</a>
+ * @see <a href="https://valkey.io/commands/flushall/">FLUSHALL</a>
+ * @see <a href="https://valkey.io/commands/flushdb/">FLUSHDB</a>
+ * @see <a href="https://valkey.io/commands/function-flush/">FUNCTION FLUSH</a>
+ * @see <a href="https://valkey.io/commands/script-flush/">SCRIPT FLUSH</a>
  */
 public enum FlushMode implements Rawable {
     /** Flushes synchronously */

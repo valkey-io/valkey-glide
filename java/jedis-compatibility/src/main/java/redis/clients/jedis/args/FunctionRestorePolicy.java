@@ -4,7 +4,7 @@ package redis.clients.jedis.args;
 /**
  * Policy options for FUNCTION RESTORE command.
  *
- * @see <a href="https://redis.io/commands/function-restore/">FUNCTION RESTORE</a>
+ * @see <a href="https://valkey.io/commands/function-restore/">FUNCTION RESTORE</a>
  */
 public enum FunctionRestorePolicy implements Rawable {
     /** Appends the restored libraries to the existing libraries and aborts on collision (default) */

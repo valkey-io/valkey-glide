@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.lang.reflect.Method;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import redis.clients.jedis.resps.AccessControlUser;
+import redis.clients.jedis.resps.FunctionStats;
 
 /**
  * Unit tests for Jedis method signatures and API contracts. Tests that required methods exist with
@@ -139,8 +141,7 @@ public class JedisMethodsTest {
         assertEquals(Object.class, evalWithKeys.getReturnType());
 
         // Test eval(String, List, List) exists
-        Method evalWithLists =
-                jedisClass.getMethod("eval", String.class, java.util.List.class, java.util.List.class);
+        Method evalWithLists = jedisClass.getMethod("eval", String.class, List.class, List.class);
         assertEquals(Object.class, evalWithLists.getReturnType());
     }
 
@@ -158,8 +159,7 @@ public class JedisMethodsTest {
         assertEquals(Object.class, evalshaWithKeys.getReturnType());
 
         // Test evalsha(String, List, List) exists
-        Method evalshaWithLists =
-                jedisClass.getMethod("evalsha", String.class, java.util.List.class, java.util.List.class);
+        Method evalshaWithLists = jedisClass.getMethod("evalsha", String.class, List.class, List.class);
         assertEquals(Object.class, evalshaWithLists.getReturnType());
     }
 
@@ -169,14 +169,12 @@ public class JedisMethodsTest {
 
         // Test evalReadonly(String, List, List) exists
         Method evalReadonly =
-                jedisClass.getMethod(
-                        "evalReadonly", String.class, java.util.List.class, java.util.List.class);
+                jedisClass.getMethod("evalReadonly", String.class, List.class, List.class);
         assertEquals(Object.class, evalReadonly.getReturnType());
 
         // Test evalshaReadonly(String, List, List) exists
         Method evalshaReadonly =
-                jedisClass.getMethod(
-                        "evalshaReadonly", String.class, java.util.List.class, java.util.List.class);
+                jedisClass.getMethod("evalshaReadonly", String.class, List.class, List.class);
         assertEquals(Object.class, evalshaReadonly.getReturnType());
     }
 
@@ -190,7 +188,7 @@ public class JedisMethodsTest {
 
         // Test scriptExists(String...) exists
         Method scriptExists = jedisClass.getMethod("scriptExists", String[].class);
-        assertEquals(java.util.List.class, scriptExists.getReturnType());
+        assertEquals(List.class, scriptExists.getReturnType());
 
         // Test scriptFlush() exists
         Method scriptFlush = jedisClass.getMethod("scriptFlush");
@@ -211,14 +209,12 @@ public class JedisMethodsTest {
         Class<Jedis> jedisClass = Jedis.class;
 
         // Test fcall(String, List, List) exists
-        Method fcall =
-                jedisClass.getMethod("fcall", String.class, java.util.List.class, java.util.List.class);
+        Method fcall = jedisClass.getMethod("fcall", String.class, List.class, List.class);
         assertEquals(Object.class, fcall.getReturnType());
 
         // Test fcallReadonly(String, List, List) exists
         Method fcallReadonly =
-                jedisClass.getMethod(
-                        "fcallReadonly", String.class, java.util.List.class, java.util.List.class);
+                jedisClass.getMethod("fcallReadonly", String.class, List.class, List.class);
         assertEquals(Object.class, fcallReadonly.getReturnType());
     }
 
@@ -272,23 +268,23 @@ public class JedisMethodsTest {
 
         // Test functionList() exists
         Method functionList = jedisClass.getMethod("functionList");
-        assertEquals(java.util.List.class, functionList.getReturnType());
+        assertEquals(List.class, functionList.getReturnType());
 
         // Test functionList(String) exists
         Method functionListWithPattern = jedisClass.getMethod("functionList", String.class);
-        assertEquals(java.util.List.class, functionListWithPattern.getReturnType());
+        assertEquals(List.class, functionListWithPattern.getReturnType());
 
         // Test functionListWithCode() exists
         Method functionListWithCode = jedisClass.getMethod("functionListWithCode");
-        assertEquals(java.util.List.class, functionListWithCode.getReturnType());
+        assertEquals(List.class, functionListWithCode.getReturnType());
 
         // Test functionListWithCode(String) exists
         Method functionListWithCodeAndPattern =
                 jedisClass.getMethod("functionListWithCode", String.class);
-        assertEquals(java.util.List.class, functionListWithCodeAndPattern.getReturnType());
+        assertEquals(List.class, functionListWithCodeAndPattern.getReturnType());
 
         // Test functionStats() exists
         Method functionStats = jedisClass.getMethod("functionStats");
-        assertEquals(Object.class, functionStats.getReturnType());
+        assertEquals(FunctionStats.class, functionStats.getReturnType());
     }
 }

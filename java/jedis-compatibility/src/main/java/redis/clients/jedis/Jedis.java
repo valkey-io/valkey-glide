@@ -63,6 +63,10 @@ import redis.clients.jedis.params.HSetExParams;
 import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.resps.AccessControlLogEntry;
+import redis.clients.jedis.resps.AccessControlUser;
+import redis.clients.jedis.resps.FunctionStats;
+import redis.clients.jedis.resps.LibraryInfo;
 import redis.clients.jedis.resps.ScanResult;
 import redis.clients.jedis.util.KeyValue;
 import redis.clients.jedis.util.Pool;
@@ -6996,7 +7000,7 @@ public final class Jedis implements Closeable {
      *
      * @param script the Lua 5.1 script to execute
      * @return the result of the script execution
-     * @see <a href="https://redis.io/commands/eval/">EVAL</a>
+     * @see <a href="https://valkey.io/commands/eval/">EVAL</a>
      */
     public Object eval(String script) {
         return eval(script, Collections.emptyList(), Collections.emptyList());
@@ -7009,7 +7013,7 @@ public final class Jedis implements Closeable {
      * @param keyCount the number of keys (first keyCount params are keys, rest are arguments)
      * @param params the keys and arguments for the script
      * @return the result of the script execution
-     * @see <a href="https://redis.io/commands/eval/">EVAL</a>
+     * @see <a href="https://valkey.io/commands/eval/">EVAL</a>
      */
     public Object eval(String script, int keyCount, String... params) {
         List<String> keys = new ArrayList<>();
@@ -7031,7 +7035,7 @@ public final class Jedis implements Closeable {
      * @param keys the keys accessed by the script
      * @param args the arguments for the script
      * @return the result of the script execution
-     * @see <a href="https://redis.io/commands/eval/">EVAL</a>
+     * @see <a href="https://valkey.io/commands/eval/">EVAL</a>
      */
     public Object eval(String script, List<String> keys, List<String> args) {
         return executeCommandWithGlide(
@@ -7052,7 +7056,7 @@ public final class Jedis implements Closeable {
                         ScriptOptions options = builder.build();
                         return glideClient.invokeScript(luaScript, options).get();
                     } catch (Exception e) {
-                        throw new ExecutionException(e);
+                        throw new RuntimeException("Failed to execute script", e);
                     }
                 });
     }
@@ -7062,7 +7066,7 @@ public final class Jedis implements Closeable {
      *
      * @param sha1 the SHA1 digest of the script
      * @return the result of the script execution
-     * @see <a href="https://redis.io/commands/evalsha/">EVALSHA</a>
+     * @see <a href="https://valkey.io/commands/evalsha/">EVALSHA</a>
      */
     public Object evalsha(String sha1) {
         return evalsha(sha1, Collections.emptyList(), Collections.emptyList());
@@ -7075,7 +7079,7 @@ public final class Jedis implements Closeable {
      * @param keyCount the number of keys (first keyCount params are keys, rest are arguments)
      * @param params the keys and arguments for the script
      * @return the result of the script execution
-     * @see <a href="https://redis.io/commands/evalsha/">EVALSHA</a>
+     * @see <a href="https://valkey.io/commands/evalsha/">EVALSHA</a>
      */
     public Object evalsha(String sha1, int keyCount, String... params) {
         List<String> keys = new ArrayList<>();
@@ -7102,7 +7106,7 @@ public final class Jedis implements Closeable {
      * @param keys the keys accessed by the script
      * @param args the arguments for the script
      * @return the result of the script execution
-     * @see <a href="https://redis.io/commands/evalsha/">EVALSHA</a>
+     * @see <a href="https://valkey.io/commands/evalsha/">EVALSHA</a>
      */
     public Object evalsha(String sha1, List<String> keys, List<String> args) {
         return executeCommandWithGlide(
@@ -7131,7 +7135,7 @@ public final class Jedis implements Closeable {
      * @param keys the keys accessed by the script
      * @param args the arguments for the script
      * @return the result of the script execution
-     * @see <a href="https://redis.io/commands/eval-ro/">EVAL_RO</a>
+     * @see <a href="https://valkey.io/commands/eval-ro/">EVAL_RO</a>
      * @since Valkey 7.0 and above
      */
     public Object evalReadonly(String script, List<String> keys, List<String> args) {
@@ -7151,7 +7155,7 @@ public final class Jedis implements Closeable {
      * @param keys the keys accessed by the script
      * @param args the arguments for the script
      * @return the result of the script execution
-     * @see <a href="https://redis.io/commands/evalsha-ro/">EVALSHA_RO</a>
+     * @see <a href="https://valkey.io/commands/evalsha-ro/">EVALSHA_RO</a>
      * @since Valkey 7.0 and above
      */
     public Object evalshaReadonly(String sha1, List<String> keys, List<String> args) {
@@ -7175,7 +7179,7 @@ public final class Jedis implements Closeable {
      *
      * @param script the Lua script to load
      * @return the SHA1 digest of the script
-     * @see <a href="https://redis.io/commands/script-load/">SCRIPT LOAD</a>
+     * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a>
      */
     public String scriptLoad(String script) {
         return executeCommandWithGlide(
@@ -7191,7 +7195,7 @@ public final class Jedis implements Closeable {
      *
      * @param sha1 the SHA1 digests to check
      * @return a list of booleans indicating the existence of each script
-     * @see <a href="https://redis.io/commands/script-exists/">SCRIPT EXISTS</a>
+     * @see <a href="https://valkey.io/commands/script-exists/">SCRIPT EXISTS</a>
      */
     public List<Boolean> scriptExists(String... sha1) {
         return executeCommandWithGlide(
@@ -7206,7 +7210,7 @@ public final class Jedis implements Closeable {
      * Flushes the Lua scripts cache.
      *
      * @return "OK"
-     * @see <a href="https://redis.io/commands/script-flush/">SCRIPT FLUSH</a>
+     * @see <a href="https://valkey.io/commands/script-flush/">SCRIPT FLUSH</a>
      */
     public String scriptFlush() {
         return executeCommandWithGlide("SCRIPT FLUSH", () -> glideClient.scriptFlush().get());
@@ -7217,7 +7221,7 @@ public final class Jedis implements Closeable {
      *
      * @param flushMode the flush mode (SYNC or ASYNC)
      * @return "OK"
-     * @see <a href="https://redis.io/commands/script-flush/">SCRIPT FLUSH</a>
+     * @see <a href="https://valkey.io/commands/script-flush/">SCRIPT FLUSH</a>
      */
     public String scriptFlush(FlushMode flushMode) {
         return executeCommandWithGlide(
@@ -7229,7 +7233,7 @@ public final class Jedis implements Closeable {
      * script.
      *
      * @return "OK"
-     * @see <a href="https://redis.io/commands/script-kill/">SCRIPT KILL</a>
+     * @see <a href="https://valkey.io/commands/script-kill/">SCRIPT KILL</a>
      */
     public String scriptKill() {
         return executeCommandWithGlide("SCRIPT KILL", () -> glideClient.scriptKill().get());
@@ -7240,7 +7244,7 @@ public final class Jedis implements Closeable {
      *
      * @param functionCode the source code that implements the library
      * @return the library name that was loaded
-     * @see <a href="https://redis.io/commands/function-load/">FUNCTION LOAD</a>
+     * @see <a href="https://valkey.io/commands/function-load/">FUNCTION LOAD</a>
      * @since Valkey 7.0 and above
      */
     public String functionLoad(String functionCode) {
@@ -7253,7 +7257,7 @@ public final class Jedis implements Closeable {
      *
      * @param functionCode the source code that implements the library
      * @return the library name that was loaded
-     * @see <a href="https://redis.io/commands/function-load/">FUNCTION LOAD</a>
+     * @see <a href="https://valkey.io/commands/function-load/">FUNCTION LOAD</a>
      * @since Valkey 7.0 and above
      */
     public String functionLoadReplace(String functionCode) {
@@ -7266,7 +7270,7 @@ public final class Jedis implements Closeable {
      *
      * @param libraryName the library name to delete
      * @return "OK"
-     * @see <a href="https://redis.io/commands/function-delete/">FUNCTION DELETE</a>
+     * @see <a href="https://valkey.io/commands/function-delete/">FUNCTION DELETE</a>
      * @since Valkey 7.0 and above
      */
     public String functionDelete(String libraryName) {
@@ -7278,7 +7282,7 @@ public final class Jedis implements Closeable {
      * Returns the serialized payload of all loaded libraries.
      *
      * @return the serialized payload of all loaded libraries
-     * @see <a href="https://redis.io/commands/function-dump/">FUNCTION DUMP</a>
+     * @see <a href="https://valkey.io/commands/function-dump/">FUNCTION DUMP</a>
      * @since Valkey 7.0 and above
      */
     public byte[] functionDump() {
@@ -7290,7 +7294,7 @@ public final class Jedis implements Closeable {
      *
      * @param serializedValue the serialized data from functionDump
      * @return "OK"
-     * @see <a href="https://redis.io/commands/function-restore/">FUNCTION RESTORE</a>
+     * @see <a href="https://valkey.io/commands/function-restore/">FUNCTION RESTORE</a>
      * @since Valkey 7.0 and above
      */
     public String functionRestore(byte[] serializedValue) {
@@ -7304,7 +7308,7 @@ public final class Jedis implements Closeable {
      * @param serializedValue the serialized data from functionDump
      * @param policy the policy for handling existing libraries
      * @return "OK"
-     * @see <a href="https://redis.io/commands/function-restore/">FUNCTION RESTORE</a>
+     * @see <a href="https://valkey.io/commands/function-restore/">FUNCTION RESTORE</a>
      * @since Valkey 7.0 and above
      */
     public String functionRestore(byte[] serializedValue, FunctionRestorePolicy policy) {
@@ -7320,7 +7324,7 @@ public final class Jedis implements Closeable {
      * Deletes all function libraries.
      *
      * @return "OK"
-     * @see <a href="https://redis.io/commands/function-flush/">FUNCTION FLUSH</a>
+     * @see <a href="https://valkey.io/commands/function-flush/">FUNCTION FLUSH</a>
      * @since Valkey 7.0 and above
      */
     public String functionFlush() {
@@ -7332,7 +7336,7 @@ public final class Jedis implements Closeable {
      *
      * @param mode the flushing mode (SYNC or ASYNC)
      * @return "OK"
-     * @see <a href="https://redis.io/commands/function-flush/">FUNCTION FLUSH</a>
+     * @see <a href="https://valkey.io/commands/function-flush/">FUNCTION FLUSH</a>
      * @since Valkey 7.0 and above
      */
     public String functionFlush(FlushMode mode) {
@@ -7344,7 +7348,7 @@ public final class Jedis implements Closeable {
      * Kills a function that is currently executing.
      *
      * @return "OK" if function is terminated
-     * @see <a href="https://redis.io/commands/function-kill/">FUNCTION KILL</a>
+     * @see <a href="https://valkey.io/commands/function-kill/">FUNCTION KILL</a>
      * @since Valkey 7.0 and above
      */
     public String functionKill() {
@@ -7358,7 +7362,7 @@ public final class Jedis implements Closeable {
      * @param keys the keys accessed by the function
      * @param args the function arguments
      * @return the invoked function's return value
-     * @see <a href="https://redis.io/commands/fcall/">FCALL</a>
+     * @see <a href="https://valkey.io/commands/fcall/">FCALL</a>
      * @since Valkey 7.0 and above
      */
     public Object fcall(String name, List<String> keys, List<String> args) {
@@ -7378,7 +7382,7 @@ public final class Jedis implements Closeable {
      * @param keys the keys accessed by the function
      * @param args the function arguments
      * @return the invoked function's return value
-     * @see <a href="https://redis.io/commands/fcall_ro/">FCALL_RO</a>
+     * @see <a href="https://valkey.io/commands/fcall_ro/">FCALL_RO</a>
      * @since Valkey 7.0 and above
      */
     public Object fcallReadonly(String name, List<String> keys, List<String> args) {
@@ -7395,16 +7399,19 @@ public final class Jedis implements Closeable {
      * Returns information about all loaded libraries.
      *
      * @return info about all libraries and their functions
-     * @see <a href="https://redis.io/commands/function-list/">FUNCTION LIST</a>
+     * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
      * @since Valkey 7.0 and above
      */
-    @SuppressWarnings("unchecked")
-    public List<Object> functionList() {
+    public List<LibraryInfo> functionList() {
         return executeCommandWithGlide(
                 "FUNCTION LIST",
                 () -> {
                     Map<String, Object>[] result = glideClient.functionList(false).get();
-                    return Arrays.asList((Object[]) result);
+                    List<LibraryInfo> libraries = new ArrayList<>(result.length);
+                    for (Map<String, Object> lib : result) {
+                        libraries.add(new LibraryInfo(lib));
+                    }
+                    return libraries;
                 });
     }
 
@@ -7413,16 +7420,19 @@ public final class Jedis implements Closeable {
      *
      * @param libraryNamePattern a wildcard pattern for matching library names
      * @return info about queried libraries and their functions
-     * @see <a href="https://redis.io/commands/function-list/">FUNCTION LIST</a>
+     * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
      * @since Valkey 7.0 and above
      */
-    @SuppressWarnings("unchecked")
-    public List<Object> functionList(String libraryNamePattern) {
+    public List<LibraryInfo> functionList(String libraryNamePattern) {
         return executeCommandWithGlide(
                 "FUNCTION LIST",
                 () -> {
                     Map<String, Object>[] result = glideClient.functionList(libraryNamePattern, false).get();
-                    return Arrays.asList((Object[]) result);
+                    List<LibraryInfo> libraries = new ArrayList<>(result.length);
+                    for (Map<String, Object> lib : result) {
+                        libraries.add(new LibraryInfo(lib));
+                    }
+                    return libraries;
                 });
     }
 
@@ -7430,16 +7440,19 @@ public final class Jedis implements Closeable {
      * Returns information about all loaded libraries with their code.
      *
      * @return info about all libraries and their functions including code
-     * @see <a href="https://redis.io/commands/function-list/">FUNCTION LIST</a>
+     * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
      * @since Valkey 7.0 and above
      */
-    @SuppressWarnings("unchecked")
-    public List<Object> functionListWithCode() {
+    public List<LibraryInfo> functionListWithCode() {
         return executeCommandWithGlide(
                 "FUNCTION LIST",
                 () -> {
                     Map<String, Object>[] result = glideClient.functionList(true).get();
-                    return Arrays.asList((Object[]) result);
+                    List<LibraryInfo> libraries = new ArrayList<>(result.length);
+                    for (Map<String, Object> lib : result) {
+                        libraries.add(new LibraryInfo(lib));
+                    }
+                    return libraries;
                 });
     }
 
@@ -7448,16 +7461,19 @@ public final class Jedis implements Closeable {
      *
      * @param libraryNamePattern a wildcard pattern for matching library names
      * @return info about queried libraries and their functions including code
-     * @see <a href="https://redis.io/commands/function-list/">FUNCTION LIST</a>
+     * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
      * @since Valkey 7.0 and above
      */
-    @SuppressWarnings("unchecked")
-    public List<Object> functionListWithCode(String libraryNamePattern) {
+    public List<LibraryInfo> functionListWithCode(String libraryNamePattern) {
         return executeCommandWithGlide(
                 "FUNCTION LIST",
                 () -> {
                     Map<String, Object>[] result = glideClient.functionList(libraryNamePattern, true).get();
-                    return Arrays.asList((Object[]) result);
+                    List<LibraryInfo> libraries = new ArrayList<>(result.length);
+                    for (Map<String, Object> lib : result) {
+                        libraries.add(new LibraryInfo(lib));
+                    }
+                    return libraries;
                 });
     }
 
@@ -7466,11 +7482,38 @@ public final class Jedis implements Closeable {
      * available execution engines.
      *
      * @return a map with information about running scripts and available engines
-     * @see <a href="https://redis.io/commands/function-stats/">FUNCTION STATS</a>
+     * @see <a href="https://valkey.io/commands/function-stats/">FUNCTION STATS</a>
      * @since Valkey 7.0 and above
      */
-    public Object functionStats() {
-        return executeCommandWithGlide("FUNCTION STATS", () -> glideClient.functionStats().get());
+    @SuppressWarnings("unchecked")
+    public FunctionStats functionStats() {
+        return executeCommandWithGlide(
+                "FUNCTION STATS",
+                () -> {
+                    Map<String, Map<String, Map<String, Object>>> result =
+                            glideClient.functionStats().get();
+                    // The result structure is: { "running_script": {...}, "engines": {...} }
+                    // But GLIDE returns it as Map<String, Map<String, Map<String, Object>>>
+                    // We need to extract and flatten appropriately
+                    Map<String, Object> runningScript = null;
+                    Map<String, Map<String, Object>> engines = null;
+
+                    if (result != null) {
+                        // Get running_script - it's actually a Map<String, Map<String, Object>>
+                        Object runningScriptObj = result.get("running_script");
+                        if (runningScriptObj instanceof Map) {
+                            runningScript = (Map<String, Object>) runningScriptObj;
+                        }
+
+                        // Get engines - it's a Map<String, Map<String, Object>>
+                        Object enginesObj = result.get("engines");
+                        if (enginesObj instanceof Map) {
+                            engines = (Map<String, Map<String, Object>>) enginesObj;
+                        }
+                    }
+
+                    return new FunctionStats(runningScript, engines);
+                });
     }
 
     // Static initialization block for cleanup hooks
