@@ -3577,14 +3577,14 @@ public class JedisTest {
     @Test
     void stream_binary_xrange_xrevrange() {
         byte[] key = ("stream:" + UUID.randomUUID()).getBytes();
-        
+
         // Add entries using XAddParams
         redis.clients.jedis.params.XAddParams params =
                 redis.clients.jedis.params.XAddParams.xAddParams();
         Map<byte[], byte[]> hash1 = Map.of("a".getBytes(), "1".getBytes());
         Map<byte[], byte[]> hash2 = Map.of("b".getBytes(), "2".getBytes());
         Map<byte[], byte[]> hash3 = Map.of("c".getBytes(), "3".getBytes());
-        
+
         jedis.xadd(key, params, hash1);
         jedis.xadd(key, params, hash2);
         jedis.xadd(key, params, hash3);
@@ -3607,7 +3607,7 @@ public class JedisTest {
         byte[] key = ("stream:" + UUID.randomUUID()).getBytes();
         redis.clients.jedis.params.XAddParams addParams =
                 redis.clients.jedis.params.XAddParams.xAddParams();
-        
+
         for (int i = 0; i < 10; i++) {
             Map<byte[], byte[]> hash = Map.of("i".getBytes(), String.valueOf(i).getBytes());
             jedis.xadd(key, addParams, hash);
