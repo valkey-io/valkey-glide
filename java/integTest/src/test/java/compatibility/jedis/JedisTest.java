@@ -3639,15 +3639,15 @@ public class JedisTest {
         StreamEntryID result = jedis.xadd(nonExistentKey, params, hash);
         assertNull(result, "XADD with NOMKSTREAM should return null for non-existent stream");
 
-        // Test with MAXLEN trimming
+        // Test with MAXLEN trimming (exact)
         String trimKey = "stream:" + UUID.randomUUID();
         for (int i = 0; i < 5; i++) {
             jedis.xadd(trimKey, Map.of("i", String.valueOf(i)));
         }
-        params = redis.clients.jedis.params.XAddParams.xAddParams().maxLen(3);
+        params = redis.clients.jedis.params.XAddParams.xAddParams().maxLenExact(3);
         jedis.xadd(trimKey, params, Map.of("new", "entry"));
         long len = jedis.xlen(trimKey);
-        assertTrue(len <= 4, "Stream should be trimmed to approximately 3 entries");
+        assertTrue(len <= 3, "Stream should be trimmed to exactly 3 entries");
     }
 
     @Test
@@ -3657,24 +3657,36 @@ public class JedisTest {
             jedis.xadd(key, Map.of("i", String.valueOf(i)));
         }
 
-        // Test MAXLEN with XTrimParams
+        // Test MAXLEN with XTrimParams (exact trimming)
         redis.clients.jedis.params.XTrimParams params =
-                redis.clients.jedis.params.XTrimParams.xTrimParams().maxLen(5);
+                redis.clients.jedis.params.XTrimParams.xTrimParams().maxLenExact(5);
         long trimmed = jedis.xtrim(key, params);
         assertTrue(trimmed >= 0, "XTRIM with XTrimParams should return non-negative count");
         long len = jedis.xlen(key);
-        assertTrue(len <= 5, "Stream should be trimmed to approximately 5 entries");
+        assertTrue(len <= 5, "Stream should be trimmed to exactly 5 entries");
 
-        // Test MINID with XTrimParams
+        // Test MAXLEN with approximate trimming
+        String key3 = "stream:" + UUID.randomUUID();
+        for (int i = 0; i < 10; i++) {
+            jedis.xadd(key3, Map.of("i", String.valueOf(i)));
+        }
+        params = redis.clients.jedis.params.XTrimParams.xTrimParams().maxLen(5);
+        jedis.xtrim(key3, params);
+        len = jedis.xlen(key3);
+        assertTrue(
+                len <= 10 && len >= 5,
+                "Stream with approximate trim should be reduced but may not be exact");
+
+        // Test MINID with XTrimParams (exact trimming)
         String key2 = "stream:" + UUID.randomUUID();
         StreamEntryID firstId = jedis.xadd(key2, Map.of("a", "1"));
         jedis.xadd(key2, Map.of("b", "2"));
         StreamEntryID thirdId = jedis.xadd(key2, Map.of("c", "3"));
 
-        params = redis.clients.jedis.params.XTrimParams.xTrimParams().minId(thirdId);
+        params = redis.clients.jedis.params.XTrimParams.xTrimParams().minIdExact(thirdId);
         jedis.xtrim(key2, params);
         len = jedis.xlen(key2);
-        assertTrue(len <= 1, "Stream should be trimmed to entries >= minId");
+        assertTrue(len == 1, "Stream should be trimmed to exactly entries >= minId");
     }
 
     // --- ACL command integration tests ---
