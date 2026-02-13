@@ -2963,15 +2963,19 @@ func (client *ClusterClient) ClusterShardsWithRoute(
 //
 // Return value:
 //
-//	An array of slot range mappings with node information.
+//	An array of slot ranges. Each slot range is an array containing:
+//	- Start slot (int64)
+//	- End slot (int64)
+//	- Primary node info array [endpoint, port, node_id, metadata_map]
+//	- Replica node info arrays (zero or more)
 //
 // [valkey.io]: https://valkey.io/commands/cluster-slots/
-func (client *ClusterClient) ClusterSlots(ctx context.Context) ([]map[string]any, error) {
+func (client *ClusterClient) ClusterSlots(ctx context.Context) ([][]any, error) {
 	result, err := client.executeCommand(ctx, C.ClusterSlots, []string{})
 	if err != nil {
 		return nil, err
 	}
-	return handleArrayOfMapsResponse(result)
+	return handleArrayOfArraysResponse(result)
 }
 
 // ClusterKeySlot returns the hash slot for a given key.
