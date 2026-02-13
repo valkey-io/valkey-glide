@@ -3078,21 +3078,6 @@ func (suite *GlideTestSuite) TestClusterShardsWithRoute() {
 	}
 }
 
-func (suite *GlideTestSuite) TestClusterSlots() {
-	client := suite.defaultClusterClient()
-	t := suite.T()
-
-	// Test ClusterSlots - deprecated but should still work
-	result, err := client.ClusterSlots(context.Background()) //nolint:SA1019
-	assert.NoError(t, err)
-	assert.Greater(t, len(result), 0)
-
-	// Each slot range should have at least 3 elements: start slot, end slot, and primary node info
-	for _, slotRange := range result {
-		assert.GreaterOrEqual(t, len(slotRange), 3, "slot range should have at least 3 elements")
-	}
-}
-
 func (suite *GlideTestSuite) TestClusterKeySlot() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -3102,11 +3087,12 @@ func (suite *GlideTestSuite) TestClusterKeySlot() {
 		key          string
 		expectedSlot int64
 	}{
-		{"key", 12539},      // known slot for "key"
-		{"hello", 866},      // known slot for "hello"
-		{"{user}:1", 5474},  // hash tag
-		{"{user}:2", 5474},  // same hash tag = same slot
-		{"foo{bar}baz", 5061}, // hash tag in middle
+		// These slot numbers are arbitrary and are only being used to test correct hash slotting
+		{"key", 12539},
+		{"hello", 866},
+		{"{user}:1", 5474},
+		{"{user}:2", 5474},
+		{"foo{bar}baz", 5061},
 	}
 
 	for _, tc := range testCases {

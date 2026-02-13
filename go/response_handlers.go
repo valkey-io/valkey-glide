@@ -1746,46 +1746,6 @@ func handleArrayOfMapsResponse(response *C.struct_CommandResponse) ([]map[string
 	return maps, nil
 }
 
-// handleArrayOfArraysResponse handles responses that return an array of arrays.
-// Used for cluster commands like CLUSTER SLOTS.
-func handleArrayOfArraysResponse(response *C.struct_CommandResponse) ([][]any, error) {
-	defer C.free_command_response(response)
-
-	typeErr := checkResponseType(response, C.Array, false)
-	if typeErr != nil {
-		return nil, typeErr
-	}
-
-	result, err := parseArray(response)
-	if err != nil {
-		return nil, err
-	}
-
-	if result == nil {
-		return nil, nil
-	}
-
-	arrResult, ok := result.([]any)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type: %T", result)
-	}
-
-	arrays := make([][]any, 0, len(arrResult))
-	for _, item := range arrResult {
-		if item == nil {
-			arrays = append(arrays, nil)
-			continue
-		}
-		arrItem, ok := item.([]any)
-		if !ok {
-			return nil, fmt.Errorf("unexpected item type in array: %T", item)
-		}
-		arrays = append(arrays, arrItem)
-	}
-
-	return arrays, nil
-}
-
 // handleStringToArrayOfMapsMapResponse handles responses that return a map of node addresses to arrays of maps.
 // Used for cluster commands with multi-node routing.
 func handleStringToArrayOfMapsMapResponse(
