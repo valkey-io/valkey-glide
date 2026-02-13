@@ -3051,6 +3051,33 @@ func (suite *GlideTestSuite) TestClusterShards() {
 	}
 }
 
+func (suite *GlideTestSuite) TestClusterShardsWithRoute() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// CLUSTER SHARDS requires Valkey 7.0+
+	if suite.serverVersion < "7.0.0" {
+		t.Skip("CLUSTER SHARDS requires Valkey 7.0 or above")
+	}
+
+	// Test with single node route
+	singleNodeRoute := options.RouteOption{Route: config.RandomRoute}
+	singleResult, err := client.ClusterShardsWithRoute(context.Background(), singleNodeRoute)
+	assert.NoError(t, err, "ClusterShardsWithRoute with single node route should not error")
+	assert.Greater(t, len(singleResult.SingleValue()), 0, "should return shard info")
+
+	// Test with multi-node route
+	multiNodeRoute := options.RouteOption{Route: config.AllNodes}
+	multiResult, err := client.ClusterShardsWithRoute(context.Background(), multiNodeRoute)
+	assert.NoError(t, err, "ClusterShardsWithRoute with multi-node route should not error")
+	assert.Greater(t, len(multiResult.MultiValue()), 0, "should return results from multiple nodes")
+
+	// Each node's result should have shard info
+	for nodeAddr, shards := range multiResult.MultiValue() {
+		assert.Greater(t, len(shards), 0, "node %s should return shard info", nodeAddr)
+	}
+}
+
 func (suite *GlideTestSuite) TestClusterSlots() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
@@ -3079,15 +3106,16 @@ func (suite *GlideTestSuite) TestClusterKeySlot() {
 
 	for _, tc := range testCases {
 		slot, err := client.ClusterKeySlot(context.Background(), tc.key)
-		assert.NoError(t, err)
-		assert.GreaterOrEqual(t, slot, int64(0))
-		assert.Less(t, slot, int64(16384))
+		assert.NoError(t, err, "unexpected error for key: %s", tc.key)
+		assert.GreaterOrEqual(t, slot, int64(0), "slot should be >= 0 for key: %s", tc.key)
+		assert.Less(t, slot, int64(16384), "slot should be < 16384 for key: %s", tc.key)
+		assert.Equal(t, tc.expectedSlot, slot, "slot mismatch for key: %s", tc.key)
 	}
 
 	// Keys with same hash tag should map to same slot
 	slot1, _ := client.ClusterKeySlot(context.Background(), "{user}:1")
 	slot2, _ := client.ClusterKeySlot(context.Background(), "{user}:2")
-	assert.Equal(t, slot1, slot2)
+	assert.Equal(t, slot1, slot2, "keys with same hash tag should map to same slot")
 }
 
 func (suite *GlideTestSuite) TestClusterMyId() {
@@ -3096,16 +3124,23 @@ func (suite *GlideTestSuite) TestClusterMyId() {
 
 	// Test ClusterMyId without route
 	result, err := client.ClusterMyId(context.Background())
-	assert.NoError(t, err)
+	assert.NoError(t, err, "ClusterMyId should not error")
 	// Node ID is 40 characters hex string
-	assert.Len(t, result, 40)
+	assert.Len(t, result, 40, "node ID should be 40 characters")
+
+	// Test ClusterMyIdWithRoute - single node
+	singleNodeRoute := options.RouteOption{Route: config.RandomRoute}
+	singleResult, err := client.ClusterMyIdWithRoute(context.Background(), singleNodeRoute)
+	assert.NoError(t, err, "ClusterMyIdWithRoute with single node route should not error")
+	assert.Len(t, singleResult.SingleValue(), 40, "node ID should be 40 characters")
 
 	// Test ClusterMyIdWithRoute - all nodes
 	routeOption := options.RouteOption{Route: config.AllNodes}
 	clusterResult, err := client.ClusterMyIdWithRoute(context.Background(), routeOption)
-	assert.NoError(t, err)
-	for _, nodeId := range clusterResult.MultiValue() {
-		assert.Len(t, nodeId, 40)
+	assert.NoError(t, err, "ClusterMyIdWithRoute with multi-node route should not error")
+	assert.Greater(t, len(clusterResult.MultiValue()), 0, "should return results from multiple nodes")
+	for nodeAddr, nodeId := range clusterResult.MultiValue() {
+		assert.Len(t, nodeId, 40, "node ID for %s should be 40 characters", nodeAddr)
 	}
 }
 
@@ -3120,16 +3155,23 @@ func (suite *GlideTestSuite) TestClusterMyShardId() {
 
 	// Test ClusterMyShardId without route
 	result, err := client.ClusterMyShardId(context.Background())
-	assert.NoError(t, err)
+	assert.NoError(t, err, "ClusterMyShardId should not error")
 	// Shard ID is 40 characters hex string
-	assert.Len(t, result, 40)
+	assert.Len(t, result, 40, "shard ID should be 40 characters")
+
+	// Test ClusterMyShardIdWithRoute - single node
+	singleNodeRoute := options.RouteOption{Route: config.RandomRoute}
+	singleResult, err := client.ClusterMyShardIdWithRoute(context.Background(), singleNodeRoute)
+	assert.NoError(t, err, "ClusterMyShardIdWithRoute with single node route should not error")
+	assert.Len(t, singleResult.SingleValue(), 40, "shard ID should be 40 characters")
 
 	// Test ClusterMyShardIdWithRoute - all nodes
 	routeOption := options.RouteOption{Route: config.AllNodes}
 	clusterResult, err := client.ClusterMyShardIdWithRoute(context.Background(), routeOption)
-	assert.NoError(t, err)
-	for _, shardId := range clusterResult.MultiValue() {
-		assert.Len(t, shardId, 40)
+	assert.NoError(t, err, "ClusterMyShardIdWithRoute with multi-node route should not error")
+	assert.Greater(t, len(clusterResult.MultiValue()), 0, "should return results from multiple nodes")
+	for nodeAddr, shardId := range clusterResult.MultiValue() {
+		assert.Len(t, shardId, 40, "shard ID for %s should be 40 characters", nodeAddr)
 	}
 }
 
