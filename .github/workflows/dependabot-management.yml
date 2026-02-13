@@ -73,7 +73,7 @@ jobs:
                   function parseDependabotTitle(title) {
                     const match = title.match(DEPENDABOT_TITLE_REGEX);
                     if (!match) return null;
-                    
+
                     const [, depName, fromVersion, toVersion] = match;
                     return { depName, fromVersion, toVersion };
                   }
@@ -89,27 +89,27 @@ jobs:
                   // Helper function to determine ecosystem label from PR branch
                   function getEcosystemLabel(pr) {
                     const branch = pr.head.ref;
-                    
+
                     // Extract ecosystem from dependabot branch name
                     // Pattern: dependabot/{ecosystem}/{dependency_name}-{version}
                     const branchMatch = branch.match(/^dependabot\/([^\/]+)\//);
                     if (branchMatch) {
                       const ecosystem = branchMatch[1];
-                      
+
                       // Map dependabot ecosystem names to our label conventions
                       const ecosystemMap = {
-                        'npm_and_yarn': 'npm',
-                        'npm': 'npm',
-                        'gradle': 'java',
-                        'cargo': 'rust',
-                        'gomod': 'go',
-                        'pip': 'python',
+                        'npm_and_yarn': 'node 🐢',
+                        'npm': 'node 🐢',
+                        'gradle': 'java ☕',
+                        'cargo': 'Rust ⚙️',
+                        'gomod': 'go 🏃',
+                        'pip': 'python 🐍',
                         'github_actions': 'github-actions'
                       };
-                      
+
                       return ecosystemMap[ecosystem] || ecosystem;
                     }
-                    
+
                     return null;
                   }
 
@@ -135,7 +135,7 @@ jobs:
 
                   async function processPR(pr) {
                     console.log(`\nProcessing PR #${pr.number}: ${pr.title}`);
-                    
+
                     // Parse the PR title to extract dependency info
                     const parsedTitle = parseDependabotTitle(pr.title);
                     if (!parsedTitle) {
@@ -169,7 +169,7 @@ jobs:
                     try {
                       const from = semver.coerce(fromVersion);
                       const to = semver.coerce(toVersion);
-                      
+
                       if (!from || !to) {
                         return 'unknown';
                       }
@@ -181,7 +181,7 @@ jobs:
                       } else if (semver.patch(from) !== semver.patch(to)) {
                         return 'patch';
                       }
-                      
+
                       return 'unknown';
                     } catch (error) {
                       console.log(`  Error determining update type: ${error.message}`);
@@ -210,7 +210,7 @@ jobs:
                         try {
                           const from = semver.coerce(fromVersion);
                           const to = semver.coerce(toVersion);
-                          
+
                           if (from && to && (semver.major(from) === 0 || semver.major(to) === 0)) {
                             console.log(`  0.x version detected - not auto-approving minor update`);
                             return false;
@@ -251,9 +251,9 @@ jobs:
 
                       // Add basic changelog information
                       const changelog = `## Changelog\n\nUpdated ${depName} from ${fromVersion} to ${toVersion}\n\n📋 To view detailed changes, visit the package repository or release notes.`;
-                      
+
                       const newBody = `${body}\n\n${changelog}`;
-                      
+
                       if (!dryRun) {
                         await octokit.rest.pulls.update({
                           owner,
@@ -273,7 +273,7 @@ jobs:
                   async function applyLabels(pr, updateType) {
                     try {
                       const labels = ['dependencies'];
-                      
+
                       // Add update type label
                       if (updateType !== 'unknown') {
                         labels.push(`dependency-${updateType}`);
@@ -311,7 +311,7 @@ jobs:
                       });
 
                       // Only allow auto-approval if all checks have concluded successfully
-                      const incompleteChecks = checks.check_runs.filter(check => 
+                      const incompleteChecks = checks.check_runs.filter(check =>
                         check.conclusion !== 'success' && check.conclusion !== 'skipped'
                       );
 
@@ -322,7 +322,7 @@ jobs:
                         const pendingChecks = incompleteChecks.filter(check =>
                           check.status === 'in_progress' || check.status === 'queued' || check.conclusion === null
                         );
-                        
+
                         if (failedChecks.length > 0) {
                           console.log(`  Cannot auto-approve - failed checks: ${failedChecks.map(c => c.name).join(', ')}`);
                         } else {
