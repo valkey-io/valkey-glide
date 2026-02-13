@@ -595,7 +595,7 @@ impl ResponsePolicy {
 
             b"WAITAOF" => Some(ResponsePolicy::AggregateArray(ArrayAggregateOp::Min)),
 
-            b"ACL SETUSER" | b"ACL DELUSER" | b"ACL SAVE" | b"CLIENT SETNAME"
+            b"ACL SETUSER" | b"ACL DELUSER" | b"ACL SAVE" | b"AUTH" | b"CLIENT SETNAME"
             | b"CLIENT SETINFO" | b"CONFIG SET" | b"CONFIG RESETSTAT" | b"CONFIG REWRITE"
             | b"FLUSHALL" | b"FLUSHDB" | b"FUNCTION DELETE" | b"FUNCTION FLUSH"
             | b"FUNCTION LOAD" | b"FUNCTION RESTORE" | b"MEMORY PURGE" | b"MSET" | b"JSON.MSET"
@@ -654,6 +654,7 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         b"ACL SETUSER"
         | b"ACL DELUSER"
         | b"ACL SAVE"
+        | b"AUTH"
         | b"CLIENT SETNAME"
         | b"CLIENT SETINFO"
         | b"SELECT"
@@ -750,7 +751,6 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"ACL LOG"
         | b"ACL USERS"
         | b"ACL WHOAMI"
-        | b"AUTH"
         | b"BGSAVE"
         | b"CLIENT GETNAME"
         | b"CLIENT GETREDIR"
