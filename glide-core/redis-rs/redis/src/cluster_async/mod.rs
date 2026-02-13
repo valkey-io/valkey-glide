@@ -126,7 +126,10 @@ const MUTEX_WRITE_ERR: &str = "Failed to obtain write lock. Poisoned mutex?";
 /// underlying connections maintained for each node in the cluster, as well
 /// as common parameters for connecting to nodes and executing commands.
 #[derive(Clone)]
-pub struct ClusterConnection<C = MultiplexedConnection>(mpsc::Sender<Message<C>>);
+pub struct ClusterConnection<C = MultiplexedConnection> {
+    sender: mpsc::Sender<Message<C>>,
+    response_timeout: Duration,
+}
 
 impl<C> ClusterConnection<C>
 where
@@ -138,6 +141,7 @@ where
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
     ) -> RedisResult<ClusterConnection<C>> {
+        let response_timeout = cluster_params.response_timeout;
         ClusterConnInner::new(
             initial_nodes,
             cluster_params,
@@ -155,7 +159,10 @@ where
             };
             #[cfg(feature = "tokio-comp")]
             tokio::spawn(stream);
-            ClusterConnection(tx)
+            ClusterConnection {
+                sender: tx,
+                response_timeout,
+            }
         })
     }
 
@@ -223,7 +230,7 @@ where
         cluster_scan_args: ClusterScanArgs,
     ) -> RedisResult<(ScanStateRC, Vec<Value>)> {
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::ClusterScan { cluster_scan_args },
                 sender,
@@ -257,7 +264,7 @@ where
     ) -> RedisResult<Value> {
         trace!("route_command");
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::Cmd {
                     cmd: Arc::new(cmd.clone()),
@@ -272,26 +279,40 @@ where
                     format!("Cluster: Error occurred while trying to send command to internal sender. {e:?}"),
                 ))
             })?;
-        receiver
+
+        // Wrap receiver with timeout to prevent indefinite blocking during reconnects
+        #[cfg(feature = "tokio-comp")]
+        {
+            tokio::time::timeout(self.response_timeout, async move {
+                receiver
+                    .await
+                    .unwrap_or_else(|e| {
+                        Err(RedisError::from(io::Error::new(
+                            io::ErrorKind::BrokenPipe,
+                            format!(
+                                "Cluster: Failed to receive command response from internal sender. {e:?}"
+                            ),
+                        )))
+                    })
+                    .map(|response| match response {
+                        Response::Single(value) => value,
+                        Response::ClusterScanResult(..) | Response::Multiple(_) => unreachable!(),
+                    })
+            })
             .await
-            .unwrap_or_else(|e| {
-                Err(RedisError::from(io::Error::new(
-                    io::ErrorKind::BrokenPipe,
-                    format!(
-                        "Cluster: Failed to receive command response from internal sender. {e:?}"
-                    ),
-                )))
-            })
-            .map(|response| match response {
-                Response::Single(value) => value,
-                Response::ClusterScanResult(..) | Response::Multiple(_) => unreachable!(),
-            })
+            .map_err(|_| {
+                RedisError::from(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "Cluster: Request timed out",
+                ))
+            })?
+        }
     }
 
     /// Send commands in `pipeline` to the given `route`. If `route` is [None], it will be computed from `pipeline`.
-    /// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.  
-    ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
-    ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).  
+    /// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.
+    ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).
+    ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).
     ///     TODO: add wiki link.
     pub async fn route_pipeline<'a>(
         &'a mut self,
@@ -302,7 +323,7 @@ where
         pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisResult<Vec<Value>> {
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::Pipeline {
                     pipeline: Arc::new(pipeline.clone()),
@@ -319,18 +340,31 @@ where
                 RedisError::from(io::Error::new(io::ErrorKind::BrokenPipe, err.to_string()))
             })?;
 
-        receiver
+        // Wrap receiver with timeout to prevent indefinite blocking during reconnects
+        #[cfg(feature = "tokio-comp")]
+        {
+            tokio::time::timeout(self.response_timeout, async move {
+                receiver
+                    .await
+                    .unwrap_or_else(|err| {
+                        Err(RedisError::from(io::Error::new(
+                            io::ErrorKind::BrokenPipe,
+                            err.to_string(),
+                        )))
+                    })
+                    .map(|response| match response {
+                        Response::Multiple(values) => values,
+                        Response::ClusterScanResult(..) | Response::Single(_) => unreachable!(),
+                    })
+            })
             .await
-            .unwrap_or_else(|err| {
-                Err(RedisError::from(io::Error::new(
-                    io::ErrorKind::BrokenPipe,
-                    err.to_string(),
-                )))
-            })
-            .map(|response| match response {
-                Response::Multiple(values) => values,
-                Response::ClusterScanResult(..) | Response::Single(_) => unreachable!(),
-            })
+            .map_err(|_| {
+                RedisError::from(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "Cluster: Pipeline request timed out",
+                ))
+            })?
+        }
     }
     /// Update the password used to authenticate with all cluster servers
     pub async fn update_connection_password(
@@ -367,7 +401,7 @@ where
         operation_request: Operation,
     ) -> RedisResult<Value> {
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::OperationRequest(operation_request),
                 sender,
@@ -375,18 +409,31 @@ where
             .await
             .map_err(|_| RedisError::from(io::Error::from(io::ErrorKind::BrokenPipe)))?;
 
-        receiver
+        // Wrap receiver with timeout to prevent indefinite blocking during reconnects
+        #[cfg(feature = "tokio-comp")]
+        {
+            tokio::time::timeout(self.response_timeout, async move {
+                receiver
+                    .await
+                    .unwrap_or_else(|err| {
+                        Err(RedisError::from(io::Error::new(
+                            io::ErrorKind::BrokenPipe,
+                            err.to_string(),
+                        )))
+                    })
+                    .map(|response| match response {
+                        Response::Single(values) => values,
+                        Response::ClusterScanResult(..) | Response::Multiple(_) => unreachable!(),
+                    })
+            })
             .await
-            .unwrap_or_else(|err| {
-                Err(RedisError::from(io::Error::new(
-                    io::ErrorKind::BrokenPipe,
-                    err.to_string(),
-                )))
-            })
-            .map(|response| match response {
-                Response::Single(values) => values,
-                Response::ClusterScanResult(..) | Response::Multiple(_) => unreachable!(),
-            })
+            .map_err(|_| {
+                RedisError::from(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "Cluster: Operation request timed out",
+                ))
+            })?
+        }
     }
 }
 
@@ -664,9 +711,9 @@ enum CmdArg<C> {
         count: usize,
         route: Option<InternalSingleNodeRouting<C>>,
         sub_pipeline: bool,
-        /// Configures retry behavior for pipeline commands.  
-        ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
-        ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).  
+        /// Configures retry behavior for pipeline commands.
+        ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).
+        ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).
         pipeline_retry_strategy: PipelineRetryStrategy,
     },
     ClusterScan {
