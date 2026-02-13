@@ -76,12 +76,14 @@ mod cluster_client_tests {
         block_on_all(async {
             const NUM_KEYS: usize = 100;
             const MEASUREMENT_DURATION_SECS: u64 = 10;
+            const REQUEST_TIMEOUT_SECS: u64 = 1;
 
-            // Start cluster with replicas
+            // Start cluster with replicas (and timeout to avoid blocking)
             let mut test_basics = setup_cluster_with_replicas(
                 TestConfiguration {
                     cluster_mode: ClusterMode::Enabled,
                     shared_server: false,
+                    request_timeout: Some((REQUEST_TIMEOUT_SECS * 1000) as u32),
                     ..Default::default()
                 },
                 1,
@@ -89,7 +91,7 @@ mod cluster_client_tests {
             )
             .await;
 
-            // Find a replica in cluster (after primaries)
+            // Get cluster info
             let cluster = test_basics.cluster.unwrap();
             let addresses = cluster.get_server_addresses();
 
@@ -126,10 +128,9 @@ mod cluster_client_tests {
             shutdown_cmd.arg("NOSAVE");
             let routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress { host, port });
             let _ = test_basics.client.send_command(&mut shutdown_cmd, Some(routing)).await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
 
-            // Wait for recovery - for manual testing only (also set #[timeout(Duration::from_secs(120))])
-            // tokio::time::sleep(Duration::from_secs(45)).await;
+            // Wait for cluster to recover
+            tokio::time::sleep(Duration::from_secs(REQUEST_TIMEOUT_SECS)).await;
 
             // Measure failover throughput across all shards (queries/second)
             let failover_start = Instant::now();

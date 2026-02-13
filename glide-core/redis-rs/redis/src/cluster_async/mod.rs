@@ -3118,7 +3118,6 @@ where
                 // Always return Ready to not block poll_flush
                 Poll::Ready(Ok(()))
             }
-            // Other cases remain unchanged
             RecoverFuture::ReconnectToInitialNodes(ref mut handle) => {
                 // Check if the task has completed
                 match handle.now_or_never() {
