@@ -8,9 +8,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.StreamInfo;
 import redis.clients.jedis.resps.StreamPendingSummary;
-import redis.clients.jedis.resps.AccessControlUser;
 
 /**
  * Unit tests for Jedis method signatures and API contracts. Tests that required methods exist with
@@ -313,10 +313,7 @@ public class JedisMethodsTest {
         // XADD binary with XAddParams
         assertNotNull(
                 jedisClass.getMethod(
-                        "xadd",
-                        byte[].class,
-                        redis.clients.jedis.params.XAddParams.class,
-                        Map.class));
+                        "xadd", byte[].class, redis.clients.jedis.params.XAddParams.class, Map.class));
 
         // XLEN binary
         assertNotNull(jedisClass.getMethod("xlen", byte[].class));
@@ -332,15 +329,13 @@ public class JedisMethodsTest {
         // XREVRANGE binary
         assertNotNull(jedisClass.getMethod("xrevrange", byte[].class, byte[].class, byte[].class));
         assertNotNull(
-                jedisClass.getMethod(
-                        "xrevrange", byte[].class, byte[].class, byte[].class, int.class));
+                jedisClass.getMethod("xrevrange", byte[].class, byte[].class, byte[].class, int.class));
 
         // XTRIM binary
         assertNotNull(jedisClass.getMethod("xtrim", byte[].class, long.class));
         assertNotNull(jedisClass.getMethod("xtrim", byte[].class, long.class, boolean.class));
         assertNotNull(
-                jedisClass.getMethod(
-                        "xtrim", byte[].class, redis.clients.jedis.params.XTrimParams.class));
+                jedisClass.getMethod("xtrim", byte[].class, redis.clients.jedis.params.XTrimParams.class));
     }
 
     @Test
@@ -350,10 +345,7 @@ public class JedisMethodsTest {
         // XADD binary returns byte[]
         Method xaddBinary =
                 jedisClass.getMethod(
-                        "xadd",
-                        byte[].class,
-                        redis.clients.jedis.params.XAddParams.class,
-                        Map.class);
+                        "xadd", byte[].class, redis.clients.jedis.params.XAddParams.class, Map.class);
         assertEquals(byte[].class, xaddBinary.getReturnType());
 
         // XLEN binary returns long
@@ -399,12 +391,10 @@ public class JedisMethodsTest {
 
         // XTRIM with XTrimParams for String keys
         assertNotNull(
-                jedisClass.getMethod(
-                        "xtrim", String.class, redis.clients.jedis.params.XTrimParams.class));
+                jedisClass.getMethod("xtrim", String.class, redis.clients.jedis.params.XTrimParams.class));
 
         Method xtrimWithParams =
-                jedisClass.getMethod(
-                        "xtrim", String.class, redis.clients.jedis.params.XTrimParams.class);
+                jedisClass.getMethod("xtrim", String.class, redis.clients.jedis.params.XTrimParams.class);
         assertEquals(long.class, xtrimWithParams.getReturnType());
     }
 
