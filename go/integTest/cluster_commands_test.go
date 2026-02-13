@@ -3083,7 +3083,7 @@ func (suite *GlideTestSuite) TestClusterSlots() {
 	t := suite.T()
 
 	// Test ClusterSlots - deprecated but should still work
-	result, err := client.ClusterSlots(context.Background())
+	result, err := client.ClusterSlots(context.Background()) //nolint:SA1019
 	assert.NoError(t, err)
 	assert.Greater(t, len(result), 0)
 
