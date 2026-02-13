@@ -827,7 +827,7 @@ struct Message<C: Sized> {
 
 enum RecoverFuture {
     RefreshingSlots(JoinHandle<RedisResult<()>>),
-    ReconnectToInitialNodes(BoxFuture<'static, ()>),
+    ReconnectToInitialNodes(JoinHandle<()>),
     Reconnect(BoxFuture<'static, ()>),
 }
 
@@ -3119,11 +3119,13 @@ where
 
                         if e.kind() == ErrorKind::AllConnectionsUnavailable {
                             // If all connections unavailable, try reconnect
+                            let inner = self.inner.clone();
+                            let handle = tokio::spawn(async move {
+                                ClusterConnInner::reconnect_to_initial_nodes(inner).await
+                            });
                             self.state =
                                 ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(
-                                    Box::pin(ClusterConnInner::reconnect_to_initial_nodes(
-                                        self.inner.clone(),
-                                    )),
+                                    handle,
                                 ));
                             return Poll::Ready(Err(e));
                         } else {
@@ -3151,11 +3153,13 @@ where
                             // TODO - consider a gracefully closing of the client
                             // Since a panic indicates a bug in the refresh logic,
                             // it might be safer to close the client entirely
+                            let inner = self.inner.clone();
+                            let handle = tokio::spawn(async move {
+                                ClusterConnInner::reconnect_to_initial_nodes(inner).await
+                            });
                             self.state =
                                 ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(
-                                    Box::pin(ClusterConnInner::reconnect_to_initial_nodes(
-                                        self.inner.clone(),
-                                    )),
+                                    handle,
                                 ));
 
                             // Report this critical error to clients
@@ -3177,10 +3181,28 @@ where
                 Poll::Ready(Ok(()))
             }
             // Other cases remain unchanged
-            RecoverFuture::ReconnectToInitialNodes(ref mut future) => {
-                ready!(future.as_mut().poll(cx));
-                trace!("Reconnected to initial nodes");
-                self.state = ConnectionState::PollComplete;
+            RecoverFuture::ReconnectToInitialNodes(ref mut handle) => {
+                // Check if the task has completed
+                match handle.now_or_never() {
+                    Some(Ok(())) => {
+                        trace!("Reconnected to initial nodes");
+                        self.state = ConnectionState::PollComplete;
+                    }
+                    Some(Err(join_err)) => {
+                        if join_err.is_cancelled() {
+                            trace!("Reconnect to initial nodes task was aborted");
+                            self.state = ConnectionState::PollComplete;
+                        } else {
+                            warn!("Reconnect to initial nodes task panicked: {:?} - marking recovery as complete", join_err);
+                            self.state = ConnectionState::PollComplete;
+                        }
+                    }
+                    None => {
+                        // Task is still running
+                        // Just continue and return Ok to not block poll_flush
+                    }
+                }
+                // Always return Ready to not block poll_flush
                 Poll::Ready(Ok(()))
             }
             RecoverFuture::Reconnect(ref mut future) => {
@@ -3474,10 +3496,12 @@ where
                         ConnectionState::Recover(RecoverFuture::RefreshingSlots(task_handle));
                 }
                 PollFlushAction::ReconnectFromInitialConnections => {
+                    let inner = self.inner.clone();
+                    let handle = tokio::spawn(async move {
+                        ClusterConnInner::reconnect_to_initial_nodes(inner).await
+                    });
                     self.state =
-                        ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(Box::pin(
-                            ClusterConnInner::reconnect_to_initial_nodes(self.inner.clone()),
-                        )));
+                        ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(handle));
                 }
                 PollFlushAction::Reconnect(addresses) => {
                     self.state = ConnectionState::Recover(RecoverFuture::Reconnect(Box::pin(
