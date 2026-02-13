@@ -6203,6 +6203,100 @@ public final class Jedis implements Closeable {
                 });
     }
 
+    /**
+     * Adds an entry to the stream at key with XAddParams. Uses GLIDE type-safe xadd.
+     *
+     * @param key stream key
+     * @param params add parameters
+     * @param hash field-value map
+     * @return generated entry ID, or null if stream did not exist and makeStream was false
+     */
+    public StreamEntryID xadd(
+            String key, redis.clients.jedis.params.XAddParams params, Map<String, String> hash) {
+        return executeCommandWithGlide(
+                "XADD",
+                () -> {
+                    StreamAddOptions.StreamAddOptionsBuilder builder = StreamAddOptions.builder();
+                    if (params.getId() != null) {
+                        builder.id(params.getId());
+                    }
+                    if (params.getMakeStream() != null) {
+                        builder.makeStream(params.getMakeStream());
+                    }
+                    if (params.getMaxLen() != null) {
+                        boolean exact = params.getExactTrimming() != null && params.getExactTrimming();
+                        StreamTrimOptions trimOpts;
+                        if (params.getLimit() != null) {
+                            trimOpts = new StreamTrimOptions.MaxLen(params.getMaxLen(), params.getLimit());
+                        } else {
+                            trimOpts = new StreamTrimOptions.MaxLen(exact, params.getMaxLen());
+                        }
+                        builder.trim(trimOpts);
+                    } else if (params.getMinId() != null) {
+                        boolean exact = params.getExactTrimming() != null && params.getExactTrimming();
+                        StreamTrimOptions trimOpts;
+                        if (params.getLimit() != null) {
+                            trimOpts = new StreamTrimOptions.MinId(params.getMinId(), params.getLimit());
+                        } else {
+                            trimOpts = new StreamTrimOptions.MinId(exact, params.getMinId());
+                        }
+                        builder.trim(trimOpts);
+                    }
+                    String result = glideClient.xadd(key, hash, builder.build()).get();
+                    return result == null ? null : new StreamEntryID(result);
+                });
+    }
+
+    /**
+     * Adds an entry to the stream at key with XAddParams - binary version. Uses GLIDE type-safe xadd.
+     *
+     * @param key stream key
+     * @param params add parameters
+     * @param hash field-value map
+     * @return generated entry ID as byte[], or null if stream did not exist and makeStream was false
+     */
+    public byte[] xadd(
+            byte[] key, redis.clients.jedis.params.XAddParams params, Map<byte[], byte[]> hash) {
+        return executeCommandWithGlide(
+                "XADD",
+                () -> {
+                    // Convert byte[] map to String map
+                    Map<String, String> stringHash = new HashMap<>();
+                    for (Map.Entry<byte[], byte[]> entry : hash.entrySet()) {
+                        stringHash.put(new String(entry.getKey()), new String(entry.getValue()));
+                    }
+
+                    StreamAddOptions.StreamAddOptionsBuilder builder = StreamAddOptions.builder();
+                    if (params.getId() != null) {
+                        builder.id(params.getId());
+                    }
+                    if (params.getMakeStream() != null) {
+                        builder.makeStream(params.getMakeStream());
+                    }
+                    if (params.getMaxLen() != null) {
+                        boolean exact = params.getExactTrimming() != null && params.getExactTrimming();
+                        StreamTrimOptions trimOpts;
+                        if (params.getLimit() != null) {
+                            trimOpts = new StreamTrimOptions.MaxLen(params.getMaxLen(), params.getLimit());
+                        } else {
+                            trimOpts = new StreamTrimOptions.MaxLen(exact, params.getMaxLen());
+                        }
+                        builder.trim(trimOpts);
+                    } else if (params.getMinId() != null) {
+                        boolean exact = params.getExactTrimming() != null && params.getExactTrimming();
+                        StreamTrimOptions trimOpts;
+                        if (params.getLimit() != null) {
+                            trimOpts = new StreamTrimOptions.MinId(params.getMinId(), params.getLimit());
+                        } else {
+                            trimOpts = new StreamTrimOptions.MinId(exact, params.getMinId());
+                        }
+                        builder.trim(trimOpts);
+                    }
+                    String result = glideClient.xadd(new String(key), stringHash, builder.build()).get();
+                    return result == null ? null : result.getBytes();
+                });
+    }
+
     /** Returns the number of entries in the stream. Uses GLIDE xlen. */
     public long xlen(String key) {
         return executeCommandWithGlide("XLEN", () -> glideClient.xlen(key).get());
@@ -6338,6 +6432,77 @@ public final class Jedis implements Closeable {
                 "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MinId(minId)).get());
     }
 
+    /**
+     * Trims the stream using XTrimParams. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param params trim parameters
+     * @return number of entries deleted
+     */
+    public long xtrim(String key, redis.clients.jedis.params.XTrimParams params) {
+        return executeCommandWithGlide(
+                "XTRIM",
+                () -> {
+                    StreamTrimOptions trimOpts;
+                    boolean exact = params.getExactTrimming() != null && params.getExactTrimming();
+                    if (params.getMaxLen() != null) {
+                        if (params.getLimit() != null) {
+                            trimOpts = new StreamTrimOptions.MaxLen(params.getMaxLen(), params.getLimit());
+                        } else {
+                            trimOpts = new StreamTrimOptions.MaxLen(exact, params.getMaxLen());
+                        }
+                    } else if (params.getMinId() != null) {
+                        if (params.getLimit() != null) {
+                            trimOpts = new StreamTrimOptions.MinId(params.getMinId(), params.getLimit());
+                        } else {
+                            trimOpts = new StreamTrimOptions.MinId(exact, params.getMinId());
+                        }
+                    } else {
+                        throw new IllegalArgumentException("XTrimParams must specify either maxLen or minId");
+                    }
+                    return glideClient.xtrim(key, trimOpts).get();
+                });
+    }
+
+    /**
+     * Trims the stream by max length - binary version. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param maxLen maximum length
+     * @return number of entries deleted
+     */
+    public long xtrim(byte[] key, long maxLen) {
+        return executeCommandWithGlide(
+                "XTRIM",
+                () -> glideClient.xtrim(new String(key), new StreamTrimOptions.MaxLen(maxLen)).get());
+    }
+
+    /**
+     * Trims the stream by max length (exact or approximate) - binary version. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param maxLen maximum length
+     * @param exact if true, trim exactly; if false, trim approximately
+     * @return number of entries deleted
+     */
+    public long xtrim(byte[] key, long maxLen, boolean exact) {
+        return executeCommandWithGlide(
+                "XTRIM",
+                () ->
+                        glideClient.xtrim(new String(key), new StreamTrimOptions.MaxLen(exact, maxLen)).get());
+    }
+
+    /**
+     * Trims the stream using XTrimParams - binary version. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param params trim parameters
+     * @return number of entries deleted
+     */
+    public long xtrim(byte[] key, redis.clients.jedis.params.XTrimParams params) {
+        return xtrim(new String(key), params);
+    }
+
     /** Creates a consumer group. Uses GLIDE xgroupCreate. */
     public String xgroupCreate(String key, String groupName, String id) {
         return executeCommandWithGlide(
@@ -6443,18 +6608,19 @@ public final class Jedis implements Closeable {
                 () -> {
                     Object[] arr = glideClient.xpending(key, group).get();
                     if (arr == null || arr.length < 4) {
-                        return new StreamPendingSummary(
-                                0L, new StreamEntryID("0-0"), new StreamEntryID("0-0"), Collections.emptyMap());
+                        return new StreamPendingSummary(0L, null, null, Collections.emptyMap());
                     }
                     long total =
                             arr[0] instanceof Long ? (Long) arr[0] : Long.parseLong(String.valueOf(arr[0]));
                     String minIdStr = String.valueOf(arr[1]);
                     String maxIdStr = String.valueOf(arr[2]);
-                    if (minIdStr == null || minIdStr.isEmpty() || "null".equals(minIdStr)) {
-                        minIdStr = "0-0";
+                    StreamEntryID minId = null;
+                    StreamEntryID maxId = null;
+                    if (minIdStr != null && !minIdStr.isEmpty() && !"null".equals(minIdStr)) {
+                        minId = new StreamEntryID(minIdStr);
                     }
-                    if (maxIdStr == null || maxIdStr.isEmpty() || "null".equals(maxIdStr)) {
-                        maxIdStr = "0-0";
+                    if (maxIdStr != null && !maxIdStr.isEmpty() && !"null".equals(maxIdStr)) {
+                        maxId = new StreamEntryID(maxIdStr);
                     }
                     Map<String, Long> consumerCounts = new HashMap<>();
                     if (arr.length > 3 && arr[3] instanceof Object[]) {
@@ -6470,8 +6636,7 @@ public final class Jedis implements Closeable {
                             }
                         }
                     }
-                    return new StreamPendingSummary(
-                            total, new StreamEntryID(minIdStr), new StreamEntryID(maxIdStr), consumerCounts);
+                    return new StreamPendingSummary(total, minId, maxId, consumerCounts);
                 });
     }
 
