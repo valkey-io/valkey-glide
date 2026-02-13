@@ -2996,8 +2996,7 @@ func (client *ClusterClient) ClusterKeySlot(ctx context.Context, key string) (in
 	return handleIntResponse(result)
 }
 
-// ClusterMyId returns the node ID of the current node.
-// The command will be routed to a random node.
+// ClusterMyId returns the unique identifier of the node to which the command is routed.
 //
 // See [valkey.io] for details.
 //
@@ -3007,7 +3006,7 @@ func (client *ClusterClient) ClusterKeySlot(ctx context.Context, key string) (in
 //
 // Return value:
 //
-//	The node ID of the current node.
+//	The unique identifier of the node to which the command is routed.
 //
 // [valkey.io]: https://valkey.io/commands/cluster-myid/
 func (client *ClusterClient) ClusterMyId(ctx context.Context) (string, error) {
