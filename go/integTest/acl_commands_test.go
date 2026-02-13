@@ -266,6 +266,8 @@ func (suite *GlideTestSuite) TestAclSetUserAndDelUser_Cluster() {
 }
 
 func (suite *GlideTestSuite) TestAclDryRun() {
+	// ACL DRYRUN was added in 7.0.0
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 	client := suite.defaultClient()
 	t := suite.T()
 
@@ -276,6 +278,8 @@ func (suite *GlideTestSuite) TestAclDryRun() {
 }
 
 func (suite *GlideTestSuite) TestAclDryRun_Cluster() {
+	// ACL DRYRUN was added in 7.0.0
+	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 	client := suite.defaultClusterClient()
 	t := suite.T()
 
