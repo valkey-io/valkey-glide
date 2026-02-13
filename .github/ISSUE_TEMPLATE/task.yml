@@ -1,7 +1,7 @@
 name: Task
 description: Create a task to manage work
 title: "[Task]"
-labels: ["task"]
+labels: ["Task 🔧"]
 assignees: []
 
 body:
@@ -21,8 +21,8 @@ body:
           label: Checklist
           description: Add items to be completed
           value: |
-              1. 
-              2. 
+              1.
+              2.
               ...
 
     - type: textarea
