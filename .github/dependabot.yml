@@ -56,7 +56,6 @@ updates:
                   - "minor"
       labels:
           - "dependencies"
-          - "gradle"
           - "java ☕"
 
     # Enable version updates for Cargo (Rust - glide-core)
@@ -76,7 +75,6 @@ updates:
                   - "minor"
       labels:
           - "dependencies"
-          - "cargo"
           - "Rust ⚙️"
 
     # Enable version updates for Cargo (Rust - Java wrapper)
@@ -96,7 +94,6 @@ updates:
                   - "minor"
       labels:
           - "dependencies"
-          - "cargo"
           - "Rust ⚙️"
           - "java ☕"
 
@@ -117,7 +114,6 @@ updates:
                   - "minor"
       labels:
           - "dependencies"
-          - "cargo"
           - "Rust ⚙️"
           - "python 🐍"
 
@@ -157,7 +153,6 @@ updates:
                   - "minor"
       labels:
           - "dependencies"
-          - "pip"
           - "python 🐍"
 
     # Enable version updates for GitHub Actions
