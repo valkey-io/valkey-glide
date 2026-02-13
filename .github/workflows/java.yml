@@ -300,11 +300,11 @@ jobs:
               run: ./gradlew publishToMavenLocal
 
             - name: Build Lambda Test App
-              working-directory: java/lambda-test
-              run: ../gradlew shadowJar
+              working-directory: java/e2e/lambda-test
+              run: ../../gradlew shadowJar
 
             - name: Run Docker Test
-              working-directory: java/lambda-test
+              working-directory: java/e2e/lambda-test
               run: |
                   docker compose up -d --build
 
@@ -326,7 +326,7 @@ jobs:
 
             - name: Cleanup Docker
               if: always()
-              working-directory: java/lambda-test
+              working-directory: java/e2e/lambda-test
               run: docker compose down -v
 
     get-containers:
