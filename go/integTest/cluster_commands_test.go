@@ -3086,6 +3086,11 @@ func (suite *GlideTestSuite) TestClusterSlots() {
 	result, err := client.ClusterSlots(context.Background())
 	assert.NoError(t, err)
 	assert.Greater(t, len(result), 0)
+
+	// Each slot range should have at least 3 elements: start slot, end slot, and primary node info
+	for _, slotRange := range result {
+		assert.GreaterOrEqual(t, len(slotRange), 3, "slot range should have at least 3 elements")
+	}
 }
 
 func (suite *GlideTestSuite) TestClusterKeySlot() {
