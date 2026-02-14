@@ -6,7 +6,8 @@ use futures_intrusive::sync::ManualResetEvent;
 use logger_core::{log_debug, log_error, log_trace, log_warn};
 use redis::aio::{DisconnectNotifier, MultiplexedConnection};
 use redis::{
-    GlideConnectionOptions, PushInfo, RedisConnectionInfo, RedisError, RedisResult, RetryStrategy,
+    AddressResolver, GlideConnectionOptions, PushInfo, RedisConnectionInfo, RedisError,
+    RedisResult, RetryStrategy,
 };
 use std::fmt;
 use std::sync::Arc;
@@ -226,9 +227,15 @@ fn get_client(
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
     tls_params: Option<redis::TlsConnParams>,
+    address_resolver: Option<&std::sync::Arc<dyn super::AddressResolver>>,
 ) -> redis::Client {
-    let connection_info =
-        super::get_connection_info(address, tls_mode, redis_connection_info, tls_params);
+    let connection_info = super::get_connection_info(
+        address,
+        tls_mode,
+        redis_connection_info,
+        tls_params,
+        address_resolver,
+    );
     redis::Client::open(connection_info).unwrap() // can unwrap, because [open] fails only on trying to convert input to ConnectionInfo, and we pass ConnectionInfo.
 }
 
@@ -252,13 +259,20 @@ impl ReconnectingConnection {
         tls_params: Option<redis::TlsConnParams>,
         tcp_nodelay: bool,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
+        address_resolver: Option<&std::sync::Arc<dyn AddressResolver>>,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
             format!("Attempting connection to {address}"),
         );
 
-        let connection_info = get_client(address, tls_mode, redis_connection_info, tls_params);
+        let connection_info = get_client(
+            address,
+            tls_mode,
+            redis_connection_info,
+            tls_params,
+            address_resolver,
+        );
         let backend = ConnectionBackend {
             connection_info: RwLock::new(connection_info),
             connection_available_signal: ManualResetEvent::new(true),

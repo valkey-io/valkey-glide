@@ -388,8 +388,14 @@ public class ConnectionManager {
                         ConnectionRequest request = requestBuilder.build();
                         byte[] requestBytes = request.toByteArray();
 
+                        // Get the address resolver (may be null if not configured)
+                        // The resolver is passed directly to native code which stores it as a global reference
+                        // to prevent garbage collection while the client is alive
+                        var addressResolver = configuration.getAddressResolver().orElse(null);
+
                         // Create native client with protobuf bytes
-                        this.nativeClientHandle = GlideNativeBridge.createClient(requestBytes);
+                        // Native code will store the resolver as a global reference if provided
+                        this.nativeClientHandle = GlideNativeBridge.createClient(requestBytes, addressResolver);
 
                         if (nativeClientHandle == 0) {
                             throw new ClosingException("Failed to create client - Connection refused");

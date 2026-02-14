@@ -27,6 +27,7 @@ use redis::Value;
 use std::str::FromStr;
 use std::sync::{Arc, OnceLock};
 
+mod address_resolver;
 mod errors;
 mod jni_client;
 mod linked_hashmap;
@@ -35,6 +36,8 @@ mod protobuf_bridge;
 use errors::{FFIError, handle_errors, handle_panics};
 use jni_client::*;
 use protobuf_bridge::*;
+
+use crate::address_resolver::JavaAddressResolver;
 
 #[derive(Clone)]
 pub struct RegistryMethodCache {
@@ -1290,11 +1293,15 @@ fn safe_create_jstring<'local>(
 // ==================== JNI CLIENT MANAGEMENT FUNCTIONS ====================
 
 /// Create Valkey client and store handle.
+/// If address_resolver is not null, it will be stored as a global reference and used
+/// for address resolution callbacks. The global reference ensures the resolver is not
+/// garbage collected while the client is alive.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
-    env: JNIEnv,
+    mut env: JNIEnv,
     _class: JClass,
     connection_request_bytes: JByteArray,
+    address_resolver: JObject,
 ) -> jlong {
     handle_panics(
         move || {
@@ -1319,11 +1326,26 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
             };
 
             // Convert protobuf to glide_core ConnectionRequest
-            let connection_request = glide_core::client::ConnectionRequest::from(request);
+            let mut connection_request = glide_core::client::ConnectionRequest::from(request);
 
             // Cache JVM for push callbacks
             if let Ok(jvm) = env.get_java_vm() {
                 let _ = jni_client::JVM.set(Arc::new(jvm));
+            }
+
+            // If an address resolver is provided, create a global reference and set up the callback
+            // The global reference ensures the Java object is not garbage collected while in use
+            if !address_resolver.is_null()
+                && let Some(jvm) = jni_client::JVM.get().cloned()
+            {
+                match JavaAddressResolver::new(&mut env, jvm, &address_resolver) {
+                    Some(resolver) => {
+                        connection_request.address_resolver = Some(Arc::new(resolver));
+                    }
+                    None => {
+                        return Some(0);
+                    }
+                }
             }
 
             // Direct client creation (no lazy loading for simplified implementation)

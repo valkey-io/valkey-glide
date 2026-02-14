@@ -3,6 +3,7 @@ package glide.api.models.configuration;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.List;
+import java.util.Optional;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -128,7 +129,48 @@ public abstract class BaseClientConfiguration {
      */
     @Builder.Default private final boolean lazyConnect = false;
 
+    /**
+     * Optional callback for resolving server addresses before connection.
+     *
+     * <p>If provided, this callback will be invoked for each configured address during connection
+     * establishment. The callback receives the configured host and port, and should return the actual
+     * host and port to use for the connection.
+     *
+     * <p>This is useful for:
+     *
+     * <ul>
+     *   <li>Custom DNS resolution for service discovery
+     *   <li>Address translation for proxy setups
+     *   <li>Dynamic endpoint resolution for cloud environments
+     * </ul>
+     *
+     * <p>If not set, addresses are used as configured without modification.
+     *
+     * @example
+     *     <pre>{@code
+     * AddressResolver resolver = (host, port) -> {
+     *     String resolvedHost = myDnsResolver.resolve(host);
+     *     return new ResolvedAddress(resolvedHost, port);
+     * };
+     *
+     * GlideClientConfiguration config = GlideClientConfiguration.builder()
+     *     .address(NodeAddress.builder().host("my-service").port(6379).build())
+     *     .addressResolver(resolver)
+     *     .build();
+     * }</pre>
+     */
+    private final AddressResolver addressResolver;
+
     public List<NodeAddress> getAddresses() {
         return List.copyOf(addresses);
+    }
+
+    /**
+     * Returns the address resolver if configured.
+     *
+     * @return An Optional containing the AddressResolver, or empty if not configured
+     */
+    public Optional<AddressResolver> getAddressResolver() {
+        return Optional.ofNullable(addressResolver);
     }
 }

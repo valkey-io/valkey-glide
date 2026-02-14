@@ -9,7 +9,7 @@ use logger_core::log_debug;
 use logger_core::log_warn;
 use redis::aio::ConnectionLike;
 use redis::cluster_routing::{self, ResponsePolicy, Routable, RoutingInfo, is_readonly_cmd};
-use redis::{PushInfo, RedisError, RedisResult, RetryStrategy, Value};
+use redis::{AddressResolver, PushInfo, RedisError, RedisResult, RetryStrategy, Value};
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -212,10 +212,20 @@ impl StandaloneClient {
                 let params = tls_params.clone();
                 let nodelay = tcp_nodelay;
                 let sync = pubsub_synchronizer.clone();
+                let resolver = connection_request.address_resolver.clone();
                 async move {
                     get_connection_and_replication_info(
-                        &address, &retry, &info, tls, &sender, discover, timeout, params, nodelay,
+                        &address,
+                        &retry,
+                        &info,
+                        tls,
+                        &sender,
+                        discover,
+                        timeout,
+                        params,
+                        nodelay,
                         &sync,
+                        resolver.as_ref(),
                     )
                     .await
                     .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -758,6 +768,7 @@ async fn get_connection_and_replication_info(
     tls_params: Option<redis::TlsConnParams>,
     tcp_nodelay: bool,
     pubsub_synchronizer: &Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
+    address_resolver: Option<&Arc<dyn AddressResolver>>,
 ) -> Result<(ReconnectingConnection, Value), (ReconnectingConnection, RedisError)> {
     let reconnecting_connection = ReconnectingConnection::new(
         address,
@@ -770,6 +781,7 @@ async fn get_connection_and_replication_info(
         tls_params,
         tcp_nodelay,
         pubsub_synchronizer.clone(),
+        address_resolver,
     )
     .await?;
 
