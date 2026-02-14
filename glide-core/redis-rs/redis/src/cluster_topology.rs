@@ -200,8 +200,10 @@ pub(crate) fn parse_and_count_slots(
                                     metadata_ip =
                                         String::from_utf8_lossy(value_bytes).parse::<IpAddr>().ok();
                                 } else if key_str == "hostname" {
-                                    metadata_hostname =
-                                        Some(String::from_utf8_lossy(value_bytes).into_owned());
+                                    let h = String::from_utf8_lossy(value_bytes);
+                                    if !h.is_empty() {
+                                        metadata_hostname = Some(h.into_owned());
+                                    }
                                 }
                                 // Other keys are ignored - we only need ip and hostname
                             };
@@ -942,6 +944,46 @@ mod tests {
             assert_eq!(
                 address_to_ip_map.get("node1.example.com:6379"),
                 Some(&"2001:db8::1".parse().unwrap())
+            );
+        });
+    }
+
+    #[test]
+    fn parse_slots_empty_hostname_in_metadata_falls_back_to_ip() {
+        // ElastiCache (plaintext, cluster mode) returns hostname: "" (empty string)
+        // in CLUSTER SLOTS metadata. The parser should treat this as absent and
+        // fall back to the IP address from the primary identifier.
+        run_with_both_formats(|format| {
+            let view = Value::Array(vec![slot_value_with_metadata(
+                0,
+                16383,
+                vec![
+                    ("172.20.43.71", 6379, Some(vec![("hostname", "")])),
+                    ("172.20.78.117", 6379, Some(vec![("hostname", "")])),
+                ],
+                format,
+            )]);
+
+            let ParsedSlotsResult {
+                slots_count,
+                slots,
+                address_to_ip_map,
+            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+
+            assert_eq!(slots_count, 16384);
+            assert_eq!(slots.len(), 1);
+            // Should use the IP as the address, not the empty hostname
+            assert_eq!(slots[0].master(), "172.20.43.71:6379");
+            assert_eq!(slots[0].replicas(), vec!["172.20.78.117:6379".to_string()]);
+
+            assert_eq!(address_to_ip_map.len(), 2);
+            assert_eq!(
+                address_to_ip_map.get("172.20.43.71:6379"),
+                Some(&"172.20.43.71".parse().unwrap())
+            );
+            assert_eq!(
+                address_to_ip_map.get("172.20.78.117:6379"),
+                Some(&"172.20.78.117".parse().unwrap())
             );
         });
     }
