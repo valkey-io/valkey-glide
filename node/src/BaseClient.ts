@@ -1674,7 +1674,6 @@ export class BaseClient {
             );
         }
 
-        // Match Java's validation: only throw error if BOTH config exists AND callback exists
         // Java: if (subscriptionConfiguration.isPresent() && subscriptionConfiguration.get().getCallback().isPresent())
         if (
             this.isPubsubConfigured(this.config!) &&
@@ -1698,7 +1697,6 @@ export class BaseClient {
             );
         }
 
-        // Match Java's validation: only throw error if BOTH config exists AND callback exists
         // Java: if (subscriptionConfiguration.isPresent() && subscriptionConfiguration.get().getCallback().isPresent())
         if (
             this.isPubsubConfigured(this.config!) &&
@@ -9286,8 +9284,6 @@ export class BaseClient {
         }
 
         // Set PubSub reconciliation interval if explicitly configured
-        // Note: This requires the protobuf files to be regenerated with:
-        // npm run build-protobuf (from the node directory)
         if (options.pubsubReconciliationIntervalMs !== undefined) {
             request.pubsubReconciliationIntervalMs =
                 options.pubsubReconciliationIntervalMs;

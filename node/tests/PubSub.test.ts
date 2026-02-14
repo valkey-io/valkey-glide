@@ -4208,7 +4208,6 @@ describe("PubSub", () => {
                 const channel = getRandomKey();
                 const message = getRandomKey();
 
-                // Create clients WITHOUT any subscription configuration
                 if (clusterMode) {
                     listener = await GlideClusterClient.createClient(
                         getOptions(clusterMode),
@@ -4276,7 +4275,6 @@ describe("PubSub", () => {
                 const channel = pattern.replace(/\*/g, getRandomKey());
                 const message = getRandomKey();
 
-                // Create clients WITHOUT any subscription configuration
                 if (clusterMode) {
                     listener = await GlideClusterClient.createClient(
                         getOptions(clusterMode),
@@ -4341,7 +4339,6 @@ describe("PubSub", () => {
                 const channel = "test-channel-" + getRandomKey();
                 const message = "test-message";
 
-                // Create clients WITHOUT any subscription configuration (like Java)
                 if (clusterMode) {
                     listener = await GlideClusterClient.createClient(
                         getOptions(clusterMode),
@@ -4420,7 +4417,6 @@ describe("PubSub", () => {
                 const channel = "test-channel-" + getRandomKey();
                 const message = "test-message";
 
-                // Create clients WITHOUT any subscription configuration
                 listener = await GlideClusterClient.createClient(
                     getOptions(clusterMode),
                 );
@@ -4496,7 +4492,6 @@ describe("PubSub", () => {
                 const channel = getRandomKey();
                 const message = getRandomKey();
 
-                // Create clients WITHOUT any subscription configuration
                 listener = await GlideClusterClient.createClient(
                     getOptions(clusterMode),
                 );
@@ -4567,7 +4562,6 @@ describe("PubSub", () => {
                 const message1 = getRandomKey();
                 const message2 = getRandomKey();
 
-                // Create clients WITHOUT any subscription configuration
                 listener = await GlideClusterClient.createClient(
                     getOptions(clusterMode),
                 );
