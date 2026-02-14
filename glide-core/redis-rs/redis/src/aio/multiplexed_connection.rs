@@ -25,6 +25,7 @@ use pin_project_lite::pin_project;
 use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::Debug;
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -605,6 +606,7 @@ impl MultiplexedConnection {
             stream,
             std::time::Duration::MAX,
             glide_connection_options,
+            None, // No socket_addr available in this path
         )
         .await
     }
@@ -616,6 +618,7 @@ impl MultiplexedConnection {
         stream: C,
         response_timeout: std::time::Duration,
         glide_connection_options: GlideConnectionOptions,
+        socket_addr: Option<SocketAddr>,
     ) -> RedisResult<(Self, impl Future<Output = ()>)>
     where
         C: Unpin + AsyncRead + AsyncWrite + Send + 'static,
@@ -626,10 +629,17 @@ impl MultiplexedConnection {
         let (mut pipeline, driver) =
             Pipeline::new(codec, glide_connection_options.disconnect_notifier);
         let driver = Box::pin(driver);
+
+        // Use the actual socket address if available, otherwise fall back to connection_info.addr
+        let address_string = if let Some(socket_addr) = socket_addr {
+            format!("{}:{}", socket_addr.ip(), socket_addr.port())
+        } else {
+            connection_info.addr.to_string()
+        };
         let pm = PushManager::new(
             glide_connection_options.push_sender,
             glide_connection_options.pubsub_synchronizer,
-            Some(connection_info.addr.to_string()),
+            Some(address_string),
         );
 
         pipeline.set_push_manager(pm.clone());
