@@ -2634,9 +2634,31 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 
 	go invokeClient.InvokeScriptWithRoute(context.Background(), *script, route)
 
-	time.Sleep(1 * time.Second)
+	timeout := time.After(4 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 
-	result, err := killClient.ScriptKillWithRoute(context.Background(), route)
+	var result string
+	killed := false
+
+	for !killed {
+		select {
+		case <-timeout:
+			suite.T().Fatal("Timeout: SCRIPT KILL failed to execute in 4 seconds")
+		case <-ticker.C:
+			result, err = killClient.ScriptKillWithRoute(context.Background(), route)
+			if err == nil {
+				killed = true
+				continue
+			}
+
+			if !strings.Contains(strings.ToLower(err.Error()), "notbusy") {
+				assert.NoError(suite.T(), err)
+				killed = true
+			}
+		}
+	}
+
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "OK", result)
 	script.Close()

@@ -1489,7 +1489,7 @@ public class GlideClusterClient extends BaseClient
      *
      * @see <a href="https://valkey.io/commands/ssubscribe/">valkey.io</a> for details
      */
-    public CompletableFuture<Void> ssubscribe(Set<String> channels) {
+    public CompletableFuture<Void> ssubscribeLazy(Set<String> channels) {
         return commandManager.submitNewCommand(
                 SSubscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
@@ -1655,7 +1655,8 @@ public class GlideClusterClient extends BaseClient
                 GetSubscriptions,
                 EMPTY_STRING_ARRAY,
                 response -> {
-                    Object[] parsed = (Object[]) parseSubscriptionState(response);
+                    Object[] arr = handleArrayResponse(response);
+                    Object[] parsed = (Object[]) parseSubscriptionState(arr);
                     @SuppressWarnings("unchecked")
                     Map<String, Object[]> desiredMap = (Map<String, Object[]>) parsed[0];
                     @SuppressWarnings("unchecked")

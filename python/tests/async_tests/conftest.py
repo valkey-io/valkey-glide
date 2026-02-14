@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from typing import AsyncGenerator, List, Optional, Union
+from contextlib import asynccontextmanager
+from typing import Any, AsyncGenerator, List, Optional, Set, Union
 
 import anyio
 import pytest
@@ -284,3 +285,93 @@ async def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersi
             raise TimeoutError(f"Connection timeout during teardown: {e}")
         else:
             raise e
+
+
+@asynccontextmanager
+async def async_pubsub_test_clients(
+    request,
+    cluster_mode: bool,
+    subscription_method,
+    channels: Optional[Set[str]] = None,
+    patterns: Optional[Set[str]] = None,
+    sharded: Optional[Set[str]] = None,
+    callback: Optional[Any] = None,
+    context: Optional[Any] = None,
+    timeout: Optional[int] = None,
+):
+    """
+    Async context manager for pubsub test clients.
+    Handles client creation, subscription, and cleanup.
+    """
+    from tests.utils.utils import (
+        create_pubsub_client,
+        psubscribe_by_method,
+        pubsub_client_cleanup,
+        ssubscribe_by_method,
+        subscribe_by_method,
+    )
+
+    listening_client, publishing_client = None, None
+
+    try:
+        if subscription_method.value == 0:  # Config
+            listening_client = await create_pubsub_client(
+                request,
+                cluster_mode,
+                channels=channels,
+                patterns=patterns,
+                sharded_channels=sharded,
+                callback=callback,
+                context=context,
+                timeout=timeout,
+            )
+        else:  # Lazy or Blocking
+            listening_client = await create_pubsub_client(
+                request,
+                cluster_mode,
+                callback=callback,
+                context=context,
+                timeout=timeout,
+            )
+            # Subscribe dynamically
+            if channels:
+                await subscribe_by_method(
+                    listening_client, channels, subscription_method
+                )
+            if patterns:
+                await psubscribe_by_method(
+                    listening_client, patterns, subscription_method
+                )
+            if sharded and cluster_mode:
+                await ssubscribe_by_method(listening_client, sharded, subscription_method)  # type: ignore[arg-type]
+
+        publishing_client = await create_client(request, cluster_mode)
+
+        yield listening_client, publishing_client
+
+    finally:
+        await pubsub_client_cleanup(listening_client)
+        await pubsub_client_cleanup(publishing_client)
+
+
+async def async_retrieve_message(client, method, callback_messages=None, timeout=3.0):
+    """
+    Retrieve a pubsub message based on the method type.
+
+    Args:
+        client: The async client
+        method: MethodTesting enum value
+        callback_messages: List for callback messages (required for Callback method)
+        timeout: Timeout in seconds
+
+    Returns:
+        The retrieved PubSubMsg
+    """
+    from tests.utils.pubsub_test_utils import wait_for_messages
+
+    if method.value == 0:  # Async
+        return await client.get_pubsub_message()
+    elif method.value == 1:  # Sync
+        return client.try_get_pubsub_message()
+    else:  # Callback
+        return wait_for_messages(1, callback_messages, timeout=timeout)[0]
