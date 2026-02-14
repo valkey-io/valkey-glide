@@ -14,6 +14,11 @@
 
 ### Fixes
 
+#### Fixes
+* CORE: Fix empty hostname in CLUSTER SLOTS metadata causing AllConnectionsUnavailable ([#5367](https://github.com/valkey-io/valkey-glide/issues/5367)). AWS ElastiCache (plaintext, cluster mode) returns `hostname: ""` in node metadata, which was used as the connection address instead of falling back to the IP.
+* Node: Fix to handle non-string types in toBuffersArray ([#4842](https://github.com/valkey-io/valkey-glide/issues/4842))
+* CORE: Enforce connection_timeout for initial standalone connection failures  ([#4991](https://github.com/valkey-io/valkey-glide/issues/4991))
+* Node: Fixed `Failed to convert napi value Undefined into rust type u32` error  ([#5128](https://github.com/valkey-io/valkey-glide/pull/5128))
 * Python: Fix Sphinx docs build failure with duplicate object warnings  ([#5163](https://github.com/valkey-io/valkey-glide/issues/5163))
 * Core: Fix topology refresh reconnection issue when using refreshTopologyFromInitialNodes ([#5155](https://github.com/valkey-io/valkey-glide/issues/5155))
 
