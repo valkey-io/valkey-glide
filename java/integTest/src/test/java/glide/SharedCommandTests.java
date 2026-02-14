@@ -141,6 +141,7 @@ import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
@@ -185,6 +186,21 @@ public class SharedCommandTests {
     public static void teardown() {
         for (var client : clients) {
             ((Named<BaseClient>) client.get()[0]).getPayload().close();
+        }
+    }
+
+    @AfterEach
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public void cleanup() {
+        // Flush all databases to ensure clean state between tests
+        for (var client : clients) {
+            BaseClient baseClient = ((Named<BaseClient>) client.get()[0]).getPayload();
+            if (baseClient instanceof GlideClient) {
+                ((GlideClient) baseClient).flushall().get();
+            } else if (baseClient instanceof GlideClusterClient) {
+                ((GlideClusterClient) baseClient).flushall().get();
+            }
         }
     }
 
@@ -678,6 +694,65 @@ public class SharedCommandTests {
         assertArrayEquals(
                 new GlideString[] {value, value, value},
                 client.mget(new GlideString[] {key1, key2, key3}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void mget_with_large_binary_values_returns_null_for_missing_keys(BaseClient client) {
+        // Large binary data causes MGET to yield GlideString "nil" instead of null for missing
+        // key. This tests the DirectByteBuffer serialization path (>16KB).
+
+        // Create 16KB of data to trigger DirectByteBuffer path
+        byte[] largeData = new byte[16 * 1024];
+        java.util.Arrays.fill(largeData, (byte) 0xFF);
+
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString missingKey = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString value1 = gs("value1");
+        GlideString largeValue = gs(largeData);
+
+        // Set only key1 and key2, leave missingKey unset
+        assertEquals(OK, client.set(key1, value1).get());
+        assertEquals(OK, client.set(key2, largeValue).get());
+
+        // Execute MGET with missing key in the middle
+        GlideString[] result = client.mget(new GlideString[] {key1, missingKey, key2}).get();
+
+        // Verify results
+        assertEquals(3, result.length);
+        assertEquals(value1, result[0]);
+        assertNull(result[1], "Missing key should return null, not GlideString('nil')");
+        assertArrayEquals(largeData, result[2].getBytes());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void mget_string_with_large_values_returns_null_for_missing_keys(BaseClient client) {
+        // String version should also handle null correctly with large data
+
+        // Create 16KB string to trigger DirectByteBuffer path
+        String largeString = "x".repeat(16 * 1024);
+
+        String key1 = UUID.randomUUID().toString();
+        String missingKey = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String value1 = "value1";
+
+        // Set only key1 and key2, leave missingKey unset
+        assertEquals(OK, client.set(key1, value1).get());
+        assertEquals(OK, client.set(key2, largeString).get());
+
+        // Execute MGET with missing key in the middle
+        String[] result = client.mget(new String[] {key1, missingKey, key2}).get();
+
+        // Verify results
+        assertEquals(3, result.length);
+        assertEquals(value1, result[0]);
+        assertNull(result[1], "Missing key should return null");
+        assertEquals(largeString, result[2]);
     }
 
     @SneakyThrows
@@ -10283,6 +10358,11 @@ public class SharedCommandTests {
         assertEquals(1, pending_results_extended.length);
         assertEquals(streamid_1, pending_results_extended[0][0]);
         assertEquals(consumer1, pending_results_extended[0][1]);
+
+        // Small delay to ensure all XCLAIM and XACK operations are fully processed
+        // This addresses a race condition in standalone RESP2 mode where the final
+        // XPENDING call might not see all expected pending messages immediately
+        Thread.sleep(5);
 
         pending_results_extended =
                 client

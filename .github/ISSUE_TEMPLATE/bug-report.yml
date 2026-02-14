@@ -2,7 +2,7 @@
 name: "🐛 Bug Report"
 description: Report a bug
 title: "(topic): (short issue description)"
-labels: [bug, needs-triage]
+labels: ["bug 🐞", "Untriaged user issue"]
 assignees: []
 body:
     - type: textarea
