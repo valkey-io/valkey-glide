@@ -35,6 +35,7 @@ import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.ScanResult;
+import redis.clients.jedis.resps.Tuple;
 import redis.clients.jedis.util.KeyValue;
 
 /**
@@ -3702,17 +3703,20 @@ public class JedisTest {
         jedis.zadd(key, members);
 
         // Test ZRANGE WITHSCORES
-        Map<String, Double> rangeWithScores = jedis.zrangeWithScores(key, 0, -1);
+        List<Tuple> rangeWithScores = jedis.zrangeWithScores(key, 0, -1);
         assertEquals(3, rangeWithScores.size(), "ZRANGE WITHSCORES should return 3 members");
-        assertEquals(1.0, rangeWithScores.get("member1"), 0.001);
-        assertEquals(2.0, rangeWithScores.get("member2"), 0.001);
-        assertEquals(3.0, rangeWithScores.get("member3"), 0.001);
+        assertEquals("member1", rangeWithScores.get(0).getElement());
+        assertEquals(1.0, rangeWithScores.get(0).getScore(), 0.001);
+        assertEquals("member2", rangeWithScores.get(1).getElement());
+        assertEquals(2.0, rangeWithScores.get(1).getScore(), 0.001);
+        assertEquals("member3", rangeWithScores.get(2).getElement());
+        assertEquals(3.0, rangeWithScores.get(2).getScore(), 0.001);
 
         // Test partial range with scores
-        rangeWithScores = jedis.zrangeWithScores(key, 0, 1);
-        assertEquals(2, rangeWithScores.size(), "ZRANGE WITHSCORES should return 2 members");
-        assertTrue(rangeWithScores.containsKey("member1"));
-        assertTrue(rangeWithScores.containsKey("member2"));
+        List<Tuple> partialRange = jedis.zrangeWithScores(key, 0, 1);
+        assertEquals(2, partialRange.size(), "ZRANGE WITHSCORES should return 2 members");
+        assertEquals("member1", partialRange.get(0).getElement());
+        assertEquals("member2", partialRange.get(1).getElement());
     }
 
     @Test
@@ -3726,7 +3730,7 @@ public class JedisTest {
         jedis.zadd(key, members);
 
         // Test binary ZRANGE WITHSCORES
-        Map<byte[], Double> rangeWithScores = jedis.zrangeWithScores(key, 0, -1);
+        List<Tuple> rangeWithScores = jedis.zrangeWithScores(key, 0, -1);
         assertEquals(2, rangeWithScores.size(), "Binary ZRANGE WITHSCORES should return 2 members");
 
         // Cleanup
@@ -3925,20 +3929,21 @@ public class JedisTest {
         jedis.zadd(key, members);
 
         // Test ZPOPMIN with count
-        Map<String, Double> popped = jedis.zpopmin(key, 2);
+        List<Tuple> popped = jedis.zpopmin(key, 2);
         assertEquals(2, popped.size(), "ZPOPMIN should return 2 members");
-        assertTrue(popped.containsKey("member1"), "ZPOPMIN should include lowest scored member");
-        assertTrue(popped.containsKey("member2"), "ZPOPMIN should include second lowest");
-        assertEquals(1.0, popped.get("member1"), 0.001);
-        assertEquals(2.0, popped.get("member2"), 0.001);
+        assertEquals(
+                "member1", popped.get(0).getElement(), "ZPOPMIN should include lowest scored member");
+        assertEquals(1.0, popped.get(0).getScore(), 0.001);
+        assertEquals("member2", popped.get(1).getElement(), "ZPOPMIN should include second lowest");
+        assertEquals(2.0, popped.get(1).getScore(), 0.001);
 
         // Verify members were removed
         long cardinality = jedis.zcard(key);
         assertEquals(2, cardinality, "Sorted set should have 2 members remaining");
 
         // Test ZPOPMIN on non-existing key
-        popped = jedis.zpopmin("nonexistent", 1);
-        assertTrue(popped.isEmpty(), "ZPOPMIN should return empty map for non-existing key");
+        List<Tuple> poppedEmpty = jedis.zpopmin("nonexistent", 1);
+        assertTrue(poppedEmpty.isEmpty(), "ZPOPMIN should return empty list for non-existing key");
     }
 
     @Test
@@ -3956,7 +3961,7 @@ public class JedisTest {
         jedis.zadd(key, members);
 
         // Test binary ZPOPMIN
-        Map<byte[], Double> popped = jedis.zpopmin(key, 1);
+        List<Tuple> popped = jedis.zpopmin(key, 1);
         assertEquals(1, popped.size(), "Binary ZPOPMIN should return 1 member");
 
         // Cleanup
@@ -3980,20 +3985,21 @@ public class JedisTest {
         jedis.zadd(key, members);
 
         // Test ZPOPMAX with count
-        Map<String, Double> popped = jedis.zpopmax(key, 2);
+        List<Tuple> popped = jedis.zpopmax(key, 2);
         assertEquals(2, popped.size(), "ZPOPMAX should return 2 members");
-        assertTrue(popped.containsKey("member4"), "ZPOPMAX should include highest scored member");
-        assertTrue(popped.containsKey("member3"), "ZPOPMAX should include second highest");
-        assertEquals(4.0, popped.get("member4"), 0.001);
-        assertEquals(3.0, popped.get("member3"), 0.001);
+        assertEquals(
+                "member4", popped.get(0).getElement(), "ZPOPMAX should include highest scored member");
+        assertEquals(4.0, popped.get(0).getScore(), 0.001);
+        assertEquals("member3", popped.get(1).getElement(), "ZPOPMAX should include second highest");
+        assertEquals(3.0, popped.get(1).getScore(), 0.001);
 
         // Verify members were removed
         long cardinality = jedis.zcard(key);
         assertEquals(2, cardinality, "Sorted set should have 2 members remaining");
 
         // Test ZPOPMAX on non-existing key
-        popped = jedis.zpopmax("nonexistent", 1);
-        assertTrue(popped.isEmpty(), "ZPOPMAX should return empty map for non-existing key");
+        List<Tuple> poppedEmpty = jedis.zpopmax("nonexistent", 1);
+        assertTrue(poppedEmpty.isEmpty(), "ZPOPMAX should return empty list for non-existing key");
     }
 
     @Test
@@ -4011,7 +4017,7 @@ public class JedisTest {
         jedis.zadd(key, members);
 
         // Test binary ZPOPMAX
-        Map<byte[], Double> popped = jedis.zpopmax(key, 1);
+        List<Tuple> popped = jedis.zpopmax(key, 1);
         assertEquals(1, popped.size(), "Binary ZPOPMAX should return 1 member");
 
         // Cleanup
@@ -4263,27 +4269,27 @@ public class JedisTest {
         jedis.zadd(key, members);
 
         // Test ZSCAN
-        ScanResult<Map.Entry<String, Double>> result = jedis.zscan(key, "0");
+        ScanResult<Tuple> result = jedis.zscan(key, "0");
         assertNotNull(result, "ZSCAN should return non-null result");
         assertNotNull(result.getCursor(), "ZSCAN should return cursor");
         assertNotNull(result.getResult(), "ZSCAN should return results");
 
-        List<Map.Entry<String, Double>> entries = result.getResult();
+        List<Tuple> entries = result.getResult();
         assertEquals(3, entries.size(), "ZSCAN should return 3 entries");
 
         // Verify all members are present
         Set<String> memberNames = new HashSet<>();
-        for (Map.Entry<String, Double> entry : entries) {
-            memberNames.add(entry.getKey());
+        for (Tuple tuple : entries) {
+            memberNames.add(tuple.getElement());
         }
         assertTrue(memberNames.contains("member1"), "ZSCAN should include member1");
         assertTrue(memberNames.contains("member2"), "ZSCAN should include member2");
         assertTrue(memberNames.contains("member3"), "ZSCAN should include member3");
 
         // Test ZSCAN on non-existing key
-        result = jedis.zscan("nonexistent", "0");
+        ScanResult<Tuple> resultEmpty = jedis.zscan("nonexistent", "0");
         assertTrue(
-                result.getResult().isEmpty(), "ZSCAN should return empty result for non-existing key");
+                resultEmpty.getResult().isEmpty(), "ZSCAN should return empty result for non-existing key");
     }
 
     @Test
@@ -4297,7 +4303,7 @@ public class JedisTest {
         jedis.zadd(key, members);
 
         // Test binary ZSCAN
-        ScanResult<Map.Entry<byte[], Double>> result = jedis.zscan(key, "0".getBytes());
+        ScanResult<Tuple> result = jedis.zscan(key, "0".getBytes());
         assertNotNull(result, "Binary ZSCAN should return non-null result");
         assertEquals(2, result.getResult().size(), "Binary ZSCAN should return 2 entries");
 
@@ -4318,10 +4324,10 @@ public class JedisTest {
         List<String> emptyRange = jedis.zrange(key, 0, -1);
         assertTrue(emptyRange.isEmpty(), "ZRANGE should return empty list for non-existing key");
 
-        Map<String, Double> emptyRangeWithScores = jedis.zrangeWithScores(key, 0, -1);
+        List<Tuple> emptyRangeWithScores = jedis.zrangeWithScores(key, 0, -1);
         assertTrue(
                 emptyRangeWithScores.isEmpty(),
-                "ZRANGE WITHSCORES should return empty map for non-existing key");
+                "ZRANGE WITHSCORES should return empty list for non-existing key");
 
         // Test ZREM on non-existing key
         long removed = jedis.zrem(key, "member1", "member2");
@@ -4381,9 +4387,9 @@ public class JedisTest {
         assertEquals(3, count, "Should have 3 players in range [150, 250]");
 
         // Remove bottom player
-        Map<String, Double> removed = jedis.zpopmin(key, 1);
+        List<Tuple> removed = jedis.zpopmin(key, 1);
         assertEquals(1, removed.size(), "Should remove 1 player");
-        assertTrue(removed.containsKey("player3"), "Should remove player3");
+        assertEquals("player3", removed.get(0).getElement(), "Should remove player3");
 
         // Final verification
         assertEquals(2, jedis.zcard(key), "Leaderboard should have 2 players remaining");
@@ -4453,11 +4459,10 @@ public class JedisTest {
         jedis.zadd(key, 2.0, "two");
         jedis.zadd(key, 3.0, "three");
 
-        List<Object> result = jedis.zrankWithScore(key, "two");
+        redis.clients.jedis.resps.KeyValue<Long, Double> result = jedis.zrankWithScore(key, "two");
         assertNotNull(result);
-        assertEquals(2, result.size());
-        assertEquals(1L, result.get(0));
-        assertEquals(2.0, (Double) result.get(1), 0.001);
+        assertEquals(1L, result.getKey());
+        assertEquals(2.0, result.getValue(), 0.001);
 
         jedis.del(key);
     }
@@ -4475,11 +4480,10 @@ public class JedisTest {
         jedis.zadd(key, 2.0, "two");
         jedis.zadd(key, 3.0, "three");
 
-        List<Object> result = jedis.zrevrankWithScore(key, "two");
+        redis.clients.jedis.resps.KeyValue<Long, Double> result = jedis.zrevrankWithScore(key, "two");
         assertNotNull(result);
-        assertEquals(2, result.size());
-        assertEquals(1L, result.get(0));
-        assertEquals(2.0, (Double) result.get(1), 0.001);
+        assertEquals(1L, result.getKey());
+        assertEquals(2.0, result.getValue(), 0.001);
 
         jedis.del(key);
     }
@@ -4557,12 +4561,12 @@ public class JedisTest {
 
         jedis.zadd(key2, 1.0, "one");
 
-        Map<String, Double> diff = jedis.zdiffWithScores(key1, key2);
+        List<Tuple> diff = jedis.zdiffWithScores(key1, key2);
         assertEquals(2, diff.size());
-        assertTrue(diff.containsKey("two"));
-        assertTrue(diff.containsKey("three"));
-        assertEquals(2.0, diff.get("two"), 0.001);
-        assertEquals(3.0, diff.get("three"), 0.001);
+        assertEquals("two", diff.get(0).getElement());
+        assertEquals(2.0, diff.get(0).getScore(), 0.001);
+        assertEquals("three", diff.get(1).getElement());
+        assertEquals(3.0, diff.get(1).getScore(), 0.001);
 
         jedis.del(key1, key2);
     }
@@ -4631,11 +4635,15 @@ public class JedisTest {
         jedis.zadd(key2, 1.0, "one");
         jedis.zadd(key2, 3.0, "three");
 
-        Map<String, Double> union = jedis.zunionWithScores(key1, key2);
+        List<Tuple> union = jedis.zunionWithScores(key1, key2);
         assertEquals(3, union.size());
-        assertEquals(2.0, union.get("one"), 0.001); // 1.0 + 1.0
-        assertEquals(2.0, union.get("two"), 0.001);
-        assertEquals(3.0, union.get("three"), 0.001);
+        // Results are sorted by score
+        assertEquals("one", union.get(0).getElement());
+        assertEquals(2.0, union.get(0).getScore(), 0.001); // 1.0 + 1.0
+        assertEquals("two", union.get(1).getElement());
+        assertEquals(2.0, union.get(1).getScore(), 0.001);
+        assertEquals("three", union.get(2).getElement());
+        assertEquals(3.0, union.get(2).getScore(), 0.001);
 
         jedis.del(key1, key2);
     }
@@ -4677,9 +4685,10 @@ public class JedisTest {
         jedis.zadd(key2, 1.0, "one");
         jedis.zadd(key2, 3.0, "three");
 
-        Map<String, Double> inter = jedis.zinterWithScores(key1, key2);
+        List<Tuple> inter = jedis.zinterWithScores(key1, key2);
         assertEquals(1, inter.size());
-        assertEquals(2.0, inter.get("one"), 0.001); // 1.0 + 1.0
+        assertEquals("one", inter.get(0).getElement());
+        assertEquals(2.0, inter.get(0).getScore(), 0.001); // 1.0 + 1.0
 
         jedis.del(key1, key2);
     }
@@ -4721,9 +4730,10 @@ public class JedisTest {
         jedis.zadd(key2, 3.0, "three");
 
         // Pop min from first non-empty key
-        Map<String, List<List<Object>>> result = jedis.zmpop(true, key1, key2);
+        redis.clients.jedis.resps.KeyValue<byte[], List<Tuple>> result =
+                jedis.zmpop(redis.clients.jedis.args.SortedSetOption.MIN, key1.getBytes(), key2.getBytes());
         assertNotNull(result);
-        assertTrue(result.containsKey(key1));
+        assertArrayEquals(key1.getBytes(), result.getKey());
 
         jedis.del(key1, key2);
     }
@@ -4799,15 +4809,14 @@ public class JedisTest {
         jedis.zadd(key, 2.0, "two");
         jedis.zadd(key, 3.0, "three");
 
-        List<List<Object>> membersWithScores = jedis.zrandmemberWithCountWithScores(key, 2);
+        List<Tuple> membersWithScores = jedis.zrandmemberWithCountWithScores(key, 2);
         assertNotNull(membersWithScores);
         assertEquals(2, membersWithScores.size());
 
-        // Each entry should have 2 elements: member and score
-        for (List<Object> entry : membersWithScores) {
-            assertEquals(2, entry.size());
-            assertNotNull(entry.get(0)); // member
-            assertNotNull(entry.get(1)); // score
+        // Each tuple should have member and score
+        for (Tuple tuple : membersWithScores) {
+            assertNotNull(tuple.getElement()); // member
+            assertNotNull(tuple.getScore()); // score
         }
 
         jedis.del(key);

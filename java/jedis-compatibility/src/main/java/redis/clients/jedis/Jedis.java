@@ -9030,7 +9030,7 @@ public final class Jedis implements Closeable {
     }
 
     /**
-    * Removes and returns one or more random members from the set stored at key.
+     * Removes and returns one or more random members from the set stored at key.
      *
      * @param key the key of the set
      * @return the popped member, or null when key does not exist
