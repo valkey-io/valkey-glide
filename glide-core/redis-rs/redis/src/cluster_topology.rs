@@ -1208,8 +1208,7 @@ mod tests {
     #[test]
     fn parse_slots_with_address_resolver_transforms_addresses() {
         // Create a resolver that appends ".resolved" to all hostnames
-        let resolver: Arc<dyn crate::types::AddressResolver> =
-            Arc::new(TestAddressResolver::new("resolved."));
+        let resolver = TestAddressResolver::new("resolved.");
 
         // Create slot data with a primary and replica
         let view = Value::Array(vec![slot_value_with_replicas(
