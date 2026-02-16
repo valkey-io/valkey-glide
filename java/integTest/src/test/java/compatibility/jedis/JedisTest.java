@@ -1634,169 +1634,57 @@ public class JedisTest {
         String channel = "ch:" + UUID.randomUUID();
         String message = "msg";
 
-        Long received = jedis.publish(channel, message);
-        assertEquals(
-                0L,
-                received,
-                "PUBLISH via Jedis compatibility uses GLIDE and returns 0 (subscriber count not provided)");
+        // Test PUBLISH command - returns 0 because GLIDE doesn't expose subscriber count
+        long received = jedis.publish(channel, message);
+        assertEquals(0L, received, "PUBLISH should return 0 (GLIDE API limitation - see issue #5354)");
 
+        // Test PUBSUB CHANNELS command
         List<String> channels = jedis.pubsubChannels();
-        assertNotNull(channels, "PUBSUB CHANNELS should return a list");
+        assertNotNull(channels, "PUBSUB CHANNELS should return a non-null list");
+        assertTrue(channels instanceof List, "PUBSUB CHANNELS should return a List instance");
 
+        // Test PUBSUB CHANNELS with pattern
         List<String> channelsWithPattern = jedis.pubsubChannels(channel);
-        assertNotNull(channelsWithPattern, "PUBSUB CHANNELS pattern should return a list");
-
-        long numPat = jedis.pubsubNumPat();
-        assertTrue(numPat >= 0, "PUBSUB NUMPAT should return non-negative");
-
-        Map<String, Long> numSub = jedis.pubsubNumSub(channel);
-        assertNotNull(numSub, "PUBSUB NUMSUB should return a map");
+        assertNotNull(
+                channelsWithPattern, "PUBSUB CHANNELS with pattern should return a non-null list");
         assertTrue(
-                numSub.containsKey(channel) || numSub.isEmpty(),
-                "PUBSUB NUMSUB should contain channel or be empty");
+                channelsWithPattern instanceof List,
+                "PUBSUB CHANNELS with pattern should return a List instance");
 
+        // Test PUBSUB NUMPAT command
+        long numPat = jedis.pubsubNumPat();
+        assertTrue(numPat >= 0, "PUBSUB NUMPAT should return a non-negative value");
+
+        // Test PUBSUB NUMSUB command
+        Map<String, Long> numSub = jedis.pubsubNumSub(channel);
+        assertNotNull(numSub, "PUBSUB NUMSUB should return a non-null map");
+        assertTrue(numSub instanceof Map, "PUBSUB NUMSUB should return a Map instance");
+        if (!numSub.isEmpty()) {
+            assertTrue(numSub.containsKey(channel), "PUBSUB NUMSUB should contain the requested channel");
+            assertTrue(numSub.get(channel) >= 0, "PUBSUB NUMSUB subscriber count should be non-negative");
+        }
+
+        // Test binary versions
         byte[] channelBytes = channel.getBytes(StandardCharsets.UTF_8);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
-        Long receivedBinary = jedis.publish(channelBytes, messageBytes);
+
+        // Test PUBLISH binary
+        long receivedBinary = jedis.publish(channelBytes, messageBytes);
         assertEquals(
                 0L,
                 receivedBinary,
-                "PUBLISH binary via Jedis compatibility uses GLIDE and returns 0 (subscriber count not"
-                        + " provided)");
+                "PUBLISH binary should return 0 (GLIDE API limitation - see issue #5354)");
 
+        // Test PUBSUB CHANNELS binary
         List<byte[]> channelsBinary = jedis.pubsubChannels(channelBytes);
-        assertNotNull(channelsBinary, "PUBSUB CHANNELS binary should return a list");
+        assertNotNull(channelsBinary, "PUBSUB CHANNELS binary should return a non-null list");
+        assertTrue(
+                channelsBinary instanceof List, "PUBSUB CHANNELS binary should return a List instance");
 
+        // Test PUBSUB NUMSUB binary
         Map<byte[], Long> numSubBinary = jedis.pubsubNumSub(channelBytes);
-        assertNotNull(numSubBinary, "PUBSUB NUMSUB binary should return a map");
-    }
-
-    @Test
-    void subscribe_unsubscribe_channels() {
-        String channel1 = "ch1:" + UUID.randomUUID();
-        String channel2 = "ch2:" + UUID.randomUUID();
-
-        // Test subscribe to multiple channels
-        assertDoesNotThrow(
-                () -> jedis.subscribe(channel1, channel2), "SUBSCRIBE should complete without exception");
-
-        // Test unsubscribe from specific channel
-        assertDoesNotThrow(
-                () -> jedis.unsubscribe(channel1), "UNSUBSCRIBE should complete without exception");
-
-        // Test unsubscribe from all channels (empty varargs)
-        assertDoesNotThrow(
-                () -> jedis.unsubscribe(new String[0]),
-                "UNSUBSCRIBE with no args should complete without exception");
-    }
-
-    @Test
-    void subscribe_unsubscribe_channels_binary() {
-        String channel1 = "ch1:" + UUID.randomUUID();
-        String channel2 = "ch2:" + UUID.randomUUID();
-        byte[] channel1Bytes = channel1.getBytes(StandardCharsets.UTF_8);
-        byte[] channel2Bytes = channel2.getBytes(StandardCharsets.UTF_8);
-
-        // Test subscribe to multiple channels (binary)
-        assertDoesNotThrow(
-                () -> jedis.subscribe(channel1Bytes, channel2Bytes),
-                "SUBSCRIBE binary should complete without exception");
-
-        // Test unsubscribe from specific channel (binary)
-        assertDoesNotThrow(
-                () -> jedis.unsubscribe(channel1Bytes),
-                "UNSUBSCRIBE binary should complete without exception");
-
-        // Test unsubscribe from all channels (empty varargs, binary)
-        assertDoesNotThrow(
-                () -> jedis.unsubscribe(new byte[0][]),
-                "UNSUBSCRIBE binary with empty array should complete without exception");
-    }
-
-    @Test
-    void psubscribe_punsubscribe_patterns() {
-        String pattern1 = "news.*";
-        String pattern2 = "alerts.*";
-
-        // Test psubscribe to multiple patterns
-        assertDoesNotThrow(
-                () -> jedis.psubscribe(pattern1, pattern2), "PSUBSCRIBE should complete without exception");
-
-        // Test punsubscribe from specific pattern
-        assertDoesNotThrow(
-                () -> jedis.punsubscribe(pattern1), "PUNSUBSCRIBE should complete without exception");
-
-        // Test punsubscribe from all patterns (empty varargs)
-        assertDoesNotThrow(
-                () -> jedis.punsubscribe(new String[0]),
-                "PUNSUBSCRIBE with no args should complete without exception");
-    }
-
-    @Test
-    void psubscribe_punsubscribe_patterns_binary() {
-        String pattern1 = "news.*";
-        String pattern2 = "alerts.*";
-        byte[] pattern1Bytes = pattern1.getBytes(StandardCharsets.UTF_8);
-        byte[] pattern2Bytes = pattern2.getBytes(StandardCharsets.UTF_8);
-
-        // Test psubscribe to multiple patterns (binary)
-        assertDoesNotThrow(
-                () -> jedis.psubscribe(pattern1Bytes, pattern2Bytes),
-                "PSUBSCRIBE binary should complete without exception");
-
-        // Test punsubscribe from specific pattern (binary)
-        assertDoesNotThrow(
-                () -> jedis.punsubscribe(pattern1Bytes),
-                "PUNSUBSCRIBE binary should complete without exception");
-
-        // Test punsubscribe from all patterns (empty varargs, binary)
-        assertDoesNotThrow(
-                () -> jedis.punsubscribe(new byte[0][]),
-                "PUNSUBSCRIBE binary with empty array should complete without exception");
-    }
-
-    @Test
-    void subscribe_and_unsubscribe_lifecycle() {
-        String channel1 = "lifecycle:" + UUID.randomUUID();
-        String channel2 = "lifecycle:" + UUID.randomUUID();
-
-        // Subscribe to multiple channels
-        assertDoesNotThrow(
-                () -> jedis.subscribe(channel1, channel2),
-                "SUBSCRIBE to multiple channels should complete");
-
-        // Unsubscribe from one channel
-        assertDoesNotThrow(
-                () -> jedis.unsubscribe(channel1), "UNSUBSCRIBE from specific channel should complete");
-
-        // Unsubscribe from all remaining channels
-        assertDoesNotThrow(
-                () -> jedis.unsubscribe(new String[0]), "UNSUBSCRIBE from all channels should complete");
-
-        // Note: To receive messages from subscriptions, configure the client with
-        // StandaloneSubscriptionConfiguration or ClusterSubscriptionConfiguration at creation time.
-    }
-
-    @Test
-    void psubscribe_and_punsubscribe_lifecycle() {
-        String pattern1 = "pattern:" + UUID.randomUUID() + ".*";
-        String pattern2 = "pattern:" + UUID.randomUUID() + ".*";
-
-        // Subscribe to multiple patterns
-        assertDoesNotThrow(
-                () -> jedis.psubscribe(pattern1, pattern2),
-                "PSUBSCRIBE to multiple patterns should complete");
-
-        // Unsubscribe from one pattern
-        assertDoesNotThrow(
-                () -> jedis.punsubscribe(pattern1), "PUNSUBSCRIBE from specific pattern should complete");
-
-        // Unsubscribe from all remaining patterns
-        assertDoesNotThrow(
-                () -> jedis.punsubscribe(new String[0]), "PUNSUBSCRIBE from all patterns should complete");
-
-        // Note: To receive messages via pattern subscriptions, configure the client with
-        // subscription configuration at creation time.
+        assertNotNull(numSubBinary, "PUBSUB NUMSUB binary should return a non-null map");
+        assertTrue(numSubBinary instanceof Map, "PUBSUB NUMSUB binary should return a Map instance");
     }
 
     @Test

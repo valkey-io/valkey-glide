@@ -4,6 +4,7 @@ package redis.clients.jedis;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -138,13 +139,13 @@ public class JedisMethodsTest {
         assertEquals(long.class, publishBinary.getReturnType());
 
         Method pubsubChannels = jedisClass.getMethod("pubsubChannels");
-        assertEquals(Set.class, pubsubChannels.getReturnType());
+        assertEquals(List.class, pubsubChannels.getReturnType());
 
         Method pubsubChannelsPattern = jedisClass.getMethod("pubsubChannels", String.class);
-        assertEquals(Set.class, pubsubChannelsPattern.getReturnType());
+        assertEquals(List.class, pubsubChannelsPattern.getReturnType());
 
         Method pubsubChannelsBinary = jedisClass.getMethod("pubsubChannels", byte[].class);
-        assertEquals(Set.class, pubsubChannelsBinary.getReturnType());
+        assertEquals(List.class, pubsubChannelsBinary.getReturnType());
 
         Method pubsubNumPat = jedisClass.getMethod("pubsubNumPat");
         assertEquals(long.class, pubsubNumPat.getReturnType());
