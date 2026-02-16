@@ -16,6 +16,9 @@ package glide.api.models.configuration;
  *   <li>Dynamic endpoint resolution for cloud environments
  * </ul>
  *
+ * <p> Note that every AddressResolver must be thread safe and should avoid blocking operations,
+ * as it is called synchronously during the connection process.
+ *
  * @example
  *     <pre>{@code
  * AddressResolver resolver = (host, port) -> {
