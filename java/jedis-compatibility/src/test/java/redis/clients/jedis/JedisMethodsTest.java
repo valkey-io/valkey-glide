@@ -5,9 +5,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.reflect.Method;
 import java.util.List;
-import java.util.Set;
-import org.junit.jupiter.api.Test;
-import redis.clients.jedis.resps.AccessControlUser;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -189,6 +186,9 @@ public class JedisMethodsTest {
         Method aclDryRun =
                 jedisClass.getMethod("aclDryRun", String.class, String.class, String[].class);
         assertEquals(String.class, aclDryRun.getReturnType());
+    }
+
+    @Test
     public void testStreamMethodSignaturesExist() throws NoSuchMethodException {
         Class<Jedis> jedisClass = Jedis.class;
 
@@ -304,63 +304,6 @@ public class JedisMethodsTest {
 
         Method xinfoConsumers = jedisClass.getMethod("xinfoConsumers", String.class, String.class);
         assertEquals(List.class, xinfoConsumers.getReturnType());
-    }
-
-    @Test
-    public void testAclMethodSignatures() throws NoSuchMethodException {
-        Class<Jedis> jedisClass = Jedis.class;
-
-        Method aclList = jedisClass.getMethod("aclList");
-        assertEquals(List.class, aclList.getReturnType());
-
-        Method aclGetUser = jedisClass.getMethod("aclGetUser", String.class);
-        assertEquals(AccessControlUser.class, aclGetUser.getReturnType());
-
-        Method aclSetUserNoRules = jedisClass.getMethod("aclSetUser", String.class);
-        assertEquals(String.class, aclSetUserNoRules.getReturnType());
-
-        Method aclSetUserWithRules = jedisClass.getMethod("aclSetUser", String.class, String[].class);
-        assertEquals(String.class, aclSetUserWithRules.getReturnType());
-
-        Method aclDelUser = jedisClass.getMethod("aclDelUser", String[].class);
-        assertEquals(long.class, aclDelUser.getReturnType());
-
-        Method aclCatNoArg = jedisClass.getMethod("aclCat");
-        assertEquals(List.class, aclCatNoArg.getReturnType());
-
-        Method aclCatCategory = jedisClass.getMethod("aclCat", String.class);
-        assertEquals(List.class, aclCatCategory.getReturnType());
-
-        Method aclGenPassNoArg = jedisClass.getMethod("aclGenPass");
-        assertEquals(String.class, aclGenPassNoArg.getReturnType());
-
-        Method aclGenPassBits = jedisClass.getMethod("aclGenPass", int.class);
-        assertEquals(String.class, aclGenPassBits.getReturnType());
-
-        Method aclLogNoArg = jedisClass.getMethod("aclLog");
-        assertEquals(List.class, aclLogNoArg.getReturnType());
-
-        Method aclLogCount = jedisClass.getMethod("aclLog", int.class);
-        assertEquals(List.class, aclLogCount.getReturnType());
-
-        Method aclLogReset = jedisClass.getMethod("aclLogReset");
-        assertEquals(String.class, aclLogReset.getReturnType());
-
-        Method aclWhoAmI = jedisClass.getMethod("aclWhoAmI");
-        assertEquals(String.class, aclWhoAmI.getReturnType());
-
-        Method aclUsers = jedisClass.getMethod("aclUsers");
-        assertEquals(List.class, aclUsers.getReturnType());
-
-        Method aclSave = jedisClass.getMethod("aclSave");
-        assertEquals(String.class, aclSave.getReturnType());
-
-        Method aclLoad = jedisClass.getMethod("aclLoad");
-        assertEquals(String.class, aclLoad.getReturnType());
-
-        Method aclDryRun =
-                jedisClass.getMethod("aclDryRun", String.class, String.class, String[].class);
-        assertEquals(String.class, aclDryRun.getReturnType());
     }
 
     @Test
