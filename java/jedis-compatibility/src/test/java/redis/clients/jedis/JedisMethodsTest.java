@@ -4,6 +4,7 @@ package redis.clients.jedis;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.resps.AccessControlUser;
@@ -290,6 +291,7 @@ public class JedisMethodsTest {
                 jedisClass.getMethod("aclDryRun", String.class, String.class, String[].class);
         assertEquals(String.class, aclDryRun.getReturnType());
     public void testSetMethodSignatures() throws NoSuchMethodException {
+    public void testAclMethodSignatures() throws NoSuchMethodException {
         Class<Jedis> jedisClass = Jedis.class;
 
         Method aclList = jedisClass.getMethod("aclList");
