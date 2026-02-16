@@ -8319,15 +8319,28 @@ public final class Jedis implements Closeable {
      *
      * @param lexStr the lex range string (e.g., "[a", "(b", "+", "-")
      * @return the corresponding LexRange object
+     * @throws IllegalArgumentException if lexStr is null or empty, or has invalid format
      */
     private LexRange parseLexRange(String lexStr) {
+        if (lexStr == null || lexStr.isEmpty()) {
+            throw new IllegalArgumentException("Lex range string cannot be null or empty");
+        }
+
         if (lexStr.equals("+")) {
             return InfLexBound.POSITIVE_INFINITY;
         } else if (lexStr.equals("-")) {
             return InfLexBound.NEGATIVE_INFINITY;
         } else if (lexStr.startsWith("[")) {
+            if (lexStr.length() < 2) {
+                throw new IllegalArgumentException(
+                        "Invalid lex range format: '[' must be followed by a value");
+            }
             return new LexBoundary(lexStr.substring(1), true);
         } else if (lexStr.startsWith("(")) {
+            if (lexStr.length() < 2) {
+                throw new IllegalArgumentException(
+                        "Invalid lex range format: '(' must be followed by a value");
+            }
             return new LexBoundary(lexStr.substring(1), false);
         } else {
             // Default to inclusive if no prefix
@@ -8338,10 +8351,18 @@ public final class Jedis implements Closeable {
     /**
      * Parses a Jedis-style lex range byte array into a LexRange object.
      *
-     * @param lexBytes the lex range byte array
+     * <p>Note: This method assumes UTF-8 encoding when converting the byte array to a string. If the
+     * byte array contains non-UTF-8 data, the behavior is undefined and may result in incorrect lex
+     * range parsing.
+     *
+     * @param lexBytes the lex range byte array (assumed to be UTF-8 encoded)
      * @return the corresponding LexRange object
+     * @throws IllegalArgumentException if lexBytes is null or empty, or has invalid format
      */
     private LexRange parseLexRange(byte[] lexBytes) {
+        if (lexBytes == null || lexBytes.length == 0) {
+            throw new IllegalArgumentException("Lex range byte array cannot be null or empty");
+        }
         String lexStr = new String(lexBytes, StandardCharsets.UTF_8);
         return parseLexRange(lexStr);
     }
