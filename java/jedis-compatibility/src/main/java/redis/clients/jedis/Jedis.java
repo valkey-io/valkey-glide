@@ -7802,8 +7802,7 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "FUNCTION STATS",
                 () -> {
-                    Map<String, Map<String, Map<String, Object>>> result =
-                            glideClient.functionStats().get();
+                    Map<String, Map<String, Map<String, Object>>> result = glideClient.functionStats().get();
                     // The result structure is: { "running_script": {...}, "engines": {...} }
                     // But GLIDE returns it as Map<String, Map<String, Map<String, Object>>>
                     // We need to extract and flatten appropriately
@@ -7826,6 +7825,8 @@ public final class Jedis implements Closeable {
 
                     return new FunctionStats(runningScript, engines);
                 });
+    }
+
     /**
      * Adds the specified members to the set stored at key.
      *

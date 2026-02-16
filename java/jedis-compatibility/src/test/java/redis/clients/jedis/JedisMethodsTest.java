@@ -287,10 +287,9 @@ public class JedisMethodsTest {
         // Test functionStats() exists
         Method functionStats = jedisClass.getMethod("functionStats");
         assertEquals(FunctionStats.class, functionStats.getReturnType());
-        Method aclDryRun =
-                jedisClass.getMethod("aclDryRun", String.class, String.class, String[].class);
-        assertEquals(String.class, aclDryRun.getReturnType());
-    public void testSetMethodSignatures() throws NoSuchMethodException {
+    }
+
+    @Test
     public void testAclMethodSignatures() throws NoSuchMethodException {
         Class<Jedis> jedisClass = Jedis.class;
 
