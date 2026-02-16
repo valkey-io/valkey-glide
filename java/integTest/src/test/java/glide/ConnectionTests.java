@@ -924,4 +924,58 @@ public class ConnectionTests {
 
         client.close();
     }
+
+    @Test
+    @SneakyThrows
+    public void test_address_resolver_cluster_client_throws_exception() {
+        // Get the actual server address from test configuration
+        String[] actualHostParts = CLUSTER_HOSTS[0].split(":");
+        String actualHost = actualHostParts[0];
+        int actualPort = Integer.parseInt(actualHostParts[1]);
+
+        AddressResolver resolver = (host, port) -> { throw new RuntimeException("test-exception"); };
+
+        var client =
+                GlideClusterClient.createClient(
+                                GlideClusterClientConfiguration.builder()
+                                        .address(NodeAddress.builder().host(actualHost).port(actualPort).build())
+                                        .addressResolver(resolver)
+                                        .build())
+                        .get();
+
+        // Connection still goes through, as the fallback is to use the original address if resolver throws an exception
+        assertEquals("PONG", client.ping().get());
+        assertEquals(
+                "OK", client.set("cluster_resolver_test_key", "cluster_resolver_test_value").get());
+        assertEquals("cluster_resolver_test_value", client.get("cluster_resolver_test_key").get());
+
+        client.close();
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_address_resolver_cluster_client_returns_null() {
+        // Get the actual server address from test configuration
+        String[] actualHostParts = CLUSTER_HOSTS[0].split(":");
+        String actualHost = actualHostParts[0];
+        int actualPort = Integer.parseInt(actualHostParts[1]);
+
+        AddressResolver resolver = (host, port) -> null;
+
+        var client =
+                GlideClusterClient.createClient(
+                                GlideClusterClientConfiguration.builder()
+                                        .address(NodeAddress.builder().host(actualHost).port(actualPort).build())
+                                        .addressResolver(resolver)
+                                        .build())
+                        .get();
+
+        // Connection still goes through, as the fallback is to use the original address if resolver returns null
+        assertEquals("PONG", client.ping().get());
+        assertEquals(
+                "OK", client.set("cluster_resolver_test_key", "cluster_resolver_test_value").get());
+        assertEquals("cluster_resolver_test_value", client.get("cluster_resolver_test_key").get());
+
+        client.close();
+    }
 }
