@@ -7084,7 +7084,8 @@ public final class Jedis implements Closeable {
                 "ZADD",
                 () -> {
                     ZAddOptions options = convertZAddParams(params);
-                    return glideClient.zadd(key, scoreMembers, options).get();
+                    boolean changed = params.getCh() != null && params.getCh();
+                    return glideClient.zadd(key, scoreMembers, options, changed).get();
                 });
     }
 
@@ -7106,7 +7107,8 @@ public final class Jedis implements Closeable {
                         glideMap.put(GlideString.of(entry.getKey()), entry.getValue());
                     }
                     ZAddOptions options = convertZAddParams(params);
-                    return glideClient.zadd(GlideString.of(key), glideMap, options).get();
+                    boolean changed = params.getCh() != null && params.getCh();
+                    return glideClient.zadd(GlideString.of(key), glideMap, options, changed).get();
                 });
     }
 
@@ -8102,10 +8104,6 @@ public final class Jedis implements Closeable {
             builder.updateOptions(ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT);
         }
 
-        if (params.getCh() != null && params.getCh()) {
-            builder.changed(true);
-        }
-
         return builder.build();
     }
 
@@ -8780,7 +8778,7 @@ public final class Jedis implements Closeable {
                     GlideString[] glideKeys =
                             Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
                     Map<GlideString, Object> result =
-                            glideClient.bzmpop(glideKeys, modifier, (long) count, timeout).get();
+                            glideClient.bzmpop(glideKeys, modifier, timeout, (long) count).get();
                     if (result == null) {
                         return null;
                     }

@@ -186,11 +186,11 @@ public class JedisMethodsTest {
         // Test zrangeWithScores methods
         Method zrangeWithScores =
                 jedisClass.getMethod("zrangeWithScores", String.class, long.class, long.class);
-        assertEquals(java.util.Map.class, zrangeWithScores.getReturnType());
+        assertEquals(java.util.List.class, zrangeWithScores.getReturnType());
 
         Method zrangeWithScoresBinary =
                 jedisClass.getMethod("zrangeWithScores", byte[].class, long.class, long.class);
-        assertEquals(java.util.Map.class, zrangeWithScoresBinary.getReturnType());
+        assertEquals(java.util.List.class, zrangeWithScoresBinary.getReturnType());
 
         // Test zrank methods
         Method zrank = jedisClass.getMethod("zrank", String.class, String.class);
@@ -223,17 +223,17 @@ public class JedisMethodsTest {
 
         // Test zpopmin methods
         Method zpopmin = jedisClass.getMethod("zpopmin", String.class, int.class);
-        assertEquals(java.util.Map.class, zpopmin.getReturnType());
+        assertEquals(java.util.List.class, zpopmin.getReturnType());
 
         Method zpopminBinary = jedisClass.getMethod("zpopmin", byte[].class, int.class);
-        assertEquals(java.util.Map.class, zpopminBinary.getReturnType());
+        assertEquals(java.util.List.class, zpopminBinary.getReturnType());
 
         // Test zpopmax methods
         Method zpopmax = jedisClass.getMethod("zpopmax", String.class, int.class);
-        assertEquals(java.util.Map.class, zpopmax.getReturnType());
+        assertEquals(java.util.List.class, zpopmax.getReturnType());
 
         Method zpopmaxBinary = jedisClass.getMethod("zpopmax", byte[].class, int.class);
-        assertEquals(java.util.Map.class, zpopmaxBinary.getReturnType());
+        assertEquals(java.util.List.class, zpopmaxBinary.getReturnType());
 
         // Test zunionstore methods
         Method zunionstore = jedisClass.getMethod("zunionstore", String.class, String[].class);
@@ -285,20 +285,20 @@ public class JedisMethodsTest {
 
         // Test zrankWithScore methods
         Method zrankWithScore = jedisClass.getMethod("zrankWithScore", String.class, String.class);
-        assertEquals(java.util.List.class, zrankWithScore.getReturnType());
+        assertEquals(redis.clients.jedis.resps.KeyValue.class, zrankWithScore.getReturnType());
 
         Method zrankWithScoreBinary =
                 jedisClass.getMethod("zrankWithScore", byte[].class, byte[].class);
-        assertEquals(java.util.List.class, zrankWithScoreBinary.getReturnType());
+        assertEquals(redis.clients.jedis.resps.KeyValue.class, zrankWithScoreBinary.getReturnType());
 
         // Test zrevrankWithScore methods
         Method zrevrankWithScore =
                 jedisClass.getMethod("zrevrankWithScore", String.class, String.class);
-        assertEquals(java.util.List.class, zrevrankWithScore.getReturnType());
+        assertEquals(redis.clients.jedis.resps.KeyValue.class, zrevrankWithScore.getReturnType());
 
         Method zrevrankWithScoreBinary =
                 jedisClass.getMethod("zrevrankWithScore", byte[].class, byte[].class);
-        assertEquals(java.util.List.class, zrevrankWithScoreBinary.getReturnType());
+        assertEquals(redis.clients.jedis.resps.KeyValue.class, zrevrankWithScoreBinary.getReturnType());
 
         // Test zlexcount methods
         Method zlexcount = jedisClass.getMethod("zlexcount", String.class, String.class, String.class);
@@ -310,17 +310,17 @@ public class JedisMethodsTest {
 
         // Test bzpopmin methods
         Method bzpopmin = jedisClass.getMethod("bzpopmin", double.class, String[].class);
-        assertEquals(java.util.List.class, bzpopmin.getReturnType());
+        assertEquals(redis.clients.jedis.resps.KeyValue.class, bzpopmin.getReturnType());
 
         Method bzpopminBinary = jedisClass.getMethod("bzpopmin", double.class, byte[][].class);
-        assertEquals(java.util.List.class, bzpopminBinary.getReturnType());
+        assertEquals(redis.clients.jedis.resps.KeyValue.class, bzpopminBinary.getReturnType());
 
         // Test bzpopmax methods
         Method bzpopmax = jedisClass.getMethod("bzpopmax", double.class, String[].class);
-        assertEquals(java.util.List.class, bzpopmax.getReturnType());
+        assertEquals(redis.clients.jedis.resps.KeyValue.class, bzpopmax.getReturnType());
 
         Method bzpopmaxBinary = jedisClass.getMethod("bzpopmax", double.class, byte[][].class);
-        assertEquals(java.util.List.class, bzpopmaxBinary.getReturnType());
+        assertEquals(redis.clients.jedis.resps.KeyValue.class, bzpopmaxBinary.getReturnType());
 
         // Test zdiff methods
         Method zdiff = jedisClass.getMethod("zdiff", String[].class);
@@ -331,10 +331,10 @@ public class JedisMethodsTest {
 
         // Test zdiffWithScores methods
         Method zdiffWithScores = jedisClass.getMethod("zdiffWithScores", String[].class);
-        assertEquals(java.util.Map.class, zdiffWithScores.getReturnType());
+        assertEquals(java.util.List.class, zdiffWithScores.getReturnType());
 
         Method zdiffWithScoresBinary = jedisClass.getMethod("zdiffWithScores", byte[][].class);
-        assertEquals(java.util.Map.class, zdiffWithScoresBinary.getReturnType());
+        assertEquals(java.util.List.class, zdiffWithScoresBinary.getReturnType());
 
         // Test zdiffstore methods
         Method zdiffstore = jedisClass.getMethod("zdiffstore", String.class, String[].class);
@@ -352,10 +352,10 @@ public class JedisMethodsTest {
 
         // Test zunionWithScores methods
         Method zunionWithScores = jedisClass.getMethod("zunionWithScores", String[].class);
-        assertEquals(java.util.Map.class, zunionWithScores.getReturnType());
+        assertEquals(java.util.List.class, zunionWithScores.getReturnType());
 
         Method zunionWithScoresBinary = jedisClass.getMethod("zunionWithScores", byte[][].class);
-        assertEquals(java.util.Map.class, zunionWithScoresBinary.getReturnType());
+        assertEquals(java.util.List.class, zunionWithScoresBinary.getReturnType());
 
         // Test zinter methods
         Method zinter = jedisClass.getMethod("zinter", String[].class);
@@ -366,32 +366,29 @@ public class JedisMethodsTest {
 
         // Test zinterWithScores methods
         Method zinterWithScores = jedisClass.getMethod("zinterWithScores", String[].class);
-        assertEquals(java.util.Map.class, zinterWithScores.getReturnType());
+        assertEquals(java.util.List.class, zinterWithScores.getReturnType());
 
         Method zinterWithScoresBinary = jedisClass.getMethod("zinterWithScores", byte[][].class);
-        assertEquals(java.util.Map.class, zinterWithScoresBinary.getReturnType());
+        assertEquals(java.util.List.class, zinterWithScoresBinary.getReturnType());
 
         // Test zintercard methods
         Method zintercard = jedisClass.getMethod("zintercard", String[].class);
-        assertEquals(Long.class, zintercard.getReturnType());
+        assertEquals(long.class, zintercard.getReturnType());
 
         Method zintercardBinary = jedisClass.getMethod("zintercard", byte[][].class);
-        assertEquals(Long.class, zintercardBinary.getReturnType());
+        assertEquals(long.class, zintercardBinary.getReturnType());
 
-        // Test zmpop methods
-        Method zmpop = jedisClass.getMethod("zmpop", boolean.class, String[].class);
-        assertEquals(java.util.Map.class, zmpop.getReturnType());
+        // Test zmpop methods (binary only, uses SortedSetOption)
+        Method zmpop =
+                jedisClass.getMethod(
+                        "zmpop", redis.clients.jedis.args.SortedSetOption.class, byte[][].class);
+        assertEquals(redis.clients.jedis.resps.KeyValue.class, zmpop.getReturnType());
 
-        Method zmpopBinary = jedisClass.getMethod("zmpop", boolean.class, byte[][].class);
-        assertEquals(java.util.Map.class, zmpopBinary.getReturnType());
-
-        // Test bzmpop methods
-        Method bzmpop = jedisClass.getMethod("bzmpop", double.class, boolean.class, String[].class);
-        assertEquals(java.util.Map.class, bzmpop.getReturnType());
-
-        Method bzmpopBinary =
-                jedisClass.getMethod("bzmpop", double.class, boolean.class, byte[][].class);
-        assertEquals(java.util.Map.class, bzmpopBinary.getReturnType());
+        // Test bzmpop methods (binary only, uses SortedSetOption)
+        Method bzmpop =
+                jedisClass.getMethod(
+                        "bzmpop", double.class, redis.clients.jedis.args.SortedSetOption.class, byte[][].class);
+        assertEquals(redis.clients.jedis.resps.KeyValue.class, bzmpop.getReturnType());
 
         // Test zremrangebylex methods
         Method zremrangebylex =

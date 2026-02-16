@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.*;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.resps.ScanResult;
+import redis.clients.jedis.resps.Tuple;
 
 /**
  * Integration tests for Jedis sorted set commands. These tests require a running Valkey/Redis
@@ -198,11 +199,14 @@ public class SortedSetCommandsTest {
         members.put("member3", 3.0);
         jedis.zadd(TEST_KEY, members);
 
-        Map<String, Double> rangeWithScores = jedis.zrangeWithScores(TEST_KEY, 0, -1);
+        List<Tuple> rangeWithScores = jedis.zrangeWithScores(TEST_KEY, 0, -1);
         assertEquals(3, rangeWithScores.size());
-        assertEquals(1.0, rangeWithScores.get("member1"), 0.001);
-        assertEquals(2.0, rangeWithScores.get("member2"), 0.001);
-        assertEquals(3.0, rangeWithScores.get("member3"), 0.001);
+        assertEquals("member1", rangeWithScores.get(0).getElement());
+        assertEquals(1.0, rangeWithScores.get(0).getScore(), 0.001);
+        assertEquals("member2", rangeWithScores.get(1).getElement());
+        assertEquals(2.0, rangeWithScores.get(1).getScore(), 0.001);
+        assertEquals("member3", rangeWithScores.get(2).getElement());
+        assertEquals(3.0, rangeWithScores.get(2).getScore(), 0.001);
     }
 
     @Test
@@ -286,10 +290,12 @@ public class SortedSetCommandsTest {
         members.put("member3", 3.0);
         jedis.zadd(TEST_KEY, members);
 
-        Map<String, Double> popped = jedis.zpopmin(TEST_KEY, 2);
+        List<Tuple> popped = jedis.zpopmin(TEST_KEY, 2);
         assertEquals(2, popped.size());
-        assertTrue(popped.containsKey("member1"));
-        assertTrue(popped.containsKey("member2"));
+        assertEquals("member1", popped.get(0).getElement());
+        assertEquals(1.0, popped.get(0).getScore(), 0.001);
+        assertEquals("member2", popped.get(1).getElement());
+        assertEquals(2.0, popped.get(1).getScore(), 0.001);
 
         long remaining = jedis.zcard(TEST_KEY);
         assertEquals(1L, remaining);
@@ -306,10 +312,12 @@ public class SortedSetCommandsTest {
         members.put("member3", 3.0);
         jedis.zadd(TEST_KEY, members);
 
-        Map<String, Double> popped = jedis.zpopmax(TEST_KEY, 2);
+        List<Tuple> popped = jedis.zpopmax(TEST_KEY, 2);
         assertEquals(2, popped.size());
-        assertTrue(popped.containsKey("member3"));
-        assertTrue(popped.containsKey("member2"));
+        assertEquals("member3", popped.get(0).getElement());
+        assertEquals(3.0, popped.get(0).getScore(), 0.001);
+        assertEquals("member2", popped.get(1).getElement());
+        assertEquals(2.0, popped.get(1).getScore(), 0.001);
 
         long remaining = jedis.zcard(TEST_KEY);
         assertEquals(1L, remaining);
@@ -411,7 +419,7 @@ public class SortedSetCommandsTest {
         members.put("member3", 3.0);
         jedis.zadd(TEST_KEY, members);
 
-        ScanResult<Map.Entry<String, Double>> result = jedis.zscan(TEST_KEY, "0");
+        ScanResult<Tuple> result = jedis.zscan(TEST_KEY, "0");
         assertNotNull(result);
         assertNotNull(result.getCursor());
         assertNotNull(result.getResult());
