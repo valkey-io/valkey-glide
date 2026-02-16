@@ -8075,7 +8075,12 @@ public final class Jedis implements Closeable {
                     List<Tuple> tuples = new ArrayList<>();
                     for (int i = 0; i < membersAndScores.length; i += 2) {
                         String member = (String) membersAndScores[i];
-                        Double score = (Double) membersAndScores[i + 1];
+                        // Score comes back as String when fraction is zero
+                        Object scoreObj = membersAndScores[i + 1];
+                        Double score =
+                                scoreObj instanceof String
+                                        ? Double.parseDouble((String) scoreObj)
+                                        : (Double) scoreObj;
                         tuples.add(new Tuple(member, score));
                     }
 
@@ -8101,7 +8106,16 @@ public final class Jedis implements Closeable {
                     List<Tuple> tuples = new ArrayList<>();
                     for (int i = 0; i < membersAndScores.length; i += 2) {
                         GlideString member = (GlideString) membersAndScores[i];
-                        Double score = (Double) membersAndScores[i + 1];
+                        // Score comes back as GlideString when fraction is zero
+                        Object scoreObj = membersAndScores[i + 1];
+                        Double score;
+                        if (scoreObj instanceof GlideString) {
+                            score = Double.parseDouble(((GlideString) scoreObj).getString());
+                        } else if (scoreObj instanceof String) {
+                            score = Double.parseDouble((String) scoreObj);
+                        } else {
+                            score = (Double) scoreObj;
+                        }
                         tuples.add(new Tuple(member.getBytes(), score));
                     }
 
@@ -8843,6 +8857,7 @@ public final class Jedis implements Closeable {
      * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a>
      * @since Valkey 7.0.0
      */
+    @SuppressWarnings("unchecked")
     public redis.clients.jedis.resps.KeyValue<byte[], List<Tuple>> zmpop(
             SortedSetOption option, byte[]... keys) {
         return executeCommandWithGlide(
@@ -8856,15 +8871,13 @@ public final class Jedis implements Closeable {
                     if (result == null) {
                         return null;
                     }
-                    // Result has single entry: key -> array of [member, score, member, score, ...]
+                    // Result has single entry: key -> map of member -> score
                     Map.Entry<GlideString, Object> entry = result.entrySet().iterator().next();
                     byte[] key = entry.getKey().getBytes();
-                    Object[] arr = (Object[]) entry.getValue();
+                    Map<GlideString, Double> membersMap = (Map<GlideString, Double>) entry.getValue();
                     List<Tuple> tuples = new ArrayList<>();
-                    for (int i = 0; i < arr.length; i += 2) {
-                        GlideString member = (GlideString) arr[i];
-                        Double score = (Double) arr[i + 1];
-                        tuples.add(new Tuple(member.getBytes(), score));
+                    for (Map.Entry<GlideString, Double> memberScore : membersMap.entrySet()) {
+                        tuples.add(new Tuple(memberScore.getKey().getBytes(), memberScore.getValue()));
                     }
                     return new redis.clients.jedis.resps.KeyValue<>(key, tuples);
                 });
@@ -8880,6 +8893,7 @@ public final class Jedis implements Closeable {
      * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a>
      * @since Valkey 7.0.0
      */
+    @SuppressWarnings("unchecked")
     public redis.clients.jedis.resps.KeyValue<byte[], List<Tuple>> zmpop(
             SortedSetOption option, int count, byte[]... keys) {
         return executeCommandWithGlide(
@@ -8894,15 +8908,13 @@ public final class Jedis implements Closeable {
                     if (result == null) {
                         return null;
                     }
-                    // Result has single entry: key -> array of [member, score, member, score, ...]
+                    // Result has single entry: key -> map of member -> score
                     Map.Entry<GlideString, Object> entry = result.entrySet().iterator().next();
                     byte[] key = entry.getKey().getBytes();
-                    Object[] arr = (Object[]) entry.getValue();
+                    Map<GlideString, Double> membersMap = (Map<GlideString, Double>) entry.getValue();
                     List<Tuple> tuples = new ArrayList<>();
-                    for (int i = 0; i < arr.length; i += 2) {
-                        GlideString member = (GlideString) arr[i];
-                        Double score = (Double) arr[i + 1];
-                        tuples.add(new Tuple(member.getBytes(), score));
+                    for (Map.Entry<GlideString, Double> memberScore : membersMap.entrySet()) {
+                        tuples.add(new Tuple(memberScore.getKey().getBytes(), memberScore.getValue()));
                     }
                     return new redis.clients.jedis.resps.KeyValue<>(key, tuples);
                 });
@@ -8918,6 +8930,7 @@ public final class Jedis implements Closeable {
      * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a>
      * @since Valkey 7.0.0
      */
+    @SuppressWarnings("unchecked")
     public redis.clients.jedis.resps.KeyValue<byte[], List<Tuple>> bzmpop(
             double timeout, SortedSetOption option, byte[]... keys) {
         return executeCommandWithGlide(
@@ -8931,15 +8944,13 @@ public final class Jedis implements Closeable {
                     if (result == null) {
                         return null;
                     }
-                    // Result has single entry: key -> array of [member, score, member, score, ...]
+                    // Result has single entry: key -> map of member -> score
                     Map.Entry<GlideString, Object> entry = result.entrySet().iterator().next();
                     byte[] key = entry.getKey().getBytes();
-                    Object[] arr = (Object[]) entry.getValue();
+                    Map<GlideString, Double> membersMap = (Map<GlideString, Double>) entry.getValue();
                     List<Tuple> tuples = new ArrayList<>();
-                    for (int i = 0; i < arr.length; i += 2) {
-                        GlideString member = (GlideString) arr[i];
-                        Double score = (Double) arr[i + 1];
-                        tuples.add(new Tuple(member.getBytes(), score));
+                    for (Map.Entry<GlideString, Double> memberScore : membersMap.entrySet()) {
+                        tuples.add(new Tuple(memberScore.getKey().getBytes(), memberScore.getValue()));
                     }
                     return new redis.clients.jedis.resps.KeyValue<>(key, tuples);
                 });
@@ -8956,6 +8967,7 @@ public final class Jedis implements Closeable {
      * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a>
      * @since Valkey 7.0.0
      */
+    @SuppressWarnings("unchecked")
     public redis.clients.jedis.resps.KeyValue<byte[], List<Tuple>> bzmpop(
             double timeout, SortedSetOption option, int count, byte[]... keys) {
         return executeCommandWithGlide(
@@ -8970,15 +8982,13 @@ public final class Jedis implements Closeable {
                     if (result == null) {
                         return null;
                     }
-                    // Result has single entry: key -> array of [member, score, member, score, ...]
+                    // Result has single entry: key -> map of member -> score
                     Map.Entry<GlideString, Object> entry = result.entrySet().iterator().next();
                     byte[] key = entry.getKey().getBytes();
-                    Object[] arr = (Object[]) entry.getValue();
+                    Map<GlideString, Double> membersMap = (Map<GlideString, Double>) entry.getValue();
                     List<Tuple> tuples = new ArrayList<>();
-                    for (int i = 0; i < arr.length; i += 2) {
-                        GlideString member = (GlideString) arr[i];
-                        Double score = (Double) arr[i + 1];
-                        tuples.add(new Tuple(member.getBytes(), score));
+                    for (Map.Entry<GlideString, Double> memberScore : membersMap.entrySet()) {
+                        tuples.add(new Tuple(memberScore.getKey().getBytes(), memberScore.getValue()));
                     }
                     return new redis.clients.jedis.resps.KeyValue<>(key, tuples);
                 });
