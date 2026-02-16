@@ -1,7 +1,9 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static glide.TestConfiguration.CLUSTER_HOSTS;
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestUtilities.*;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
@@ -675,7 +677,6 @@ public class ConnectionTests {
                             expectedNewConnections,
                             clientsBeforeLazyInit,
                             clientsAfterFirstCommand));
-
         } finally {
             if (monitoringClient != null) {
                 monitoringClient.close();
@@ -839,5 +840,142 @@ public class ConnectionTests {
         assertEquals("OK", clientFalse.set("key3", "value3").get());
         assertEquals("value3", clientFalse.get("key3").get());
         clientFalse.close();
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_address_resolver_standalone_client() {
+        // Get the actual server address from test configuration
+        String[] actualHostParts = STANDALONE_HOSTS[0].split(":");
+        String actualHost = actualHostParts[0];
+        int actualPort = Integer.parseInt(actualHostParts[1]);
+
+        // Use a fake/placeholder address in configuration
+        String fakeHost = "fake-host-that-does-not-exist.invalid";
+        int fakePort = 9999;
+
+        // Create resolver that translates fake address to real server address
+        AddressResolver resolver =
+                (host, port) -> {
+                    // Only translate our fake address to the real one
+                    if (fakeHost.equals(host) && port == fakePort) {
+                        return new ResolvedAddress(actualHost, actualPort);
+                    }
+                    // Pass through any other addresses unchanged
+                    return new ResolvedAddress(host, port);
+                };
+
+        // Configure client with fake address - connection should succeed because
+        // resolver translates it to the real address
+        var client =
+                GlideClient.createClient(
+                                GlideClientConfiguration.builder()
+                                        .address(NodeAddress.builder().host(fakeHost).port(fakePort).build())
+                                        .addressResolver(resolver)
+                                        .build())
+                        .get();
+
+        // Verify the client works - this proves the resolved address was used
+        assertEquals("PONG", client.ping().get());
+        assertEquals("OK", client.set("resolver_test_key", "resolver_test_value").get());
+        assertEquals("resolver_test_value", client.get("resolver_test_key").get());
+
+        client.close();
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_address_resolver_cluster_client() {
+        // Get the actual server address from test configuration
+        String[] actualHostParts = CLUSTER_HOSTS[0].split(":");
+        String actualHost = actualHostParts[0];
+        int actualPort = Integer.parseInt(actualHostParts[1]);
+
+        // Use a fake/placeholder address in configuration
+        String fakeHost = "fake-cluster-host.invalid";
+        int fakePort = 9999;
+
+        // Create resolver that translates fake address to real server address
+        AddressResolver resolver =
+                (host, port) -> {
+                    // Only translate our fake address to the real one
+                    if (fakeHost.equals(host) && port == fakePort) {
+                        return new ResolvedAddress(actualHost, actualPort);
+                    }
+                    // Pass through any other addresses unchanged
+                    return new ResolvedAddress(host, port);
+                };
+
+        // Configure client with fake address - connection should succeed because
+        // resolver translates it to the real address
+        var client =
+                GlideClusterClient.createClient(
+                                GlideClusterClientConfiguration.builder()
+                                        .address(NodeAddress.builder().host(fakeHost).port(fakePort).build())
+                                        .addressResolver(resolver)
+                                        .build())
+                        .get();
+
+        // Verify the client works - this proves the resolved address was used
+        assertEquals("PONG", client.ping().get());
+        assertEquals(
+                "OK", client.set("cluster_resolver_test_key", "cluster_resolver_test_value").get());
+        assertEquals("cluster_resolver_test_value", client.get("cluster_resolver_test_key").get());
+
+        client.close();
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_address_resolver_cluster_client_throws_exception() {
+        // Get the actual server address from test configuration
+        String[] actualHostParts = CLUSTER_HOSTS[0].split(":");
+        String actualHost = actualHostParts[0];
+        int actualPort = Integer.parseInt(actualHostParts[1]);
+
+        AddressResolver resolver = (host, port) -> { throw new RuntimeException("test-exception"); };
+
+        var client =
+                GlideClusterClient.createClient(
+                                GlideClusterClientConfiguration.builder()
+                                        .address(NodeAddress.builder().host(actualHost).port(actualPort).build())
+                                        .addressResolver(resolver)
+                                        .build())
+                        .get();
+
+        // Connection still goes through, as the fallback is to use the original address if resolver throws an exception
+        assertEquals("PONG", client.ping().get());
+        assertEquals(
+                "OK", client.set("cluster_resolver_test_key", "cluster_resolver_test_value").get());
+        assertEquals("cluster_resolver_test_value", client.get("cluster_resolver_test_key").get());
+
+        client.close();
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_address_resolver_cluster_client_returns_null() {
+        // Get the actual server address from test configuration
+        String[] actualHostParts = CLUSTER_HOSTS[0].split(":");
+        String actualHost = actualHostParts[0];
+        int actualPort = Integer.parseInt(actualHostParts[1]);
+
+        AddressResolver resolver = (host, port) -> null;
+
+        var client =
+                GlideClusterClient.createClient(
+                                GlideClusterClientConfiguration.builder()
+                                        .address(NodeAddress.builder().host(actualHost).port(actualPort).build())
+                                        .addressResolver(resolver)
+                                        .build())
+                        .get();
+
+        // Connection still goes through, as the fallback is to use the original address if resolver returns null
+        assertEquals("PONG", client.ping().get());
+        assertEquals(
+                "OK", client.set("cluster_resolver_test_key", "cluster_resolver_test_value").get());
+        assertEquals("cluster_resolver_test_value", client.get("cluster_resolver_test_key").get());
+
+        client.close();
     }
 }

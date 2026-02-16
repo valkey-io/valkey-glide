@@ -2393,3 +2393,11 @@ pub enum ProtocolVersion {
     #[default]
     RESP3,
 }
+
+/// A trait for resolving addresses before connection.
+/// Given a host and port, returns the resolved (host, port) pair.
+/// This allows custom DNS resolution or address translation logic.
+pub trait AddressResolver: Send + Sync + std::fmt::Debug {
+    /// Resolve the given host and port to the actual connection address.
+    fn resolve(&self, host: &str, port: u16) -> (String, u16);
+}
