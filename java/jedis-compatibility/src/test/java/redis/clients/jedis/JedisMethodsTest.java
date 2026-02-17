@@ -9,9 +9,9 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.resps.AccessControlUser;
+import redis.clients.jedis.resps.FunctionStats;
 import redis.clients.jedis.resps.StreamInfo;
 import redis.clients.jedis.resps.StreamPendingSummary;
-import redis.clients.jedis.resps.FunctionStats;
 
 /**
  * Unit tests for Jedis method signatures and API contracts. Tests that required methods exist with
