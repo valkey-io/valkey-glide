@@ -2712,4 +2712,308 @@ pub(crate) mod shared_client_tests {
             }
         });
     }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    /// Test that verifies the client maintains the correct username after an automatic reconnection
+    /// when authentication is changed using the AUTH command.
+    /// This test:
+    /// 1. Creates a client with default authentication
+    /// 2. Uses ACL SETUSER to create a new user "testuser"
+    /// 3. Uses AUTH command to authenticate as "testuser"
+    /// 4. Verifies the connection is authenticated with the correct username
+    /// 5. Simulates a connection drop by killing the connection
+    /// 6. Sends another command which either:
+    ///    - Fails due to the dropped connection, then retries and verifies reconnection with same username
+    ///    - Succeeds with a new client ID (indicating reconnection) and verifies still authenticated with same username
+    /// This ensures that username authentication via AUTH command persists across reconnections.
+    fn test_username_persistence_after_reconnection(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    connection_info: Some(redis::RedisConnectionInfo {
+                        password: Some("ReallySecurePassword".to_string()),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut client_info_cmd = redis::Cmd::new();
+            client_info_cmd.arg("CLIENT").arg("INFO");
+
+            // Verify initial connection (should be default user)
+            let initial_client_info_response = test_basics
+                .client
+                .send_command(&mut client_info_cmd, None)
+                .await
+                .unwrap();
+
+            let initial_client_info = match initial_client_info_response {
+                Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                Value::VerbatimString { text, .. } => text,
+                _ => panic!(
+                    "Unexpected CLIENT INFO response type: {:?}",
+                    initial_client_info_response
+                ),
+            };
+            assert!(initial_client_info.contains("user=default"));
+
+            // Extract initial client ID
+            let initial_client_id = utilities::extract_client_id(&initial_client_info)
+                .expect("Failed to extract initial client ID");
+
+            // Create a new user using ACL SETUSER (automatically routes to all nodes)
+            let mut acl_setuser_cmd = redis::Cmd::new();
+            acl_setuser_cmd
+                .arg("ACL")
+                .arg("SETUSER")
+                .arg("testuser")
+                .arg("on")
+                .arg(">testpassword")
+                .arg("~*")
+                .arg("+@all");
+
+            let acl_result = test_basics
+                .client
+                .send_command(&mut acl_setuser_cmd, None)
+                .await
+                .unwrap();
+
+            // ACL SETUSER routes to all nodes with AllSucceeded policy, which returns a single OK
+            assert_eq!(acl_result, Value::Okay);
+
+            // Execute AUTH command to authenticate as testuser (automatically routes to all nodes)
+            let mut auth_cmd = redis::Cmd::new();
+            auth_cmd.arg("AUTH").arg("testuser").arg("testpassword");
+
+            let auth_result = test_basics
+                .client
+                .send_command(&mut auth_cmd, None)
+                .await
+                .unwrap();
+
+            // AUTH routes to all nodes with AllSucceeded policy, which returns a single OK
+            assert_eq!(auth_result, Value::Okay);
+
+            // Verify we're now authenticated as testuser
+            let post_auth_client_info_response = test_basics
+                .client
+                .send_command(&mut client_info_cmd, None)
+                .await
+                .unwrap();
+
+            let post_auth_client_info = match post_auth_client_info_response {
+                Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                Value::VerbatimString { text, .. } => text,
+                _ => panic!(
+                    "Unexpected CLIENT INFO response type: {:?}",
+                    post_auth_client_info_response
+                ),
+            };
+            assert!(post_auth_client_info.contains("user=testuser"));
+
+            // Kill the connection to simulate a network drop
+            kill_connection(&mut test_basics.client).await;
+
+            // Wait a moment for the connection to be fully dropped
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+            // Try to send another command - this should trigger reconnection
+            let res = test_basics
+                .client
+                .send_command(&mut client_info_cmd, None)
+                .await;
+            match res {
+                Err(err) => {
+                    // Connection was dropped as expected
+                    assert!(
+                        err.is_connection_dropped() || err.is_timeout(),
+                        "Expected connection dropped or timeout error, got: {err:?}",
+                    );
+                    // Retry and verify we're still authenticated with same username after reconnection
+                    let client_info = repeat_try_create(|| async {
+                        let mut client = test_basics.client.clone();
+                        let mut cmd = client_info_cmd.clone();
+                        let response = client.send_command(&mut cmd, None).await.ok()?;
+                        match response {
+                            Value::BulkString(bytes) => {
+                                Some(String::from_utf8_lossy(&bytes).to_string())
+                            }
+                            Value::VerbatimString { text, .. } => Some(text),
+                            _ => None,
+                        }
+                    })
+                    .await;
+                    assert!(client_info.contains("user=testuser"));
+                }
+                Ok(response) => {
+                    // Command succeeded after reconnection, verify username persists
+                    let new_client_info = match response {
+                        Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                        Value::VerbatimString { text, .. } => text,
+                        _ => panic!("Unexpected CLIENT INFO response type: {:?}", response),
+                    };
+                    let new_client_id = utilities::extract_client_id(&new_client_info)
+                        .expect("Failed to extract new client ID");
+
+                    // Client ID may or may not change depending on timing
+                    // The important thing is that the username persists
+                    if new_client_id != initial_client_id {
+                        // Reconnection happened and we got a new client ID
+                        println!(
+                            "Reconnection detected: client ID changed from {} to {}",
+                            initial_client_id, new_client_id
+                        );
+                    }
+
+                    // Check that the username is still testuser after reconnection
+                    assert!(new_client_info.contains("user=testuser"));
+                }
+            }
+
+            // Cleanup: delete the test user (automatically routes to all nodes)
+            let mut acl_deluser_cmd = redis::Cmd::new();
+            acl_deluser_cmd.arg("ACL").arg("DELUSER").arg("testuser");
+            let _ = test_basics
+                .client
+                .send_command(&mut acl_deluser_cmd, None)
+                .await;
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    /// Test that verifies the client maintains the correct protocol version after an automatic reconnection
+    /// when the protocol is changed using the HELLO command.
+    /// This test:
+    /// 1. Creates a client with RESP2 protocol
+    /// 2. Uses HELLO command to change to RESP3
+    /// 3. Verifies the connection is using RESP3 (proto=3)
+    /// 4. Simulates a connection drop by killing the connection
+    /// 5. Sends another command which either:
+    ///    - Fails due to the dropped connection, then retries and verifies reconnection with RESP3
+    ///    - Succeeds with a new client ID (indicating reconnection) and verifies still using RESP3
+    /// This ensures that protocol version changed via HELLO command persists across reconnections.
+    fn test_protocol_persistence_after_reconnection(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    connection_info: Some(RedisConnectionInfo {
+                        protocol: redis::ProtocolVersion::RESP2,
+                        ..Default::default()
+                    }),
+                    protocol: ProtocolVersion::RESP2,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut hello_cmd = redis::Cmd::new();
+            hello_cmd.arg("HELLO");
+
+            // Verify initial connection is using RESP2
+            let initial_hello_response = test_basics
+                .client
+                .send_command(&mut hello_cmd, None)
+                .await
+                .unwrap();
+
+            let initial_hello: std::collections::HashMap<String, Value> =
+                redis::from_owned_redis_value(initial_hello_response).unwrap();
+            assert_eq!(initial_hello.get("proto").unwrap(), &Value::Int(2));
+
+            // Get initial client ID
+            let mut client_info_cmd = redis::Cmd::new();
+            client_info_cmd.arg("CLIENT").arg("INFO");
+            let initial_client_info_response = test_basics
+                .client
+                .send_command(&mut client_info_cmd, None)
+                .await
+                .unwrap();
+
+            let initial_client_info = match initial_client_info_response {
+                Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                Value::VerbatimString { text, .. } => text,
+                _ => panic!(
+                    "Unexpected CLIENT INFO response type: {:?}",
+                    initial_client_info_response
+                ),
+            };
+            let initial_client_id = utilities::extract_client_id(&initial_client_info)
+                .expect("Failed to extract initial client ID");
+
+            // Use HELLO command to change to RESP3
+            let mut hello_3_cmd = redis::Cmd::new();
+            hello_3_cmd.arg("HELLO").arg("3");
+            let hello_3_response = test_basics
+                .client
+                .send_command(&mut hello_3_cmd, None)
+                .await
+                .unwrap();
+
+            let hello_3_result: std::collections::HashMap<String, Value> =
+                redis::from_owned_redis_value(hello_3_response).unwrap();
+            assert_eq!(hello_3_result.get("proto").unwrap(), &Value::Int(3));
+
+            // Kill the connection to simulate a network drop
+            kill_connection(&mut test_basics.client).await;
+
+            // Try to send another command - this should trigger reconnection
+            let res = test_basics.client.send_command(&mut hello_cmd, None).await;
+            match res {
+                Err(err) => {
+                    // Connection was dropped as expected
+                    assert!(
+                        err.is_connection_dropped() || err.is_timeout(),
+                        "Expected connection dropped or timeout error, got: {err:?}",
+                    );
+                    // Retry and verify we're still using RESP3 after reconnection
+                    let hello_info = repeat_try_create(|| async {
+                        let mut client = test_basics.client.clone();
+                        let mut cmd = hello_cmd.clone();
+                        let response = client.send_command(&mut cmd, None).await.ok()?;
+                        redis::from_owned_redis_value::<std::collections::HashMap<String, Value>>(
+                            response,
+                        )
+                        .ok()
+                    })
+                    .await;
+                    assert_eq!(hello_info.get("proto").unwrap(), &Value::Int(3));
+                }
+                Ok(response) => {
+                    // Command succeeded, extract new client ID and compare
+                    let new_hello: std::collections::HashMap<String, Value> =
+                        redis::from_owned_redis_value(response).unwrap();
+                    assert_eq!(new_hello.get("proto").unwrap(), &Value::Int(3));
+
+                    // Verify client ID changed (indicating reconnection)
+                    let new_client_info_response = test_basics
+                        .client
+                        .send_command(&mut client_info_cmd, None)
+                        .await
+                        .unwrap();
+                    let new_client_info = match new_client_info_response {
+                        Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                        Value::VerbatimString { text, .. } => text,
+                        _ => panic!("Unexpected CLIENT INFO response type"),
+                    };
+                    let new_client_id = utilities::extract_client_id(&new_client_info)
+                        .expect("Failed to extract new client ID");
+                    assert_ne!(
+                        initial_client_id, new_client_id,
+                        "Client ID should change after reconnection if command succeeds"
+                    );
+                }
+            }
+        });
+    }
 }
