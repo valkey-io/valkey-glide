@@ -9,7 +9,6 @@
 * JAVA: Add EVAL_RO, EVALSHA_RO, and SCRIPT DEBUG commands ([#5125](https://github.com/valkey-io/valkey-glide/pull/5125))
 * CORE: Add client certificate and private key support for mTLS ([#5092](https://github.com/valkey-io/valkey-glide/issues/5092))
 * Python: Add client certificate and private key support for mTLS ([5123](https://github.com/valkey-io/valkey-glide/issues/5123))
-<<<<<<< Updated upstream
 * JAVA: Add KEYS, MIGRATE and WAITAOF command support ([#5017](https://github.com/valkey-io/valkey-glide/pull/5107))
 * Python Sync: Add dynamic PubSub methods (subscribe, psubscribe, unsubscribe, punsubscribe, ssubscribe, sunsubscribe with timeout support), get_subscriptions(), and pubsub_reconciliation_interval configuration support. Unified configuration classes with async client by importing from glide_shared ([#5270](https://github.com/valkey-io/valkey-glide/pull/5270))
 * Go: Add dynamic PubSub methods (Subscribe, PSubscribe, SSubscribe, Unsubscribe, PUnsubscribe, SUnsubscribe with blocking variants and timeout support), GetSubscriptions(), and helper functions (UnsubscribeAll, PUnsubscribeAll, SUnsubscribeAll). Export pubsub constants (AllChannels, AllPatterns, AllShardedChannels)
@@ -22,9 +21,7 @@
 * JAVA: Add dynamic PubSub methods (subscribe, psubscribe, unsubscribe, punsubscribe, ssubscribe, sunsubscribe), getSubscriptions() for subscription state tracking, pubsubReconciliationIntervalMs configuration option, and subscription_out_of_sync_count and subscription_last_sync_timestamp metrics ([#5267](https://github.com/valkey-io/valkey-glide/issues/5267))
 * Go: Add ALLOW_NON_COVERED_SLOTS flag support for cluster scan ([#4895](https://github.com/valkey-io/valkey-glide/issues/4895))
 * CORE: Track HELLO and AUTH state for reconnection ([#5145](https://github.com/valkey-io/valkey-glide/issues/5145))
-=======
 * CORE: Add support for ZRANGEBYLEX, ZRANGEBYSCORE, ZREVRANGE, ZREVRANGEBYLEX, and ZREVRANGEBYSCORE commands in request_type ([#5379](https://github.com/valkey-io/valkey-glide/pull/5379))
->>>>>>> Stashed changes
 
 #### Fixes
 * CORE: Fix empty hostname in CLUSTER SLOTS metadata causing AllConnectionsUnavailable ([#5367](https://github.com/valkey-io/valkey-glide/issues/5367)). AWS ElastiCache (plaintext, cluster mode) returns `hostname: ""` in node metadata, which was used as the connection address instead of falling back to the IP.
