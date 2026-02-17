@@ -314,6 +314,120 @@ public class JedisTest {
     }
 
     @Test
+    void msetnx_command() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+
+        // Test MSETNX when all keys are new
+        long result = jedis.msetnx(key1, "value1", key2, "value2");
+        assertEquals(1L, result, "MSETNX should return 1 when all keys are new");
+        assertEquals("value1", jedis.get(key1), "First key should be set");
+        assertEquals("value2", jedis.get(key2), "Second key should be set");
+
+        // Test MSETNX when one key already exists
+        result = jedis.msetnx(key2, "newvalue2", key3, "value3");
+        assertEquals(0L, result, "MSETNX should return 0 when at least one key exists");
+        assertEquals("value2", jedis.get(key2), "Existing key should not be modified");
+        assertNull(jedis.get(key3), "New key should not be set when operation fails");
+
+        // Test binary version
+        byte[] bkey1 = ("bkey1:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] bkey2 = ("bkey2:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] bvalue1 = "bvalue1".getBytes(StandardCharsets.UTF_8);
+        byte[] bvalue2 = "bvalue2".getBytes(StandardCharsets.UTF_8);
+
+        result = jedis.msetnx(bkey1, bvalue1, bkey2, bvalue2);
+        assertEquals(1L, result, "MSETNX binary should return 1 when all keys are new");
+        assertArrayEquals(bvalue1, jedis.get(bkey1), "First binary key should be set");
+        assertArrayEquals(bvalue2, jedis.get(bkey2), "Second binary key should be set");
+    }
+
+    @Test
+    void setrange_getrange_commands() {
+        String key = UUID.randomUUID().toString();
+
+        // Test SETRANGE on non-existing key (creates key with zero-padding)
+        long length = jedis.setrange(key, 5, "world");
+        assertEquals(10L, length, "SETRANGE should return new string length");
+        String value = jedis.get(key);
+        assertTrue(value.endsWith("world"), "Value should end with 'world'");
+
+        // Test SETRANGE overwriting part of existing string
+        jedis.set(key, "Hello World");
+        length = jedis.setrange(key, 6, "Redis");
+        assertEquals(11L, length, "SETRANGE should return string length");
+        assertEquals("Hello Redis", jedis.get(key), "String should be modified correctly");
+
+        // Test GETRANGE
+        String substring = jedis.getrange(key, 0, 4);
+        assertEquals("Hello", substring, "GETRANGE should return correct substring");
+
+        substring = jedis.getrange(key, 6, 10);
+        assertEquals("Redis", substring, "GETRANGE should return correct substring");
+
+        // Test GETRANGE with negative indices
+        substring = jedis.getrange(key, -5, -1);
+        assertEquals("Redis", substring, "GETRANGE with negative indices should work");
+
+        // Test binary version
+        byte[] bkey = ("bkey:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] bvalue = "Hello".getBytes(StandardCharsets.UTF_8);
+        jedis.set(bkey, bvalue);
+
+        length = jedis.setrange(bkey, 6, "World".getBytes(StandardCharsets.UTF_8));
+        assertTrue(length >= 11, "SETRANGE binary should return string length");
+
+        byte[] bsubstring = jedis.getrange(bkey, 0, 4);
+        assertArrayEquals(
+                "Hello".getBytes(StandardCharsets.UTF_8),
+                bsubstring,
+                "GETRANGE binary should return correct substring");
+    }
+
+    @Test
+    void lcs_commands() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        // Set up test data
+        jedis.set(key1, "ohmytext");
+        jedis.set(key2, "mynewtext");
+
+        // Test LCS - returns the longest common subsequence
+        String lcs = jedis.lcs(key1, key2);
+        assertNotNull(lcs, "LCS should return a string");
+        assertTrue(lcs.contains("my"), "LCS should contain common subsequence");
+
+        // Test LCSLEN - returns the length of LCS
+        long lcsLen = jedis.lcsLen(key1, key2);
+        assertTrue(lcsLen > 0, "LCS length should be positive");
+        assertEquals(lcs.length(), lcsLen, "LCS length should match string length");
+
+        // Test LCSIDX - returns match indices
+        Map<String, Object> lcsIdx = jedis.lcsIdx(key1, key2);
+        assertNotNull(lcsIdx, "LCSIDX should return a map");
+        assertTrue(lcsIdx.containsKey("matches"), "LCSIDX should contain matches");
+        assertTrue(lcsIdx.containsKey("len"), "LCSIDX should contain length");
+
+        // Test binary version
+        byte[] bkey1 = ("bkey1:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] bkey2 = ("bkey2:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.set(bkey1, "ohmytext".getBytes(StandardCharsets.UTF_8));
+        jedis.set(bkey2, "mynewtext".getBytes(StandardCharsets.UTF_8));
+
+        byte[] blcs = jedis.lcs(bkey1, bkey2);
+        assertNotNull(blcs, "LCS binary should return byte array");
+        assertTrue(blcs.length > 0, "LCS binary should have positive length");
+
+        long blcsLen = jedis.lcsLen(bkey1, bkey2);
+        assertEquals(blcs.length, blcsLen, "LCS binary length should match");
+
+        Map<String, Object> blcsIdx = jedis.lcsIdx(bkey1, bkey2);
+        assertNotNull(blcsIdx, "LCSIDX binary should return a map");
+    }
+
+    @Test
     void setnx_command() {
         String testKey = UUID.randomUUID().toString();
 
