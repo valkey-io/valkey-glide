@@ -1,0 +1,31 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '9.1.0'
+    id 'com.google.osdetector' version '1.7.3'
+}
+
+group = 'com.company.glide'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.amazonaws:aws-lambda-java-core:1.2.3'
+    implementation 'ch.qos.logback:logback-classic:1.5.6'
+    
+    // Dynamically use the correct classifier for the local platform (e.g. linux-aarch_64 or osx-aarch_64)
+    implementation "io.valkey:valkey-glide:255.255.255:${osdetector.classifier}"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(11)
+    }
+}
+
+shadowJar {
+    archiveClassifier.set('')
+}
