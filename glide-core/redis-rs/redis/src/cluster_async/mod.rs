@@ -786,7 +786,7 @@ struct Message<C: Sized> {
 enum RecoverFuture {
     RefreshingSlots(JoinHandle<RedisResult<()>>),
     ReconnectToInitialNodes(JoinHandle<()>),
-    Reconnect(BoxFuture<'static, ()>),
+    Reconnect(JoinHandle<Vec<Arc<Notify>>>),
 }
 
 enum ConnectionState {
@@ -3033,7 +3033,7 @@ where
         Ok((address, conn))
     }
 
-    fn poll_recover(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<(), RedisError>> {
+    fn poll_recover(&mut self, _cx: &mut task::Context<'_>) -> Poll<Result<(), RedisError>> {
         trace!("entered poll_recover");
 
         let recover_future = match &mut self.state {
@@ -3142,10 +3142,28 @@ where
                 // Always return Ready to not block poll_flush
                 Poll::Ready(Ok(()))
             }
-            RecoverFuture::Reconnect(ref mut future) => {
-                ready!(future.as_mut().poll(cx));
-                trace!("Reconnected connections");
-                self.state = ConnectionState::PollComplete;
+            RecoverFuture::Reconnect(ref mut handle) => {
+                // Check if the task has completed
+                match handle.now_or_never() {
+                    Some(Ok(_notifiers)) => {
+                        trace!("Reconnected connections");
+                        self.state = ConnectionState::PollComplete;
+                    }
+                    Some(Err(join_err)) => {
+                        if join_err.is_cancelled() {
+                            trace!("Reconnect task was aborted");
+                            self.state = ConnectionState::PollComplete;
+                        } else {
+                            warn!("Reconnect task panicked: {:?} - marking recovery as complete", join_err);
+                            self.state = ConnectionState::PollComplete;
+                        }
+                    }
+                    None => {
+                        // Task is still running
+                        // Just continue and return Ok to not block poll_flush
+                    }
+                }
+                // Always return Ready to not block poll_flush
                 Poll::Ready(Ok(()))
             }
         }
@@ -3441,15 +3459,17 @@ where
                         ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(handle));
                 }
                 PollFlushAction::Reconnect(addresses) => {
-                    self.state = ConnectionState::Recover(RecoverFuture::Reconnect(Box::pin(
+                    let inner = self.inner.clone();
+                    let handle = tokio::spawn(async move {
                         ClusterConnInner::trigger_refresh_connection_tasks(
-                            self.inner.clone(),
+                            inner,
                             addresses,
                             RefreshConnectionType::OnlyUserConnection,
                             true,
                         )
-                        .map(|_| ()), // Convert Vec<Arc<Notify>> to () as it's not needed here
-                    )));
+                        .await
+                    });
+                    self.state = ConnectionState::Recover(RecoverFuture::Reconnect(handle));
                 }
             }
         }
