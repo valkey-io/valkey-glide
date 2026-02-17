@@ -3,10 +3,12 @@ package redis.clients.jedis;
 
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
+import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
+import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
@@ -57,6 +59,8 @@ import javax.net.ssl.SSLSocketFactory;
 import redis.clients.jedis.args.BitCountOption;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.args.FlushMode;
+import redis.clients.jedis.args.FunctionRestorePolicy;
 import redis.clients.jedis.args.ListDirection;
 import redis.clients.jedis.args.ListPosition;
 import redis.clients.jedis.commands.ProtocolCommand;
@@ -71,6 +75,8 @@ import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.AccessControlLogEntry;
 import redis.clients.jedis.resps.AccessControlUser;
+import redis.clients.jedis.resps.FunctionStats;
+import redis.clients.jedis.resps.LibraryInfo;
 import redis.clients.jedis.resps.ScanResult;
 import redis.clients.jedis.resps.StreamConsumerInfo;
 import redis.clients.jedis.resps.StreamEntry;
@@ -8091,6 +8097,528 @@ public final class Jedis implements Closeable {
     @Deprecated
     public byte[] brpoplpush(final byte[] source, final byte[] destination, int timeout) {
         return blmove(source, destination, ListDirection.RIGHT, ListDirection.LEFT, timeout);
+    }
+
+    // ==================== Scripting and Functions Commands ====================
+
+    /**
+     * Executes a Lua script on the server.
+     *
+     * @param script the Lua 5.1 script to execute
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/eval/">EVAL</a>
+     */
+    public Object eval(String script) {
+        return eval(script, Collections.emptyList(), Collections.emptyList());
+    }
+
+    /**
+     * Executes a Lua script on the server with keys and arguments.
+     *
+     * @param script the Lua 5.1 script to execute
+     * @param keyCount the number of keys (first keyCount params are keys, rest are arguments)
+     * @param params the keys and arguments for the script
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/eval/">EVAL</a>
+     */
+    public Object eval(String script, int keyCount, String... params) {
+        List<String> keys = new ArrayList<>();
+        List<String> args = new ArrayList<>();
+        for (int i = 0; i < params.length; i++) {
+            if (i < keyCount) {
+                keys.add(params[i]);
+            } else {
+                args.add(params[i]);
+            }
+        }
+        return eval(script, keys, args);
+    }
+
+    /**
+     * Executes a Lua script on the server with keys and arguments.
+     *
+     * @param script the Lua 5.1 script to execute
+     * @param keys the keys accessed by the script
+     * @param args the arguments for the script
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/eval/">EVAL</a>
+     */
+    public Object eval(String script, List<String> keys, List<String> args) {
+        return executeCommandWithGlide(
+                "EVAL",
+                () -> {
+                    try (Script luaScript = new Script(script, false)) {
+                        ScriptOptions.ScriptOptionsBuilder builder = ScriptOptions.builder();
+                        if (keys != null && !keys.isEmpty()) {
+                            for (String key : keys) {
+                                builder.key(key);
+                            }
+                        }
+                        if (args != null && !args.isEmpty()) {
+                            for (String arg : args) {
+                                builder.arg(arg);
+                            }
+                        }
+                        ScriptOptions options = builder.build();
+                        return glideClient.invokeScript(luaScript, options).get();
+                    } catch (Exception e) {
+                        throw new RuntimeException("Failed to execute script", e);
+                    }
+                });
+    }
+
+    /**
+     * Executes a Lua script by its SHA1 digest.
+     *
+     * @param sha1 the SHA1 digest of the script
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/evalsha/">EVALSHA</a>
+     */
+    public Object evalsha(String sha1) {
+        return evalsha(sha1, Collections.emptyList(), Collections.emptyList());
+    }
+
+    /**
+     * Executes a Lua script by its SHA1 digest with keys and arguments.
+     *
+     * @param sha1 the SHA1 digest of the script
+     * @param keyCount the number of keys (first keyCount params are keys, rest are arguments)
+     * @param params the keys and arguments for the script
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/evalsha/">EVALSHA</a>
+     */
+    public Object evalsha(String sha1, int keyCount, String... params) {
+        List<String> keys = new ArrayList<>();
+        List<String> args = new ArrayList<>();
+        for (int i = 0; i < params.length; i++) {
+            if (i < keyCount) {
+                keys.add(params[i]);
+            } else {
+                args.add(params[i]);
+            }
+        }
+        return evalsha(sha1, keys, args);
+    }
+
+    /**
+     * Executes a Lua script by its SHA1 digest with keys and arguments.
+     *
+     * <p><b>Implementation Note:</b> This method uses {@code customCommand} because GLIDE Java does
+     * not currently expose a type-safe {@code evalsha} API for non-read-only operations. While GLIDE
+     * provides {@link #evalshaReadonly(String, List, List)} for read-only scripts, the standard
+     * {@code EVALSHA} command (which allows writes) must be sent using {@code customCommand}.
+     *
+     * @param sha1 the SHA1 digest of the script
+     * @param keys the keys accessed by the script
+     * @param args the arguments for the script
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/evalsha/">EVALSHA</a>
+     */
+    public Object evalsha(String sha1, List<String> keys, List<String> args) {
+        return executeCommandWithGlide(
+                "EVALSHA",
+                () -> {
+                    // Use customCommand since GLIDE Java only exposes evalshaReadOnly, not evalsha
+                    // Build the command: EVALSHA sha1 numkeys key [key ...] arg [arg ...]
+                    List<String> cmdArgs = new ArrayList<>();
+                    cmdArgs.add("EVALSHA");
+                    cmdArgs.add(sha1);
+                    cmdArgs.add(String.valueOf(keys != null ? keys.size() : 0));
+                    if (keys != null) {
+                        cmdArgs.addAll(keys);
+                    }
+                    if (args != null) {
+                        cmdArgs.addAll(args);
+                    }
+                    return glideClient.customCommand(cmdArgs.toArray(new String[0])).get();
+                });
+    }
+
+    /**
+     * Executes a read-only Lua script with keys and arguments.
+     *
+     * @param script the Lua 5.1 script to execute
+     * @param keys the keys accessed by the script
+     * @param args the arguments for the script
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/eval-ro/">EVAL_RO</a>
+     * @since Valkey 7.0 and above
+     */
+    public Object evalReadonly(String script, List<String> keys, List<String> args) {
+        return executeCommandWithGlide(
+                "EVAL_RO",
+                () -> {
+                    String[] keyArray = keys != null ? keys.toArray(new String[0]) : new String[0];
+                    String[] argArray = args != null ? args.toArray(new String[0]) : new String[0];
+                    return glideClient.evalReadOnly(script, keyArray, argArray).get();
+                });
+    }
+
+    /**
+     * Executes a read-only Lua script by its SHA1 digest with keys and arguments.
+     *
+     * @param sha1 the SHA1 digest of the script
+     * @param keys the keys accessed by the script
+     * @param args the arguments for the script
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/evalsha-ro/">EVALSHA_RO</a>
+     * @since Valkey 7.0 and above
+     */
+    public Object evalshaReadonly(String sha1, List<String> keys, List<String> args) {
+        return executeCommandWithGlide(
+                "EVALSHA_RO",
+                () -> {
+                    String[] keyArray = keys != null ? keys.toArray(new String[0]) : new String[0];
+                    String[] argArray = args != null ? args.toArray(new String[0]) : new String[0];
+                    return glideClient.evalshaReadOnly(sha1, keyArray, argArray).get();
+                });
+    }
+
+    /**
+     * Loads a Lua script into the server's script cache and returns its SHA1 digest.
+     *
+     * <p><b>Implementation Note:</b> This method uses {@code customCommand} because GLIDE Java does
+     * not currently expose a type-safe {@code scriptLoad} API. While GLIDE's {@link Script} object
+     * can store scripts in the Rust FFI layer and compute SHA1 hashes client-side, it does not
+     * explicitly send {@code SCRIPT LOAD} to the Valkey server, which is required for Jedis API
+     * compatibility where scripts must be loaded before {@code EVALSHA} can be used.
+     *
+     * @param script the Lua script to load
+     * @return the SHA1 digest of the script
+     * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a>
+     */
+    public String scriptLoad(String script) {
+        return executeCommandWithGlide(
+                "SCRIPT LOAD",
+                () -> {
+                    // Use customCommand since GLIDE Java doesn't expose a type-safe scriptLoad API
+                    return (String) glideClient.customCommand(new String[] {"SCRIPT", "LOAD", script}).get();
+                });
+    }
+
+    /**
+     * Checks if scripts exist in the script cache by their SHA1 digests.
+     *
+     * @param sha1 the SHA1 digests to check
+     * @return a list of booleans indicating the existence of each script
+     * @see <a href="https://valkey.io/commands/script-exists/">SCRIPT EXISTS</a>
+     */
+    public List<Boolean> scriptExists(String... sha1) {
+        return executeCommandWithGlide(
+                "SCRIPT EXISTS",
+                () -> {
+                    Boolean[] result = glideClient.scriptExists(sha1).get();
+                    return Arrays.asList(result);
+                });
+    }
+
+    /**
+     * Flushes the Lua scripts cache.
+     *
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/script-flush/">SCRIPT FLUSH</a>
+     */
+    public String scriptFlush() {
+        return executeCommandWithGlide("SCRIPT FLUSH", () -> glideClient.scriptFlush().get());
+    }
+
+    /**
+     * Flushes the Lua scripts cache with the specified flush mode.
+     *
+     * @param flushMode the flush mode (SYNC or ASYNC)
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/script-flush/">SCRIPT FLUSH</a>
+     */
+    public String scriptFlush(FlushMode flushMode) {
+        return executeCommandWithGlide(
+                "SCRIPT FLUSH", () -> glideClient.scriptFlush(flushMode.toGlideFlushMode()).get());
+    }
+
+    /**
+     * Kills the currently executing Lua script, assuming no write operation was yet performed by the
+     * script.
+     *
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/script-kill/">SCRIPT KILL</a>
+     */
+    public String scriptKill() {
+        return executeCommandWithGlide("SCRIPT KILL", () -> glideClient.scriptKill().get());
+    }
+
+    /**
+     * Loads a library to Valkey.
+     *
+     * @param functionCode the source code that implements the library
+     * @return the library name that was loaded
+     * @see <a href="https://valkey.io/commands/function-load/">FUNCTION LOAD</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionLoad(String functionCode) {
+        return executeCommandWithGlide(
+                "FUNCTION LOAD", () -> glideClient.functionLoad(functionCode, false).get());
+    }
+
+    /**
+     * Loads a library to Valkey, replacing any existing library with the same name.
+     *
+     * @param functionCode the source code that implements the library
+     * @return the library name that was loaded
+     * @see <a href="https://valkey.io/commands/function-load/">FUNCTION LOAD</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionLoadReplace(String functionCode) {
+        return executeCommandWithGlide(
+                "FUNCTION LOAD", () -> glideClient.functionLoad(functionCode, true).get());
+    }
+
+    /**
+     * Deletes a library and all its functions.
+     *
+     * @param libraryName the library name to delete
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/function-delete/">FUNCTION DELETE</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionDelete(String libraryName) {
+        return executeCommandWithGlide(
+                "FUNCTION DELETE", () -> glideClient.functionDelete(libraryName).get());
+    }
+
+    /**
+     * Returns the serialized payload of all loaded libraries.
+     *
+     * @return the serialized payload of all loaded libraries
+     * @see <a href="https://valkey.io/commands/function-dump/">FUNCTION DUMP</a>
+     * @since Valkey 7.0 and above
+     */
+    public byte[] functionDump() {
+        return executeCommandWithGlide("FUNCTION DUMP", () -> glideClient.functionDump().get());
+    }
+
+    /**
+     * Restores libraries from the serialized payload.
+     *
+     * @param serializedValue the serialized data from functionDump
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/function-restore/">FUNCTION RESTORE</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionRestore(byte[] serializedValue) {
+        return executeCommandWithGlide(
+                "FUNCTION RESTORE", () -> glideClient.functionRestore(serializedValue).get());
+    }
+
+    /**
+     * Restores libraries from the serialized payload with a policy for handling existing libraries.
+     *
+     * @param serializedValue the serialized data from functionDump
+     * @param policy the policy for handling existing libraries
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/function-restore/">FUNCTION RESTORE</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionRestore(byte[] serializedValue, FunctionRestorePolicy policy) {
+        return executeCommandWithGlide(
+                "FUNCTION RESTORE",
+                () ->
+                        glideClient
+                                .functionRestore(serializedValue, policy.toGlideFunctionRestorePolicy())
+                                .get());
+    }
+
+    /**
+     * Deletes all function libraries.
+     *
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/function-flush/">FUNCTION FLUSH</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionFlush() {
+        return executeCommandWithGlide("FUNCTION FLUSH", () -> glideClient.functionFlush().get());
+    }
+
+    /**
+     * Deletes all function libraries with the specified flush mode.
+     *
+     * @param mode the flushing mode (SYNC or ASYNC)
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/function-flush/">FUNCTION FLUSH</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionFlush(FlushMode mode) {
+        return executeCommandWithGlide(
+                "FUNCTION FLUSH", () -> glideClient.functionFlush(mode.toGlideFlushMode()).get());
+    }
+
+    /**
+     * Kills a function that is currently executing.
+     *
+     * @return "OK" if function is terminated
+     * @see <a href="https://valkey.io/commands/function-kill/">FUNCTION KILL</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionKill() {
+        return executeCommandWithGlide("FUNCTION KILL", () -> glideClient.functionKill().get());
+    }
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * @param name the function name
+     * @param keys the keys accessed by the function
+     * @param args the function arguments
+     * @return the invoked function's return value
+     * @see <a href="https://valkey.io/commands/fcall/">FCALL</a>
+     * @since Valkey 7.0 and above
+     */
+    public Object fcall(String name, List<String> keys, List<String> args) {
+        return executeCommandWithGlide(
+                "FCALL",
+                () -> {
+                    String[] keyArray = keys != null ? keys.toArray(new String[0]) : new String[0];
+                    String[] argArray = args != null ? args.toArray(new String[0]) : new String[0];
+                    return glideClient.fcall(name, keyArray, argArray).get();
+                });
+    }
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * @param name the function name
+     * @param keys the keys accessed by the function
+     * @param args the function arguments
+     * @return the invoked function's return value
+     * @see <a href="https://valkey.io/commands/fcall_ro/">FCALL_RO</a>
+     * @since Valkey 7.0 and above
+     */
+    public Object fcallReadonly(String name, List<String> keys, List<String> args) {
+        return executeCommandWithGlide(
+                "FCALL_RO",
+                () -> {
+                    String[] keyArray = keys != null ? keys.toArray(new String[0]) : new String[0];
+                    String[] argArray = args != null ? args.toArray(new String[0]) : new String[0];
+                    return glideClient.fcallReadOnly(name, keyArray, argArray).get();
+                });
+    }
+
+    /**
+     * Returns information about all loaded libraries.
+     *
+     * @return info about all libraries and their functions
+     * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
+     * @since Valkey 7.0 and above
+     */
+    public List<LibraryInfo> functionList() {
+        return executeCommandWithGlide(
+                "FUNCTION LIST",
+                () -> {
+                    Map<String, Object>[] result = glideClient.functionList(false).get();
+                    List<LibraryInfo> libraries = new ArrayList<>(result.length);
+                    for (Map<String, Object> lib : result) {
+                        libraries.add(new LibraryInfo(lib));
+                    }
+                    return libraries;
+                });
+    }
+
+    /**
+     * Returns information about loaded libraries matching a pattern.
+     *
+     * @param libraryNamePattern a wildcard pattern for matching library names
+     * @return info about queried libraries and their functions
+     * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
+     * @since Valkey 7.0 and above
+     */
+    public List<LibraryInfo> functionList(String libraryNamePattern) {
+        return executeCommandWithGlide(
+                "FUNCTION LIST",
+                () -> {
+                    Map<String, Object>[] result = glideClient.functionList(libraryNamePattern, false).get();
+                    List<LibraryInfo> libraries = new ArrayList<>(result.length);
+                    for (Map<String, Object> lib : result) {
+                        libraries.add(new LibraryInfo(lib));
+                    }
+                    return libraries;
+                });
+    }
+
+    /**
+     * Returns information about all loaded libraries with their code.
+     *
+     * @return info about all libraries and their functions including code
+     * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
+     * @since Valkey 7.0 and above
+     */
+    public List<LibraryInfo> functionListWithCode() {
+        return executeCommandWithGlide(
+                "FUNCTION LIST",
+                () -> {
+                    Map<String, Object>[] result = glideClient.functionList(true).get();
+                    List<LibraryInfo> libraries = new ArrayList<>(result.length);
+                    for (Map<String, Object> lib : result) {
+                        libraries.add(new LibraryInfo(lib));
+                    }
+                    return libraries;
+                });
+    }
+
+    /**
+     * Returns information about loaded libraries matching a pattern with their code.
+     *
+     * @param libraryNamePattern a wildcard pattern for matching library names
+     * @return info about queried libraries and their functions including code
+     * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
+     * @since Valkey 7.0 and above
+     */
+    public List<LibraryInfo> functionListWithCode(String libraryNamePattern) {
+        return executeCommandWithGlide(
+                "FUNCTION LIST",
+                () -> {
+                    Map<String, Object>[] result = glideClient.functionList(libraryNamePattern, true).get();
+                    List<LibraryInfo> libraries = new ArrayList<>(result.length);
+                    for (Map<String, Object> lib : result) {
+                        libraries.add(new LibraryInfo(lib));
+                    }
+                    return libraries;
+                });
+    }
+
+    /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.
+     *
+     * @return a map with information about running scripts and available engines
+     * @see <a href="https://valkey.io/commands/function-stats/">FUNCTION STATS</a>
+     * @since Valkey 7.0 and above
+     */
+    @SuppressWarnings("unchecked")
+    public FunctionStats functionStats() {
+        return executeCommandWithGlide(
+                "FUNCTION STATS",
+                () -> {
+                    Map<String, Map<String, Map<String, Object>>> result = glideClient.functionStats().get();
+                    // The result structure is: { "running_script": {...}, "engines": {...} }
+                    // But GLIDE returns it as Map<String, Map<String, Map<String, Object>>>
+                    // We need to extract and flatten appropriately
+                    Map<String, Object> runningScript = null;
+                    Map<String, Map<String, Object>> engines = null;
+
+                    if (result != null) {
+                        // Get running_script - it's actually a Map<String, Map<String, Object>>
+                        Object runningScriptObj = result.get("running_script");
+                        if (runningScriptObj instanceof Map) {
+                            runningScript = (Map<String, Object>) runningScriptObj;
+                        }
+
+                        // Get engines - it's a Map<String, Map<String, Object>>
+                        Object enginesObj = result.get("engines");
+                        if (enginesObj instanceof Map) {
+                            engines = (Map<String, Map<String, Object>>) enginesObj;
+                        }
+                    }
+
+                    return new FunctionStats(runningScript, engines);
+                });
     }
 
     /**
