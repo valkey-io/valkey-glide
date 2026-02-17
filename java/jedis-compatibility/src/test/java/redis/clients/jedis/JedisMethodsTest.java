@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.resps.AccessControlUser;
@@ -344,5 +345,213 @@ public class JedisMethodsTest {
         Method aclDryRun =
                 jedisClass.getMethod("aclDryRun", String.class, String.class, String[].class);
         assertEquals(String.class, aclDryRun.getReturnType());
+    }
+
+    @Test
+    public void testSortReadOnlyMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test sortReadOnly(String key) method exists
+        Method sortReadOnlyString = jedisClass.getMethod("sortReadOnly", String.class);
+        assertEquals(List.class, sortReadOnlyString.getReturnType());
+
+        // Test sortReadOnly(byte[] key) method exists
+        Method sortReadOnlyBytes = jedisClass.getMethod("sortReadOnly", byte[].class);
+        assertEquals(List.class, sortReadOnlyBytes.getReturnType());
+
+        // Test sortReadOnly(String key, SortingParams) method exists
+        Method sortReadOnlyStringParams =
+                jedisClass.getMethod(
+                        "sortReadOnly", String.class, redis.clients.jedis.params.SortingParams.class);
+        assertEquals(List.class, sortReadOnlyStringParams.getReturnType());
+
+        // Test sortReadOnly(byte[] key, SortingParams) method exists
+        Method sortReadOnlyBytesParams =
+                jedisClass.getMethod(
+                        "sortReadOnly", byte[].class, redis.clients.jedis.params.SortingParams.class);
+        assertEquals(List.class, sortReadOnlyBytesParams.getReturnType());
+    }
+
+    @Test
+    public void testSortStoreMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test sortStore(String key, String dstkey) method exists
+        Method sortStoreString = jedisClass.getMethod("sortStore", String.class, String.class);
+        assertEquals(long.class, sortStoreString.getReturnType());
+
+        // Test sortStore(byte[] key, byte[] dstkey) method exists
+        Method sortStoreBytes = jedisClass.getMethod("sortStore", byte[].class, byte[].class);
+        assertEquals(long.class, sortStoreBytes.getReturnType());
+
+        // Test sortStore(String key, String dstkey, SortingParams) method exists
+        Method sortStoreStringParams =
+                jedisClass.getMethod(
+                        "sortStore",
+                        String.class,
+                        String.class,
+                        redis.clients.jedis.params.SortingParams.class);
+        assertEquals(long.class, sortStoreStringParams.getReturnType());
+
+        // Test sortStore(byte[] key, byte[] dstkey, SortingParams) method exists
+        Method sortStoreBytesParams =
+                jedisClass.getMethod(
+                        "sortStore",
+                        byte[].class,
+                        byte[].class,
+                        redis.clients.jedis.params.SortingParams.class);
+        assertEquals(long.class, sortStoreBytesParams.getReturnType());
+    }
+
+    @Test
+    public void testWaitMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test wait(long replicas, long timeout) method exists
+        Method waitMethod = jedisClass.getMethod("wait", long.class, long.class);
+        assertEquals(long.class, waitMethod.getReturnType());
+
+        // Test waitaof(long numlocal, long numreplicas, long timeout) method exists
+        Method waitaofMethod = jedisClass.getMethod("waitaof", long.class, long.class, long.class);
+        assertEquals(List.class, waitaofMethod.getReturnType());
+    }
+
+    @Test
+    public void testObjectMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test objectEncoding(String key) method exists
+        Method objectEncodingString = jedisClass.getMethod("objectEncoding", String.class);
+        assertEquals(String.class, objectEncodingString.getReturnType());
+
+        // Test objectEncoding(byte[] key) method exists
+        Method objectEncodingBytes = jedisClass.getMethod("objectEncoding", byte[].class);
+        assertEquals(byte[].class, objectEncodingBytes.getReturnType());
+
+        // Test objectFreq(String key) method exists
+        Method objectFreqString = jedisClass.getMethod("objectFreq", String.class);
+        assertEquals(Long.class, objectFreqString.getReturnType());
+
+        // Test objectFreq(byte[] key) method exists
+        Method objectFreqBytes = jedisClass.getMethod("objectFreq", byte[].class);
+        assertEquals(Long.class, objectFreqBytes.getReturnType());
+
+        // Test objectIdletime(String key) method exists
+        Method objectIdletimeString = jedisClass.getMethod("objectIdletime", String.class);
+        assertEquals(Long.class, objectIdletimeString.getReturnType());
+
+        // Test objectIdletime(byte[] key) method exists
+        Method objectIdletimeBytes = jedisClass.getMethod("objectIdletime", byte[].class);
+        assertEquals(Long.class, objectIdletimeBytes.getReturnType());
+
+        // Test objectRefcount(String key) method exists
+        Method objectRefcountString = jedisClass.getMethod("objectRefcount", String.class);
+        assertEquals(Long.class, objectRefcountString.getReturnType());
+
+        // Test objectRefcount(byte[] key) method exists
+        Method objectRefcountBytes = jedisClass.getMethod("objectRefcount", byte[].class);
+        assertEquals(Long.class, objectRefcountBytes.getReturnType());
+    }
+
+    @Test
+    public void testGeoMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test geoadd(String key, double longitude, double latitude, String member) method exists
+        Method geoaddSingle =
+                jedisClass.getMethod("geoadd", String.class, double.class, double.class, String.class);
+        assertEquals(long.class, geoaddSingle.getReturnType());
+
+        // Test geoadd(byte[] key, double longitude, double latitude, byte[] member) method exists
+        Method geoaddSingleBytes =
+                jedisClass.getMethod("geoadd", byte[].class, double.class, double.class, byte[].class);
+        assertEquals(long.class, geoaddSingleBytes.getReturnType());
+
+        // Test geoadd(String key, Map<String, GeoCoordinate>) method exists
+        Method geoaddMap = jedisClass.getMethod("geoadd", String.class, Map.class);
+        assertEquals(long.class, geoaddMap.getReturnType());
+
+        // Test geoadd(byte[] key, Map<byte[], GeoCoordinate>) method exists
+        Method geoaddMapBytes = jedisClass.getMethod("geoadd", byte[].class, Map.class);
+        assertEquals(long.class, geoaddMapBytes.getReturnType());
+
+        // Test geopos(String key, String... members) method exists
+        Method geoposString = jedisClass.getMethod("geopos", String.class, String[].class);
+        assertEquals(List.class, geoposString.getReturnType());
+
+        // Test geopos(byte[] key, byte[]... members) method exists
+        Method geoposBytes = jedisClass.getMethod("geopos", byte[].class, byte[][].class);
+        assertEquals(List.class, geoposBytes.getReturnType());
+
+        // Test geodist(String key, String member1, String member2) method exists
+        Method geodistString =
+                jedisClass.getMethod("geodist", String.class, String.class, String.class);
+        assertEquals(Double.class, geodistString.getReturnType());
+
+        // Test geodist(byte[] key, byte[] member1, byte[] member2) method exists
+        Method geodistBytes = jedisClass.getMethod("geodist", byte[].class, byte[].class, byte[].class);
+        assertEquals(Double.class, geodistBytes.getReturnType());
+
+        // Test geodist with unit
+        Method geodistStringUnit =
+                jedisClass.getMethod(
+                        "geodist",
+                        String.class,
+                        String.class,
+                        String.class,
+                        redis.clients.jedis.args.GeoUnit.class);
+        assertEquals(Double.class, geodistStringUnit.getReturnType());
+
+        // Test geohash(String key, String... members) method exists
+        Method geohashString = jedisClass.getMethod("geohash", String.class, String[].class);
+        assertEquals(List.class, geohashString.getReturnType());
+
+        // Test geohash(byte[] key, byte[]... members) method exists
+        Method geohashBytes = jedisClass.getMethod("geohash", byte[].class, byte[][].class);
+        assertEquals(List.class, geohashBytes.getReturnType());
+
+        // Test geosearch(String key, String member, double radius, GeoUnit unit) method exists
+        Method geosearchString =
+                jedisClass.getMethod(
+                        "geosearch",
+                        String.class,
+                        String.class,
+                        double.class,
+                        redis.clients.jedis.args.GeoUnit.class);
+        assertEquals(List.class, geosearchString.getReturnType());
+
+        // Test geosearch(byte[] key, byte[] member, double radius, GeoUnit unit) method exists
+        Method geosearchBytes =
+                jedisClass.getMethod(
+                        "geosearch",
+                        byte[].class,
+                        byte[].class,
+                        double.class,
+                        redis.clients.jedis.args.GeoUnit.class);
+        assertEquals(List.class, geosearchBytes.getReturnType());
+
+        // Test geosearchstore(String dest, String src, String member, double radius, GeoUnit unit)
+        // method exists
+        Method geosearchstoreString =
+                jedisClass.getMethod(
+                        "geosearchstore",
+                        String.class,
+                        String.class,
+                        String.class,
+                        double.class,
+                        redis.clients.jedis.args.GeoUnit.class);
+        assertEquals(long.class, geosearchstoreString.getReturnType());
+
+        // Test geosearchstore(byte[] dest, byte[] src, byte[] member, double radius, GeoUnit unit)
+        // method exists
+        Method geosearchstoreBytes =
+                jedisClass.getMethod(
+                        "geosearchstore",
+                        byte[].class,
+                        byte[].class,
+                        byte[].class,
+                        double.class,
+                        redis.clients.jedis.args.GeoUnit.class);
+        assertEquals(long.class, geosearchstoreBytes.getReturnType());
     }
 }

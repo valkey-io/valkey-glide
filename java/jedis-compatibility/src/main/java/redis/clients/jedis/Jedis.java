@@ -12,6 +12,7 @@ import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldIncrby;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow;
@@ -65,9 +66,11 @@ import redis.clients.jedis.params.HSetExParams;
 import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.params.SortingParams;
 import redis.clients.jedis.resps.AccessControlLogEntry;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
+import redis.clients.jedis.resps.GeoRadiusResponse;
 import redis.clients.jedis.resps.LibraryInfo;
 import redis.clients.jedis.resps.ScanResult;
 import redis.clients.jedis.util.KeyValue;
@@ -8468,6 +8471,811 @@ public final class Jedis implements Closeable {
             builder.count(params.getCount());
         }
         return builder.build();
+    }
+
+    // ==================== SORT COMMANDS ====================
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key and returns the result. The
+     * sortReadOnly command is a read-only variant of SORT that does not modify the key.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @return the sorted elements as a list
+     */
+    public List<String> sortReadOnly(String key) {
+        return executeCommandWithGlide(
+                "SORT_RO",
+                () -> {
+                    String[] result = glideClient.sortReadOnly(key).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key and returns the result (binary
+     * version). The sortReadOnly command is a read-only variant of SORT that does not modify the key.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @return the sorted elements as a list
+     */
+    public List<byte[]> sortReadOnly(final byte[] key) {
+        return executeCommandWithGlide(
+                "SORT_RO",
+                () -> {
+                    GlideString[] result = glideClient.sortReadOnly(GlideString.of(key)).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<byte[]> out = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        out.add(gs.getBytes());
+                    }
+                    return out;
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key with sorting parameters and returns
+     * the result. The sortReadOnly command is a read-only variant of SORT that does not modify the
+     * key.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param sortingParams the sorting parameters
+     * @return the sorted elements as a list
+     */
+    public List<String> sortReadOnly(String key, SortingParams sortingParams) {
+        return executeCommandWithGlide(
+                "SORT_RO",
+                () -> {
+                    SortOptions options = convertSortingParamsToSortOptions(sortingParams);
+                    String[] result = glideClient.sortReadOnly(key, options).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key with sorting parameters and returns
+     * the result (binary version). The sortReadOnly command is a read-only variant of SORT that does
+     * not modify the key.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param sortingParams the sorting parameters
+     * @return the sorted elements as a list
+     */
+    public List<byte[]> sortReadOnly(final byte[] key, SortingParams sortingParams) {
+        return executeCommandWithGlide(
+                "SORT_RO",
+                () -> {
+                    SortOptionsBinary options = convertSortingParamsToSortOptionsBinary(sortingParams);
+                    GlideString[] result = glideClient.sortReadOnly(GlideString.of(key), options).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<byte[]> out = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        out.add(gs.getBytes());
+                    }
+                    return out;
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key and stores the result in destination.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param dstkey the destination key to store the sorted result
+     * @return the number of elements in the sorted result
+     */
+    public long sortStore(String key, String dstkey) {
+        return executeCommandWithGlide("SORT", () -> glideClient.sortStore(key, dstkey).get());
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key and stores the result in destination
+     * (binary version).
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param dstkey the destination key to store the sorted result
+     * @return the number of elements in the sorted result
+     */
+    public long sortStore(final byte[] key, final byte[] dstkey) {
+        return executeCommandWithGlide(
+                "SORT", () -> glideClient.sortStore(GlideString.of(key), GlideString.of(dstkey)).get());
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key with sorting parameters and stores
+     * the result in destination.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param dstkey the destination key to store the sorted result
+     * @param sortingParams the sorting parameters
+     * @return the number of elements in the sorted result
+     */
+    public long sortStore(String key, String dstkey, SortingParams sortingParams) {
+        return executeCommandWithGlide(
+                "SORT",
+                () -> {
+                    SortOptions options = convertSortingParamsToSortOptions(sortingParams);
+                    return glideClient.sortStore(key, dstkey, options).get();
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key with sorting parameters and stores
+     * the result in destination (binary version).
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param dstkey the destination key to store the sorted result
+     * @param sortingParams the sorting parameters
+     * @return the number of elements in the sorted result
+     */
+    public long sortStore(final byte[] key, final byte[] dstkey, SortingParams sortingParams) {
+        return executeCommandWithGlide(
+                "SORT",
+                () -> {
+                    SortOptionsBinary options = convertSortingParamsToSortOptionsBinary(sortingParams);
+                    return glideClient.sortStore(GlideString.of(key), GlideString.of(dstkey), options).get();
+                });
+    }
+
+    /** Convert SortingParams to GLIDE SortOptions. */
+    private static SortOptions convertSortingParamsToSortOptions(SortingParams params) {
+        if (params == null) {
+            return SortOptions.builder().build();
+        }
+
+        SortOptions.SortOptionsBuilder builder = SortOptions.builder();
+        String[] paramArray = params.getParams();
+
+        for (int i = 0; i < paramArray.length; i++) {
+            String param = paramArray[i].toUpperCase();
+
+            switch (param) {
+                case "BY":
+                    if (i + 1 < paramArray.length) {
+                        builder.byPattern(paramArray[++i]);
+                    }
+                    break;
+
+                case "LIMIT":
+                    if (i + 2 < paramArray.length) {
+                        try {
+                            long offset = Long.parseLong(paramArray[++i]);
+                            long count = Long.parseLong(paramArray[++i]);
+                            builder.limit(new SortBaseOptions.Limit(offset, count));
+                        } catch (NumberFormatException e) {
+                            // Skip invalid limit parameters
+                        }
+                    }
+                    break;
+
+                case "GET":
+                    if (i + 1 < paramArray.length) {
+                        builder.getPattern(paramArray[++i]);
+                    }
+                    break;
+
+                case "ASC":
+                    builder.orderBy(SortBaseOptions.OrderBy.ASC);
+                    break;
+
+                case "DESC":
+                    builder.orderBy(SortBaseOptions.OrderBy.DESC);
+                    break;
+
+                case "ALPHA":
+                    builder.alpha();
+                    break;
+
+                default:
+                    // Ignore unknown parameters
+                    break;
+            }
+        }
+
+        return builder.build();
+    }
+
+    /** Convert SortingParams to GLIDE SortOptionsBinary. */
+    private static SortOptionsBinary convertSortingParamsToSortOptionsBinary(SortingParams params) {
+        if (params == null) {
+            return SortOptionsBinary.builder().build();
+        }
+
+        SortOptionsBinary.SortOptionsBinaryBuilder builder = SortOptionsBinary.builder();
+        String[] paramArray = params.getParams();
+
+        for (int i = 0; i < paramArray.length; i++) {
+            String param = paramArray[i].toUpperCase();
+
+            switch (param) {
+                case "BY":
+                    if (i + 1 < paramArray.length) {
+                        builder.byPattern(GlideString.of(paramArray[++i]));
+                    }
+                    break;
+
+                case "LIMIT":
+                    if (i + 2 < paramArray.length) {
+                        try {
+                            long offset = Long.parseLong(paramArray[++i]);
+                            long count = Long.parseLong(paramArray[++i]);
+                            builder.limit(new SortBaseOptions.Limit(offset, count));
+                        } catch (NumberFormatException e) {
+                            // Skip invalid limit parameters
+                        }
+                    }
+                    break;
+
+                case "GET":
+                    if (i + 1 < paramArray.length) {
+                        builder.getPattern(GlideString.of(paramArray[++i]));
+                    }
+                    break;
+
+                case "ASC":
+                    builder.orderBy(SortBaseOptions.OrderBy.ASC);
+                    break;
+
+                case "DESC":
+                    builder.orderBy(SortBaseOptions.OrderBy.DESC);
+                    break;
+
+                case "ALPHA":
+                    builder.alpha();
+                    break;
+
+                default:
+                    // Ignore unknown parameters
+                    break;
+            }
+        }
+
+        return builder.build();
+    }
+
+    // ==================== WAIT COMMANDS ====================
+
+    /**
+     * Blocks the current client until all previous write commands are successfully transferred and
+     * acknowledged by at least numreplicas of replicas.
+     *
+     * @param replicas the number of replicas to wait for
+     * @param timeout the timeout in milliseconds
+     * @return the number of replicas that acknowledged the write commands
+     */
+    public long wait(long replicas, long timeout) {
+        return executeCommandWithGlide("WAIT", () -> glideClient.wait(replicas, timeout).get());
+    }
+
+    /**
+     * Blocks the current client until all previous write commands are successfully transferred and
+     * acknowledged by at least numlocal and numreplicas of replicas and local persistence.
+     *
+     * @param numlocal the number of local acknowledgments required
+     * @param numreplicas the number of replica acknowledgments required
+     * @param timeout the timeout in milliseconds
+     * @return an array containing [numlocal_acks, numreplica_acks]
+     */
+    public List<Long> waitaof(long numlocal, long numreplicas, long timeout) {
+        return executeCommandWithGlide(
+                "WAITAOF",
+                () -> {
+                    Long[] result = glideClient.waitaof(numlocal, numreplicas, timeout).get();
+                    return result != null ? Arrays.asList(result) : Arrays.asList(0L, 0L);
+                });
+    }
+
+    // ==================== OBJECT COMMANDS ====================
+
+    /**
+     * Returns the internal encoding for the Valkey object stored at key.
+     *
+     * @param key the key of the object
+     * @return the encoding of the object, or null if the key does not exist
+     */
+    public String objectEncoding(String key) {
+        return executeCommandWithGlide("OBJECT", () -> glideClient.objectEncoding(key).get());
+    }
+
+    /**
+     * Returns the internal encoding for the Valkey object stored at key (binary version).
+     *
+     * @param key the key of the object
+     * @return the encoding of the object, or null if the key does not exist
+     */
+    public byte[] objectEncoding(final byte[] key) {
+        return executeCommandWithGlide(
+                "OBJECT",
+                () -> {
+                    String result = glideClient.objectEncoding(GlideString.of(key)).get();
+                    return result != null ? result.getBytes(VALKEY_CHARSET) : null;
+                });
+    }
+
+    /**
+     * Returns the logarithmic access frequency counter of a Valkey object stored at key.
+     *
+     * @param key the key of the object
+     * @return the frequency counter, or null if the key does not exist
+     */
+    public Long objectFreq(String key) {
+        return executeCommandWithGlide("OBJECT", () -> glideClient.objectFreq(key).get());
+    }
+
+    /**
+     * Returns the logarithmic access frequency counter of a Valkey object stored at key (binary
+     * version).
+     *
+     * @param key the key of the object
+     * @return the frequency counter, or null if the key does not exist
+     */
+    public Long objectFreq(final byte[] key) {
+        return executeCommandWithGlide(
+                "OBJECT", () -> glideClient.objectFreq(GlideString.of(key)).get());
+    }
+
+    /**
+     * Returns the time in seconds since the last access to the value stored at key.
+     *
+     * @param key the key of the object
+     * @return the idle time in seconds, or null if the key does not exist
+     */
+    public Long objectIdletime(String key) {
+        return executeCommandWithGlide("OBJECT", () -> glideClient.objectIdletime(key).get());
+    }
+
+    /**
+     * Returns the time in seconds since the last access to the value stored at key (binary version).
+     *
+     * @param key the key of the object
+     * @return the idle time in seconds, or null if the key does not exist
+     */
+    public Long objectIdletime(final byte[] key) {
+        return executeCommandWithGlide(
+                "OBJECT", () -> glideClient.objectIdletime(GlideString.of(key)).get());
+    }
+
+    /**
+     * Returns the reference count of the object stored at key.
+     *
+     * @param key the key of the object
+     * @return the reference count, or null if the key does not exist
+     */
+    public Long objectRefcount(String key) {
+        return executeCommandWithGlide("OBJECT", () -> glideClient.objectRefcount(key).get());
+    }
+
+    /**
+     * Returns the reference count of the object stored at key (binary version).
+     *
+     * @param key the key of the object
+     * @return the reference count, or null if the key does not exist
+     */
+    public Long objectRefcount(final byte[] key) {
+        return executeCommandWithGlide(
+                "OBJECT", () -> glideClient.objectRefcount(GlideString.of(key)).get());
+    }
+
+    // ==================== GEO COMMANDS ====================
+
+    /**
+     * Adds geospatial members with their positions to the specified sorted set stored at key.
+     *
+     * @param key the key of the sorted set
+     * @param longitude the longitude of the member
+     * @param latitude the latitude of the member
+     * @param member the member name
+     * @return the number of elements added to the sorted set
+     */
+    public long geoadd(String key, double longitude, double latitude, String member) {
+        return executeCommandWithGlide(
+                "GEOADD",
+                () -> {
+                    Map<String, glide.api.models.commands.geospatial.GeospatialData> data = new HashMap<>();
+                    data.put(
+                            member, new glide.api.models.commands.geospatial.GeospatialData(longitude, latitude));
+                    return glideClient.geoadd(key, data).get();
+                });
+    }
+
+    /**
+     * Adds geospatial members with their positions to the specified sorted set stored at key (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param longitude the longitude of the member
+     * @param latitude the latitude of the member
+     * @param member the member name
+     * @return the number of elements added to the sorted set
+     */
+    public long geoadd(final byte[] key, double longitude, double latitude, final byte[] member) {
+        return executeCommandWithGlide(
+                "GEOADD",
+                () -> {
+                    Map<GlideString, glide.api.models.commands.geospatial.GeospatialData> data =
+                            new HashMap<>();
+                    data.put(
+                            GlideString.of(member),
+                            new glide.api.models.commands.geospatial.GeospatialData(longitude, latitude));
+                    return glideClient.geoadd(GlideString.of(key), data).get();
+                });
+    }
+
+    /**
+     * Adds multiple geospatial members with their positions to the specified sorted set stored at
+     * key.
+     *
+     * @param key the key of the sorted set
+     * @param memberCoordinateMap a map of member names to their coordinates
+     * @return the number of elements added to the sorted set
+     */
+    public long geoadd(String key, Map<String, GeoCoordinate> memberCoordinateMap) {
+        return executeCommandWithGlide(
+                "GEOADD",
+                () -> {
+                    Map<String, glide.api.models.commands.geospatial.GeospatialData> data = new HashMap<>();
+                    for (Map.Entry<String, GeoCoordinate> entry : memberCoordinateMap.entrySet()) {
+                        data.put(
+                                entry.getKey(),
+                                new glide.api.models.commands.geospatial.GeospatialData(
+                                        entry.getValue().getLongitude(), entry.getValue().getLatitude()));
+                    }
+                    return glideClient.geoadd(key, data).get();
+                });
+    }
+
+    /**
+     * Adds multiple geospatial members with their positions to the specified sorted set stored at key
+     * (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param memberCoordinateMap a map of member names to their coordinates
+     * @return the number of elements added to the sorted set
+     */
+    public long geoadd(final byte[] key, Map<byte[], GeoCoordinate> memberCoordinateMap) {
+        return executeCommandWithGlide(
+                "GEOADD",
+                () -> {
+                    Map<GlideString, glide.api.models.commands.geospatial.GeospatialData> data =
+                            new HashMap<>();
+                    for (Map.Entry<byte[], GeoCoordinate> entry : memberCoordinateMap.entrySet()) {
+                        data.put(
+                                GlideString.of(entry.getKey()),
+                                new glide.api.models.commands.geospatial.GeospatialData(
+                                        entry.getValue().getLongitude(), entry.getValue().getLatitude()));
+                    }
+                    return glideClient.geoadd(GlideString.of(key), data).get();
+                });
+    }
+
+    /**
+     * Returns the positions (longitude,latitude) of all the specified members of the geospatial index
+     * represented by the sorted set at key.
+     *
+     * @param key the key of the sorted set
+     * @param members the members for which to get the positions
+     * @return a list of coordinates corresponding to the given members
+     */
+    public List<GeoCoordinate> geopos(String key, String... members) {
+        return executeCommandWithGlide(
+                "GEOPOS",
+                () -> {
+                    Double[][] result = glideClient.geopos(key, members).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoCoordinate> coordinates = new ArrayList<>();
+                    for (Double[] coord : result) {
+                        if (coord != null && coord.length >= 2 && coord[0] != null && coord[1] != null) {
+                            coordinates.add(new GeoCoordinate(coord[0], coord[1]));
+                        } else {
+                            coordinates.add(null);
+                        }
+                    }
+                    return coordinates;
+                });
+    }
+
+    /**
+     * Returns the positions (longitude,latitude) of all the specified members of the geospatial index
+     * represented by the sorted set at key (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param members the members for which to get the positions
+     * @return a list of coordinates corresponding to the given members
+     */
+    public List<GeoCoordinate> geopos(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "GEOPOS",
+                () -> {
+                    GlideString[] glideMembers = new GlideString[members.length];
+                    for (int i = 0; i < members.length; i++) {
+                        glideMembers[i] = GlideString.of(members[i]);
+                    }
+                    Double[][] result = glideClient.geopos(GlideString.of(key), glideMembers).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoCoordinate> coordinates = new ArrayList<>();
+                    for (Double[] coord : result) {
+                        if (coord != null && coord.length >= 2 && coord[0] != null && coord[1] != null) {
+                            coordinates.add(new GeoCoordinate(coord[0], coord[1]));
+                        } else {
+                            coordinates.add(null);
+                        }
+                    }
+                    return coordinates;
+                });
+    }
+
+    /**
+     * Returns the distance between two members in the geospatial index represented by the sorted set
+     * at key.
+     *
+     * @param key the key of the sorted set
+     * @param member1 the first member
+     * @param member2 the second member
+     * @return the distance in meters, or null if one or both members do not exist
+     */
+    public Double geodist(String key, String member1, String member2) {
+        return executeCommandWithGlide(
+                "GEODIST", () -> glideClient.geodist(key, member1, member2).get());
+    }
+
+    /**
+     * Returns the distance between two members in the geospatial index represented by the sorted set
+     * at key (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param member1 the first member
+     * @param member2 the second member
+     * @return the distance in meters, or null if one or both members do not exist
+     */
+    public Double geodist(final byte[] key, final byte[] member1, final byte[] member2) {
+        return executeCommandWithGlide(
+                "GEODIST",
+                () ->
+                        glideClient
+                                .geodist(GlideString.of(key), GlideString.of(member1), GlideString.of(member2))
+                                .get());
+    }
+
+    /**
+     * Returns the distance between two members in the geospatial index with specified unit.
+     *
+     * @param key the key of the sorted set
+     * @param member1 the first member
+     * @param member2 the second member
+     * @param unit the unit of distance (m, km, mi, ft)
+     * @return the distance in the specified unit, or null if one or both members do not exist
+     */
+    public Double geodist(
+            String key, String member1, String member2, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEODIST",
+                () -> {
+                    glide.api.models.commands.geospatial.GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    return glideClient.geodist(key, member1, member2, glideUnit).get();
+                });
+    }
+
+    /**
+     * Returns the distance between two members in the geospatial index with specified unit (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param member1 the first member
+     * @param member2 the second member
+     * @param unit the unit of distance (m, km, mi, ft)
+     * @return the distance in the specified unit, or null if one or both members do not exist
+     */
+    public Double geodist(
+            final byte[] key,
+            final byte[] member1,
+            final byte[] member2,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEODIST",
+                () -> {
+                    glide.api.models.commands.geospatial.GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    return glideClient
+                            .geodist(
+                                    GlideString.of(key), GlideString.of(member1), GlideString.of(member2), glideUnit)
+                            .get();
+                });
+    }
+
+    /**
+     * Returns the GeoHash strings representing the positions of all the specified members in the
+     * geospatial index represented by the sorted set at key.
+     *
+     * @param key the key of the sorted set
+     * @param members the members for which to get the geohash
+     * @return a list of geohash strings corresponding to the given members
+     */
+    public List<String> geohash(String key, String... members) {
+        return executeCommandWithGlide(
+                "GEOHASH",
+                () -> {
+                    String[] result = glideClient.geohash(key, members).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Returns the GeoHash strings representing the positions of all the specified members in the
+     * geospatial index represented by the sorted set at key (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param members the members for which to get the geohash
+     * @return a list of geohash strings corresponding to the given members
+     */
+    public List<byte[]> geohash(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "GEOHASH",
+                () -> {
+                    GlideString[] glideMembers = new GlideString[members.length];
+                    for (int i = 0; i < members.length; i++) {
+                        glideMembers[i] = GlideString.of(members[i]);
+                    }
+                    GlideString[] result = glideClient.geohash(GlideString.of(key), glideMembers).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<byte[]> out = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        out.add(gs != null ? gs.getBytes() : null);
+                    }
+                    return out;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a given member and radius.
+     *
+     * @param key the key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return a list of members within the specified area
+     */
+    public List<GeoRadiusResponse> geosearch(
+            String key, String member, double radius, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    glide.api.models.commands.geospatial.GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOrigin origin =
+                            new glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOrigin(member);
+                    glide.api.models.commands.geospatial.GeoSearchShape shape =
+                            new glide.api.models.commands.geospatial.GeoSearchShape(radius, glideUnit);
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a given member and radius (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return a list of members within the specified area
+     */
+    public List<GeoRadiusResponse> geosearch(
+            final byte[] key, final byte[] member, double radius, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    glide.api.models.commands.geospatial.GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOriginBinary origin =
+                            new glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOriginBinary(
+                                    GlideString.of(member));
+                    glide.api.models.commands.geospatial.GeoSearchShape shape =
+                            new glide.api.models.commands.geospatial.GeoSearchShape(radius, glideUnit);
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return the number of elements in the resulting sorted set
+     */
+    public long geosearchstore(
+            String dest,
+            String src,
+            String member,
+            double radius,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    glide.api.models.commands.geospatial.GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOrigin origin =
+                            new glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOrigin(member);
+                    glide.api.models.commands.geospatial.GeoSearchShape shape =
+                            new glide.api.models.commands.geospatial.GeoSearchShape(radius, glideUnit);
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return the number of elements in the resulting sorted set
+     */
+    public long geosearchstore(
+            final byte[] dest,
+            final byte[] src,
+            final byte[] member,
+            double radius,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    glide.api.models.commands.geospatial.GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOriginBinary origin =
+                            new glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOriginBinary(
+                                    GlideString.of(member));
+                    glide.api.models.commands.geospatial.GeoSearchShape shape =
+                            new glide.api.models.commands.geospatial.GeoSearchShape(radius, glideUnit);
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /** Convert Jedis GeoUnit to GLIDE GeoUnit. */
+    private static glide.api.models.commands.geospatial.GeoUnit convertToGlideGeoUnit(
+            redis.clients.jedis.args.GeoUnit unit) {
+        if (unit == null) {
+            return glide.api.models.commands.geospatial.GeoUnit.METERS;
+        }
+        switch (unit) {
+            case M:
+                return glide.api.models.commands.geospatial.GeoUnit.METERS;
+            case KM:
+                return glide.api.models.commands.geospatial.GeoUnit.KILOMETERS;
+            case MI:
+                return glide.api.models.commands.geospatial.GeoUnit.MILES;
+            case FT:
+                return glide.api.models.commands.geospatial.GeoUnit.FEET;
+            default:
+                return glide.api.models.commands.geospatial.GeoUnit.METERS;
+        }
     }
 
     // Static initialization block for cleanup hooks
