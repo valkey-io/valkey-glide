@@ -3,7 +3,6 @@
 use super::get_valkey_connection_info;
 use super::reconnecting_connection::{ReconnectReason, ReconnectingConnection};
 use super::{ConnectionRequest, NodeAddress, TlsMode};
-use super::{DEFAULT_CONNECTION_TIMEOUT, to_duration};
 use crate::client::types::ReadFrom as ClientReadFrom;
 use futures::{StreamExt, future, stream};
 use logger_core::log_debug;
@@ -142,10 +141,7 @@ impl StandaloneClient {
                 | Some(ClientReadFrom::AZAffinityReplicasAndPrimary(_))
         );
 
-        let connection_timeout = to_duration(
-            connection_request.connection_timeout,
-            DEFAULT_CONNECTION_TIMEOUT,
-        );
+        let connection_timeout = connection_request.get_connection_timeout();
 
         let tcp_nodelay = connection_request.tcp_nodelay;
 
@@ -512,6 +508,9 @@ impl StandaloneClient {
             Some(ResponsePolicy::Aggregate(op)) => future::try_join_all(requests)
                 .await
                 .and_then(|results| cluster_routing::aggregate(results, op)),
+            Some(ResponsePolicy::AggregateArray(op)) => future::try_join_all(requests)
+                .await
+                .and_then(|results| cluster_routing::aggregate_array(results, op)),
             Some(ResponsePolicy::AggregateLogical(op)) => future::try_join_all(requests)
                 .await
                 .and_then(|results| cluster_routing::logical_aggregate(results, op)),
@@ -695,6 +694,46 @@ impl StandaloneClient {
     ) -> RedisResult<Value> {
         for node in self.inner.nodes.iter() {
             node.update_connection_client_name(new_client_name.clone());
+        }
+
+        Ok(Value::Okay)
+    }
+
+    /// Update the username used to authenticate with the servers.
+    ///
+    /// This method updates the username for all connections and stores it for future reconnections.
+    /// Typically called after a successful AUTH command with a username parameter.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_username` - The username to use for authentication (None to clear)
+    ///
+    pub async fn update_connection_username(
+        &self,
+        new_username: Option<String>,
+    ) -> RedisResult<Value> {
+        for node in self.inner.nodes.iter() {
+            node.update_connection_username(new_username.clone());
+        }
+
+        Ok(Value::Okay)
+    }
+
+    /// Update the protocol version used for connections.
+    ///
+    /// This method updates the protocol version for all connections and stores it for future reconnections.
+    /// Typically called after a successful HELLO command that changes the protocol version.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_protocol` - The protocol version to use (RESP2 or RESP3)
+    ///
+    pub async fn update_connection_protocol(
+        &self,
+        new_protocol: redis::ProtocolVersion,
+    ) -> RedisResult<Value> {
+        for node in self.inner.nodes.iter() {
+            node.update_connection_protocol(new_protocol);
         }
 
         Ok(Value::Okay)

@@ -1156,7 +1156,7 @@ describe("GlideClient", () => {
                             advancedConfiguration: { connectionTimeout: 100 }, // 100ms connection timeout
                             ...config, // Include the rest of the config
                         }),
-                    ).rejects.toThrowError(/timed out/i); // Ensure it throws a timeout error
+                    ).rejects.toThrowError(/timed?\s*out/i); // Ensure it throws a timeout error
                 };
 
                 // Function that verifies that a larger connection timeout allows connection
@@ -1188,6 +1188,60 @@ describe("GlideClient", () => {
                 ]);
             } finally {
                 // Clean up the test client and ensure everything is flushed and closed
+                client.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "should respect connection timeout duration (protocol: %p)",
+        async (protocol) => {
+            // Create a client configuration
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                { requestTimeout: 20000 },
+            );
+
+            // Initialize the primary client to block the server
+            const client = await GlideClient.createClient(config);
+
+            try {
+                // Run a long-running DEBUG SLEEP command (7 seconds)
+                const debugCommandPromise = client.customCommand([
+                    "DEBUG",
+                    "sleep",
+                    "7",
+                ]);
+
+                // Wait a bit for the sleep to start
+                await new Promise((resolve) => setTimeout(resolve, 500));
+
+                // Try to connect with 3000ms timeout - should fail and take ~3 seconds
+                const startTime = Date.now();
+
+                await expect(
+                    GlideClient.createClient({
+                        connectionBackoff: {
+                            exponentBase: 2,
+                            factor: 100,
+                            numberOfRetries: 1,
+                        },
+                        advancedConfiguration: { connectionTimeout: 3000 },
+                        ...config,
+                    }),
+                ).rejects.toThrowError(/timed?\s*out/i);
+
+                const elapsed = Date.now() - startTime;
+
+                // Verify the timeout was respected (should be around 3000ms, allow some buffer)
+                expect(elapsed).toBeGreaterThanOrEqual(2500); // At least 2.5s
+                expect(elapsed).toBeLessThan(6000); // Less than 6s (well before the 7s sleep ends)
+
+                // Wait for the debug command to complete
+                await debugCommandPromise;
+            } finally {
                 client.close();
             }
         },

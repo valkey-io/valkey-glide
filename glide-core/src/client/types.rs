@@ -43,6 +43,20 @@ pub struct ConnectionRequest {
     pub pubsub_reconciliation_interval_ms: Option<u32>,
 }
 
+/// Default connection timeout used when not specified in the request.
+/// Note: If you change this value, make sure to change the documentation in *all* wrappers.
+pub const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(2000);
+
+impl ConnectionRequest {
+    /// Returns the connection timeout from the request, or the default if not specified.
+    /// This centralizes the timeout logic to ensure consistency across all client types.
+    pub fn get_connection_timeout(&self) -> Duration {
+        self.connection_timeout
+            .map(|val| Duration::from_millis(val as u64))
+            .unwrap_or(DEFAULT_CONNECTION_TIMEOUT)
+    }
+}
+
 /// Authentication information for connecting to Redis/Valkey servers
 ///
 /// Supports traditional username/password authentication and AWS IAM authentication.

@@ -7,7 +7,7 @@ use crate::{
     connection::{connect, Connection, ConnectionInfo, ConnectionLike, IntoConnectionInfo},
     push_manager::PushInfo,
     retry_strategies::RetryStrategy,
-    types::{RedisResult, Value},
+    types::{ProtocolVersion, RedisResult, Value},
 };
 #[cfg(feature = "aio")]
 use std::net::IpAddr;
@@ -601,6 +601,34 @@ impl Client {
     /// Updates the client_name in connection_info.
     pub fn update_client_name(&mut self, client_name: Option<String>) {
         self.connection_info.redis.client_name = client_name;
+    }
+
+    /// Updates the username in connection_info.
+    ///
+    /// This method updates the username field in the connection information,
+    /// which will be used for subsequent connections and reconnections.
+    /// Typically updated when AUTH command is used with a username.
+    ///
+    /// # Arguments
+    ///
+    /// * `username` - The username to use for authentication (None to clear)
+    ///
+    pub fn update_username(&mut self, username: Option<String>) {
+        self.connection_info.redis.username = username;
+    }
+
+    /// Updates the protocol version in connection_info.
+    ///
+    /// This method updates the protocol field in the connection information,
+    /// which will be used for subsequent connections and reconnections.
+    /// Typically updated when HELLO command is used to change protocol version.
+    ///
+    /// # Arguments
+    ///
+    /// * `protocol` - The protocol version to use (RESP2 or RESP3)
+    ///
+    pub fn update_protocol(&mut self, protocol: ProtocolVersion) {
+        self.connection_info.redis.protocol = protocol;
     }
 }
 

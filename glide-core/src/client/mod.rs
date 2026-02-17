@@ -49,8 +49,6 @@ pub const DEFAULT_RETRIES: u32 = 3;
 /// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
-/// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
-pub const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(2000);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 
 /// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
@@ -513,6 +511,210 @@ impl Client {
             }
         }
     }
+
+    /// Checks if the given command is an AUTH command.
+    /// Returns true if the command is "AUTH", false otherwise.
+    fn is_auth_command(&self, cmd: &Cmd) -> bool {
+        cmd.command().is_some_and(|bytes| bytes == b"AUTH")
+    }
+
+    /// Extracts authentication information from an AUTH command.
+    /// Returns (username, password) tuple where username is None for password-only auth.
+    ///
+    /// AUTH command formats:
+    /// - AUTH password (args: \[password\])
+    /// - AUTH username password (args: \[username, password\])
+    fn extract_auth_info(&self, cmd: &Cmd) -> (Option<String>, Option<String>) {
+        // Get the first argument
+        let first_arg = cmd
+            .arg_idx(1)
+            .and_then(|bytes| std::str::from_utf8(bytes).ok().map(|s| s.to_string()));
+
+        // Get the second argument
+        let second_arg = cmd
+            .arg_idx(2)
+            .and_then(|bytes| std::str::from_utf8(bytes).ok().map(|s| s.to_string()));
+
+        match (first_arg, second_arg) {
+            // AUTH username password
+            (Some(username), Some(password)) => (Some(username), Some(password)),
+            // AUTH password
+            (Some(password), None) => (None, Some(password)),
+            // Invalid AUTH command
+            _ => (None, None),
+        }
+    }
+
+    /// Handles AUTH command processing after successful execution.
+    /// Updates username and password state for standalone, cluster, and lazy clients.
+    async fn handle_auth_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
+        let (username, password) = self.extract_auth_info(cmd);
+
+        // Update username if provided
+        if username.is_some() {
+            self.update_stored_username(username).await?;
+        }
+
+        // Update password if provided (updateConnectionPassword handles this, so we track it too)
+        if password.is_some() {
+            self.update_stored_password(password).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Updates the stored username for different client types.
+    async fn update_stored_username(&self, username: Option<String>) -> RedisResult<()> {
+        let mut guard = self.internal_client.write().await;
+        match &mut *guard {
+            ClientWrapper::Standalone(client) => {
+                client.update_connection_username(username).await?;
+                Ok(())
+            }
+            ClientWrapper::Cluster { client } => {
+                client.update_connection_username(username).await?;
+                Ok(())
+            }
+            ClientWrapper::Lazy(_) => {
+                unreachable!("Lazy client should have been initialized")
+            }
+        }
+    }
+
+    /// Updates the stored password for different client types.
+    async fn update_stored_password(&self, password: Option<String>) -> RedisResult<()> {
+        let mut guard = self.internal_client.write().await;
+        match &mut *guard {
+            ClientWrapper::Standalone(client) => {
+                client.update_connection_password(password).await?;
+                Ok(())
+            }
+            ClientWrapper::Cluster { client } => {
+                client.update_connection_password(password).await?;
+                Ok(())
+            }
+            ClientWrapper::Lazy(_) => {
+                unreachable!("Lazy client should have been initialized")
+            }
+        }
+    }
+
+    /// Checks if the given command is a HELLO command.
+    /// Returns true if the command is "HELLO", false otherwise.
+    fn is_hello_command(&self, cmd: &Cmd) -> bool {
+        cmd.command().is_some_and(|bytes| bytes == b"HELLO")
+    }
+
+    /// Extracts protocol version and optional auth info from a HELLO command.
+    /// Returns (protocol_version, username, password, client_name) tuple.
+    ///
+    /// HELLO command formats:
+    /// - HELLO 3
+    /// - HELLO 3 AUTH username password
+    /// - HELLO 3 SETNAME clientname
+    /// - HELLO 3 AUTH username password SETNAME clientname
+    fn extract_hello_info(
+        &self,
+        cmd: &Cmd,
+    ) -> (
+        Option<redis::ProtocolVersion>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ) {
+        // Get protocol version (first argument)
+        let protocol = cmd.arg_idx(1).and_then(|bytes| {
+            std::str::from_utf8(bytes).ok().and_then(|s| match s {
+                "2" => Some(redis::ProtocolVersion::RESP2),
+                "3" => Some(redis::ProtocolVersion::RESP3),
+                _ => None,
+            })
+        });
+
+        let mut username = None;
+        let mut password = None;
+        let mut client_name = None;
+
+        // Parse optional arguments (AUTH username password, SETNAME name)
+        let mut idx = 2;
+        while let Some(arg) = cmd.arg_idx(idx) {
+            if let Ok(arg_str) = std::str::from_utf8(arg) {
+                match arg_str.to_uppercase().as_str() {
+                    "AUTH" => {
+                        // Next two args are username and password
+                        username = cmd.arg_idx(idx + 1).and_then(|bytes| {
+                            std::str::from_utf8(bytes).ok().map(|s| s.to_string())
+                        });
+                        password = cmd.arg_idx(idx + 2).and_then(|bytes| {
+                            std::str::from_utf8(bytes).ok().map(|s| s.to_string())
+                        });
+                        idx += 3;
+                    }
+                    "SETNAME" => {
+                        // Next arg is client name
+                        client_name = cmd.arg_idx(idx + 1).and_then(|bytes| {
+                            std::str::from_utf8(bytes).ok().map(|s| s.to_string())
+                        });
+                        idx += 2;
+                    }
+                    _ => {
+                        idx += 1;
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        (protocol, username, password, client_name)
+    }
+
+    /// Handles HELLO command processing after successful execution.
+    /// Updates protocol version and optionally auth info and client name.
+    async fn handle_hello_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
+        let (protocol, username, password, client_name) = self.extract_hello_info(cmd);
+
+        // Update protocol version if provided
+        if let Some(protocol) = protocol {
+            self.update_stored_protocol(protocol).await?;
+        }
+
+        // Update username if provided
+        if username.is_some() {
+            self.update_stored_username(username).await?;
+        }
+
+        // Update password if provided
+        if password.is_some() {
+            self.update_stored_password(password).await?;
+        }
+
+        // Update client name if provided
+        if client_name.is_some() {
+            self.update_stored_client_name(client_name).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Updates the stored protocol version for different client types.
+    async fn update_stored_protocol(&self, protocol: redis::ProtocolVersion) -> RedisResult<()> {
+        let mut guard = self.internal_client.write().await;
+        match &mut *guard {
+            ClientWrapper::Standalone(client) => {
+                client.update_connection_protocol(protocol).await?;
+                Ok(())
+            }
+            ClientWrapper::Cluster { client } => {
+                client.update_connection_protocol(protocol).await?;
+                Ok(())
+            }
+            ClientWrapper::Lazy(_) => {
+                unreachable!("Lazy client should have been initialized")
+            }
+        }
+    }
+
     async fn get_or_initialize_client(&self) -> RedisResult<ClientWrapper> {
         {
             let guard = self.internal_client.read().await;
@@ -689,6 +891,16 @@ impl Client {
                 // Only handle SELECT commands if they executed successfully (no error)
                 if self.is_select_command(cmd) {
                     self.handle_select_command(cmd).await?;
+                }
+                // Intercept AUTH commands after regular processing
+                // Only handle AUTH commands if they executed successfully (no error)
+                if self.is_auth_command(cmd) {
+                    self.handle_auth_command(cmd).await?;
+                }
+                // Intercept HELLO commands after regular processing
+                // Only handle HELLO commands if they executed successfully (no error)
+                if self.is_hello_command(cmd) {
+                    self.handle_hello_command(cmd).await?;
                 }
                 Ok(value)
             })
@@ -1348,6 +1560,13 @@ async fn create_cluster_client(
     } else {
         (None, None)
     };
+    let periodic_topology_checks = match request.periodic_checks {
+        Some(PeriodicCheck::Disabled) => None,
+        Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
+        Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
+        None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
+    };
+    let connection_timeout = request.get_connection_timeout();
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
@@ -1361,13 +1580,6 @@ async fn create_cluster_client(
         })
         .collect();
 
-    let periodic_topology_checks = match request.periodic_checks {
-        Some(PeriodicCheck::Disabled) => None,
-        Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
-        Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
-        None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
-    };
-    let connection_timeout = to_duration(request.connection_timeout, DEFAULT_CONNECTION_TIMEOUT);
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
         .connection_timeout(connection_timeout)
         .retries(DEFAULT_RETRIES);
@@ -1552,9 +1764,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     );
     let connection_timeout = format!(
         "\nConnection timeout: {}",
-        request
-            .connection_timeout
-            .unwrap_or(DEFAULT_CONNECTION_TIMEOUT.as_millis() as u32)
+        request.get_connection_timeout().as_millis()
     );
     let database_id = format!("\ndatabase ID: {}", request.database_id);
     let rfr_strategy = request
@@ -1647,7 +1857,8 @@ impl Client {
         request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
-        const DEFAULT_CLIENT_CREATION_TIMEOUT: Duration = Duration::from_secs(10);
+        // Add buffer to connection_timeout to allow inner connection logic to fully execute before the outer timeout triggers
+        let client_creation_timeout = request.get_connection_timeout() + Duration::from_millis(500);
 
         log_info(
             "Connection configuration",
@@ -1669,7 +1880,7 @@ impl Client {
             _ => None,
         };
 
-        tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
+        tokio::time::timeout(client_creation_timeout, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
             let internal_client_arc =
@@ -2162,5 +2373,144 @@ mod tests {
             client.extract_client_name_from_client_set_name(&cmd),
             Some("test_name".to_string())
         );
+    }
+
+    #[test]
+    fn test_is_auth_command() {
+        let client = create_test_client();
+
+        // Test valid AUTH command with password
+        let mut cmd = Cmd::new();
+        cmd.arg("AUTH").arg("password123");
+        assert!(client.is_auth_command(&cmd));
+
+        // Test AUTH command with username and password
+        let mut cmd = Cmd::new();
+        cmd.arg("AUTH").arg("myuser").arg("password123");
+        assert!(client.is_auth_command(&cmd));
+
+        // Test non-AUTH command
+        let mut cmd = Cmd::new();
+        cmd.arg("SET").arg("key").arg("value");
+        assert!(!client.is_auth_command(&cmd));
+    }
+
+    #[test]
+    fn test_extract_auth_info() {
+        let client = create_test_client();
+
+        // Test AUTH with password only
+        let mut cmd = Cmd::new();
+        cmd.arg("AUTH").arg("password123");
+        let (username, password) = client.extract_auth_info(&cmd);
+        assert_eq!(username, None);
+        assert_eq!(password, Some("password123".to_string()));
+
+        // Test AUTH with username and password
+        let mut cmd = Cmd::new();
+        cmd.arg("AUTH").arg("myuser").arg("password123");
+        let (username, password) = client.extract_auth_info(&cmd);
+        assert_eq!(username, Some("myuser".to_string()));
+        assert_eq!(password, Some("password123".to_string()));
+
+        // Test AUTH with no arguments (invalid)
+        let mut cmd = Cmd::new();
+        cmd.arg("AUTH");
+        let (username, password) = client.extract_auth_info(&cmd);
+        assert_eq!(username, None);
+        assert_eq!(password, None);
+    }
+
+    #[test]
+    fn test_is_hello_command() {
+        let client = create_test_client();
+
+        // Test valid HELLO command
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO").arg("3");
+        assert!(client.is_hello_command(&cmd));
+
+        // Test HELLO with AUTH
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO")
+            .arg("3")
+            .arg("AUTH")
+            .arg("user")
+            .arg("pass");
+        assert!(client.is_hello_command(&cmd));
+
+        // Test non-HELLO command
+        let mut cmd = Cmd::new();
+        cmd.arg("PING");
+        assert!(!client.is_hello_command(&cmd));
+    }
+
+    #[test]
+    fn test_extract_hello_info() {
+        let client = create_test_client();
+
+        // Test HELLO 3
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO").arg("3");
+        let (protocol, username, password, client_name) = client.extract_hello_info(&cmd);
+        assert_eq!(protocol, Some(redis::ProtocolVersion::RESP3));
+        assert_eq!(username, None);
+        assert_eq!(password, None);
+        assert_eq!(client_name, None);
+
+        // Test HELLO 2
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO").arg("2");
+        let (protocol, username, password, client_name) = client.extract_hello_info(&cmd);
+        assert_eq!(protocol, Some(redis::ProtocolVersion::RESP2));
+        assert_eq!(username, None);
+        assert_eq!(password, None);
+        assert_eq!(client_name, None);
+
+        // Test HELLO 3 AUTH username password
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO")
+            .arg("3")
+            .arg("AUTH")
+            .arg("myuser")
+            .arg("mypass");
+        let (protocol, username, password, client_name) = client.extract_hello_info(&cmd);
+        assert_eq!(protocol, Some(redis::ProtocolVersion::RESP3));
+        assert_eq!(username, Some("myuser".to_string()));
+        assert_eq!(password, Some("mypass".to_string()));
+        assert_eq!(client_name, None);
+
+        // Test HELLO 3 SETNAME myclient
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO").arg("3").arg("SETNAME").arg("myclient");
+        let (protocol, username, password, client_name) = client.extract_hello_info(&cmd);
+        assert_eq!(protocol, Some(redis::ProtocolVersion::RESP3));
+        assert_eq!(username, None);
+        assert_eq!(password, None);
+        assert_eq!(client_name, Some("myclient".to_string()));
+
+        // Test HELLO 3 AUTH user pass SETNAME myclient
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO")
+            .arg("3")
+            .arg("AUTH")
+            .arg("myuser")
+            .arg("mypass")
+            .arg("SETNAME")
+            .arg("myclient");
+        let (protocol, username, password, client_name) = client.extract_hello_info(&cmd);
+        assert_eq!(protocol, Some(redis::ProtocolVersion::RESP3));
+        assert_eq!(username, Some("myuser".to_string()));
+        assert_eq!(password, Some("mypass".to_string()));
+        assert_eq!(client_name, Some("myclient".to_string()));
+
+        // Test HELLO with invalid protocol version
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO").arg("99");
+        let (protocol, username, password, client_name) = client.extract_hello_info(&cmd);
+        assert_eq!(protocol, None);
+        assert_eq!(username, None);
+        assert_eq!(password, None);
+        assert_eq!(client_name, None);
     }
 }

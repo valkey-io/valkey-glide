@@ -376,6 +376,17 @@ func handleOkOrStringOrNilResponse(response *C.struct_CommandResponse) (models.R
 	return convertCharArrayToString(response, true)
 }
 
+func handleOkOrStringResponse(response *C.struct_CommandResponse) (string, error) {
+	defer C.free_command_response(response)
+
+	if response.response_type == uint32(C.Ok) {
+		return "OK", nil
+	}
+
+	res, err := convertCharArrayToString(response, false)
+	return res.Value(), err
+}
+
 func handle2DStringArrayResponse(response *C.struct_CommandResponse) ([][]string, error) {
 	defer C.free_command_response(response)
 	typeErr := checkResponseType(response, C.Array, false)
@@ -939,6 +950,67 @@ func handleScanResponse(response *C.struct_CommandResponse) (models.ScanResult, 
 
 	res, err := internal.ConvertScanResult(slice)
 	return res.(models.ScanResult), err
+}
+
+func handlePubSubStateResponse(response *C.struct_CommandResponse) (*models.PubSubState, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	arr, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+
+	slice, ok := arr.([]any)
+	if !ok || len(slice) != 4 {
+		return nil, errors.New("invalid response format from GetSubscriptions")
+	}
+
+	state := models.NewPubSubState()
+
+	// Parse desired subscriptions (index 1)
+	if desiredMap, ok := slice[1].(map[string]any); ok {
+		parseSubscriptionMap(desiredMap, state.DesiredSubscriptions)
+	}
+
+	// Parse actual subscriptions (index 3)
+	if actualMap, ok := slice[3].(map[string]any); ok {
+		parseSubscriptionMap(actualMap, state.ActualSubscriptions)
+	}
+
+	return state, nil
+}
+
+func parseSubscriptionMap(source map[string]any, dest map[models.PubSubChannelMode]map[string]struct{}) {
+	for key, value := range source {
+		var mode models.PubSubChannelMode
+		switch key {
+		case "Exact":
+			mode = models.Exact
+		case "Pattern":
+			mode = models.Pattern
+		case "Sharded":
+			mode = models.Sharded
+		default:
+			continue
+		}
+
+		if dest[mode] == nil {
+			dest[mode] = make(map[string]struct{})
+		}
+
+		if channels, ok := value.([]any); ok {
+			for _, ch := range channels {
+				if chStr, ok := ch.(string); ok {
+					dest[mode][chStr] = struct{}{}
+				}
+			}
+		}
+	}
 }
 
 func handleXClaimResponse(response *C.struct_CommandResponse) (map[string]models.XClaimResponse, error) {

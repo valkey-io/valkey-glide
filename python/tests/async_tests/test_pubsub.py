@@ -4898,48 +4898,58 @@ class TestPubSub:
         cluster_mode: bool,
     ):
         """
-        Test that a short pubsub_reconciliation_interval causes faster reconciliation.
+        Test that pubsub_reconciliation_interval controls reconciliation frequency.
 
-        Uses sync timestamp metrics to verify reconciliation happens at approximately
-        the configured interval.
+        Configures a 1 second interval, then measures the actual time between
+        two consecutive reconciliation events by polling the sync timestamp.
+        Verifies the interval is within +/- 50% tolerance (500ms to 1500ms).
         """
         listening_client = None
         try:
-            # Use a short interval (500ms) for faster testing
-            short_interval_ms = 500
+            interval_ms = 1000  # 1 second interval
+            poll_interval_s = 0.1  # 100ms polling
 
-            # Create client with short reconciliation interval
+            # Create client with configured reconciliation interval
             listening_client = await create_pubsub_client(
                 request,
                 cluster_mode,
-                reconciliation_interval_ms=short_interval_ms,
+                reconciliation_interval_ms=interval_ms,
             )
+
+            async def poll_for_timestamp_change(
+                previous_ts: int, timeout_s: float = 5.0
+            ) -> int:
+                """Poll until sync timestamp changes, return new timestamp."""
+                start = anyio.current_time()
+                while (anyio.current_time() - start) < timeout_s:
+                    stats = await listening_client.get_statistics()
+                    current_ts = int(stats.get("subscription_last_sync_timestamp", "0"))
+                    if current_ts != previous_ts:
+                        return current_ts
+                    await anyio.sleep(poll_interval_s)
+
+                raise TimeoutError(
+                    f"Sync timestamp did not change within {timeout_s}s. Previous: {previous_ts}"
+                )
 
             # Get initial timestamp
             initial_stats = await listening_client.get_statistics()
-            previous_timestamp = int(
-                initial_stats.get("subscription_last_sync_timestamp", "0")
+            initial_ts = int(initial_stats.get("subscription_last_sync_timestamp", "0"))
+
+            # Wait for first sync event
+            first_sync_ts = await poll_for_timestamp_change(initial_ts)
+
+            # Wait for second sync event
+            second_sync_ts = await poll_for_timestamp_change(first_sync_ts)
+
+            # Compute the actual interval between syncs (timestamps are in milliseconds)
+            actual_interval_ms = second_sync_ts - first_sync_ts
+
+            # Assert interval is within +/- 50% tolerance
+            assert interval_ms * 0.5 <= actual_interval_ms <= interval_ms * 1.5, (
+                f"Reconciliation interval ({actual_interval_ms}ms) should be between "
+                f"{interval_ms * 0.5}ms and {interval_ms * 1.5}ms"
             )
-
-            # Iterate 5 times and verify timestamp increases by approximately the interval each time
-            for i in range(5):
-                await anyio.sleep(
-                    0.6
-                )  # Sleep slightly longer than interval to ensure reconciliation runs
-
-                stats = await listening_client.get_statistics()
-                current_timestamp = int(
-                    stats.get("subscription_last_sync_timestamp", "0")
-                )
-
-                time_diff_ms = current_timestamp - previous_timestamp
-
-                assert time_diff_ms >= short_interval_ms, (
-                    f"Iteration {i + 1}: Timestamp difference ({time_diff_ms}ms) should be >= {short_interval_ms}ms "
-                    f"Previous: {previous_timestamp}, Current: {current_timestamp}"
-                )
-
-                previous_timestamp = current_timestamp
 
         finally:
             await pubsub_client_cleanup(listening_client)
@@ -4981,3 +4991,58 @@ class TestPubSub:
         finally:
             await pubsub_client_cleanup(listening_client)
             await pubsub_client_cleanup(publishing_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_negative_timeout_raises_error(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """Test that negative timeout raises ValueError."""
+        client = None
+        try:
+            client = await create_pubsub_client(request, cluster_mode)
+
+            # Test subscribe with negative timeout
+            with pytest.raises(ValueError) as exc_info:
+                await client.subscribe({"channel1"}, timeout_ms=-1)
+            assert "Timeout must be non-negative" in str(exc_info.value)
+            assert "got: -1" in str(exc_info.value)
+
+            # Test psubscribe with negative timeout
+            with pytest.raises(ValueError) as exc_info:
+                await client.psubscribe({"pattern*"}, timeout_ms=-100)
+            assert "Timeout must be non-negative" in str(exc_info.value)
+            assert "got: -100" in str(exc_info.value)
+
+            # Test unsubscribe with negative timeout
+            with pytest.raises(ValueError) as exc_info:
+                await client.unsubscribe({"channel1"}, timeout_ms=-5)
+            assert "Timeout must be non-negative" in str(exc_info.value)
+            assert "got: -5" in str(exc_info.value)
+
+            # Test punsubscribe with negative timeout
+            with pytest.raises(ValueError) as exc_info:
+                await client.punsubscribe({"pattern*"}, timeout_ms=-10)
+            assert "Timeout must be non-negative" in str(exc_info.value)
+            assert "got: -10" in str(exc_info.value)
+
+            # Test ssubscribe with negative timeout (cluster only)
+            if cluster_mode:
+                with pytest.raises(ValueError) as exc_info:
+                    await cast(GlideClusterClient, client).ssubscribe(
+                        {"shard1"}, timeout_ms=-20
+                    )
+                assert "Timeout must be non-negative" in str(exc_info.value)
+                assert "got: -20" in str(exc_info.value)
+
+                # Test sunsubscribe with negative timeout (cluster only)
+                with pytest.raises(ValueError) as exc_info:
+                    await cast(GlideClusterClient, client).sunsubscribe(
+                        {"shard1"}, timeout_ms=-30
+                    )
+                assert "Timeout must be non-negative" in str(exc_info.value)
+                assert "got: -30" in str(exc_info.value)
+
+        finally:
+            await pubsub_client_cleanup(client)

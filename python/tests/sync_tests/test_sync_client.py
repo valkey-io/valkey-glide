@@ -411,7 +411,7 @@ class TestGlideClients:
                         1, 100, 2
                     ),  # needs to be configured so that we wont be connected within 7 seconds bc of default retries
                 )
-            assert "timed out" in str(e)
+            assert "timed out" in str(e).lower() or "timeout" in str(e).lower()
 
         def connect_to_client():
             # Create a second client with a connection timeout of 7 seconds
@@ -10646,15 +10646,13 @@ class TestSyncScripts:
         )
 
         # Add test for script_kill with writing script
-        writing_script = Script(
-            """
+        writing_script = Script("""
             redis.call('SET', KEYS[1], 'value')
             local start = redis.call('TIME')[1]
             while redis.call('TIME')[1] - start < 15 do
                 redis.call('SET', KEYS[1], 'value')
             end
-        """
-        )
+        """)
 
         def run_writing_script():
             test_client.invoke_script(writing_script, keys=[get_random_string(5)])
@@ -12075,3 +12073,46 @@ class TestSyncScripts:
                 standalone_client.delete(["key"])
             finally:
                 standalone_client.close()
+
+    # Testing the inflight_requests_limit parameter in sync client. Sending the allowed amount + 1 of requests
+    # to glide, using blocking commands, and checking the N+1 request returns immediately with error.
+    @pytest.mark.parametrize("cluster_mode", [False, True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("inflight_requests_limit", [5, 100, 250])
+    def test_sync_inflight_request_limit(
+        self, cluster_mode, protocol, inflight_requests_limit, request
+    ):
+        key1 = f"{{nonexistinglist}}1-{get_random_string(10)}"
+        test_client = create_sync_client(
+            request=request,
+            protocol=protocol,
+            cluster_mode=cluster_mode,
+            inflight_requests_limit=inflight_requests_limit,
+        )
+
+        # Event to signal when a thread receives the inflight limit error
+        max_reached = threading.Event()
+
+        def _blpop():
+            try:
+                test_client.blpop([key1], 3)
+            except RequestError as e:
+                error_msg = str(e).lower()
+                if "maximum inflight requests" in error_msg:
+                    max_reached.set()
+                # Ignore timeout errors - these are expected for blocked threads
+
+        threads = []
+        for _ in range(inflight_requests_limit + 1):
+            thread = threading.Thread(target=_blpop, daemon=True)
+            thread.start()
+            threads.append(thread)
+
+        # Wait for the max inflight error to occur
+        assert max_reached.wait(timeout=10), "Expected inflight request limit error"
+
+        # Wait for threads to complete (they'll timeout after 3 seconds)
+        for thread in threads:
+            thread.join(timeout=4)
+
+        test_client.close()

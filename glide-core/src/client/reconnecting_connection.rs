@@ -20,7 +20,7 @@ use tokio::task;
 use tokio::time::timeout;
 use tokio_retry2::{Retry, RetryError};
 
-use super::{DEFAULT_CONNECTION_TIMEOUT, run_with_timeout};
+use super::{run_with_timeout, types::DEFAULT_CONNECTION_TIMEOUT};
 
 const WRITE_LOCK_ERR: &str = "Failed to acquire the write lock";
 const READ_LOCK_ERR: &str = "Failed to acquire the read lock";
@@ -158,7 +158,8 @@ async fn create_connection(
                     redis::ErrorKind::AuthenticationFailed
                         | redis::ErrorKind::InvalidClientConfig
                         | redis::ErrorKind::RESP3NotSupported
-                ) || e.to_string().contains("NOAUTH");
+                ) || e.to_string().contains("NOAUTH")
+                    || e.to_string().contains("WRONGPASS");
                 if is_permanent {
                     RetryError::permanent(e)
                 } else {
@@ -457,6 +458,42 @@ impl ReconnectingConnection {
             .write()
             .expect(WRITE_LOCK_ERR);
         client.update_client_name(new_client_name);
+    }
+
+    /// Updates the username that's saved inside connection_info, that will be used in case of disconnection from the server.
+    ///
+    /// This method is called when an AUTH command is successfully executed with a username to track the current user.
+    /// During reconnection, the stored username will be automatically used for authentication.
+    ///
+    /// # Arguments
+    /// * `new_username` - The username to store for future reconnections (None to clear)
+    ///
+    pub(crate) fn update_connection_username(&self, new_username: Option<String>) {
+        let mut client = self
+            .inner
+            .backend
+            .connection_info
+            .write()
+            .expect(WRITE_LOCK_ERR);
+        client.update_username(new_username);
+    }
+
+    /// Updates the protocol version that's saved inside connection_info, that will be used in case of disconnection from the server.
+    ///
+    /// This method is called when a HELLO command is successfully executed to track the current protocol version.
+    /// During reconnection, the stored protocol version will be automatically used for connection establishment.
+    ///
+    /// # Arguments
+    /// * `new_protocol` - The protocol version to store for future reconnections
+    ///
+    pub(crate) fn update_connection_protocol(&self, new_protocol: redis::ProtocolVersion) {
+        let mut client = self
+            .inner
+            .backend
+            .connection_info
+            .write()
+            .expect(WRITE_LOCK_ERR);
+        client.update_protocol(new_protocol);
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.

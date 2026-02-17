@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"runtime"
 	"strings"
 	"time"
 
@@ -2612,8 +2613,6 @@ func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestScriptKillWithRoute() {
-	suite.T().Skip("Flaky Test: Wait until #2277 is resolved")
-
 	invokeClient, err := suite.clusterClient(suite.defaultClusterClientConfig())
 	require.NoError(suite.T(), err)
 	killClient := suite.defaultClusterClient()
@@ -2683,8 +2682,6 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestScriptKillUnkillableWithRoute() {
-	suite.T().Skip("Flaky Test: Wait until #2277 is resolved")
-
 	key := uuid.NewString()
 	invokeClient, err := suite.clusterClient(suite.defaultClusterClientConfig())
 	require.NoError(suite.T(), err)
@@ -2784,5 +2781,203 @@ func (suite *GlideTestSuite) TestBatchWithSingleNodeRoute() {
 		)
 		assert.NoError(suite.T(), err)
 		assert.Contains(suite.T(), res[0], "# Replication", "isAtomic = %v", isAtomic)
+	}
+}
+
+func (suite *GlideTestSuite) TestClusterScanEarlyTermination() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Ensure clean start
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
+	assert.NoError(t, err)
+
+	// Create a large number of keys to ensure multiple scan batches
+	keysToSet := make(map[string]string)
+	for i := 0; i < 1000; i++ {
+		key := "key-" + string(rune(i))
+		keysToSet[key] = "value"
+	}
+
+	_, err = client.MSet(context.Background(), keysToSet)
+	assert.NoError(t, err)
+
+	// Start scanning with small count to force multiple batches
+	cursor := models.NewClusterScanCursor()
+	opts := options.NewClusterScanOptions().SetCount(10)
+
+	// Fetch only first 2 batches then stop
+	batchCount := 0
+	maxBatches := 2
+
+	for !cursor.IsFinished() && batchCount < maxBatches {
+		result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
+		assert.NoError(t, err)
+		cursor = result.Cursor
+		batchCount++
+	}
+
+	// Verify we stopped early (cursor should not be finished)
+	assert.False(t, cursor.IsFinished(), "Cursor should not be finished after early termination")
+	assert.Equal(t, maxBatches, batchCount, "Should have fetched exactly 2 batches")
+
+	// The cursor should be cleaned up automatically when it goes out of scope
+	// This test verifies no memory leaks or hanging resources occur
+}
+
+func (suite *GlideTestSuite) TestClusterScanInvalidCursorError() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Ensure clean start
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
+	assert.NoError(t, err)
+
+	// Create keys
+	keysToSet := make(map[string]string)
+	for i := 0; i < 100; i++ {
+		key := "key-" + string(rune(i))
+		keysToSet[key] = "value"
+	}
+	_, err = client.MSet(context.Background(), keysToSet)
+	assert.NoError(t, err)
+
+	// Get a cursor from first scan
+	cursor := models.NewClusterScanCursor()
+	result, err := client.Scan(context.Background(), cursor)
+	assert.NoError(t, err)
+	cursor = result.Cursor
+
+	// Save the cursor ID
+	cursorID := cursor.GetCursor()
+
+	// Perform another scan to advance the cursor
+	result, err = client.Scan(context.Background(), cursor)
+	assert.NoError(t, err)
+
+	// Now try to use the old cursor ID - this should fail
+	// because the cursor state has moved forward
+	oldCursor := models.NewClusterScanCursorWithId(cursorID)
+	_, err = client.Scan(context.Background(), oldCursor)
+
+	// The Go client should validate cursor IDs and return an error
+	assert.Error(t, err, "Expected error when using stale cursor ID")
+	assert.Contains(t, err.Error(), "Invalid scan_state_cursor id",
+		"Error should indicate invalid cursor ID")
+}
+
+func (suite *GlideTestSuite) TestClusterScanWithAllowNonCoveredSlots() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Ensure clean start
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
+	assert.NoError(t, err)
+
+	// Create keys
+	keysToSet := make(map[string]string)
+	for i := 0; i < 50; i++ {
+		key := "key-" + string(rune(i))
+		keysToSet[key] = "value"
+	}
+	_, err = client.MSet(context.Background(), keysToSet)
+	assert.NoError(t, err)
+
+	// Scan with AllowNonCoveredSlots=true
+	cursor := models.NewClusterScanCursor()
+	opts := options.NewClusterScanOptions().
+		SetCount(10).
+		SetAllowNonCoveredSlots(true)
+
+	allKeys := []string{}
+	for !cursor.IsFinished() {
+		result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
+		if !assert.NoError(t, err) {
+			break
+		}
+		allKeys = append(allKeys, result.Keys...)
+		cursor = result.Cursor
+	}
+
+	// Should have scanned all keys
+	assert.GreaterOrEqual(t, len(allKeys), 50, "Should have scanned at least 50 keys")
+}
+
+func (suite *GlideTestSuite) TestClusterScanEarlyTerminationMemoryLeak() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Ensure clean start
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
+	assert.NoError(t, err)
+
+	// Create keys
+	keysToSet := make(map[string]string)
+	for i := 0; i < 1000; i++ {
+		key := "key-" + string(rune(i))
+		keysToSet[key] = "value"
+	}
+	_, err = client.MSet(context.Background(), keysToSet)
+	assert.NoError(t, err)
+
+	// Force GC and get baseline memory
+	runtime.GC()
+	var m1 runtime.MemStats
+	runtime.ReadMemStats(&m1)
+
+	// Perform many early-terminated scans
+	iterations := 100
+	for i := 0; i < iterations; i++ {
+		cursor := models.NewClusterScanCursor()
+		opts := options.NewClusterScanOptions().SetCount(10)
+
+		// Fetch only 2 batches then abandon cursor
+		for j := 0; j < 2 && !cursor.IsFinished(); j++ {
+			result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
+			assert.NoError(t, err)
+			cursor = result.Cursor
+		}
+		// Cursor goes out of scope here - should be cleaned up
+	}
+
+	// Force GC and measure memory after
+	runtime.GC()
+	var m2 runtime.MemStats
+	runtime.ReadMemStats(&m2)
+
+	// Calculate memory growth (handle potential decrease)
+	var allocGrowth, heapGrowth int64
+	allocGrowth = int64(m2.Alloc) - int64(m1.Alloc)
+	heapGrowth = int64(m2.HeapAlloc) - int64(m1.HeapAlloc)
+
+	t.Logf("Memory stats after %d early-terminated scans:", iterations)
+	t.Logf("  Alloc growth: %d bytes (%.2f KB)", allocGrowth, float64(allocGrowth)/1024)
+	t.Logf("  Heap growth: %d bytes (%.2f KB)", heapGrowth, float64(heapGrowth)/1024)
+	t.Logf("  Total allocs: %d", m2.TotalAlloc-m1.TotalAlloc)
+	t.Logf("  Baseline heap: %d bytes, Final heap: %d bytes", m1.HeapAlloc, m2.HeapAlloc)
+
+	// Memory growth should be minimal (< 1MB for 100 iterations)
+	// Each iteration creates a cursor and fetches ~20 keys
+	// Negative growth is fine (GC cleaned up)
+	maxAcceptableGrowth := int64(1024 * 1024) // 1MB
+	if heapGrowth > maxAcceptableGrowth {
+		t.Errorf("Heap memory grew by %d bytes, expected < %d bytes. Possible memory leak.",
+			heapGrowth, maxAcceptableGrowth)
+	} else if heapGrowth < 0 {
+		t.Logf("Heap memory decreased by %d bytes - GC is working well", -heapGrowth)
+	} else {
+		t.Logf("Heap memory growth is acceptable: %d bytes", heapGrowth)
 	}
 }
