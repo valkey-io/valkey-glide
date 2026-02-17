@@ -841,15 +841,13 @@ public final class Jedis implements Closeable {
     /**
      * Helper method to convert a GlideString array to a List of byte arrays.
      *
-     * @param glideStrings the GlideString array to convert (can be null)
-     * @return a List of byte arrays, or an empty list if input is null
+     * @param glideStrings the GlideString array to convert
+     * @return a List of byte arrays
      */
     private static List<byte[]> convertGlideStringArrayToByteArrayList(GlideString[] glideStrings) {
         List<byte[]> result = new ArrayList<>();
-        if (glideStrings != null) {
-            for (GlideString gs : glideStrings) {
-                result.add(gs.getBytes());
-            }
+        for (GlideString gs : glideStrings) {
+            result.add(gs.getBytes());
         }
         return result;
     }

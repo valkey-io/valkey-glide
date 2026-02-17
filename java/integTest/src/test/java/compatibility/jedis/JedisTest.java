@@ -1639,9 +1639,15 @@ public class JedisTest {
         assertEquals(0L, received, "PUBLISH should return 0 (GLIDE API limitation - see issue #5354)");
 
         // Test PUBSUB CHANNELS command
+        // Note: PUBSUB CHANNELS returns channels with active subscriptions.
+        // Since we don't have any subscriptions in this test, the list should be empty.
         List<String> channels = jedis.pubsubChannels();
         assertNotNull(channels, "PUBSUB CHANNELS should return a non-null list");
         assertTrue(channels instanceof List, "PUBSUB CHANNELS should return a List instance");
+        // Channel won't be in the list since there are no active subscriptions
+        assertFalse(
+                channels.contains(channel),
+                "PUBSUB CHANNELS should not contain channel without subscribers");
 
         // Test PUBSUB CHANNELS with pattern
         List<String> channelsWithPattern = jedis.pubsubChannels(channel);
@@ -1650,6 +1656,10 @@ public class JedisTest {
         assertTrue(
                 channelsWithPattern instanceof List,
                 "PUBSUB CHANNELS with pattern should return a List instance");
+        // Channel won't be in the list since there are no active subscriptions
+        assertFalse(
+                channelsWithPattern.contains(channel),
+                "PUBSUB CHANNELS with pattern should not contain channel without subscribers");
 
         // Test PUBSUB NUMPAT command
         long numPat = jedis.pubsubNumPat();
@@ -1680,6 +1690,11 @@ public class JedisTest {
         assertNotNull(channelsBinary, "PUBSUB CHANNELS binary should return a non-null list");
         assertTrue(
                 channelsBinary instanceof List, "PUBSUB CHANNELS binary should return a List instance");
+        // Channel won't be in the list since there are no active subscriptions
+        boolean containsChannel =
+                channelsBinary.stream().anyMatch(ch -> Arrays.equals(ch, channelBytes));
+        assertFalse(
+                containsChannel, "PUBSUB CHANNELS binary should not contain channel without subscribers");
 
         // Test PUBSUB NUMSUB binary
         Map<byte[], Long> numSubBinary = jedis.pubsubNumSub(channelBytes);
