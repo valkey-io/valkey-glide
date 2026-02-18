@@ -384,6 +384,12 @@ public class ConnectionManager {
                                     advanced.getPubsubReconciliationIntervalMs());
                         }
 
+                        // Set compression configuration if provided
+                        if (configuration.getCompressionConfiguration() != null) {
+                            requestBuilder.setCompressionConfig(
+                                    configuration.getCompressionConfiguration().toProtobuf());
+                        }
+
                         // Build and serialize to bytes
                         ConnectionRequest request = requestBuilder.build();
                         byte[] requestBytes = request.toByteArray();
