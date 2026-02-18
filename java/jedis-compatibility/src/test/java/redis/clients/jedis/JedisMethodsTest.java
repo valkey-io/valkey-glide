@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.lang.reflect.Method;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import redis.clients.jedis.resps.AccessControlUser;
+import redis.clients.jedis.resps.FunctionStats;
 
 /**
  * Unit tests for Jedis method signatures and API contracts. Tests that required methods exist with
@@ -124,6 +126,166 @@ public class JedisMethodsTest {
 
         Method closeMethod = jedisClass.getMethod("close");
         assertEquals(void.class, closeMethod.getReturnType());
+    }
+
+    @Test
+    public void testEvalMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test eval(String) exists
+        Method evalSimple = jedisClass.getMethod("eval", String.class);
+        assertEquals(Object.class, evalSimple.getReturnType());
+
+        // Test eval(String, int, String...) exists
+        Method evalWithKeys = jedisClass.getMethod("eval", String.class, int.class, String[].class);
+        assertEquals(Object.class, evalWithKeys.getReturnType());
+
+        // Test eval(String, List, List) exists
+        Method evalWithLists = jedisClass.getMethod("eval", String.class, List.class, List.class);
+        assertEquals(Object.class, evalWithLists.getReturnType());
+    }
+
+    @Test
+    public void testEvalshaMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test evalsha(String) exists
+        Method evalshaSimple = jedisClass.getMethod("evalsha", String.class);
+        assertEquals(Object.class, evalshaSimple.getReturnType());
+
+        // Test evalsha(String, int, String...) exists
+        Method evalshaWithKeys =
+                jedisClass.getMethod("evalsha", String.class, int.class, String[].class);
+        assertEquals(Object.class, evalshaWithKeys.getReturnType());
+
+        // Test evalsha(String, List, List) exists
+        Method evalshaWithLists = jedisClass.getMethod("evalsha", String.class, List.class, List.class);
+        assertEquals(Object.class, evalshaWithLists.getReturnType());
+    }
+
+    @Test
+    public void testEvalReadonlyMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test evalReadonly(String, List, List) exists
+        Method evalReadonly =
+                jedisClass.getMethod("evalReadonly", String.class, List.class, List.class);
+        assertEquals(Object.class, evalReadonly.getReturnType());
+
+        // Test evalshaReadonly(String, List, List) exists
+        Method evalshaReadonly =
+                jedisClass.getMethod("evalshaReadonly", String.class, List.class, List.class);
+        assertEquals(Object.class, evalshaReadonly.getReturnType());
+    }
+
+    @Test
+    public void testScriptManagementMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test scriptLoad(String) exists
+        Method scriptLoad = jedisClass.getMethod("scriptLoad", String.class);
+        assertEquals(String.class, scriptLoad.getReturnType());
+
+        // Test scriptExists(String...) exists
+        Method scriptExists = jedisClass.getMethod("scriptExists", String[].class);
+        assertEquals(List.class, scriptExists.getReturnType());
+
+        // Test scriptFlush() exists
+        Method scriptFlush = jedisClass.getMethod("scriptFlush");
+        assertEquals(String.class, scriptFlush.getReturnType());
+
+        // Test scriptFlush(FlushMode) exists
+        Method scriptFlushWithMode =
+                jedisClass.getMethod("scriptFlush", redis.clients.jedis.args.FlushMode.class);
+        assertEquals(String.class, scriptFlushWithMode.getReturnType());
+
+        // Test scriptKill() exists
+        Method scriptKill = jedisClass.getMethod("scriptKill");
+        assertEquals(String.class, scriptKill.getReturnType());
+    }
+
+    @Test
+    public void testFcallMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test fcall(String, List, List) exists
+        Method fcall = jedisClass.getMethod("fcall", String.class, List.class, List.class);
+        assertEquals(Object.class, fcall.getReturnType());
+
+        // Test fcallReadonly(String, List, List) exists
+        Method fcallReadonly =
+                jedisClass.getMethod("fcallReadonly", String.class, List.class, List.class);
+        assertEquals(Object.class, fcallReadonly.getReturnType());
+    }
+
+    @Test
+    public void testFunctionManagementMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test functionLoad(String) exists
+        Method functionLoad = jedisClass.getMethod("functionLoad", String.class);
+        assertEquals(String.class, functionLoad.getReturnType());
+
+        // Test functionLoadReplace(String) exists
+        Method functionLoadReplace = jedisClass.getMethod("functionLoadReplace", String.class);
+        assertEquals(String.class, functionLoadReplace.getReturnType());
+
+        // Test functionDelete(String) exists
+        Method functionDelete = jedisClass.getMethod("functionDelete", String.class);
+        assertEquals(String.class, functionDelete.getReturnType());
+
+        // Test functionDump() exists
+        Method functionDump = jedisClass.getMethod("functionDump");
+        assertEquals(byte[].class, functionDump.getReturnType());
+
+        // Test functionRestore(byte[]) exists
+        Method functionRestore = jedisClass.getMethod("functionRestore", byte[].class);
+        assertEquals(String.class, functionRestore.getReturnType());
+
+        // Test functionRestore(byte[], FunctionRestorePolicy) exists
+        Method functionRestoreWithPolicy =
+                jedisClass.getMethod(
+                        "functionRestore", byte[].class, redis.clients.jedis.args.FunctionRestorePolicy.class);
+        assertEquals(String.class, functionRestoreWithPolicy.getReturnType());
+
+        // Test functionFlush() exists
+        Method functionFlush = jedisClass.getMethod("functionFlush");
+        assertEquals(String.class, functionFlush.getReturnType());
+
+        // Test functionFlush(FlushMode) exists
+        Method functionFlushWithMode =
+                jedisClass.getMethod("functionFlush", redis.clients.jedis.args.FlushMode.class);
+        assertEquals(String.class, functionFlushWithMode.getReturnType());
+
+        // Test functionKill() exists
+        Method functionKill = jedisClass.getMethod("functionKill");
+        assertEquals(String.class, functionKill.getReturnType());
+    }
+
+    @Test
+    public void testFunctionListMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test functionList() exists
+        Method functionList = jedisClass.getMethod("functionList");
+        assertEquals(List.class, functionList.getReturnType());
+
+        // Test functionList(String) exists
+        Method functionListWithPattern = jedisClass.getMethod("functionList", String.class);
+        assertEquals(List.class, functionListWithPattern.getReturnType());
+
+        // Test functionListWithCode() exists
+        Method functionListWithCode = jedisClass.getMethod("functionListWithCode");
+        assertEquals(List.class, functionListWithCode.getReturnType());
+
+        // Test functionListWithCode(String) exists
+        Method functionListWithCodeAndPattern =
+                jedisClass.getMethod("functionListWithCode", String.class);
+        assertEquals(List.class, functionListWithCodeAndPattern.getReturnType());
+
+        // Test functionStats() exists
+        Method functionStats = jedisClass.getMethod("functionStats");
+        assertEquals(FunctionStats.class, functionStats.getReturnType());
     }
 
     @Test
