@@ -181,6 +181,25 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
                     );
                     data_points.push(Value::Object(dp));
                 }
+            } else if let Some(gauge) = aggregation.downcast_ref::<Gauge<u64>>() {
+                for point in gauge.data_points.iter() {
+                    let mut dp = Map::new();
+                    dp.insert("value".to_owned(), Value::Number(point.value.into()));
+                    let time = point
+                        .time
+                        .ok_or_else(|| MetricError::Other("Missing time".to_string()))?;
+                    let time: DateTime<Utc> = time.into();
+                    dp.insert(
+                        "time".to_owned(),
+                        Value::String(time.timestamp_micros().to_string()),
+                    );
+
+                    dp.insert(
+                        "attributes".to_owned(),
+                        attributes_to_json(&point.attributes),
+                    );
+                    data_points.push(Value::Object(dp));
+                }
             } else if let Some(histogram) = aggregation.downcast_ref::<Histogram<f64>>() {
                 for point in histogram.data_points.iter() {
                     let mut dp = Map::new();
