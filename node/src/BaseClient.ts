@@ -1674,7 +1674,7 @@ export class BaseClient {
             );
         }
 
-        // Java: if (subscriptionConfiguration.isPresent() && subscriptionConfiguration.get().getCallback().isPresent())
+        // only throw error if BOTH config exists AND callback exists
         if (
             this.isPubsubConfigured(this.config!) &&
             this.getPubsubCallbackAndContext(this.config!)[0]
@@ -1697,7 +1697,7 @@ export class BaseClient {
             );
         }
 
-        // Java: if (subscriptionConfiguration.isPresent() && subscriptionConfiguration.get().getCallback().isPresent())
+        // only throw error if BOTH config exists AND callback exists
         if (
             this.isPubsubConfigured(this.config!) &&
             this.getPubsubCallbackAndContext(this.config!)[0]
