@@ -9545,7 +9545,7 @@ export class BaseClient {
      * ```
      */
     public async subscribeLazy(
-        channels: Set<GlideString>,
+        channels: Iterable<GlideString>,
         options?: DecoderOption,
     ): Promise<void> {
         const channelsArray = Array.from(channels);
@@ -9575,7 +9575,7 @@ export class BaseClient {
      * ```
      */
     public async subscribe(
-        channels: Set<GlideString>,
+        channels: Iterable<GlideString>,
         timeoutMs: number,
         options?: DecoderOption,
     ): Promise<void> {
@@ -9592,17 +9592,17 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/psubscribe/|valkey.io} for details.
      *
-     * @param patterns - A set of glob-style patterns to subscribe to.
+     * @param patterns - An array of glob-style patterns to subscribe to.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns A promise that resolves immediately.
      *
      * @example
      * ```typescript
-     * await client.psubscribeLazy(new Set(["news.*", "updates.*"]));
+     * await client.psubscribeLazy(["news.*", "updates.*"]);
      * ```
      */
     public async psubscribeLazy(
-        patterns: Set<GlideString>,
+        patterns: Iterable<GlideString>,
         options?: DecoderOption,
     ): Promise<void> {
         const patternsArray = Array.from(patterns);
@@ -9618,18 +9618,18 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/psubscribe/|valkey.io} for details.
      *
-     * @param patterns - A set of glob-style patterns to subscribe to.
+     * @param patterns - An array of glob-style patterns to subscribe to.
      * @param timeoutMs - Maximum time in milliseconds to wait. Use 0 for indefinite wait.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns A promise that resolves when subscription is confirmed or timeout occurs.
      *
      * @example
      * ```typescript
-     * await client.psubscribe(new Set(["news.*"]), 5000);
+     * await client.psubscribe(["news.*"], 5000);
      * ```
      */
     public async psubscribe(
-        patterns: Set<GlideString>,
+        patterns: Iterable<GlideString>,
         timeoutMs: number,
         options?: DecoderOption,
     ): Promise<void> {
@@ -9658,7 +9658,7 @@ export class BaseClient {
      * ```
      */
     public async unsubscribeLazy(
-        channels?: Set<GlideString> | null,
+        channels?: Iterable<GlideString> | null,
         options?: DecoderOption,
     ): Promise<void> {
         const channelsArray = channels ? Array.from(channels) : undefined;
@@ -9687,13 +9687,13 @@ export class BaseClient {
      * ```
      */
     public async unsubscribe(
-        channels: Set<GlideString> | null,
+        channels: Iterable<GlideString> | null,
         timeoutMs: number,
         options?: DecoderOption,
     ): Promise<void> {
-        const channelsArray = channels ? Array.from(channels) : undefined;
+        const channelsArray = channels ? Array.from(channels) : [];
         return this.createWritePromise(
-            createUnsubscribe(channelsArray ?? [], timeoutMs),
+            createUnsubscribe(channelsArray, timeoutMs),
             options,
         );
     }
@@ -9716,7 +9716,7 @@ export class BaseClient {
      * ```
      */
     public async punsubscribeLazy(
-        patterns?: Set<GlideString> | null,
+        patterns?: Iterable<GlideString> | null,
         options?: DecoderOption,
     ): Promise<void> {
         const patternsArray = patterns ? Array.from(patterns) : undefined;
@@ -9745,13 +9745,13 @@ export class BaseClient {
      * ```
      */
     public async punsubscribe(
-        patterns: Set<GlideString> | null,
+        patterns: Iterable<GlideString> | null,
         timeoutMs: number,
         options?: DecoderOption,
     ): Promise<void> {
-        const patternsArray = patterns ? Array.from(patterns) : undefined;
+        const patternsArray = patterns ? Array.from(patterns) : [];
         return this.createWritePromise(
-            createPUnsubscribe(patternsArray ?? [], timeoutMs),
+            createPUnsubscribe(patternsArray, timeoutMs),
             options,
         );
     }
