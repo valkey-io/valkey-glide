@@ -1250,27 +1250,27 @@ public final class Jedis implements Closeable {
             // Handle different possible return types
             if (result instanceof GlideString[]) {
                 GlideString[] glideArray = (GlideString[]) result;
-                Set<byte[]> keySet = new HashSet<>();
+                Set<GlideString> glideSet = new HashSet<>();
                 for (GlideString gs : glideArray) {
                     if (gs != null) {
-                        keySet.add(gs.getBytes());
+                        glideSet.add(gs);
                     }
                 }
-                return keySet;
+                return new redis.clients.jedis.util.GlideStringSetWrapper(glideSet);
             } else if (result instanceof Object[]) {
-                // Convert Object[] to byte[][]
+                // Convert Object[] to Set<GlideString>
                 Object[] objArray = (Object[]) result;
-                Set<byte[]> keySet = new HashSet<>();
+                Set<GlideString> glideSet = new HashSet<>();
                 for (Object obj : objArray) {
                     if (obj instanceof GlideString) {
-                        keySet.add(((GlideString) obj).getBytes());
+                        glideSet.add((GlideString) obj);
                     } else if (obj != null) {
-                        keySet.add(obj.toString().getBytes(VALKEY_CHARSET));
+                        glideSet.add(GlideString.of(obj.toString().getBytes(VALKEY_CHARSET)));
                     }
                 }
-                return keySet;
+                return new redis.clients.jedis.util.GlideStringSetWrapper(glideSet);
             } else {
-                return new HashSet<>();
+                return new redis.clients.jedis.util.GlideStringSetWrapper(new HashSet<>());
             }
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("KEYS operation failed", e);
@@ -2780,13 +2780,15 @@ public final class Jedis implements Closeable {
         return glideStrings;
     }
 
-    /** Helper method to convert Set of GlideString to Set of byte arrays. */
+    /**
+     * Helper method to convert Set of GlideString to Set of byte arrays.
+     *
+     * <p>Returns a wrapper that avoids the HashSet<byte[]> performance issue where byte[]
+     * identity hashCode causes all entries to hash to the same bucket. The wrapper keeps data as
+     * GlideString internally (which has proper hashCode/equals) and converts to byte[] lazily.
+     */
     private static Set<byte[]> convertGlideStringsToByteArraySet(Set<GlideString> glideStrings) {
-        Set<byte[]> result = new HashSet<>();
-        for (GlideString gs : glideStrings) {
-            result.add(gs.getBytes());
-        }
-        return result;
+        return new redis.clients.jedis.util.GlideStringSetWrapper(glideStrings);
     }
 
     private static ScanResult<String> convertToScanResult(Object[] result) {
@@ -4455,11 +4457,11 @@ public final class Jedis implements Closeable {
         ensureInitialized();
         try {
             GlideString[] keys = glideClient.hkeys(GlideString.of(key)).get();
-            Set<byte[]> byteKeys = new HashSet<>();
+            Set<GlideString> glideSet = new HashSet<>();
             for (GlideString gs : keys) {
-                byteKeys.add(gs.getBytes());
+                glideSet.add(gs);
             }
-            return byteKeys;
+            return new redis.clients.jedis.util.GlideStringSetWrapper(glideSet);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("HKEYS operation failed", e);
         }

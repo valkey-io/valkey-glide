@@ -5,7 +5,6 @@ package redis.clients.jedis.params;
  * Parameters for ZRANGE command. Provides options for controlling ZRANGE behavior such as BYSCORE,
  * BYLEX, REV (reverse order), and LIMIT (pagination).
  *
- * <p>This class is compatible with Jedis ZRangeParams and provides the same builder-style API.
  */
 public class ZRangeParams {
 
