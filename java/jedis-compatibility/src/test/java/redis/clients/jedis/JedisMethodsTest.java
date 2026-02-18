@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.reflect.Method;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.resps.AccessControlUser;
@@ -388,25 +387,15 @@ public class JedisMethodsTest {
         Method getrangeBinary = jedisClass.getMethod("getrange", byte[].class, long.class, long.class);
         assertEquals(byte[].class, getrangeBinary.getReturnType());
 
-        // Test lcs methods
-        Method lcsString = jedisClass.getMethod("lcs", String.class, String.class);
-        assertEquals(String.class, lcsString.getReturnType());
+        // Test lcs methods (takes LCSParams and returns LCSMatchResult)
+        Method lcsString =
+                jedisClass.getMethod(
+                        "lcs", String.class, String.class, redis.clients.jedis.params.LCSParams.class);
+        assertEquals(redis.clients.jedis.resps.LCSMatchResult.class, lcsString.getReturnType());
 
-        Method lcsBinary = jedisClass.getMethod("lcs", byte[].class, byte[].class);
-        assertEquals(byte[].class, lcsBinary.getReturnType());
-
-        // Test lcsLen methods
-        Method lcsLenString = jedisClass.getMethod("lcsLen", String.class, String.class);
-        assertEquals(long.class, lcsLenString.getReturnType());
-
-        Method lcsLenBinary = jedisClass.getMethod("lcsLen", byte[].class, byte[].class);
-        assertEquals(long.class, lcsLenBinary.getReturnType());
-
-        // Test lcsIdx methods
-        Method lcsIdxString = jedisClass.getMethod("lcsIdx", String.class, String.class);
-        assertEquals(Map.class, lcsIdxString.getReturnType());
-
-        Method lcsIdxBinary = jedisClass.getMethod("lcsIdx", byte[].class, byte[].class);
-        assertEquals(Map.class, lcsIdxBinary.getReturnType());
+        Method lcsBinary =
+                jedisClass.getMethod(
+                        "lcs", byte[].class, byte[].class, redis.clients.jedis.params.LCSParams.class);
+        assertEquals(redis.clients.jedis.resps.LCSMatchResult.class, lcsBinary.getReturnType());
     }
 }
