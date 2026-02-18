@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis.params;
 
+import glide.api.models.commands.stream.StreamTrimOptions;
 import redis.clients.jedis.StreamEntryID;
 
 /**
@@ -116,5 +117,31 @@ public class XTrimParams {
 
     public Long getLimit() {
         return limit;
+    }
+
+    /**
+     * Converts this XTrimParams to a GLIDE StreamTrimOptions.
+     *
+     * @return StreamTrimOptions instance configured with this params' settings
+     * @throws IllegalArgumentException if neither maxLen nor minId is specified
+     */
+    public StreamTrimOptions toStreamTrimOptions() {
+        boolean exact = exactTrimming != null && exactTrimming;
+
+        if (maxLen != null) {
+            if (limit != null) {
+                return new StreamTrimOptions.MaxLen(maxLen, limit);
+            } else {
+                return new StreamTrimOptions.MaxLen(exact, maxLen);
+            }
+        } else if (minId != null) {
+            if (limit != null) {
+                return new StreamTrimOptions.MinId(minId, limit);
+            } else {
+                return new StreamTrimOptions.MinId(exact, minId);
+            }
+        } else {
+            throw new IllegalArgumentException("XTrimParams must specify either maxLen or minId");
+        }
     }
 }

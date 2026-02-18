@@ -6222,33 +6222,7 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "XADD",
                 () -> {
-                    StreamAddOptions.StreamAddOptionsBuilder builder = StreamAddOptions.builder();
-                    if (params.getId() != null) {
-                        builder.id(params.getId());
-                    }
-                    if (params.getMakeStream() != null) {
-                        builder.makeStream(params.getMakeStream());
-                    }
-                    if (params.getMaxLen() != null) {
-                        boolean exact = params.getExactTrimming() != null && params.getExactTrimming();
-                        StreamTrimOptions trimOpts;
-                        if (params.getLimit() != null) {
-                            trimOpts = new StreamTrimOptions.MaxLen(params.getMaxLen(), params.getLimit());
-                        } else {
-                            trimOpts = new StreamTrimOptions.MaxLen(exact, params.getMaxLen());
-                        }
-                        builder.trim(trimOpts);
-                    } else if (params.getMinId() != null) {
-                        boolean exact = params.getExactTrimming() != null && params.getExactTrimming();
-                        StreamTrimOptions trimOpts;
-                        if (params.getLimit() != null) {
-                            trimOpts = new StreamTrimOptions.MinId(params.getMinId(), params.getLimit());
-                        } else {
-                            trimOpts = new StreamTrimOptions.MinId(exact, params.getMinId());
-                        }
-                        builder.trim(trimOpts);
-                    }
-                    String result = glideClient.xadd(key, hash, builder.build()).get();
+                    String result = glideClient.xadd(key, hash, params.toStreamAddOptions()).get();
                     return result == null ? null : new StreamEntryID(result);
                 });
     }
@@ -6272,33 +6246,8 @@ public final class Jedis implements Closeable {
                         stringHash.put(new String(entry.getKey()), new String(entry.getValue()));
                     }
 
-                    StreamAddOptions.StreamAddOptionsBuilder builder = StreamAddOptions.builder();
-                    if (params.getId() != null) {
-                        builder.id(params.getId());
-                    }
-                    if (params.getMakeStream() != null) {
-                        builder.makeStream(params.getMakeStream());
-                    }
-                    if (params.getMaxLen() != null) {
-                        boolean exact = params.getExactTrimming() != null && params.getExactTrimming();
-                        StreamTrimOptions trimOpts;
-                        if (params.getLimit() != null) {
-                            trimOpts = new StreamTrimOptions.MaxLen(params.getMaxLen(), params.getLimit());
-                        } else {
-                            trimOpts = new StreamTrimOptions.MaxLen(exact, params.getMaxLen());
-                        }
-                        builder.trim(trimOpts);
-                    } else if (params.getMinId() != null) {
-                        boolean exact = params.getExactTrimming() != null && params.getExactTrimming();
-                        StreamTrimOptions trimOpts;
-                        if (params.getLimit() != null) {
-                            trimOpts = new StreamTrimOptions.MinId(params.getMinId(), params.getLimit());
-                        } else {
-                            trimOpts = new StreamTrimOptions.MinId(exact, params.getMinId());
-                        }
-                        builder.trim(trimOpts);
-                    }
-                    String result = glideClient.xadd(new String(key), stringHash, builder.build()).get();
+                    String result =
+                            glideClient.xadd(new String(key), stringHash, params.toStreamAddOptions()).get();
                     return result == null ? null : result.getBytes();
                 });
     }
@@ -6524,27 +6473,7 @@ public final class Jedis implements Closeable {
      */
     public long xtrim(String key, redis.clients.jedis.params.XTrimParams params) {
         return executeCommandWithGlide(
-                "XTRIM",
-                () -> {
-                    StreamTrimOptions trimOpts;
-                    boolean exact = params.getExactTrimming() != null && params.getExactTrimming();
-                    if (params.getMaxLen() != null) {
-                        if (params.getLimit() != null) {
-                            trimOpts = new StreamTrimOptions.MaxLen(params.getMaxLen(), params.getLimit());
-                        } else {
-                            trimOpts = new StreamTrimOptions.MaxLen(exact, params.getMaxLen());
-                        }
-                    } else if (params.getMinId() != null) {
-                        if (params.getLimit() != null) {
-                            trimOpts = new StreamTrimOptions.MinId(params.getMinId(), params.getLimit());
-                        } else {
-                            trimOpts = new StreamTrimOptions.MinId(exact, params.getMinId());
-                        }
-                    } else {
-                        throw new IllegalArgumentException("XTrimParams must specify either maxLen or minId");
-                    }
-                    return glideClient.xtrim(key, trimOpts).get();
-                });
+                "XTRIM", () -> glideClient.xtrim(key, params.toStreamTrimOptions()).get());
     }
 
     /**

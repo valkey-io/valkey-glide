@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis.params;
 
+import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamTrimOptions;
 import redis.clients.jedis.StreamEntryID;
 
 /**
@@ -158,5 +160,44 @@ public class XAddParams {
 
     public Long getLimit() {
         return limit;
+    }
+
+    /**
+     * Converts this XAddParams to a GLIDE StreamAddOptions.
+     *
+     * @return StreamAddOptions instance configured with this params' settings
+     */
+    public StreamAddOptions toStreamAddOptions() {
+        StreamAddOptions.StreamAddOptionsBuilder builder = StreamAddOptions.builder();
+
+        if (id != null) {
+            builder.id(id);
+        }
+        if (makeStream != null) {
+            builder.makeStream(makeStream);
+        }
+
+        // Handle trim options
+        if (maxLen != null) {
+            boolean exact = exactTrimming != null && exactTrimming;
+            StreamTrimOptions trimOpts;
+            if (limit != null) {
+                trimOpts = new StreamTrimOptions.MaxLen(maxLen, limit);
+            } else {
+                trimOpts = new StreamTrimOptions.MaxLen(exact, maxLen);
+            }
+            builder.trim(trimOpts);
+        } else if (minId != null) {
+            boolean exact = exactTrimming != null && exactTrimming;
+            StreamTrimOptions trimOpts;
+            if (limit != null) {
+                trimOpts = new StreamTrimOptions.MinId(minId, limit);
+            } else {
+                trimOpts = new StreamTrimOptions.MinId(exact, minId);
+            }
+            builder.trim(trimOpts);
+        }
+
+        return builder.build();
     }
 }
