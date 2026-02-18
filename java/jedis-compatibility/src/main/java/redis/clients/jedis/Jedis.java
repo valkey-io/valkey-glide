@@ -20,8 +20,15 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.WeightAggregateOptions;
+import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeyArrayBinary;
+import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
+import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeysBinary;
+import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
+import glide.api.models.commands.WeightAggregateOptions.WeightedKeysBinary;
+import glide.api.models.configuration.NodeAddress;
+import org.apache.commons.lang3.tuple.Pair;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldIncrby;
@@ -80,6 +87,7 @@ import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.params.ZAddParams;
 import redis.clients.jedis.params.ZIncrByParams;
+import redis.clients.jedis.params.ZParams;
 import redis.clients.jedis.resps.AccessControlLogEntry;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
@@ -8741,6 +8749,56 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Computes the union of sorted sets with weights and aggregation, storing the result in a
+     * destination key.
+     *
+     * @param dstkey the destination key
+     * @param params the ZParams containing weights and aggregation options
+     * @param sets the keys of the sorted sets to union
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public long zunionstore(String dstkey, ZParams params, String... sets) {
+        return executeCommandWithGlide(
+                "ZUNIONSTORE",
+                () -> {
+                    KeysOrWeightedKeys keysOrWeighted = convertZParamsToKeysOrWeighted(sets, params);
+                    if (params.getAggregate() != null) {
+                        Aggregate aggregate = convertZParamsAggregate(params.getAggregate());
+                        return glideClient.zunionstore(dstkey, keysOrWeighted, aggregate).get();
+                    } else {
+                        return glideClient.zunionstore(dstkey, keysOrWeighted).get();
+                    }
+                });
+    }
+
+    /**
+     * Computes the union of sorted sets with weights and aggregation, storing the result in a
+     * destination key (binary version).
+     *
+     * @param dstkey the destination key
+     * @param params the ZParams containing weights and aggregation options
+     * @param sets the keys of the sorted sets to union
+     * @return the number of elements in the resulting sorted set
+     */
+    public long zunionstore(final byte[] dstkey, ZParams params, final byte[]... sets) {
+        return executeCommandWithGlide(
+                "ZUNIONSTORE",
+                () -> {
+                    KeysOrWeightedKeysBinary keysOrWeighted =
+                            convertZParamsToKeysOrWeightedBinary(sets, params);
+                    if (params.getAggregate() != null) {
+                        Aggregate aggregate = convertZParamsAggregate(params.getAggregate());
+                        return glideClient.zunionstore(GlideString.of(dstkey), keysOrWeighted, aggregate)
+                                .get();
+                    } else {
+                        return glideClient.zunionstore(GlideString.of(dstkey), keysOrWeighted).get();
+                    }
+                });
+    }
+
+    /**
      * Computes the intersection of sorted sets and stores the result in a destination key.
      *
      * @param dstkey the destination key
@@ -8774,6 +8832,56 @@ public final class Jedis implements Closeable {
                     WeightAggregateOptions.KeyArrayBinary keyArray =
                             new WeightAggregateOptions.KeyArrayBinary(glideSets);
                     return glideClient.zinterstore(GlideString.of(dstkey), keyArray).get();
+                });
+    }
+
+    /**
+     * Computes the intersection of sorted sets with weights and aggregation, storing the result in
+     * a destination key.
+     *
+     * @param dstkey the destination key
+     * @param params the ZParams containing weights and aggregation options
+     * @param sets the keys of the sorted sets to intersect
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public long zinterstore(String dstkey, ZParams params, String... sets) {
+        return executeCommandWithGlide(
+                "ZINTERSTORE",
+                () -> {
+                    KeysOrWeightedKeys keysOrWeighted = convertZParamsToKeysOrWeighted(sets, params);
+                    if (params.getAggregate() != null) {
+                        Aggregate aggregate = convertZParamsAggregate(params.getAggregate());
+                        return glideClient.zinterstore(dstkey, keysOrWeighted, aggregate).get();
+                    } else {
+                        return glideClient.zinterstore(dstkey, keysOrWeighted).get();
+                    }
+                });
+    }
+
+    /**
+     * Computes the intersection of sorted sets with weights and aggregation, storing the result in
+     * a destination key (binary version).
+     *
+     * @param dstkey the destination key
+     * @param params the ZParams containing weights and aggregation options
+     * @param sets the keys of the sorted sets to intersect
+     * @return the number of elements in the resulting sorted set
+     */
+    public long zinterstore(final byte[] dstkey, ZParams params, final byte[]... sets) {
+        return executeCommandWithGlide(
+                "ZINTERSTORE",
+                () -> {
+                    KeysOrWeightedKeysBinary keysOrWeighted =
+                            convertZParamsToKeysOrWeightedBinary(sets, params);
+                    if (params.getAggregate() != null) {
+                        Aggregate aggregate = convertZParamsAggregate(params.getAggregate());
+                        return glideClient.zinterstore(GlideString.of(dstkey), keysOrWeighted, aggregate)
+                                .get();
+                    } else {
+                        return glideClient.zinterstore(GlideString.of(dstkey), keysOrWeighted).get();
+                    }
                 });
     }
 
@@ -9156,6 +9264,70 @@ public final class Jedis implements Closeable {
         }
 
         return builder.build();
+    }
+
+    /**
+     * Converts Jedis ZParams.Aggregate to GLIDE Aggregate.
+     *
+     * @param aggregate the Jedis aggregate type
+     * @return the corresponding GLIDE Aggregate
+     */
+    private static Aggregate convertZParamsAggregate(ZParams.Aggregate aggregate) {
+        switch (aggregate) {
+            case SUM:
+                return Aggregate.SUM;
+            case MIN:
+                return Aggregate.MIN;
+            case MAX:
+                return Aggregate.MAX;
+            default:
+                throw new IllegalArgumentException("Unknown aggregate type: " + aggregate);
+        }
+    }
+
+    /**
+     * Converts ZParams and key array to GLIDE KeysOrWeightedKeys.
+     *
+     * @param keys the sorted set keys
+     * @param params the ZParams containing weights
+     * @return KeysOrWeightedKeys for GLIDE API
+     */
+    private static KeysOrWeightedKeys convertZParamsToKeysOrWeighted(String[] keys, ZParams params) {
+        List<Double> weights = params.getWeights();
+        if (weights == null || weights.isEmpty()) {
+            return new KeyArray(keys);
+        } else {
+            List<Pair<String, Double>> weightedPairs = new ArrayList<>();
+            for (int i = 0; i < keys.length; i++) {
+                double weight = i < weights.size() ? weights.get(i) : 1.0;
+                weightedPairs.add(Pair.of(keys[i], weight));
+            }
+            return new WeightedKeys(weightedPairs);
+        }
+    }
+
+    /**
+     * Converts ZParams and binary key array to GLIDE KeysOrWeightedKeysBinary.
+     *
+     * @param keys the sorted set keys (binary)
+     * @param params the ZParams containing weights
+     * @return KeysOrWeightedKeysBinary for GLIDE API
+     */
+    private static KeysOrWeightedKeysBinary convertZParamsToKeysOrWeightedBinary(
+            byte[][] keys, ZParams params) {
+        List<Double> weights = params.getWeights();
+        if (weights == null || weights.isEmpty()) {
+            GlideString[] glideKeys =
+                    Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+            return new KeyArrayBinary(glideKeys);
+        } else {
+            List<Pair<GlideString, Double>> weightedPairs = new ArrayList<>();
+            for (int i = 0; i < keys.length; i++) {
+                double weight = i < weights.size() ? weights.get(i) : 1.0;
+                weightedPairs.add(Pair.of(GlideString.of(keys[i]), weight));
+            }
+            return new WeightedKeysBinary(weightedPairs);
+        }
     }
 
     /**

@@ -9,6 +9,10 @@ import redis.clients.jedis.util.SafeEncoder;
  * Tuple compatibility class for Valkey GLIDE wrapper. Represents a sorted set element with element
  * and score. Supports both String and binary (byte[]) element representations for full Jedis
  * compatibility.
+ *
+ * <p>Note: This class is compatible with Jedis Tuple and follows the same behavior. Null scores
+ * are allowed in the constructor but will cause NullPointerException when calling hashCode(),
+ * equals(), getScore(), or compareTo() methods.
  */
 public class Tuple implements Comparable<Tuple> {
 
@@ -20,7 +24,6 @@ public class Tuple implements Comparable<Tuple> {
     }
 
     public Tuple(byte[] element, Double score) {
-        super();
         this.element = element;
         this.score = score;
     }
@@ -51,11 +54,29 @@ public class Tuple implements Comparable<Tuple> {
         return Objects.equals(score, other.score);
     }
 
+    /**
+     * Compares this Tuple with another Tuple for order. First compares by score, then by element
+     * lexicographically if scores are equal.
+     *
+     * @param other the Tuple to compare with (must not be null)
+     * @return a negative integer, zero, or a positive integer as this Tuple is less than, equal
+     *     to, or greater than the specified Tuple
+     * @throws NullPointerException if other is null or if either Tuple has a null score
+     */
     @Override
     public int compareTo(Tuple other) {
         return compare(this, other);
     }
 
+    /**
+     * Compares two Tuple objects for order.
+     *
+     * @param t1 the first Tuple (must not be null)
+     * @param t2 the second Tuple (must not be null)
+     * @return a negative integer, zero, or a positive integer as t1 is less than, equal to, or
+     *     greater than t2
+     * @throws NullPointerException if t1 or t2 is null, or if either has a null score
+     */
     public static int compare(Tuple t1, Tuple t2) {
         int compScore = Double.compare(t1.score, t2.score);
         if (compScore != 0) return compScore;
@@ -88,6 +109,12 @@ public class Tuple implements Comparable<Tuple> {
         return element;
     }
 
+    /**
+     * Returns the score of this Tuple.
+     *
+     * @return the score as a primitive double
+     * @throws NullPointerException if the score is null (due to auto-unboxing)
+     */
     public double getScore() {
         return score;
     }
