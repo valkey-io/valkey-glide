@@ -149,7 +149,9 @@ export namespace GlideClusterClientConfiguration {
         /**
          * Channels and patterns by modes.
          */
-        channelsAndPatterns: Partial<Record<PubSubChannelModes, Set<string>>>;
+        channelsAndPatterns: Partial<
+            Record<PubSubChannelModes, Iterable<string>>
+        >;
 
         /**
          * Optional callback to accept the incoming messages.
@@ -2051,7 +2053,7 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async ssubscribeLazy(
-        channels: Set<GlideString>,
+        channels: Iterable<GlideString>,
         options?: DecoderOption,
     ): Promise<void> {
         const channelsArray = Array.from(channels);
@@ -2082,7 +2084,7 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async ssubscribe(
-        channels: Set<GlideString>,
+        channels: Iterable<GlideString>,
         timeoutMs: number,
         options?: DecoderOption,
     ): Promise<void> {
@@ -2112,7 +2114,7 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async sunsubscribeLazy(
-        channels?: Set<GlideString> | null,
+        channels?: Iterable<GlideString> | null,
         options?: DecoderOption,
     ): Promise<void> {
         const channelsArray = channels ? Array.from(channels) : undefined;
@@ -2142,13 +2144,13 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async sunsubscribe(
-        channels: Set<GlideString> | null,
+        channels: Iterable<GlideString> | null,
         timeoutMs: number,
         options?: DecoderOption,
     ): Promise<void> {
-        const channelsArray = channels ? Array.from(channels) : undefined;
+        const channelsArray = channels ? Array.from(channels) : [];
         return this.createWritePromise(
-            createSUnsubscribe(channelsArray ?? [], timeoutMs),
+            createSUnsubscribe(channelsArray, timeoutMs),
             options,
         );
     }

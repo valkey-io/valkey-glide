@@ -4245,7 +4245,7 @@ describe("PubSub", () => {
                     );
                 }
 
-                const channels = new Set([channel]);
+                const channels = [channel];
 
                 // Dynamically subscribe to channel
                 if (subscribeMode === Mode.Lazy) {
@@ -4350,7 +4350,7 @@ describe("PubSub", () => {
                     );
                 }
 
-                const patterns = new Set([pattern]);
+                const patterns = [pattern];
 
                 // Dynamically subscribe to pattern
                 if (subscribeMode === Mode.Lazy) {
@@ -4445,7 +4445,7 @@ describe("PubSub", () => {
                     getOptions(clusterMode),
                 );
 
-                const channels = new Set([channel]);
+                const channels = [channel];
 
                 // Dynamically subscribe to sharded channel
                 if (subscribeMode === Mode.Lazy) {
@@ -4594,9 +4594,9 @@ describe("PubSub", () => {
 
                 // Dynamically unsubscribe from pre-configured channel
                 if (unsubscribeMode === Mode.Lazy) {
-                    await listener.unsubscribeLazy(new Set([channel]));
+                    await listener.unsubscribeLazy([channel]);
                 } else {
-                    await listener.unsubscribe(new Set([channel]), 30000);
+                    await listener.unsubscribe([channel], 30000);
                 }
 
                 // Wait for unsubscribe to propagate
@@ -4704,9 +4704,9 @@ describe("PubSub", () => {
 
                 // Dynamically unsubscribe from pre-configured pattern
                 if (unsubscribeMode === Mode.Lazy) {
-                    await listener.punsubscribeLazy(new Set([pattern]));
+                    await listener.punsubscribeLazy([pattern]);
                 } else {
-                    await listener.punsubscribe(new Set([pattern]), 30000);
+                    await listener.punsubscribe([pattern], 30000);
                 }
 
                 // Wait for unsubscribe to propagate
@@ -4811,12 +4811,12 @@ describe("PubSub", () => {
 
                 // Dynamically unsubscribe from pre-configured sharded channel
                 if (unsubscribeMode === Mode.Lazy) {
-                    await (listener as GlideClusterClient).sunsubscribeLazy(
-                        new Set([channel]),
-                    );
+                    await (listener as GlideClusterClient).sunsubscribeLazy([
+                        channel,
+                    ]);
                 } else {
                     await (listener as GlideClusterClient).sunsubscribe(
-                        new Set([channel]),
+                        [channel],
                         30000,
                     );
                 }
@@ -4884,7 +4884,7 @@ describe("PubSub", () => {
                 }
 
                 // Dynamically subscribe to channel (non-blocking)
-                await client.subscribeLazy(new Set([channel]));
+                await client.subscribeLazy([channel]);
 
                 // Allow time for subscription to propagate
                 await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -4957,7 +4957,7 @@ describe("PubSub", () => {
                 );
 
                 // Dynamically subscribe to channel (non-blocking)
-                await client.subscribeLazy(new Set([channel]));
+                await client.subscribeLazy([channel]);
 
                 // Allow time for subscription to propagate
                 await new Promise((resolve) => setTimeout(resolve, 1000));

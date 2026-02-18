@@ -83,7 +83,9 @@ export namespace GlideClientConfiguration {
         /**
          * Channels and patterns by modes.
          */
-        channelsAndPatterns: Partial<Record<PubSubChannelModes, Set<string>>>;
+        channelsAndPatterns: Partial<
+            Record<PubSubChannelModes, Iterable<string>>
+        >;
 
         /**
          * Optional callback to accept the incoming messages.
