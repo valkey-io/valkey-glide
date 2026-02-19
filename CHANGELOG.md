@@ -1,3 +1,9 @@
+## 2.2.8
+
+### Fixes
+
+* CORE: Fix empty hostname in CLUSTER SLOTS metadata causing AllConnectionsUnavailable ([#5367](https://github.com/valkey-io/valkey-glide/issues/5367))
+
 ## 2.2.7
 
 ### Fixes
