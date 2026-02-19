@@ -1672,10 +1672,12 @@ public class JedisTest {
         Map<String, Long> numSub = jedis.pubsubNumSub(channel);
         assertNotNull(numSub, "PUBSUB NUMSUB should return a non-null map");
         assertTrue(numSub instanceof Map, "PUBSUB NUMSUB should return a Map instance");
-        if (!numSub.isEmpty()) {
-            assertTrue(numSub.containsKey(channel), "PUBSUB NUMSUB should contain the requested channel");
-            assertTrue(numSub.get(channel) >= 0, "PUBSUB NUMSUB subscriber count should be non-negative");
-        }
+        // PUBSUB NUMSUB always returns a map with the requested channels
+        assertTrue(numSub.containsKey(channel), "PUBSUB NUMSUB should contain the requested channel");
+        assertEquals(
+                0L,
+                numSub.get(channel),
+                "PUBSUB NUMSUB should return 0 subscribers for channel without active subscriptions");
 
         // Test binary versions
         byte[] channelBytes = channel.getBytes(StandardCharsets.UTF_8);
@@ -1703,6 +1705,27 @@ public class JedisTest {
         Map<byte[], Long> numSubBinary = jedis.pubsubNumSub(channelBytes);
         assertNotNull(numSubBinary, "PUBSUB NUMSUB binary should return a non-null map");
         assertTrue(numSubBinary instanceof Map, "PUBSUB NUMSUB binary should return a Map instance");
+        // Verify map contains the requested channel
+        boolean containsChannelKey =
+                numSubBinary.keySet().stream().anyMatch(key -> Arrays.equals(key, channelBytes));
+        assertTrue(containsChannelKey, "PUBSUB NUMSUB binary should contain the requested channel");
+        // Get subscriber count for the channel
+        Long subscriberCount =
+                numSubBinary.entrySet().stream()
+                        .filter(entry -> Arrays.equals(entry.getKey(), channelBytes))
+                        .map(Map.Entry::getValue)
+                        .findFirst()
+                        .orElse(null);
+        assertNotNull(
+                subscriberCount, "PUBSUB NUMSUB binary should return subscriber count for channel");
+        assertEquals(
+                0L,
+                subscriberCount,
+                "PUBSUB NUMSUB binary should return 0 subscribers for channel without active"
+                        + " subscriptions");
+    }
+
+    @Test
     void sadd_srem_smembers_command() {
         String key = UUID.randomUUID().toString();
         String member1 = "member1";
