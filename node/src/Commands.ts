@@ -4615,7 +4615,7 @@ export function createUnsubscribe(
 export function createPUnsubscribeLazy(
     patterns?: GlideString[],
 ): command_request.Command {
-    return createCommand(RequestType.PUnsubscribe, patterns ? patterns : []);
+    return createCommand(RequestType.PUnsubscribe, patterns ?? []);
 }
 
 /**
