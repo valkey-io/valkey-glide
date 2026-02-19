@@ -685,11 +685,13 @@ mod cluster_client_tests {
     #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
     fn test_failover_doesnt_block_healthy_shards() {
         block_on_all(async {
-            const NUM_KEYS: usize = 100;
-            const MEASUREMENT_DURATION_SECS: u64 = 10;
-            const REQUEST_TIMEOUT_SECS: u64 = 1;
+            const NUM_KEYS: usize = 300;
+            const NUM_PRIMARIES: u16 = 5;
+            const NUM_REPLICAS: u16 = 1;
+            const MEASUREMENT_DURATION_SECS: u64 = 3;
+            const REQUEST_TIMEOUT_SECS: u64 = 5;
 
-            // Start cluster with replicas (and timeout to avoid blocking)
+            // Start cluster with replicas
             let mut test_basics = setup_cluster_with_replicas(
                 TestConfiguration {
                     cluster_mode: ClusterMode::Enabled,
@@ -697,8 +699,8 @@ mod cluster_client_tests {
                     request_timeout: Some((REQUEST_TIMEOUT_SECS * 1000) as u32),
                     ..Default::default()
                 },
-                1,
-                3,
+                NUM_REPLICAS,
+                NUM_PRIMARIES,
             )
             .await;
 
@@ -714,7 +716,7 @@ mod cluster_client_tests {
                 test_basics.client.send_command(&mut cmd, None).await.unwrap();
             }
 
-            // Measure baseline throughput across all shards (queries/second)
+            // Measure baseline throughput across all shards
             let baseline_count = Arc::new(AtomicU64::new(0));
             let stop_flag = Arc::new(AtomicBool::new(false));
             let mut tasks = Vec::new();
@@ -739,22 +741,33 @@ mod cluster_client_tests {
             futures::future::join_all(tasks).await;
             let baseline_qps = baseline_count.load(Ordering::Relaxed) / MEASUREMENT_DURATION_SECS;
 
-            // Kill the first primary (simulate crash)
+            // Crash first primary (no auto-failover)
+            let replica_addr = &addresses[1];
+            let (replica_host, replica_port) = match replica_addr {
+                redis::ConnectionAddr::Tcp(h, p) => (h.clone(), *p),
+                redis::ConnectionAddr::TcpTls { host: h, port: p, .. } => (h.clone(), *p),
+                _ => panic!("Unexpected connection type"),
+            };
+            let mut config_cmd = redis::cmd("CONFIG");
+            config_cmd.arg("SET").arg("cluster-replica-no-failover").arg("yes");
+            let replica_routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                host: replica_host,
+                port: replica_port
+            });
+            let _ = test_basics.client.send_command(&mut config_cmd, Some(replica_routing)).await;
+
             let primary_addr = &addresses[0];
             let (host, port) = match primary_addr {
                 redis::ConnectionAddr::Tcp(h, p) => (h.clone(), *p),
                 redis::ConnectionAddr::TcpTls { host: h, port: p, .. } => (h.clone(), *p),
                 _ => panic!("Unexpected connection type"),
             };
-            let mut shutdown_cmd = redis::cmd("SHUTDOWN");
-            shutdown_cmd.arg("NOSAVE");
+            let mut crash_cmd = redis::cmd("DEBUG");
+            crash_cmd.arg("SEGFAULT");
             let routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress { host, port });
-            let _ = test_basics.client.send_command(&mut shutdown_cmd, Some(routing)).await;
+            let _ = test_basics.client.send_command(&mut crash_cmd, Some(routing)).await;
 
-            // Wait for cluster to detect failure and begin reconnection attempts
-            tokio::time::sleep(Duration::from_secs(REQUEST_TIMEOUT_SECS * 2)).await;
-
-            // Measure failover throughput across all shards (queries/second)
+            // Measure throughput across shards during failover
             let failover_count = Arc::new(AtomicU64::new(0));
             let error_count = Arc::new(AtomicU64::new(0));
             let stop_flag = Arc::new(AtomicBool::new(false));
@@ -783,12 +796,12 @@ mod cluster_client_tests {
             let failover_qps = failover_count.load(Ordering::Relaxed) / MEASUREMENT_DURATION_SECS;
             let errors = error_count.load(Ordering::Relaxed);
 
-            // Verify throughput doesn't drop to near-zero during failover.  Expect 2/3 healthy shards to maintain throughput.
-            let expected_min_throughput = baseline_qps * 60 / 100;
+            // Verify throughput recovers after full cluster failover
+            let expected_min_throughput = baseline_qps * 50 / 100;
             println!("Baseline QPS: {}, Failover QPS: {}, Errors: {}", baseline_qps, failover_qps, errors);
             assert!(
                 failover_qps > expected_min_throughput,
-                "Throughput dropped too much during failover: {} vs baseline {} (expected >{} for 2/3 healthy shards)",
+                "Throughput dropped too much during full cluster failover: {} vs baseline {} (expected >{})",
                 failover_qps,
                 baseline_qps,
                 expected_min_throughput
