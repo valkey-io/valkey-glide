@@ -15,7 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClusterClient;
+import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.ServerCredentials;
+import glide.api.models.configuration.ServiceType;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
 import java.util.Map;
@@ -474,6 +476,144 @@ public class ClusterClientTests {
         } finally {
             deleteAclUser(adminClient, username);
             adminClient.close();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_iam_authentication_with_mock_credentials() {
+        // Save original AWS credentials
+        String originalAccessKey = System.getenv("AWS_ACCESS_KEY_ID");
+        String originalSecretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
+        String originalSessionToken = System.getenv("AWS_SESSION_TOKEN");
+
+        try {
+            // Set mock AWS credentials for testing
+            System.setProperty("AWS_ACCESS_KEY_ID", "test_access_key");
+            System.setProperty("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+            System.setProperty("AWS_SESSION_TOKEN", "test_session_token");
+
+            // Create IAM config
+            IamAuthConfig iamConfig =
+                    IamAuthConfig.builder()
+                            .clusterName("test-cluster")
+                            .service(ServiceType.ELASTICACHE)
+                            .region("us-east-1")
+                            .refreshIntervalSeconds(5) // Fast refresh for testing
+                            .build();
+
+            // Create credentials with IAM config
+            ServerCredentials credentials =
+                    ServerCredentials.builder().username("default").iamConfig(iamConfig).build();
+
+            // Create client with IAM authentication
+            try (GlideClusterClient client =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig()
+                                            .credentials(credentials)
+                                            .useTLS(false) // Local cluster doesn't use TLS
+                                            .build())
+                            .get()) {
+
+                // Verify connection works
+                String pingResult = client.ping().get();
+                assertEquals("PONG", pingResult);
+
+                // Test basic operations
+                assertEquals("OK", client.set("iam_test_key", "iam_test_value").get());
+                assertEquals("iam_test_value", client.get("iam_test_key").get());
+
+                // Test manual token refresh
+                client.refreshIamToken().get();
+
+                // Verify operations still work after token refresh
+                assertEquals("OK", client.set("iam_test_key2", "iam_test_value2").get());
+                assertEquals("iam_test_value2", client.get("iam_test_key2").get());
+            }
+        } finally {
+            // Restore original AWS credentials
+            if (originalAccessKey != null) {
+                System.setProperty("AWS_ACCESS_KEY_ID", originalAccessKey);
+            } else {
+                System.clearProperty("AWS_ACCESS_KEY_ID");
+            }
+
+            if (originalSecretKey != null) {
+                System.setProperty("AWS_SECRET_ACCESS_KEY", originalSecretKey);
+            } else {
+                System.clearProperty("AWS_SECRET_ACCESS_KEY");
+            }
+
+            if (originalSessionToken != null) {
+                System.setProperty("AWS_SESSION_TOKEN", originalSessionToken);
+            } else {
+                System.clearProperty("AWS_SESSION_TOKEN");
+            }
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_iam_authentication_automatic_token_refresh()
+            throws InterruptedException, ExecutionException {
+        // Save original AWS credentials
+        String originalAccessKey = System.getenv("AWS_ACCESS_KEY_ID");
+        String originalSecretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
+        String originalSessionToken = System.getenv("AWS_SESSION_TOKEN");
+
+        try {
+            // Set mock AWS credentials for testing
+            System.setProperty("AWS_ACCESS_KEY_ID", "test_access_key");
+            System.setProperty("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+            System.setProperty("AWS_SESSION_TOKEN", "test_session_token");
+
+            // Create IAM config with very short refresh interval
+            IamAuthConfig iamConfig =
+                    IamAuthConfig.builder()
+                            .clusterName("test-cluster")
+                            .service(ServiceType.ELASTICACHE)
+                            .region("us-east-1")
+                            .refreshIntervalSeconds(2) // Very fast refresh for testing
+                            .build();
+
+            ServerCredentials credentials =
+                    ServerCredentials.builder().username("default").iamConfig(iamConfig).build();
+
+            try (GlideClusterClient client =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig().credentials(credentials).useTLS(false).build())
+                            .get()) {
+
+                // Verify initial connection
+                String pingResult = client.ping().get();
+                assertEquals("PONG", pingResult);
+
+                // Wait for automatic token refresh to occur
+                Thread.sleep(3000);
+
+                // Verify client still works after automatic refresh
+                assertEquals("OK", client.set("iam_auto_refresh_key", "iam_auto_refresh_value").get());
+                assertEquals("iam_auto_refresh_value", client.get("iam_auto_refresh_key").get());
+            }
+        } finally {
+            // Restore original AWS credentials
+            if (originalAccessKey != null) {
+                System.setProperty("AWS_ACCESS_KEY_ID", originalAccessKey);
+            } else {
+                System.clearProperty("AWS_ACCESS_KEY_ID");
+            }
+
+            if (originalSecretKey != null) {
+                System.setProperty("AWS_SECRET_ACCESS_KEY", originalSecretKey);
+            } else {
+                System.clearProperty("AWS_SECRET_ACCESS_KEY");
+            }
+
+            if (originalSessionToken != null) {
+                System.setProperty("AWS_SESSION_TOKEN", originalSessionToken);
+            } else {
+                System.clearProperty("AWS_SESSION_TOKEN");
+            }
         }
     }
 }

@@ -1,13 +1,22 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
+import asyncio
+import os
+
 import anyio
 import pytest
 from glide.glide_client import TGlideClient
-from glide_shared.config import ProtocolVersion
+from glide_shared.config import (
+    IamAuthConfig,
+    ProtocolVersion,
+    ServerCredentials,
+    ServiceType,
+)
 from glide_shared.constants import OK
 from glide_shared.exceptions import RequestError
 
+from tests.async_tests.conftest import create_client
 from tests.utils.utils import (
     NEW_PASSWORD,
     USERNAME,
@@ -330,3 +339,149 @@ class TestAuthCommands:
             await acl_glide_client.update_connection_password(None, immediate_auth=True)
         with pytest.raises(RequestError):
             await acl_glide_client.update_connection_password("", immediate_auth=True)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_iam_authentication_with_mock_credentials(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        """
+        Test IAM authentication using mock AWS credentials.
+
+        This test verifies:
+        1. Client can connect using IAM authentication with mock credentials
+        2. Basic operations work after IAM authentication
+        3. Manual token refresh works
+        4. Operations continue to work after token refresh
+        """
+        # Save original values
+        original_access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+        original_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        original_session_token = os.environ.get("AWS_SESSION_TOKEN")
+
+        # Set mock credentials
+        os.environ["AWS_ACCESS_KEY_ID"] = "test_access_key"
+        os.environ["AWS_SECRET_ACCESS_KEY"] = "test_secret_key"
+        os.environ["AWS_SESSION_TOKEN"] = "test_session_token"
+
+        try:
+            # Create IAM config
+            iam_config = IamAuthConfig(
+                cluster_name="test-cluster",
+                service=ServiceType.ELASTICACHE,
+                region="us-east-1",
+                refresh_interval_seconds=5,  # Fast refresh for testing
+            )
+
+            # Create credentials with IAM config
+            credentials = ServerCredentials(username="default", iam_config=iam_config)
+
+            # Create client with IAM authentication
+            client = await create_client(
+                request=request,
+                cluster_mode=cluster_mode,
+                protocol=protocol,
+                credentials=credentials,
+                use_tls=False,  # Local cluster doesn't use TLS
+            )
+
+            # Verify connection works
+            result = await client.custom_command(["PING"])
+            assert result == b"PONG"
+
+            # Test basic operations
+            await client.set("iam_test_key", "iam_test_value")
+            value = await client.get("iam_test_key")
+            assert value == b"iam_test_value"
+
+            # Test manual token refresh
+            await client.refresh_iam_token()
+
+            # Verify operations still work after token refresh
+            await client.set("iam_test_key2", "iam_test_value2")
+            value2 = await client.get("iam_test_key2")
+            assert value2 == b"iam_test_value2"
+        finally:
+            # Restore original values
+            if original_access_key:
+                os.environ["AWS_ACCESS_KEY_ID"] = original_access_key
+            else:
+                os.environ.pop("AWS_ACCESS_KEY_ID", None)
+
+            if original_secret_key:
+                os.environ["AWS_SECRET_ACCESS_KEY"] = original_secret_key
+            else:
+                os.environ.pop("AWS_SECRET_ACCESS_KEY", None)
+
+            if original_session_token:
+                os.environ["AWS_SESSION_TOKEN"] = original_session_token
+            else:
+                os.environ.pop("AWS_SESSION_TOKEN", None)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_iam_authentication_automatic_token_refresh(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        """
+        Test automatic IAM token refresh.
+
+        This test verifies that the client automatically refreshes the IAM token
+        at the configured interval and continues to work correctly.
+        """
+        # Save original values
+        original_access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+        original_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        original_session_token = os.environ.get("AWS_SESSION_TOKEN")
+
+        # Set mock credentials
+        os.environ["AWS_ACCESS_KEY_ID"] = "test_access_key"
+        os.environ["AWS_SECRET_ACCESS_KEY"] = "test_secret_key"
+        os.environ["AWS_SESSION_TOKEN"] = "test_session_token"
+
+        try:
+            # Create IAM config with very short refresh interval
+            iam_config = IamAuthConfig(
+                cluster_name="test-cluster",
+                service=ServiceType.ELASTICACHE,
+                region="us-east-1",
+                refresh_interval_seconds=2,  # Very fast refresh for testing
+            )
+
+            credentials = ServerCredentials(username="default", iam_config=iam_config)
+
+            client = await create_client(
+                request=request,
+                cluster_mode=cluster_mode,
+                protocol=protocol,
+                credentials=credentials,
+                use_tls=False,
+            )
+
+            # Verify initial connection
+            result = await client.custom_command(["PING"])
+            assert result == b"PONG"
+
+            # Wait for automatic token refresh to occur
+            await asyncio.sleep(3)
+
+            # Verify client still works after automatic refresh
+            await client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
+            value = await client.get("iam_auto_refresh_key")
+            assert value == b"iam_auto_refresh_value"
+        finally:
+            # Restore original values
+            if original_access_key:
+                os.environ["AWS_ACCESS_KEY_ID"] = original_access_key
+            else:
+                os.environ.pop("AWS_ACCESS_KEY_ID", None)
+
+            if original_secret_key:
+                os.environ["AWS_SECRET_ACCESS_KEY"] = original_secret_key
+            else:
+                os.environ.pop("AWS_SECRET_ACCESS_KEY", None)
+
+            if original_session_token:
+                os.environ["AWS_SESSION_TOKEN"] = original_session_token
+            else:
+                os.environ.pop("AWS_SESSION_TOKEN", None)

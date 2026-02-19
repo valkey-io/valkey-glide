@@ -600,45 +600,108 @@ describe("Auth tests", () => {
     );
 });
 
-// Skip IAM Auth tests in CI/CD environments
-const describeIamTests =
-    process.env.CI || process.env.GITHUB_ACTIONS || process.env.JENKINS_URL
-        ? describe.skip
-        : describe;
-
-describeIamTests("IAM Auth: Elasticache Cluster", () => {
-    it("test_iam_authentication_elasticache_cluster", async () => {
-        // Use debug level to see detailed logs about the iam auth process
-        Logger.setLoggerConfig("debug");
-
-        // Replace these values with your actual cluster info and region
-        const clusterName = "iam-auth-cluster";
-        const username = "iam-auth";
-        const region = "us-east-1";
-        const endpoint =
-            "clustercfg.iam-auth-cluster.nra7gl.use1.cache.amazonaws.com";
-        const iamConfig: IamAuthConfig = {
-            clusterName: clusterName,
-            service: ServiceType.Elasticache,
-            region: region,
-            // refreshIntervalSeconds: 10, // optional
-        };
-
-        const client = await GlideClusterClient.createClient({
-            addresses: [{ host: endpoint, port: 6379 }],
-            credentials: { username: username, iamConfig: iamConfig },
-            useTLS: true,
-        });
-
-        // Basic ping test to verify connection
-        const result = await client.ping();
-        expect(result).toBe("PONG");
-
-        Logger.log("info", "IAM test", "Refreshing the token manually");
-
-        // Should see in the logs ""send_immediate_auth - Using IAM token for authentication`
-        await client.refreshIamToken();
-
-        await client.close();
+// IAM Auth tests with mock credentials
+describe("IAM Auth: Mock Credentials", () => {
+    beforeAll(() => {
+        // Set mock AWS credentials for testing
+        process.env.AWS_ACCESS_KEY_ID = "test_access_key";
+        process.env.AWS_SECRET_ACCESS_KEY = "test_secret_key";
+        process.env.AWS_SESSION_TOKEN = "test_session_token";
     });
+
+    afterAll(() => {
+        // Clean up environment variables
+        delete process.env.AWS_ACCESS_KEY_ID;
+        delete process.env.AWS_SECRET_ACCESS_KEY;
+        delete process.env.AWS_SESSION_TOKEN;
+    });
+
+    it(
+        "test_iam_authentication_with_mock_credentials",
+        async () => {
+            // Use debug level to see detailed logs about the IAM auth process
+            Logger.setLoggerConfig("debug");
+
+            const clusterName = "test-cluster";
+            const username = "default"; // Use default user
+            const region = "us-east-1";
+            const iamConfig: IamAuthConfig = {
+                clusterName: clusterName,
+                service: ServiceType.Elasticache,
+                region: region,
+                refreshIntervalSeconds: 5, // Fast refresh for testing
+            };
+
+            // Use existing cluster from global setup
+            const clusterAddresses = global.CLUSTER_ENDPOINTS;
+            const cluster = clusterAddresses
+                ? await ValkeyCluster.initFromExistingCluster(
+                      true,
+                      parseEndpoints(clusterAddresses),
+                      getServerVersion,
+                  )
+                : await ValkeyCluster.createCluster(
+                      true,
+                      3,
+                      1,
+                      getServerVersion,
+                  );
+
+            const addresses = cluster
+                .getAddresses()
+                .map(([host, port]) => ({ host, port }));
+
+            Logger.log(
+                "info",
+                "IAM test",
+                `Creating client with IAM auth to ${JSON.stringify(addresses)}`,
+            );
+
+            try {
+                const client = await GlideClusterClient.createClient({
+                    addresses: addresses,
+                    credentials: { username: username, iamConfig: iamConfig },
+                    useTLS: false, // Local cluster doesn't use TLS
+                });
+
+                // Basic ping test to verify connection
+                const result = await client.ping();
+                expect(result).toBe("PONG");
+
+                Logger.log(
+                    "info",
+                    "IAM test",
+                    "Connection successful with IAM auth",
+                );
+
+                // Test basic operations
+                await client.set("iam_test_key", "iam_test_value");
+                const value = await client.get("iam_test_key");
+                expect(value).toBe("iam_test_value");
+
+                Logger.log("info", "IAM test", "Basic operations successful");
+
+                // Test manual token refresh
+                Logger.log("info", "IAM test", "Refreshing the token manually");
+                await client.refreshIamToken();
+                Logger.log("info", "IAM test", "Token refresh successful");
+
+                // Verify client still works after token refresh
+                await client.set("iam_test_key2", "iam_test_value2");
+                const value2 = await client.get("iam_test_key2");
+                expect(value2).toBe("iam_test_value2");
+
+                Logger.log(
+                    "info",
+                    "IAM test",
+                    "Operations after token refresh successful",
+                );
+
+                client.close();
+            } finally {
+                await cluster.close();
+            }
+        },
+        TIMEOUT,
+    );
 });
