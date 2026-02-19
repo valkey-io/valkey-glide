@@ -3443,6 +3443,9 @@ public class JedisTest {
                             || errorMsg.contains("CONFIG REWRITE")
                             || errorMsg.contains("config"),
                     "Expected error about config file, got: " + errorMsg);
+        }
+    }
+
     // --- ACL command integration tests ---
 
     @Test
@@ -3685,6 +3688,9 @@ public class JedisTest {
         String artWithParams = jedis.lolwut(5, 10);
         assertNotNull(artWithParams, "LOLWUT with params should return art");
         assertTrue(artWithParams.length() > 0, "LOLWUT with params should return non-empty string");
+    }
+
+    @Test
     void acl_deluser_multiple_users() {
         String username1 = "testuser1_" + UUID.randomUUID().toString().replace("-", "");
         String username2 = "testuser2_" + UUID.randomUUID().toString().replace("-", "");
