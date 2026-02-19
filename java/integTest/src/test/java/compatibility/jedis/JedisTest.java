@@ -10,6 +10,7 @@ import glide.api.GlideClient;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import java.lang.reflect.Constructor;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,6 +27,7 @@ import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
 import redis.clients.jedis.args.ListDirection;
 import redis.clients.jedis.args.ListPosition;
+import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
 import redis.clients.jedis.params.HGetExParams;
@@ -33,6 +35,8 @@ import redis.clients.jedis.params.HSetExParams;
 import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.resps.AccessControlLogEntry;
+import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.ScanResult;
 import redis.clients.jedis.util.KeyValue;
 
@@ -1626,6 +1630,145 @@ public class JedisTest {
         assertTrue(resultSet.contains(member1), "SMEMBERS result should contain member1");
         assertTrue(resultSet.contains(member2), "SMEMBERS result should contain member2");
         assertTrue(resultSet.contains(member3), "SMEMBERS result should contain member3");
+    }
+
+    @Test
+    void sadd_srem_smembers_command() {
+        String key = UUID.randomUUID().toString();
+        String member1 = "member1";
+        String member2 = "member2";
+        String member3 = "member3";
+
+        long added = jedis.sadd(key, member1, member2, member3);
+        assertEquals(3L, added, "SADD should return 3 for three new members");
+
+        Set<String> members = jedis.smembers(key);
+        assertEquals(3, members.size(), "SMEMBERS should return 3 members");
+        assertTrue(members.contains(member1));
+        assertTrue(members.contains(member2));
+        assertTrue(members.contains(member3));
+
+        long removed = jedis.srem(key, member1);
+        assertEquals(1L, removed, "SREM should return 1 for one removed member");
+
+        members = jedis.smembers(key);
+        assertEquals(2, members.size(), "SMEMBERS should return 2 members after srem");
+
+        String keyBinary = UUID.randomUUID().toString();
+        byte[] keyBytes = keyBinary.getBytes(StandardCharsets.UTF_8);
+        byte[] m1 = "m1".getBytes(StandardCharsets.UTF_8);
+        byte[] m2 = "m2".getBytes(StandardCharsets.UTF_8);
+        jedis.sadd(keyBytes, m1, m2);
+        Set<byte[]> binaryMembers = jedis.smembers(keyBytes);
+        assertEquals(2, binaryMembers.size(), "SMEMBERS binary should return 2 members");
+        Set<String> memberStrings = new HashSet<>();
+        for (byte[] member : binaryMembers) {
+            memberStrings.add(new String(member, StandardCharsets.UTF_8));
+        }
+        Set<String> expectedBinaryMembers = new HashSet<>(Arrays.asList("m1", "m2"));
+        assertEquals(expectedBinaryMembers, memberStrings, "SMEMBERS binary should contain m1 and m2");
+    }
+
+    @Test
+    void set_commands_scard_sismember_smismember_spop_srandmember_smove() {
+        String key = UUID.randomUUID().toString();
+        jedis.sadd(key, "a", "b", "c");
+        assertEquals(3L, jedis.scard(key), "SCARD should return 3");
+        assertTrue(jedis.sismember(key, "a"), "SISMEMBER a should be true");
+        assertFalse(jedis.sismember(key, "z"), "SISMEMBER z should be false");
+
+        List<Boolean> smismember = jedis.smismember(key, "a", "b", "z");
+        assertEquals(
+                Arrays.asList(true, true, false),
+                smismember,
+                "SMISMEMBER should return [true, true, false]");
+
+        String popped = jedis.spop(key);
+        assertNotNull(popped, "SPOP should return a member");
+        Set<String> expectedMembers = new HashSet<>(Arrays.asList("a", "b", "c"));
+        assertTrue(expectedMembers.contains(popped), "SPOP should return one of a,b,c");
+        assertEquals(2L, jedis.scard(key), "SCARD should be 2 after spop");
+
+        String rand = jedis.srandmember(key);
+        assertNotNull(rand, "SRANDMEMBER should return a member");
+        List<String> randList = jedis.srandmember(key, 2);
+        assertEquals(2, randList.size(), "SRANDMEMBER count 2 should return 2");
+
+        String srcKey = UUID.randomUUID().toString();
+        String dstKey = UUID.randomUUID().toString();
+        jedis.sadd(srcKey, "x", "y");
+        jedis.sadd(dstKey, "z");
+        long moved = jedis.smove(srcKey, dstKey, "x");
+        assertEquals(1L, moved, "SMOVE should return 1");
+        assertFalse(jedis.sismember(srcKey, "x"), "x should be removed from source");
+        assertTrue(jedis.sismember(dstKey, "x"), "x should be in destination");
+    }
+
+    @Test
+    void set_commands_sinter_sintercard_sinterstore_sunion_sunionstore_sdiff_sdiffstore() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String dest = UUID.randomUUID().toString();
+        jedis.sadd(key1, "a", "b", "c");
+        jedis.sadd(key2, "b", "c", "d");
+
+        Set<String> inter = jedis.sinter(key1, key2);
+        Set<String> expectedInter = new HashSet<>(Arrays.asList("b", "c"));
+        assertEquals(expectedInter, inter, "SINTER should return b,c");
+
+        // SINTERCARD was added in Redis 7.0
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            long interCard = jedis.sintercard(key1, key2);
+            assertEquals(2L, interCard, "SINTERCARD should return 2");
+        }
+
+        long interStoreLen = jedis.sinterstore(dest, key1, key2);
+        assertEquals(2L, interStoreLen, "SINTERSTORE should store 2 elements");
+        Set<String> expectedInterStore = new HashSet<>(Arrays.asList("b", "c"));
+        assertEquals(expectedInterStore, jedis.smembers(dest), "SINTERSTORE result should be b,c");
+
+        Set<String> union = jedis.sunion(key1, key2);
+        Set<String> expectedUnion = new HashSet<>(Arrays.asList("a", "b", "c", "d"));
+        assertEquals(expectedUnion, union, "SUNION should return a,b,c,d");
+
+        String destUnion = UUID.randomUUID().toString();
+        long unionStoreLen = jedis.sunionstore(destUnion, key1, key2);
+        assertEquals(4L, unionStoreLen, "SUNIONSTORE should store 4 elements");
+
+        Set<String> diff = jedis.sdiff(key1, key2);
+        Set<String> expectedDiff = new HashSet<>(Arrays.asList("a"));
+        assertEquals(expectedDiff, diff, "SDIFF key1-key2 should return a");
+
+        String destDiff = UUID.randomUUID().toString();
+        long diffStoreLen = jedis.sdiffstore(destDiff, key1, key2);
+        assertEquals(1L, diffStoreLen, "SDIFFSTORE should store 1 element");
+        Set<String> expectedDiffStore = new HashSet<>(Arrays.asList("a"));
+        assertEquals(expectedDiffStore, jedis.smembers(destDiff), "SDIFFSTORE result should be a");
+    }
+
+    @Test
+    void set_commands_sscan() {
+        String key = UUID.randomUUID().toString();
+        jedis.sadd(key, "m1", "m2", "m3");
+        ScanResult<String> result = jedis.sscan(key, "0");
+        assertNotNull(result, "SSCAN result should not be null");
+        assertNotNull(result.getCursor(), "SSCAN cursor should not be null");
+        assertNotNull(result.getResult(), "SSCAN result list should not be null");
+        assertTrue(
+                result.getResult().size() >= 1 && result.getResult().size() <= 3,
+                "SSCAN should return 1-3 members in first iteration");
+        Set<String> expectedMembers = new HashSet<>(Arrays.asList("m1", "m2", "m3"));
+        for (String member : result.getResult()) {
+            assertTrue(expectedMembers.contains(member), "SSCAN should return valid members: " + member);
+        }
+
+        ScanResult<String> withParams = jedis.sscan(key, "0", new ScanParams().count(10));
+        assertNotNull(withParams.getResult(), "SSCAN with params should return result");
+        for (String member : withParams.getResult()) {
+            assertTrue(
+                    expectedMembers.contains(member),
+                    "SSCAN with params should return valid members: " + member);
+        }
     }
 
     @Test
@@ -3296,6 +3439,66 @@ public class JedisTest {
                             || errorMsg.contains("CONFIG REWRITE")
                             || errorMsg.contains("config"),
                     "Expected error about config file, got: " + errorMsg);
+    // --- ACL command integration tests ---
+
+    @Test
+    void acl_cat_without_category() {
+        List<String> categories = jedis.aclCat();
+        assertNotNull(categories);
+        assertTrue(categories.size() > 0);
+        assertTrue(categories.contains("string"));
+        assertTrue(categories.contains("list"));
+        assertTrue(categories.contains("hash"));
+    }
+
+    @Test
+    void acl_cat_with_category() {
+        List<String> stringCommands = jedis.aclCat("string");
+        assertNotNull(stringCommands);
+        assertTrue(stringCommands.size() > 0);
+        assertTrue(stringCommands.contains("get"));
+        assertTrue(stringCommands.contains("set"));
+
+        List<String> listCommands = jedis.aclCat("list");
+        assertNotNull(listCommands);
+        assertTrue(listCommands.size() > 0);
+        assertTrue(listCommands.contains("lpush"));
+        assertTrue(listCommands.contains("rpush"));
+    }
+
+    @Test
+    void acl_cat_invalid_category() {
+        JedisException exception =
+                assertThrows(JedisException.class, () -> jedis.aclCat("nonexistent"));
+        String message = exception.getMessage().toLowerCase();
+        assertTrue(
+                message.contains("unknown category")
+                        || message.contains("category")
+                        || (exception.getCause() != null
+                                && exception.getCause().getMessage().toLowerCase().contains("category")));
+    }
+
+    @Test
+    void acl_setuser_and_deluser() {
+        String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            String setResult = jedis.aclSetUser(username, "on", "+get", "~*");
+            assertEquals("OK", setResult);
+
+            List<String> users = jedis.aclUsers();
+            assertTrue(users.contains(username));
+
+            long deleteCount = jedis.aclDelUser(username);
+            assertEquals(1L, deleteCount);
+
+            users = jedis.aclUsers();
+            assertFalse(users.contains(username));
+        } finally {
+            try {
+                jedis.aclDelUser(username);
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -3403,5 +3606,219 @@ public class JedisTest {
         String artWithParams = jedis.lolwut(5, 10);
         assertNotNull(artWithParams, "LOLWUT with params should return art");
         assertTrue(artWithParams.length() > 0, "LOLWUT with params should return non-empty string");
+    void acl_deluser_multiple_users() {
+        String username1 = "testuser1_" + UUID.randomUUID().toString().replace("-", "");
+        String username2 = "testuser2_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            jedis.aclSetUser(username1, "on");
+            jedis.aclSetUser(username2, "on");
+
+            long deleteCount = jedis.aclDelUser(username1, username2);
+            assertEquals(2L, deleteCount);
+
+            List<String> users = jedis.aclUsers();
+            assertFalse(users.contains(username1));
+            assertFalse(users.contains(username2));
+        } finally {
+            try {
+                jedis.aclDelUser(username1, username2);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @Test
+    void acl_getuser() {
+        String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            jedis.aclSetUser(username, "on", "+get", "+set", "~key*");
+
+            AccessControlUser userInfo = jedis.aclGetUser(username);
+            assertNotNull(userInfo);
+            assertFalse(userInfo.getFlags().isEmpty());
+            assertTrue(userInfo.getFlags().contains("on"));
+            assertNotNull(userInfo.getCommands());
+            assertTrue(userInfo.getCommands().contains("+get"));
+            assertTrue(userInfo.getCommands().contains("+set"));
+            assertFalse(userInfo.getKeys().isEmpty());
+
+            AccessControlUser nonExistent = jedis.aclGetUser("nonexistent_user_12345");
+            assertNull(nonExistent);
+        } finally {
+            try {
+                jedis.aclDelUser(username);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @Test
+    void acl_list() {
+        List<String> aclList = jedis.aclList();
+        assertNotNull(aclList);
+        assertTrue(aclList.size() > 0);
+
+        boolean hasDefaultUser = false;
+        for (String rule : aclList) {
+            if (rule.contains("user default")) {
+                hasDefaultUser = true;
+                break;
+            }
+        }
+        assertTrue(hasDefaultUser);
+    }
+
+    @Test
+    void acl_users() {
+        List<String> users = jedis.aclUsers();
+        assertNotNull(users);
+        assertTrue(users.size() > 0);
+        assertTrue(users.contains("default"));
+    }
+
+    @Test
+    void acl_whoami() {
+        String username = jedis.aclWhoAmI();
+        assertNotNull(username);
+        assertEquals("default", username);
+    }
+
+    @Test
+    void acl_dryrun() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "ACL DRYRUN added in version 7.0");
+
+        String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            jedis.aclSetUser(username, "on", "+get", "~*", "nopass");
+
+            String result = jedis.aclDryRun(username, "get", "key");
+            assertEquals("OK", result);
+
+            String deniedResult = jedis.aclDryRun(username, "set", "key", "value");
+            String denied = deniedResult.toLowerCase();
+            assertTrue(
+                    denied.contains("permission")
+                            || denied.contains("denied")
+                            || denied.contains("noperm")
+                            || denied.contains("user")
+                            || denied.contains("command"));
+        } finally {
+            try {
+                jedis.aclDelUser(username);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @Test
+    void acl_genpass_default() {
+        String password = jedis.aclGenPass();
+        assertNotNull(password);
+        assertEquals(64, password.length());
+        assertTrue(password.matches("[0-9a-f]+"));
+    }
+
+    @Test
+    void acl_genpass_with_bits() {
+        String password = jedis.aclGenPass(128);
+        assertNotNull(password);
+        assertEquals(32, password.length());
+        assertTrue(password.matches("[0-9a-f]+"));
+
+        String password256 = jedis.aclGenPass(256);
+        assertNotNull(password256);
+        assertEquals(64, password256.length());
+        assertTrue(password256.matches("[0-9a-f]+"));
+    }
+
+    @Test
+    void acl_log() {
+        List<AccessControlLogEntry> log = jedis.aclLog();
+        assertNotNull(log);
+        assertTrue(log.size() >= 0);
+    }
+
+    @Test
+    void acl_log_with_count() {
+        List<AccessControlLogEntry> log = jedis.aclLog(5);
+        assertNotNull(log);
+        assertTrue(log.size() <= 5);
+    }
+
+    @Test
+    void acl_log_reset() {
+        String result = jedis.aclLogReset();
+        assertEquals("OK", result);
+
+        List<AccessControlLogEntry> log = jedis.aclLog();
+        assertNotNull(log);
+        assertEquals(0, log.size());
+    }
+
+    @Test
+    void acl_setuser_complex_rules() {
+        String username = "complexuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            String result = jedis.aclSetUser(username, "on", "+get", "+set", "+del", "~key:*", "nopass");
+            assertEquals("OK", result);
+
+            List<String> users = jedis.aclUsers();
+            assertTrue(users.contains(username));
+
+            AccessControlUser userInfo = jedis.aclGetUser(username);
+            assertNotNull(userInfo);
+        } finally {
+            try {
+                jedis.aclDelUser(username);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @Test
+    void acl_load() {
+        assumeTrue(isAclFileConfigured(), "Skipping test: ACL file not configured on server");
+
+        String result = jedis.aclLoad();
+        assertEquals("OK", result);
+    }
+
+    @Test
+    void acl_save() {
+        assumeTrue(isAclFileConfigured(), "Skipping test: ACL file not configured on server");
+
+        String result = jedis.aclSave();
+        assertEquals("OK", result);
+    }
+
+    private boolean isAclFileConfigured() {
+        try {
+            jedis.aclLoad();
+            return true;
+        } catch (JedisException e) {
+            String message = getFullExceptionMessage(e).toLowerCase();
+            if (message.contains("no acl file")
+                    || message.contains("aclfile")
+                    || message.contains("not configured")) {
+                return false;
+            }
+            throw e;
+        }
+    }
+
+    private static String getFullExceptionMessage(Throwable t) {
+        StringBuilder sb = new StringBuilder();
+        while (t != null) {
+            if (t.getMessage() != null) {
+                if (sb.length() > 0) sb.append(" ");
+                sb.append(t.getMessage());
+            }
+            t = t.getCause();
+        }
+        return sb.toString();
     }
 }
