@@ -387,6 +387,8 @@ public class JedisTest {
 
     @Test
     void lcs_commands() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LCS requires Valkey 7.0.0+");
+
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
 
