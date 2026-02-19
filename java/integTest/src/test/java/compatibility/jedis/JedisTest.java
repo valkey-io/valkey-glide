@@ -35,6 +35,7 @@ import redis.clients.jedis.params.HSetExParams;
 import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.params.SortingParams;
 import redis.clients.jedis.resps.AccessControlLogEntry;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.ScanResult;
@@ -51,6 +52,17 @@ public class JedisTest {
     // Server configuration - dynamically resolved from CI environment
     private static final String valkeyHost;
     private static final int valkeyPort;
+
+    // Geo test constants
+    private static final double TEST_LONGITUDE_PALERMO = 13.361389;
+    private static final double TEST_LATITUDE_PALERMO = 38.115556;
+    private static final double TEST_LONGITUDE_CATANIA = 15.087269;
+    private static final double TEST_LATITUDE_CATANIA = 37.502669;
+    private static final double TEST_GEO_DISTANCE_MIN_METERS = 166000;
+    private static final double TEST_GEO_DISTANCE_MAX_METERS = 167000;
+    private static final double TEST_GEO_DISTANCE_MIN_KM = 166;
+    private static final double TEST_GEO_DISTANCE_MAX_KM = 167;
+    private static final double TEST_GEO_COORD_TOLERANCE = 0.01;
 
     // GLIDE compatibility layer instance
     private Jedis jedis;
@@ -3659,31 +3671,30 @@ public class JedisTest {
     // ==================== SORT COMMANDS TESTS ====================
 
     @Test
-    void sortReadOnly_basic() {
-        String key = "sortReadOnlyList_" + UUID.randomUUID();
+    void sortReadonly_basic() {
+        String key = "sortReadonlyList_" + UUID.randomUUID();
         jedis.rpush(key, "3", "1", "2");
 
-        List<String> result = jedis.sortReadOnly(key);
+        List<String> result = jedis.sortReadonly(key);
         assertEquals(Arrays.asList("1", "2", "3"), result);
     }
 
     @Test
-    void sortReadOnly_with_params() {
-        String key = "sortReadOnlyList_" + UUID.randomUUID();
+    void sortReadonly_with_params() {
+        String key = "sortReadonlyList_" + UUID.randomUUID();
         jedis.rpush(key, "3", "1", "2");
 
-        redis.clients.jedis.params.SortingParams params =
-                new redis.clients.jedis.params.SortingParams().desc().limit(0, 2);
-        List<String> result = jedis.sortReadOnly(key, params);
+        SortingParams params = new SortingParams().desc().limit(0, 2);
+        List<String> result = jedis.sortReadonly(key, params);
         assertEquals(Arrays.asList("3", "2"), result);
     }
 
     @Test
-    void sortReadOnly_binary() {
-        byte[] key = ("sortReadOnlyListBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+    void sortReadonly_binary() {
+        byte[] key = ("sortReadonlyListBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
         jedis.rpush(key, "3".getBytes(), "1".getBytes(), "2".getBytes());
 
-        List<byte[]> result = jedis.sortReadOnly(key);
+        List<byte[]> result = jedis.sortReadonly(key);
         assertEquals(3, result.size());
         assertEquals("1", new String(result.get(0), StandardCharsets.UTF_8));
         assertEquals("2", new String(result.get(1), StandardCharsets.UTF_8));
@@ -3691,12 +3702,12 @@ public class JedisTest {
     }
 
     @Test
-    void sortStore_basic() {
+    void sort_store_basic() {
         String key = "sortStoreList_" + UUID.randomUUID();
         String dest = "sortStoreDest_" + UUID.randomUUID();
         jedis.rpush(key, "3", "1", "2");
 
-        long count = jedis.sortStore(key, dest);
+        long count = jedis.sort(key, dest);
         assertEquals(3, count);
 
         List<String> result = jedis.lrange(dest, 0, -1);
@@ -3704,14 +3715,13 @@ public class JedisTest {
     }
 
     @Test
-    void sortStore_with_params() {
+    void sort_store_with_params() {
         String key = "sortStoreList_" + UUID.randomUUID();
         String dest = "sortStoreDest_" + UUID.randomUUID();
         jedis.rpush(key, "3", "1", "2");
 
-        redis.clients.jedis.params.SortingParams params =
-                new redis.clients.jedis.params.SortingParams().desc();
-        long count = jedis.sortStore(key, dest, params);
+        SortingParams params = new SortingParams().desc();
+        long count = jedis.sort(key, params, dest);
         assertEquals(3, count);
 
         List<String> result = jedis.lrange(dest, 0, -1);
@@ -3719,12 +3729,12 @@ public class JedisTest {
     }
 
     @Test
-    void sortStore_binary() {
+    void sort_store_binary() {
         byte[] key = ("sortStoreListBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
         byte[] dest = ("sortStoreDestBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
         jedis.rpush(key, "3".getBytes(), "1".getBytes(), "2".getBytes());
 
-        long count = jedis.sortStore(key, dest);
+        long count = jedis.sort(key, dest);
         assertEquals(3, count);
     }
 
@@ -3858,7 +3868,7 @@ public class JedisTest {
     @Test
     void geoadd_single_member() {
         String key = "geoKey_" + UUID.randomUUID();
-        long result = jedis.geoadd(key, 13.361389, 38.115556, "Palermo");
+        long result = jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
         assertEquals(1, result);
     }
 
@@ -3866,8 +3876,12 @@ public class JedisTest {
     void geoadd_multiple_members() {
         String key = "geoKey_" + UUID.randomUUID();
         Map<String, redis.clients.jedis.GeoCoordinate> members = new HashMap<>();
-        members.put("Palermo", new redis.clients.jedis.GeoCoordinate(13.361389, 38.115556));
-        members.put("Catania", new redis.clients.jedis.GeoCoordinate(15.087269, 37.502669));
+        members.put(
+                "Palermo",
+                new redis.clients.jedis.GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO));
+        members.put(
+                "Catania",
+                new redis.clients.jedis.GeoCoordinate(TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA));
 
         long result = jedis.geoadd(key, members);
         assertEquals(2, result);
@@ -3876,28 +3890,33 @@ public class JedisTest {
     @Test
     void geoadd_binary() {
         byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
-        long result = jedis.geoadd(key, 13.361389, 38.115556, "Palermo".getBytes());
+        long result =
+                jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
         assertEquals(1, result);
     }
 
     @Test
     void geopos_existing_members() {
         String key = "geoKey_" + UUID.randomUUID();
-        jedis.geoadd(key, 13.361389, 38.115556, "Palermo");
-        jedis.geoadd(key, 15.087269, 37.502669, "Catania");
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
 
         List<redis.clients.jedis.GeoCoordinate> positions = jedis.geopos(key, "Palermo", "Catania");
         assertEquals(2, positions.size());
         assertNotNull(positions.get(0));
         assertNotNull(positions.get(1));
-        assertTrue(Math.abs(positions.get(0).getLongitude() - 13.361389) < 0.01);
-        assertTrue(Math.abs(positions.get(0).getLatitude() - 38.115556) < 0.01);
+        assertTrue(
+                Math.abs(positions.get(0).getLongitude() - TEST_LONGITUDE_PALERMO)
+                        < TEST_GEO_COORD_TOLERANCE);
+        assertTrue(
+                Math.abs(positions.get(0).getLatitude() - TEST_LATITUDE_PALERMO)
+                        < TEST_GEO_COORD_TOLERANCE);
     }
 
     @Test
     void geopos_nonexistent_member() {
         String key = "geoKey_" + UUID.randomUUID();
-        jedis.geoadd(key, 13.361389, 38.115556, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
 
         List<redis.clients.jedis.GeoCoordinate> positions = jedis.geopos(key, "Palermo", "NonExistent");
         assertEquals(2, positions.size());
@@ -3908,7 +3927,7 @@ public class JedisTest {
     @Test
     void geopos_binary() {
         byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
-        jedis.geoadd(key, 13.361389, 38.115556, "Palermo".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
 
         List<redis.clients.jedis.GeoCoordinate> positions = jedis.geopos(key, "Palermo".getBytes());
         assertEquals(1, positions.size());
@@ -3918,41 +3937,41 @@ public class JedisTest {
     @Test
     void geodist_meters() {
         String key = "geoKey_" + UUID.randomUUID();
-        jedis.geoadd(key, 13.361389, 38.115556, "Palermo");
-        jedis.geoadd(key, 15.087269, 37.502669, "Catania");
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
 
         Double distance = jedis.geodist(key, "Palermo", "Catania");
         assertNotNull(distance);
-        assertTrue(distance > 166000 && distance < 167000); // ~166274 meters
+        assertTrue(distance > TEST_GEO_DISTANCE_MIN_METERS && distance < TEST_GEO_DISTANCE_MAX_METERS);
     }
 
     @Test
     void geodist_kilometers() {
         String key = "geoKey_" + UUID.randomUUID();
-        jedis.geoadd(key, 13.361389, 38.115556, "Palermo");
-        jedis.geoadd(key, 15.087269, 37.502669, "Catania");
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
 
         Double distance = jedis.geodist(key, "Palermo", "Catania", redis.clients.jedis.args.GeoUnit.KM);
         assertNotNull(distance);
-        assertTrue(distance > 166 && distance < 167); // ~166.27 km
+        assertTrue(distance > TEST_GEO_DISTANCE_MIN_KM && distance < TEST_GEO_DISTANCE_MAX_KM);
     }
 
     @Test
     void geodist_binary() {
         byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
-        jedis.geoadd(key, 13.361389, 38.115556, "Palermo".getBytes());
-        jedis.geoadd(key, 15.087269, 37.502669, "Catania".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
 
         Double distance = jedis.geodist(key, "Palermo".getBytes(), "Catania".getBytes());
         assertNotNull(distance);
-        assertTrue(distance > 166000 && distance < 167000);
+        assertTrue(distance > TEST_GEO_DISTANCE_MIN_METERS && distance < TEST_GEO_DISTANCE_MAX_METERS);
     }
 
     @Test
     void geohash_existing_members() {
         String key = "geoKey_" + UUID.randomUUID();
-        jedis.geoadd(key, 13.361389, 38.115556, "Palermo");
-        jedis.geoadd(key, 15.087269, 37.502669, "Catania");
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
 
         List<String> hashes = jedis.geohash(key, "Palermo", "Catania");
         assertEquals(2, hashes.size());
@@ -3965,7 +3984,7 @@ public class JedisTest {
     @Test
     void geohash_binary() {
         byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
-        jedis.geoadd(key, 13.361389, 38.115556, "Palermo".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
 
         List<byte[]> hashes = jedis.geohash(key, "Palermo".getBytes());
         assertEquals(1, hashes.size());
@@ -3981,8 +4000,8 @@ public class JedisTest {
                 "GEOSEARCH requires Valkey 6.2.0 or higher");
 
         String key = "geoKey_" + UUID.randomUUID();
-        jedis.geoadd(key, 13.361389, 38.115556, "Palermo");
-        jedis.geoadd(key, 15.087269, 37.502669, "Catania");
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
 
         List<redis.clients.jedis.resps.GeoRadiusResponse> results =
                 jedis.geosearch(key, "Palermo", 200, redis.clients.jedis.args.GeoUnit.KM);
@@ -3998,8 +4017,8 @@ public class JedisTest {
                 "GEOSEARCH requires Valkey 6.2.0 or higher");
 
         byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
-        jedis.geoadd(key, 13.361389, 38.115556, "Palermo".getBytes());
-        jedis.geoadd(key, 15.087269, 37.502669, "Catania".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
 
         List<redis.clients.jedis.resps.GeoRadiusResponse> results =
                 jedis.geosearch(key, "Palermo".getBytes(), 200, redis.clients.jedis.args.GeoUnit.KM);
@@ -4016,8 +4035,8 @@ public class JedisTest {
 
         String srcKey = "geoSrcKey_" + UUID.randomUUID();
         String destKey = "geoDestKey_" + UUID.randomUUID();
-        jedis.geoadd(srcKey, 13.361389, 38.115556, "Palermo");
-        jedis.geoadd(srcKey, 15.087269, 37.502669, "Catania");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
 
         long count =
                 jedis.geosearchstore(destKey, srcKey, "Palermo", 200, redis.clients.jedis.args.GeoUnit.KM);
@@ -4033,8 +4052,8 @@ public class JedisTest {
 
         byte[] srcKey = ("geoSrcKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
         byte[] destKey = ("geoDestKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
-        jedis.geoadd(srcKey, 13.361389, 38.115556, "Palermo".getBytes());
-        jedis.geoadd(srcKey, 15.087269, 37.502669, "Catania".getBytes());
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
 
         long count =
                 jedis.geosearchstore(

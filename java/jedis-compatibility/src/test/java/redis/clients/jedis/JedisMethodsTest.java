@@ -348,58 +348,52 @@ public class JedisMethodsTest {
     }
 
     @Test
-    public void testSortReadOnlyMethodSignatures() throws NoSuchMethodException {
+    public void testSortReadonlyMethodSignatures() throws NoSuchMethodException {
         Class<Jedis> jedisClass = Jedis.class;
 
-        // Test sortReadOnly(String key) method exists
-        Method sortReadOnlyString = jedisClass.getMethod("sortReadOnly", String.class);
-        assertEquals(List.class, sortReadOnlyString.getReturnType());
+        // Test sortReadonly(String key) method exists
+        Method sortReadonlyString = jedisClass.getMethod("sortReadonly", String.class);
+        assertEquals(List.class, sortReadonlyString.getReturnType());
 
-        // Test sortReadOnly(byte[] key) method exists
-        Method sortReadOnlyBytes = jedisClass.getMethod("sortReadOnly", byte[].class);
-        assertEquals(List.class, sortReadOnlyBytes.getReturnType());
+        // Test sortReadonly(byte[] key) method exists
+        Method sortReadonlyBytes = jedisClass.getMethod("sortReadonly", byte[].class);
+        assertEquals(List.class, sortReadonlyBytes.getReturnType());
 
-        // Test sortReadOnly(String key, SortingParams) method exists
-        Method sortReadOnlyStringParams =
+        // Test sortReadonly(String key, SortingParams) method exists
+        Method sortReadonlyStringParams =
                 jedisClass.getMethod(
-                        "sortReadOnly", String.class, redis.clients.jedis.params.SortingParams.class);
-        assertEquals(List.class, sortReadOnlyStringParams.getReturnType());
+                        "sortReadonly", String.class, redis.clients.jedis.params.SortingParams.class);
+        assertEquals(List.class, sortReadonlyStringParams.getReturnType());
 
-        // Test sortReadOnly(byte[] key, SortingParams) method exists
-        Method sortReadOnlyBytesParams =
+        // Test sortReadonly(byte[] key, SortingParams) method exists
+        Method sortReadonlyBytesParams =
                 jedisClass.getMethod(
-                        "sortReadOnly", byte[].class, redis.clients.jedis.params.SortingParams.class);
-        assertEquals(List.class, sortReadOnlyBytesParams.getReturnType());
+                        "sortReadonly", byte[].class, redis.clients.jedis.params.SortingParams.class);
+        assertEquals(List.class, sortReadonlyBytesParams.getReturnType());
     }
 
     @Test
     public void testSortStoreMethodSignatures() throws NoSuchMethodException {
         Class<Jedis> jedisClass = Jedis.class;
 
-        // Test sortStore(String key, String dstkey) method exists
-        Method sortStoreString = jedisClass.getMethod("sortStore", String.class, String.class);
+        // Test sort(String key, String dstkey) method exists
+        Method sortStoreString = jedisClass.getMethod("sort", String.class, String.class);
         assertEquals(long.class, sortStoreString.getReturnType());
 
-        // Test sortStore(byte[] key, byte[] dstkey) method exists
-        Method sortStoreBytes = jedisClass.getMethod("sortStore", byte[].class, byte[].class);
+        // Test sort(byte[] key, byte[] dstkey) method exists
+        Method sortStoreBytes = jedisClass.getMethod("sort", byte[].class, byte[].class);
         assertEquals(long.class, sortStoreBytes.getReturnType());
 
-        // Test sortStore(String key, String dstkey, SortingParams) method exists
+        // Test sort(String key, SortingParams, String dstkey) method exists
         Method sortStoreStringParams =
                 jedisClass.getMethod(
-                        "sortStore",
-                        String.class,
-                        String.class,
-                        redis.clients.jedis.params.SortingParams.class);
+                        "sort", String.class, redis.clients.jedis.params.SortingParams.class, String.class);
         assertEquals(long.class, sortStoreStringParams.getReturnType());
 
-        // Test sortStore(byte[] key, byte[] dstkey, SortingParams) method exists
+        // Test sort(byte[] key, SortingParams, byte[] dstkey) method exists
         Method sortStoreBytesParams =
                 jedisClass.getMethod(
-                        "sortStore",
-                        byte[].class,
-                        byte[].class,
-                        redis.clients.jedis.params.SortingParams.class);
+                        "sort", byte[].class, redis.clients.jedis.params.SortingParams.class, byte[].class);
         assertEquals(long.class, sortStoreBytesParams.getReturnType());
     }
 

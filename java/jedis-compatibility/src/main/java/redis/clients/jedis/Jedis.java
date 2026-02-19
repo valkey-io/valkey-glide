@@ -8477,12 +8477,14 @@ public final class Jedis implements Closeable {
 
     /**
      * Sorts the elements in the list, set, or sorted set at key and returns the result. The
-     * sortReadOnly command is a read-only variant of SORT that does not modify the key.
+     * sortReadonly command is a read-only variant of SORT that does not modify the key.
      *
      * @param key the key of the list, set, or sorted set to be sorted
      * @return the sorted elements as a list
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
      */
-    public List<String> sortReadOnly(String key) {
+    public List<String> sortReadonly(String key) {
         return executeCommandWithGlide(
                 "SORT_RO",
                 () -> {
@@ -8493,12 +8495,14 @@ public final class Jedis implements Closeable {
 
     /**
      * Sorts the elements in the list, set, or sorted set at key and returns the result (binary
-     * version). The sortReadOnly command is a read-only variant of SORT that does not modify the key.
+     * version). The sortReadonly command is a read-only variant of SORT that does not modify the key.
      *
      * @param key the key of the list, set, or sorted set to be sorted
      * @return the sorted elements as a list
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
      */
-    public List<byte[]> sortReadOnly(final byte[] key) {
+    public List<byte[]> sortReadonly(final byte[] key) {
         return executeCommandWithGlide(
                 "SORT_RO",
                 () -> {
@@ -8516,14 +8520,16 @@ public final class Jedis implements Closeable {
 
     /**
      * Sorts the elements in the list, set, or sorted set at key with sorting parameters and returns
-     * the result. The sortReadOnly command is a read-only variant of SORT that does not modify the
+     * the result. The sortReadonly command is a read-only variant of SORT that does not modify the
      * key.
      *
      * @param key the key of the list, set, or sorted set to be sorted
      * @param sortingParams the sorting parameters
      * @return the sorted elements as a list
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
      */
-    public List<String> sortReadOnly(String key, SortingParams sortingParams) {
+    public List<String> sortReadonly(String key, SortingParams sortingParams) {
         return executeCommandWithGlide(
                 "SORT_RO",
                 () -> {
@@ -8535,14 +8541,16 @@ public final class Jedis implements Closeable {
 
     /**
      * Sorts the elements in the list, set, or sorted set at key with sorting parameters and returns
-     * the result (binary version). The sortReadOnly command is a read-only variant of SORT that does
+     * the result (binary version). The sortReadonly command is a read-only variant of SORT that does
      * not modify the key.
      *
      * @param key the key of the list, set, or sorted set to be sorted
      * @param sortingParams the sorting parameters
      * @return the sorted elements as a list
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
      */
-    public List<byte[]> sortReadOnly(final byte[] key, SortingParams sortingParams) {
+    public List<byte[]> sortReadonly(final byte[] key, SortingParams sortingParams) {
         return executeCommandWithGlide(
                 "SORT_RO",
                 () -> {
@@ -8565,8 +8573,10 @@ public final class Jedis implements Closeable {
      * @param key the key of the list, set, or sorted set to be sorted
      * @param dstkey the destination key to store the sorted result
      * @return the number of elements in the sorted result
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
      */
-    public long sortStore(String key, String dstkey) {
+    public long sort(String key, String dstkey) {
         return executeCommandWithGlide("SORT", () -> glideClient.sortStore(key, dstkey).get());
     }
 
@@ -8577,8 +8587,10 @@ public final class Jedis implements Closeable {
      * @param key the key of the list, set, or sorted set to be sorted
      * @param dstkey the destination key to store the sorted result
      * @return the number of elements in the sorted result
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
      */
-    public long sortStore(final byte[] key, final byte[] dstkey) {
+    public long sort(final byte[] key, final byte[] dstkey) {
         return executeCommandWithGlide(
                 "SORT", () -> glideClient.sortStore(GlideString.of(key), GlideString.of(dstkey)).get());
     }
@@ -8588,15 +8600,17 @@ public final class Jedis implements Closeable {
      * the result in destination.
      *
      * @param key the key of the list, set, or sorted set to be sorted
+     * @param sortingParameters the sorting parameters
      * @param dstkey the destination key to store the sorted result
-     * @param sortingParams the sorting parameters
      * @return the number of elements in the sorted result
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
      */
-    public long sortStore(String key, String dstkey, SortingParams sortingParams) {
+    public long sort(String key, SortingParams sortingParameters, String dstkey) {
         return executeCommandWithGlide(
                 "SORT",
                 () -> {
-                    SortOptions options = convertSortingParamsToSortOptions(sortingParams);
+                    SortOptions options = convertSortingParamsToSortOptions(sortingParameters);
                     return glideClient.sortStore(key, dstkey, options).get();
                 });
     }
@@ -8606,15 +8620,17 @@ public final class Jedis implements Closeable {
      * the result in destination (binary version).
      *
      * @param key the key of the list, set, or sorted set to be sorted
+     * @param sortingParameters the sorting parameters
      * @param dstkey the destination key to store the sorted result
-     * @param sortingParams the sorting parameters
      * @return the number of elements in the sorted result
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
      */
-    public long sortStore(final byte[] key, final byte[] dstkey, SortingParams sortingParams) {
+    public long sort(final byte[] key, SortingParams sortingParameters, final byte[] dstkey) {
         return executeCommandWithGlide(
                 "SORT",
                 () -> {
-                    SortOptionsBinary options = convertSortingParamsToSortOptionsBinary(sortingParams);
+                    SortOptionsBinary options = convertSortingParamsToSortOptionsBinary(sortingParameters);
                     return glideClient.sortStore(GlideString.of(key), GlideString.of(dstkey), options).get();
                 });
     }
@@ -8744,6 +8760,8 @@ public final class Jedis implements Closeable {
      * @param replicas the number of replicas to wait for
      * @param timeout the timeout in milliseconds
      * @return the number of replicas that acknowledged the write commands
+     * @see <a href="https://valkey.io/commands/wait/">valkey.io</a> for details.
+     * @since Valkey 3.0.0
      */
     public long wait(long replicas, long timeout) {
         return executeCommandWithGlide("WAIT", () -> glideClient.wait(replicas, timeout).get());
@@ -8751,19 +8769,38 @@ public final class Jedis implements Closeable {
 
     /**
      * Blocks the current client until all previous write commands are successfully transferred and
-     * acknowledged by at least numlocal and numreplicas of replicas and local persistence.
+     * acknowledged by at least numreplicas of replicas.
      *
-     * @param numlocal the number of local acknowledgments required
-     * @param numreplicas the number of replica acknowledgments required
+     * @param replicas the number of replicas to wait for
      * @param timeout the timeout in milliseconds
-     * @return an array containing [numlocal_acks, numreplica_acks]
+     * @return the number of replicas that acknowledged the write commands
+     * @see <a href="https://valkey.io/commands/wait/">valkey.io</a> for details.
+     * @since Valkey 3.0.0
      */
-    public List<Long> waitaof(long numlocal, long numreplicas, long timeout) {
+    public long waitReplicas(int replicas, long timeout) {
+        return executeCommandWithGlide("WAIT", () -> glideClient.wait((long) replicas, timeout).get());
+    }
+
+    /**
+     * Blocks the current client until all previous write commands are successfully transferred and
+     * acknowledged by at least numLocal and numReplicas of replicas and local persistence.
+     *
+     * @param numLocal the number of local acknowledgments required
+     * @param numReplicas the number of replica acknowledgments required
+     * @param timeout the timeout in milliseconds
+     * @return a KeyValue containing the number of local and replica acknowledgments
+     * @see <a href="https://valkey.io/commands/waitaof/">valkey.io</a> for details.
+     * @since Valkey 7.2.0
+     */
+    public KeyValue<Long, Long> waitAOF(long numLocal, long numReplicas, long timeout) {
         return executeCommandWithGlide(
                 "WAITAOF",
                 () -> {
-                    Long[] result = glideClient.waitaof(numlocal, numreplicas, timeout).get();
-                    return result != null ? Arrays.asList(result) : Arrays.asList(0L, 0L);
+                    Long[] result = glideClient.waitaof(numLocal, numReplicas, timeout).get();
+                    if (result != null && result.length >= 2) {
+                        return new KeyValue<>(result[0], result[1]);
+                    }
+                    return new KeyValue<>(0L, 0L);
                 });
     }
 
