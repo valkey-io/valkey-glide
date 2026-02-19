@@ -4900,9 +4900,13 @@ class TestPubSub:
         """
         Test that pubsub_reconciliation_interval controls reconciliation frequency.
 
-        Configures a 1 second interval, then measures the actual time between
-        two consecutive reconciliation events by polling the sync timestamp.
-        Verifies the interval is within +/- 50% tolerance (500ms to 1500ms).
+        Configures a 1 second interval, then samples multiple intervals between
+        consecutive reconciliation timestamp updates.
+
+        Reconciliation can also be triggered by internal events (in addition to
+        the periodic timer), so some short intervals are expected. We validate
+        that multiple sampled intervals fall within +/- 50% tolerance
+        (500ms to 1500ms), proving the configured periodic interval is applied.
         """
         listening_client = None
         try:
@@ -4936,19 +4940,42 @@ class TestPubSub:
             initial_stats = await listening_client.get_statistics()
             initial_ts = int(initial_stats.get("subscription_last_sync_timestamp", "0"))
 
-            # Wait for first sync event
+            # Wait for first sync event after client creation.
             first_sync_ts = await poll_for_timestamp_change(initial_ts)
 
-            # Wait for second sync event
-            second_sync_ts = await poll_for_timestamp_change(first_sync_ts)
+            lower_bound_ms = interval_ms * 0.5
+            upper_bound_ms = interval_ms * 1.5
+            required_in_tolerance_intervals = 2
+            max_samples = 8
 
-            # Compute the actual interval between syncs (timestamps are in milliseconds)
-            actual_interval_ms = second_sync_ts - first_sync_ts
+            # Collect several consecutive intervals to avoid flakiness caused by
+            # event-triggered reconciliations that can occur faster than the
+            # configured periodic interval. Exit early once we have enough
+            # in-tolerance samples.
+            sampled_intervals_ms = []
+            in_tolerance_intervals = []
+            previous_sync_ts = first_sync_ts
+            for _ in range(max_samples):
+                current_sync_ts = await poll_for_timestamp_change(
+                    previous_sync_ts, timeout_s=3.0
+                )
+                sampled_interval_ms = current_sync_ts - previous_sync_ts
+                sampled_intervals_ms.append(sampled_interval_ms)
+                previous_sync_ts = current_sync_ts
 
-            # Assert interval is within +/- 50% tolerance
-            assert interval_ms * 0.5 <= actual_interval_ms <= interval_ms * 1.5, (
-                f"Reconciliation interval ({actual_interval_ms}ms) should be between "
-                f"{interval_ms * 0.5}ms and {interval_ms * 1.5}ms"
+                if lower_bound_ms <= sampled_interval_ms <= upper_bound_ms:
+                    in_tolerance_intervals.append(sampled_interval_ms)
+                    if (
+                        len(in_tolerance_intervals)
+                        >= required_in_tolerance_intervals
+                    ):
+                        break
+
+            assert len(in_tolerance_intervals) >= required_in_tolerance_intervals, (
+                "Expected at least "
+                f"{required_in_tolerance_intervals} reconciliation intervals in tolerance "
+                f"[{lower_bound_ms}ms, {upper_bound_ms}ms], "
+                f"but observed intervals: {sampled_intervals_ms}"
             )
 
         finally:
