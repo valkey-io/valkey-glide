@@ -5,6 +5,7 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.concatenateArrays;
+import static glide.TestUtilities.createClusterClientWithRetry;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
@@ -59,22 +60,20 @@ public class ClusterBatchTests {
                 Arguments.of(
                         Named.of(
                                 "RESP2",
-                                GlideClusterClient.createClient(
-                                                commonClusterClientConfig()
-                                                        .requestTimeout(7000)
-                                                        .protocol(ProtocolVersion.RESP2)
-                                                        .build())
-                                        .get())));
+                                createClusterClientWithRetry(
+                                        commonClusterClientConfig()
+                                                .requestTimeout(7000)
+                                                .protocol(ProtocolVersion.RESP2)
+                                                .build()))));
         clients.add(
                 Arguments.of(
                         Named.of(
                                 "RESP3",
-                                GlideClusterClient.createClient(
-                                                commonClusterClientConfig()
-                                                        .requestTimeout(7000)
-                                                        .protocol(ProtocolVersion.RESP3)
-                                                        .build())
-                                        .get())));
+                                createClusterClientWithRetry(
+                                        commonClusterClientConfig()
+                                                .requestTimeout(7000)
+                                                .protocol(ProtocolVersion.RESP3)
+                                                .build()))));
     }
 
     @AfterAll

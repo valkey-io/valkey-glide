@@ -4,6 +4,7 @@ package glide.standalone;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
+import static glide.TestUtilities.createStandaloneClientWithRetry;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
@@ -68,22 +69,20 @@ public class BatchTests {
                 Arguments.of(
                         Named.of(
                                 "RESP2",
-                                GlideClient.createClient(
-                                                commonClientConfig()
-                                                        .requestTimeout(7000)
-                                                        .protocol(ProtocolVersion.RESP2)
-                                                        .build())
-                                        .get())));
+                                createStandaloneClientWithRetry(
+                                        commonClientConfig()
+                                                .requestTimeout(7000)
+                                                .protocol(ProtocolVersion.RESP2)
+                                                .build()))));
         clients.add(
                 Arguments.of(
                         Named.of(
                                 "RESP3",
-                                GlideClient.createClient(
-                                                commonClientConfig()
-                                                        .requestTimeout(7000)
-                                                        .protocol(ProtocolVersion.RESP3)
-                                                        .build())
-                                        .get())));
+                                createStandaloneClientWithRetry(
+                                        commonClientConfig()
+                                                .requestTimeout(7000)
+                                                .protocol(ProtocolVersion.RESP3)
+                                                .build()))));
     }
 
     @AfterAll

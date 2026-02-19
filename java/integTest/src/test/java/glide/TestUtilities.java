@@ -48,6 +48,9 @@ import lombok.experimental.UtilityClass;
 
 @UtilityClass
 public class TestUtilities {
+    private static final int CLIENT_CREATION_MAX_ATTEMPTS = 5;
+    private static final long CLIENT_CREATION_RETRY_DELAY_MS = 1000;
+
     /** Key names for versions returned in info command. */
     private static final String VALKEY_VERSION_KEY = "valkey_version";
 
@@ -242,6 +245,68 @@ public class TestUtilities {
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
         return builder.useTLS(TLS);
+    }
+
+    public static GlideClient createStandaloneClientWithRetry(GlideClientConfiguration config)
+            throws ExecutionException {
+        return createClientWithRetry(() -> GlideClient.createClient(config), "standalone");
+    }
+
+    public static GlideClusterClient createClusterClientWithRetry(
+            GlideClusterClientConfiguration config) throws ExecutionException {
+        return createClientWithRetry(() -> GlideClusterClient.createClient(config), "cluster");
+    }
+
+    private static <T extends BaseClient> T createClientWithRetry(
+            Supplier<CompletableFuture<T>> createClientCall, String clientType)
+            throws ExecutionException {
+        ExecutionException lastExecutionException = null;
+        RuntimeException lastRuntimeException = null;
+
+        for (int attempt = 1; attempt <= CLIENT_CREATION_MAX_ATTEMPTS; attempt++) {
+            try {
+                return createClientCall.get().get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Interrupted while creating " + clientType + " client", e);
+            } catch (ExecutionException e) {
+                lastExecutionException = e;
+                if (!isConnectionRefusedError(e) || attempt == CLIENT_CREATION_MAX_ATTEMPTS) {
+                    throw e;
+                }
+            } catch (RuntimeException e) {
+                lastRuntimeException = e;
+                if (!isConnectionRefusedError(e) || attempt == CLIENT_CREATION_MAX_ATTEMPTS) {
+                    throw e;
+                }
+            }
+
+            try {
+                Thread.sleep(CLIENT_CREATION_RETRY_DELAY_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(
+                        "Interrupted while retrying " + clientType + " client creation", e);
+            }
+        }
+
+        if (lastExecutionException != null) {
+            throw lastExecutionException;
+        }
+        throw new RuntimeException(
+                "Failed to create " + clientType + " client after retries", lastRuntimeException);
+    }
+
+    private static boolean isConnectionRefusedError(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null && message.toLowerCase().contains("connection refused")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     /**
