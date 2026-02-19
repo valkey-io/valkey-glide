@@ -8835,10 +8835,20 @@ public final class Jedis implements Closeable {
      * Returns the logarithmic access frequency counter of a Valkey object stored at key.
      *
      * @param key the key of the object
-     * @return the frequency counter, or null if the key does not exist
+     * @return the frequency counter, or null if the key does not exist or LFU is not enabled
      */
     public Long objectFreq(String key) {
-        return executeCommandWithGlide("OBJECT", () -> glideClient.objectFreq(key).get());
+        try {
+            return executeCommandWithGlide("OBJECT", () -> glideClient.objectFreq(key).get());
+        } catch (JedisException e) {
+            // Return null if LFU maxmemory policy is not enabled
+            if (e.getCause() != null
+                    && e.getCause().getMessage() != null
+                    && e.getCause().getMessage().contains("LFU maxmemory policy is not selected")) {
+                return null;
+            }
+            throw e;
+        }
     }
 
     /**
@@ -8846,11 +8856,21 @@ public final class Jedis implements Closeable {
      * version).
      *
      * @param key the key of the object
-     * @return the frequency counter, or null if the key does not exist
+     * @return the frequency counter, or null if the key does not exist or LFU is not enabled
      */
     public Long objectFreq(final byte[] key) {
-        return executeCommandWithGlide(
-                "OBJECT", () -> glideClient.objectFreq(GlideString.of(key)).get());
+        try {
+            return executeCommandWithGlide(
+                    "OBJECT", () -> glideClient.objectFreq(GlideString.of(key)).get());
+        } catch (JedisException e) {
+            // Return null if LFU maxmemory policy is not enabled
+            if (e.getCause() != null
+                    && e.getCause().getMessage() != null
+                    && e.getCause().getMessage().contains("LFU maxmemory policy is not selected")) {
+                return null;
+            }
+            throw e;
+        }
     }
 
     /**
