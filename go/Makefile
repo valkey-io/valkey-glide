@@ -114,7 +114,7 @@ build-glide-ffi: libglide_ffi gen-c-bindings
 
 gen-c-bindings:
 	cd $(GLIDE_FFI_PATH) && \
-	cbindgen --config cbindgen.toml --crate glide-ffi --output $(GO_DIR)lib.h --lang c
+	cbindgen --config cbindgen.toml --crate glide-ffi --output $(GO_DIR)/lib.h --lang c
 
 generate-protobuf:
 	rm -rf internal/protobuf
