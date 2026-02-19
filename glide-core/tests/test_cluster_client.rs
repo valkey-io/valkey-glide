@@ -689,14 +689,12 @@ mod cluster_client_tests {
             const NUM_PRIMARIES: u16 = 5;
             const NUM_REPLICAS: u16 = 1;
             const MEASUREMENT_DURATION_SECS: u64 = 3;
-            const REQUEST_TIMEOUT_SECS: u64 = 5;
 
             // Start cluster with replicas
             let mut test_basics = setup_cluster_with_replicas(
                 TestConfiguration {
                     cluster_mode: ClusterMode::Enabled,
                     shared_server: false,
-                    request_timeout: Some((REQUEST_TIMEOUT_SECS * 1000) as u32),
                     ..Default::default()
                 },
                 NUM_REPLICAS,

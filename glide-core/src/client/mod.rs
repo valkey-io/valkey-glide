@@ -1353,7 +1353,6 @@ async fn create_cluster_client(
         None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
     };
     let connection_timeout = request.get_connection_timeout();
-    let request_timeout = to_duration(request.request_timeout, DEFAULT_RESPONSE_TIMEOUT);
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
@@ -1369,7 +1368,6 @@ async fn create_cluster_client(
 
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
         .connection_timeout(connection_timeout)
-        .response_timeout(request_timeout)
         .retries(DEFAULT_RETRIES);
     let read_from_strategy = request.read_from.unwrap_or_default();
     builder = builder.read_from(match read_from_strategy {

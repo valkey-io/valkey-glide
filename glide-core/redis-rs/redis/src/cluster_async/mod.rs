@@ -3122,23 +3122,27 @@ where
                     Some(Ok(())) => {
                         trace!("Reconnected to initial nodes");
                         self.state = ConnectionState::PollComplete;
+                        Poll::Ready(Ok(()))
                     }
                     Some(Err(join_err)) => {
                         if join_err.is_cancelled() {
                             trace!("Reconnect to initial nodes task was aborted");
                             self.state = ConnectionState::PollComplete;
+                            Poll::Ready(Ok(()))
                         } else {
                             warn!("Reconnect to initial nodes task panicked: {:?} - marking recovery as complete", join_err);
                             self.state = ConnectionState::PollComplete;
+                            Poll::Ready(Ok(()))
                         }
                     }
                     None => {
-                        // Task is still running
-                        // Just continue and return Ok to not block poll_flush
+                        // Task is still running - return error to indicate connections unavailable
+                        Poll::Ready(Err(RedisError::from((
+                            ErrorKind::AllConnectionsUnavailable,
+                            "Reconnecting to initial nodes",
+                        ))))
                     }
                 }
-                // Always return Ready to not block poll_flush
-                Poll::Ready(Ok(()))
             }
             RecoverFuture::Reconnect(ref mut handle) => {
                 // Check if the task has completed
@@ -3146,26 +3150,30 @@ where
                     Some(Ok(_notifiers)) => {
                         trace!("Reconnected connections");
                         self.state = ConnectionState::PollComplete;
+                        Poll::Ready(Ok(()))
                     }
                     Some(Err(join_err)) => {
                         if join_err.is_cancelled() {
                             trace!("Reconnect task was aborted");
                             self.state = ConnectionState::PollComplete;
+                            Poll::Ready(Ok(()))
                         } else {
                             warn!(
                                 "Reconnect task panicked: {:?} - marking recovery as complete",
                                 join_err
                             );
                             self.state = ConnectionState::PollComplete;
+                            Poll::Ready(Ok(()))
                         }
                     }
                     None => {
-                        // Task is still running
-                        // Just continue and return Ok to not block poll_flush
+                        // Task is still running - return error to indicate connections unavailable
+                        Poll::Ready(Err(RedisError::from((
+                            ErrorKind::AllConnectionsUnavailable,
+                            "Reconnecting",
+                        ))))
                     }
                 }
-                // Always return Ready to not block poll_flush
-                Poll::Ready(Ok(()))
             }
         }
     }
