@@ -5,8 +5,8 @@ mod utilities;
 #[cfg(test)]
 mod cluster_client_tests {
     use std::collections::HashMap;
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::time::Duration;
 
     use super::*;
@@ -713,7 +713,11 @@ mod cluster_client_tests {
                 let key = format!("key_{}", i);
                 let mut cmd = redis::cmd("SET");
                 cmd.arg(&key).arg("value");
-                test_basics.client.send_command(&mut cmd, None).await.unwrap();
+                test_basics
+                    .client
+                    .send_command(&mut cmd, None)
+                    .await
+                    .unwrap();
             }
 
             // Measure baseline throughput across all shards
@@ -745,27 +749,40 @@ mod cluster_client_tests {
             let replica_addr = &addresses[1];
             let (replica_host, replica_port) = match replica_addr {
                 redis::ConnectionAddr::Tcp(h, p) => (h.clone(), *p),
-                redis::ConnectionAddr::TcpTls { host: h, port: p, .. } => (h.clone(), *p),
+                redis::ConnectionAddr::TcpTls {
+                    host: h, port: p, ..
+                } => (h.clone(), *p),
                 _ => panic!("Unexpected connection type"),
             };
             let mut config_cmd = redis::cmd("CONFIG");
-            config_cmd.arg("SET").arg("cluster-replica-no-failover").arg("yes");
+            config_cmd
+                .arg("SET")
+                .arg("cluster-replica-no-failover")
+                .arg("yes");
             let replica_routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
                 host: replica_host,
-                port: replica_port
+                port: replica_port,
             });
-            let _ = test_basics.client.send_command(&mut config_cmd, Some(replica_routing)).await;
+            let _ = test_basics
+                .client
+                .send_command(&mut config_cmd, Some(replica_routing))
+                .await;
 
             let primary_addr = &addresses[0];
             let (host, port) = match primary_addr {
                 redis::ConnectionAddr::Tcp(h, p) => (h.clone(), *p),
-                redis::ConnectionAddr::TcpTls { host: h, port: p, .. } => (h.clone(), *p),
+                redis::ConnectionAddr::TcpTls {
+                    host: h, port: p, ..
+                } => (h.clone(), *p),
                 _ => panic!("Unexpected connection type"),
             };
             let mut crash_cmd = redis::cmd("DEBUG");
             crash_cmd.arg("SEGFAULT");
             let routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress { host, port });
-            let _ = test_basics.client.send_command(&mut crash_cmd, Some(routing)).await;
+            let _ = test_basics
+                .client
+                .send_command(&mut crash_cmd, Some(routing))
+                .await;
 
             // Measure throughput across shards during failover
             let failover_count = Arc::new(AtomicU64::new(0));
@@ -798,7 +815,10 @@ mod cluster_client_tests {
 
             // Verify throughput recovers after full cluster failover
             let expected_min_throughput = baseline_qps * 50 / 100;
-            println!("Baseline QPS: {}, Failover QPS: {}, Errors: {}", baseline_qps, failover_qps, errors);
+            println!(
+                "Baseline QPS: {}, Failover QPS: {}, Errors: {}",
+                baseline_qps, failover_qps, errors
+            );
             assert!(
                 failover_qps > expected_min_throughput,
                 "Throughput dropped too much during full cluster failover: {} vs baseline {} (expected >{})",
@@ -808,5 +828,4 @@ mod cluster_client_tests {
             );
         });
     }
-
 }

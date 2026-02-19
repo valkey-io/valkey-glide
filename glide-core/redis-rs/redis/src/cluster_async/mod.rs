@@ -3123,10 +3123,9 @@ where
                             let handle = tokio::spawn(async move {
                                 ClusterConnInner::reconnect_to_initial_nodes(inner).await
                             });
-                            self.state =
-                                ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(
-                                    handle,
-                                ));
+                            self.state = ConnectionState::Recover(
+                                RecoverFuture::ReconnectToInitialNodes(handle),
+                            );
                             return Poll::Ready(Err(e));
                         } else {
                             // Retry refresh
@@ -3157,10 +3156,9 @@ where
                             let handle = tokio::spawn(async move {
                                 ClusterConnInner::reconnect_to_initial_nodes(inner).await
                             });
-                            self.state =
-                                ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(
-                                    handle,
-                                ));
+                            self.state = ConnectionState::Recover(
+                                RecoverFuture::ReconnectToInitialNodes(handle),
+                            );
 
                             // Report this critical error to clients
                             let err = RedisError::from((
@@ -3216,7 +3214,10 @@ where
                             trace!("Reconnect task was aborted");
                             self.state = ConnectionState::PollComplete;
                         } else {
-                            warn!("Reconnect task panicked: {:?} - marking recovery as complete", join_err);
+                            warn!(
+                                "Reconnect task panicked: {:?} - marking recovery as complete",
+                                join_err
+                            );
                             self.state = ConnectionState::PollComplete;
                         }
                     }
