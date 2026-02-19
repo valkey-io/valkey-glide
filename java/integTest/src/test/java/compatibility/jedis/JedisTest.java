@@ -3672,6 +3672,8 @@ public class JedisTest {
 
     @Test
     void sortReadonly_basic() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "SORT_RO requires Valkey 7.0.0+");
+
         String key = "sortReadonlyList_" + UUID.randomUUID();
         jedis.rpush(key, "3", "1", "2");
 
@@ -3681,6 +3683,8 @@ public class JedisTest {
 
     @Test
     void sortReadonly_with_params() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "SORT_RO requires Valkey 7.0.0+");
+
         String key = "sortReadonlyList_" + UUID.randomUUID();
         jedis.rpush(key, "3", "1", "2");
 
@@ -3691,6 +3695,8 @@ public class JedisTest {
 
     @Test
     void sortReadonly_binary() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "SORT_RO requires Valkey 7.0.0+");
+
         byte[] key = ("sortReadonlyListBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
         jedis.rpush(key, "3".getBytes(), "1".getBytes(), "2".getBytes());
 
