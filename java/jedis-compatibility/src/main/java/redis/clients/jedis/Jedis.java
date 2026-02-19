@@ -27,8 +27,6 @@ import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeysBinary;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeysBinary;
-import glide.api.models.configuration.NodeAddress;
-import org.apache.commons.lang3.tuple.Pair;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldIncrby;
@@ -67,6 +65,7 @@ import java.util.stream.Collectors;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocketFactory;
+import org.apache.commons.lang3.tuple.Pair;
 import redis.clients.jedis.args.BitCountOption;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
@@ -94,6 +93,7 @@ import redis.clients.jedis.resps.FunctionStats;
 import redis.clients.jedis.resps.LibraryInfo;
 import redis.clients.jedis.resps.ScanResult;
 import redis.clients.jedis.resps.Tuple;
+import redis.clients.jedis.util.GlideStringSetWrapper;
 import redis.clients.jedis.util.KeyValue;
 import redis.clients.jedis.util.Pool;
 
@@ -1256,7 +1256,7 @@ public final class Jedis implements Closeable {
                         glideSet.add(gs);
                     }
                 }
-                return new redis.clients.jedis.util.GlideStringSetWrapper(glideSet);
+                return new GlideStringSetWrapper(glideSet);
             } else if (result instanceof Object[]) {
                 // Convert Object[] to Set<GlideString>
                 Object[] objArray = (Object[]) result;
@@ -1268,7 +1268,7 @@ public final class Jedis implements Closeable {
                         glideSet.add(GlideString.of(obj.toString().getBytes(VALKEY_CHARSET)));
                     }
                 }
-                return new redis.clients.jedis.util.GlideStringSetWrapper(glideSet);
+                return new GlideStringSetWrapper(glideSet);
             } else {
                 return new redis.clients.jedis.util.GlideStringSetWrapper(new HashSet<>());
             }
@@ -2783,9 +2783,9 @@ public final class Jedis implements Closeable {
     /**
      * Helper method to convert Set of GlideString to Set of byte arrays.
      *
-     * <p>Returns a wrapper that avoids the HashSet<byte[]> performance issue where byte[]
-     * identity hashCode causes all entries to hash to the same bucket. The wrapper keeps data as
-     * GlideString internally (which has proper hashCode/equals) and converts to byte[] lazily.
+     * <p>Returns a wrapper that avoids the HashSet<byte[]> performance issue where byte[] identity
+     * hashCode causes all entries to hash to the same bucket. The wrapper keeps data as GlideString
+     * internally (which has proper hashCode/equals) and converts to byte[] lazily.
      */
     private static Set<byte[]> convertGlideStringsToByteArraySet(Set<GlideString> glideStrings) {
         return new redis.clients.jedis.util.GlideStringSetWrapper(glideStrings);
@@ -8792,8 +8792,7 @@ public final class Jedis implements Closeable {
                             convertZParamsToKeysOrWeightedBinary(sets, params);
                     if (params.getAggregate() != null) {
                         Aggregate aggregate = convertZParamsAggregate(params.getAggregate());
-                        return glideClient.zunionstore(GlideString.of(dstkey), keysOrWeighted, aggregate)
-                                .get();
+                        return glideClient.zunionstore(GlideString.of(dstkey), keysOrWeighted, aggregate).get();
                     } else {
                         return glideClient.zunionstore(GlideString.of(dstkey), keysOrWeighted).get();
                     }
@@ -8838,8 +8837,8 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Computes the intersection of sorted sets with weights and aggregation, storing the result in
-     * a destination key.
+     * Computes the intersection of sorted sets with weights and aggregation, storing the result in a
+     * destination key.
      *
      * @param dstkey the destination key
      * @param params the ZParams containing weights and aggregation options
@@ -8863,8 +8862,8 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Computes the intersection of sorted sets with weights and aggregation, storing the result in
-     * a destination key (binary version).
+     * Computes the intersection of sorted sets with weights and aggregation, storing the result in a
+     * destination key (binary version).
      *
      * @param dstkey the destination key
      * @param params the ZParams containing weights and aggregation options
@@ -8879,8 +8878,7 @@ public final class Jedis implements Closeable {
                             convertZParamsToKeysOrWeightedBinary(sets, params);
                     if (params.getAggregate() != null) {
                         Aggregate aggregate = convertZParamsAggregate(params.getAggregate());
-                        return glideClient.zinterstore(GlideString.of(dstkey), keysOrWeighted, aggregate)
-                                .get();
+                        return glideClient.zinterstore(GlideString.of(dstkey), keysOrWeighted, aggregate).get();
                     } else {
                         return glideClient.zinterstore(GlideString.of(dstkey), keysOrWeighted).get();
                     }

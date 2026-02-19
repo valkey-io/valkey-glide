@@ -10,9 +10,23 @@ import redis.clients.jedis.util.SafeEncoder;
  * and score. Supports both String and binary (byte[]) element representations for full Jedis
  * compatibility.
  *
- * <p>Note: This class is compatible with Jedis Tuple and follows the same behavior. Null scores
- * are allowed in the constructor but will cause NullPointerException when calling hashCode(),
- * equals(), getScore(), or compareTo() methods.
+ * <p>Design Decision: We store the element as byte[] rather than GlideString to maintain exact
+ * Jedis 5.1.5 Tuple semantics:
+ *
+ * <ul>
+ *   <li>Jedis Tuple uses a custom hashCode algorithm that iterates over each byte, which differs
+ *       from Arrays.hashCode() used by GlideString
+ *   <li>Using byte[] ensures our hashCode/equals behavior is identical to Jedis, critical for
+ *       HashMap keys and Set membership
+ *   <li>GlideString's lazy String conversion offers no advantage here since Tuple already provides
+ *       this via getElement()
+ *   <li>Storing byte[] directly reduces memory overhead compared to GlideString (which maintains
+ *       both byte[] and potentially a String)
+ * </ul>
+ *
+ * <p>Note: This class is compatible with Jedis Tuple and follows the same behavior. Null scores are
+ * allowed in the constructor but will cause NullPointerException when calling hashCode(), equals(),
+ * getScore(), or compareTo() methods.
  */
 public class Tuple implements Comparable<Tuple> {
 
@@ -59,8 +73,8 @@ public class Tuple implements Comparable<Tuple> {
      * lexicographically if scores are equal.
      *
      * @param other the Tuple to compare with (must not be null)
-     * @return a negative integer, zero, or a positive integer as this Tuple is less than, equal
-     *     to, or greater than the specified Tuple
+     * @return a negative integer, zero, or a positive integer as this Tuple is less than, equal to,
+     *     or greater than the specified Tuple
      * @throws NullPointerException if other is null or if either Tuple has a null score
      */
     @Override
