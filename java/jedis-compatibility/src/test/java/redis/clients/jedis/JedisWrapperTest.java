@@ -91,6 +91,54 @@ public class JedisWrapperTest {
         assertNotNull(jedisClass.getMethod("pubsubNumPat"));
         assertNotNull(jedisClass.getMethod("pubsubNumSub", String[].class));
         assertNotNull(jedisClass.getMethod("pubsubNumSub", byte[][].class));
+
+        // Set command methods
+        assertNotNull(jedisClass.getMethod("sadd", String.class, String[].class));
+        assertNotNull(jedisClass.getMethod("sadd", byte[].class, byte[][].class));
+        assertNotNull(jedisClass.getMethod("srem", String.class, String[].class));
+        assertNotNull(jedisClass.getMethod("srem", byte[].class, byte[][].class));
+        assertNotNull(jedisClass.getMethod("smembers", String.class));
+        assertNotNull(jedisClass.getMethod("smembers", byte[].class));
+        assertNotNull(jedisClass.getMethod("scard", String.class));
+        assertNotNull(jedisClass.getMethod("scard", byte[].class));
+        assertNotNull(jedisClass.getMethod("sismember", String.class, String.class));
+        assertNotNull(jedisClass.getMethod("sismember", byte[].class, byte[].class));
+        assertNotNull(jedisClass.getMethod("smismember", String.class, String[].class));
+        assertNotNull(jedisClass.getMethod("smismember", byte[].class, byte[][].class));
+        assertNotNull(jedisClass.getMethod("spop", String.class));
+        assertNotNull(jedisClass.getMethod("spop", byte[].class));
+        assertNotNull(jedisClass.getMethod("spop", String.class, long.class));
+        assertNotNull(jedisClass.getMethod("spop", byte[].class, long.class));
+        assertNotNull(jedisClass.getMethod("srandmember", String.class));
+        assertNotNull(jedisClass.getMethod("srandmember", byte[].class));
+        assertNotNull(jedisClass.getMethod("srandmember", String.class, int.class));
+        assertNotNull(jedisClass.getMethod("srandmember", byte[].class, int.class));
+        assertNotNull(jedisClass.getMethod("smove", String.class, String.class, String.class));
+        assertNotNull(jedisClass.getMethod("smove", byte[].class, byte[].class, byte[].class));
+        assertNotNull(jedisClass.getMethod("sinter", String[].class));
+        assertNotNull(jedisClass.getMethod("sinter", byte[][].class));
+        assertNotNull(jedisClass.getMethod("sintercard", String[].class));
+        assertNotNull(jedisClass.getMethod("sintercard", long.class, String[].class));
+        assertNotNull(jedisClass.getMethod("sintercard", byte[][].class));
+        assertNotNull(jedisClass.getMethod("sintercard", long.class, byte[][].class));
+        assertNotNull(jedisClass.getMethod("sinterstore", String.class, String[].class));
+        assertNotNull(jedisClass.getMethod("sinterstore", byte[].class, byte[][].class));
+        assertNotNull(jedisClass.getMethod("sunion", String[].class));
+        assertNotNull(jedisClass.getMethod("sunion", byte[][].class));
+        assertNotNull(jedisClass.getMethod("sunionstore", String.class, String[].class));
+        assertNotNull(jedisClass.getMethod("sunionstore", byte[].class, byte[][].class));
+        assertNotNull(jedisClass.getMethod("sdiff", String[].class));
+        assertNotNull(jedisClass.getMethod("sdiff", byte[][].class));
+        assertNotNull(jedisClass.getMethod("sdiffstore", String.class, String[].class));
+        assertNotNull(jedisClass.getMethod("sdiffstore", byte[].class, byte[][].class));
+        assertNotNull(jedisClass.getMethod("sscan", String.class, String.class));
+        assertNotNull(
+                jedisClass.getMethod(
+                        "sscan", String.class, String.class, redis.clients.jedis.params.ScanParams.class));
+        assertNotNull(jedisClass.getMethod("sscan", byte[].class, byte[].class));
+        assertNotNull(
+                jedisClass.getMethod(
+                        "sscan", byte[].class, byte[].class, redis.clients.jedis.params.ScanParams.class));
     }
 
     @Test

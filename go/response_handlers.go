@@ -376,6 +376,17 @@ func handleOkOrStringOrNilResponse(response *C.struct_CommandResponse) (models.R
 	return convertCharArrayToString(response, true)
 }
 
+func handleOkOrStringResponse(response *C.struct_CommandResponse) (string, error) {
+	defer C.free_command_response(response)
+
+	if response.response_type == uint32(C.Ok) {
+		return "OK", nil
+	}
+
+	res, err := convertCharArrayToString(response, false)
+	return res.Value(), err
+}
+
 func handle2DStringArrayResponse(response *C.struct_CommandResponse) ([][]string, error) {
 	defer C.free_command_response(response)
 	typeErr := checkResponseType(response, C.Array, false)
