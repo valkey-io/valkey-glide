@@ -27,7 +27,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::Duration;
 use tokio::runtime::{Builder, Handle};
 pub use types::*;
 
@@ -40,6 +39,8 @@ use crate::request_type::RequestType;
 use redis::InfoDict;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock, mpsc, oneshot};
 use versions::Versioning;
@@ -1333,27 +1334,72 @@ impl Client {
         }
     }
 
-    /// IAM token refresh callback function
+    /// IAM token refresh callback.
     ///
-    /// On new token, spawns a task that write-locks the `Client` and calls
-    /// `update_connection_password(Some(new_token), true)`. Uses a strong `Arc<RwLock<Client>>`.
-    /// Note: this can form a retain cycle; call `stop_refresh_task()` and drop the manager to tear down.
+    /// Updates the connection password on each new token.
+    /// Uses `immediate_auth = false` for most refreshes and performs an explicit
+    /// `AUTH` at most once every 10 hours (and on the first call).
+    ///
+    /// Briefly write-locks the `Client` to apply the update.
+    /// Captures a strong `Arc<RwLock<Client>>`, which may form a retain cycle;
+    /// call `stop_refresh_task()` and drop the manager to shut down.
+    ///
+    /// Failed immediate `AUTH` retries on the next refresh.
     fn iam_callback(
         client_arc: Arc<tokio::sync::RwLock<Client>>,
     ) -> impl Fn(String) + Send + 'static {
+        let last_immediate_auth: Arc<Mutex<Option<Instant>>> = Arc::new(Mutex::new(None));
+        // Can be up to 12 hours
+        const REFRESH_TIME: Duration = Duration::from_secs(11 * 60 * 60); // 11 hours
+
         move |new_token: String| {
             let client_arc = Arc::clone(&client_arc);
+            let last_immediate_auth = Arc::clone(&last_immediate_auth);
+
             tokio::spawn(async move {
+                // Determine if we should use immediate auth
+                let (use_immediate_auth, previous_value) = {
+                    let mut last = last_immediate_auth.lock().unwrap();
+                    let previous = *last;
+                    match *last {
+                        None => {
+                            *last = Some(Instant::now());
+                            (true, previous)
+                        }
+                        Some(instant) if instant.elapsed() >= REFRESH_TIME => {
+                            *last = Some(Instant::now());
+                            (true, previous)
+                        }
+                        Some(_) => (false, previous),
+                    }
+                };
+
+                if use_immediate_auth {
+                    log_info(
+                        "IAM token refresh",
+                        "Performing immediate AUTH across connections",
+                    );
+                }
+
                 let mut client = client_arc.write().await;
                 let result = client
-                    .update_connection_password(Some(new_token.clone()), true)
+                    .update_connection_password(Some(new_token.clone()), use_immediate_auth)
                     .await;
 
                 if let Err(e) = result {
                     log_error(
                         "IAM token refresh",
-                        format!("Failed to update connection password with immediate auth: {e}"),
+                        format!(
+                            "Failed to update connection password (immediate={}): {e}",
+                            use_immediate_auth
+                        ),
                     );
+
+                    // Reset timestamp on failure so next call retries with immediate auth
+                    if use_immediate_auth {
+                        let mut last = last_immediate_auth.lock().unwrap();
+                        *last = previous_value;
+                    }
                 }
             });
         }
