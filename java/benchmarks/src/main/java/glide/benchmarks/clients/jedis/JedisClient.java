@@ -51,8 +51,7 @@ public class JedisClient implements SyncClient {
                             .connectionTimeoutMillis(10000) // 10 second connection timeout
                             .build();
             jedisStandalonePool =
-                    new JedisPool(
-                            new HostAndPort(connectionSettings.host, connectionSettings.port), config);
+                    new JedisPool(new HostAndPort(connectionSettings.host, connectionSettings.port), config);
         }
     }
 
