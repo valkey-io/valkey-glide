@@ -162,6 +162,62 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
                     );
                     data_points.push(Value::Object(dp));
                 }
+            } else if let Some(sum) = aggregation.downcast_ref::<Sum<f64>>() {
+                for point in sum.data_points.iter() {
+                    let mut dp = Map::new();
+                    dp.insert("value".to_owned(), Value::String(point.value.to_string()));
+                    let start_time = point
+                        .start_time
+                        .ok_or_else(|| MetricError::Other("Missing start time".to_string()))?;
+                    let start_time: DateTime<Utc> = start_time.into();
+                    dp.insert(
+                        "start_time".to_owned(),
+                        Value::String(start_time.timestamp_micros().to_string()),
+                    );
+
+                    let time = point
+                        .time
+                        .ok_or_else(|| MetricError::Other("Missing time".to_string()))?;
+                    let time: DateTime<Utc> = time.into();
+                    dp.insert(
+                        "time".to_owned(),
+                        Value::String(time.timestamp_micros().to_string()),
+                    );
+
+                    dp.insert(
+                        "attributes".to_owned(),
+                        attributes_to_json(&point.attributes),
+                    );
+                    data_points.push(Value::Object(dp));
+                }
+            } else if let Some(sum) = aggregation.downcast_ref::<Sum<i64>>() {
+                for point in sum.data_points.iter() {
+                    let mut dp = Map::new();
+                    dp.insert("value".to_owned(), Value::Number(point.value.into()));
+                    let start_time = point
+                        .start_time
+                        .ok_or_else(|| MetricError::Other("Missing start time".to_string()))?;
+                    let start_time: DateTime<Utc> = start_time.into();
+                    dp.insert(
+                        "start_time".to_owned(),
+                        Value::String(start_time.timestamp_micros().to_string()),
+                    );
+
+                    let time = point
+                        .time
+                        .ok_or_else(|| MetricError::Other("Missing time".to_string()))?;
+                    let time: DateTime<Utc> = time.into();
+                    dp.insert(
+                        "time".to_owned(),
+                        Value::String(time.timestamp_micros().to_string()),
+                    );
+
+                    dp.insert(
+                        "attributes".to_owned(),
+                        attributes_to_json(&point.attributes),
+                    );
+                    data_points.push(Value::Object(dp));
+                }
             } else if let Some(gauge) = aggregation.downcast_ref::<Gauge<f64>>() {
                 for point in gauge.data_points.iter() {
                     let mut dp = Map::new();
@@ -200,11 +256,108 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
                     );
                     data_points.push(Value::Object(dp));
                 }
+            } else if let Some(gauge) = aggregation.downcast_ref::<Gauge<i64>>() {
+                for point in gauge.data_points.iter() {
+                    let mut dp = Map::new();
+                    dp.insert("value".to_owned(), Value::Number(point.value.into()));
+                    let time = point
+                        .time
+                        .ok_or_else(|| MetricError::Other("Missing time".to_string()))?;
+                    let time: DateTime<Utc> = time.into();
+                    dp.insert(
+                        "time".to_owned(),
+                        Value::String(time.timestamp_micros().to_string()),
+                    );
+
+                    dp.insert(
+                        "attributes".to_owned(),
+                        attributes_to_json(&point.attributes),
+                    );
+                    data_points.push(Value::Object(dp));
+                }
             } else if let Some(histogram) = aggregation.downcast_ref::<Histogram<f64>>() {
                 for point in histogram.data_points.iter() {
                     let mut dp = Map::new();
                     dp.insert("count".to_owned(), Value::Number(point.count.into()));
                     dp.insert("sum".to_owned(), Value::String(point.sum.to_string()));
+
+                    // Add bucket counts
+                    let bucket_counts: Vec<Value> = point
+                        .bucket_counts
+                        .iter()
+                        .map(|&count| Value::Number(count.into()))
+                        .collect();
+                    dp.insert("bucket_counts".to_owned(), Value::Array(bucket_counts));
+
+                    // Add bounds
+                    let bounds: Vec<Value> = point
+                        .bounds
+                        .iter()
+                        .map(|&bound| Value::String(bound.to_string()))
+                        .collect();
+                    dp.insert("bounds".to_owned(), Value::Array(bounds));
+
+                    let start_time: DateTime<Utc> = point.start_time.into();
+                    dp.insert(
+                        "start_time".to_owned(),
+                        Value::String(start_time.timestamp_micros().to_string()),
+                    );
+                    let time: DateTime<Utc> = point.time.into();
+                    dp.insert(
+                        "time".to_owned(),
+                        Value::String(time.timestamp_micros().to_string()),
+                    );
+
+                    dp.insert(
+                        "attributes".to_owned(),
+                        attributes_to_json(&point.attributes),
+                    );
+                    data_points.push(Value::Object(dp));
+                }
+            } else if let Some(histogram) = aggregation.downcast_ref::<Histogram<u64>>() {
+                for point in histogram.data_points.iter() {
+                    let mut dp = Map::new();
+                    dp.insert("count".to_owned(), Value::Number(point.count.into()));
+                    dp.insert("sum".to_owned(), Value::Number(point.sum.into()));
+
+                    // Add bucket counts
+                    let bucket_counts: Vec<Value> = point
+                        .bucket_counts
+                        .iter()
+                        .map(|&count| Value::Number(count.into()))
+                        .collect();
+                    dp.insert("bucket_counts".to_owned(), Value::Array(bucket_counts));
+
+                    // Add bounds
+                    let bounds: Vec<Value> = point
+                        .bounds
+                        .iter()
+                        .map(|&bound| Value::String(bound.to_string()))
+                        .collect();
+                    dp.insert("bounds".to_owned(), Value::Array(bounds));
+
+                    let start_time: DateTime<Utc> = point.start_time.into();
+                    dp.insert(
+                        "start_time".to_owned(),
+                        Value::String(start_time.timestamp_micros().to_string()),
+                    );
+                    let time: DateTime<Utc> = point.time.into();
+                    dp.insert(
+                        "time".to_owned(),
+                        Value::String(time.timestamp_micros().to_string()),
+                    );
+
+                    dp.insert(
+                        "attributes".to_owned(),
+                        attributes_to_json(&point.attributes),
+                    );
+                    data_points.push(Value::Object(dp));
+                }
+            } else if let Some(histogram) = aggregation.downcast_ref::<Histogram<i64>>() {
+                for point in histogram.data_points.iter() {
+                    let mut dp = Map::new();
+                    dp.insert("count".to_owned(), Value::Number(point.count.into()));
+                    dp.insert("sum".to_owned(), Value::Number(point.sum.into()));
 
                     // Add bucket counts
                     let bucket_counts: Vec<Value> = point
