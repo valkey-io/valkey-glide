@@ -144,7 +144,9 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> customCommand(@NonNull GlideString[] args) {
-        return commandManager.submitCustomCommand(args, this::handleBinaryObjectOrNullResponse);
+        // DEMO: Artificial latency - run command twice to simulate slower client
+        return commandManager.submitCustomCommand(args, this::handleBinaryObjectOrNullResponse)
+            .thenCompose(firstResult -> commandManager.submitCustomCommand(args, this::handleBinaryObjectOrNullResponse));
     }
 
     @Deprecated
