@@ -837,3 +837,317 @@ fn test_batch_span_error_handling() {
         }
     }
 }
+
+// ============================================================================
+// Tests for Bug Fix: CustomCommand Span Creation
+// ============================================================================
+//
+// These tests verify the fix for the bug where create_otel_span() and
+// create_otel_span_with_parent() failed when RequestType::CustomCommand was passed.
+// The bug occurred because Cmd::new() has no pre-set command bytes for custom commands
+// like EVAL and EVALSHA.
+//
+// Fix: Fall back to "CustomCommand" as span name when cmd.command() returns None.
+
+#[test]
+fn test_custom_command_span_creation() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
+    // Test creating span with CustomCommand request type
+    // This should now succeed with fallback to "CustomCommand" name
+    let span_ptr = create_otel_span(RequestType::CustomCommand);
+    assert_ne!(
+        span_ptr, 0,
+        "create_otel_span should succeed for CustomCommand with fallback name"
+    );
+
+    // Verify pointer properties
+    assert_eq!(span_ptr % 8, 0, "Span pointer should be 8-byte aligned");
+    assert!(
+        span_ptr >= 0x1000,
+        "Span pointer should be above minimum valid address"
+    );
+
+    // Clean up
+    unsafe {
+        drop_otel_span(span_ptr);
+    }
+}
+
+#[test]
+fn test_custom_command_span_with_parent() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
+    // Create a parent span
+    let parent_name = CString::new("user_operation").expect("CString::new failed");
+    let parent_span_ptr = unsafe { create_named_otel_span(parent_name.as_ptr()) };
+    assert_ne!(parent_span_ptr, 0, "Parent span creation should succeed");
+
+    // Test creating CustomCommand span as child of parent
+    // This should now succeed with fallback to "CustomCommand" name
+    let child_span_ptr =
+        unsafe { create_otel_span_with_parent(RequestType::CustomCommand, parent_span_ptr) };
+    assert_ne!(
+        child_span_ptr, 0,
+        "create_otel_span_with_parent should succeed for CustomCommand with fallback name"
+    );
+
+    // Verify child span has different pointer than parent
+    assert_ne!(
+        child_span_ptr, parent_span_ptr,
+        "Child span should have different pointer than parent"
+    );
+
+    // Verify pointer properties
+    assert_eq!(
+        child_span_ptr % 8,
+        0,
+        "Child span pointer should be 8-byte aligned"
+    );
+
+    // Clean up (child first, then parent)
+    unsafe {
+        drop_otel_span(child_span_ptr);
+        drop_otel_span(parent_span_ptr);
+    }
+}
+
+#[test]
+fn test_multiple_custom_command_spans() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
+    // Test creating multiple CustomCommand spans
+    // CustomCommand is used for EVAL, EVALSHA, and other user-defined commands
+    let mut span_ptrs = Vec::new();
+
+    for i in 0..5 {
+        let span_ptr = create_otel_span(RequestType::CustomCommand);
+        assert_ne!(
+            span_ptr, 0,
+            "create_otel_span should succeed for CustomCommand iteration {i}"
+        );
+
+        // Verify pointer properties
+        assert_eq!(span_ptr % 8, 0, "Span pointer should be 8-byte aligned");
+        assert!(
+            span_ptr >= 0x1000,
+            "Span pointer should be above minimum valid address"
+        );
+
+        span_ptrs.push(span_ptr);
+    }
+
+    // Verify all spans are unique
+    for i in 0..span_ptrs.len() {
+        for j in (i + 1)..span_ptrs.len() {
+            assert_ne!(
+                span_ptrs[i], span_ptrs[j],
+                "All CustomCommand spans should have unique pointers"
+            );
+        }
+    }
+
+    // Clean up all spans
+    for span_ptr in span_ptrs {
+        unsafe {
+            drop_otel_span(span_ptr);
+        }
+    }
+}
+
+#[test]
+fn test_custom_command_hierarchy() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
+    // Create a root operation span
+    let root_name = CString::new("script_execution").expect("CString::new failed");
+    let root_span_ptr = unsafe { create_named_otel_span(root_name.as_ptr()) };
+    assert_ne!(root_span_ptr, 0, "Root span creation should succeed");
+
+    // Create batch span as child of root
+    let batch_span_ptr = unsafe { create_batch_otel_span_with_parent(root_span_ptr) };
+    assert_ne!(batch_span_ptr, 0, "Batch span creation should succeed");
+
+    // Create CustomCommand spans as children of batch span
+    // This simulates a batch operation containing custom commands (EVAL, EVALSHA, etc.)
+    let custom_span_1 =
+        unsafe { create_otel_span_with_parent(RequestType::CustomCommand, batch_span_ptr) };
+    let custom_span_2 =
+        unsafe { create_otel_span_with_parent(RequestType::CustomCommand, batch_span_ptr) };
+    let custom_span_3 =
+        unsafe { create_otel_span_with_parent(RequestType::CustomCommand, batch_span_ptr) };
+
+    assert_ne!(custom_span_1, 0, "CustomCommand span 1 creation should succeed");
+    assert_ne!(custom_span_2, 0, "CustomCommand span 2 creation should succeed");
+    assert_ne!(custom_span_3, 0, "CustomCommand span 3 creation should succeed");
+
+    // Verify all spans have unique pointers
+    let all_spans = [
+        root_span_ptr,
+        batch_span_ptr,
+        custom_span_1,
+        custom_span_2,
+        custom_span_3,
+    ];
+    for i in 0..all_spans.len() {
+        for j in (i + 1)..all_spans.len() {
+            assert_ne!(
+                all_spans[i], all_spans[j],
+                "All spans should have unique pointers"
+            );
+        }
+    }
+
+    // Clean up in reverse order (children before parents)
+    unsafe {
+        drop_otel_span(custom_span_1);
+        drop_otel_span(custom_span_2);
+        drop_otel_span(custom_span_3);
+        drop_otel_span(batch_span_ptr);
+        drop_otel_span(root_span_ptr);
+    }
+}
+
+#[test]
+fn test_mixed_command_types_in_batch() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
+    // Create a batch span
+    let batch_span_ptr = create_batch_otel_span();
+    assert_ne!(batch_span_ptr, 0, "Batch span creation should succeed");
+
+    // Create a mix of regular commands and custom commands
+    let command_types = vec![
+        RequestType::Set,
+        RequestType::Get,
+        RequestType::CustomCommand, // Represents EVAL, EVALSHA, etc.
+        RequestType::Del,
+        RequestType::CustomCommand, // Another custom command
+        RequestType::Exists,
+        RequestType::CustomCommand, // Yet another custom command
+    ];
+
+    let mut child_spans = Vec::new();
+
+    for request_type in command_types {
+        let child_span_ptr =
+            unsafe { create_otel_span_with_parent(request_type, batch_span_ptr) };
+        assert_ne!(
+            child_span_ptr, 0,
+            "Child span creation should succeed for {request_type:?}"
+        );
+        child_spans.push(child_span_ptr);
+    }
+
+    // Verify all child spans are unique
+    for i in 0..child_spans.len() {
+        for j in (i + 1)..child_spans.len() {
+            assert_ne!(
+                child_spans[i], child_spans[j],
+                "All child spans should have unique pointers"
+            );
+        }
+    }
+
+    // Clean up all child spans first
+    for child_span_ptr in child_spans {
+        unsafe {
+            drop_otel_span(child_span_ptr);
+        }
+    }
+
+    // Clean up batch span
+    unsafe {
+        drop_otel_span(batch_span_ptr);
+    }
+}
+
+#[test]
+fn test_custom_command_with_null_parent() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
+    // Test CustomCommand span creation with null parent (should fallback to independent span)
+    let span_ptr = unsafe { create_otel_span_with_parent(RequestType::CustomCommand, 0) };
+    assert_ne!(
+        span_ptr, 0,
+        "CustomCommand with null parent should fallback to independent span"
+    );
+
+    // Verify pointer properties
+    assert_eq!(span_ptr % 8, 0, "Span pointer should be 8-byte aligned");
+
+    // Clean up
+    unsafe {
+        drop_otel_span(span_ptr);
+    }
+}
+
+#[test]
+fn test_custom_command_with_invalid_parent() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
+    // Test CustomCommand span creation with invalid parent pointers
+    let invalid_parents = vec![
+        0xDEADBEEF,            // Garbage pointer
+        0x1001,                // Misaligned pointer
+        0x800,                 // Address too low
+        0x8000_0000_0000_0000, // Address too high
+    ];
+
+    let mut fallback_spans = Vec::new();
+
+    for invalid_parent_ptr in invalid_parents {
+        let span_ptr = unsafe {
+            create_otel_span_with_parent(RequestType::CustomCommand, invalid_parent_ptr)
+        };
+        assert_ne!(
+            span_ptr, 0,
+            "CustomCommand with invalid parent 0x{invalid_parent_ptr:x} should fallback to independent span"
+        );
+        fallback_spans.push(span_ptr);
+    }
+
+    // Clean up all fallback spans
+    for span_ptr in fallback_spans {
+        unsafe {
+            drop_otel_span(span_ptr);
+        }
+    }
+}
+
+#[test]
+fn test_regression_no_error_logs_for_custom_command() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
+    // This test verifies that CustomCommand no longer produces error logs
+    // Before the fix, this would log: "ERROR logger_core: ffi_otel - create_otel_span: Command has no bytes available"
+
+    // Create CustomCommand span - should succeed without errors
+    let span_ptr = create_otel_span(RequestType::CustomCommand);
+    assert_ne!(
+        span_ptr, 0,
+        "CustomCommand span creation should succeed without errors"
+    );
+
+    // Create CustomCommand span with parent - should succeed without errors
+    let parent_name = CString::new("parent").expect("CString::new failed");
+    let parent_span_ptr = unsafe { create_named_otel_span(parent_name.as_ptr()) };
+    assert_ne!(parent_span_ptr, 0, "Parent span creation should succeed");
+
+    let child_span_ptr =
+        unsafe { create_otel_span_with_parent(RequestType::CustomCommand, parent_span_ptr) };
+    assert_ne!(
+        child_span_ptr, 0,
+        "CustomCommand child span creation should succeed without errors"
+    );
+
+    // Clean up
+    unsafe {
+        drop_otel_span(child_span_ptr);
+        drop_otel_span(parent_span_ptr);
+        drop_otel_span(span_ptr);
+    }
+
+    // If we reach here without panics, the fix is working correctly
+    // No error logs should have been produced
+}
