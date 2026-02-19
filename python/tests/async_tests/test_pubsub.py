@@ -4965,10 +4965,7 @@ class TestPubSub:
 
                 if lower_bound_ms <= sampled_interval_ms <= upper_bound_ms:
                     in_tolerance_intervals.append(sampled_interval_ms)
-                    if (
-                        len(in_tolerance_intervals)
-                        >= required_in_tolerance_intervals
-                    ):
+                    if len(in_tolerance_intervals) >= required_in_tolerance_intervals:
                         break
 
             assert len(in_tolerance_intervals) >= required_in_tolerance_intervals, (
