@@ -1,0 +1,141 @@
+name: valkey-lambda-stack
+
+services:
+  valkey-master-1:
+    image: valkey/valkey:latest
+    command: >
+      valkey-server 
+      --cluster-enabled yes 
+      --cluster-config-file nodes.conf 
+      --cluster-node-timeout 5000 
+      --port 7001
+      --bind 0.0.0.0
+    volumes:
+      - valkey-data-m1:/data
+    networks:
+      valkey-net:
+        ipv4_address: 172.30.0.11
+
+  valkey-master-2:
+    image: valkey/valkey:latest
+    command: >
+      valkey-server 
+      --cluster-enabled yes 
+      --cluster-config-file nodes.conf 
+      --cluster-node-timeout 5000 
+      --port 7002
+      --bind 0.0.0.0
+    volumes:
+      - valkey-data-m2:/data
+    networks:
+      valkey-net:
+        ipv4_address: 172.30.0.12
+
+  valkey-master-3:
+    image: valkey/valkey:latest
+    command: >
+      valkey-server 
+      --cluster-enabled yes 
+      --cluster-config-file nodes.conf 
+      --cluster-node-timeout 5000 
+      --port 7003
+      --bind 0.0.0.0
+    volumes:
+      - valkey-data-m3:/data
+    networks:
+      valkey-net:
+        ipv4_address: 172.30.0.13
+
+  valkey-replica-1:
+    image: valkey/valkey:latest
+    command: >
+      valkey-server 
+      --cluster-enabled yes 
+      --cluster-config-file nodes.conf 
+      --cluster-node-timeout 5000 
+      --port 7004
+      --bind 0.0.0.0
+    volumes:
+      - valkey-data-r1:/data
+    networks:
+      valkey-net:
+        ipv4_address: 172.30.0.14
+
+  valkey-replica-2:
+    image: valkey/valkey:latest
+    command: >
+      valkey-server 
+      --cluster-enabled yes 
+      --cluster-config-file nodes.conf 
+      --cluster-node-timeout 5000 
+      --port 7005
+      --bind 0.0.0.0
+    volumes:
+      - valkey-data-r2:/data
+    networks:
+      valkey-net:
+        ipv4_address: 172.30.0.15
+
+  valkey-replica-3:
+    image: valkey/valkey:latest
+    command: >
+      valkey-server 
+      --cluster-enabled yes 
+      --cluster-config-file nodes.conf 
+      --cluster-node-timeout 5000 
+      --port 7006
+      --bind 0.0.0.0
+    volumes:
+      - valkey-data-r3:/data
+    networks:
+      valkey-net:
+        ipv4_address: 172.30.0.16
+
+  valkey-cluster-init:
+    image: valkey/valkey:latest
+    depends_on:
+      - valkey-master-1
+      - valkey-master-2
+      - valkey-master-3
+      - valkey-replica-1
+      - valkey-replica-2
+      - valkey-replica-3
+    command: >
+      sh -c "
+        echo 'Waiting for all nodes to be ready...' &&
+        sleep 10 &&
+        echo 'Creating Valkey cluster: 3 masters + 3 replicas' &&
+        valkey-cli --cluster create 172.30.0.11:7001 172.30.0.12:7002 172.30.0.13:7003 172.30.0.14:7004 172.30.0.15:7005 172.30.0.16:7006 --cluster-replicas 1 --cluster-yes &&
+        echo 'Cluster created successfully!'
+      "
+    networks:
+      - valkey-net
+    restart: "no"
+
+  valkey-lambda:
+    build: .
+    depends_on:
+      - valkey-cluster-init
+    ports:
+      - "8080:8080"
+    environment:
+      - VALKEY_HOST=172.30.0.11
+      - VALKEY_PORT=7001
+    networks:
+      - valkey-net
+    restart: unless-stopped
+
+volumes:
+  valkey-data-m1:
+  valkey-data-m2:
+  valkey-data-m3:
+  valkey-data-r1:
+  valkey-data-r2:
+  valkey-data-r3:
+
+networks:
+  valkey-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
