@@ -289,12 +289,6 @@ public class TestUtilities {
                         "Interrupted while retrying " + clientType + " client creation", e);
             }
         }
-
-        if (lastExecutionException != null) {
-            throw lastExecutionException;
-        }
-        throw new RuntimeException(
-                "Failed to create " + clientType + " client after retries", lastRuntimeException);
     }
 
     private static boolean isConnectionRefusedError(Throwable throwable) {
