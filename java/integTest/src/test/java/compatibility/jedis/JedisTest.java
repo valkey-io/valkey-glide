@@ -3745,7 +3745,7 @@ public class JedisTest {
         String key = "waitKey_" + UUID.randomUUID();
         jedis.set(key, "value");
 
-        long replicas = jedis.wait(0, 1000);
+        long replicas = jedis.wait(0L, 1000L);
         assertTrue(replicas >= 0);
     }
 
@@ -3758,11 +3758,10 @@ public class JedisTest {
         String key = "waitaofKey_" + UUID.randomUUID();
         jedis.set(key, "value");
 
-        List<Long> result = jedis.waitaof(0, 0, 1000);
+        KeyValue<Long, Long> result = jedis.waitAOF(0, 0, 1000);
         assertNotNull(result);
-        assertEquals(2, result.size());
-        assertTrue(result.get(0) >= 0);
-        assertTrue(result.get(1) >= 0);
+        assertTrue(result.getKey() >= 0);
+        assertTrue(result.getValue() >= 0);
     }
 
     // ==================== OBJECT COMMANDS TESTS ====================

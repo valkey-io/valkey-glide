@@ -10,6 +10,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
+import redis.clients.jedis.util.KeyValue;
 
 /**
  * Unit tests for Jedis method signatures and API contracts. Tests that required methods exist with
@@ -405,9 +406,9 @@ public class JedisMethodsTest {
         Method waitMethod = jedisClass.getMethod("wait", long.class, long.class);
         assertEquals(long.class, waitMethod.getReturnType());
 
-        // Test waitaof(long numlocal, long numreplicas, long timeout) method exists
-        Method waitaofMethod = jedisClass.getMethod("waitaof", long.class, long.class, long.class);
-        assertEquals(List.class, waitaofMethod.getReturnType());
+        // Test waitAOF(long numlocal, long numreplicas, long timeout) method exists
+        Method waitAOFMethod = jedisClass.getMethod("waitAOF", long.class, long.class, long.class);
+        assertEquals(KeyValue.class, waitAOFMethod.getReturnType());
     }
 
     @Test
