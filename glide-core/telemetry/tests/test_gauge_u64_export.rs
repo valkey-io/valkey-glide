@@ -8,12 +8,12 @@
 //!
 //! Fix: Added Gauge<u64> branch in to_json() method to serialize u64 gauge metrics.
 
-use opentelemetry::KeyValue;
 use opentelemetry::InstrumentationScope;
-use opentelemetry_sdk::metrics::data::{DataPoint, Gauge, ResourceMetrics, ScopeMetrics, Metric};
-use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
-use opentelemetry_sdk::metrics::Temporality;
+use opentelemetry::KeyValue;
 use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::metrics::Temporality;
+use opentelemetry_sdk::metrics::data::{DataPoint, Gauge, Metric, ResourceMetrics, ScopeMetrics};
+use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use std::fs;
 use std::time::SystemTime;
 use telemetrylib::FileMetricExporter;
@@ -90,10 +90,7 @@ async fn test_gauge_u64_export_success() {
         .as_array()
         .expect("Should have metrics array");
     assert_eq!(metrics_array.len(), 1, "Should have one metric");
-    assert_eq!(
-        metrics_array[0]["name"].as_str().unwrap(),
-        "test.gauge.u64"
-    );
+    assert_eq!(metrics_array[0]["name"].as_str().unwrap(), "test.gauge.u64");
 
     // Verify the value is present and correct
     let data_points = metrics_array[0]["data_points"]
@@ -128,13 +125,15 @@ async fn test_gauge_u64_large_values() {
 
     // Verify the value is correctly serialized
     let content = fs::read_to_string(&file_path).expect("Failed to read metrics file");
-    let json: serde_json::Value =
-        serde_json::from_str(&content).expect("Should be valid JSON");
+    let json: serde_json::Value = serde_json::from_str(&content).expect("Should be valid JSON");
 
     let value = json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"]
         .as_u64()
         .expect("Value should be u64");
-    assert_eq!(value, timestamp_value, "Large u64 value should be preserved");
+    assert_eq!(
+        value, timestamp_value,
+        "Large u64 value should be preserved"
+    );
 }
 
 #[tokio::test]
@@ -151,8 +150,7 @@ async fn test_gauge_u64_zero_value() {
     assert!(result.is_ok(), "Export should succeed for zero value");
 
     let content = fs::read_to_string(&file_path).expect("Failed to read metrics file");
-    let json: serde_json::Value =
-        serde_json::from_str(&content).expect("Should be valid JSON");
+    let json: serde_json::Value = serde_json::from_str(&content).expect("Should be valid JSON");
 
     let value = json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"]
         .as_u64()
@@ -178,8 +176,7 @@ async fn test_gauge_u64_max_value() {
     );
 
     let content = fs::read_to_string(&file_path).expect("Failed to read metrics file");
-    let json: serde_json::Value =
-        serde_json::from_str(&content).expect("Should be valid JSON");
+    let json: serde_json::Value = serde_json::from_str(&content).expect("Should be valid JSON");
 
     let value = json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"]
         .as_u64()
@@ -252,8 +249,7 @@ async fn test_gauge_u64_with_multiple_data_points() {
 
     // Verify all data points were exported
     let content = fs::read_to_string(&file_path).expect("Failed to read metrics file");
-    let json: serde_json::Value =
-        serde_json::from_str(&content).expect("Should be valid JSON");
+    let json: serde_json::Value = serde_json::from_str(&content).expect("Should be valid JSON");
 
     let data_points = json["scope_metrics"][0]["metrics"][0]["data_points"]
         .as_array()
@@ -310,8 +306,7 @@ async fn test_regression_subscription_last_sync_timestamp() {
 
     // Verify the metric was written correctly
     let content = fs::read_to_string(&file_path).expect("Failed to read metrics file");
-    let json: serde_json::Value =
-        serde_json::from_str(&content).expect("Should be valid JSON");
+    let json: serde_json::Value = serde_json::from_str(&content).expect("Should be valid JSON");
 
     let metric_name = json["scope_metrics"][0]["metrics"][0]["name"]
         .as_str()

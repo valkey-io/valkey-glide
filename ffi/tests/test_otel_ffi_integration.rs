@@ -977,9 +977,18 @@ fn test_custom_command_hierarchy() {
     let custom_span_3 =
         unsafe { create_otel_span_with_parent(RequestType::CustomCommand, batch_span_ptr) };
 
-    assert_ne!(custom_span_1, 0, "CustomCommand span 1 creation should succeed");
-    assert_ne!(custom_span_2, 0, "CustomCommand span 2 creation should succeed");
-    assert_ne!(custom_span_3, 0, "CustomCommand span 3 creation should succeed");
+    assert_ne!(
+        custom_span_1, 0,
+        "CustomCommand span 1 creation should succeed"
+    );
+    assert_ne!(
+        custom_span_2, 0,
+        "CustomCommand span 2 creation should succeed"
+    );
+    assert_ne!(
+        custom_span_3, 0,
+        "CustomCommand span 3 creation should succeed"
+    );
 
     // Verify all spans have unique pointers
     let all_spans = [
@@ -1030,8 +1039,7 @@ fn test_mixed_command_types_in_batch() {
     let mut child_spans = Vec::new();
 
     for request_type in command_types {
-        let child_span_ptr =
-            unsafe { create_otel_span_with_parent(request_type, batch_span_ptr) };
+        let child_span_ptr = unsafe { create_otel_span_with_parent(request_type, batch_span_ptr) };
         assert_ne!(
             child_span_ptr, 0,
             "Child span creation should succeed for {request_type:?}"
@@ -1097,9 +1105,8 @@ fn test_custom_command_with_invalid_parent() {
     let mut fallback_spans = Vec::new();
 
     for invalid_parent_ptr in invalid_parents {
-        let span_ptr = unsafe {
-            create_otel_span_with_parent(RequestType::CustomCommand, invalid_parent_ptr)
-        };
+        let span_ptr =
+            unsafe { create_otel_span_with_parent(RequestType::CustomCommand, invalid_parent_ptr) };
         assert_ne!(
             span_ptr, 0,
             "CustomCommand with invalid parent 0x{invalid_parent_ptr:x} should fallback to independent span"
