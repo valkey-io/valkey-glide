@@ -52,6 +52,10 @@ public class JedisTest {
     private static final String valkeyHost;
     private static final int valkeyPort;
 
+    // Microseconds per second - used to validate TIME command response
+    // The TIME command returns [seconds, microseconds] where microseconds must be in [0, 999999]
+    private static final long MICROSECONDS_PER_SECOND = 1_000_000;
+
     // GLIDE compatibility layer instance
     private Jedis jedis;
 
@@ -3555,18 +3559,79 @@ public class JedisTest {
     }
 
     @Test
-    void testFlushAll() {
-        // Add some keys
-        jedis.set("test_key1", "value1");
-        jedis.set("test_key2", "value2");
+    void testFlushDBWithFlushMode() {
+        // Test FLUSHDB with SYNC mode
+        jedis.set("sync_key1", "value1");
+        jedis.set("sync_key2", "value2");
         assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
 
-        // Test FLUSHALL
+        String syncResult = jedis.flushDB(redis.clients.jedis.args.FlushMode.SYNC);
+        assertEquals("OK", syncResult, "FLUSHDB with SYNC mode should return OK");
+        assertEquals(0, jedis.dbsize(), "Database should be empty after FLUSHDB SYNC");
+
+        // Test FLUSHDB with ASYNC mode
+        jedis.set("async_key1", "value1");
+        jedis.set("async_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        String asyncResult = jedis.flushDB(redis.clients.jedis.args.FlushMode.ASYNC);
+        assertEquals("OK", asyncResult, "FLUSHDB with ASYNC mode should return OK");
+        // Note: ASYNC mode may not complete immediately, but the command should succeed
+    }
+
+    @Test
+    void testFlushAll() {
+        // Clean up first to ensure consistent test state
+        jedis.flushAll();
+
+        // Add keys to database 0 (default database)
+        jedis.set("db0_key1", "value1");
+        jedis.set("db0_key2", "value2");
+        jedis.set("db0_key3", "value3");
+
+        // Move one key to database 1 to test multi-database flush
+        long moveResult = jedis.move("db0_key3", 1);
+        assertEquals(1L, moveResult, "MOVE should successfully move key to database 1");
+
+        // Verify database 0 has 2 keys (after moving one to db 1)
+        long db0Size = jedis.dbsize();
+        assertEquals(2, db0Size, "Database 0 should have 2 keys after moving one key");
+
+        // Test FLUSHALL - should remove keys from ALL databases
         String result = jedis.flushAll();
         assertEquals("OK", result, "FLUSHALL should return OK");
 
-        // Verify database is empty
-        assertEquals(0, jedis.dbsize(), "DBSIZE should return 0 after FLUSHALL");
+        // Verify all keys are removed from database 0
+        assertEquals(0, jedis.dbsize(), "DBSIZE should return 0 after FLUSHALL in database 0");
+
+        // Note: Cannot verify database 1 is also flushed in the current GLIDE compatibility layer
+        // because SELECT is not fully implemented. In real Jedis, we would do:
+        // jedis.select(1);
+        // assertEquals(0, jedis.dbsize(), "Database 1 should also be empty after FLUSHALL");
+        // This limitation is acceptable as FLUSHALL is a server-wide operation that affects all
+        // databases.
+    }
+
+    @Test
+    void testFlushAllWithFlushMode() {
+        // Test FLUSHALL with SYNC mode
+        jedis.flushAll(); // Clean first
+        jedis.set("sync_key1", "value1");
+        jedis.set("sync_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        String syncResult = jedis.flushAll(redis.clients.jedis.args.FlushMode.SYNC);
+        assertEquals("OK", syncResult, "FLUSHALL with SYNC mode should return OK");
+        assertEquals(0, jedis.dbsize(), "All databases should be empty after FLUSHALL SYNC");
+
+        // Test FLUSHALL with ASYNC mode
+        jedis.set("async_key1", "value1");
+        jedis.set("async_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        String asyncResult = jedis.flushAll(redis.clients.jedis.args.FlushMode.ASYNC);
+        assertEquals("OK", asyncResult, "FLUSHALL with ASYNC mode should return OK");
+        // Note: ASYNC mode may not complete immediately, but the command should succeed
     }
 
     @Test
@@ -3578,21 +3643,35 @@ public class JedisTest {
 
         // Verify first element is Unix timestamp (seconds)
         long seconds = Long.parseLong(time[0]);
+        long currentTime = System.currentTimeMillis() / 1000;
         assertTrue(seconds > 0, "Unix timestamp should be positive");
-        assertTrue(seconds > 1609459200, "Unix timestamp should be after 2021-01-01");
+        assertTrue(
+                seconds >= currentTime - 60 && seconds <= currentTime + 60,
+                "Unix timestamp should be within reasonable range of current time");
 
         // Verify second element is microseconds
+        // Microseconds must be in the range [0, 999999] as there are 1,000,000 microseconds in a
+        // second
         long microseconds = Long.parseLong(time[1]);
         assertTrue(microseconds >= 0, "Microseconds should be non-negative");
-        assertTrue(microseconds < 1000000, "Microseconds should be less than 1000000");
+        assertTrue(
+                microseconds < MICROSECONDS_PER_SECOND,
+                "Microseconds should be less than " + MICROSECONDS_PER_SECOND);
     }
 
     @Test
     void testLastsave() {
         // Test LASTSAVE command
         long timestamp = jedis.lastsave();
+        long currentTime = System.currentTimeMillis() / 1000;
         assertTrue(timestamp > 0, "LASTSAVE should return positive timestamp");
-        assertTrue(timestamp > 1609459200, "LASTSAVE timestamp should be after 2021-01-01");
+        assertTrue(
+                timestamp <= currentTime,
+                "LASTSAVE timestamp should not be in the future (current: "
+                        + currentTime
+                        + ", lastsave: "
+                        + timestamp
+                        + ")");
     }
 
     @Test

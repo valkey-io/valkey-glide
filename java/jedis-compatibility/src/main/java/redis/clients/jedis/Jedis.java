@@ -6,6 +6,7 @@ import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ScriptOptions;
@@ -51,7 +52,6 @@ import javax.net.ssl.SSLSocketFactory;
 import redis.clients.jedis.args.BitCountOption;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
-import redis.clients.jedis.args.FlushMode;
 import redis.clients.jedis.args.FunctionRestorePolicy;
 import redis.clients.jedis.args.ListDirection;
 import redis.clients.jedis.args.ListPosition;
@@ -7328,6 +7328,7 @@ public final class Jedis implements Closeable {
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
      * @param section The section name (e.g., "server", "clients", "memory", "stats")
      * @return A String containing server information for the specified section.
+     * @throws JedisException if the section name is invalid
      * @example
      *     <pre>{@code
      * String memoryInfo = jedis.info("memory");
@@ -7338,12 +7339,18 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "INFO",
                 () -> {
-                    glide.api.models.commands.InfoOptions.Section glideSection =
-                            glide.api.models.commands.InfoOptions.Section.valueOf(section.toUpperCase());
-                    return glideClient
-                            .info(new glide.api.models.commands.InfoOptions.Section[] {glideSection})
-                            .get();
-                    });
+                    try {
+                        Section glideSection = Section.valueOf(section.toUpperCase());
+                        return glideClient.info(new Section[] {glideSection}).get();
+                    } catch (IllegalArgumentException e) {
+                        throw new JedisException(
+                                "Invalid INFO section: '"
+                                        + section
+                                        + "'. Valid sections are: "
+                                        + Arrays.toString(Section.values()),
+                                e);
+                    }
+                });
     }
 
     // ==================== Scripting and Functions Commands ====================
@@ -7517,6 +7524,8 @@ public final class Jedis implements Closeable {
     /**
      * Deletes all the keys of the currently selected database.
      *
+     * <p>This method uses the default synchronous flush mode.
+     *
      * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
      * @return "OK" when the operation completes successfully.
      * @example
@@ -7530,7 +7539,27 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Deletes all the keys of the currently selected database with the specified flush mode.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @param mode The flushing mode (SYNC or ASYNC).
+     * @return "OK" when the operation completes successfully.
+     * @example
+     *     <pre>{@code
+     * // Flush asynchronously (non-blocking)
+     * String result = jedis.flushDB(redis.clients.jedis.args.FlushMode.ASYNC);
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    public String flushDB(redis.clients.jedis.args.FlushMode mode) {
+        return executeCommandWithGlide(
+                "FLUSHDB", () -> glideClient.flushdb(mode.toGlideFlushMode()).get());
+    }
+
+    /**
      * Deletes all the keys of all the existing databases.
+     *
+     * <p>This method uses the default synchronous flush mode.
      *
      * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
      * @return "OK" when the operation completes successfully.
@@ -7542,6 +7571,24 @@ public final class Jedis implements Closeable {
      */
     public String flushAll() {
         return executeCommandWithGlide("FLUSHALL", () -> glideClient.flushall().get());
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases with the specified flush mode.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @param mode The flushing mode (SYNC or ASYNC).
+     * @return "OK" when the operation completes successfully.
+     * @example
+     *     <pre>{@code
+     * // Flush all databases asynchronously (non-blocking)
+     * String result = jedis.flushAll(redis.clients.jedis.args.FlushMode.ASYNC);
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    public String flushAll(redis.clients.jedis.args.FlushMode mode) {
+        return executeCommandWithGlide(
+                "FLUSHALL", () -> glideClient.flushall(mode.toGlideFlushMode()).get());
     }
 
     /**
@@ -7767,7 +7814,7 @@ public final class Jedis implements Closeable {
      * @return "OK"
      * @see <a href="https://valkey.io/commands/script-flush/">SCRIPT FLUSH</a>
      */
-    public String scriptFlush(FlushMode flushMode) {
+    public String scriptFlush(redis.clients.jedis.args.FlushMode flushMode) {
         return executeCommandWithGlide(
                 "SCRIPT FLUSH", () -> glideClient.scriptFlush(flushMode.toGlideFlushMode()).get());
     }
@@ -7883,7 +7930,7 @@ public final class Jedis implements Closeable {
      * @see <a href="https://valkey.io/commands/function-flush/">FUNCTION FLUSH</a>
      * @since Valkey 7.0 and above
      */
-    public String functionFlush(FlushMode mode) {
+    public String functionFlush(redis.clients.jedis.args.FlushMode mode) {
         return executeCommandWithGlide(
                 "FUNCTION FLUSH", () -> glideClient.functionFlush(mode.toGlideFlushMode()).get());
     }

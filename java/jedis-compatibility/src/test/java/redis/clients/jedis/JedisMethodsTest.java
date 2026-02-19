@@ -4,8 +4,8 @@ package redis.clients.jedis;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.reflect.Method;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.resps.AccessControlUser;
@@ -152,6 +152,22 @@ public class JedisMethodsTest {
         Method configSetMapMethod = jedisClass.getMethod("configSet", Map.class);
         assertEquals(String.class, configSetMapMethod.getReturnType());
 
+        // Test flushDB() methods
+        Method flushDBMethod = jedisClass.getMethod("flushDB");
+        assertEquals(String.class, flushDBMethod.getReturnType());
+
+        Method flushDBFlushModeMethod =
+                jedisClass.getMethod("flushDB", redis.clients.jedis.args.FlushMode.class);
+        assertEquals(String.class, flushDBFlushModeMethod.getReturnType());
+
+        // Test flushAll() methods
+        Method flushAllMethod = jedisClass.getMethod("flushAll");
+        assertEquals(String.class, flushAllMethod.getReturnType());
+
+        Method flushAllFlushModeMethod =
+                jedisClass.getMethod("flushAll", redis.clients.jedis.args.FlushMode.class);
+        assertEquals(String.class, flushAllFlushModeMethod.getReturnType());
+
         // Test configRewrite() method
         Method configRewriteMethod = jedisClass.getMethod("configRewrite");
         assertEquals(String.class, configRewriteMethod.getReturnType());
@@ -163,14 +179,6 @@ public class JedisMethodsTest {
         // Test dbsize() method
         Method dbsizeMethod = jedisClass.getMethod("dbsize");
         assertEquals(long.class, dbsizeMethod.getReturnType());
-
-        // Test flushDB() method
-        Method flushDBMethod = jedisClass.getMethod("flushDB");
-        assertEquals(String.class, flushDBMethod.getReturnType());
-
-        // Test flushAll() method
-        Method flushAllMethod = jedisClass.getMethod("flushAll");
-        assertEquals(String.class, flushAllMethod.getReturnType());
 
         // Test time() method
         Method timeMethod = jedisClass.getMethod("time");
@@ -205,7 +213,9 @@ public class JedisMethodsTest {
                     assertNotNull(jedisClass.getMethod("configResetStat"));
                     assertNotNull(jedisClass.getMethod("dbsize"));
                     assertNotNull(jedisClass.getMethod("flushDB"));
+                    assertNotNull(jedisClass.getMethod("flushDB", redis.clients.jedis.args.FlushMode.class));
                     assertNotNull(jedisClass.getMethod("flushAll"));
+                    assertNotNull(jedisClass.getMethod("flushAll", redis.clients.jedis.args.FlushMode.class));
                     assertNotNull(jedisClass.getMethod("time"));
                     assertNotNull(jedisClass.getMethod("lastsave"));
                     assertNotNull(jedisClass.getMethod("lolwut"));
