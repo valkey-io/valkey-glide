@@ -268,6 +268,67 @@ jobs:
                       java/integTest/build/reports/**
                       utils/clusters/**
 
+    test-lambda-test:
+        name: Lambda Test (Linux ARM64)
+        timeout-minutes: 30
+        runs-on: ubuntu-24.04-arm
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up JDK 11
+              uses: actions/setup-java@v4
+              with:
+                  distribution: "temurin"
+                  java-version: 11
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ubuntu
+                  target: aarch64-unknown-linux-gnu
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  language: java
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "29.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Build and Publish valkey-glide
+              working-directory: java
+              run: ./gradlew publishToMavenLocal
+
+            - name: Build Lambda Test App
+              working-directory: java/e2e/lambda-test
+              run: ../../gradlew shadowJar
+
+            - name: Run Docker Test
+              working-directory: java/e2e/lambda-test
+              run: |
+                  docker compose up -d --build
+
+                  echo "Waiting for cluster init..."
+                  timeout 120s bash -c 'until docker compose logs valkey-cluster-init | grep "Cluster created successfully"; do sleep 5; done'
+
+                  echo "Invoking Lambda..."
+                  RESPONSE=$(curl -s -XPOST "http://localhost:8080/2015-03-31/functions/function/invocations" -d '{}')
+
+                  echo "Response: $RESPONSE"
+
+                  if [[ "$RESPONSE" == *"\"statusCode\":\"200\""* ]]; then
+                      echo "Test Passed!"
+                  else
+                      echo "Test Failed!"
+                      docker compose logs
+                      exit 1
+                  fi
+
+            - name: Cleanup Docker
+              if: always()
+              working-directory: java/e2e/lambda-test
+              run: docker compose down -v
+
     get-containers:
         runs-on: ubuntu-latest
         if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
