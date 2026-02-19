@@ -4951,6 +4951,7 @@ class TestPubSub:
             # Collect several consecutive intervals. Event-triggered syncs may
             # produce sub-interval updates, so we only assert an upper bound.
             sampled_intervals_ms = []
+            within_upper_bound_count = 0
             previous_sync_ts = first_sync_ts
             for _ in range(max_samples):
                 current_sync_ts = await poll_for_timestamp_change(
@@ -4960,13 +4961,12 @@ class TestPubSub:
                 sampled_intervals_ms.append(sampled_interval_ms)
                 previous_sync_ts = current_sync_ts
 
-            within_upper_bound = [
-                interval
-                for interval in sampled_intervals_ms
-                if interval <= upper_bound_ms
-            ]
+                if sampled_interval_ms <= upper_bound_ms:
+                    within_upper_bound_count += 1
+                    if within_upper_bound_count >= required_within_upper_bound_samples:
+                        break
 
-            assert len(within_upper_bound) >= required_within_upper_bound_samples, (
+            assert within_upper_bound_count >= required_within_upper_bound_samples, (
                 "Expected at least "
                 f"{required_within_upper_bound_samples} reconciliation intervals <= "
                 f"{upper_bound_ms}ms, "
