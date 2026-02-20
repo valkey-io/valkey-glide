@@ -48,8 +48,17 @@ type GlideTestSuite struct {
 	clusterHosts    []config.NodeAddress
 	tls             bool
 	serverVersion   string
+	parsedVersion   *semanticVersion
+	versionCache    map[string]semanticVersion
 	clients         []interfaces.GlideClientCommands
 	clusterClients  []interfaces.GlideClusterClientCommands
+}
+
+type semanticVersion struct {
+	major      int
+	minor      int
+	patch      int
+	preRelease []string
 }
 
 var (
@@ -111,6 +120,10 @@ func (suite *GlideTestSuite) SetupSuite() {
 	// Get server version
 	suite.serverVersion = getServerVersion(suite)
 	suite.T().Logf("Detected server version = %s", suite.serverVersion)
+	parsedVersion, parseErr := parseSemanticVersion(suite.serverVersion)
+	require.NoError(suite.T(), parseErr)
+	suite.parsedVersion = &parsedVersion
+	suite.versionCache = make(map[string]semanticVersion)
 
 	// OpenTelemetry illegal config tests and setup
 	if *otelTest {
@@ -552,8 +565,193 @@ func (suite *GlideTestSuite) verifyOK(result string, err error) {
 	assert.Equal(suite.T(), glide.OK, result)
 }
 
+func parseSemanticVersion(version string) (semanticVersion, error) {
+	parsedVersion := semanticVersion{}
+	cleanVersion := strings.TrimSpace(version)
+	cleanVersion = strings.TrimPrefix(cleanVersion, "v")
+	cleanVersion = strings.SplitN(cleanVersion, "+", 2)[0]
+
+	versionAndPreRelease := strings.SplitN(cleanVersion, "-", 2)
+	coreVersion := versionAndPreRelease[0]
+
+	if len(versionAndPreRelease) == 2 {
+		identifiers := strings.Split(versionAndPreRelease[1], ".")
+		for _, identifier := range identifiers {
+			if identifier == "" {
+				return parsedVersion, fmt.Errorf("invalid semantic version pre-release segment in %s", version)
+			}
+		}
+		parsedVersion.preRelease = identifiers
+	}
+
+	segments := strings.Split(coreVersion, ".")
+	if len(segments) < 2 || len(segments) > 3 {
+		return parsedVersion, fmt.Errorf("invalid semantic version format: %s", version)
+	}
+
+	for i := 0; i < len(segments); i++ {
+		number, err := strconv.Atoi(segments[i])
+		if err != nil {
+			return parsedVersion, fmt.Errorf("invalid semantic version segment %q in %s: %w", segments[i], version, err)
+		}
+		switch i {
+		case 0:
+			parsedVersion.major = number
+		case 1:
+			parsedVersion.minor = number
+		case 2:
+			parsedVersion.patch = number
+		}
+	}
+
+	return parsedVersion, nil
+}
+
+func parseNumericIdentifier(identifier string) (int, bool) {
+	if identifier == "" {
+		return 0, false
+	}
+	for _, char := range identifier {
+		if char < '0' || char > '9' {
+			return 0, false
+		}
+	}
+	value, err := strconv.Atoi(identifier)
+	if err != nil {
+		return 0, false
+	}
+	return value, true
+}
+
+func comparePreReleaseIdentifiers(currentIdentifiers []string, requiredIdentifiers []string) int {
+	if len(currentIdentifiers) == 0 && len(requiredIdentifiers) == 0 {
+		return 0
+	}
+	if len(currentIdentifiers) == 0 {
+		return 1
+	}
+	if len(requiredIdentifiers) == 0 {
+		return -1
+	}
+
+	comparisonLength := len(currentIdentifiers)
+	if len(requiredIdentifiers) > comparisonLength {
+		comparisonLength = len(requiredIdentifiers)
+	}
+
+	for i := 0; i < comparisonLength; i++ {
+		if i >= len(currentIdentifiers) {
+			return -1
+		}
+		if i >= len(requiredIdentifiers) {
+			return 1
+		}
+
+		currentNumeric, currentIsNumeric := parseNumericIdentifier(currentIdentifiers[i])
+		requiredNumeric, requiredIsNumeric := parseNumericIdentifier(requiredIdentifiers[i])
+
+		if currentIsNumeric && requiredIsNumeric {
+			if currentNumeric > requiredNumeric {
+				return 1
+			}
+			if currentNumeric < requiredNumeric {
+				return -1
+			}
+			continue
+		}
+		if currentIsNumeric && !requiredIsNumeric {
+			return -1
+		}
+		if !currentIsNumeric && requiredIsNumeric {
+			return 1
+		}
+
+		if currentIdentifiers[i] > requiredIdentifiers[i] {
+			return 1
+		}
+		if currentIdentifiers[i] < requiredIdentifiers[i] {
+			return -1
+		}
+	}
+
+	return 0
+}
+
+func compareParsedSemanticVersions(currentVersion semanticVersion, requiredVersion semanticVersion) int {
+	if currentVersion.major > requiredVersion.major {
+		return 1
+	}
+	if currentVersion.major < requiredVersion.major {
+		return -1
+	}
+
+	if currentVersion.minor > requiredVersion.minor {
+		return 1
+	}
+	if currentVersion.minor < requiredVersion.minor {
+		return -1
+	}
+
+	if currentVersion.patch > requiredVersion.patch {
+		return 1
+	}
+	if currentVersion.patch < requiredVersion.patch {
+		return -1
+	}
+
+	return comparePreReleaseIdentifiers(currentVersion.preRelease, requiredVersion.preRelease)
+}
+
+func compareSemanticVersions(currentVersion string, requiredVersion string) (int, error) {
+	currentParts, err := parseSemanticVersion(currentVersion)
+	if err != nil {
+		return 0, err
+	}
+
+	requiredParts, err := parseSemanticVersion(requiredVersion)
+	if err != nil {
+		return 0, err
+	}
+
+	return compareParsedSemanticVersions(currentParts, requiredParts), nil
+}
+
+func (suite *GlideTestSuite) compareServerVersion(version string) int {
+	if suite.parsedVersion == nil {
+		parsedCurrentVersion, parseErr := parseSemanticVersion(suite.serverVersion)
+		require.NoError(suite.T(), parseErr)
+		suite.parsedVersion = &parsedCurrentVersion
+	}
+	if suite.versionCache == nil {
+		suite.versionCache = make(map[string]semanticVersion)
+	}
+
+	requiredVersion, exists := suite.versionCache[version]
+	if !exists {
+		parsedRequiredVersion, parseErr := parseSemanticVersion(version)
+		require.NoError(suite.T(), parseErr)
+		requiredVersion = parsedRequiredVersion
+		suite.versionCache[version] = requiredVersion
+	}
+
+	comparison := compareParsedSemanticVersions(*suite.parsedVersion, requiredVersion)
+	return comparison
+}
+
+func (suite *GlideTestSuite) IsServerVersionAtLeast(version string) bool {
+	return suite.compareServerVersion(version) >= 0
+}
+
+func (suite *GlideTestSuite) IsServerVersionLowerThan(version string) bool {
+	return suite.compareServerVersion(version) < 0
+}
+
+func (suite *GlideTestSuite) IsServerVersionGreaterThan(version string) bool {
+	return suite.compareServerVersion(version) > 0
+}
+
 func (suite *GlideTestSuite) SkipIfServerVersionLowerThan(version string, t *testing.T) {
-	if suite.serverVersion < version {
+	if suite.IsServerVersionLowerThan(version) {
 		t.Skipf("This feature is added in version %s", version)
 	}
 }
