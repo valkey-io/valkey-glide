@@ -8,9 +8,10 @@ mod auth {
         cluster::ClusterClientBuilder,
         cluster_async::ClusterConnection,
         cluster_routing::{MultipleNodeRoutingInfo, ResponsePolicy, RoutingInfo},
-        cmd, ConnectionInfo, GlideConnectionOptions, ProtocolVersion, RedisConnectionInfo,
-        RedisResult, Value,
+        cmd, ConnectionInfo, ErrorKind, GlideConnectionOptions, ProtocolVersion,
+        RedisConnectionInfo, RedisResult, Value,
     };
+    use std::time::Duration;
 
     const ALL_SUCCESS_ROUTE: RoutingInfo = RoutingInfo::MultiNode((
         MultipleNodeRoutingInfo::AllNodes,
@@ -171,11 +172,26 @@ mod auth {
             .await;
 
         // Attempt to get the value again to ensure reconnection works
-        let should_be_ok: RedisResult<Value> = cmd("get")
-            .arg("foo")
-            .query_async(&mut connection_should_succeed)
-            .await;
-        assert_eq!(should_be_ok.unwrap(), Value::BulkString(b"bar".to_vec()));
+        // May get AllConnectionsUnavailable during non-blocking reconnection, so retry
+        let should_be_ok = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                match cmd("get")
+                    .arg("foo")
+                    .query_async::<Value>(&mut connection_should_succeed)
+                    .await
+                {
+                    Ok(val) => return val,
+                    Err(e) if e.kind() == ErrorKind::AllConnectionsUnavailable => {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        continue;
+                    }
+                    Err(e) => panic!("Unexpected error: {e:?}"),
+                }
+            }
+        })
+        .await
+        .expect("Timeout waiting for reconnection");
+        assert_eq!(should_be_ok, Value::BulkString(b"bar".to_vec()));
 
         // Update the password in the connection
         connection_should_succeed
