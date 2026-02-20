@@ -4486,13 +4486,13 @@ public class UnifiedJedis implements Closeable {
             }
 
             if (result instanceof String[]) {
-                Set<byte[]> keySet = new HashSet<>();
+                Set<GlideString> glideSet = new HashSet<>();
                 for (String key : (String[]) result) {
-                    keySet.add(key.getBytes());
+                    glideSet.add(GlideString.of(key.getBytes()));
                 }
-                return keySet;
+                return new redis.clients.jedis.util.GlideStringSetWrapper(glideSet);
             } else if (result == null) {
-                return new HashSet<>();
+                return new redis.clients.jedis.util.GlideStringSetWrapper(new HashSet<>());
             } else {
                 throw new JedisException("Unexpected response type for KEYS command: " + result.getClass());
             }
