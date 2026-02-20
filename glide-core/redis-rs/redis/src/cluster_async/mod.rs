@@ -1327,7 +1327,9 @@ where
                     .await
                     .get_node();
                     let node_address = if let Some(socket_addr) = socket_addr {
-                        socket_addr.to_string()
+                        // Use format! to avoid reverse DNS lookup that socket_addr.to_string() performs
+                        let addr = format!("{}:{}", socket_addr.ip(), socket_addr.port());
+                        addr
                     } else {
                         node_addr
                     };
@@ -2287,7 +2289,12 @@ where
                                         let conn_lock =
                                             inner.conn_lock.read().expect(MUTEX_READ_ERR);
                                         socket_addresses.find_map(|socket_addr| {
-                                            conn_lock.node_for_address(&socket_addr.to_string())
+                                            let addr_str = format!(
+                                                "{}:{}",
+                                                socket_addr.ip(),
+                                                socket_addr.port()
+                                            );
+                                            conn_lock.node_for_address(&addr_str)
                                         })
                                     },
                                 );
