@@ -922,6 +922,29 @@ export interface AdvancedBaseClientConfiguration {
          * - This is useful when connecting to servers with self-signed certificates or custom certificate authorities.
          */
         rootCertificates?: string | Buffer;
+
+        /**
+         * Client certificate data for mutual TLS (mTLS) authentication.
+         *
+         * - When provided together with `clientPrivateKey`, the client presents this certificate
+         *   to the server during TLS handshake.
+         *
+         * - The certificate data should be in PEM format as a string or Buffer.
+         *
+         * - Must be used together with `clientPrivateKey`.
+         */
+        clientCertificate?: string | Buffer;
+
+        /**
+         * Client private key data for mutual TLS (mTLS) authentication.
+         *
+         * - When provided together with `clientCertificate`, enables client certificate authentication.
+         *
+         * - The private key data should be in PEM format as a string or Buffer.
+         *
+         * - Must be used together with `clientCertificate`.
+         */
+        clientPrivateKey?: string | Buffer;
     };
 
     /**
@@ -9232,6 +9255,8 @@ export class BaseClient {
 
         // Apply TLS configuration if present
         if (options.tlsAdvancedConfiguration) {
+            const tlsConfig = options.tlsAdvancedConfiguration;
+
             // request.tlsMode is either SecureTls or InsecureTls here
             if (request.tlsMode === connection_request.TlsMode.NoTls) {
                 throw new ConfigurationError(
@@ -9240,20 +9265,63 @@ export class BaseClient {
             }
 
             // If options.tlsAdvancedConfiguration.insecure is true then use InsecureTls mode
-            if (options.tlsAdvancedConfiguration.insecure) {
+            if (tlsConfig.insecure) {
                 request.tlsMode = connection_request.TlsMode.InsecureTls;
             }
 
-            if (options.tlsAdvancedConfiguration.rootCertificates) {
-                const certData =
-                    typeof options.tlsAdvancedConfiguration.rootCertificates ===
-                    "string"
-                        ? Buffer.from(
-                              options.tlsAdvancedConfiguration.rootCertificates,
-                              "utf-8",
-                          )
-                        : options.tlsAdvancedConfiguration.rootCertificates;
-                request.rootCerts = [new Uint8Array(certData)];
+            const getTlsBytes = (
+                data: string | Buffer,
+                fieldName: string,
+            ): Uint8Array => {
+                const bytes =
+                    typeof data === "string"
+                        ? Buffer.from(data, "utf-8")
+                        : data;
+
+                if (bytes.length === 0) {
+                    throw new ConfigurationError(
+                        `${fieldName} cannot be empty; use undefined to omit it.`,
+                    );
+                }
+
+                return new Uint8Array(bytes);
+            };
+
+            const clientCertificate = tlsConfig.clientCertificate;
+            const clientPrivateKey = tlsConfig.clientPrivateKey;
+            const clientCertificateProvided = clientCertificate != null;
+            const clientPrivateKeyProvided = clientPrivateKey != null;
+
+            if (clientCertificateProvided && !clientPrivateKeyProvided) {
+                throw new ConfigurationError(
+                    "clientCertificate is provided but clientPrivateKey is missing. mTLS requires both.",
+                );
+            }
+
+            if (!clientCertificateProvided && clientPrivateKeyProvided) {
+                throw new ConfigurationError(
+                    "clientPrivateKey is provided but clientCertificate is missing. mTLS requires both.",
+                );
+            }
+
+            if (tlsConfig.rootCertificates != null) {
+                request.rootCerts = [
+                    getTlsBytes(
+                        tlsConfig.rootCertificates,
+                        "rootCertificates",
+                    ),
+                ];
+            }
+
+            if (clientCertificateProvided && clientPrivateKeyProvided) {
+                request.clientCert = getTlsBytes(
+                    clientCertificate,
+                    "clientCertificate",
+                );
+                request.clientKey = getTlsBytes(
+                    clientPrivateKey,
+                    "clientPrivateKey",
+                );
             }
         }
     }

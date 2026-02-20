@@ -267,6 +267,18 @@ async function testSentValueMatches(config: {
     });
 }
 
+class TestGlideClient extends GlideClient {
+    public constructor() {
+        super(new net.Socket());
+    }
+
+    public buildConnectionRequest(
+        options: GlideClientConfiguration,
+    ): connection_request.IConnectionRequest {
+        return this.createClientRequest(options);
+    }
+}
+
 describe("SocketConnectionInternals", () => {
     it("Test setup returns values", async () => {
         await testWithResources((connection, socket) => {
@@ -724,6 +736,153 @@ describe("SocketConnectionInternals", () => {
             true,
         );
         closeTestResources(connection, server, socket);
+    });
+
+    describe("advanced TLS configuration", () => {
+        it("should set mTLS client certificate and private key as buffers", () => {
+            const client = new TestGlideClient();
+            const rootCert = Buffer.from("ROOT_CERT_DATA", "utf-8");
+            const clientCert = Buffer.from("CLIENT_CERT_DATA", "utf-8");
+            const clientKey = Buffer.from("CLIENT_KEY_DATA", "utf-8");
+
+            try {
+                const request = client.buildConnectionRequest({
+                    addresses: [{ host: "foo" }],
+                    useTLS: true,
+                    advancedConfiguration: {
+                        tlsAdvancedConfiguration: {
+                            rootCertificates: rootCert,
+                            clientCertificate: clientCert,
+                            clientPrivateKey: clientKey,
+                        },
+                    },
+                });
+
+                expect(request.rootCerts).toEqual([new Uint8Array(rootCert)]);
+                expect(request.clientCert).toEqual(new Uint8Array(clientCert));
+                expect(request.clientKey).toEqual(new Uint8Array(clientKey));
+            } finally {
+                client.close();
+            }
+        });
+
+        it("should set mTLS client certificate and private key from strings", () => {
+            const client = new TestGlideClient();
+            const clientCert = "CLIENT_CERT_DATA";
+            const clientKey = "CLIENT_KEY_DATA";
+
+            try {
+                const request = client.buildConnectionRequest({
+                    addresses: [{ host: "foo" }],
+                    useTLS: true,
+                    advancedConfiguration: {
+                        tlsAdvancedConfiguration: {
+                            clientCertificate: clientCert,
+                            clientPrivateKey: clientKey,
+                        },
+                    },
+                });
+
+                expect(request.clientCert).toEqual(
+                    new Uint8Array(Buffer.from(clientCert, "utf-8")),
+                );
+                expect(request.clientKey).toEqual(
+                    new Uint8Array(Buffer.from(clientKey, "utf-8")),
+                );
+            } finally {
+                client.close();
+            }
+        });
+
+        it("should fail when client certificate is provided without private key", () => {
+            const client = new TestGlideClient();
+
+            try {
+                expect(() =>
+                    client.buildConnectionRequest({
+                        addresses: [{ host: "foo" }],
+                        useTLS: true,
+                        advancedConfiguration: {
+                            tlsAdvancedConfiguration: {
+                                clientCertificate: "CLIENT_CERT_DATA",
+                            },
+                        },
+                    }),
+                ).toThrow(
+                    "clientCertificate is provided but clientPrivateKey is missing. mTLS requires both.",
+                );
+            } finally {
+                client.close();
+            }
+        });
+
+        it("should fail when client private key is provided without certificate", () => {
+            const client = new TestGlideClient();
+
+            try {
+                expect(() =>
+                    client.buildConnectionRequest({
+                        addresses: [{ host: "foo" }],
+                        useTLS: true,
+                        advancedConfiguration: {
+                            tlsAdvancedConfiguration: {
+                                clientPrivateKey: "CLIENT_KEY_DATA",
+                            },
+                        },
+                    }),
+                ).toThrow(
+                    "clientPrivateKey is provided but clientCertificate is missing. mTLS requires both.",
+                );
+            } finally {
+                client.close();
+            }
+        });
+
+        it("should fail when client certificate is empty", () => {
+            const client = new TestGlideClient();
+
+            try {
+                expect(() =>
+                    client.buildConnectionRequest({
+                        addresses: [{ host: "foo" }],
+                        useTLS: true,
+                        advancedConfiguration: {
+                            tlsAdvancedConfiguration: {
+                                clientCertificate: "",
+                                clientPrivateKey: "CLIENT_KEY_DATA",
+                            },
+                        },
+                    }),
+                ).toThrow(
+                    "clientCertificate cannot be empty; use undefined to omit it.",
+                );
+            } finally {
+                client.close();
+            }
+        });
+
+        it("should fail when client private key is empty", () => {
+            const client = new TestGlideClient();
+
+            try {
+                expect(() =>
+                    client.buildConnectionRequest({
+                        addresses: [{ host: "foo" }],
+                        useTLS: true,
+                        advancedConfiguration: {
+                            tlsAdvancedConfiguration: {
+                                clientCertificate: "CLIENT_CERT_DATA",
+                                clientPrivateKey: Buffer.alloc(0),
+                            },
+                        },
+                    }),
+                ).toThrow(
+                    "clientPrivateKey cannot be empty; use undefined to omit it.",
+                );
+            } finally {
+                client.close();
+            }
+        });
     });
 
     it("should pass routing information from user", async () => {
