@@ -1,6 +1,6 @@
 name: Flaky CI Test Issue
 description: Report a flaky test in the CI pipeline
-title: "[Flaky Test] <test-name>"
+title: "[<language>][Flaky Test] <test-name>"
 labels: ["Flaky-tests 🐦", "CI/CD ⚒️"]
 assignees: []
 
