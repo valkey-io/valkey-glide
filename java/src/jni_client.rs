@@ -902,7 +902,7 @@ fn get_glide_core_client_cache_safe(env: &mut JNIEnv) -> Result<GlideCoreClientC
 #[cfg(test)]
 mod tests {
     use super::serialize_array_to_bytes;
-    use redis::{parse_redis_value, Value};
+    use redis::{Value, parse_redis_value};
 
     #[test]
     fn serialize_array_to_bytes_encodes_bool_double_bignumber_and_nil() {
