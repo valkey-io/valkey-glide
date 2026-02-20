@@ -103,7 +103,7 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 
 	// info with option or with multiple options without route
 	sections := []constants.Section{constants.Cpu}
-	if suite.serverVersion >= "7.0.0" {
+	if suite.IsServerVersionAtLeast("7.0.0") {
 		sections = append(sections, constants.Memory)
 	}
 	opts := options.ClusterInfoOptions{
@@ -1226,7 +1226,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithRandomRoute() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_AllNodes() {
 	client := suite.defaultClusterClient()
 	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
-	if suite.serverVersion >= "9.0.0" {
+	if suite.IsServerVersionAtLeast("9.0.0") {
 		options := options.ClusterLolwutOptions{
 			LolwutOptions: &options.LolwutOptions{
 				Version: 9,
@@ -1250,7 +1250,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_AllNodes() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_RandomNode() {
 	client := suite.defaultClusterClient()
 	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
-	if suite.serverVersion >= "9.0.0" {
+	if suite.IsServerVersionAtLeast("9.0.0") {
 		options := options.ClusterLolwutOptions{
 			LolwutOptions: &options.LolwutOptions{
 				Version: 9,
@@ -3033,7 +3033,7 @@ func (suite *GlideTestSuite) TestClusterShards() {
 	t := suite.T()
 
 	// CLUSTER SHARDS requires Valkey 7.0+
-	if suite.serverVersion < "7.0.0" {
+	if suite.IsServerVersionLowerThan("7.0.0") {
 		t.Skip("CLUSTER SHARDS requires Valkey 7.0 or above")
 	}
 
@@ -3058,7 +3058,7 @@ func (suite *GlideTestSuite) TestClusterShardsWithRoute() {
 	t := suite.T()
 
 	// CLUSTER SHARDS requires Valkey 7.0+
-	if suite.serverVersion < "7.0.0" {
+	if suite.IsServerVersionLowerThan("7.0.0") {
 		t.Skip("CLUSTER SHARDS requires Valkey 7.0 or above")
 	}
 
@@ -3142,7 +3142,7 @@ func (suite *GlideTestSuite) TestClusterMyShardId() {
 	t := suite.T()
 
 	// CLUSTER MYSHARDID requires Valkey 7.2+
-	if suite.serverVersion < "7.2.0" {
+	if suite.IsServerVersionLowerThan("7.2.0") {
 		t.Skip("CLUSTER MYSHARDID requires Valkey 7.2 or above")
 	}
 
@@ -3220,7 +3220,7 @@ func (suite *GlideTestSuite) TestClusterLinks() {
 	t := suite.T()
 
 	// CLUSTER LINKS requires Valkey 7.0+
-	if suite.serverVersion < "7.0.0" {
+	if suite.IsServerVersionLowerThan("7.0.0") {
 		t.Skip("CLUSTER LINKS requires Valkey 7.0 or above")
 	}
 

@@ -1266,7 +1266,7 @@ func (suite *GlideTestSuite) TestHScan() {
 		assert.Empty(t, result.Data)
 
 		// Negative cursor check.
-		if suite.serverVersion >= "8.0.0" {
+		if suite.IsServerVersionAtLeast("8.0.0") {
 			_, err = client.HScan(context.Background(), key1, models.NewCursorFromString("-1"))
 			assert.NotEmpty(t, err)
 		} else {
@@ -1371,7 +1371,7 @@ func (suite *GlideTestSuite) TestHScan() {
 		assert.True(t, resCursorInt >= 0)
 		assert.True(t, len(result.Data) >= 0)
 
-		if suite.serverVersion >= "8.0.0" {
+		if suite.IsServerVersionAtLeast("8.0.0") {
 			opts = options.NewHashScanOptions().SetNoValues(true)
 			result, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
 			resCursorInt, _ = strconv.Atoi(result.Cursor.String())
@@ -3123,7 +3123,7 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.Empty(t, result.Data)
 
 		// negative cursor
-		if suite.serverVersion < "8.0.0" {
+		if suite.IsServerVersionLowerThan("8.0.0") {
 			result, err = client.SScan(context.Background(), key1, models.NewCursorFromString("-1"))
 			assert.NoError(t, err)
 			assert.Equal(t, initialCursor.String(), result.Cursor.String())
@@ -3558,7 +3558,7 @@ func (suite *GlideTestSuite) TestLPushX() {
 }
 
 func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
-	if suite.serverVersion < "7.0.0" {
+	if suite.IsServerVersionLowerThan("7.0.0") {
 		suite.T().Skip("This feature is added in version 7")
 	}
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
@@ -3610,7 +3610,7 @@ func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
 }
 
 func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
-	if suite.serverVersion < "7.0.0" {
+	if suite.IsServerVersionLowerThan("7.0.0") {
 		suite.T().Skip("This feature is added in version 7")
 	}
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
@@ -3664,7 +3664,7 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 }
 
 func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
-	if suite.serverVersion < "7.0.0" {
+	if suite.IsServerVersionLowerThan("7.0.0") {
 		suite.T().Skip("This feature is added in version 7")
 	}
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
@@ -3778,7 +3778,7 @@ func (suite *GlideTestSuite) TestLSet() {
 }
 
 func (suite *GlideTestSuite) TestLMove() {
-	if suite.serverVersion < "6.2.0" {
+	if suite.IsServerVersionLowerThan("6.2.0") {
 		suite.T().Skip("This feature is added in version 6.2.0")
 	}
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
@@ -4892,7 +4892,7 @@ func (suite *GlideTestSuite) TestSortReadyOnlyWithOptions_DescendingOrder() {
 }
 
 func (suite *GlideTestSuite) TestBLMove() {
-	if suite.serverVersion < "6.2.0" {
+	if suite.IsServerVersionLowerThan("6.2.0") {
 		suite.T().Skip("This feature is added in version 6.2.0")
 	}
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
@@ -5254,7 +5254,7 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		xautoclaim, err := client.XAutoClaimWithOptions(context.Background(), key, group, consumer, 0, "0-0", *opts)
 		assert.NoError(suite.T(), err)
 		var deletedEntries []string
-		if suite.serverVersion >= "7.0.0" {
+		if suite.IsServerVersionAtLeast("7.0.0") {
 			deletedEntries = []string{}
 		}
 		assert.Equal(
@@ -5697,7 +5697,7 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		assert.Nil(suite.T(), xreadgroup)
 
 		// Reset the last delivered ID for the consumer group to "1-1"
-		if suite.serverVersion < "7.0.0" {
+		if suite.IsServerVersionLowerThan("7.0.0") {
 			suite.verifyOK(client.XGroupSetId(context.Background(), key, group, "1-1"))
 		} else {
 			opts := options.NewXGroupSetIdOptionsOptions().SetEntriesRead(42)
@@ -6413,7 +6413,7 @@ func (suite *GlideTestSuite) TestZRank() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), int64(1), res.Value())
 
-		if suite.serverVersion >= "7.2.0" {
+		if suite.IsServerVersionAtLeast("7.2.0") {
 			res2, err := client.ZRankWithScore(context.Background(), key, "one")
 			suite.NoError(err)
 			assert.Equal(suite.T(), int64(0), res2.Value().Rank)
@@ -6445,7 +6445,7 @@ func (suite *GlideTestSuite) TestZRevRank() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), int64(1), res.Value())
 
-		if suite.serverVersion >= "7.2.0" {
+		if suite.IsServerVersionAtLeast("7.2.0") {
 			res2, err := client.ZRevRankWithScore(context.Background(), key, "one")
 			suite.NoError(err)
 			assert.Equal(suite.T(), int64(2), res2.Value().Rank)
@@ -6753,7 +6753,7 @@ func (suite *GlideTestSuite) TestZScan() {
 		assert.Empty(suite.T(), result.Data)
 
 		// Negative cursor
-		if suite.serverVersion >= "8.0.0" {
+		if suite.IsServerVersionAtLeast("8.0.0") {
 			_, err = client.ZScan(context.Background(), key1, models.NewCursorFromString("-1"))
 			suite.Error(err)
 		} else {
@@ -6845,7 +6845,7 @@ func (suite *GlideTestSuite) TestZScan() {
 		assert.GreaterOrEqual(suite.T(), len(result.Data), 0)
 
 		// Test NoScores option for Redis 8.0.0+
-		if suite.serverVersion >= "8.0.0" {
+		if suite.IsServerVersionAtLeast("8.0.0") {
 			// Use a fresh key for NoScores test to avoid interference from previous entries
 			noScoresKey := uuid.New().String()
 			// Create a smaller fresh map for NoScores test - we don't need 50K entries just to test the NoScores option
@@ -7426,7 +7426,7 @@ func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
 
 		// ENTRIESREAD option was added in valkey 7.0.0
 		opts = options.NewXGroupCreateOptions().SetEntriesRead(100)
-		if suite.serverVersion >= "7.0.0" {
+		if suite.IsServerVersionAtLeast("7.0.0") {
 			suite.verifyOK(client.XGroupCreateWithOptions(context.Background(), key, group, id, *opts))
 		} else {
 			_, err = client.XGroupCreateWithOptions(context.Background(), key, group, id, *opts)
@@ -8243,7 +8243,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), infoFull.Length)
-		if suite.serverVersion >= "7.0.0" {
+		if suite.IsServerVersionAtLeast("7.0.0") {
 			assert.Equal(suite.T(), "1-0", infoFull.RecordedFirstEntryId.Value())
 		} else {
 			assert.True(suite.T(), infoFull.RecordedFirstEntryId.IsNil())
@@ -8255,7 +8255,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		// first group
 		assert.Equal(suite.T(), len(infoFull.Groups), 1)
 		groupItem := infoFull.Groups[0]
-		if suite.serverVersion >= "7.0.0" {
+		if suite.IsServerVersionAtLeast("7.0.0") {
 			assert.Equal(suite.T(), groupItem.EntriesRead.Value(), int64(1))
 			assert.Equal(suite.T(), groupItem.Lag.Value(), int64(1))
 		}
@@ -8271,7 +8271,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		assert.Equal(suite.T(), len(cns.Pending), int(1))
 		assert.Equal(suite.T(), cns.Pending[0].Id, "1-0")
 		assert.Equal(suite.T(), cns.Pending[0].DeliveredCount, int64(1))
-		if suite.serverVersion >= "7.2.0" {
+		if suite.IsServerVersionAtLeast("7.2.0") {
 			assert.False(suite.T(), cns.ActiveTime.IsNil())
 		} else {
 			assert.True(suite.T(), cns.ActiveTime.IsNil())
@@ -8343,7 +8343,7 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		assert.Equal(suite.T(), consumer1, info[0].Name)
 		assert.Equal(suite.T(), int64(1), info[0].Pending)
 		assert.Greater(suite.T(), info[0].Idle, int64(0))
-		if suite.serverVersion > "7.2.0" {
+		if suite.IsServerVersionGreaterThan("7.2.0") {
 			assert.False(suite.T(), info[0].Inactive.IsNil())
 			assert.Greater(suite.T(), info[0].Inactive.Value(), int64(0))
 		} else {
@@ -8449,7 +8449,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		// one empty group exists
 		xinfo, err := client.XInfoGroups(context.Background(), key)
 		suite.NoError(err)
-		if suite.serverVersion < "7.0.0" {
+		if suite.IsServerVersionLowerThan("7.0.0") {
 			suite.Equal([]models.XInfoGroupInfo{
 				{
 					Name:            group,
@@ -8499,7 +8499,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		// same as previous check, bug lag = 3, there are 3 messages unread
 		xinfo, err = client.XInfoGroups(context.Background(), key)
 		suite.NoError(err)
-		if suite.serverVersion < "7.0.0" {
+		if suite.IsServerVersionLowerThan("7.0.0") {
 			suite.Equal([]models.XInfoGroupInfo{
 				{
 					Name:            group,
@@ -8580,7 +8580,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		// after reading, `lag` is reset, and `pending`, consumer count and last ID are set
 		xinfo, err = client.XInfoGroups(context.Background(), key)
 		assert.NoError(suite.T(), err)
-		if suite.serverVersion < "7.0.0" {
+		if suite.IsServerVersionLowerThan("7.0.0") {
 			assert.Equal(suite.T(), []models.XInfoGroupInfo{
 				{
 					Name:            group,
@@ -8611,7 +8611,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		// once message ack'ed, pending counter decreased
 		xinfo, err = client.XInfoGroups(context.Background(), key)
 		assert.NoError(suite.T(), err)
-		if suite.serverVersion < "7.0.0" {
+		if suite.IsServerVersionLowerThan("7.0.0") {
 			assert.Equal(suite.T(), []models.XInfoGroupInfo{
 				{
 					Name:            group,
@@ -9495,7 +9495,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NotNil(suite.T(), streamId3)
 
 		// Exclusive ranges are added in 6.2.0
-		if suite.serverVersion >= "6.2.0" {
+		if suite.IsServerVersionAtLeast("6.2.0") {
 			// get the newest stream entry
 			xrangeResult, err = client.XRangeWithOptions(
 				context.Background(),
