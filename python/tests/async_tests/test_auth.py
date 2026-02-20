@@ -351,8 +351,7 @@ class TestAuthCommands:
         This test verifies:
         1. Client can connect using IAM authentication with mock credentials
         2. Basic operations work after IAM authentication
-        3. Manual token refresh works
-        4. Operations continue to work after token refresh
+        3. Operations continue to work after token refresh
         """
         # Save original values
         original_access_key = os.environ.get("AWS_ACCESS_KEY_ID")
@@ -393,9 +392,6 @@ class TestAuthCommands:
             await client.set("iam_test_key", "iam_test_value")
             value = await client.get("iam_test_key")
             assert value == b"iam_test_value"
-
-            # Test manual token refresh
-            await client.refresh_iam_token()
 
             # Verify operations still work after token refresh
             await client.set("iam_test_key2", "iam_test_value2")

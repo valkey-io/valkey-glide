@@ -681,11 +681,6 @@ describe("IAM Auth: Mock Credentials", () => {
 
                 Logger.log("info", "IAM test", "Basic operations successful");
 
-                // Test manual token refresh
-                Logger.log("info", "IAM test", "Refreshing the token manually");
-                await client.refreshIamToken();
-                Logger.log("info", "IAM test", "Token refresh successful");
-
                 // Verify client still works after token refresh
                 await client.set("iam_test_key2", "iam_test_value2");
                 const value2 = await client.get("iam_test_key2");

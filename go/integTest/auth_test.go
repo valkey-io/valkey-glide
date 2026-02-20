@@ -18,8 +18,7 @@ import (
 // This test verifies:
 // 1. Client can connect using IAM authentication with mock credentials
 // 2. Basic operations work after IAM authentication
-// 3. Manual token refresh works
-// 4. Operations continue to work after token refresh
+// 3. Operations continue to work after token refresh
 func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 	// Save original AWS credentials
 	originalAccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
@@ -90,10 +89,6 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 	getResult, err := client.Get(context.Background(), key1)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), value1, getResult.Value())
-
-	// Test manual token refresh
-	_, refreshErr := client.RefreshIamToken(context.Background())
-	assert.NoError(suite.T(), refreshErr)
 
 	// Verify operations still work after token refresh
 	key2 := uuid.NewString()

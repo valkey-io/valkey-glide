@@ -1486,7 +1486,7 @@ pub(crate) mod shared_client_tests {
                     cleanup();
                     panic!(
                         "Failed to create client with IAM authentication: {}",
-                        err.to_string()
+                        err
                     );
                 }
             }

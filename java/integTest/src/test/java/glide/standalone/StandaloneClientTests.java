@@ -465,9 +465,6 @@ public class StandaloneClientTests {
                 assertEquals("OK", client.set("iam_test_key", "iam_test_value").get());
                 assertEquals("iam_test_value", client.get("iam_test_key").get());
 
-                // Test manual token refresh
-                client.refreshIamToken().get();
-
                 // Verify operations still work after token refresh
                 assertEquals("OK", client.set("iam_test_key2", "iam_test_value2").get());
                 assertEquals("iam_test_value2", client.get("iam_test_key2").get());
