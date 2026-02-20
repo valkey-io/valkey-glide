@@ -1484,10 +1484,7 @@ pub(crate) mod shared_client_tests {
                 }
                 Err(err) => {
                     cleanup();
-                    panic!(
-                        "Failed to create client with IAM authentication: {}",
-                        err
-                    );
+                    panic!("Failed to create client with IAM authentication: {}", err);
                 }
             }
         });
