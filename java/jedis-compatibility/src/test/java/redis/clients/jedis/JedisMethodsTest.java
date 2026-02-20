@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.resps.AccessControlUser;
@@ -130,6 +131,34 @@ public class JedisMethodsTest {
     }
 
     @Test
+    public void testPubSubMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        Method publishString = jedisClass.getMethod("publish", String.class, String.class);
+        assertEquals(long.class, publishString.getReturnType());
+
+        Method publishBinary = jedisClass.getMethod("publish", byte[].class, byte[].class);
+        assertEquals(long.class, publishBinary.getReturnType());
+
+        Method pubsubChannels = jedisClass.getMethod("pubsubChannels");
+        assertEquals(List.class, pubsubChannels.getReturnType());
+
+        Method pubsubChannelsPattern = jedisClass.getMethod("pubsubChannels", String.class);
+        assertEquals(List.class, pubsubChannelsPattern.getReturnType());
+
+        Method pubsubChannelsBinary = jedisClass.getMethod("pubsubChannels", byte[].class);
+        assertEquals(List.class, pubsubChannelsBinary.getReturnType());
+
+        Method pubsubNumPat = jedisClass.getMethod("pubsubNumPat");
+        assertEquals(long.class, pubsubNumPat.getReturnType());
+
+        Method pubsubNumSub = jedisClass.getMethod("pubsubNumSub", String[].class);
+        assertEquals(Map.class, pubsubNumSub.getReturnType());
+
+        Method pubsubNumSubBinary = jedisClass.getMethod("pubsubNumSub", byte[][].class);
+        assertEquals(Map.class, pubsubNumSubBinary.getReturnType());
+    }
+
     public void testEvalMethodSignatures() throws NoSuchMethodException {
         Class<Jedis> jedisClass = Jedis.class;
 

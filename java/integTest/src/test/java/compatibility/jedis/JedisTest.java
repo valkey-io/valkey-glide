@@ -1633,6 +1633,99 @@ public class JedisTest {
     }
 
     @Test
+    void publish_pubsub_command() {
+        String channel = "ch:" + UUID.randomUUID();
+        String message = "msg";
+
+        // Test PUBLISH command - returns 0 because GLIDE doesn't expose subscriber count
+        long received = jedis.publish(channel, message);
+        assertEquals(0L, received, "PUBLISH should return 0 (GLIDE API limitation - see issue #5354)");
+
+        // Test PUBSUB CHANNELS command
+        // Note: PUBSUB CHANNELS returns channels with active subscriptions.
+        // Since we don't have any subscriptions in this test, the list should be empty.
+        List<String> channels = jedis.pubsubChannels();
+        assertNotNull(channels, "PUBSUB CHANNELS should return a non-null list");
+        assertTrue(channels instanceof List, "PUBSUB CHANNELS should return a List instance");
+        // Channel won't be in the list since there are no active subscriptions
+        assertFalse(
+                channels.contains(channel),
+                "PUBSUB CHANNELS should not contain channel without subscribers");
+
+        // Test PUBSUB CHANNELS with pattern
+        List<String> channelsWithPattern = jedis.pubsubChannels(channel);
+        assertNotNull(
+                channelsWithPattern, "PUBSUB CHANNELS with pattern should return a non-null list");
+        assertTrue(
+                channelsWithPattern instanceof List,
+                "PUBSUB CHANNELS with pattern should return a List instance");
+        // Channel won't be in the list since there are no active subscriptions
+        assertFalse(
+                channelsWithPattern.contains(channel),
+                "PUBSUB CHANNELS with pattern should not contain channel without subscribers");
+
+        // Test PUBSUB NUMPAT command
+        long numPat = jedis.pubsubNumPat();
+        assertTrue(numPat >= 0, "PUBSUB NUMPAT should return a non-negative value");
+
+        // Test PUBSUB NUMSUB command
+        Map<String, Long> numSub = jedis.pubsubNumSub(channel);
+        assertNotNull(numSub, "PUBSUB NUMSUB should return a non-null map");
+        assertTrue(numSub instanceof Map, "PUBSUB NUMSUB should return a Map instance");
+        // PUBSUB NUMSUB always returns a map with the requested channels
+        assertTrue(numSub.containsKey(channel), "PUBSUB NUMSUB should contain the requested channel");
+        assertEquals(
+                0L,
+                numSub.get(channel),
+                "PUBSUB NUMSUB should return 0 subscribers for channel without active subscriptions");
+
+        // Test binary versions
+        byte[] channelBytes = channel.getBytes(StandardCharsets.UTF_8);
+        byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+
+        // Test PUBLISH binary
+        long receivedBinary = jedis.publish(channelBytes, messageBytes);
+        assertEquals(
+                0L,
+                receivedBinary,
+                "PUBLISH binary should return 0 (GLIDE API limitation - see issue #5354)");
+
+        // Test PUBSUB CHANNELS binary
+        List<byte[]> channelsBinary = jedis.pubsubChannels(channelBytes);
+        assertNotNull(channelsBinary, "PUBSUB CHANNELS binary should return a non-null list");
+        assertTrue(
+                channelsBinary instanceof List, "PUBSUB CHANNELS binary should return a List instance");
+        // Channel won't be in the list since there are no active subscriptions
+        boolean containsChannel =
+                channelsBinary.stream().anyMatch(ch -> Arrays.equals(ch, channelBytes));
+        assertFalse(
+                containsChannel, "PUBSUB CHANNELS binary should not contain channel without subscribers");
+
+        // Test PUBSUB NUMSUB binary
+        Map<byte[], Long> numSubBinary = jedis.pubsubNumSub(channelBytes);
+        assertNotNull(numSubBinary, "PUBSUB NUMSUB binary should return a non-null map");
+        assertTrue(numSubBinary instanceof Map, "PUBSUB NUMSUB binary should return a Map instance");
+        // Verify map contains the requested channel
+        boolean containsChannelKey =
+                numSubBinary.keySet().stream().anyMatch(key -> Arrays.equals(key, channelBytes));
+        assertTrue(containsChannelKey, "PUBSUB NUMSUB binary should contain the requested channel");
+        // Get subscriber count for the channel
+        Long subscriberCount =
+                numSubBinary.entrySet().stream()
+                        .filter(entry -> Arrays.equals(entry.getKey(), channelBytes))
+                        .map(Map.Entry::getValue)
+                        .findFirst()
+                        .orElse(null);
+        assertNotNull(
+                subscriberCount, "PUBSUB NUMSUB binary should return subscriber count for channel");
+        assertEquals(
+                0L,
+                subscriberCount,
+                "PUBSUB NUMSUB binary should return 0 subscribers for channel without active"
+                        + " subscriptions");
+    }
+
+    @Test
     void sadd_srem_smembers_command() {
         String key = UUID.randomUUID().toString();
         String member1 = "member1";
