@@ -345,4 +345,57 @@ public class JedisMethodsTest {
                 jedisClass.getMethod("aclDryRun", String.class, String.class, String[].class);
         assertEquals(String.class, aclDryRun.getReturnType());
     }
+
+    @Test
+    public void testHashCommandMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test hrandfieldWithCount alias methods
+        Method hrandfieldWithCountString =
+                jedisClass.getMethod("hrandfieldWithCount", String.class, long.class);
+        assertEquals(List.class, hrandfieldWithCountString.getReturnType());
+
+        Method hrandfieldWithCountBinary =
+                jedisClass.getMethod("hrandfieldWithCount", byte[].class, long.class);
+        assertEquals(List.class, hrandfieldWithCountBinary.getReturnType());
+    }
+
+    @Test
+    public void testStringCommandMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test msetnx methods
+        Method msetnxString = jedisClass.getMethod("msetnx", String[].class);
+        assertEquals(long.class, msetnxString.getReturnType());
+
+        Method msetnxBinary = jedisClass.getMethod("msetnx", byte[][].class);
+        assertEquals(long.class, msetnxBinary.getReturnType());
+
+        // Test setrange methods
+        Method setrangeString =
+                jedisClass.getMethod("setrange", String.class, long.class, String.class);
+        assertEquals(long.class, setrangeString.getReturnType());
+
+        Method setrangeBinary =
+                jedisClass.getMethod("setrange", byte[].class, long.class, byte[].class);
+        assertEquals(long.class, setrangeBinary.getReturnType());
+
+        // Test getrange methods
+        Method getrangeString = jedisClass.getMethod("getrange", String.class, long.class, long.class);
+        assertEquals(String.class, getrangeString.getReturnType());
+
+        Method getrangeBinary = jedisClass.getMethod("getrange", byte[].class, long.class, long.class);
+        assertEquals(byte[].class, getrangeBinary.getReturnType());
+
+        // Test lcs methods (takes LCSParams and returns LCSMatchResult)
+        Method lcsString =
+                jedisClass.getMethod(
+                        "lcs", String.class, String.class, redis.clients.jedis.params.LCSParams.class);
+        assertEquals(redis.clients.jedis.resps.LCSMatchResult.class, lcsString.getReturnType());
+
+        Method lcsBinary =
+                jedisClass.getMethod(
+                        "lcs", byte[].class, byte[].class, redis.clients.jedis.params.LCSParams.class);
+        assertEquals(redis.clients.jedis.resps.LCSMatchResult.class, lcsBinary.getReturnType());
+    }
 }

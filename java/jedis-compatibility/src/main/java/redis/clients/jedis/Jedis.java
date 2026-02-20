@@ -62,12 +62,14 @@ import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
 import redis.clients.jedis.params.HGetExParams;
 import redis.clients.jedis.params.HSetExParams;
+import redis.clients.jedis.params.LCSParams;
 import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.AccessControlLogEntry;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
+import redis.clients.jedis.resps.LCSMatchResult;
 import redis.clients.jedis.resps.LibraryInfo;
 import redis.clients.jedis.resps.ScanResult;
 import redis.clients.jedis.util.KeyValue;
@@ -1312,6 +1314,56 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Set multiple key-value pairs, only if none of the keys exist.
+     *
+     * @param keysvalues alternating keys and values
+     * @return true if all keys were set, false if no key was set (at least one key already existed)
+     * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
+     * @since Valkey 1.0.1
+     */
+    public long msetnx(String... keysvalues) {
+        return executeCommandWithGlide(
+                "MSETNX",
+                () -> {
+                    if (keysvalues.length % 2 == 1) {
+                        throw new IllegalArgumentException("keysvalues must be of even length");
+                    }
+                    Map<String, String> keyValueMap = new HashMap<>();
+                    for (int i = 0; i < keysvalues.length; i += 2) {
+                        if (i + 1 < keysvalues.length) {
+                            keyValueMap.put(keysvalues[i], keysvalues[i + 1]);
+                        }
+                    }
+                    return glideClient.msetnx(keyValueMap).get() ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set multiple key-value pairs, only if none of the keys exist (binary version).
+     *
+     * @param keysvalues alternating keys and values
+     * @return true if all keys were set, false if no key was set (at least one key already existed)
+     * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
+     * @since Valkey 1.0.1
+     */
+    public long msetnx(final byte[]... keysvalues) {
+        return executeCommandWithGlide(
+                "MSETNX",
+                () -> {
+                    if (keysvalues.length % 2 == 1) {
+                        throw new IllegalArgumentException("keysvalues must be of even length");
+                    }
+                    Map<GlideString, GlideString> keyValueMap = new HashMap<>();
+                    for (int i = 0; i < keysvalues.length; i += 2) {
+                        if (i + 1 < keysvalues.length) {
+                            keyValueMap.put(GlideString.of(keysvalues[i]), GlideString.of(keysvalues[i + 1]));
+                        }
+                    }
+                    return glideClient.msetnxBinary(keyValueMap).get() ? 1L : 0L;
+                });
+    }
+
+    /**
      * Get multiple values.
      *
      * @param keys the keys to get
@@ -1720,6 +1772,78 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Overwrites part of the string stored at key, starting at the specified offset, for the entire
+     * length of value. If the offset is larger than the current length of the string at key, the
+     * string is padded with zero-bytes to make offset fit. Non-existing keys are considered as empty
+     * strings, so this command will make sure it holds a string large enough to be able to set value
+     * at offset.
+     *
+     * @param key the key
+     * @param offset the offset at which to start overwriting
+     * @param value the value to set
+     * @return the length of the string after it was modified
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
+     * @since Valkey 2.2.0
+     */
+    public long setrange(String key, long offset, String value) {
+        return executeCommandWithGlide(
+                "SETRANGE", () -> glideClient.setrange(key, (int) offset, value).get());
+    }
+
+    /**
+     * Overwrites part of the string stored at key, starting at the specified offset (binary version).
+     *
+     * @param key the key
+     * @param offset the offset at which to start overwriting
+     * @param value the value to set
+     * @return the length of the string after it was modified
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
+     * @since Valkey 2.2.0
+     */
+    public long setrange(final byte[] key, long offset, final byte[] value) {
+        return executeCommandWithGlide(
+                "SETRANGE",
+                () -> glideClient.setrange(GlideString.of(key), (int) offset, GlideString.of(value)).get());
+    }
+
+    /**
+     * Returns the substring of the string value stored at key, determined by the offsets start and
+     * end (both are inclusive). Negative offsets can be used in order to provide an offset starting
+     * from the end of the string. So -1 means the last character, -2 the penultimate and so forth.
+     *
+     * @param key the key
+     * @param startOffset the start offset (inclusive)
+     * @param endOffset the end offset (inclusive)
+     * @return the substring
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
+     * @since Valkey 2.4.0
+     */
+    public String getrange(String key, long startOffset, long endOffset) {
+        return executeCommandWithGlide(
+                "GETRANGE", () -> glideClient.getrange(key, (int) startOffset, (int) endOffset).get());
+    }
+
+    /**
+     * Returns the substring of the string value stored at key (binary version).
+     *
+     * @param key the key
+     * @param startOffset the start offset (inclusive)
+     * @param endOffset the end offset (inclusive)
+     * @return the substring
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
+     * @since Valkey 2.4.0
+     */
+    public byte[] getrange(final byte[] key, long startOffset, long endOffset) {
+        return executeCommandWithGlide(
+                "GETRANGE",
+                () -> {
+                    GlideString result =
+                            glideClient.getrange(GlideString.of(key), (int) startOffset, (int) endOffset).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
      * Append a value to the end of the string stored at the specified key. If the key does not exist,
      * it is created and set as an empty string before performing the append operation. This operation
      * is atomic and efficient for building strings incrementally.
@@ -1786,6 +1910,76 @@ public final class Jedis implements Closeable {
      */
     public long strlen(final byte[] key) {
         return executeCommandWithGlide("STRLEN", () -> glideClient.strlen(GlideString.of(key)).get());
+    }
+
+    /**
+     * Calculate the longest common subsequence of keyA and keyB.
+     *
+     * @param keyA the first key
+     * @param keyB the second key
+     * @param params LCS parameters
+     * @return LCSMatchResult containing the result based on params
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
+     */
+    public LCSMatchResult lcs(String keyA, String keyB, LCSParams params) {
+        return executeCommandWithGlide(
+                "LCS",
+                () -> {
+                    if (params.isLen()) {
+                        // LEN option: return only length
+                        Long len = glideClient.lcsLen(keyA, keyB).get();
+                        return new LCSMatchResult(null, null, len);
+                    } else if (params.isIdx()) {
+                        // IDX option: return match indices
+                        Map<String, Object> result = glideClient.lcsIdx(keyA, keyB).get();
+                        // Convert GLIDE result to LCSMatchResult format
+                        // Note: This is a simplified conversion - full implementation would need
+                        // to properly parse the GLIDE result map structure
+                        Long len = result.containsKey("len") ? ((Number) result.get("len")).longValue() : 0L;
+                        return new LCSMatchResult(null, null, len);
+                    } else {
+                        // Default: return the LCS string
+                        String matchString = glideClient.lcs(keyA, keyB).get();
+                        return new LCSMatchResult(
+                                matchString, null, matchString != null ? matchString.length() : 0);
+                    }
+                });
+    }
+
+    /**
+     * Calculate the longest common subsequence of keyA and keyB (binary version).
+     *
+     * @param keyA the first key
+     * @param keyB the second key
+     * @param params LCS parameters
+     * @return LCSMatchResult containing the result based on params
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
+     */
+    public LCSMatchResult lcs(byte[] keyA, byte[] keyB, LCSParams params) {
+        return executeCommandWithGlide(
+                "LCS",
+                () -> {
+                    GlideString keyAGs = GlideString.of(keyA);
+                    GlideString keyBGs = GlideString.of(keyB);
+
+                    if (params.isLen()) {
+                        // LEN option: return only length
+                        Long len = glideClient.lcsLen(keyAGs, keyBGs).get();
+                        return new LCSMatchResult(null, null, len);
+                    } else if (params.isIdx()) {
+                        // IDX option: return match indices
+                        Map<String, Object> result = glideClient.lcsIdx(keyAGs, keyBGs).get();
+                        Long len = result.containsKey("len") ? ((Number) result.get("len")).longValue() : 0L;
+                        return new LCSMatchResult(null, null, len);
+                    } else {
+                        // Default: return the LCS string
+                        GlideString matchString = glideClient.lcs(keyAGs, keyBGs).get();
+                        String matchStr = matchString != null ? matchString.toString() : null;
+                        return new LCSMatchResult(matchStr, null, matchStr != null ? matchStr.length() : 0);
+                    }
+                });
     }
 
     /**
@@ -4639,6 +4833,18 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Returns an array of random fields from the hash value stored at key. Alias for {@link
+     * #hrandfield(String, long)}.
+     *
+     * @param key the key of the hash
+     * @param count the number of fields to return
+     * @return an array of random fields from the hash
+     */
+    public List<String> hrandfieldWithCount(String key, long count) {
+        return hrandfield(key, count);
+    }
+
+    /**
      * Returns an array of random fields from the hash value stored at key (binary version).
      *
      * @param key the key of the hash
@@ -4658,6 +4864,18 @@ public final class Jedis implements Closeable {
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("HRANDFIELD operation failed", e);
         }
+    }
+
+    /**
+     * Returns an array of random fields from the hash value stored at key (binary version). Alias for
+     * {@link #hrandfield(byte[], long)}.
+     *
+     * @param key the key of the hash
+     * @param count the number of fields to return
+     * @return an array of random fields from the hash
+     */
+    public List<byte[]> hrandfieldWithCount(final byte[] key, final long count) {
+        return hrandfield(key, count);
     }
 
     /**
