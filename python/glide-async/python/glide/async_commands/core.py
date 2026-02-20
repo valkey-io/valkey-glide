@@ -60,7 +60,7 @@ from glide_shared.constants import (
     TXInfoStreamResponse,
 )
 from glide_shared.exceptions import RequestError
-from glide_shared.protobuf.command_request_pb2 import RequestType
+from glide_shared.protobuf.command_request_pb2 import CacheMetricsType, RequestType
 from glide_shared.routes import Route
 
 # PubSub constants for unsubscribing from all channels/patterns
@@ -178,6 +178,95 @@ class CoreCommands(Protocol):
             'OK'
         """
         return cast(TOK, await self._refresh_iam_token())
+
+    async def _get_cache_metrics(
+        self, metrics_type: CacheMetricsType.ValueType
+    ) -> TResult: ...
+
+    async def get_cache_hit_rate(self) -> float:
+        """
+        Get the cache hit rate (hits / total requests).
+
+        Returns:
+            float: The cache hit rate as a float between 0.0 and 1.0.
+
+        Raises:
+            RequestError: If client-side caching is not enabled or metrics tracking is disabled.
+
+        Example:
+            >>> hit_rate = await client.get_cache_hit_rate()
+            >>> print(f"Cache hit rate: {hit_rate:.2%}")
+            Cache hit rate: 85.50%
+        """
+        return cast(float, await self._get_cache_metrics(CacheMetricsType.HitRate))
+
+    async def get_cache_miss_rate(self) -> float:
+        """
+        Get the cache miss rate (misses / total requests).
+
+        Returns:
+            float: The cache miss rate as a float between 0.0 and 1.0.
+
+        Raises:
+            RequestError: If client-side caching is not enabled or metrics tracking is disabled.
+
+        Example:
+            >>> miss_rate = await client.get_cache_miss_rate()
+            >>> print(f"Cache miss rate: {miss_rate:.2%}")
+            Cache miss rate: 14.50%
+        """
+        return cast(float, await self._get_cache_metrics(CacheMetricsType.MissRate))
+
+    async def get_cache_entry_count(self) -> int:
+        """
+        Get the current number of entries in the client-side cache.
+
+        Returns:
+            int: The number of entries in the cache.
+
+        Raises:
+            RequestError: If client-side caching is not enabled.
+
+        Example:
+            >>> entry_count = await client.get_cache_entry_count()
+            >>> print(f"Cache entry count: {entry_count}")
+            Cache entry count: 1500
+        """
+        return cast(int, await self._get_cache_metrics(CacheMetricsType.EntryCount))
+
+    async def get_cache_evictions(self) -> int:
+        """
+        Get the total number of entries evicted from the client-side cache due to memory constraints.
+
+        Returns:
+            int: The number of evictions.
+
+        Raises:
+            RequestError: If client-side caching is not enabled or metrics tracking is disabled.
+
+        Example:
+            >>> evictions = await client.get_cache_evictions()
+            >>> print(f"Cache evictions: {evictions}")
+            Cache evictions: 100
+        """
+        return cast(int, await self._get_cache_metrics(CacheMetricsType.Evictions))
+
+    async def get_cache_expirations(self) -> int:
+        """
+        Get the total number of entries expired from the client-side cache.
+
+        Returns:
+            int: The number of expirations.
+
+        Raises:
+            RequestError: If client-side caching is not enabled or metrics tracking is disabled.
+
+        Example:
+            >>> expirations = await client.get_cache_expirations()
+            >>> print(f"Cache expirations: {expirations}")
+            Cache expirations: 250
+        """
+        return cast(int, await self._get_cache_metrics(CacheMetricsType.Expirations))
 
     async def set(
         self,

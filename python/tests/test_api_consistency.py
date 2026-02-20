@@ -44,12 +44,19 @@ EXCLUDED_API_FUNCTIONS = {
         "create_leaked_value",
         "start_socket_listener_external",
         "value_from_pointer",
+        # cache
+        "_get_cache_metrics",
+        "get_cache_hit_rate",
+        "get_cache_miss_rate",
+        "get_cache_entry_count",
+        "get_cache_evictions",
+        "get_cache_expirations",
     ],
     "sync_only": [],
 }
 
 EXCLUDED_API_FILENAMES = {
-    "async_only": [],
+    "async_only": ["cache.py"],
     "sync_only": ["_glide_ffi.py"],
 }
 
@@ -124,6 +131,7 @@ EXCLUDED_TESTS = {
 EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
         "test_deprecation_warnings.py",
+        "test_client_side_cache.py",
     ],
     "sync_only": [],
 }
