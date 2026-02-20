@@ -135,7 +135,7 @@ def generate_tls_certs():
     ext_file = f"{TLS_FOLDER}/openssl.cnf"
 
     f = open(ext_file, "w")
-    f.write("keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,DNS:localhost")
+    f.write("keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,IP:::1,DNS:localhost,DNS:valkey.glide.test.tls.com")
     f.close()
 
     def make_key(name: str, size: int):
