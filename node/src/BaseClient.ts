@@ -9,6 +9,7 @@
 
 import Long from "long";
 import * as net from "net";
+import * as fs from "fs";
 import {
     Buffer,
     BufferWriter,
@@ -316,6 +317,65 @@ export type GlideReturnType =
  * Union type that can store either a valid UTF-8 string or array of bytes.
  */
 export type GlideString = string | Buffer;
+
+function loadTlsPemFile(path: string, certType: string): Buffer {
+    let data: Buffer;
+
+    try {
+        data = fs.readFileSync(path);
+    } catch (error) {
+        const fsError = error as NodeJS.ErrnoException;
+
+        if (fsError.code === "ENOENT") {
+            throw new ConfigurationError(`${certType} file not found: ${path}`);
+        }
+
+        const message =
+            error instanceof Error ? error.message : String(error);
+        throw new ConfigurationError(
+            `Failed to read ${certType.toLowerCase()} file: ${message}`,
+        );
+    }
+
+    if (data.length === 0) {
+        throw new ConfigurationError(`${certType} file is empty: ${path}`);
+    }
+
+    return data;
+}
+
+/**
+ * Loads PEM-encoded root certificates from a file for TLS server verification.
+ *
+ * @param path - File path to a PEM root certificate or bundle.
+ * @returns Certificate data as a `Buffer`.
+ * @throws ConfigurationError If the file is missing, unreadable, or empty.
+ */
+export function loadRootCertificatesFromFile(path: string): Buffer {
+    return loadTlsPemFile(path, "Root certificate");
+}
+
+/**
+ * Loads a PEM-encoded client certificate from a file for mTLS authentication.
+ *
+ * @param path - File path to a PEM client certificate.
+ * @returns Certificate data as a `Buffer`.
+ * @throws ConfigurationError If the file is missing, unreadable, or empty.
+ */
+export function loadClientCertificateFromFile(path: string): Buffer {
+    return loadTlsPemFile(path, "Client certificate");
+}
+
+/**
+ * Loads a PEM-encoded client private key from a file for mTLS authentication.
+ *
+ * @param path - File path to a PEM client private key.
+ * @returns Private key data as a `Buffer`.
+ * @throws ConfigurationError If the file is missing, unreadable, or empty.
+ */
+export function loadClientPrivateKeyFromFile(path: string): Buffer {
+    return loadTlsPemFile(path, "Client private key");
+}
 
 /**
  * Enum representing the different types of decoders.

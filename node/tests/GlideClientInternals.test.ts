@@ -24,6 +24,9 @@ import {
     GlideReturnType,
     InfoOptions,
     isGlideRecord,
+    loadClientCertificateFromFile,
+    loadClientPrivateKeyFromFile,
+    loadRootCertificatesFromFile,
     MAX_REQUEST_ARGS_LEN,
     RequestError,
     SlotKeyTypes,
@@ -881,6 +884,71 @@ describe("SocketConnectionInternals", () => {
                 );
             } finally {
                 client.close();
+            }
+        });
+    });
+
+    describe("TLS certificate file loaders", () => {
+        it("should load root certificates from a file", () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tls-root-"));
+            const certPath = path.join(tempDir, "ca.pem");
+            const certData = Buffer.from(
+                "-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----\n",
+                "utf-8",
+            );
+
+            try {
+                fs.writeFileSync(certPath, certData);
+                expect(loadRootCertificatesFromFile(certPath)).toEqual(certData);
+            } finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        it("should load client certificate and private key from files", () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tls-mtls-"));
+            const certPath = path.join(tempDir, "client.crt");
+            const keyPath = path.join(tempDir, "client.key");
+            const certData = Buffer.from(
+                "-----BEGIN CERTIFICATE-----\nCLIENT\n-----END CERTIFICATE-----\n",
+                "utf-8",
+            );
+            const keyData = Buffer.from(
+                "-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----\n",
+                "utf-8",
+            );
+
+            try {
+                fs.writeFileSync(certPath, certData);
+                fs.writeFileSync(keyPath, keyData);
+                expect(loadClientCertificateFromFile(certPath)).toEqual(
+                    certData,
+                );
+                expect(loadClientPrivateKeyFromFile(keyPath)).toEqual(keyData);
+            } finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        it("should fail when client certificate file does not exist", () => {
+            expect(() =>
+                loadClientCertificateFromFile(
+                    "/tmp/does-not-exist/client-cert.pem",
+                ),
+            ).toThrow("Client certificate file not found");
+        });
+
+        it("should fail when client private key file is empty", () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tls-empty-"));
+            const keyPath = path.join(tempDir, "client.key");
+
+            try {
+                fs.writeFileSync(keyPath, Buffer.alloc(0));
+                expect(() => loadClientPrivateKeyFromFile(keyPath)).toThrow(
+                    "Client private key file is empty",
+                );
+            } finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
             }
         });
     });
