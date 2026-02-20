@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import redis.clients.jedis.params.SortingParams;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
 import redis.clients.jedis.util.KeyValue;
@@ -362,14 +363,12 @@ public class JedisMethodsTest {
 
         // Test sortReadonly(String key, SortingParams) method exists
         Method sortReadonlyStringParams =
-                jedisClass.getMethod(
-                        "sortReadonly", String.class, redis.clients.jedis.params.SortingParams.class);
+                jedisClass.getMethod("sortReadonly", String.class, SortingParams.class);
         assertEquals(List.class, sortReadonlyStringParams.getReturnType());
 
         // Test sortReadonly(byte[] key, SortingParams) method exists
         Method sortReadonlyBytesParams =
-                jedisClass.getMethod(
-                        "sortReadonly", byte[].class, redis.clients.jedis.params.SortingParams.class);
+                jedisClass.getMethod("sortReadonly", byte[].class, SortingParams.class);
         assertEquals(List.class, sortReadonlyBytesParams.getReturnType());
     }
 
@@ -387,14 +386,12 @@ public class JedisMethodsTest {
 
         // Test sort(String key, SortingParams, String dstkey) method exists
         Method sortStoreStringParams =
-                jedisClass.getMethod(
-                        "sort", String.class, redis.clients.jedis.params.SortingParams.class, String.class);
+                jedisClass.getMethod("sort", String.class, SortingParams.class, String.class);
         assertEquals(long.class, sortStoreStringParams.getReturnType());
 
         // Test sort(byte[] key, SortingParams, byte[] dstkey) method exists
         Method sortStoreBytesParams =
-                jedisClass.getMethod(
-                        "sort", byte[].class, redis.clients.jedis.params.SortingParams.class, byte[].class);
+                jedisClass.getMethod("sort", byte[].class, SortingParams.class, byte[].class);
         assertEquals(long.class, sortStoreBytesParams.getReturnType());
     }
 
