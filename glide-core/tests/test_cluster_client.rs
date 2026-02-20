@@ -684,13 +684,13 @@ mod cluster_client_tests {
     /// Test for #4990: Failover causes near-zero throughput
     /// See: https://github.com/valkey-io/valkey-glide/issues/4990
     #[rstest]
-    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT*2)]
     fn test_failover_doesnt_block_healthy_shards() {
         block_on_all(async {
-            const NUM_KEYS: usize = 300;
-            const NUM_PRIMARIES: u16 = 5;
+            const NUM_KEYS: usize = 1000;
+            const NUM_PRIMARIES: u16 = 10;
             const NUM_REPLICAS: u16 = 1;
-            const MEASUREMENT_DURATION_SECS: u64 = 3;
+            const MEASUREMENT_DURATION_SECS: u64 = 5;
 
             // Start cluster with replicas
             let mut test_basics = setup_cluster_with_replicas(
@@ -745,44 +745,47 @@ mod cluster_client_tests {
             futures::future::join_all(tasks).await;
             let baseline_qps = baseline_count.load(Ordering::Relaxed) / MEASUREMENT_DURATION_SECS;
 
-            // Crash first primary (no auto-failover)
-            let replica_addr = &addresses[1];
-            let (replica_host, replica_port) = match replica_addr {
-                redis::ConnectionAddr::Tcp(h, p) => (h.clone(), *p),
-                redis::ConnectionAddr::TcpTls {
-                    host: h, port: p, ..
-                } => (h.clone(), *p),
-                _ => panic!("Unexpected connection type"),
-            };
-            let mut config_cmd = redis::cmd("CONFIG");
-            config_cmd
-                .arg("SET")
-                .arg("cluster-replica-no-failover")
-                .arg("yes");
-            let replica_routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
-                host: replica_host,
-                port: replica_port,
-            });
-            let _ = test_basics
-                .client
-                .send_command(&mut config_cmd, Some(replica_routing))
-                .await;
-
-            let primary_addr = &addresses[0];
-            let (host, port) = match primary_addr {
-                redis::ConnectionAddr::Tcp(h, p) => (h.clone(), *p),
-                redis::ConnectionAddr::TcpTls {
-                    host: h, port: p, ..
-                } => (h.clone(), *p),
-                _ => panic!("Unexpected connection type"),
-            };
-            let mut crash_cmd = redis::cmd("DEBUG");
-            crash_cmd.arg("SEGFAULT");
-            let routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress { host, port });
-            let _ = test_basics
-                .client
-                .send_command(&mut crash_cmd, Some(routing))
-                .await;
+            // Choose failover method:
+            // 1. CLUSTER FAILOVER (graceful, no connection loss, no errors expected)
+            // 2. SHUTDOWN NOSAVE (ungraceful, connection loss, triggers reconnection)
+            // 3. DEBUG SEGFAULT (crash, connection loss, triggers reconnection)
+            let failover_method = "SEGFAULT"; // FAILOVER | SHUTDOWN | SEGFAULT
+            match failover_method {
+                "FAILOVER" => {
+                    // Graceful failover via replica
+                    let replica_addr = &addresses[1];
+                    let (replica_host, replica_port) = match replica_addr {
+                        redis::ConnectionAddr::Tcp(h, p) => (h.clone(), *p),
+                        redis::ConnectionAddr::TcpTls { host: h, port: p, .. } => (h.clone(), *p),
+                        _ => panic!("Unexpected connection type"),
+                    };
+                    let mut cmd = redis::cmd("CLUSTER");
+                    cmd.arg("FAILOVER");
+                    let routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                        host: replica_host,
+                        port: replica_port,
+                    });
+                    let _ = test_basics.client.send_command(&mut cmd, Some(routing)).await;
+                }
+                "SHUTDOWN" | "SEGFAULT" => {
+                    // Ungraceful failover via primary crash
+                    let primary_addr = &addresses[0];
+                    let (host, port) = match primary_addr {
+                        redis::ConnectionAddr::Tcp(h, p) => (h.clone(), *p),
+                        redis::ConnectionAddr::TcpTls { host: h, port: p, .. } => (h.clone(), *p),
+                        _ => panic!("Unexpected connection type"),
+                    };
+                    let mut cmd = redis::cmd(if failover_method == "SHUTDOWN" { "SHUTDOWN" } else { "DEBUG" });
+                    if failover_method == "SHUTDOWN" {
+                        cmd.arg("NOSAVE");
+                    } else {
+                        cmd.arg("SEGFAULT");
+                    }
+                    let routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress { host, port });
+                    let _ = test_basics.client.send_command(&mut cmd, Some(routing)).await;
+                }
+                _ => panic!("Unknown failover method"),
+            }
 
             // Measure throughput across shards during failover
             let failover_count = Arc::new(AtomicU64::new(0));
