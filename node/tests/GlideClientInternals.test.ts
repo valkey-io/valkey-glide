@@ -899,7 +899,9 @@ describe("SocketConnectionInternals", () => {
 
             try {
                 fs.writeFileSync(certPath, certData);
-                expect(loadRootCertificatesFromFile(certPath)).toEqual(certData);
+                expect(loadRootCertificatesFromFile(certPath)).toEqual(
+                    certData,
+                );
             } finally {
                 fs.rmSync(tempDir, { recursive: true, force: true });
             }
@@ -939,7 +941,9 @@ describe("SocketConnectionInternals", () => {
         });
 
         it("should fail when client private key file is empty", () => {
-            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tls-empty-"));
+            const tempDir = fs.mkdtempSync(
+                path.join(os.tmpdir(), "tls-empty-"),
+            );
             const keyPath = path.join(tempDir, "client.key");
 
             try {

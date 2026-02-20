@@ -330,8 +330,7 @@ function loadTlsPemFile(path: string, certType: string): Buffer {
             throw new ConfigurationError(`${certType} file not found: ${path}`);
         }
 
-        const message =
-            error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
         throw new ConfigurationError(
             `Failed to read ${certType.toLowerCase()} file: ${message}`,
         );
@@ -9366,10 +9365,7 @@ export class BaseClient {
 
             if (tlsConfig.rootCertificates != null) {
                 request.rootCerts = [
-                    getTlsBytes(
-                        tlsConfig.rootCertificates,
-                        "rootCertificates",
-                    ),
+                    getTlsBytes(tlsConfig.rootCertificates, "rootCertificates"),
                 ];
             }
 
