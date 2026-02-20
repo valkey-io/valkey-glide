@@ -6251,7 +6251,7 @@ public abstract class BaseClient
                 AclWhoami, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
-    public CompletableFuture<Void> subscribe(Set<String> channels) {
+    public CompletableFuture<Void> subscribeLazy(Set<String> channels) {
         return commandManager.submitNewCommand(
                 Subscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
@@ -6269,7 +6269,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(SubscribeBlocking, args, response -> null);
     }
 
-    public CompletableFuture<Void> psubscribe(Set<String> patterns) {
+    public CompletableFuture<Void> psubscribeLazy(Set<String> patterns) {
         return commandManager.submitNewCommand(
                 PSubscribe, patterns.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
@@ -6349,11 +6349,15 @@ public abstract class BaseClient
 
     protected Object parseSubscriptionState(Object response) {
         if (!(response instanceof Object[])) {
-            throw new RuntimeException("Invalid response format from GetSubscriptions");
+            throw new RuntimeException(
+                    "Invalid response format from GetSubscriptions: expected Object[], got "
+                            + (response == null ? "null" : response.getClass().getName()));
         }
         Object[] arr = (Object[]) response;
         if (arr.length != 4) {
-            throw new RuntimeException("Invalid response format from GetSubscriptions");
+            throw new RuntimeException(
+                    "Invalid response format from GetSubscriptions: expected array length 4, got "
+                            + arr.length);
         }
 
         @SuppressWarnings("unchecked")

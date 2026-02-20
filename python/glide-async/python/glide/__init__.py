@@ -10,6 +10,9 @@ from glide.glide import (
     get_min_compressed_size,
 )
 from glide_shared import (
+    ALL_CHANNELS,
+    ALL_PATTERNS,
+    ALL_SHARDED_CHANNELS,
     OK,
     TOK,
     AdvancedGlideClientConfiguration,
@@ -164,9 +167,6 @@ from glide_shared import (
 )
 
 from .async_commands import (
-    ALL_CHANNELS,
-    ALL_PATTERNS,
-    ALL_SHARDED_CHANNELS,
     ft,
     glide_json,
 )
@@ -264,6 +264,9 @@ __all__ = [
     "TlsAdvancedConfiguration",
     # Response
     "OK",
+    "ALL_CHANNELS",
+    "ALL_PATTERNS",
+    "ALL_SHARDED_CHANNELS",
     "TClusterResponse",
     "TEncodable",
     "TFunctionListResponse",
@@ -343,9 +346,6 @@ __all__ = [
     "ClusterScanCursor",
     # PubSub
     "PubSubMsg",
-    "ALL_CHANNELS",
-    "ALL_PATTERNS",
-    "ALL_SHARDED_CHANNELS",
     # Json
     "glide_json",
     "json_batch",

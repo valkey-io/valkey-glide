@@ -180,8 +180,8 @@ integ-test: __it
 modules-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter), -testify.m TestGlideTestSuite/TestModule)
 modules-test: __it
 
-# pubsub tests - run subtask with the pubsub flag enabled
-pubsub-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -pubsub -testify.m TestPubSub
+# pubsub tests - run pubsub tests using testify filter
+pubsub-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -testify.m TestPubSub
 pubsub-test: __it
 
 # long timeout tests - run subtask with the long timeout flag enabled
