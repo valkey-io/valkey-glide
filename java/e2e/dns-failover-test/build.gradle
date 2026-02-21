@@ -1,0 +1,34 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.google.osdetector' version '1.7.3'
+    id 'com.gradleup.shadow' version '9.1.0'
+}
+
+group = 'com.company.glide'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    // Dynamically use the correct classifier for the local platform (e.g. linux-aarch_64 or osx-aarch_64)
+    implementation "io.valkey:valkey-glide:255.255.255:${osdetector.classifier}"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+application {
+    mainClass = 'com.company.glide.dnsfailover.DnsFailoverTest'
+}
+
+shadowJar {
+    archiveClassifier.set('')
+}
+
