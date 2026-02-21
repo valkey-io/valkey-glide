@@ -51,12 +51,6 @@ public class ConnectionManager {
         return CompletableFuture.supplyAsync(
                 () -> {
                     try {
-                        // Convert addresses to simple string array
-                        String[] addresses =
-                                configuration.getAddresses().stream()
-                                        .map(addr -> addr.getHost() + ":" + addr.getPort())
-                                        .toArray(String[]::new);
-
                         // Extract credentials
                         if (configuration.getCredentials() != null) {
                             this.credentials = configuration.getCredentials();
@@ -174,16 +168,12 @@ public class ConnectionManager {
                         // Build ConnectionRequest protobuf
                         ConnectionRequest.Builder requestBuilder = ConnectionRequest.newBuilder();
 
-                        // Add addresses
-                        for (String addr : addresses) {
-                            String[] parts = addr.split(":");
-                            if (parts.length == 2) {
-                                requestBuilder.addAddresses(
-                                        NodeAddress.newBuilder()
-                                                .setHost(parts[0])
-                                                .setPort(Integer.parseInt(parts[1]))
-                                                .build());
-                            }
+                        for (var addr : configuration.getAddresses()) {
+                            var nodeAddress = NodeAddress.newBuilder()
+                                    .setHost(addr.getHost())
+                                    .setPort(addr.getPort())
+                                    .build();
+                            requestBuilder.addAddresses(nodeAddress);
                         }
 
                         // Set TLS mode
