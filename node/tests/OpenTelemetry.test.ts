@@ -12,6 +12,7 @@ import {
     OpenTelemetry,
     OpenTelemetryConfig,
     ProtocolVersion,
+    SpanContext,
 } from "../build-ts";
 import {
     flushAndCloseClient,
@@ -609,6 +610,159 @@ describe("OpenTelemetry GlideClient", () => {
             const endMemory = process.memoryUsage().heapUsed;
 
             expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow small fluctuations
+        },
+        TIMEOUT,
+    );
+});
+
+// Unit tests for setSpanFromContext / getSpanFromContext API
+describe("OpenTelemetry SpanContext propagation", () => {
+    afterEach(() => {
+        // Reset the callback after each test
+        OpenTelemetry.setSpanFromContext(null);
+    });
+
+    it("getSpanFromContext returns undefined when no callback is set", () => {
+        expect(OpenTelemetry.getSpanFromContext()).toBeUndefined();
+    });
+
+    it("getSpanFromContext returns the value from the registered callback", () => {
+        const ctx: SpanContext = {
+            traceId: "0af7651916cd43dd8448eb211c80319c",
+            spanId: "b7ad6b7169203331",
+            traceFlags: 1,
+        };
+        OpenTelemetry.setSpanFromContext(() => ctx);
+        expect(OpenTelemetry.getSpanFromContext()).toEqual(ctx);
+    });
+
+    it("getSpanFromContext returns undefined when callback returns undefined", () => {
+        OpenTelemetry.setSpanFromContext(() => undefined);
+        expect(OpenTelemetry.getSpanFromContext()).toBeUndefined();
+    });
+
+    it("setSpanFromContext(null) clears a previously set callback", () => {
+        const ctx: SpanContext = {
+            traceId: "0af7651916cd43dd8448eb211c80319c",
+            spanId: "b7ad6b7169203331",
+            traceFlags: 1,
+        };
+        OpenTelemetry.setSpanFromContext(() => ctx);
+        expect(OpenTelemetry.getSpanFromContext()).toEqual(ctx);
+
+        OpenTelemetry.setSpanFromContext(null);
+        expect(OpenTelemetry.getSpanFromContext()).toBeUndefined();
+    });
+
+    it("callback is invoked on each call to getSpanFromContext", () => {
+        let callCount = 0;
+        OpenTelemetry.setSpanFromContext(() => {
+            callCount++;
+            return {
+                traceId: "0af7651916cd43dd8448eb211c80319c",
+                spanId: "b7ad6b7169203331",
+                traceFlags: 1,
+            };
+        });
+
+        OpenTelemetry.getSpanFromContext();
+        OpenTelemetry.getSpanFromContext();
+        OpenTelemetry.getSpanFromContext();
+        expect(callCount).toBe(3);
+    });
+});
+
+// Integration test for parent span context propagation
+describe("OpenTelemetry parent span context propagation", () => {
+    const testsFailed = 0;
+    let cluster: ValkeyCluster;
+    let client: GlideClusterClient;
+
+    beforeAll(async () => {
+        const clusterAddresses = global.CLUSTER_ENDPOINTS;
+        cluster = clusterAddresses
+            ? await ValkeyCluster.initFromExistingCluster(
+                  true,
+                  parseEndpoints(clusterAddresses),
+                  getServerVersion,
+              )
+            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+    }, 40000);
+
+    afterEach(async () => {
+        OpenTelemetry.setSpanFromContext(null);
+
+        if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
+            fs.unlinkSync(VALID_ENDPOINT_TRACES);
+        }
+
+        await flushAndCloseClient(true, cluster?.getAddresses(), client);
+    });
+
+    afterAll(async () => {
+        if (testsFailed === 0) {
+            await cluster.close();
+        } else {
+            await cluster.close(true);
+        }
+    });
+
+    it(
+        "GLIDE spans inherit trace_id and parent_span_id from provided context",
+        async () => {
+            // Fixed parent context to verify propagation
+            const parentTraceId = "0af7651916cd43dd8448eb211c80319c";
+            const parentSpanId = "b7ad6b7169203331";
+            const parentTraceFlags = 1;
+
+            OpenTelemetry.setSpanFromContext(() => ({
+                traceId: parentTraceId,
+                spanId: parentSpanId,
+                traceFlags: parentTraceFlags,
+            }));
+
+            // Ensure 100% sampling so all commands produce spans
+            OpenTelemetry.setSamplePercentage(100);
+
+            client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            });
+
+            await client.set(
+                "ctx_propagation_test_key",
+                "ctx_propagation_test_value",
+            );
+            await client.get("ctx_propagation_test_key");
+
+            // Wait for spans to be flushed to file
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+
+            const { spans, spanNames } = readAndParseSpanFile(
+                VALID_ENDPOINT_TRACES,
+            );
+
+            // Verify we got Set and Get spans
+            expect(spanNames).toContain("Set");
+            expect(spanNames).toContain("Get");
+
+            // Verify each span has the correct trace_id and parent_span_id
+            for (const line of spans) {
+                let spanJson: Record<string, unknown>;
+
+                try {
+                    spanJson = JSON.parse(line);
+                } catch {
+                    continue;
+                }
+
+                if (spanJson.name === "Set" || spanJson.name === "Get") {
+                    expect(spanJson.trace_id).toBe(parentTraceId);
+                    expect(spanJson.parent_span_id).toBe(parentSpanId);
+                }
+            }
         },
         TIMEOUT,
     );

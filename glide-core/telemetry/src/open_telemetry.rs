@@ -2,7 +2,9 @@ use crate::Telemetry;
 use logger_core::log_warn;
 use once_cell::sync::OnceCell;
 use opentelemetry::global::ObjectSafeSpan;
-use opentelemetry::trace::{SpanKind, TraceContextExt, TraceError};
+use opentelemetry::trace::{
+    SpanContext, SpanId, SpanKind, TraceContextExt, TraceError, TraceFlags, TraceId, TraceState,
+};
 use opentelemetry::{global, trace::Tracer};
 use opentelemetry_otlp::{MetricExporter, Protocol, WithExportConfig};
 use opentelemetry_sdk::export::trace::SpanExporter;
@@ -240,6 +242,46 @@ impl GlideSpanInner {
         })
     }
 
+    /// Create a new span as a child of a remote span context identified by raw hex IDs.
+    ///
+    /// This is used for cross-process context propagation, e.g. when a Node.js OTel SDK
+    /// passes its active span context to the Rust core.
+    pub fn new_with_remote_context(
+        name: &str,
+        trace_id_hex: &str,
+        span_id_hex: &str,
+        trace_flags: u8,
+    ) -> Result<Self, TraceError> {
+        let trace_id = TraceId::from_hex(trace_id_hex)
+            .map_err(|_| TraceError::from(format!("Invalid trace_id hex: {trace_id_hex}")))?;
+        let span_id = SpanId::from_hex(span_id_hex)
+            .map_err(|_| TraceError::from(format!("Invalid span_id hex: {span_id_hex}")))?;
+
+        let remote_span_context = SpanContext::new(
+            trace_id,
+            span_id,
+            TraceFlags::new(trace_flags),
+            true, // is_remote
+            TraceState::default(),
+        );
+
+        let parent_context =
+            opentelemetry::Context::new().with_remote_span_context(remote_span_context);
+
+        let tracer = global::tracer(TRACE_SCOPE);
+        let span = Arc::new(RwLock::new(
+            tracer
+                .span_builder(name.to_string())
+                .with_kind(SpanKind::Client)
+                .start_with_context(&tracer, &parent_context),
+        ));
+        Ok(GlideSpanInner {
+            span,
+            #[cfg(test)]
+            reference_count: Arc::new(AtomicUsize::new(1)),
+        })
+    }
+
     /// Attach event with name and list of attributes to this span.
     pub fn add_event(&self, name: &str, attributes: Option<&Vec<(&str, &str)>>) {
         let attributes: Vec<opentelemetry::KeyValue> = if let Some(attributes) = attributes {
@@ -348,6 +390,23 @@ impl GlideSpan {
         GlideSpan {
             inner: GlideSpanInner::new(name),
         }
+    }
+
+    /// Create a new span as a child of a remote span context identified by raw hex IDs.
+    pub fn new_with_remote_context(
+        name: &str,
+        trace_id_hex: &str,
+        span_id_hex: &str,
+        trace_flags: u8,
+    ) -> Result<Self, TraceError> {
+        Ok(GlideSpan {
+            inner: GlideSpanInner::new_with_remote_context(
+                name,
+                trace_id_hex,
+                span_id_hex,
+                trace_flags,
+            )?,
+        })
     }
 
     /// Attach event with name to this span.
