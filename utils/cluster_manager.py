@@ -32,7 +32,7 @@ GLIDE_HOME_DIR = os.getenv("GLIDE_HOME_DIR") or f"{__file__}/.."
 def _get_clusters_folder():
     if os.getenv("CLUSTERS_FOLDER"):
         return os.getenv("CLUSTERS_FOLDER")
-    
+
     # Check if running on Windows WSL
     try:
         with open("/proc/version", "r") as f:
@@ -40,7 +40,7 @@ def _get_clusters_folder():
                 return "/tmp/clusters"
     except (FileNotFoundError, PermissionError):
         pass
-    
+
     return os.path.abspath(f"{GLIDE_HOME_DIR}/clusters")
 
 CLUSTERS_FOLDER = _get_clusters_folder()
@@ -48,6 +48,10 @@ TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/tls_crts")
 CA_CRT = f"{TLS_FOLDER}/ca.crt"
 SERVER_CRT = f"{TLS_FOLDER}/server.crt"
 SERVER_KEY = f"{TLS_FOLDER}/server.key"
+
+# Allowed hostnames
+HOSTNAME_TLS = "valkey.glide.test.tls.com"
+HOSTNAME_NO_TLS = "valkey.glide.test.no_tls.com"
 
 
 def get_command(commands: List[str]) -> str:
@@ -135,7 +139,9 @@ def generate_tls_certs():
     ext_file = f"{TLS_FOLDER}/openssl.cnf"
 
     f = open(ext_file, "w")
-    f.write("keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,IP:::1,DNS:localhost,DNS:valkey.glide.test.tls.com")
+    f.write(
+        f"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,IP:::1,DNS:localhost,DNS:{HOSTNAME_TLS}"
+    )
     f.close()
 
     def make_key(name: str, size: int):
@@ -399,6 +405,10 @@ def start_server(
         str(port),
         "--cluster-enabled",
         f"{'yes' if cluster_mode else 'no'}",
+        "--bind",
+        "127.0.0.1",
+        HOSTNAME_TLS,
+        HOSTNAME_NO_TLS,
         "--dir",
         node_folder,
         "--daemonize",
@@ -474,11 +484,11 @@ def create_servers(
         cert_file = tls_cert_file or SERVER_CRT
         key_file = tls_key_file or SERVER_KEY
         ca_file = tls_ca_cert_file or CA_CRT
-        
+
         # Only generate default certs if using default paths and they don't exist
         if not tls_cert_file and should_generate_new_tls_certs():
             generate_tls_certs()
-            
+
         tls_args = [
             "--tls-cluster",
             "yes",
@@ -490,8 +500,6 @@ def create_servers(
             ca_file,
             "--tls-auth-clients",  # Make it so client doesn't have to send cert
             "no",
-            "--bind",
-            host,
             "--port",
             "0",
         ]
@@ -866,7 +874,7 @@ def is_address_already_in_use(
         if not os.path.exists(log_file):
             time.sleep(0.1)
             continue
-        
+
         with open(log_file, "r") as f:
             server_log = f.read()
             # Check for known error message variants because different C libraries
@@ -1170,21 +1178,21 @@ def main():
         help="The paths of the server modules to load.",
         required=False,
     )
-    
+
     parser_start.add_argument(
         "--tls-cert-file",
         type=str,
         help="Path to TLS certificate file (default: uses generated certificates)",
         required=False,
     )
-    
+
     parser_start.add_argument(
         "--tls-key-file",
         type=str,
         help="Path to TLS key file (default: uses generated certificates)",
         required=False,
     )
-    
+
     parser_start.add_argument(
         "--tls-ca-cert-file",
         type=str,
