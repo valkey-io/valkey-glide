@@ -259,6 +259,10 @@ pub struct Client {
     // Optional compression manager for automatic compression/decompression
     compression_manager: Option<Arc<CompressionManager>>,
     pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
+    // Connection metadata for OTel span attributes
+    server_address: String,
+    server_port: u16,
+    db_namespace: String,
 }
 
 async fn run_with_timeout<T>(
@@ -435,6 +439,8 @@ impl Client {
 
         // Update database state for all client types
         self.update_stored_database_id(database_id).await?;
+        // Keep OTel db.namespace in sync
+        self.db_namespace = database_id.to_string();
         Ok(())
     }
 
@@ -1919,6 +1925,14 @@ impl Client {
             )
             .await;
 
+            // Extract connection metadata for OTel span attributes
+            let (server_address, server_port) = request
+                .addresses
+                .first()
+                .map(|addr| (addr.host.clone(), get_port(addr)))
+                .unwrap_or_else(|| ("unknown".to_string(), 6379));
+            let db_namespace = request.database_id.to_string();
+
             // Create the Client first without IAM token manager
             let client = Self {
                 internal_client: internal_client_arc.clone(),
@@ -1927,6 +1941,9 @@ impl Client {
                 compression_manager: compression_manager.clone(),
                 iam_token_manager: None,
                 pubsub_synchronizer: pubsub_synchronizer.clone(),
+                server_address,
+                server_port,
+                db_namespace,
             };
 
             let client_arc = Arc::new(RwLock::new(client));
@@ -2023,6 +2040,18 @@ impl Client {
             .as_ref()
             .map(|manager| manager.is_enabled())
             .unwrap_or(false)
+    }
+
+    pub fn server_address(&self) -> &str {
+        &self.server_address
+    }
+
+    pub fn server_port(&self) -> u16 {
+        self.server_port
+    }
+
+    pub fn db_namespace(&self) -> &str {
+        &self.db_namespace
     }
 }
 
@@ -2340,6 +2369,9 @@ mod tests {
             iam_token_manager: None,
             compression_manager: None,
             pubsub_synchronizer,
+            server_address: "localhost".to_string(),
+            server_port: 6379,
+            db_namespace: "0".to_string(),
         }
     }
 

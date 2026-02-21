@@ -530,6 +530,77 @@ fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Option<GlideSpan> 
     }
 }
 
+/// Returns the number of arguments (after the command name) to include in `db.query.text`.
+/// Negative value means include all arguments. This prevents sensitive values from leaking
+/// into telemetry, following the same approach as `@opentelemetry/instrumentation-ioredis`.
+fn safe_arg_count(cmd_name: &str) -> i32 {
+    match cmd_name.to_ascii_uppercase().as_str() {
+        // Commands where no arguments should be shown
+        "ECHO" | "AUTH" => 0,
+        // Commands where only the key should be shown (value is sensitive)
+        "APPEND" | "GETSET" | "LPUSH" | "LPUSHX" | "MSET" | "MSETNX" | "PFADD" | "PUBLISH"
+        | "RPUSH" | "RPUSHX" | "SADD" | "SET" | "SETEX" | "SETNX" | "PSETEX" | "SPUBLISH"
+        | "XADD" | "ZADD" | "SINTERCARD" => 1,
+        // Commands where key + field should be shown (value is sensitive)
+        "HSET" | "HMSET" | "HSETNX" | "LSET" | "LINSERT" | "LPOS" => 2,
+        // All other commands: show all arguments (keys, patterns, etc.)
+        _ => -1,
+    }
+}
+
+/// Serialize command arguments for `db.query.text`, hiding sensitive values.
+fn serialize_query_text(cmd: &Cmd) -> Option<String> {
+    let mut args = cmd.args_iter().filter_map(|arg| match arg {
+        redis::Arg::Simple(b) => Some(String::from_utf8_lossy(b).into_owned()),
+        _ => None,
+    });
+
+    let cmd_name = args.next()?;
+    let remaining: Vec<String> = args.collect();
+
+    if remaining.is_empty() {
+        return Some(cmd_name);
+    }
+
+    let safe_count = safe_arg_count(&cmd_name);
+    let n_to_show = if safe_count < 0 {
+        remaining.len()
+    } else {
+        (safe_count as usize).min(remaining.len())
+    };
+
+    let mut parts = vec![cmd_name];
+    parts.extend_from_slice(&remaining[..n_to_show]);
+
+    for _ in 0..(remaining.len() - n_to_show) {
+        parts.push("?".to_string());
+    }
+
+    Some(parts.join(" "))
+}
+
+/// Sets connection-level OTel DB attributes on a span (no command-specific attributes).
+fn set_db_connection_attributes(span: &GlideSpan, client: &Client) {
+    span.set_attribute("db.system.name", "redis");
+    span.set_attribute("server.address", client.server_address());
+    span.set_attribute_i64("server.port", client.server_port() as i64);
+    span.set_attribute("db.namespace", client.db_namespace());
+}
+
+/// Sets OTel DB semantic convention attributes on a span.
+fn set_db_attributes(span: &GlideSpan, cmd: &Cmd, client: &Client) {
+    set_db_connection_attributes(span, client);
+
+    if let Some(redis::Arg::Simple(name_bytes)) = cmd.args_iter().next() {
+        let cmd_name = String::from_utf8_lossy(name_bytes);
+        span.set_attribute("db.operation.name", &cmd_name);
+    }
+
+    if let Some(query_text) = serialize_query_text(cmd) {
+        span.set_attribute("db.query.text", &query_text);
+    }
+}
+
 async fn send_batch(
     request: Batch,
     client: &mut Client,
@@ -702,6 +773,9 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                             Ok(mut cmd) => match get_route(request.route.0, Some(&cmd)) {
                                 Ok(routes) => {
                                     cmd.set_span(get_unsafe_span_from_ptr(request.root_span_ptr));
+                                    if let Some(ref span) = cmd.span() {
+                                        set_db_attributes(span, &cmd, &client);
+                                    }
                                     send_command(cmd, client, routes).await
                                 }
                                 Err(e) => Err(e),
@@ -714,6 +788,9 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                             Ok(routes) => {
                                 let otel_command_span =
                                     get_unsafe_span_from_ptr(request.root_span_ptr);
+                                if let Some(ref span) = otel_command_span {
+                                    set_db_connection_attributes(span, &client);
+                                }
                                 send_batch(batch, &mut client, routes, otel_command_span).await
                             }
                             Err(e) => Err(e),
@@ -1209,4 +1286,135 @@ where
     InitCallback: FnOnce(Result<String, String>) + Send + Clone + 'static,
 {
     start_socket_listener_internal(init_callback, None);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- safe_arg_count ---
+
+    #[test]
+    fn test_safe_arg_count_no_args_commands() {
+        assert_eq!(safe_arg_count("AUTH"), 0);
+        assert_eq!(safe_arg_count("ECHO"), 0);
+    }
+
+    #[test]
+    fn test_safe_arg_count_key_only_commands() {
+        for cmd in [
+            "SET", "APPEND", "GETSET", "LPUSH", "MSET", "PFADD", "PUBLISH", "RPUSH", "SADD",
+            "SETEX", "SETNX", "PSETEX", "XADD", "ZADD",
+        ] {
+            assert_eq!(safe_arg_count(cmd), 1, "expected 1 for {cmd}");
+        }
+    }
+
+    #[test]
+    fn test_safe_arg_count_key_and_field_commands() {
+        for cmd in ["HSET", "HMSET", "HSETNX", "LSET", "LINSERT", "LPOS"] {
+            assert_eq!(safe_arg_count(cmd), 2, "expected 2 for {cmd}");
+        }
+    }
+
+    #[test]
+    fn test_safe_arg_count_show_all_commands() {
+        for cmd in [
+            "GET", "DEL", "HGET", "KEYS", "SCAN", "PING", "INFO", "CONFIG",
+        ] {
+            assert!(safe_arg_count(cmd) < 0, "expected all-args for {cmd}");
+        }
+    }
+
+    #[test]
+    fn test_safe_arg_count_case_insensitive() {
+        assert_eq!(safe_arg_count("set"), 1);
+        assert_eq!(safe_arg_count("Set"), 1);
+        assert_eq!(safe_arg_count("hset"), 2);
+        assert_eq!(safe_arg_count("auth"), 0);
+        assert_eq!(safe_arg_count("get"), -1);
+    }
+
+    // --- serialize_query_text ---
+
+    fn make_cmd(name: &str, args: &[&str]) -> Cmd {
+        let mut cmd = redis::cmd(name);
+        for arg in args {
+            cmd.arg(*arg);
+        }
+        cmd
+    }
+
+    #[test]
+    fn test_serialize_set_hides_value() {
+        let cmd = make_cmd("SET", &["mykey", "secret-password"]);
+        let result = serialize_query_text(&cmd).unwrap();
+        assert_eq!(result, "SET mykey ?");
+        assert!(!result.contains("secret"));
+    }
+
+    #[test]
+    fn test_serialize_set_with_options_hides_value_and_options() {
+        let cmd = make_cmd("SET", &["mykey", "secret", "EX", "60"]);
+        let result = serialize_query_text(&cmd).unwrap();
+        assert_eq!(result, "SET mykey ? ? ?");
+    }
+
+    #[test]
+    fn test_serialize_get_shows_all() {
+        let cmd = make_cmd("GET", &["mykey"]);
+        let result = serialize_query_text(&cmd).unwrap();
+        assert_eq!(result, "GET mykey");
+    }
+
+    #[test]
+    fn test_serialize_hset_shows_key_and_field() {
+        let cmd = make_cmd("HSET", &["myhash", "field1", "secret-value"]);
+        let result = serialize_query_text(&cmd).unwrap();
+        assert_eq!(result, "HSET myhash field1 ?");
+        assert!(!result.contains("secret"));
+    }
+
+    #[test]
+    fn test_serialize_del_shows_all_keys() {
+        let cmd = make_cmd("DEL", &["key1", "key2", "key3"]);
+        let result = serialize_query_text(&cmd).unwrap();
+        assert_eq!(result, "DEL key1 key2 key3");
+    }
+
+    #[test]
+    fn test_serialize_auth_hides_everything() {
+        let cmd = make_cmd("AUTH", &["my-password"]);
+        let result = serialize_query_text(&cmd).unwrap();
+        assert_eq!(result, "AUTH ?");
+        assert!(!result.contains("password"));
+    }
+
+    #[test]
+    fn test_serialize_auth_with_username_hides_everything() {
+        let cmd = make_cmd("AUTH", &["username", "password"]);
+        let result = serialize_query_text(&cmd).unwrap();
+        assert_eq!(result, "AUTH ? ?");
+    }
+
+    #[test]
+    fn test_serialize_echo_hides_everything() {
+        let cmd = make_cmd("ECHO", &["hello world"]);
+        let result = serialize_query_text(&cmd).unwrap();
+        assert_eq!(result, "ECHO ?");
+    }
+
+    #[test]
+    fn test_serialize_command_only_no_args() {
+        let cmd = redis::cmd("PING");
+        let result = serialize_query_text(&cmd).unwrap();
+        assert_eq!(result, "PING");
+    }
+
+    #[test]
+    fn test_serialize_mset_shows_first_key_only() {
+        let cmd = make_cmd("MSET", &["k1", "v1", "k2", "v2"]);
+        let result = serialize_query_text(&cmd).unwrap();
+        assert_eq!(result, "MSET k1 ? ? ?");
+    }
 }
