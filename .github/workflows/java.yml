@@ -345,10 +345,12 @@ jobs:
                     yum update -y
                     # AL2023 uses different package naming for Java 8 vs 11+
                     if [[ "${{ matrix.java }}" == "8" ]]; then
-                      yum install -y git tar java-1.8.0-amazon-corretto-devel
-                      export JAVA_HOME=/usr/lib/jvm/java-1.8.0-amazon-corretto
-                      echo "JAVA_HOME=/usr/lib/jvm/java-1.8.0-amazon-corretto" >> $GITHUB_ENV
-                      echo "/usr/lib/jvm/java-1.8.0-amazon-corretto/bin" >> $GITHUB_PATH
+                      # Install both Java 8 (compilation target) and Java 11 (Gradle runtime)
+                      # Spotless plugin 7.x and Gradle 8.x require JVM 11+ to run
+                      yum install -y git tar java-1.8.0-amazon-corretto-devel java-11-amazon-corretto-devel
+                      export JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto
+                      echo "JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto" >> $GITHUB_ENV
+                      echo "/usr/lib/jvm/java-11-amazon-corretto/bin" >> $GITHUB_PATH
                     else
                       yum install -y git tar java-${{ matrix.java }}-amazon-corretto-devel
                       export JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto
@@ -425,7 +427,9 @@ jobs:
               run: |
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
                       if [[ "${{ matrix.java }}" == "8" ]]; then
-                          export JAVA_HOME=/usr/lib/jvm/java-1.8.0-amazon-corretto
+                          # Use JDK 11 to run Gradle (required by Spotless 7.x / Gradle 8.x)
+                          # The toolchain config in build.gradle handles compiling to Java 8 bytecode
+                          export JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto
                       else
                           export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-amazon-corretto
                       fi
