@@ -292,7 +292,7 @@ public class DnsTest {
         assumeTrue(isDnsTestsEnabled(), "DNS tests not enabled");
         assumeTrue(isIpv6Supported(), "IPv6 not available");
 
-        String ipv6Address = "[::1]";
+        String ipv6Address = "::1";
         int port = getPort(clusterMode, true);
         byte[] caCert = getCaCertificate();
         NodeAddress address = NodeAddress.builder().host(ipv6Address).port(port).build();
