@@ -169,10 +169,8 @@ public class ConnectionManager {
                         ConnectionRequest.Builder requestBuilder = ConnectionRequest.newBuilder();
 
                         for (var addr : configuration.getAddresses()) {
-                            var nodeAddress = NodeAddress.newBuilder()
-                                    .setHost(addr.getHost())
-                                    .setPort(addr.getPort())
-                                    .build();
+                            var nodeAddress =
+                                    NodeAddress.newBuilder().setHost(addr.getHost()).setPort(addr.getPort()).build();
                             requestBuilder.addAddresses(nodeAddress);
                         }
 
