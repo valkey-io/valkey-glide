@@ -103,6 +103,26 @@ public class ClusterTlsCertificateTest {
     }
 
     @Test
+    void testClusterTlsWithIpv4Succeeds() throws Exception {
+        NodeAddress ipv4Node =
+                NodeAddress.builder().host("127.0.0.1").port(clusterNodes.get(0).getPort()).build();
+        GlideClusterClientConfiguration config =
+                TestUtilities.createClusterConfigWithRootCert(caCert, List.of(ipv4Node));
+
+        TestUtilities.createAndTestClient(config);
+    }
+
+    @Test
+    void testClusterTlsWithIpv6Succeeds() throws Exception {
+        NodeAddress ipv6Node =
+                NodeAddress.builder().host("::1").port(clusterNodes.get(0).getPort()).build();
+        GlideClusterClientConfiguration config =
+                TestUtilities.createClusterConfigWithRootCert(caCert, List.of(ipv6Node));
+
+        TestUtilities.createAndTestClient(config);
+    }
+
+    @Test
     void testClusterTlsWithKeyStoreSucceeds() throws Exception {
         Path keyStorePath = Files.createTempFile("test-keystore", ".jks");
         char[] password = "password".toCharArray();

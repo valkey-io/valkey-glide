@@ -107,6 +107,28 @@ public class StandaloneTlsCertificateTest {
     }
 
     @Test
+    void testStandaloneTlsWithIpv4Succeeds() throws ExecutionException, InterruptedException {
+        NodeAddress ipv4Node = NodeAddress.builder().host("127.0.0.1").port(nodeAddr.getPort()).build();
+        GlideClientConfiguration config =
+                TestUtilities.createStandaloneConfigWithRootCert(caCert, ipv4Node);
+
+        try (GlideClient client = GlideClient.createClient(config).get()) {
+            assertEquals("PONG", client.ping().get());
+        }
+    }
+
+    @Test
+    void testStandaloneTlsWithIpv6Succeeds() throws ExecutionException, InterruptedException {
+        NodeAddress ipv6Node = NodeAddress.builder().host("::1").port(nodeAddr.getPort()).build();
+        GlideClientConfiguration config =
+                TestUtilities.createStandaloneConfigWithRootCert(caCert, ipv6Node);
+
+        try (GlideClient client = GlideClient.createClient(config).get()) {
+            assertEquals("PONG", client.ping().get());
+        }
+    }
+
+    @Test
     void testStandaloneTlsWithKeyStoreSucceeds()
             throws IOException,
                     KeyStoreException,

@@ -68,25 +68,24 @@ public class DnsTest {
         assertThrows(Exception.class, () -> buildClient(clusterMode, true, HOSTNAME_NO_TLS));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    void testTlsConnectWithIpv4(boolean clusterMode) {
-        BaseClient client = buildClient(clusterMode, true, "127.0.0.1");
-        assertConnected(client);
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    void testTlsConnectWithIpv6(boolean clusterMode) {
-        BaseClient client = buildClient(clusterMode, true, "::1");
-        assertConnected(client);
-    }
-
     // -------------------
     // Helper methods
     // -------------------
 
-    private static NodeAddress buildAddress(boolean clusterMode, boolean useTls, String host) {
+    @SneakyThrows
+    private static void assertConnected(BaseClient client) {
+        final String expected = "PONG";
+        if (client instanceof GlideClusterClient) {
+            assertEquals(expected, ((GlideClusterClient) client).ping().get());
+        } else {
+            assertEquals(expected, ((GlideClient) client).ping().get());
+        }
+    }
+
+    @SneakyThrows
+    private static BaseClient buildClient(boolean clusterMode, boolean useTls, String host) {
+
+        // Build address with host.
         String[] hosts =
                 useTls
                         ? (clusterMode
@@ -94,12 +93,9 @@ public class DnsTest {
                                 : TestConfiguration.STANDALONE_TLS_HOSTS)
                         : (clusterMode ? TestConfiguration.CLUSTER_HOSTS : TestConfiguration.STANDALONE_HOSTS);
         int port = Integer.parseInt(hosts[0].trim().split(":")[1]);
-        return NodeAddress.builder().host(host).port(port).build();
-    }
+        var address = NodeAddress.builder().host(host).port(port).build();
 
-    @SneakyThrows
-    private static BaseClient buildClient(boolean clusterMode, boolean useTls, String host) {
-        NodeAddress address = buildAddress(clusterMode, useTls, host);
+        // Build client configuration and client.
         if (clusterMode) {
             var builder = GlideClusterClientConfiguration.builder().address(address).useTLS(useTls);
             if (useTls) {
@@ -111,24 +107,15 @@ public class DnsTest {
                                 .build());
             }
             return GlideClusterClient.createClient(builder.build()).get();
-        } else {
-            var builder = GlideClientConfiguration.builder().address(address).useTLS(useTls);
-            if (useTls) {
-                TlsAdvancedConfiguration tlsConfig =
-                        TlsAdvancedConfiguration.builder().rootCertificates(getCaCertificate()).build();
-                builder.advancedConfiguration(
-                        AdvancedGlideClientConfiguration.builder().tlsAdvancedConfiguration(tlsConfig).build());
-            }
-            return GlideClient.createClient(builder.build()).get();
         }
-    }
 
-    @SneakyThrows
-    private static void assertConnected(BaseClient client) {
-        if (client instanceof GlideClusterClient) {
-            assertEquals("PONG", ((GlideClusterClient) client).ping().get());
-        } else {
-            assertEquals("PONG", ((GlideClient) client).ping().get());
+        var builder = GlideClientConfiguration.builder().address(address).useTLS(useTls);
+        if (useTls) {
+            TlsAdvancedConfiguration tlsConfig =
+                    TlsAdvancedConfiguration.builder().rootCertificates(getCaCertificate()).build();
+            builder.advancedConfiguration(
+                    AdvancedGlideClientConfiguration.builder().tlsAdvancedConfiguration(tlsConfig).build());
         }
+        return GlideClient.createClient(builder.build()).get();
     }
 }
