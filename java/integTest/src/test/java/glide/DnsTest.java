@@ -44,9 +44,11 @@ public class DnsTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
+    @SneakyThrows
     void testConnectWithValidHostnameNoTls(boolean clusterMode) {
-        BaseClient client = buildClient(clusterMode, false, HOSTNAME_NO_TLS);
-        assertConnected(client);
+        try (BaseClient client = buildClient(clusterMode, false, HOSTNAME_NO_TLS)) {
+            assertConnected(client);
+        }
     }
 
     @ParameterizedTest
@@ -57,9 +59,11 @@ public class DnsTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
+    @SneakyThrows
     void testTlsConnectWithHostnameInCert(boolean clusterMode) {
-        BaseClient client = buildClient(clusterMode, true, HOSTNAME_TLS);
-        assertConnected(client);
+        try (BaseClient client = buildClient(clusterMode, true, HOSTNAME_TLS)) {
+            assertConnected(client);
+        }
     }
 
     @ParameterizedTest

@@ -405,9 +405,6 @@ def start_server(
         str(port),
         "--cluster-enabled",
         f"{'yes' if cluster_mode else 'no'}",
-        "--bind",
-        "127.0.0.1",
-        "::1",
         "--dir",
         node_folder,
         "--daemonize",
@@ -421,6 +418,10 @@ def start_server(
         "--save",
         "",
     ]
+
+    # Bind server to both IPv4 and IPv6 loopback addresses.
+    cmd_args.extend(["--bind", "127.0.0.1", "::1"])
+
     if server_version >= (7, 0, 0):
         cmd_args.extend(["--enable-debug-command", "yes"])
     # Enable multi-database support in cluster mode for Valkey 9.0+

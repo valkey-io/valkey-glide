@@ -14,11 +14,11 @@ import org.semver4j.Semver;
 public final class TestConfiguration {
 
     // Server addresses for testing.
-    public static final String[] STANDALONE_HOSTS = GetHosts("test.server.standalone");
-    public static final String[] CLUSTER_HOSTS = GetHosts("test.server.cluster");
-    public static final String[] STANDALONE_TLS_HOSTS = GetHosts("test.server.standalone.tls");
-    public static final String[] CLUSTER_TLS_HOSTS = GetHosts("test.server.cluster.tls");
-    public static final String[] AZ_CLUSTER_HOSTS = GetHosts("test.server.azcluster");
+    public static final String[] STANDALONE_HOSTS = getHosts("test.server.standalone");
+    public static final String[] CLUSTER_HOSTS = getHosts("test.server.cluster");
+    public static final String[] STANDALONE_TLS_HOSTS = getHosts("test.server.standalone.tls");
+    public static final String[] CLUSTER_TLS_HOSTS = getHosts("test.server.cluster.tls");
+    public static final String[] AZ_CLUSTER_HOSTS = getHosts("test.server.azcluster");
 
     public static final Semver SERVER_VERSION;
     public static final boolean TLS = Boolean.parseBoolean(System.getProperty("test.server.tls", ""));
@@ -89,7 +89,7 @@ public final class TestConfiguration {
         }
     }
 
-    private static String[] GetHosts(String propertyKey) {
+    private static String[] getHosts(String propertyKey) {
         String hostsStr = System.getProperty(propertyKey, "");
         return hostsStr.split(",");
     }
