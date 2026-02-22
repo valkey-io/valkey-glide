@@ -1,45 +1,42 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-use dashmap::DashMap;
+
 /// Glide Cache Module
 pub mod glide_cache;
 /// LFU Cache Implementation
 pub mod lfu_cache;
 /// LRU Cache Implementation
 pub mod lru_cache;
+
 use glide_cache::{CacheConfig, GlideCache};
 use lfu_cache::GlideLfuCache;
 use logger_core::{log_debug, log_info};
 use lru_cache::GlideLruCache;
 use std::{
-    sync::{Arc, LazyLock, Weak},
+    collections::HashMap,
+    sync::{Arc, LazyLock, RwLock, Weak},
     time::Duration,
 };
 use tokio::task::JoinHandle;
 
 /// Registry of all active caches (weak references)
-static CACHE_REGISTRY: LazyLock<DashMap<String, Weak<dyn GlideCache>>> =
-    LazyLock::new(DashMap::new);
+static CACHE_REGISTRY: LazyLock<RwLock<HashMap<String, Weak<dyn GlideCache>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// Handle to the background housekeeping task
 static HOUSEKEEPING_HANDLE: LazyLock<std::sync::Mutex<Option<JoinHandle<()>>>> =
     LazyLock::new(|| std::sync::Mutex::new(None));
 
 /// Cache eviction policy
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum EvictionPolicy {
     /// Least Recently Used - Evicts the least recently accessed entry.
     /// Best for workloads with temporal locality (recent items are likely to be accessed again).
+    #[default]
     Lru,
 
     /// Least Frequently Used - Evicts entries with the lowest access count.
     /// Best for workloads where popular items should stay cached regardless of recency.
     Lfu,
-}
-
-impl Default for EvictionPolicy {
-    fn default() -> Self {
-        Self::Lru
-    }
 }
 
 /// Creates (or retrieves) a cache with the given ID.
@@ -60,21 +57,33 @@ pub fn get_or_create_cache(
     eviction_policy: Option<EvictionPolicy>,
     enable_metrics: bool,
 ) -> Arc<dyn GlideCache> {
-    // Try to get existing cache
-    if let Some(weak_ref) = CACHE_REGISTRY.get(cache_id) {
-        if let Some(cache) = weak_ref.upgrade() {
-            log_debug(
-                "cache_lifetime",
-                format!("Retrieved existing cache `{cache_id}`"),
-            );
-            return cache;
-        }
-        // Cache was dropped - release read lock before removing
-        drop(weak_ref);
-        CACHE_REGISTRY.remove(cache_id);
+    // Fast path: try to get existing cache with read lock
+    if let Some(cache) = CACHE_REGISTRY
+        .read()
+        .unwrap()
+        .get(cache_id)
+        .and_then(Weak::upgrade)
+    {
+        log_debug(
+            "cache_lifetime",
+            format!("Retrieved existing cache `{cache_id}`"),
+        );
+        return cache;
     }
 
-    // Cache does not exist - create cache configuration
+    // Slow path: acquire write lock and double-check
+    let mut registry = CACHE_REGISTRY.write().unwrap();
+
+    // Double-check: another thread may have created the cache while we waited
+    if let Some(cache) = registry.get(cache_id).and_then(Weak::upgrade) {
+        log_debug(
+            "cache_lifetime",
+            format!("Retrieved existing cache `{cache_id}` (after write lock)"),
+        );
+        return cache;
+    }
+
+    // Create cache configuration
     let config = CacheConfig {
         max_memory_bytes: max_cache_kb * 1024, // Convert KB to bytes
         ttl: ttl_sec.map(Duration::from_secs),
@@ -97,7 +106,8 @@ pub fn get_or_create_cache(
     );
 
     // Store weak reference in registry
-    CACHE_REGISTRY.insert(cache_id.to_string(), Arc::downgrade(&cache));
+    registry.insert(cache_id.to_string(), Arc::downgrade(&cache));
+    drop(registry); // Release write lock
 
     // Start housekeeping task if this is the first cache
     start_cache_housekeeping();
@@ -106,48 +116,32 @@ pub fn get_or_create_cache(
 }
 
 /// Periodically cleans up dead weak references from the cache registry
-async fn periodic_cache_housekeeping(interval_duration: Duration) {
+async fn periodic_cache_housekeeping(interval: Duration) {
     log_info(
         "cache_housekeeping",
-        format!(
-            "Started cache registry cleanup task (interval: {:?})",
-            interval_duration
-        ),
+        format!("Started cache registry cleanup task (interval: {interval:?})"),
     );
 
     loop {
-        tokio::time::sleep(interval_duration).await;
+        tokio::time::sleep(interval).await;
 
-        let mut live_count = 0;
-        let mut dead_keys = Vec::new();
+        let live_count = {
+            let mut registry = CACHE_REGISTRY.write().unwrap();
+            let before = registry.len();
+            registry.retain(|_, weak| weak.upgrade().is_some());
+            let after = registry.len();
 
-        // Scan for dead caches
-        for entry in CACHE_REGISTRY.iter() {
-            match entry.value().upgrade() {
-                Some(_cache) => {
-                    // Cache is alive
-                    live_count += 1;
-                }
-                None => {
-                    // Cache is dead, mark for removal
-                    dead_keys.push(entry.key().clone());
-                }
+            if before > after {
+                log_debug(
+                    "cache_housekeeping",
+                    format!("Cleaned up {} dead cache references", before - after),
+                );
             }
-        }
-
-        // Clean up dead cache entries
-        if !dead_keys.is_empty() {
-            for key in &dead_keys {
-                CACHE_REGISTRY.remove(key);
-            }
-            log_debug(
-                "cache_housekeeping",
-                format!("Cleaned up {} dead cache references", dead_keys.len()),
-            );
-        }
+            after
+        };
 
         // If no live caches remain, stop the housekeeping task
-        if live_count == 0 && CACHE_REGISTRY.is_empty() {
+        if live_count == 0 {
             log_info(
                 "cache_housekeeping",
                 "No live caches remaining, stopping registry cleanup task",
@@ -157,43 +151,43 @@ async fn periodic_cache_housekeeping(interval_duration: Duration) {
 
         log_debug(
             "cache_housekeeping",
-            format!("Registry health: {} live caches", live_count),
+            format!("Registry health: {live_count} live caches"),
         );
     }
 
     log_info("cache_housekeeping", "Cache registry cleanup task stopped");
 }
 
-/// Start the cache housekeeping background task
+/// Start the cache housekeeping background task if not already running
 fn start_cache_housekeeping() {
     let mut handle_guard = HOUSEKEEPING_HANDLE.lock().unwrap();
 
     // Check if task exists AND is still running
-    if let Some(handle) = handle_guard.as_ref() {
-        if !handle.is_finished() {
-            log_debug("cache_housekeeping", "Housekeeping task already running");
-            return;
-        }
-        // Task finished, clear the old handle
-        log_debug("cache_housekeeping", "Previous housekeeping task finished");
+    if handle_guard.as_ref().is_some_and(|h| !h.is_finished()) {
+        log_debug("cache_housekeeping", "Housekeeping task already running");
+        return;
     }
 
-    let task = tokio::spawn(periodic_cache_housekeeping(Duration::from_secs(5 * 60)));
-    *handle_guard = Some(task);
-
     log_info("cache_housekeeping", "Started cache housekeeping task");
+
+    *handle_guard = Some(tokio::spawn(periodic_cache_housekeeping(
+        Duration::from_secs(5 * 60),
+    )));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn cleanup_cache(cache_id: &str) {
+        CACHE_REGISTRY.write().unwrap().remove(cache_id);
+    }
+
     // ==================== EvictionPolicy ====================
 
     #[tokio::test]
     async fn test_eviction_policy_default() {
-        let policy = EvictionPolicy::default();
-        assert_eq!(policy, EvictionPolicy::Lru);
+        assert_eq!(EvictionPolicy::default(), EvictionPolicy::Lru);
     }
 
     #[tokio::test]
@@ -205,8 +199,7 @@ mod tests {
     #[tokio::test]
     async fn test_eviction_policy_clone() {
         let policy = EvictionPolicy::Lfu;
-        let cloned = policy.clone();
-        assert_eq!(policy, cloned);
+        assert_eq!(policy, policy.clone());
     }
 
     // ==================== get_or_create_cache ====================
@@ -220,11 +213,8 @@ mod tests {
             Some(EvictionPolicy::Lru),
             false,
         );
-
         assert_eq!(cache.entry_count(), 0);
-
-        // Cleanup
-        CACHE_REGISTRY.remove("test_lru_cache");
+        cleanup_cache("test_lru_cache");
     }
 
     #[tokio::test]
@@ -236,61 +226,32 @@ mod tests {
             Some(EvictionPolicy::Lfu),
             false,
         );
-
         assert_eq!(cache.entry_count(), 0);
-
-        // Cleanup
-        CACHE_REGISTRY.remove("test_lfu_cache");
+        cleanup_cache("test_lfu_cache");
     }
 
     #[tokio::test]
     async fn test_create_cache_with_metrics() {
-        let cache = get_or_create_cache(
-            "test_metrics_cache",
-            1024,
-            None,
-            None,
-            true, // Enable metrics
-        );
-
-        // Metrics should work
-        let metrics = cache.metrics();
-        assert!(metrics.is_ok());
-
-        // Cleanup
-        CACHE_REGISTRY.remove("test_metrics_cache");
+        let cache = get_or_create_cache("test_metrics_cache", 1024, None, None, true);
+        assert!(cache.metrics().is_ok());
+        cleanup_cache("test_metrics_cache");
     }
 
     #[tokio::test]
     async fn test_create_cache_without_metrics() {
-        let cache = get_or_create_cache(
-            "test_no_metrics_cache",
-            1024,
-            None,
-            None,
-            false, // Disable metrics
-        );
-
-        // Metrics should fail
-        let metrics = cache.metrics();
-        assert!(metrics.is_err());
-
-        // Cleanup
-        CACHE_REGISTRY.remove("test_no_metrics_cache");
+        let cache = get_or_create_cache("test_no_metrics_cache", 1024, None, None, false);
+        assert!(cache.metrics().is_err());
+        cleanup_cache("test_no_metrics_cache");
     }
 
     #[tokio::test]
     async fn test_get_existing_cache() {
         let cache_id = "test_get_existing";
-
         let cache1 = get_or_create_cache(cache_id, 1024, None, None, false);
         let cache2 = get_or_create_cache(cache_id, 2048, Some(30), Some(EvictionPolicy::Lfu), true);
 
-        // Should return same cache (Arc pointer equality)
         assert!(Arc::ptr_eq(&cache1, &cache2));
-
-        // Cleanup
-        CACHE_REGISTRY.remove(cache_id);
+        cleanup_cache(cache_id);
     }
 
     #[tokio::test]
@@ -298,12 +259,9 @@ mod tests {
         let cache1 = get_or_create_cache("test_diff_1", 1024, None, None, false);
         let cache2 = get_or_create_cache("test_diff_2", 1024, None, None, false);
 
-        // Should be different caches
         assert!(!Arc::ptr_eq(&cache1, &cache2));
-
-        // Cleanup
-        CACHE_REGISTRY.remove("test_diff_1");
-        CACHE_REGISTRY.remove("test_diff_2");
+        cleanup_cache("test_diff_1");
+        cleanup_cache("test_diff_2");
     }
 
     // ==================== Cache Registry ====================
@@ -311,61 +269,44 @@ mod tests {
     #[tokio::test]
     async fn test_cache_registered_after_creation() {
         let cache_id = "test_registered";
-
-        // Should not exist initially
-        let exists_before = CACHE_REGISTRY.contains_key(cache_id);
+        let exists_before = CACHE_REGISTRY.read().unwrap().contains_key(cache_id);
 
         let _cache = get_or_create_cache(cache_id, 1024, None, None, false);
 
-        // Should exist after creation
-        let exists_after = CACHE_REGISTRY.contains_key(cache_id);
+        let exists_after = CACHE_REGISTRY.read().unwrap().contains_key(cache_id);
 
         assert!(!exists_before);
         assert!(exists_after);
-
-        // Cleanup
-        CACHE_REGISTRY.remove(cache_id);
+        cleanup_cache(cache_id);
     }
 
     #[tokio::test]
     async fn test_weak_reference_upgrades_while_cache_alive() {
         let cache_id = "test_weak_upgrade";
-
         let cache = get_or_create_cache(cache_id, 1024, None, None, false);
 
-        // Weak reference should upgrade while cache is held
-        let upgraded = {
-            let weak = CACHE_REGISTRY.get(cache_id).unwrap();
-            weak.upgrade()
-        };
+        let upgraded = CACHE_REGISTRY
+            .read()
+            .unwrap()
+            .get(cache_id)
+            .and_then(Weak::upgrade);
+
         assert!(upgraded.is_some());
-
-        // Should be the same cache
         assert!(Arc::ptr_eq(&cache, &upgraded.unwrap()));
-
-        // Cleanup
-        CACHE_REGISTRY.remove(cache_id);
+        cleanup_cache(cache_id);
     }
 
     #[tokio::test]
     async fn test_cache_recreated_after_drop() {
         let cache_id = "test_recreate";
 
-        // Create cache WITHOUT metrics
         let cache1 = get_or_create_cache(cache_id, 1024, None, None, false);
-        assert!(cache1.metrics().is_err()); // Metrics disabled
-
-        // Drop cache
+        assert!(cache1.metrics().is_err());
         drop(cache1);
 
-        // Create new cache WITH metrics (different config)
         let cache2 = get_or_create_cache(cache_id, 1024, None, None, true);
-
-        // If it's truly a new cache, metrics should now work
-        assert!(cache2.metrics().is_ok()); // Metrics enabled
-
-        // Cleanup
-        CACHE_REGISTRY.remove(cache_id);
+        assert!(cache2.metrics().is_ok());
+        cleanup_cache(cache_id);
     }
 
     // ==================== Cache Operations Through Registry ====================
@@ -377,7 +318,6 @@ mod tests {
 
         let cache = get_or_create_cache("test_operations", 10_000, None, None, false);
 
-        // Insert
         cache.insert(
             b"key1".to_vec(),
             CachedKeyType::String,
@@ -385,16 +325,13 @@ mod tests {
         );
         assert_eq!(cache.entry_count(), 1);
 
-        // Get
         let result = cache.get(b"key1", CachedKeyType::String);
         assert!(result.is_some());
         assert_eq!(result.unwrap(), Value::BulkString(b"value1".to_vec()));
 
-        // Invalidate
         cache.invalidate(b"key1");
         assert_eq!(cache.entry_count(), 0);
 
-        // Cleanup
-        CACHE_REGISTRY.remove("test_operations");
+        cleanup_cache("test_operations");
     }
 }

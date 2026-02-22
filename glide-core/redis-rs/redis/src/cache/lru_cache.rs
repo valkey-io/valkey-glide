@@ -1,15 +1,13 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-use super::glide_cache::{
-    calculate_entry_size, CacheConfig, CacheMetrics, CachedKeyType, GlideCache,
-};
+use super::glide_cache::{calculate_entry_size, CacheConfig, CachedKeyType, GlideCache};
 
-use crate::{ErrorKind, RedisError, RedisResult, Value};
+use crate::{
+    cache::glide_cache::{CacheCore, CacheEntry},
+    Value,
+};
 use logger_core::{log_debug, log_warn};
 use lru::LruCache;
-use std::{
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::sync::{Arc, Mutex};
 
 /// LRU (Least Recently Used) Cache Implementation with Lazy TTL Expiration
 #[derive(Debug)]
@@ -17,44 +15,8 @@ pub struct GlideLruCache {
     /// LRU cache with automatic access ordering
     cache: Mutex<LruCache<Vec<u8>, CacheEntry>>,
 
-    /// Cache configuration
-    config: CacheConfig,
-
-    /// Current memory usage (tracked separately)
-    current_memory: Mutex<u64>,
-
-    /// Performance statistics
-    stats: Option<Mutex<CacheMetrics>>,
-}
-
-/// Cache entry containing all cached command responses for a single key
-#[derive(Debug)]
-struct CacheEntry {
-    /// The cached value
-    value: Value,
-    /// Type of the Redis key
-    key_type: CachedKeyType,
-    /// Expiration time for this entry (None = no expiration)
-    expires_at: Option<Instant>,
-    /// Size of this entry in bytes
-    size: u64,
-}
-
-impl CacheEntry {
-    fn new(value: Value, key_type: CachedKeyType, expires_at: Option<Instant>, size: u64) -> Self {
-        Self {
-            value,
-            key_type,
-            expires_at,
-            size,
-        }
-    }
-
-    /// Check if this entry is expired
-    #[inline]
-    fn is_expired(&self) -> bool {
-        self.expires_at.map_or(false, |exp| Instant::now() >= exp)
-    }
+    /// Shared cache core (config, memory tracking, metrics)
+    core: CacheCore,
 }
 
 impl GlideLruCache {
@@ -67,22 +29,14 @@ impl GlideLruCache {
                 config.max_memory_bytes / 1024,
                 config
                     .ttl
-                    .map_or("".to_string(), |ttl| format!(" ttl={:?},", ttl)),
+                    .map_or(String::new(), |ttl| format!(" ttl={:?},", ttl)),
                 config.enable_metrics
             ),
         );
 
-        let stats = if config.enable_metrics {
-            Some(Mutex::new(CacheMetrics::default()))
-        } else {
-            None
-        };
-
         Arc::new(Self {
             cache: Mutex::new(LruCache::unbounded()),
-            config,
-            current_memory: Mutex::new(0),
-            stats,
+            core: CacheCore::new(config),
         })
     }
 
@@ -91,40 +45,36 @@ impl GlideLruCache {
     fn evict_until_space_available(
         &self,
         cache: &mut LruCache<Vec<u8>, CacheEntry>,
-        current_memory: &mut u64,
         required_space: u64,
     ) {
-        while *current_memory + required_space > self.config.max_memory_bytes {
-            if let Some((_, entry)) = cache.pop_lru() {
-                *current_memory = current_memory.saturating_sub(entry.size);
-
-                let is_expired = entry.is_expired();
-
-                // Update stats
-                if let Some(stats) = self.stats.as_ref() {
-                    if let Ok(mut stats) = stats.lock() {
-                        if is_expired {
-                            stats.expirations += 1;
-                        } else {
-                            stats.evictions += 1;
-                        }
-                    }
-                }
-
-                log_debug(
-                    format!("lru_{}", if is_expired { "expiration" } else { "eviction" }),
-                    format!(
-                        "{} entry (type={:?}, size={}B, remaining_memory={}B)",
-                        if is_expired { "Expired" } else { "Evicted" },
-                        entry.key_type,
-                        entry.size,
-                        *current_memory
-                    ),
-                );
-            } else {
+        while self.core.needs_eviction(required_space) {
+            let Some((_, entry)) = cache.pop_lru() else {
                 // Cache is empty
                 break;
+            };
+
+            self.core.uncharge(entry.size);
+            let is_expired = entry.is_expired();
+
+            // Update stats
+            if let Some(stats) = self.core.stats() {
+                if is_expired {
+                    stats.record_expiration();
+                } else {
+                    stats.record_eviction();
+                }
             }
+
+            log_debug(
+                format!("lru_{}", if is_expired { "expiration" } else { "eviction" }),
+                format!(
+                    "{} entry (type={:?}, size={}B, remaining_memory={}B)",
+                    if is_expired { "Expired" } else { "Evicted" },
+                    entry.key_type,
+                    entry.size,
+                    self.core.current_memory()
+                ),
+            );
         }
     }
 
@@ -136,20 +86,19 @@ impl GlideLruCache {
 
         if is_expired {
             if let Some(entry) = cache.pop(key) {
-                let mut current_memory = self.current_memory.lock().unwrap();
-                *current_memory = current_memory.saturating_sub(entry.size);
+                self.core.uncharge(entry.size);
 
-                if let Some(stats) = self.stats.as_ref() {
-                    if let Ok(mut stats) = stats.lock() {
-                        stats.expirations += 1;
-                    }
+                if let Some(stats) = self.core.stats() {
+                    stats.record_expiration();
                 }
 
                 log_debug(
                     "lru_expiration",
                     format!(
                         "Expired entry (type={:?}, size={}B, remaining_memory={}B)",
-                        entry.key_type, entry.size, *current_memory
+                        entry.key_type,
+                        entry.size,
+                        self.core.current_memory()
                     ),
                 );
                 return true;
@@ -160,6 +109,9 @@ impl GlideLruCache {
 }
 
 impl GlideCache for GlideLruCache {
+    fn core(&self) -> &CacheCore {
+        &self.core
+    }
     fn get(&self, key: &[u8], expected_type: CachedKeyType) -> Option<Value> {
         let mut cache = self.cache.lock().unwrap();
 
@@ -168,57 +120,55 @@ impl GlideCache for GlideLruCache {
             return None;
         }
 
-        if let Some(entry) = cache.get(key) {
-            // Check type match
-            if entry.key_type != expected_type {
-                log_debug(
-                    "lru_type_mismatch",
-                    format!(
-                        "Type mismatch: cached as {:?}, requested as {:?}",
-                        entry.key_type, expected_type
-                    ),
-                );
-                return None;
-            }
+        let entry = cache.get(key)?;
 
-            return Some(entry.value.clone());
+        // Check type match
+        if entry.key_type != expected_type {
+            log_debug(
+                "lru_type_mismatch",
+                format!(
+                    "Type mismatch: cached as {:?}, requested as {:?}",
+                    entry.key_type, expected_type
+                ),
+            );
+            return None;
         }
 
-        None
+        Some(entry.value.clone())
     }
 
     fn insert(&self, key: Vec<u8>, key_type: CachedKeyType, value: Value) {
         let entry_size = calculate_entry_size(&key, &value);
 
         // Check if entry is too large for cache
-        if entry_size > self.config.max_memory_bytes {
+        if self.core.entry_too_big(entry_size) {
             log_warn(
                 "lru_insert",
                 format!(
                     "Entry too large for cache: {}B > {}B (max), skipping",
-                    entry_size, self.config.max_memory_bytes
+                    entry_size,
+                    self.core.max_memory()
                 ),
             );
             return;
         }
 
         let mut cache = self.cache.lock().unwrap();
-        let mut current_memory = self.current_memory.lock().unwrap();
 
         // Remove existing entry if present
         if let Some(existing) = cache.pop(&key) {
-            *current_memory = current_memory.saturating_sub(existing.size);
+            self.core.uncharge(existing.size);
         }
 
         // Evict until space available
-        self.evict_until_space_available(&mut cache, &mut current_memory, entry_size);
+        self.evict_until_space_available(&mut cache, entry_size);
 
         // Insert new entry
-        let expires_at = self.config.ttl.map(|ttl| Instant::now() + ttl);
+        let expires_at = self.core.compute_expires_at();
         let entry = CacheEntry::new(value, key_type, expires_at, entry_size);
 
         cache.push(key, entry);
-        *current_memory += entry_size;
+        self.core.charge(entry_size);
 
         log_debug(
             "lru_insert",
@@ -237,57 +187,31 @@ impl GlideCache for GlideLruCache {
 
     fn invalidate(&self, key: &[u8]) {
         let mut cache = self.cache.lock().unwrap();
-        let mut current_memory = self.current_memory.lock().unwrap();
 
         // Remove from cache
         if let Some(entry) = cache.pop(key) {
             // Update memory usage
-            *current_memory = current_memory.saturating_sub(entry.size);
+            self.core.uncharge(entry.size);
 
             log_debug(
                 "lru_invalidate",
                 format!(
                     "Invalidated entry (type={:?}, size={}B, remaining_memory={}B)",
-                    entry.key_type, entry.size, *current_memory
+                    entry.key_type,
+                    entry.size,
+                    self.core.current_memory()
                 ),
             );
 
             // Update stats
-            if let Some(stats) = self.stats.as_ref() {
-                let mut stats = stats.lock().unwrap();
-                stats.invalidations += 1;
+            if let Some(stats) = self.core.stats() {
+                stats.record_invalidation();
             }
         }
     }
 
-    fn metrics(&self) -> RedisResult<CacheMetrics> {
-        let stats = self.stats.as_ref().ok_or_else(|| {
-            RedisError::from((
-                ErrorKind::InvalidClientConfig,
-                "Cache metrics tracking is not enabled",
-            ))
-        })?;
-        let stats = stats.lock().unwrap().clone();
-        Ok(stats)
-    }
-
-    fn increment_hit(&self) {
-        if let Some(stats) = self.stats.as_ref() {
-            let mut stats = stats.lock().unwrap();
-            stats.hits += 1;
-        }
-    }
-
-    fn increment_miss(&self) {
-        if let Some(stats) = self.stats.as_ref() {
-            let mut stats = stats.lock().unwrap();
-            stats.misses += 1;
-        }
-    }
-
     fn entry_count(&self) -> u64 {
-        let cache = self.cache.lock().unwrap();
-        cache.len() as u64
+        self.cache.lock().unwrap().len() as u64
     }
 }
 
@@ -504,8 +428,8 @@ mod tests {
         cache.increment_miss();
 
         let metrics = cache.metrics().unwrap();
-        assert_eq!(metrics.hits, 2);
-        assert_eq!(metrics.misses, 1);
+        assert_eq!(metrics.hits(), 2);
+        assert_eq!(metrics.misses(), 1);
     }
 
     #[test]
@@ -527,7 +451,7 @@ mod tests {
         cache.invalidate(b"key2");
 
         let metrics = cache.metrics().unwrap();
-        assert_eq!(metrics.invalidations, 2);
+        assert_eq!(metrics.invalidations(), 2);
     }
 
     #[test]
@@ -553,7 +477,7 @@ mod tests {
         );
 
         let metrics = cache.metrics().unwrap();
-        assert_eq!(metrics.evictions, 1);
+        assert_eq!(metrics.evictions(), 1);
     }
 
     #[test]

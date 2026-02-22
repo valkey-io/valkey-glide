@@ -936,6 +936,10 @@ impl RoutingInfo {
 
             RouteBy::MultiShard(_) => None, //TODO: handle multi-shard commands
 
+            RouteBy::FirstKey => r.arg_idx(1),
+            RouteBy::SecondArg => r.arg_idx(2),
+            RouteBy::ThirdArg => r.arg_idx(3),
+
             RouteBy::ThirdArgAfterKeyCount => {
                 let key_count = r
                     .arg_idx(2)
@@ -947,8 +951,6 @@ impl RoutingInfo {
                     r.arg_idx(3)
                 }
             }
-
-            RouteBy::SecondArg => r.arg_idx(2),
 
             RouteBy::SecondArgAfterKeyCount => {
                 let key_count = r
@@ -966,8 +968,6 @@ impl RoutingInfo {
                 let streams_position = r.position(b"STREAMS")?;
                 r.arg_idx(streams_position + 1)
             }
-
-            RouteBy::FirstKey => r.arg_idx(1),
         }
     }
 

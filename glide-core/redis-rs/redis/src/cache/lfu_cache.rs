@@ -1,10 +1,12 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 use logger_core::{log_debug, log_warn};
 
-use crate::cache::glide_cache::{calculate_entry_size, CachedKeyType, GlideCache};
-use crate::{ErrorKind, RedisError, RedisResult, Value};
+use crate::cache::glide_cache::{
+    calculate_entry_size, CacheCore, CacheEntry, CachedKeyType, GlideCache,
+};
+use crate::Value;
 
-use super::glide_cache::{CacheConfig, CacheMetrics};
+use super::glide_cache::CacheConfig;
 use std::collections::{HashMap, HashSet};
 use std::{
     sync::{Arc, Mutex},
@@ -20,35 +22,31 @@ use std::{
 /// Uses O(1) minimum frequency tracking for efficient eviction.
 #[derive(Debug)]
 pub struct GlideLfuCache {
-    /// Main storage: key -> cache entry
-    cache: Mutex<HashMap<Vec<u8>, LfuCacheEntry>>,
+    /// All mutable LFU state behind a single mutex to prevent lock-ordering issues and reduce locking overhead.
+    inner: Mutex<LfuInner>,
 
-    /// Frequency bucket management with O(1) min tracking
-    freq_buckets: Mutex<FrequencyBuckets>,
-
-    /// Cache configuration
-    config: CacheConfig,
-
-    /// Current memory usage (tracked separately)
-    current_memory: Mutex<u64>,
-
-    /// Performance statistics
-    stats: Option<Mutex<CacheMetrics>>,
+    /// Shared cache core (config, memory tracking, metrics)
+    core: CacheCore,
 }
 
-/// Cache entry containing all cached command responses for a single key with frequency tracking
+/// All mutable LFU state grouped under a single lock
+#[derive(Debug)]
+struct LfuInner {
+    /// Main storage: key -> cache entry
+    cache: HashMap<Vec<u8>, LfuCacheEntry>,
+    /// Frequency bucket management with O(1) min tracking
+    freq_buckets: FrequencyBuckets,
+}
+
+/// LFU-specific cache entry wrapping the shared CacheEntry with frequency tracking
 #[derive(Debug)]
 struct LfuCacheEntry {
-    /// The cached Valkey value
-    value: Value,
-    /// Type of the key (String, Hash, etc.)
-    key_type: CachedKeyType,
-    /// Expiration time for this entry (None = no expiration)
-    expires_at: Option<Instant>,
-    /// Size of this entry in bytes
-    size: u64,
+    /// Base cache entry (value, key_type, expires_at, size)
+    base: CacheEntry,
+
     /// Access frequency counter
     frequency: u64,
+
     /// Last access time (for tie-breaking within same frequency)
     last_access: Instant,
 }
@@ -75,8 +73,7 @@ impl FrequencyBuckets {
         if self.buckets.is_empty() || frequency < self.min_frequency {
             self.min_frequency = frequency;
         }
-        let bucket = self.buckets.entry(frequency).or_default();
-        bucket.insert(key);
+        self.buckets.entry(frequency).or_default().insert(key);
     }
 
     /// Remove a key from a frequency bucket
@@ -116,21 +113,12 @@ impl FrequencyBuckets {
 }
 
 impl LfuCacheEntry {
-    fn new(value: Value, key_type: CachedKeyType, expires_at: Option<Instant>, size: u64) -> Self {
+    fn new(base: CacheEntry) -> Self {
         Self {
-            value,
-            key_type,
-            expires_at,
-            size,
+            base,
             frequency: 1,
             last_access: Instant::now(),
         }
-    }
-
-    /// Check if this entry is expired
-    #[inline]
-    fn is_expired(&self) -> bool {
-        self.expires_at.map_or(false, |exp| Instant::now() >= exp)
     }
 
     /// Increment frequency and update last access time
@@ -150,61 +138,52 @@ impl GlideLfuCache {
                 config.max_memory_bytes / 1024,
                 config
                     .ttl
-                    .map_or("".to_string(), |ttl| format!(" ttl={:?},", ttl)),
+                    .map_or(String::new(), |ttl| format!(" ttl={:?},", ttl)),
                 config.enable_metrics
             ),
         );
 
-        let stats = if config.enable_metrics {
-            Some(Mutex::new(CacheMetrics::default()))
-        } else {
-            None
-        };
-
         Arc::new(Self {
-            cache: Mutex::new(HashMap::new()),
-            freq_buckets: Mutex::new(FrequencyBuckets::new()),
-            config,
-            current_memory: Mutex::new(0),
-            stats,
+            inner: Mutex::new(LfuInner {
+                cache: HashMap::new(),
+                freq_buckets: FrequencyBuckets::new(),
+            }),
+            core: CacheCore::new(config),
         })
     }
 
-    /// Evict LFU entries until we have enough space
+    /// Evict LFU entries until we have enough space.
     /// Collects candidates per frequency bucket and sorts by access time once,
     /// then evicts in order
-    fn evict_until_space_available(
-        &self,
-        cache: &mut HashMap<Vec<u8>, LfuCacheEntry>,
-        freq_buckets: &mut FrequencyBuckets,
-        current_memory: &mut u64,
-        required_space: u64,
-    ) {
-        while *current_memory + required_space > self.config.max_memory_bytes {
-            if freq_buckets.is_empty() {
+    fn evict_until_space_available(&self, inner: &mut LfuInner, required_space: u64) {
+        while self.core.needs_eviction(required_space) {
+            if inner.freq_buckets.is_empty() {
                 break;
             }
 
-            let min_freq = freq_buckets.min_frequency;
+            let min_freq = inner.freq_buckets.min_frequency;
 
             // Collect all candidates from min frequency bucket
-            let mut candidates: Vec<(Vec<u8>, Instant)> = match freq_buckets.buckets.get(&min_freq)
-            {
-                Some(bucket) => bucket
-                    .iter()
-                    .filter_map(|key| cache.get(key).map(|entry| (key.clone(), entry.last_access)))
-                    .collect(),
-                None => {
-                    // Bucket doesn't exist (shouldn't happen), update min and retry
-                    freq_buckets.update_min_frequency();
-                    continue;
-                }
+            let Some(bucket) = inner.freq_buckets.buckets.get(&min_freq) else {
+                // Bucket doesn't exist (shouldn't happen), update min and retry
+                inner.freq_buckets.update_min_frequency();
+                continue;
             };
+
+            let mut candidates: Vec<(Vec<u8>, Instant)> = bucket
+                .iter()
+                .filter_map(|key| {
+                    inner
+                        .cache
+                        .get(key)
+                        .map(|entry| (key.clone(), entry.last_access))
+                })
+                .collect();
 
             if candidates.is_empty() {
                 // Empty bucket, update min frequency and continue
-                freq_buckets.buckets.remove(&min_freq);
-                freq_buckets.update_min_frequency();
+                inner.freq_buckets.buckets.remove(&min_freq);
+                inner.freq_buckets.update_min_frequency();
                 continue;
             }
 
@@ -214,26 +193,23 @@ impl GlideLfuCache {
             // Evict in order until we have enough space or exhaust this frequency bucket
             for (key, _) in candidates {
                 // Check if we have enough space now
-                if *current_memory + required_space <= self.config.max_memory_bytes {
+                if !self.core.needs_eviction(required_space) {
                     return;
                 }
 
-                if let Some(entry) = cache.remove(&key) {
+                if let Some(entry) = inner.cache.remove(&key) {
                     // Remove from frequency bucket
-                    freq_buckets.remove(&key, entry.frequency);
+                    inner.freq_buckets.remove(&key, entry.frequency);
 
                     // Update memory
-                    *current_memory = current_memory.saturating_sub(entry.size);
+                    self.core.uncharge(entry.base.size);
+                    let is_expired = entry.base.is_expired();
 
-                    let is_expired = entry.is_expired();
-
-                    if let Some(stats) = self.stats.as_ref() {
-                        if let Ok(mut stats) = stats.lock() {
-                            if is_expired {
-                                stats.expirations += 1;
-                            } else {
-                                stats.evictions += 1;
-                            }
+                    if let Some(stats) = self.core.stats() {
+                        if is_expired {
+                            stats.record_expiration();
+                        } else {
+                            stats.record_eviction();
                         }
                     }
 
@@ -243,9 +219,9 @@ impl GlideLfuCache {
                             "{} entry (freq={}, type={:?}, size={}B, remaining_memory={}B)",
                             if is_expired { "Expired" } else { "Evicted" },
                             entry.frequency,
-                            entry.key_type,
-                            entry.size,
-                            *current_memory
+                            entry.base.key_type,
+                            entry.base.size,
+                            self.core.current_memory()
                         ),
                     );
                 }
@@ -258,32 +234,27 @@ impl GlideLfuCache {
 
     /// Remove an expired entry if present, updating memory and stats.
     /// Returns true if an entry was removed.
-    fn remove_if_expired(
-        &self,
-        cache: &mut HashMap<Vec<u8>, LfuCacheEntry>,
-        freq_buckets: &mut FrequencyBuckets,
-        key: &[u8],
-    ) -> bool {
-        let is_expired = cache.get(key).map_or(false, |e| e.is_expired());
+    fn remove_if_expired(&self, inner: &mut LfuInner, key: &[u8]) -> bool {
+        let is_expired = inner.cache.get(key).map_or(false, |e| e.base.is_expired());
 
         if is_expired {
-            if let Some(entry) = cache.remove(key) {
-                freq_buckets.remove(key, entry.frequency);
+            if let Some(entry) = inner.cache.remove(key) {
+                inner.freq_buckets.remove(key, entry.frequency);
 
-                let mut current_memory = self.current_memory.lock().unwrap();
-                *current_memory = current_memory.saturating_sub(entry.size);
+                self.core.uncharge(entry.base.size);
 
-                if let Some(stats) = self.stats.as_ref() {
-                    if let Ok(mut stats) = stats.lock() {
-                        stats.expirations += 1;
-                    }
+                if let Some(stats) = self.core.stats() {
+                    stats.record_expiration();
                 }
 
                 log_debug(
                     "lfu_expiration",
                     format!(
                         "Expired entry (freq={}, type={:?}, size={}B, remaining_memory={}B)",
-                        entry.frequency, entry.key_type, entry.size, *current_memory
+                        entry.frequency,
+                        entry.base.key_type,
+                        entry.base.size,
+                        self.core.current_memory()
                     ),
                 );
                 return true;
@@ -294,81 +265,77 @@ impl GlideLfuCache {
 }
 
 impl GlideCache for GlideLfuCache {
+    fn core(&self) -> &CacheCore {
+        &self.core
+    }
+
     fn get(&self, key: &[u8], expected_type: CachedKeyType) -> Option<Value> {
-        let mut cache = self.cache.lock().unwrap();
-        let mut freq_buckets = self.freq_buckets.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap();
 
         // Check if expired and remove if so
-        if self.remove_if_expired(&mut cache, &mut freq_buckets, key) {
+        if self.remove_if_expired(&mut inner, key) {
             return None;
         }
 
-        if let Some(entry) = cache.get_mut(key) {
-            // Check type match
-            if entry.key_type != expected_type {
-                log_debug(
-                    "lfu_type_mismatch",
-                    format!(
-                        "Type mismatch: cached as {:?}, requested as {:?}",
-                        entry.key_type, expected_type
-                    ),
-                );
-                return None;
-            }
+        let entry = inner.cache.get_mut(key)?;
 
-            let value = entry.value.clone();
-
-            // Update frequency on successful access
-            let old_frequency = entry.frequency;
-            entry.touch();
-            freq_buckets.increment(key, old_frequency);
-
-            return Some(value);
+        // Check type match
+        if entry.base.key_type != expected_type {
+            log_debug(
+                "lfu_type_mismatch",
+                format!(
+                    "Type mismatch: cached as {:?}, requested as {:?}",
+                    entry.base.key_type, expected_type
+                ),
+            );
+            return None;
         }
 
-        None
+        let value = entry.base.value.clone();
+
+        // Update frequency on successful access
+        let old_frequency = entry.frequency;
+        entry.touch();
+        inner.freq_buckets.increment(key, old_frequency);
+
+        Some(value)
     }
 
     fn insert(&self, key: Vec<u8>, key_type: CachedKeyType, value: Value) {
         let entry_size = calculate_entry_size(&key, &value);
 
         // Check if entry is too large for cache
-        if entry_size > self.config.max_memory_bytes {
+        if self.core.entry_too_big(entry_size) {
             log_warn(
                 "lfu_insert",
                 format!(
                     "Entry too large for cache: {}B > {}B (max), skipping",
-                    entry_size, self.config.max_memory_bytes
+                    entry_size,
+                    self.core.max_memory()
                 ),
             );
             return;
         }
 
-        let mut cache = self.cache.lock().unwrap();
-        let mut freq_buckets = self.freq_buckets.lock().unwrap();
-        let mut current_memory = self.current_memory.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap();
 
         // Remove existing entry if present
-        if let Some(existing) = cache.remove(&key) {
-            freq_buckets.remove(&key, existing.frequency);
-            *current_memory = current_memory.saturating_sub(existing.size);
+        if let Some(existing) = inner.cache.remove(&key) {
+            inner.freq_buckets.remove(&key, existing.frequency);
+            self.core.uncharge(existing.base.size);
         }
 
         // Evict until space available
-        self.evict_until_space_available(
-            &mut cache,
-            &mut freq_buckets,
-            &mut current_memory,
-            entry_size,
-        );
+        self.evict_until_space_available(&mut inner, entry_size);
 
         // Insert new entry
-        let expires_at = self.config.ttl.map(|ttl| Instant::now() + ttl);
-        let entry = LfuCacheEntry::new(value, key_type, expires_at, entry_size);
+        let expires_at = self.core.compute_expires_at();
+        let base_entry = CacheEntry::new(value, key_type, expires_at, entry_size);
+        let entry = LfuCacheEntry::new(base_entry);
 
-        freq_buckets.add(key.clone(), entry.frequency);
-        cache.insert(key, entry);
-        *current_memory += entry_size;
+        inner.freq_buckets.add(key.clone(), entry.frequency);
+        inner.cache.insert(key, entry);
+        self.core.charge(entry_size);
 
         log_debug(
             "lfu_insert",
@@ -386,62 +353,36 @@ impl GlideCache for GlideLfuCache {
     }
 
     fn invalidate(&self, key: &[u8]) {
-        let mut cache = self.cache.lock().unwrap();
-        let mut freq_buckets = self.freq_buckets.lock().unwrap();
-        let mut current_memory = self.current_memory.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap();
 
         // Remove from cache
-        if let Some(entry) = cache.remove(key) {
+        if let Some(entry) = inner.cache.remove(key) {
             // Remove from frequency bucket
-            freq_buckets.remove(key, entry.frequency);
+            inner.freq_buckets.remove(key, entry.frequency);
 
             // Update memory usage
-            *current_memory = current_memory.saturating_sub(entry.size);
+            self.core.uncharge(entry.base.size);
 
             log_debug(
                 "lfu_invalidate",
                 format!(
                     "Invalidated entry (freq={}, type={:?}, size={}B, remaining_memory={}B)",
-                    entry.frequency, entry.key_type, entry.size, *current_memory
+                    entry.frequency,
+                    entry.base.key_type,
+                    entry.base.size,
+                    self.core.current_memory()
                 ),
             );
 
             // Update stats
-            if let Some(stats) = self.stats.as_ref() {
-                let mut stats = stats.lock().unwrap();
-                stats.invalidations += 1;
+            if let Some(stats) = self.core.stats() {
+                stats.record_invalidation();
             }
         }
     }
 
-    fn metrics(&self) -> RedisResult<CacheMetrics> {
-        let stats = self.stats.as_ref().ok_or_else(|| {
-            RedisError::from((
-                ErrorKind::InvalidClientConfig,
-                "Cache metrics tracking is not enabled",
-            ))
-        })?;
-        let stats = stats.lock().unwrap().clone();
-        Ok(stats)
-    }
-
-    fn increment_hit(&self) {
-        if let Some(stats) = self.stats.as_ref() {
-            let mut stats = stats.lock().unwrap();
-            stats.hits += 1;
-        }
-    }
-
-    fn increment_miss(&self) {
-        if let Some(stats) = self.stats.as_ref() {
-            let mut stats = stats.lock().unwrap();
-            stats.misses += 1;
-        }
-    }
-
     fn entry_count(&self) -> u64 {
-        let cache = self.cache.lock().unwrap();
-        cache.len() as u64
+        self.inner.lock().unwrap().cache.len() as u64
     }
 }
 
@@ -689,8 +630,8 @@ mod tests {
         cache.increment_miss();
 
         let metrics = cache.metrics().unwrap();
-        assert_eq!(metrics.hits, 2);
-        assert_eq!(metrics.misses, 1);
+        assert_eq!(metrics.hits(), 2);
+        assert_eq!(metrics.misses(), 1);
     }
 
     #[test]
@@ -712,7 +653,7 @@ mod tests {
         cache.invalidate(b"key2");
 
         let metrics = cache.metrics().unwrap();
-        assert_eq!(metrics.invalidations, 2);
+        assert_eq!(metrics.invalidations(), 2);
     }
 
     #[test]
@@ -739,7 +680,7 @@ mod tests {
         );
 
         let metrics = cache.metrics().unwrap();
-        assert_eq!(metrics.evictions, 1);
+        assert_eq!(metrics.evictions(), 1);
     }
 
     #[test]
@@ -826,8 +767,8 @@ mod tests {
         }
 
         // Verify frequency increased by checking internal state
-        let cache_lock = cache.cache.lock().unwrap();
-        let entry = cache_lock.get(&b"key1".to_vec()).unwrap();
+        let inner_lock = cache.inner.lock().unwrap();
+        let entry = inner_lock.cache.get(&b"key1".to_vec()).unwrap();
         assert_eq!(entry.frequency, 6); // 1 initial + 5 gets
     }
 

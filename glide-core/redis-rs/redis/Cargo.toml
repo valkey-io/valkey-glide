@@ -144,7 +144,6 @@ which = "8"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 serde_json = { version = "1" }
 
-
 [[test]]
 name = "test_async"
 required-features = ["tokio-comp"]

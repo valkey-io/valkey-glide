@@ -2,10 +2,14 @@
 use crate::{
     cluster_routing::{Routable, RoutingInfo},
     cmd::cacheable_cmd_type,
-    Cmd, RedisResult, Value,
+    Cmd, ErrorKind, RedisError, RedisResult, Value,
 };
 /// Core caching interfaces and utilities for Glide
-use std::{fmt::Debug, time::Duration};
+use std::{
+    fmt::Debug,
+    sync::atomic::{AtomicU64, Ordering},
+    time::{Duration, Instant},
+};
 
 /// Configuration for cache instances
 #[derive(Debug, Clone)]
@@ -21,42 +25,101 @@ pub struct CacheConfig {
 }
 
 /// Metrics about cache performance
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct CacheMetrics {
     /// Total number of successful get operations
-    pub hits: u64,
+    hits: AtomicU64,
 
     /// Total number of failed get operations (key not found or expired)
-    pub misses: u64,
+    misses: AtomicU64,
 
     /// Total number of expired entries removed
-    pub expirations: u64,
+    expirations: AtomicU64,
 
     /// Total number of entries invalidated
-    pub invalidations: u64,
+    invalidations: AtomicU64,
 
     /// Total number of entries evicted due to memory constraints
-    pub evictions: u64,
+    evictions: AtomicU64,
 }
 
 impl CacheMetrics {
+    // ==================== Getters ====================
+
+    /// Returns the total number of cache hits
+    pub fn hits(&self) -> u64 {
+        self.hits.load(Ordering::Relaxed)
+    }
+
+    /// Returns the total number of cache misses
+    pub fn misses(&self) -> u64 {
+        self.misses.load(Ordering::Relaxed)
+    }
+
+    /// Returns the total number of expirations
+    pub fn expirations(&self) -> u64 {
+        self.expirations.load(Ordering::Relaxed)
+    }
+
+    /// Returns the total number of invalidations
+    pub fn invalidations(&self) -> u64 {
+        self.invalidations.load(Ordering::Relaxed)
+    }
+
+    /// Returns the total number of evictions
+    pub fn evictions(&self) -> u64 {
+        self.evictions.load(Ordering::Relaxed)
+    }
+
+    // ==================== Recording ====================
+
+    pub(crate) fn record_hit(&self) {
+        self.hits.fetch_add(1, Ordering::Relaxed);
+    }
+    pub(crate) fn record_miss(&self) {
+        self.misses.fetch_add(1, Ordering::Relaxed);
+    }
+    pub(crate) fn record_eviction(&self) {
+        self.evictions.fetch_add(1, Ordering::Relaxed);
+    }
+    pub(crate) fn record_expiration(&self) {
+        self.expirations.fetch_add(1, Ordering::Relaxed);
+    }
+    pub(crate) fn record_invalidation(&self) {
+        self.invalidations.fetch_add(1, Ordering::Relaxed);
+    }
+
+    // ==================== Rates ====================
+
     /// Calculate the hit rate (hits / total requests)
     pub fn hit_rate(&self) -> f64 {
-        let total = self.hits + self.misses;
+        let total = self.hits() + self.misses();
         if total == 0 {
             0.0
         } else {
-            self.hits as f64 / total as f64
+            self.hits() as f64 / total as f64
         }
     }
 
     /// Calculate the miss rate (misses / total requests)
     pub fn miss_rate(&self) -> f64 {
-        let total = self.hits + self.misses;
+        let total = self.hits() + self.misses();
         if total == 0 {
             0.0
         } else {
-            self.misses as f64 / total as f64
+            self.misses() as f64 / total as f64
+        }
+    }
+}
+
+impl Clone for CacheMetrics {
+    fn clone(&self) -> Self {
+        Self {
+            hits: AtomicU64::new(self.hits()),
+            misses: AtomicU64::new(self.misses()),
+            expirations: AtomicU64::new(self.expirations()),
+            invalidations: AtomicU64::new(self.invalidations()),
+            evictions: AtomicU64::new(self.evictions()),
         }
     }
 }
@@ -73,8 +136,149 @@ pub enum CachedKeyType {
     Set,
 }
 
+// ==================== Shared Cache Entry ====================
+
+/// Cache entry containing the cached value and metadata
+#[derive(Debug)]
+pub struct CacheEntry {
+    /// The cached Valkey value
+    pub value: Value,
+
+    /// Type of the key (String, Hash, etc.)
+    pub key_type: CachedKeyType,
+
+    /// Expiration time for this entry (None = no expiration)
+    pub expires_at: Option<Instant>,
+
+    /// Size of this entry in bytes
+    pub size: u64,
+}
+
+impl CacheEntry {
+    /// Creates a new cache entry
+    pub fn new(
+        value: Value,
+        key_type: CachedKeyType,
+        expires_at: Option<Instant>,
+        size: u64,
+    ) -> Self {
+        Self {
+            value,
+            key_type,
+            expires_at,
+            size,
+        }
+    }
+
+    /// Check if this entry is expired
+    #[inline]
+    pub fn is_expired(&self) -> bool {
+        self.expires_at.map_or(false, |exp| Instant::now() >= exp)
+    }
+}
+
+// ==================== Shared Cache Core ====================
+
+/// Shared cache core that handles configuration, memory tracking, and metrics
+#[derive(Debug)]
+pub struct CacheCore {
+    /// Cache configuration
+    config: CacheConfig,
+
+    /// Current memory usage in bytes
+    current_memory: AtomicU64,
+
+    /// Performance statistics (None if metrics disabled)
+    stats: Option<CacheMetrics>,
+}
+
+impl CacheCore {
+    /// Creates a new cache core with the given configuration
+    pub fn new(config: CacheConfig) -> Self {
+        let stats = config.enable_metrics.then(CacheMetrics::default);
+
+        Self {
+            config,
+            current_memory: AtomicU64::new(0),
+            stats,
+        }
+    }
+
+    // ==================== Config Access ====================
+
+    /// Returns the cache configuration
+    pub fn config(&self) -> &CacheConfig {
+        &self.config
+    }
+
+    /// Returns the maximum memory in bytes
+    pub fn max_memory(&self) -> u64 {
+        self.config.max_memory_bytes
+    }
+
+    /// Computes the expiration time based on TTL config
+    pub fn compute_expires_at(&self) -> Option<Instant> {
+        self.config.ttl.map(|ttl| Instant::now() + ttl)
+    }
+
+    // ==================== Memory Management ====================
+
+    /// Checks if an entry is too large for the cache
+    pub fn entry_too_big(&self, size: u64) -> bool {
+        size > self.config.max_memory_bytes
+    }
+
+    /// Checks if eviction is needed to fit the required space
+    pub fn needs_eviction(&self, required_space: u64) -> bool {
+        let current = self.current_memory.load(Ordering::Relaxed);
+        required_space > self.config.max_memory_bytes.saturating_sub(current)
+    }
+
+    /// Returns the current memory usage in bytes
+    pub fn current_memory(&self) -> u64 {
+        self.current_memory.load(Ordering::Relaxed)
+    }
+
+    /// Adds bytes to memory tracking
+    pub fn charge(&self, bytes: u64) {
+        self.current_memory.fetch_add(bytes, Ordering::Relaxed);
+    }
+
+    /// Subtracts bytes from memory tracking (saturating)
+    pub fn uncharge(&self, bytes: u64) {
+        let _ = self
+            .current_memory
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                Some(current.saturating_sub(bytes))
+            });
+    }
+
+    // ==================== Metrics ====================
+
+    /// Returns a reference to the metrics if enabled
+    pub fn stats(&self) -> Option<&CacheMetrics> {
+        self.stats.as_ref()
+    }
+
+    /// Returns a clone of the current cache metrics
+    pub fn metrics(&self) -> RedisResult<CacheMetrics> {
+        self.stats.clone().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Cache metrics tracking is not enabled",
+            ))
+        })
+    }
+}
+
+// ==================== Cache Trait ====================
+
 /// Core caching interface for Glide
 pub trait GlideCache: Send + Sync + Debug {
+    // ==================== Core Access ====================
+    /// Access the shared cache core
+    fn core(&self) -> &CacheCore;
+
     // ==================== Core Operations ====================
 
     /// Retrieves a value from the cache
@@ -117,13 +321,23 @@ pub trait GlideCache: Send + Sync + Debug {
 
     /// Returns current cache metrics (hits, misses, etc.)
     /// Returns an error if metrics tracking is not enabled.
-    fn metrics(&self) -> RedisResult<CacheMetrics>;
+    fn metrics(&self) -> RedisResult<CacheMetrics> {
+        self.core().metrics()
+    }
 
     /// Increases the hit count for the cache
-    fn increment_hit(&self);
+    fn increment_hit(&self) {
+        if let Some(stats) = self.core().stats() {
+            stats.record_hit();
+        }
+    }
 
     /// Increases the miss count for the cache
-    fn increment_miss(&self);
+    fn increment_miss(&self) {
+        if let Some(stats) = self.core().stats() {
+            stats.record_miss();
+        }
+    }
 
     /// Get the current entry count in the cache
     fn entry_count(&self) -> u64;
@@ -189,17 +403,31 @@ pub fn calculate_value_size(value: &Value) -> usize {
 
     // Plus any additional allocated data
     let additional_data = match value {
-        Value::Nil | Value::Int(_) | Value::Double(_) | Value::Boolean(_) => 0,
+        Value::Nil | Value::Int(_) | Value::Double(_) | Value::Boolean(_) | Value::Okay => 0,
+
         Value::BulkString(data) => data.len(),
+        Value::SimpleString(s) => s.len(),
+        Value::VerbatimString { format: _, text } => text.len(),
+
+        Value::BigNumber(big_int) => {
+            // BigInt allocates memory based on the number size
+            ((big_int.bits() + 7) / 8) as usize // Convert bits to bytes
+        }
+
         Value::Array(arr) => {
             arr.len() * std::mem::size_of::<Value>()
                 + arr
                     .iter()
-                    .map(|v| calculate_value_additional_data(v))
+                    .map(calculate_value_additional_data)
                     .sum::<usize>()
         }
-        Value::SimpleString(s) => s.len(),
-        Value::Okay => 0,
+        Value::Set(set) => {
+            set.len() * std::mem::size_of::<Value>()
+                + set
+                    .iter()
+                    .map(calculate_value_additional_data)
+                    .sum::<usize>()
+        }
         Value::Map(map) => {
             map.len() * std::mem::size_of::<(Value, Value)>()
                 + map
@@ -218,29 +446,15 @@ pub fn calculate_value_size(value: &Value) -> usize {
                     .map(|(k, v)| calculate_value_additional_data(k) + calculate_value_additional_data(v))
                     .sum::<usize>()
         }
-        Value::Set(set) => {
-            set.len() * std::mem::size_of::<Value>()
-                + set
-                    .iter()
-                    .map(|v| calculate_value_additional_data(v))
-                    .sum::<usize>()
-        }
-        Value::VerbatimString { format: _, text } => text.len(),
-        Value::BigNumber(big_int) => {
-            // BigInt allocates memory based on the number size
-            ((big_int.bits() + 7) / 8) as usize // Convert bits to bytes
-        }
         Value::Push { kind: _, data } => {
             data.len() * std::mem::size_of::<Value>()
                 + data
                     .iter()
-                    .map(|v| calculate_value_additional_data(v))
+                    .map(calculate_value_additional_data)
                     .sum::<usize>()
         }
-        Value::ServerError(err) => {
-            // Adjust based on ServerError's actual structure
-            std::mem::size_of_val(err)
-        }
+
+        Value::ServerError(err) => err.to_string().len(),
     };
 
     base_overhead + additional_data
@@ -249,7 +463,7 @@ pub fn calculate_value_size(value: &Value) -> usize {
 /// Helper function that calculates only the additional allocated data
 /// (without the base enum overhead)
 fn calculate_value_additional_data(value: &Value) -> usize {
-    calculate_value_size(value) - std::mem::size_of::<Value>()
+    calculate_value_size(value).saturating_sub(std::mem::size_of::<Value>())
 }
 
 /// Calculates the total size of a cache entry (key + value)
@@ -264,35 +478,210 @@ mod tests {
 
     // ==================== CacheMetrics ====================
     #[test]
-    fn test_hit_rate_zero_requests() {
+    fn test_metrics_default() {
         let metrics = CacheMetrics::default();
-        assert_eq!(metrics.hit_rate(), 0.0);
+        assert_eq!(metrics.hits(), 0);
+        assert_eq!(metrics.misses(), 0);
+        assert_eq!(metrics.expirations(), 0);
+        assert_eq!(metrics.invalidations(), 0);
+        assert_eq!(metrics.evictions(), 0);
+    }
+    #[test]
+    fn test_metrics_recording() {
+        let metrics = CacheMetrics::default();
+        metrics.record_hit();
+        metrics.record_hit();
+        metrics.record_miss();
+        metrics.record_eviction();
+        metrics.record_expiration();
+        metrics.record_expiration();
+        metrics.record_invalidation();
+        assert_eq!(metrics.hits(), 2);
+        assert_eq!(metrics.misses(), 1);
+        assert_eq!(metrics.evictions(), 1);
+        assert_eq!(metrics.expirations(), 2);
+        assert_eq!(metrics.invalidations(), 1);
+    }
+    #[test]
+    fn test_metrics_clone() {
+        let metrics = CacheMetrics::default();
+        metrics.record_hit();
+        metrics.record_hit();
+        metrics.record_miss();
+        let cloned = metrics.clone();
+        assert_eq!(cloned.hits(), 2);
+        assert_eq!(cloned.misses(), 1);
+        // Original and clone are independent
+        metrics.record_hit();
+        assert_eq!(metrics.hits(), 3);
+        assert_eq!(cloned.hits(), 2);
     }
 
     #[test]
-    fn test_miss_rate_zero_requests() {
+    fn test_hit_miss_rate_zero_requests() {
         let metrics = CacheMetrics::default();
+        assert_eq!(metrics.hit_rate(), 0.0);
         assert_eq!(metrics.miss_rate(), 0.0);
     }
 
     #[test]
-    fn test_hit_rate_mixed() {
+    fn test_hit_miss_rate_mixed() {
         let metrics = CacheMetrics {
-            hits: 75,
-            misses: 25,
+            hits: 75.into(),
+            misses: 25.into(),
             ..Default::default()
         };
         assert_eq!(metrics.hit_rate(), 0.75);
+        assert_eq!(metrics.miss_rate(), 0.25);
+    }
+
+    // ==================== CacheEntry ====================
+    #[test]
+    fn test_cache_entry_not_expired_no_ttl() {
+        let entry = CacheEntry::new(
+            Value::BulkString(b"test".to_vec()),
+            CachedKeyType::String,
+            None,
+            100,
+        );
+        assert!(!entry.is_expired());
+    }
+    #[test]
+    fn test_cache_entry_not_expired_with_future_ttl() {
+        let entry = CacheEntry::new(
+            Value::BulkString(b"test".to_vec()),
+            CachedKeyType::String,
+            Some(Instant::now() + Duration::from_secs(60)),
+            100,
+        );
+        assert!(!entry.is_expired());
     }
 
     #[test]
-    fn test_miss_rate_mixed() {
-        let metrics = CacheMetrics {
-            hits: 75,
-            misses: 25,
-            ..Default::default()
+    fn test_cache_entry_expired() {
+        let entry = CacheEntry::new(
+            Value::BulkString(b"test".to_vec()),
+            CachedKeyType::String,
+            Some(Instant::now() - Duration::from_secs(1)),
+            100,
+        );
+        assert!(entry.is_expired());
+    }
+
+    // ==================== CacheCore ====================
+    #[test]
+    fn test_cache_core_new_with_metrics() {
+        let config = CacheConfig {
+            max_memory_bytes: 1024,
+            ttl: Some(Duration::from_secs(60)),
+            enable_metrics: true,
         };
-        assert_eq!(metrics.miss_rate(), 0.25);
+        let core = CacheCore::new(config);
+        assert_eq!(core.max_memory(), 1024);
+        assert!(core.stats.is_some());
+    }
+
+    #[test]
+    fn test_cache_core_new_without_metrics() {
+        let config = CacheConfig {
+            max_memory_bytes: 1024,
+            ttl: None,
+            enable_metrics: false,
+        };
+        let core = CacheCore::new(config);
+        assert!(core.stats.is_none());
+        assert!(core.metrics().is_err());
+    }
+
+    #[test]
+    fn test_cache_core_compute_expires_at() {
+        let with_ttl = CacheCore::new(CacheConfig {
+            max_memory_bytes: 1024,
+            ttl: Some(Duration::from_secs(60)),
+            enable_metrics: false,
+        });
+        assert!(with_ttl.compute_expires_at().is_some());
+        let without_ttl = CacheCore::new(CacheConfig {
+            max_memory_bytes: 1024,
+            ttl: None,
+            enable_metrics: false,
+        });
+        assert!(without_ttl.compute_expires_at().is_none());
+    }
+    #[test]
+    fn test_cache_core_entry_too_big() {
+        let core = CacheCore::new(CacheConfig {
+            max_memory_bytes: 100,
+            ttl: None,
+            enable_metrics: false,
+        });
+        assert!(!core.entry_too_big(50));
+        assert!(!core.entry_too_big(100));
+        assert!(core.entry_too_big(101));
+    }
+    #[test]
+    fn test_cache_core_memory_tracking() {
+        let core = CacheCore::new(CacheConfig {
+            max_memory_bytes: 1000,
+            ttl: None,
+            enable_metrics: false,
+        });
+        assert_eq!(core.current_memory(), 0);
+        core.charge(100);
+        assert_eq!(core.current_memory(), 100);
+        core.charge(50);
+        assert_eq!(core.current_memory(), 150);
+        core.uncharge(30);
+        assert_eq!(core.current_memory(), 120);
+        // Test saturating subtraction
+        core.uncharge(1000);
+        assert_eq!(core.current_memory(), 0);
+    }
+    #[test]
+    fn test_cache_core_needs_eviction() {
+        let core = CacheCore::new(CacheConfig {
+            max_memory_bytes: 100,
+            ttl: None,
+            enable_metrics: false,
+        });
+        assert!(!core.needs_eviction(50));
+        assert!(!core.needs_eviction(100));
+        assert!(core.needs_eviction(101));
+        core.charge(60);
+        assert!(!core.needs_eviction(40));
+        assert!(core.needs_eviction(41));
+    }
+    #[test]
+    fn test_cache_core_metrics_recording() {
+        let core = CacheCore::new(CacheConfig {
+            max_memory_bytes: 1024,
+            ttl: None,
+            enable_metrics: true,
+        });
+        let stats = core.stats().unwrap();
+        stats.record_hit();
+        stats.record_hit();
+        stats.record_miss();
+        stats.record_eviction();
+        stats.record_expiration();
+        stats.record_expiration();
+        stats.record_invalidation();
+        let metrics = core.metrics().unwrap();
+        assert_eq!(metrics.hits(), 2);
+        assert_eq!(metrics.misses(), 1);
+        assert_eq!(metrics.evictions(), 1);
+        assert_eq!(metrics.expirations(), 2);
+        assert_eq!(metrics.invalidations(), 1);
+    }
+    #[test]
+    fn test_cache_core_metrics_disabled_no_panic() {
+        let core = CacheCore::new(CacheConfig {
+            max_memory_bytes: 1024,
+            ttl: None,
+            enable_metrics: false,
+        });
+
+        assert!(core.stats().is_none());
     }
 
     // ==================== calculate_value_size ====================
