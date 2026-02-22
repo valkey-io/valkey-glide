@@ -85,6 +85,7 @@ use crate::{
         self, MultipleNodeRoutingInfo, Redirect, ResponsePolicy, Route, SingleNodeRoutingInfo,
     },
     push_manager::PushInfo,
+    types::ProtocolVersion,
     Cmd, ConnectionInfo, ErrorKind, IntoConnectionInfo, RedisError, RedisFuture, RedisResult,
     Value,
 };
@@ -353,6 +354,40 @@ where
         client_name: Option<String>,
     ) -> RedisResult<Value> {
         self.route_operation_request(Operation::UpdateConnectionClientName(client_name))
+            .await
+    }
+
+    /// Update the username used to authenticate with all cluster servers
+    ///
+    /// This method updates the username for all cluster connections and stores it for future reconnections.
+    /// Typically called after a successful AUTH command with a username parameter.
+    ///
+    /// # Arguments
+    ///
+    /// * `username` - The username to use for authentication (None to clear)
+    ///
+    pub async fn update_connection_username(
+        &mut self,
+        username: Option<String>,
+    ) -> RedisResult<Value> {
+        self.route_operation_request(Operation::UpdateConnectionUsername(username))
+            .await
+    }
+
+    /// Update the protocol version used for all cluster connections
+    ///
+    /// This method updates the protocol version for all cluster connections and stores it for future reconnections.
+    /// Typically called after a successful HELLO command that changes the protocol version.
+    ///
+    /// # Arguments
+    ///
+    /// * `protocol` - The protocol version to use (RESP2 or RESP3)
+    ///
+    pub async fn update_connection_protocol(
+        &mut self,
+        protocol: ProtocolVersion,
+    ) -> RedisResult<Value> {
+        self.route_operation_request(Operation::UpdateConnectionProtocol(protocol))
             .await
     }
 
@@ -688,6 +723,8 @@ enum Operation {
     UpdateConnectionPassword(Option<String>),
     UpdateConnectionDatabase(i64),
     UpdateConnectionClientName(Option<String>),
+    UpdateConnectionUsername(Option<String>),
+    UpdateConnectionProtocol(ProtocolVersion),
     GetUsername,
 }
 
@@ -2633,6 +2670,16 @@ where
                 }
                 Operation::UpdateConnectionClientName(client_name) => {
                     core.set_cluster_param(|params| params.client_name = client_name)
+                        .expect(MUTEX_WRITE_ERR);
+                    Ok(Response::Single(Value::Okay))
+                }
+                Operation::UpdateConnectionUsername(username) => {
+                    core.set_cluster_param(|params| params.username = username)
+                        .expect(MUTEX_WRITE_ERR);
+                    Ok(Response::Single(Value::Okay))
+                }
+                Operation::UpdateConnectionProtocol(protocol) => {
+                    core.set_cluster_param(|params| params.protocol = protocol)
                         .expect(MUTEX_WRITE_ERR);
                     Ok(Response::Single(Value::Okay))
                 }

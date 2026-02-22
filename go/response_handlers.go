@@ -376,6 +376,17 @@ func handleOkOrStringOrNilResponse(response *C.struct_CommandResponse) (models.R
 	return convertCharArrayToString(response, true)
 }
 
+func handleOkOrStringResponse(response *C.struct_CommandResponse) (string, error) {
+	defer C.free_command_response(response)
+
+	if response.response_type == uint32(C.Ok) {
+		return "OK", nil
+	}
+
+	res, err := convertCharArrayToString(response, false)
+	return res.Value(), err
+}
+
 func handle2DStringArrayResponse(response *C.struct_CommandResponse) ([][]string, error) {
 	defer C.free_command_response(response)
 	typeErr := checkResponseType(response, C.Array, false)
@@ -1693,4 +1704,98 @@ func handleXInfoStreamFullOptionsResponse(response *C.struct_CommandResponse) (m
 
 	streamInfo, err := internal.ConvertXInfoStreamFullResponse(result)
 	return streamInfo.(models.XInfoStreamFullOptionsResponse), err
+}
+
+// handleArrayOfMapsResponse handles responses that return an array of maps.
+// Used for cluster commands like CLUSTER SHARDS, CLUSTER LINKS.
+func handleArrayOfMapsResponse(response *C.struct_CommandResponse) ([]map[string]any, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	result, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+
+	if result == nil {
+		return nil, nil
+	}
+
+	arrResult, ok := result.([]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type: %T", result)
+	}
+
+	maps := make([]map[string]any, 0, len(arrResult))
+	for _, item := range arrResult {
+		if item == nil {
+			maps = append(maps, nil)
+			continue
+		}
+		mapItem, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("unexpected item type in array: %T", item)
+		}
+		maps = append(maps, mapItem)
+	}
+
+	return maps, nil
+}
+
+// handleStringToArrayOfMapsMapResponse handles responses that return a map of node addresses to arrays of maps.
+// Used for cluster commands with multi-node routing.
+func handleStringToArrayOfMapsMapResponse(
+	response *C.struct_CommandResponse,
+) (map[string][]map[string]any, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	result, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+
+	if result == nil {
+		return nil, nil
+	}
+
+	parsedMap, ok := result.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type: %T", result)
+	}
+
+	resultMap := make(map[string][]map[string]any)
+	for key, value := range parsedMap {
+		if value == nil {
+			resultMap[key] = nil
+			continue
+		}
+		arrValue, ok := value.([]any)
+		if !ok {
+			return nil, fmt.Errorf("unexpected value type for key %s: %T", key, value)
+		}
+		maps := make([]map[string]any, 0, len(arrValue))
+		for _, item := range arrValue {
+			if item == nil {
+				maps = append(maps, nil)
+				continue
+			}
+			mapItem, ok := item.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("unexpected item type in array: %T", item)
+			}
+			maps = append(maps, mapItem)
+		}
+		resultMap[key] = maps
+	}
+
+	return resultMap, nil
 }

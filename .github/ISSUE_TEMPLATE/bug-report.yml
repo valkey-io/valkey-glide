@@ -2,7 +2,7 @@
 name: "🐛 Bug Report"
 description: Report a bug
 title: "(topic): (short issue description)"
-labels: [bug, needs-triage]
+labels: ["bug 🐞", "Untriaged user issue"]
 assignees: []
 body:
     - type: textarea
@@ -77,6 +77,15 @@ body:
       attributes:
           label: Engine type and version
           description: E.g. Valkey 7.0
+      validations:
+          required: true
+
+    - type: input
+      id: engine-environment
+      attributes:
+          label: Engine Environment
+          description: Specify the engine environment
+          placeholder: e.g., Local, ElastiCache Serverless, ElastiCache Provision, Docker...
       validations:
           required: true
 
