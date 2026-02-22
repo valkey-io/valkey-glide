@@ -93,6 +93,7 @@ GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers d
 - [Modules API](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#modules-api)
 - [Batching (Pipeline and Transaction)](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#batching-pipeline-and-transaction)
 - [OpenTelemetry](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#opentelemetry)
+- [Compression (EXPERIMENTAL)](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#compression)
 
 **Migration Guides**
 - [go-redis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-go%E2%80%90redis)
@@ -119,6 +120,21 @@ Valkey GLIDE has a growing ecosystem of integrations and extensions that enhance
 - **[aws-lambda-powertools-typescript](https://github.com/aws-powertools/powertools-lambda-typescript)** - AWS Lambda Powertools for TypeScript with Valkey GLIDE integration in the idempotency feature (more integrations planned)
 - **[aws-lambda-powertools-python](https://github.com/aws-powertools/powertools-lambda-python)** - AWS Lambda Powertools for Python with Valkey GLIDE support in the idempotency feature (more integrations planned)
 - **[redlock-universal](https://www.npmjs.com/package/redlock-universal)** - Distributed lock library for Node.js with native GLIDE adapter, featuring auto-extension and atomic batch acquisition
+
+## Experimental Features
+
+### Compression (EXPERIMENTAL)
+
+**⚠️ WARNING: This feature is experimental**
+
+Valkey GLIDE supports automatic compression and decompression of string values to reduce memory usage and network bandwidth. Currently supports SET, GET, MGET, MSET, GETEX, GETDEL, SETEX, PSETEX, and SETNX commands.
+
+**Incompatible Commands**: Compression is NOT compatible with commands that manipulate string data on the server side:
+- APPEND, GETRANGE, SETRANGE, STRLEN, LCS
+- INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY
+- GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP
+
+Using these commands with compressed values will result in incorrect behavior or errors.
 
 ## Getting Help
 
