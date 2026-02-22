@@ -102,6 +102,8 @@ jobs:
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
         runs-on: ${{ matrix.host.RUNNER }}
+        env:
+            VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
 
         steps:
             - uses: actions/checkout@v4
@@ -153,6 +155,19 @@ jobs:
                   key: ${{ runner.os }}-gradle-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
                   restore-keys: |
                       ${{ runner.os }}-gradle-
+
+            - name: Set up host mappings for DNS tests
+              shell: bash
+              run: |
+                  ENTRIES="127.0.0.1 valkey.glide.test.tls.com
+                  127.0.0.1 valkey.glide.test.no_tls.com
+                  ::1 valkey.glide.test.tls.com
+                  ::1 valkey.glide.test.no_tls.com"
+                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                      echo "$ENTRIES" >> /c/Windows/System32/drivers/etc/hosts
+                  else
+                      echo "$ENTRIES" | sudo tee -a /etc/hosts
+                  fi
 
             - name: Build java client
               working-directory: java

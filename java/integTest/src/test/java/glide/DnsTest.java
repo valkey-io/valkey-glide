@@ -38,7 +38,7 @@ public class DnsTest {
 
     // Hostname constants for testing. Both hostnames should map to localhost,
     // but only HOSTNAME_TLS should be included in the TLS certificate used by the
-    // server. See '../utils/cluster_manager.py' for details.
+    // server. See 'cluster_manager.py' for details.
     private static final String HOSTNAME_TLS = "valkey.glide.test.tls.com";
     private static final String HOSTNAME_NO_TLS = "valkey.glide.test.no_tls.com";
 
