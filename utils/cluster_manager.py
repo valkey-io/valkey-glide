@@ -49,10 +49,12 @@ CA_CRT = f"{TLS_FOLDER}/ca.crt"
 SERVER_CRT = f"{TLS_FOLDER}/server.crt"
 SERVER_KEY = f"{TLS_FOLDER}/server.key"
 
-# Allowed hostnames
-HOSTNAME_TLS = "valkey.glide.test.tls.com"
-HOSTNAME_NO_TLS = "valkey.glide.test.no_tls.com"
+# Allowed hostname for TLS certificate.
+HOSTNAME_TLS: str = "valkey.glide.test.tls.com"
 
+# Default hosts (loopback addresses for IPv4 and IPv6)
+DEFAULT_HOST_IPV4: str = "127.0.0.1"
+DEFAULT_HOST_IPV6: str = "::1"
 
 def get_command(commands: List[str]) -> str:
     for command in commands:
@@ -140,7 +142,7 @@ def generate_tls_certs():
 
     f = open(ext_file, "w")
     f.write(
-        f"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,IP:::1,DNS:localhost,DNS:{HOSTNAME_TLS}"
+        f"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:{DEFAULT_HOST_IPV4},IP:{DEFAULT_HOST_IPV6},DNS:localhost,DNS:{HOSTNAME_TLS}"
     )
     f.close()
 
@@ -332,9 +334,18 @@ def next_free_port(
     while time.time() < timeout_start + timeout:
         try:
             port = random.randint(min_port, max_port)
-            logging.debug(f"Trying port {port}")
-            sock.bind(("127.0.0.1", port))
-            sock.close()
+
+            # Check IPv4
+            sock4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock4.bind((DEFAULT_HOST_IPV4, port))
+            sock4.close()
+
+            # Check IPv6
+            sock6 = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            sock6.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            sock6.bind((DEFAULT_HOST_IPV6, port))
+            sock6.close()
+
             toc = time.perf_counter()
             logging.debug(f"next_free_port() is {port} Elapsed time: {toc - tic:0.4f}")
             return port
@@ -420,7 +431,7 @@ def start_server(
     ]
 
     # Bind server to both IPv4 and IPv6 loopback addresses.
-    cmd_args.extend(["--bind", "127.0.0.1", "::1"])
+    cmd_args.extend(["--bind", DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6])
 
     if server_version >= (7, 0, 0):
         cmd_args.extend(["--enable-debug-command", "yes"])
@@ -1082,7 +1093,7 @@ def main():
         type=str,
         help="Host address (default: %(default)s)",
         required=False,
-        default="127.0.0.1",
+        default=DEFAULT_HOST_IPV4,
     )
 
     parser.add_argument(
