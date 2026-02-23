@@ -6,7 +6,7 @@ import base64
 import json
 import os
 import random
-from typing import List, cast
+from typing import Callable, List, cast
 
 import pytest
 from glide import GlideClient, GlideClusterClient, TGlideClient
@@ -551,7 +551,11 @@ class TestCompressionDataTypes:
     )
     @pytest.mark.parametrize("size", [1024, 10240, 102400])  # 1KB, 10KB, 100KB
     async def test_compression_string_types(
-        self, compression_client: TGlideClient, data_type: str, generator, size: int
+        self,
+        compression_client: TGlideClient,
+        data_type: str,
+        generator: Callable[[int], str],
+        size: int,
     ):
         """Test compression with different string content types."""
         key = f"test_{data_type}_{size}_{get_random_string(8)}"
