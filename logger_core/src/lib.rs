@@ -176,11 +176,15 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
             .with_target("logger_core", log_level)
             .with_target(std::env!("CARGO_PKG_NAME"), log_level);
 
+        // Use try_init() instead of init() to gracefully handle the case where
+        // a tracing subscriber has already been set by the application.
+        // This allows applications to control their own logging configuration.
         tracing_subscriber::registry()
             .with(stdout_layer)
             .with(file_layer)
             .with(targets_filter)
-            .init();
+            .try_init()
+            .ok(); // Ignore the error if subscriber already set
 
         let reloads: Reloads = Reloads {
             console_reload: RwLock::new(stdout_reload),
