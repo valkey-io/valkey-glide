@@ -155,7 +155,9 @@ class TestBasicCompression:
         keys_and_values = []
         for i in range(5):
             key = f"mget_test_{i}_{get_random_string(8)}"
-            value = generate_compressible_text(1024)  # 1KB - above compression threshold
+            value = generate_compressible_text(
+                1024
+            )  # 1KB - above compression threshold
             keys_and_values.append((key, value))
 
         # Set all values (should be compressed)
@@ -189,7 +191,9 @@ class TestBasicCompression:
         await compression_client.set(key, value)
 
         # Use GETEX to retrieve value with expiration
-        retrieved = await compression_client.getex(key, ExpiryGetEx(ExpiryTypeGetEx.SEC, 10))
+        retrieved = await compression_client.getex(
+            key, ExpiryGetEx(ExpiryTypeGetEx.SEC, 10)
+        )
         assert retrieved == value.encode(), (
             f"GETEX should return decompressed value for key {key}. "
             f"Expected: {value[:50]}..., Got: {retrieved[:50] if retrieved else None}..."
@@ -257,7 +261,9 @@ class TestBasicCompression:
         keys_and_values = []
         for i in range(3):
             key = f"custom_mget_test_{i}_{get_random_string(8)}"
-            value = generate_compressible_text(1024)  # 1KB - above compression threshold
+            value = generate_compressible_text(
+                1024
+            )  # 1KB - above compression threshold
             keys_and_values.append((key, value))
 
         # Set all values using regular SET (should be compressed)
@@ -344,15 +350,15 @@ class TestBasicCompression:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_compression_mset_compression(
-        self, compression_client: TGlideClient
-    ):
+    async def test_compression_mset_compression(self, compression_client: TGlideClient):
         """Verify MSET compresses values above threshold (should fail until implemented)."""
         # Create test data
         keys_and_values = {}
         for i in range(3):
             key = f"mset_test_{i}_{get_random_string(8)}"
-            value = generate_compressible_text(1024)  # 1KB - above compression threshold
+            value = generate_compressible_text(
+                1024
+            )  # 1KB - above compression threshold
             keys_and_values[key] = value
 
         # Get initial statistics
@@ -485,7 +491,9 @@ class TestBasicCompression:
         assert retrieved == value.encode()
 
         # Verify SETNX doesn't overwrite existing key
-        result2 = await compression_client.custom_command(["SETNX", key, "different_value"])
+        result2 = await compression_client.custom_command(
+            ["SETNX", key, "different_value"]
+        )
         assert result2 == 0  # Should fail since key exists
 
         # Cleanup
@@ -829,7 +837,9 @@ class TestCompressionBatch:
         keys_and_values = {}
         for i in range(num_keys):
             key = f"{key_prefix}_{i}"
-            value = generate_compressible_text(1024)  # 1KB - above compression threshold
+            value = generate_compressible_text(
+                1024
+            )  # 1KB - above compression threshold
             keys_and_values[key] = value
 
         # Add MSET to batch
