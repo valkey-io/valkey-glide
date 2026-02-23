@@ -309,7 +309,7 @@ jobs:
                   echo "/opt/${PYPY_VERSION_3_11}/bin:/opt/${PYPY_VERSION_3_10}/bin:/opt/${PYPY_VERSION_3_9}/bin" >> ${GITHUB_PATH}
 
                   sudo chmod -R a+rx /opt/pypy*/bin
-                  sudo chmod -R a+rx /opt/pypy*/lib/*.dylib
+                  sudo chmod -R a+rx /opt/pypy*/lib/*.dylib 2>/dev/null || true
 
             ### ASYNC CLIENT ###
 
@@ -629,44 +629,48 @@ jobs:
                       PYPY_VERSION_3_10=pypy3.10-v7.3.19-aarch64
                       PYPY_VERSION_3_11=pypy3.11-v7.3.19-aarch64
                     fi
+
+                    # Download and extract all PyPy versions for Linux
+                    for PYPY_VERSION in "$PYPY_VERSION_3_9" "$PYPY_VERSION_3_10" "$PYPY_VERSION_3_11"; do
+                      echo "Downloading ${PYPY_VERSION}"
+                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION}.tar.bz2"
+                      sudo tar -xf "${PYPY_VERSION}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      sudo chmod -R a+rx /opt/${PYPY_VERSION}/bin
+                    done
+
+                    # Add all PyPy versions to PATH
+                    echo "/opt/${PYPY_VERSION_3_11}/bin" >> ${GITHUB_PATH}
+                    echo "/opt/${PYPY_VERSION_3_10}/bin" >> ${GITHUB_PATH}
+                    echo "/opt/${PYPY_VERSION_3_9}/bin" >> ${GITHUB_PATH}
+
+                    # Save full path to pypy binaries (Linux uses pypy3 as binary name)
+                    echo "PYPY39_BIN=/opt/${PYPY_VERSION_3_9}/bin/pypy3" >> ${GITHUB_ENV}
+                    echo "PYPY310_BIN=/opt/${PYPY_VERSION_3_10}/bin/pypy3" >> ${GITHUB_ENV}
+                    echo "PYPY311_BIN=/opt/${PYPY_VERSION_3_11}/bin/pypy3" >> ${GITHUB_ENV}
+
                   elif [[ "${{ matrix.build.NAMED_OS }}" == "darwin" ]]; then
-                    if [[ "$ARCH" == "arm64" ]]; then
-                      PYPY_VERSION_3_9=pypy3.9-v7.3.16-macos_arm64
-                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_arm64
-                      PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_arm64
-                    else
-                      PYPY_VERSION_3_9=pypy3.9-v7.3.16-macos_x86_64
-                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_x86_64
-                      PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
-                    fi
+                    # Use homebrew PyPy on macOS for proper SSL support
+                    # Note: homebrew only has pypy3.9 and pypy3.10, no pypy3.11
+                    brew install pypy3.9 pypy3.10 openssl@3
+
+                    # Save full path to pypy binaries
+                    # Homebrew names binaries as pypy3.9, pypy3.10 (not pypy3)
+                    echo "PYPY39_BIN=$(brew --prefix pypy3.9)/bin/pypy3.9" >> ${GITHUB_ENV}
+                    echo "PYPY310_BIN=$(brew --prefix pypy3.10)/bin/pypy3.10" >> ${GITHUB_ENV}
+                    echo "PYPY311_BIN=" >> ${GITHUB_ENV}  # Not available in homebrew, will be skipped
                   fi
 
-                  # Download and extract all PyPy versions
-                  for PYPY_VERSION in "$PYPY_VERSION_3_9" "$PYPY_VERSION_3_10" "$PYPY_VERSION_3_11"; do
-                    echo "Downloading ${PYPY_VERSION}"
-                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION}.tar.bz2"
-                    sudo tar -xf "${PYPY_VERSION}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    sudo chmod -R a+rx /opt/${PYPY_VERSION}/bin
-                    if [[ "${{ matrix.build.NAMED_OS }}" == "darwin" ]]; then
-                      sudo chmod -R a+rx /opt/${PYPY_VERSION}/lib/*.dylib
-                    fi
-                  done
-
-                  # Add all PyPy versions to PATH
-                  echo "/opt/${PYPY_VERSION_3_11}/bin" >> ${GITHUB_PATH}
-                  echo "/opt/${PYPY_VERSION_3_10}/bin" >> ${GITHUB_PATH}
-                  echo "/opt/${PYPY_VERSION_3_9}/bin" >> ${GITHUB_PATH}
-
-                  # Save PyPy paths for later use
-                  echo "PYPY39_PATH=/opt/${PYPY_VERSION_3_9}/bin" >> ${GITHUB_ENV}
-                  echo "PYPY310_PATH=/opt/${PYPY_VERSION_3_10}/bin" >> ${GITHUB_ENV}
-                  echo "PYPY311_PATH=/opt/${PYPY_VERSION_3_11}/bin" >> ${GITHUB_ENV}
+            - name: Install dependencies for engine build
+              if: ${{ matrix.build.NAMED_OS == 'linux' }}
+              run: |
+                  sudo apt update -y
+                  sudo apt install -y libssl-dev
 
             - name: Install engine
               uses: ./.github/workflows/install-engine
               with:
                   engine-version: "8.0"
-                  target: ${{ matrix.build.target }}
+                  target: ${{ matrix.build.TARGET }}
 
             ### DOWNLOAD ARTIFACTS ###
 
@@ -702,22 +706,39 @@ jobs:
                   # 6.x: 6.30.2 (first 6.x), 6.33.5 (latest)
                   PROTOBUF_VERSIONS=("3.20.0" "3.20.3" "4.21.12" "4.25.8" "5.26.1" "5.29.6" "6.30.2" "6.33.5")
 
-                  # CPython versions and their wheel patterns
-                  declare -A CPYTHON_VERSIONS=(
-                    ["3.9"]="cp39"
-                    ["3.10"]="cp310"
-                    ["3.11"]="cp311"
-                    ["3.12"]="cp312"
-                    ["3.13"]="cp313"
-                    ["3.14"]="cp314"
-                  )
+                  # Function to get wheel pattern for CPython version (bash 3.2 compatible)
+                  get_cpython_wheel_pattern() {
+                    case "$1" in
+                      3.9)  echo "cp39" ;;
+                      3.10) echo "cp310" ;;
+                      3.11) echo "cp311" ;;
+                      3.12) echo "cp312" ;;
+                      3.13) echo "cp313" ;;
+                      3.14) echo "cp314" ;;
+                      *)    echo "" ;;
+                    esac
+                  }
 
                   FAILED_TESTS=()
 
                   for PY_VERSION in "3.9" "3.10" "3.11" "3.12" "3.13" "3.14"; do
-                    WHEEL_PATTERN="${CPYTHON_VERSIONS[$PY_VERSION]}"
+                    WHEEL_PATTERN=$(get_cpython_wheel_pattern "$PY_VERSION")
 
                     for PROTOBUF_VERSION in "${PROTOBUF_VERSIONS[@]}"; do
+                      # Skip Python 3.14 with protobuf < 5.29 (known incompatibility)
+                      # Python 3.14 removed support for metaclasses with custom tp_new
+                      if [[ "$PY_VERSION" == "3.14" ]]; then
+                        PB_MAJOR=$(echo "$PROTOBUF_VERSION" | cut -d. -f1)
+                        PB_MINOR=$(echo "$PROTOBUF_VERSION" | cut -d. -f2)
+                        if [[ "$PB_MAJOR" -lt 5 ]] || [[ "$PB_MAJOR" -eq 5 && "$PB_MINOR" -lt 29 ]]; then
+                          echo ""
+                          echo "=============================================="
+                          echo "SKIPPING CPython ${PY_VERSION} with protobuf ${PROTOBUF_VERSION} (incompatible)"
+                          echo "=============================================="
+                          continue
+                        fi
+                      fi
+
                       echo ""
                       echo "=============================================="
                       echo "Testing CPython ${PY_VERSION} with protobuf ${PROTOBUF_VERSION}"
@@ -804,27 +825,34 @@ jobs:
                   # 6.x: 6.30.2 (first 6.x), 6.33.5 (latest)
                   PROTOBUF_VERSIONS=("3.20.0" "3.20.3" "4.21.12" "4.25.8" "5.26.1" "5.29.6" "6.30.2" "6.33.5")
 
-                  # PyPy versions and their wheel patterns
-                  declare -A PYPY_VERSIONS=(
-                    ["3.9"]="pp39"
-                    ["3.10"]="pp310"
-                    ["3.11"]="pp311"
-                  )
+                  # Functions to get PyPy wheel pattern and path (bash 3.2 compatible)
+                  get_pypy_wheel_pattern() {
+                    case "$1" in
+                      3.9)  echo "pp39" ;;
+                      3.10) echo "pp310" ;;
+                      3.11) echo "pp311" ;;
+                      *)    echo "" ;;
+                    esac
+                  }
 
-                  declare -A PYPY_PATHS=(
-                    ["3.9"]="${PYPY39_PATH}"
-                    ["3.10"]="${PYPY310_PATH}"
-                    ["3.11"]="${PYPY311_PATH}"
-                  )
+                  get_pypy_bin() {
+                    case "$1" in
+                      3.9)  echo "${PYPY39_BIN}" ;;
+                      3.10) echo "${PYPY310_BIN}" ;;
+                      3.11) echo "${PYPY311_BIN}" ;;
+                      *)    echo "" ;;
+                    esac
+                  }
 
                   FAILED_TESTS=()
 
                   for PY_VERSION in "3.9" "3.10" "3.11"; do
-                    WHEEL_PATTERN="${PYPY_VERSIONS[$PY_VERSION]}"
-                    PYPY_BIN="${PYPY_PATHS[$PY_VERSION]}/pypy3"
+                    WHEEL_PATTERN=$(get_pypy_wheel_pattern "$PY_VERSION")
+                    PYPY_BIN="$(get_pypy_bin "$PY_VERSION")"
 
-                    if [[ ! -x "$PYPY_BIN" ]]; then
-                      echo "WARNING: PyPy ${PY_VERSION} not found at ${PYPY_BIN}, skipping..."
+                    # Skip if path is empty or binary not found
+                    if [[ -z "$PYPY_BIN" ]] || [[ ! -x "$PYPY_BIN" ]]; then
+                      echo "INFO: PyPy ${PY_VERSION} not available, skipping..."
                       continue
                     fi
 
@@ -839,6 +867,13 @@ jobs:
                       # Create fresh venv
                       ${PYPY_BIN} -m venv ${VENV_NAME}
                       source ${VENV_NAME}/bin/activate
+
+                      # Debug: show venv bin contents and verify python works
+                      echo "Venv bin contents:"
+                      ls -la ${VENV_NAME}/bin/
+                      echo "Python interpreter: $(which python)"
+                      python --version
+
                       pip install -U pip
 
                       # Install the wheel
@@ -862,7 +897,7 @@ jobs:
 
                       # Run async test
                       echo "Running async test..."
-                      if ${PYPY_BIN} async_rc_test.py; then
+                      if python async_rc_test.py; then
                         echo "✓ Async test PASSED for PyPy ${PY_VERSION} + protobuf ${PROTOBUF_VERSION}"
                       else
                         echo "✗ Async test FAILED for PyPy ${PY_VERSION} + protobuf ${PROTOBUF_VERSION}"
@@ -875,7 +910,7 @@ jobs:
                         pip install "protobuf==${PROTOBUF_VERSION}" --force-reinstall
 
                         echo "Running sync test..."
-                        if ${PYPY_BIN} sync_rc_test.py; then
+                        if python sync_rc_test.py; then
                           echo "✓ Sync test PASSED for PyPy ${PY_VERSION} + protobuf ${PROTOBUF_VERSION}"
                         else
                           echo "✗ Sync test FAILED for PyPy ${PY_VERSION} + protobuf ${PROTOBUF_VERSION}"
