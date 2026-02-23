@@ -81,6 +81,15 @@ body:
           required: true
 
     - type: input
+      id: engine-environment
+      attributes:
+          label: Engine Environment
+          description: Specify the engine environment
+          placeholder: e.g., Local, ElastiCache Serverless, ElastiCache Provision, Docker...
+      validations:
+          required: true
+
+    - type: input
       id: operating-system
       attributes:
           label: OS
