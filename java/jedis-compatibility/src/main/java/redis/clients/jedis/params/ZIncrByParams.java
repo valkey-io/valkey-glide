@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis.params;
 
+import java.util.Objects;
+
 /**
  * Parameters for ZINCRBY command. In fact, Redis doesn't have parameters for ZINCRBY. Instead Redis
  * has INCR parameter for ZADD.
@@ -57,11 +59,11 @@ public class ZIncrByParams {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ZIncrByParams that = (ZIncrByParams) o;
-        return java.util.Objects.equals(nx, that.nx) && java.util.Objects.equals(xx, that.xx);
+        return Objects.equals(nx, that.nx) && Objects.equals(xx, that.xx);
     }
 
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(nx, xx);
+        return Objects.hash(nx, xx);
     }
 }

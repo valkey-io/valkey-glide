@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis.params;
 
+import java.util.Objects;
+
 /**
  * Parameters for ZADD command. Provides options for controlling ZADD behavior such as NX (only add
  * new elements), XX (only update existing elements), GT (only update if new score is greater), LT
@@ -98,15 +100,15 @@ public class ZAddParams {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ZAddParams that = (ZAddParams) o;
-        return java.util.Objects.equals(nx, that.nx)
-                && java.util.Objects.equals(xx, that.xx)
-                && java.util.Objects.equals(gt, that.gt)
-                && java.util.Objects.equals(lt, that.lt)
-                && java.util.Objects.equals(ch, that.ch);
+        return Objects.equals(nx, that.nx)
+                && Objects.equals(xx, that.xx)
+                && Objects.equals(gt, that.gt)
+                && Objects.equals(lt, that.lt)
+                && Objects.equals(ch, that.ch);
     }
 
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(nx, xx, gt, lt, ch);
+        return Objects.hash(nx, xx, gt, lt, ch);
     }
 }

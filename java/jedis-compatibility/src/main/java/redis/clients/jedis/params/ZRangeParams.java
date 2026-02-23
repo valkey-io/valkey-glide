@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis.params;
 
+import java.util.Objects;
+
 /**
  * Parameters for ZRANGE command. Provides options for controlling ZRANGE behavior such as BYSCORE,
  * BYLEX, REV (reverse order), and LIMIT (pagination).
@@ -122,12 +124,12 @@ public class ZRangeParams {
                 && offset == that.offset
                 && count == that.count
                 && by == that.by
-                && java.util.Objects.equals(min, that.min)
-                && java.util.Objects.equals(max, that.max);
+                && Objects.equals(min, that.min)
+                && Objects.equals(max, that.max);
     }
 
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(by, min, max, rev, limit, offset, count);
+        return Objects.hash(by, min, max, rev, limit, offset, count);
     }
 }

@@ -3,6 +3,7 @@ package redis.clients.jedis.params;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Parameters for sorted set aggregation operations like ZUNIONSTORE, ZINTERSTORE, ZUNION, ZINTER,
@@ -60,12 +61,11 @@ public class ZParams {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ZParams zParams = (ZParams) o;
-        return java.util.Objects.equals(weightsList, zParams.weightsList)
-                && aggregate == zParams.aggregate;
+        return Objects.equals(weightsList, zParams.weightsList) && aggregate == zParams.aggregate;
     }
 
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(weightsList, aggregate);
+        return Objects.hash(weightsList, aggregate);
     }
 }

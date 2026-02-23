@@ -360,6 +360,25 @@ public class JedisMethodsTest {
         Method zaddBinary = jedisClass.getMethod("zadd", byte[].class, double.class, byte[].class);
         assertEquals(long.class, zaddBinary.getReturnType());
 
+        // Test zadd with ZAddParams
+        Method zaddWithParams =
+                jedisClass.getMethod(
+                        "zadd",
+                        String.class,
+                        double.class,
+                        String.class,
+                        redis.clients.jedis.params.ZAddParams.class);
+        assertEquals(long.class, zaddWithParams.getReturnType());
+
+        Method zaddWithParamsBinary =
+                jedisClass.getMethod(
+                        "zadd",
+                        byte[].class,
+                        double.class,
+                        byte[].class,
+                        redis.clients.jedis.params.ZAddParams.class);
+        assertEquals(long.class, zaddWithParamsBinary.getReturnType());
+
         // Test zaddIncr methods
         Method zaddIncr = jedisClass.getMethod("zaddIncr", String.class, double.class, String.class);
         assertEquals(double.class, zaddIncr.getReturnType());
@@ -497,11 +516,11 @@ public class JedisMethodsTest {
         // Test zrangestore methods
         Method zrangestore =
                 jedisClass.getMethod("zrangestore", String.class, String.class, long.class, long.class);
-        assertEquals(Long.class, zrangestore.getReturnType());
+        assertEquals(long.class, zrangestore.getReturnType());
 
         Method zrangestoreBinary =
                 jedisClass.getMethod("zrangestore", byte[].class, byte[].class, long.class, long.class);
-        assertEquals(Long.class, zrangestoreBinary.getReturnType());
+        assertEquals(long.class, zrangestoreBinary.getReturnType());
 
         // Test zrankWithScore methods
         Method zrankWithScore = jedisClass.getMethod("zrankWithScore", String.class, String.class);
@@ -522,11 +541,11 @@ public class JedisMethodsTest {
 
         // Test zlexcount methods
         Method zlexcount = jedisClass.getMethod("zlexcount", String.class, String.class, String.class);
-        assertEquals(Long.class, zlexcount.getReturnType());
+        assertEquals(long.class, zlexcount.getReturnType());
 
         Method zlexcountBinary =
                 jedisClass.getMethod("zlexcount", byte[].class, byte[].class, byte[].class);
-        assertEquals(Long.class, zlexcountBinary.getReturnType());
+        assertEquals(long.class, zlexcountBinary.getReturnType());
 
         // Test bzpopmin methods
         Method bzpopmin = jedisClass.getMethod("bzpopmin", double.class, String[].class);
@@ -558,10 +577,10 @@ public class JedisMethodsTest {
 
         // Test zdiffstore methods
         Method zdiffstore = jedisClass.getMethod("zdiffstore", String.class, String[].class);
-        assertEquals(Long.class, zdiffstore.getReturnType());
+        assertEquals(long.class, zdiffstore.getReturnType());
 
         Method zdiffstoreBinary = jedisClass.getMethod("zdiffstore", byte[].class, byte[][].class);
-        assertEquals(Long.class, zdiffstoreBinary.getReturnType());
+        assertEquals(long.class, zdiffstoreBinary.getReturnType());
 
         // Test zunion methods
         Method zunion = jedisClass.getMethod("zunion", String[].class);
@@ -613,11 +632,11 @@ public class JedisMethodsTest {
         // Test zremrangebylex methods
         Method zremrangebylex =
                 jedisClass.getMethod("zremrangebylex", String.class, String.class, String.class);
-        assertEquals(Long.class, zremrangebylex.getReturnType());
+        assertEquals(long.class, zremrangebylex.getReturnType());
 
         Method zremrangebylexBinary =
                 jedisClass.getMethod("zremrangebylex", byte[].class, byte[].class, byte[].class);
-        assertEquals(Long.class, zremrangebylexBinary.getReturnType());
+        assertEquals(long.class, zremrangebylexBinary.getReturnType());
 
         // Test zrandmember methods
         Method zrandmember = jedisClass.getMethod("zrandmember", String.class);
@@ -643,6 +662,59 @@ public class JedisMethodsTest {
         Method zrandmemberWithCountWithScoresBinary =
                 jedisClass.getMethod("zrandmemberWithCountWithScores", byte[].class, long.class);
         assertEquals(java.util.List.class, zrandmemberWithCountWithScoresBinary.getReturnType());
+
+        // Test zrevrange methods
+        Method zrevrange = jedisClass.getMethod("zrevrange", String.class, long.class, long.class);
+        assertEquals(java.util.List.class, zrevrange.getReturnType());
+
+        Method zrevrangeBinary =
+                jedisClass.getMethod("zrevrange", byte[].class, long.class, long.class);
+        assertEquals(java.util.List.class, zrevrangeBinary.getReturnType());
+
+        // Test zscan with ScanParams
+        Method zscanWithParams =
+                jedisClass.getMethod(
+                        "zscan",
+                        String.class,
+                        String.class,
+                        redis.clients.jedis.params.ScanParams.class);
+        assertEquals(redis.clients.jedis.resps.ScanResult.class, zscanWithParams.getReturnType());
+
+        Method zscanWithParamsBinary =
+                jedisClass.getMethod(
+                        "zscan",
+                        byte[].class,
+                        byte[].class,
+                        redis.clients.jedis.params.ScanParams.class);
+        assertEquals(redis.clients.jedis.resps.ScanResult.class, zscanWithParamsBinary.getReturnType());
+
+        // Test zrange with ZRangeParams
+        Method zrangeWithParams =
+                jedisClass.getMethod(
+                        "zrange", String.class, redis.clients.jedis.params.ZRangeParams.class);
+        assertEquals(java.util.List.class, zrangeWithParams.getReturnType());
+
+        Method zrangeWithParamsBinary =
+                jedisClass.getMethod(
+                        "zrange", byte[].class, redis.clients.jedis.params.ZRangeParams.class);
+        assertEquals(java.util.List.class, zrangeWithParamsBinary.getReturnType());
+
+        // Test zrangestore with ZRangeParams
+        Method zrangestoreWithParams =
+                jedisClass.getMethod(
+                        "zrangestore",
+                        String.class,
+                        String.class,
+                        redis.clients.jedis.params.ZRangeParams.class);
+        assertEquals(long.class, zrangestoreWithParams.getReturnType());
+
+        Method zrangestoreWithParamsBinary =
+                jedisClass.getMethod(
+                        "zrangestore",
+                        byte[].class,
+                        byte[].class,
+                        redis.clients.jedis.params.ZRangeParams.class);
+        assertEquals(long.class, zrangestoreWithParamsBinary.getReturnType());
     }
 
     @Test

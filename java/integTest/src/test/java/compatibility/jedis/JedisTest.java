@@ -35,6 +35,8 @@ import redis.clients.jedis.params.HSetExParams;
 import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.params.ZAddParams;
+import redis.clients.jedis.params.ZRangeParams;
 import redis.clients.jedis.resps.AccessControlLogEntry;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.ScanResult;
@@ -5103,5 +5105,128 @@ public class JedisTest {
         }
 
         jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zadd_with_params() {
+        String key = UUID.randomUUID().toString();
+
+        // Test zadd with ZAddParams (NX - only add if doesn't exist)
+        ZAddParams nxParams = new ZAddParams().nx();
+        long added = jedis.zadd(key, 1.0, "one", nxParams);
+        assertEquals(1, added);
+
+        // Try adding same member with NX - should not update
+        added = jedis.zadd(key, 2.0, "one", nxParams);
+        assertEquals(0, added);
+        assertEquals(1.0, jedis.zscore(key, "one"));
+
+        // Test with XX - only update existing
+        ZAddParams xxParams = new ZAddParams().xx();
+        added = jedis.zadd(key, 2.0, "one", xxParams);
+        assertEquals(0, added); // 0 new members added, but updated
+        assertEquals(2.0, jedis.zscore(key, "one"));
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrevrange() {
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        // Get range in reverse order (highest to lowest score)
+        List<String> result = jedis.zrevrange(key, 0, 1);
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertEquals("three", result.get(0)); // highest score
+        assertEquals("two", result.get(1));
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zscan_with_params() {
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "member1");
+        jedis.zadd(key, 2.0, "member2");
+        jedis.zadd(key, 3.0, "member3");
+        jedis.zadd(key, 4.0, "other1");
+
+        // Scan with pattern matching
+        ScanParams params = new ScanParams().match("member*").count(10);
+        ScanResult<Tuple> result = jedis.zscan(key, "0", params);
+
+        assertNotNull(result);
+        assertNotNull(result.getResult());
+        assertTrue(result.getResult().size() >= 3); // Should match member1, member2, member3
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrange_with_params() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+        jedis.zadd(key, 4.0, "four");
+
+        // Test range by score
+        ZRangeParams byScore = ZRangeParams.zrangeByScoreParams(1.5, 3.5);
+        List<String> result = jedis.zrange(key, byScore);
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertTrue(result.contains("two"));
+        assertTrue(result.contains("three"));
+
+        // Test range by index
+        ZRangeParams byIndex = ZRangeParams.zrangeParams(0, 1);
+        result = jedis.zrange(key, byIndex);
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertEquals("one", result.get(0));
+        assertEquals("two", result.get(1));
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrangestore_with_params() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String srcKey = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
+
+        jedis.zadd(srcKey, 1.0, "one");
+        jedis.zadd(srcKey, 2.0, "two");
+        jedis.zadd(srcKey, 3.0, "three");
+        jedis.zadd(srcKey, 4.0, "four");
+
+        // Store range by score
+        ZRangeParams byScore = ZRangeParams.zrangeByScoreParams(1.5, 3.5);
+        long stored = jedis.zrangestore(destKey, srcKey, byScore);
+        assertEquals(2, stored);
+
+        // Verify destination has the correct members
+        List<String> result = jedis.zrange(destKey, 0, -1);
+        assertEquals(2, result.size());
+        assertTrue(result.contains("two"));
+        assertTrue(result.contains("three"));
+
+        jedis.del(srcKey, destKey);
     }
 }
