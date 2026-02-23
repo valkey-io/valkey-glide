@@ -10,7 +10,9 @@ import glide.api.GlideClusterClient;
 import glide.api.models.configuration.AdvancedGlideClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.GlideClientConfiguration.GlideClientConfigurationBuilder;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import lombok.SneakyThrows;
@@ -100,11 +102,12 @@ public class DnsTest {
         int port = Integer.parseInt(hostEntry.substring(hostEntry.lastIndexOf(':') + 1));
 
         // Build address with specified hostname.
-        var address = NodeAddress.builder().host(hostname).port(port).build();
+        NodeAddress address = NodeAddress.builder().host(hostname).port(port).build();
 
         // Build client configuration and client.
         if (clusterMode) {
-            var builder = GlideClusterClientConfiguration.builder().address(address).useTLS(useTls);
+            GlideClusterClientConfigurationBuilder<?, ?> builder = GlideClusterClientConfiguration.builder()
+                    .address(address).useTLS(useTls);
             if (useTls) {
                 TlsAdvancedConfiguration tlsConfig =
                         TlsAdvancedConfiguration.builder().rootCertificates(getCaCertificate()).build();
@@ -115,7 +118,8 @@ public class DnsTest {
             }
             return GlideClusterClient.createClient(builder.build()).get();
         } else {
-            var builder = GlideClientConfiguration.builder().address(address).useTLS(useTls);
+            GlideClientConfigurationBuilder<?, ?> builder = GlideClientConfiguration.builder().address(address)
+                    .useTLS(useTls);
             if (useTls) {
                 TlsAdvancedConfiguration tlsConfig =
                         TlsAdvancedConfiguration.builder().rootCertificates(getCaCertificate()).build();
