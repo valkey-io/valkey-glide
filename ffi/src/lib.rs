@@ -2142,17 +2142,19 @@ pub(crate) unsafe fn get_pipeline_options(
 
 /// Creates an OpenTelemetry span with the given name and returns a pointer to the span as u64.
 ///
-#[unsafe(no_mangle)]
-pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
+/// Helper function to extract and validate command name from RequestType.
+/// Returns the command name or None if validation fails.
+/// Falls back to "CustomCommand" for user-defined commands (e.g., EVAL, EVALSHA).
+fn extract_command_name(request_type: RequestType, context: &str) -> Option<String> {
     // Validate request type and extract command
     let cmd = match request_type.get_command() {
         Some(cmd) => cmd,
         None => {
             logger_core::log_error(
                 "ffi_otel",
-                "create_otel_span: RequestType has no command available",
+                format!("{context}: RequestType has no command available"),
             );
-            return 0;
+            return None;
         }
     };
 
@@ -2164,9 +2166,9 @@ pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
             Err(e) => {
                 logger_core::log_error(
                     "ffi_otel",
-                    format!("create_otel_span: Command bytes are not valid UTF-8: {e}"),
+                    format!("{context}: Command bytes are not valid UTF-8: {e}"),
                 );
-                return 0;
+                return None;
             }
         },
         None => "CustomCommand".to_owned(),
@@ -2177,12 +2179,22 @@ pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
         logger_core::log_error(
             "ffi_otel",
             format!(
-                "create_otel_span: Command name too long ({} chars), max 256",
+                "{context}: Command name too long ({} chars), max 256",
                 command_name.len()
             ),
         );
-        return 0;
+        return None;
     }
+
+    Some(command_name)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
+    let command_name = match extract_command_name(request_type, "create_otel_span") {
+        Some(name) => name,
+        None => return 0,
+    };
 
     // Create span and convert to pointer
     let span = GlideOpenTelemetry::new_span(&command_name);
@@ -2398,44 +2410,10 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
     request_type: RequestType,
     parent_span_ptr: u64,
 ) -> u64 {
-    // Validate request type and extract command first (this should fail hard)
-    let cmd = match request_type.get_command() {
-        Some(cmd) => cmd,
-        None => {
-            logger_core::log_error(
-                "ffi_otel",
-                "create_otel_span_with_parent: RequestType has no command available",
-            );
-            return 0;
-        }
+    let command_name = match extract_command_name(request_type, "create_otel_span_with_parent") {
+        Some(name) => name,
+        None => return 0,
     };
-
-    // Extract command name, falling back to "CustomCommand" for user-defined commands
-    let command_name = match cmd.command() {
-        Some(bytes) => match std::str::from_utf8(bytes.as_slice()) {
-            Ok(name) => name.to_owned(),
-            Err(e) => {
-                logger_core::log_error(
-                    "ffi_otel",
-                    format!("create_otel_span_with_parent: Command bytes are not valid UTF-8: {e}"),
-                );
-                return 0;
-            }
-        },
-        None => "CustomCommand".to_owned(),
-    };
-
-    // Validate command name length (reasonable limit to prevent abuse)
-    if command_name.len() > 256 {
-        logger_core::log_error(
-            "ffi_otel",
-            format!(
-                "create_otel_span_with_parent: Command name too long ({} chars), max 256",
-                command_name.len()
-            ),
-        );
-        return 0;
-    }
 
     // Handle parent span pointer validation with graceful fallback
     if parent_span_ptr == 0 {
