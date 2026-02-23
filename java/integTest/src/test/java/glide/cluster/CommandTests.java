@@ -3597,7 +3597,13 @@ public class CommandTests {
         try (Script script = new Script(code, false);
                 GlideClusterClient testClient =
                         GlideClusterClient.createClient(
-                                        commonClusterClientConfig().requestTimeout(10000).build())
+                                        commonClusterClientConfig()
+                                                .requestTimeout(10000)
+                                                .advancedConfiguration(
+                                                        AdvancedGlideClusterClientConfiguration.builder()
+                                                                .connectionTimeout(10000)
+                                                                .build())
+                                                .build())
                                 .get()) {
 
             CompletableFuture<Object> scriptFuture =
@@ -3606,37 +3612,38 @@ public class CommandTests {
             // Wait for the script to start executing on the server
             Thread.sleep(1000);
 
-            // Try to kill the script - it should fail with "unkillable" since it has writes
-            boolean foundUnkillable = false;
-            for (int i = 0; i < 25 && !foundUnkillable; i++) {
-                try {
-                    clusterClient.scriptKill(route).get();
-                } catch (ExecutionException e) {
-                    if (e.getCause() instanceof RequestException) {
-                        String msg = e.getMessage().toLowerCase();
-                        if (msg.contains("unkillable")) {
-                            foundUnkillable = true;
-                        } else if (msg.contains("no scripts in execution")) {
-                            // Script hasn't started yet or already finished, wait and retry
-                            Thread.sleep(200);
+            try {
+                // Try to kill the script - it should fail with "unkillable" since it has writes
+                boolean foundUnkillable = false;
+                for (int i = 0; i < 25 && !foundUnkillable; i++) {
+                    try {
+                        clusterClient.scriptKill(route).get();
+                    } catch (ExecutionException e) {
+                        if (e.getCause() instanceof RequestException) {
+                            String msg = e.getMessage().toLowerCase();
+                            if (msg.contains("unkillable")) {
+                                foundUnkillable = true;
+                            } else if (msg.contains("no scripts in execution")) {
+                                Thread.sleep(200);
+                            }
                         }
                     }
                 }
-            }
 
-            assertTrue(foundUnkillable, "Expected to find 'unkillable' error for write script");
-
-            // Wait for the script to complete naturally.
-            // The script runs for 6 seconds and is unkillable, so we must let it finish.
-            try {
-                scriptFuture.get();
-            } catch (Exception ignored) {
-                // Script may throw timeout or other errors, but we just need it to finish
+                assertTrue(foundUnkillable, "Expected to find 'unkillable' error for write script");
+            } finally {
+                // Always wait for the unkillable script to finish before closing the client,
+                // even if the assertion above fails. Leaving a running script blocks the
+                // server and causes the next parameterized iteration to get connection errors.
+                try {
+                    scriptFuture.get();
+                } catch (Exception ignored) {
+                }
             }
         }
-        // Ensure the cluster is fully ready before the next test iteration.
-        // This is critical for parameterized tests (RESP2/RESP3) running back-to-back.
+        // Confirm the cluster is healthy before the next iteration (RESP2 -> RESP3).
         waitForNotBusy(clusterClient::scriptKill);
+        clusterClient.ping().get();
     }
 
     /**
