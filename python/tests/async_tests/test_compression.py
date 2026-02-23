@@ -11,12 +11,12 @@ from typing import List, cast
 import pytest
 from glide import GlideClient, GlideClusterClient, TGlideClient
 from glide_shared.commands.batch import Batch, ClusterBatch
+from glide_shared.commands.core_options import ExpiryGetEx, ExpiryTypeGetEx
 from glide_shared.config import (
     CompressionBackend,
     CompressionConfiguration,
     ProtocolVersion,
 )
-from glide_shared.commands.core_options import ExpiryGetEx, ExpiryTypeGetEx
 from glide_shared.constants import OK
 
 from tests.async_tests.conftest import create_client
@@ -862,6 +862,10 @@ class TestCompressionBatch:
 
         # Cleanup
         await compression_client.delete(keys)
+
+
+@pytest.mark.anyio
+class TestCompressionEdgeCases:
     """Test compression edge cases and error handling."""
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
