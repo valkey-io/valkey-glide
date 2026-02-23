@@ -8,6 +8,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import redis.clients.jedis.args.FlushMode;
+import redis.clients.jedis.args.FunctionRestorePolicy;
+import redis.clients.jedis.params.XAddParams;
+import redis.clients.jedis.params.XTrimParams;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
 import redis.clients.jedis.resps.StreamInfo;
@@ -199,8 +203,7 @@ public class JedisMethodsTest {
         assertEquals(String.class, scriptFlush.getReturnType());
 
         // Test scriptFlush(FlushMode) exists
-        Method scriptFlushWithMode =
-                jedisClass.getMethod("scriptFlush", redis.clients.jedis.args.FlushMode.class);
+        Method scriptFlushWithMode = jedisClass.getMethod("scriptFlush", FlushMode.class);
         assertEquals(String.class, scriptFlushWithMode.getReturnType());
 
         // Test scriptKill() exists
@@ -248,8 +251,7 @@ public class JedisMethodsTest {
 
         // Test functionRestore(byte[], FunctionRestorePolicy) exists
         Method functionRestoreWithPolicy =
-                jedisClass.getMethod(
-                        "functionRestore", byte[].class, redis.clients.jedis.args.FunctionRestorePolicy.class);
+                jedisClass.getMethod("functionRestore", byte[].class, FunctionRestorePolicy.class);
         assertEquals(String.class, functionRestoreWithPolicy.getReturnType());
 
         // Test functionFlush() exists
@@ -257,8 +259,7 @@ public class JedisMethodsTest {
         assertEquals(String.class, functionFlush.getReturnType());
 
         // Test functionFlush(FlushMode) exists
-        Method functionFlushWithMode =
-                jedisClass.getMethod("functionFlush", redis.clients.jedis.args.FlushMode.class);
+        Method functionFlushWithMode = jedisClass.getMethod("functionFlush", FlushMode.class);
         assertEquals(String.class, functionFlushWithMode.getReturnType());
 
         // Test functionKill() exists
@@ -472,9 +473,7 @@ public class JedisMethodsTest {
         Class<Jedis> jedisClass = Jedis.class;
 
         // XADD binary with XAddParams
-        assertNotNull(
-                jedisClass.getMethod(
-                        "xadd", byte[].class, redis.clients.jedis.params.XAddParams.class, Map.class));
+        assertNotNull(jedisClass.getMethod("xadd", byte[].class, XAddParams.class, Map.class));
 
         // XLEN binary
         assertNotNull(jedisClass.getMethod("xlen", byte[].class));
@@ -495,8 +494,7 @@ public class JedisMethodsTest {
         // XTRIM binary
         assertNotNull(jedisClass.getMethod("xtrim", byte[].class, long.class));
         assertNotNull(jedisClass.getMethod("xtrim", byte[].class, long.class, boolean.class));
-        assertNotNull(
-                jedisClass.getMethod("xtrim", byte[].class, redis.clients.jedis.params.XTrimParams.class));
+        assertNotNull(jedisClass.getMethod("xtrim", byte[].class, XTrimParams.class));
     }
 
     @Test
@@ -504,9 +502,7 @@ public class JedisMethodsTest {
         Class<Jedis> jedisClass = Jedis.class;
 
         // XADD binary returns byte[]
-        Method xaddBinary =
-                jedisClass.getMethod(
-                        "xadd", byte[].class, redis.clients.jedis.params.XAddParams.class, Map.class);
+        Method xaddBinary = jedisClass.getMethod("xadd", byte[].class, XAddParams.class, Map.class);
         assertEquals(byte[].class, xaddBinary.getReturnType());
 
         // XLEN binary returns long
@@ -536,13 +532,9 @@ public class JedisMethodsTest {
         Class<Jedis> jedisClass = Jedis.class;
 
         // XADD with XAddParams for String keys
-        assertNotNull(
-                jedisClass.getMethod(
-                        "xadd", String.class, redis.clients.jedis.params.XAddParams.class, Map.class));
+        assertNotNull(jedisClass.getMethod("xadd", String.class, XAddParams.class, Map.class));
 
-        Method xaddWithParams =
-                jedisClass.getMethod(
-                        "xadd", String.class, redis.clients.jedis.params.XAddParams.class, Map.class);
+        Method xaddWithParams = jedisClass.getMethod("xadd", String.class, XAddParams.class, Map.class);
         assertEquals(StreamEntryID.class, xaddWithParams.getReturnType());
     }
 
@@ -551,11 +543,9 @@ public class JedisMethodsTest {
         Class<Jedis> jedisClass = Jedis.class;
 
         // XTRIM with XTrimParams for String keys
-        assertNotNull(
-                jedisClass.getMethod("xtrim", String.class, redis.clients.jedis.params.XTrimParams.class));
+        assertNotNull(jedisClass.getMethod("xtrim", String.class, XTrimParams.class));
 
-        Method xtrimWithParams =
-                jedisClass.getMethod("xtrim", String.class, redis.clients.jedis.params.XTrimParams.class);
+        Method xtrimWithParams = jedisClass.getMethod("xtrim", String.class, XTrimParams.class);
         assertEquals(long.class, xtrimWithParams.getReturnType());
     }
 
@@ -564,7 +554,7 @@ public class JedisMethodsTest {
         // Test that XAddParams class exists and has expected methods
         assertDoesNotThrow(
                 () -> {
-                    Class<?> xAddParamsClass = redis.clients.jedis.params.XAddParams.class;
+                    Class<?> xAddParamsClass = XAddParams.class;
                     assertNotNull(xAddParamsClass);
 
                     // Check factory method exists
@@ -589,7 +579,7 @@ public class JedisMethodsTest {
         // Test that XTrimParams class exists and has expected methods
         assertDoesNotThrow(
                 () -> {
-                    Class<?> xTrimParamsClass = redis.clients.jedis.params.XTrimParams.class;
+                    Class<?> xTrimParamsClass = XTrimParams.class;
                     assertNotNull(xTrimParamsClass);
 
                     // Check factory method exists

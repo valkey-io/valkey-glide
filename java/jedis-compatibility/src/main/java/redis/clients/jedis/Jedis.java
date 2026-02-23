@@ -73,6 +73,8 @@ import redis.clients.jedis.params.HSetExParams;
 import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.params.XAddParams;
+import redis.clients.jedis.params.XTrimParams;
 import redis.clients.jedis.resps.AccessControlLogEntry;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
@@ -6217,8 +6219,7 @@ public final class Jedis implements Closeable {
      * @param hash field-value map
      * @return generated entry ID, or null if stream did not exist and makeStream was false
      */
-    public StreamEntryID xadd(
-            String key, redis.clients.jedis.params.XAddParams params, Map<String, String> hash) {
+    public StreamEntryID xadd(String key, XAddParams params, Map<String, String> hash) {
         return executeCommandWithGlide(
                 "XADD",
                 () -> {
@@ -6235,8 +6236,7 @@ public final class Jedis implements Closeable {
      * @param hash field-value map
      * @return generated entry ID as byte[], or null if stream did not exist and makeStream was false
      */
-    public byte[] xadd(
-            byte[] key, redis.clients.jedis.params.XAddParams params, Map<byte[], byte[]> hash) {
+    public byte[] xadd(byte[] key, XAddParams params, Map<byte[], byte[]> hash) {
         return executeCommandWithGlide(
                 "XADD",
                 () -> {
@@ -6471,7 +6471,7 @@ public final class Jedis implements Closeable {
      * @param params trim parameters
      * @return number of entries deleted
      */
-    public long xtrim(String key, redis.clients.jedis.params.XTrimParams params) {
+    public long xtrim(String key, XTrimParams params) {
         return executeCommandWithGlide(
                 "XTRIM", () -> glideClient.xtrim(key, params.toStreamTrimOptions()).get());
     }
@@ -6511,7 +6511,7 @@ public final class Jedis implements Closeable {
      * @param params trim parameters
      * @return number of entries deleted
      */
-    public long xtrim(byte[] key, redis.clients.jedis.params.XTrimParams params) {
+    public long xtrim(byte[] key, XTrimParams params) {
         return xtrim(new String(key), params);
     }
 
