@@ -20,11 +20,13 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.GeoCoordinate;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.Protocol;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.args.GeoUnit;
 import redis.clients.jedis.args.ListDirection;
 import redis.clients.jedis.args.ListPosition;
 import redis.clients.jedis.exceptions.JedisException;
@@ -3956,7 +3958,7 @@ public class JedisTest {
         jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
         jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
 
-        Double distance = jedis.geodist(key, "Palermo", "Catania", redis.clients.jedis.args.GeoUnit.KM);
+        Double distance = jedis.geodist(key, "Palermo", "Catania", GeoUnit.KM);
         assertNotNull(distance);
         assertTrue(distance > TEST_GEO_DISTANCE_MIN_KM && distance < TEST_GEO_DISTANCE_MAX_KM);
     }
@@ -4009,7 +4011,7 @@ public class JedisTest {
         jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
 
         List<redis.clients.jedis.resps.GeoRadiusResponse> results =
-                jedis.geosearch(key, "Palermo", 200, redis.clients.jedis.args.GeoUnit.KM);
+                jedis.geosearch(key, "Palermo", 200, GeoUnit.KM);
         assertNotNull(results);
         assertTrue(results.size() >= 1);
     }
@@ -4026,7 +4028,7 @@ public class JedisTest {
         jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
 
         List<redis.clients.jedis.resps.GeoRadiusResponse> results =
-                jedis.geosearch(key, "Palermo".getBytes(), 200, redis.clients.jedis.args.GeoUnit.KM);
+                jedis.geosearch(key, "Palermo".getBytes(), 200, GeoUnit.KM);
         assertNotNull(results);
         assertTrue(results.size() >= 1);
     }
@@ -4043,8 +4045,7 @@ public class JedisTest {
         jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
         jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
 
-        long count =
-                jedis.geosearchstore(destKey, srcKey, "Palermo", 200, redis.clients.jedis.args.GeoUnit.KM);
+        long count = jedis.geosearchstore(destKey, srcKey, "Palermo", 200, GeoUnit.KM);
         assertTrue(count >= 1);
     }
 
@@ -4060,9 +4061,210 @@ public class JedisTest {
         jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
         jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
 
-        long count =
-                jedis.geosearchstore(
-                        destKey, srcKey, "Palermo".getBytes(), 200, redis.clients.jedis.args.GeoUnit.KM);
+        long count = jedis.geosearchstore(destKey, srcKey, "Palermo".getBytes(), 200, GeoUnit.KM);
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void sort_binary() {
+        byte[] key = ("sortList_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.rpush(key, "3".getBytes(), "1".getBytes(), "2".getBytes());
+
+        List<byte[]> sorted = jedis.sort(key);
+        assertNotNull(sorted);
+        assertEquals(3, sorted.size());
+        assertEquals("1", new String(sorted.get(0)));
+        assertEquals("2", new String(sorted.get(1)));
+        assertEquals("3", new String(sorted.get(2)));
+    }
+
+    @Test
+    void objectHelp() {
+        List<String> help = jedis.objectHelp();
+        assertNotNull(help);
+        assertFalse(help.isEmpty());
+        // Verify that the help contains information about object subcommands
+        assertTrue(
+                help.stream()
+                        .anyMatch(
+                                line ->
+                                        line.toLowerCase().contains("encoding")
+                                                || line.toLowerCase().contains("freq")));
+    }
+
+    @Test
+    void objectHelpBinary() {
+        List<byte[]> help = jedis.objectHelpBinary();
+        assertNotNull(help);
+        assertFalse(help.isEmpty());
+        // Convert first element to string to verify it contains help text
+        assertTrue(help.get(0) != null && help.get(0).length > 0);
+    }
+
+    @Test
+    void geosearch_by_coordinate() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        GeoCoordinate coord = new GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO);
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, coord, 200, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_by_coordinate_binary() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
+
+        GeoCoordinate coord = new GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO);
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, coord, 200, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_by_box() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, "Palermo", 400, 400, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_by_box_binary() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
+
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, "Palermo".getBytes(), 400, 400, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_by_coordinate_box() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.GeoCoordinate coord =
+                new redis.clients.jedis.GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO);
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, coord, 400, 400, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_with_params() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.params.GeoSearchParam params =
+                redis.clients.jedis.params.GeoSearchParam.fromMember("Palermo").byRadius(200, GeoUnit.KM);
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results = jedis.geosearch(key, params);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearchStore_by_coordinate() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        String srcKey = "geoSrcKey_" + UUID.randomUUID();
+        String destKey = "geoDestKey_" + UUID.randomUUID();
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.GeoCoordinate coord =
+                new redis.clients.jedis.GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO);
+        long count = jedis.geosearchStore(destKey, srcKey, coord, 200, GeoUnit.KM);
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void geosearchStore_by_box() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        String srcKey = "geoSrcKey_" + UUID.randomUUID();
+        String destKey = "geoDestKey_" + UUID.randomUUID();
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        long count = jedis.geosearchStore(destKey, srcKey, "Palermo", 400, 400, GeoUnit.KM);
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void geosearchStore_with_params() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        String srcKey = "geoSrcKey_" + UUID.randomUUID();
+        String destKey = "geoDestKey_" + UUID.randomUUID();
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.params.GeoSearchParam params =
+                redis.clients.jedis.params.GeoSearchParam.fromMember("Palermo").byRadius(200, GeoUnit.KM);
+        long count = jedis.geosearchStore(destKey, srcKey, params);
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void geosearchStoreStoreDist() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        String srcKey = "geoSrcKey_" + UUID.randomUUID();
+        String destKey = "geoDestKey_" + UUID.randomUUID();
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.params.GeoSearchParam params =
+                redis.clients.jedis.params.GeoSearchParam.fromMember("Palermo").byRadius(200, GeoUnit.KM);
+        long count = jedis.geosearchStoreStoreDist(destKey, srcKey, params);
         assertTrue(count >= 1);
     }
 }

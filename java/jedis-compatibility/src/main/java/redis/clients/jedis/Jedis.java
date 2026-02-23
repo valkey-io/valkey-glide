@@ -26,6 +26,10 @@ import glide.api.models.commands.bitmap.BitFieldOptions.SignedEncoding;
 import glide.api.models.commands.bitmap.BitFieldOptions.UnsignedEncoding;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.commands.geospatial.GeoSearchOrigin;
+import glide.api.models.commands.geospatial.GeoSearchShape;
+import glide.api.models.commands.geospatial.GeoUnit;
+import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.HScanOptionsBinary;
 import glide.api.models.commands.scan.SScanOptions;
@@ -2533,6 +2537,25 @@ public final class Jedis implements Closeable {
                 () -> {
                     String[] result = glideClient.sort(key).get();
                     return Arrays.asList(result);
+                });
+    }
+
+    /**
+     * Sort the elements in a list, set, or sorted set (binary version).
+     *
+     * @param key the key
+     * @return the sorted elements
+     */
+    public List<byte[]> sort(final byte[] key) {
+        return executeCommandWithGlide(
+                "SORT",
+                () -> {
+                    GlideString[] result = glideClient.sort(GlideString.of(key)).get();
+                    List<byte[]> out = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        out.add(gs.getBytes());
+                    }
+                    return out;
                 });
     }
 
@@ -8915,6 +8938,62 @@ public final class Jedis implements Closeable {
                 "OBJECT", () -> glideClient.objectRefcount(GlideString.of(key)).get());
     }
 
+    /**
+     * Returns help information about the OBJECT command.
+     *
+     * @return a list of help messages describing OBJECT subcommands
+     */
+    public List<String> objectHelp() {
+        return executeCommandWithGlide(
+                "OBJECT",
+                () -> {
+                    Object result = glideClient.customCommand(new String[] {"OBJECT", "HELP"}).get();
+                    if (result instanceof Object[]) {
+                        Object[] array = (Object[]) result;
+                        List<String> helpMessages = new ArrayList<>(array.length);
+                        for (Object obj : array) {
+                            helpMessages.add(obj != null ? obj.toString() : null);
+                        }
+                        return helpMessages;
+                    }
+                    return Collections.emptyList();
+                });
+    }
+
+    /**
+     * Returns help information about the OBJECT command (binary version).
+     *
+     * @return a list of help messages describing OBJECT subcommands
+     */
+    public List<byte[]> objectHelpBinary() {
+        return executeCommandWithGlide(
+                "OBJECT",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(
+                                            new GlideString[] {GlideString.of("OBJECT"), GlideString.of("HELP")})
+                                    .get();
+                    if (result instanceof Object[]) {
+                        Object[] array = (Object[]) result;
+                        List<byte[]> helpMessages = new ArrayList<>(array.length);
+                        for (Object obj : array) {
+                            if (obj instanceof GlideString) {
+                                helpMessages.add(((GlideString) obj).getBytes());
+                            } else if (obj instanceof String) {
+                                helpMessages.add(((String) obj).getBytes(VALKEY_CHARSET));
+                            } else if (obj != null) {
+                                helpMessages.add(obj.toString().getBytes(VALKEY_CHARSET));
+                            } else {
+                                helpMessages.add(null);
+                            }
+                        }
+                        return helpMessages;
+                    }
+                    return Collections.emptyList();
+                });
+    }
+
     // ==================== GEO COMMANDS ====================
 
     /**
@@ -8930,9 +9009,8 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "GEOADD",
                 () -> {
-                    Map<String, glide.api.models.commands.geospatial.GeospatialData> data = new HashMap<>();
-                    data.put(
-                            member, new glide.api.models.commands.geospatial.GeospatialData(longitude, latitude));
+                    Map<String, GeospatialData> data = new HashMap<>();
+                    data.put(member, new GeospatialData(longitude, latitude));
                     return glideClient.geoadd(key, data).get();
                 });
     }
@@ -8951,11 +9029,8 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "GEOADD",
                 () -> {
-                    Map<GlideString, glide.api.models.commands.geospatial.GeospatialData> data =
-                            new HashMap<>();
-                    data.put(
-                            GlideString.of(member),
-                            new glide.api.models.commands.geospatial.GeospatialData(longitude, latitude));
+                    Map<GlideString, GeospatialData> data = new HashMap<>();
+                    data.put(GlideString.of(member), new GeospatialData(longitude, latitude));
                     return glideClient.geoadd(GlideString.of(key), data).get();
                 });
     }
@@ -8972,11 +9047,11 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "GEOADD",
                 () -> {
-                    Map<String, glide.api.models.commands.geospatial.GeospatialData> data = new HashMap<>();
+                    Map<String, GeospatialData> data = new HashMap<>();
                     for (Map.Entry<String, GeoCoordinate> entry : memberCoordinateMap.entrySet()) {
                         data.put(
                                 entry.getKey(),
-                                new glide.api.models.commands.geospatial.GeospatialData(
+                                new GeospatialData(
                                         entry.getValue().getLongitude(), entry.getValue().getLatitude()));
                     }
                     return glideClient.geoadd(key, data).get();
@@ -8995,12 +9070,11 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "GEOADD",
                 () -> {
-                    Map<GlideString, glide.api.models.commands.geospatial.GeospatialData> data =
-                            new HashMap<>();
+                    Map<GlideString, GeospatialData> data = new HashMap<>();
                     for (Map.Entry<byte[], GeoCoordinate> entry : memberCoordinateMap.entrySet()) {
                         data.put(
                                 GlideString.of(entry.getKey()),
-                                new glide.api.models.commands.geospatial.GeospatialData(
+                                new GeospatialData(
                                         entry.getValue().getLongitude(), entry.getValue().getLatitude()));
                     }
                     return glideClient.geoadd(GlideString.of(key), data).get();
@@ -9113,7 +9187,7 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "GEODIST",
                 () -> {
-                    glide.api.models.commands.geospatial.GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
                     return glideClient.geodist(key, member1, member2, glideUnit).get();
                 });
     }
@@ -9136,7 +9210,7 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "GEODIST",
                 () -> {
-                    glide.api.models.commands.geospatial.GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
                     return glideClient
                             .geodist(
                                     GlideString.of(key), GlideString.of(member1), GlideString.of(member2), glideUnit)
@@ -9204,11 +9278,9 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "GEOSEARCH",
                 () -> {
-                    glide.api.models.commands.geospatial.GeoUnit glideUnit = convertToGlideGeoUnit(unit);
-                    glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOrigin origin =
-                            new glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOrigin(member);
-                    glide.api.models.commands.geospatial.GeoSearchShape shape =
-                            new glide.api.models.commands.geospatial.GeoSearchShape(radius, glideUnit);
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOrigin origin = new GeoSearchOrigin.MemberOrigin(member);
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
                     String[] result = glideClient.geosearch(key, origin, shape).get();
                     if (result == null) {
                         return Collections.emptyList();
@@ -9236,12 +9308,331 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "GEOSEARCH",
                 () -> {
-                    glide.api.models.commands.geospatial.GeoUnit glideUnit = convertToGlideGeoUnit(unit);
-                    glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOriginBinary origin =
-                            new glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOriginBinary(
-                                    GlideString.of(member));
-                    glide.api.models.commands.geospatial.GeoSearchShape shape =
-                            new glide.api.models.commands.geospatial.GeoSearchShape(radius, glideUnit);
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOriginBinary origin =
+                            new GeoSearchOrigin.MemberOriginBinary(GlideString.of(member));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a coordinate and radius.
+     *
+     * @param key the key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return a list of members within the specified area
+     */
+    public List<GeoRadiusResponse> geosearch(
+            String key, GeoCoordinate coord, double radius, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a coordinate and radius (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return a list of members within the specified area
+     */
+    public List<GeoRadiusResponse> geosearch(
+            final byte[] key, GeoCoordinate coord, double radius, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a given member and box (width x height).
+     *
+     * @param key the key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return a list of members within the specified area
+     */
+    public List<GeoRadiusResponse> geosearch(
+            String key,
+            String member,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOrigin origin = new GeoSearchOrigin.MemberOrigin(member);
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a given member and box (width x height) (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return a list of members within the specified area
+     */
+    public List<GeoRadiusResponse> geosearch(
+            final byte[] key,
+            final byte[] member,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOriginBinary origin =
+                            new GeoSearchOrigin.MemberOriginBinary(GlideString.of(member));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a coordinate and box (width x height).
+     *
+     * @param key the key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return a list of members within the specified area
+     */
+    public List<GeoRadiusResponse> geosearch(
+            String key,
+            GeoCoordinate coord,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a coordinate and box (width x height) (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return a list of members within the specified area
+     */
+    public List<GeoRadiusResponse> geosearch(
+            final byte[] key,
+            GeoCoordinate coord,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by the GeoSearchParam.
+     *
+     * @param key the key of the sorted set
+     * @param params the search parameters
+     * @return a list of members within the specified area
+     */
+    public List<GeoRadiusResponse> geosearch(
+            String key, redis.clients.jedis.params.GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin = new GeoSearchOrigin.MemberOrigin(params.getFromMember());
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    // For simple search without options, use basic geosearch
+                    // Note: GLIDE's geosearch doesn't support all Jedis options like WITHCOORD, WITHDIST,
+                    // etc.
+                    // in the same way, so this is a simplified implementation
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by the GeoSearchParam (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param params the search parameters
+     * @return a list of members within the specified area
+     */
+    public List<GeoRadiusResponse> geosearch(
+            final byte[] key, redis.clients.jedis.params.GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin =
+                                new GeoSearchOrigin.MemberOriginBinary(
+                                        GlideString.of(params.getFromMember().getBytes(VALKEY_CHARSET)));
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
                     GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
                     if (result == null) {
                         return Collections.emptyList();
@@ -9274,11 +9665,9 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "GEOSEARCHSTORE",
                 () -> {
-                    glide.api.models.commands.geospatial.GeoUnit glideUnit = convertToGlideGeoUnit(unit);
-                    glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOrigin origin =
-                            new glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOrigin(member);
-                    glide.api.models.commands.geospatial.GeoSearchShape shape =
-                            new glide.api.models.commands.geospatial.GeoSearchShape(radius, glideUnit);
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOrigin origin = new GeoSearchOrigin.MemberOrigin(member);
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
                     return glideClient.geosearchstore(dest, src, origin, shape).get();
                 });
     }
@@ -9303,35 +9692,471 @@ public final class Jedis implements Closeable {
         return executeCommandWithGlide(
                 "GEOSEARCHSTORE",
                 () -> {
-                    glide.api.models.commands.geospatial.GeoUnit glideUnit = convertToGlideGeoUnit(unit);
-                    glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOriginBinary origin =
-                            new glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOriginBinary(
-                                    GlideString.of(member));
-                    glide.api.models.commands.geospatial.GeoSearchShape shape =
-                            new glide.api.models.commands.geospatial.GeoSearchShape(radius, glideUnit);
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOriginBinary origin =
+                            new GeoSearchOrigin.MemberOriginBinary(GlideString.of(member));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
                     return glideClient
                             .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
                             .get();
                 });
     }
 
-    /** Convert Jedis GeoUnit to GLIDE GeoUnit. */
-    private static glide.api.models.commands.geospatial.GeoUnit convertToGlideGeoUnit(
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return the number of elements in the resulting sorted set
+     */
+    public long geosearchStore(
+            String dest,
+            String src,
+            GeoCoordinate coord,
+            double radius,
             redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return the number of elements in the resulting sorted set
+     */
+    public long geosearchStore(
+            final byte[] dest,
+            final byte[] src,
+            GeoCoordinate coord,
+            double radius,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return the number of elements in the resulting sorted set
+     */
+    public long geosearchStore(
+            String dest,
+            String src,
+            String member,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOrigin origin = new GeoSearchOrigin.MemberOrigin(member);
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return the number of elements in the resulting sorted set
+     */
+    public long geosearchStore(
+            final byte[] dest,
+            final byte[] src,
+            final byte[] member,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOriginBinary origin =
+                            new GeoSearchOrigin.MemberOriginBinary(GlideString.of(member));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return the number of elements in the resulting sorted set
+     */
+    public long geosearchStore(
+            String dest,
+            String src,
+            GeoCoordinate coord,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return the number of elements in the resulting sorted set
+     */
+    public long geosearchStore(
+            final byte[] dest,
+            final byte[] src,
+            GeoCoordinate coord,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
+     * stores the result in a destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param params the search parameters
+     * @return the number of elements in the resulting sorted set
+     */
+    public long geosearchStore(
+            String dest, String src, redis.clients.jedis.params.GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin = new GeoSearchOrigin.MemberOrigin(params.getFromMember());
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
+     * stores the result in a destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param params the search parameters
+     * @return the number of elements in the resulting sorted set
+     */
+    public long geosearchStore(
+            final byte[] dest, final byte[] src, redis.clients.jedis.params.GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin =
+                                new GeoSearchOrigin.MemberOriginBinary(
+                                        GlideString.of(params.getFromMember().getBytes(VALKEY_CHARSET)));
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
+     * stores the result with distances in a destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param params the search parameters
+     * @return the number of elements in the resulting sorted set
+     */
+    public long geosearchStoreStoreDist(
+            String dest, String src, redis.clients.jedis.params.GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin = new GeoSearchOrigin.MemberOrigin(params.getFromMember());
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    // Use geosearchstore with STOREDIST option
+                    glide.api.models.commands.geospatial.GeoSearchStoreOptions options =
+                            glide.api.models.commands.geospatial.GeoSearchStoreOptions.builder()
+                                    .storeDist(true)
+                                    .build();
+                    return glideClient.geosearchstore(dest, src, origin, shape, options).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
+     * stores the result with distances in a destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param params the search parameters
+     * @return the number of elements in the resulting sorted set
+     */
+    public long geosearchStoreStoreDist(
+            final byte[] dest, final byte[] src, redis.clients.jedis.params.GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin =
+                                new GeoSearchOrigin.MemberOriginBinary(
+                                        GlideString.of(params.getFromMember().getBytes(VALKEY_CHARSET)));
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    // Use geosearchstore with STOREDIST option
+                    glide.api.models.commands.geospatial.GeoSearchStoreOptions options =
+                            glide.api.models.commands.geospatial.GeoSearchStoreOptions.builder()
+                                    .storeDist(true)
+                                    .build();
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape, options)
+                            .get();
+                });
+    }
+
+    // ==================== DEPRECATED GEO COMMANDS ====================
+    //
+    // The following georadius and georadiusByMember methods are DEPRECATED in Redis/Valkey 6.2.0+
+    // and are NOT supported in this Jedis compatibility layer.
+    //
+    // Use the GEOSEARCH and GEOSEARCHSTORE commands instead, which provide equivalent functionality
+    // with better performance and cleaner semantics.
+    //
+    // DEPRECATED METHODS NOT IMPLEMENTED:
+    //
+    // georadius methods (10 variants):
+    // - georadius(String key, double longitude, double latitude, double radius, GeoUnit unit)
+    // - georadius(byte[] key, double longitude, double latitude, double radius, GeoUnit unit)
+    // - georadiusReadonly(String key, double longitude, double latitude, double radius, GeoUnit unit)
+    // - georadiusReadonly(byte[] key, double longitude, double latitude, double radius, GeoUnit unit)
+    // - georadius(String key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadius(byte[] key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusReadonly(String key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusReadonly(byte[] key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusStore(String key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param, GeoRadiusStoreParam storeParam)
+    // - georadiusStore(byte[] key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param, GeoRadiusStoreParam storeParam)
+    //
+    // georadiusByMember methods (10 variants):
+    // - georadiusByMember(String key, String member, double radius, GeoUnit unit)
+    // - georadiusByMember(byte[] key, byte[] member, double radius, GeoUnit unit)
+    // - georadiusByMemberReadonly(String key, String member, double radius, GeoUnit unit)
+    // - georadiusByMemberReadonly(byte[] key, byte[] member, double radius, GeoUnit unit)
+    // - georadiusByMember(String key, String member, double radius, GeoUnit unit, GeoRadiusParam
+    // param)
+    // - georadiusByMember(byte[] key, byte[] member, double radius, GeoUnit unit, GeoRadiusParam
+    // param)
+    // - georadiusByMemberReadonly(String key, String member, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusByMemberReadonly(byte[] key, byte[] member, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusByMemberStore(String key, String member, double radius, GeoUnit unit, GeoRadiusParam
+    // param, GeoRadiusStoreParam storeParam)
+    // - georadiusByMemberStore(byte[] key, byte[] member, double radius, GeoUnit unit, GeoRadiusParam
+    // param, GeoRadiusStoreParam storeParam)
+    //
+    // Migration guide:
+    // - Replace georadius(..., longitude, latitude, radius, unit) with geosearch(...,
+    // GeoCoordinate(longitude, latitude), radius, unit)
+    // - Replace georadiusByMember(..., member, radius, unit) with geosearch(..., member, radius,
+    // unit)
+    // - Replace georadiusStore with geosearchStore using equivalent parameters
+    // - Replace georadiusByMemberStore with geosearchStore using member as origin
+    //
+    // ==================== END DEPRECATED GEO COMMANDS ====================
+
+    /** Convert Jedis GeoUnit to GLIDE GeoUnit. */
+    private static GeoUnit convertToGlideGeoUnit(redis.clients.jedis.args.GeoUnit unit) {
         if (unit == null) {
-            return glide.api.models.commands.geospatial.GeoUnit.METERS;
+            return GeoUnit.METERS;
         }
         switch (unit) {
             case M:
-                return glide.api.models.commands.geospatial.GeoUnit.METERS;
+                return GeoUnit.METERS;
             case KM:
-                return glide.api.models.commands.geospatial.GeoUnit.KILOMETERS;
+                return GeoUnit.KILOMETERS;
             case MI:
-                return glide.api.models.commands.geospatial.GeoUnit.MILES;
+                return GeoUnit.MILES;
             case FT:
-                return glide.api.models.commands.geospatial.GeoUnit.FEET;
+                return GeoUnit.FEET;
             default:
-                return glide.api.models.commands.geospatial.GeoUnit.METERS;
+                return GeoUnit.METERS;
         }
     }
 
