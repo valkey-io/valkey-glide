@@ -433,11 +433,14 @@ impl Client {
 
     /// Handles SELECT command processing after successful execution.
     /// Updates database state for standalone, cluster, and lazy clients.
+    ///
+    /// Note: `db_namespace` is updated on `&mut self`, but `Client` is cloned
+    /// into each request handler. If concurrent tasks issue SELECT, a cloned
+    /// Client may report a stale `db_namespace` in OTel spans. This is an
+    /// acceptable trade-off since concurrent SELECTs are rare in practice.
     async fn handle_select_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
-        // Extract database ID from the SELECT command
         let database_id = self.extract_database_id_from_select(cmd)?;
 
-        // Update database state for all client types
         self.update_stored_database_id(database_id).await?;
         // Keep OTel db.namespace in sync
         self.db_namespace = database_id.to_string();
