@@ -329,20 +329,20 @@ def next_free_port(
     min_port: int = 6379, max_port: int = 55535, timeout: int = 60
 ) -> int:
     tic = time.perf_counter()
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    sock4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock6 = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    sock6.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+
     timeout_start = time.time()
     while time.time() < timeout_start + timeout:
         try:
             port = random.randint(min_port, max_port)
 
-            # Check IPv4
-            sock4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # Check IPv4 and IPv6 ports.
             sock4.bind((DEFAULT_HOST_IPV4, port))
             sock4.close()
 
-            # Check IPv6
-            sock6 = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-            sock6.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
             sock6.bind((DEFAULT_HOST_IPV6, port))
             sock6.close()
 
@@ -354,6 +354,7 @@ def next_free_port(
             # Sleep so we won't spam the system with sockets
             time.sleep(random.randint(0, 9) / 10000 + 0.01)
             continue
+
     logging.error("Timeout Expired: No free port found")
     raise Exception("Timeout Expired: No free port found")
 
