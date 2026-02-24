@@ -106,8 +106,8 @@ public class DnsTest {
 
         // Build client configuration and client.
         if (clusterMode) {
-            GlideClusterClientConfigurationBuilder<?, ?> builder = GlideClusterClientConfiguration.builder()
-                    .address(address).useTLS(useTls);
+            GlideClusterClientConfigurationBuilder<?, ?> builder =
+                    GlideClusterClientConfiguration.builder().address(address).useTLS(useTls);
             if (useTls) {
                 TlsAdvancedConfiguration tlsConfig =
                         TlsAdvancedConfiguration.builder().rootCertificates(getCaCertificate()).build();
@@ -118,8 +118,8 @@ public class DnsTest {
             }
             return GlideClusterClient.createClient(builder.build()).get();
         } else {
-            GlideClientConfigurationBuilder<?, ?> builder = GlideClientConfiguration.builder().address(address)
-                    .useTLS(useTls);
+            GlideClientConfigurationBuilder<?, ?> builder =
+                    GlideClientConfiguration.builder().address(address).useTLS(useTls);
             if (useTls) {
                 TlsAdvancedConfiguration tlsConfig =
                         TlsAdvancedConfiguration.builder().rootCertificates(getCaCertificate()).build();
