@@ -6,11 +6,11 @@ mod test_constants;
 mod utilities;
 
 use glide_core::*;
+use integer_encoding::VarInt;
 use rsevents::{Awaitable, EventState, ManualResetEvent};
 use std::io::prelude::*;
 use std::sync::{Arc, Mutex};
 use std::{os::unix::net::UnixStream, thread};
-use integer_encoding::VarInt;
 use utilities::cluster::*;
 use utilities::*;
 

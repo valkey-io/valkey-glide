@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #![allow(dead_code)]
-use super::test_constants::{HOSTNAME_TLS, HOST_IPV4, HOST_IPV6};
+use super::test_constants::{HOST_IPV4, HOST_IPV6, HOSTNAME_TLS};
 use futures::Future;
 use glide_core::{
     client::{Client, StandaloneClient},
