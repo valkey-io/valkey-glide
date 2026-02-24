@@ -674,29 +674,21 @@ public class JedisMethodsTest {
         // Test zscan with ScanParams
         Method zscanWithParams =
                 jedisClass.getMethod(
-                        "zscan",
-                        String.class,
-                        String.class,
-                        redis.clients.jedis.params.ScanParams.class);
+                        "zscan", String.class, String.class, redis.clients.jedis.params.ScanParams.class);
         assertEquals(redis.clients.jedis.resps.ScanResult.class, zscanWithParams.getReturnType());
 
         Method zscanWithParamsBinary =
                 jedisClass.getMethod(
-                        "zscan",
-                        byte[].class,
-                        byte[].class,
-                        redis.clients.jedis.params.ScanParams.class);
+                        "zscan", byte[].class, byte[].class, redis.clients.jedis.params.ScanParams.class);
         assertEquals(redis.clients.jedis.resps.ScanResult.class, zscanWithParamsBinary.getReturnType());
 
         // Test zrange with ZRangeParams
         Method zrangeWithParams =
-                jedisClass.getMethod(
-                        "zrange", String.class, redis.clients.jedis.params.ZRangeParams.class);
+                jedisClass.getMethod("zrange", String.class, redis.clients.jedis.params.ZRangeParams.class);
         assertEquals(java.util.List.class, zrangeWithParams.getReturnType());
 
         Method zrangeWithParamsBinary =
-                jedisClass.getMethod(
-                        "zrange", byte[].class, redis.clients.jedis.params.ZRangeParams.class);
+                jedisClass.getMethod("zrange", byte[].class, redis.clients.jedis.params.ZRangeParams.class);
         assertEquals(java.util.List.class, zrangeWithParamsBinary.getReturnType());
 
         // Test zrangestore with ZRangeParams
