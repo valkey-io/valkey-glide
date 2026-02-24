@@ -4295,7 +4295,12 @@ public final class Jedis implements Closeable {
         }
 
         try {
-            return glideClient.customCommand(glideArgs).get();
+            Object result = glideClient.customCommand(glideArgs).get();
+            // Convert GlideString to String for Jedis compatibility
+            if (result instanceof GlideString) {
+                return ((GlideString) result).toString();
+            }
+            return result;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("Command " + commandName + " execution failed", e);
         }

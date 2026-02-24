@@ -3779,72 +3779,39 @@ public class JedisTest {
         }
     }
 
+    // NOTE: scriptShow tests are disabled because SCRIPT SHOW is not a standard Redis/Valkey command.
+    // The command returns "unknown subcommand 'SHOW'" on all current server versions.
+    // The implementation exists for future compatibility but cannot be tested until servers support
+    // it.
+
+    @Disabled("SCRIPT SHOW command not supported by current Valkey/Redis versions")
     @Test
     void scriptShow() {
-        // Note: SCRIPT SHOW is not a standard Redis/Valkey command
-        // It may not be supported in all versions
-        // The GLIDE library has scriptShow support, but the command may not exist on the server
+        String script = "return 'Hello from script'";
+        String sha1 = jedis.scriptLoad(script);
+        assertNotNull(sha1);
 
-        try {
-            // First load a script
-            String script = "return 'Hello from script'";
-            String sha1 = jedis.scriptLoad(script);
-            assertNotNull(sha1);
-
-            // Show the script source
-            String source = jedis.scriptShow(sha1);
-            assertEquals(script, source);
-        } catch (JedisException e) {
-            // If the command doesn't exist on this server version, skip the test
-            String message = e.getMessage().toLowerCase();
-            if (message.contains("unknown subcommand") || message.contains("unknown command")) {
-                assumeTrue(
-                        false, "Skipping test: SCRIPT SHOW command not supported on this server version");
-            } else {
-                throw e;
-            }
-        }
+        String source = jedis.scriptShow(sha1);
+        assertEquals(script, source);
     }
 
+    @Disabled("SCRIPT SHOW command not supported by current Valkey/Redis versions")
     @Test
     void scriptShow_nonexistent() {
-        try {
-            String fakeSha1 = "0000000000000000000000000000000000000000";
-            String result = jedis.scriptShow(fakeSha1);
-            assertNull(result, "scriptShow should return null for non-existent scripts");
-        } catch (JedisException e) {
-            // If the command doesn't exist on this server version, skip the test
-            String message = e.getMessage().toLowerCase();
-            if (message.contains("unknown subcommand") || message.contains("unknown command")) {
-                assumeTrue(
-                        false, "Skipping test: SCRIPT SHOW command not supported on this server version");
-            } else {
-                throw e;
-            }
-        }
+        String fakeSha1 = "0000000000000000000000000000000000000000";
+        String result = jedis.scriptShow(fakeSha1);
+        assertNull(result, "scriptShow should return null for non-existent scripts");
     }
 
+    @Disabled("SCRIPT SHOW command not supported by current Valkey/Redis versions")
     @Test
     void scriptShow_binary() {
-        try {
-            // First load a script
-            String script = "return 'Binary script'";
-            String sha1 = jedis.scriptLoad(script);
-            assertNotNull(sha1);
+        String script = "return 'Binary script'";
+        String sha1 = jedis.scriptLoad(script);
+        assertNotNull(sha1);
 
-            // Show the script source (binary)
-            byte[] source = jedis.scriptShow(sha1.getBytes(StandardCharsets.UTF_8));
-            assertArrayEquals(script.getBytes(StandardCharsets.UTF_8), source);
-        } catch (JedisException e) {
-            // If the command doesn't exist on this server version, skip the test
-            String message = e.getMessage().toLowerCase();
-            if (message.contains("unknown subcommand") || message.contains("unknown command")) {
-                assumeTrue(
-                        false, "Skipping test: SCRIPT SHOW command not supported on this server version");
-            } else {
-                throw e;
-            }
-        }
+        byte[] source = jedis.scriptShow(sha1.getBytes(StandardCharsets.UTF_8));
+        assertArrayEquals(script.getBytes(StandardCharsets.UTF_8), source);
     }
 
     @Test
