@@ -356,14 +356,6 @@ jobs:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Build and Publish valkey-glide
-              working-directory: java
-              run: ./gradlew publishToMavenLocal
-
-            - name: Build Test JAR
-              working-directory: java/e2e/dns-failover-test
-              run: ../../gradlew shadowJar
-
             - name: Run Docker Test
               working-directory: java/e2e/dns-failover-test
               run: ./run-test.sh

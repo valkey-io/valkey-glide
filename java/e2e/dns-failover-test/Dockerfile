@@ -1,4 +1,3 @@
-# nosemgrep: dockerfile.security.missing-user.missing-user
 FROM public.ecr.aws/amazoncorretto/amazoncorretto:21
 
 WORKDIR /app
