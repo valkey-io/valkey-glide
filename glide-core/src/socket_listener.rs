@@ -530,25 +530,37 @@ fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Option<GlideSpan> 
     }
 }
 
-/// Returns the number of arguments (after the command name) to include in `db.query.text`.
-/// Negative value means include all arguments. This prevents sensitive values from leaking
-/// into telemetry, following the same approach as `@opentelemetry/instrumentation-ioredis`.
-fn safe_arg_count(cmd_name: &str) -> i32 {
+/// Defines how command arguments are masked in `db.query.text` to prevent
+/// sensitive values from leaking into telemetry.
+enum MaskingPattern {
+    /// Show all arguments. Used for read commands (GET, DEL, KEYS, etc.).
+    ShowAll,
+    /// Mask all arguments. Used for commands with entirely sensitive args (AUTH, ECHO).
+    MaskAll,
+    /// Show the first N arguments, mask the rest. Used for commands where the key
+    /// (and optionally field) is safe but the value is sensitive (SET=1, HSET=2, etc.).
+    ShowFirst(usize),
+    /// Interleaved key-value pairs: show even-indexed args (keys), mask odd-indexed
+    /// args (values). Used for MSET and MSETNX.
+    InterleavedKeyValue,
+}
+
+/// Returns the masking pattern for a given command.
+fn masking_pattern(cmd_name: &str) -> MaskingPattern {
     match cmd_name.to_ascii_uppercase().as_str() {
-        // Commands where no arguments should be shown
-        "ECHO" | "AUTH" => 0,
-        // Commands where only the key should be shown (value is sensitive)
-        "APPEND" | "GETSET" | "LPUSH" | "LPUSHX" | "MSET" | "MSETNX" | "PFADD" | "PUBLISH"
-        | "RPUSH" | "RPUSHX" | "SADD" | "SET" | "SETEX" | "SETNX" | "PSETEX" | "SPUBLISH"
-        | "XADD" | "ZADD" | "SINTERCARD" => 1,
-        // Commands where key + field should be shown (value is sensitive)
-        "HSET" | "HMSET" | "HSETNX" | "LSET" | "LINSERT" | "LPOS" => 2,
-        // All other commands: show all arguments (keys, patterns, etc.)
-        _ => -1,
+        "ECHO" | "AUTH" => MaskingPattern::MaskAll,
+        "APPEND" | "GETSET" | "LPUSH" | "LPUSHX" | "PFADD" | "PUBLISH" | "RPUSH" | "RPUSHX"
+        | "SADD" | "SET" | "SETEX" | "SETNX" | "PSETEX" | "SPUBLISH" | "XADD" | "ZADD" => {
+            MaskingPattern::ShowFirst(1)
+        }
+        "HSET" | "HMSET" | "HSETNX" | "LSET" | "LINSERT" | "LPOS" => MaskingPattern::ShowFirst(2),
+        "MSET" | "MSETNX" => MaskingPattern::InterleavedKeyValue,
+        _ => MaskingPattern::ShowAll,
     }
 }
 
-/// Serialize command arguments for `db.query.text`, hiding sensitive values.
+/// Serialize command arguments for `db.query.text`, hiding sensitive values
+/// according to the command's [`MaskingPattern`].
 fn serialize_query_text(cmd: &Cmd) -> Option<String> {
     let mut args = cmd.args_iter().filter_map(|arg| match arg {
         redis::Arg::Simple(b) => Some(String::from_utf8_lossy(b).into_owned()),
@@ -562,18 +574,28 @@ fn serialize_query_text(cmd: &Cmd) -> Option<String> {
         return Some(cmd_name);
     }
 
-    let safe_count = safe_arg_count(&cmd_name);
-    let n_to_show = if safe_count < 0 {
-        remaining.len()
-    } else {
-        (safe_count as usize).min(remaining.len())
-    };
-
+    let pattern = masking_pattern(&cmd_name);
     let mut parts = vec![cmd_name];
-    parts.extend_from_slice(&remaining[..n_to_show]);
 
-    for _ in 0..(remaining.len() - n_to_show) {
-        parts.push("?".to_string());
+    match pattern {
+        MaskingPattern::ShowAll => parts.extend(remaining),
+        MaskingPattern::MaskAll => {
+            parts.extend(remaining.iter().map(|_| "?".to_string()));
+        }
+        MaskingPattern::ShowFirst(n) => {
+            let n = n.min(remaining.len());
+            parts.extend_from_slice(&remaining[..n]);
+            parts.extend((0..remaining.len() - n).map(|_| "?".to_string()));
+        }
+        MaskingPattern::InterleavedKeyValue => {
+            for (i, arg) in remaining.iter().enumerate() {
+                if i % 2 == 0 {
+                    parts.push(arg.clone());
+                } else {
+                    parts.push("?".to_string());
+                }
+            }
+        }
     }
 
     Some(parts.join(" "))
@@ -588,9 +610,9 @@ const DB_SYSTEM_NAME: &str = "redis";
 /// Sets connection-level OTel DB attributes on a span (no command-specific attributes).
 fn set_db_connection_attributes(span: &GlideSpan, client: &Client) {
     span.set_attribute("db.system.name", DB_SYSTEM_NAME);
-    span.set_attribute("server.address", client.server_address());
+    span.set_attribute("server.address", client.server_address().to_string());
     span.set_attribute_i64("server.port", client.server_port() as i64);
-    span.set_attribute("db.namespace", client.db_namespace());
+    span.set_attribute("db.namespace", client.db_namespace().to_string());
 }
 
 /// Sets OTel DB semantic convention attributes on a span.
@@ -598,12 +620,12 @@ fn set_db_attributes(span: &GlideSpan, cmd: &Cmd, client: &Client) {
     set_db_connection_attributes(span, client);
 
     if let Some(redis::Arg::Simple(name_bytes)) = cmd.args_iter().next() {
-        let cmd_name = String::from_utf8_lossy(name_bytes);
-        span.set_attribute("db.operation.name", &cmd_name);
+        let cmd_name = String::from_utf8_lossy(name_bytes).into_owned();
+        span.set_attribute("db.operation.name", cmd_name);
     }
 
     if let Some(query_text) = serialize_query_text(cmd) {
-        span.set_attribute("db.query.text", &query_text);
+        span.set_attribute("db.query.text", query_text);
     }
 }
 
@@ -1298,50 +1320,12 @@ where
 mod tests {
     use super::*;
 
-    // --- safe_arg_count ---
-
-    #[test]
-    fn test_safe_arg_count_no_args_commands() {
-        assert_eq!(safe_arg_count("AUTH"), 0);
-        assert_eq!(safe_arg_count("ECHO"), 0);
-    }
-
-    #[test]
-    fn test_safe_arg_count_key_only_commands() {
-        for cmd in [
-            "SET", "APPEND", "GETSET", "LPUSH", "MSET", "PFADD", "PUBLISH", "RPUSH", "SADD",
-            "SETEX", "SETNX", "PSETEX", "XADD", "ZADD",
-        ] {
-            assert_eq!(safe_arg_count(cmd), 1, "expected 1 for {cmd}");
-        }
-    }
-
-    #[test]
-    fn test_safe_arg_count_key_and_field_commands() {
-        for cmd in ["HSET", "HMSET", "HSETNX", "LSET", "LINSERT", "LPOS"] {
-            assert_eq!(safe_arg_count(cmd), 2, "expected 2 for {cmd}");
-        }
-    }
-
-    #[test]
-    fn test_safe_arg_count_show_all_commands() {
-        for cmd in [
-            "GET", "DEL", "HGET", "KEYS", "SCAN", "PING", "INFO", "CONFIG",
-        ] {
-            assert!(safe_arg_count(cmd) < 0, "expected all-args for {cmd}");
-        }
-    }
-
-    #[test]
-    fn test_safe_arg_count_case_insensitive() {
-        assert_eq!(safe_arg_count("set"), 1);
-        assert_eq!(safe_arg_count("Set"), 1);
-        assert_eq!(safe_arg_count("hset"), 2);
-        assert_eq!(safe_arg_count("auth"), 0);
-        assert_eq!(safe_arg_count("get"), -1);
-    }
-
     // --- serialize_query_text ---
+    //
+    // Table-driven tests: each entry is a realistic query an application would
+    // issue, paired with the expected sanitized db.query.text output.
+    // This serves as both the masking_pattern mapping test and the
+    // serialize_query_text integration test.
 
     fn make_cmd(name: &str, args: &[&str]) -> Cmd {
         let mut cmd = redis::cmd(name);
@@ -1351,76 +1335,247 @@ mod tests {
         cmd
     }
 
+    /// (command, args, expected db.query.text)
+    const QUERY_TEXT_CASES: &[(&str, &[&str], &str)] = &[
+        // -- MaskAll: all arguments are sensitive --
+        // AUTH <password>
+        ("AUTH", &["s3cret!"], "AUTH ?"),
+        // AUTH <username> <password>  (ACL-based auth)
+        ("AUTH", &["admin", "s3cret!"], "AUTH ? ?"),
+        // ECHO <message>
+        ("ECHO", &["sensitive-payload"], "ECHO ?"),
+        // -- ShowFirst(1): key visible, value and remaining options masked --
+        // SET key value
+        (
+            "SET",
+            &["user:1001", r#"{"name":"Alice"}"#],
+            "SET user:1001 ?",
+        ),
+        // SET key value EX seconds NX
+        (
+            "SET",
+            &["session:abc", "token123", "EX", "3600", "NX"],
+            "SET session:abc ? ? ? ?",
+        ),
+        // SETNX key value
+        (
+            "SETNX",
+            &["lock:resource", "owner-id"],
+            "SETNX lock:resource ?",
+        ),
+        // SETEX key seconds value
+        (
+            "SETEX",
+            &["cache:page:home", "300", "<html>..."],
+            "SETEX cache:page:home ? ?",
+        ),
+        // PSETEX key milliseconds value
+        (
+            "PSETEX",
+            &["ratelimit:user:42", "1500", "1"],
+            "PSETEX ratelimit:user:42 ? ?",
+        ),
+        // APPEND key value
+        (
+            "APPEND",
+            &["audit:log", "2026-02-24 action=login"],
+            "APPEND audit:log ?",
+        ),
+        // GETSET key value
+        (
+            "GETSET",
+            &["counter:visits", "0"],
+            "GETSET counter:visits ?",
+        ),
+        // LPUSH key element [element ...]
+        (
+            "LPUSH",
+            &["queue:jobs", "job1", "job2", "job3"],
+            "LPUSH queue:jobs ? ? ?",
+        ),
+        // LPUSHX key element
+        (
+            "LPUSHX",
+            &["queue:existing", "new-item"],
+            "LPUSHX queue:existing ?",
+        ),
+        // RPUSH key element
+        (
+            "RPUSH",
+            &["notifications:user:5", r#"{"type":"mention"}"#],
+            "RPUSH notifications:user:5 ?",
+        ),
+        // RPUSHX key element
+        (
+            "RPUSHX",
+            &["pending:emails", "msg-body"],
+            "RPUSHX pending:emails ?",
+        ),
+        // SADD key member [member ...]
+        (
+            "SADD",
+            &["tags:article:99", "rust", "async", "valkey"],
+            "SADD tags:article:99 ? ? ?",
+        ),
+        // PFADD key element [element ...]
+        (
+            "PFADD",
+            &["unique:visitors", "user1", "user2", "user3"],
+            "PFADD unique:visitors ? ? ?",
+        ),
+        // PUBLISH channel message
+        (
+            "PUBLISH",
+            &["chat:room:1", "Hello everyone!"],
+            "PUBLISH chat:room:1 ?",
+        ),
+        // SPUBLISH shardchannel message
+        (
+            "SPUBLISH",
+            &["orders:shard1", r#"{"orderId":42}"#],
+            "SPUBLISH orders:shard1 ?",
+        ),
+        // ZADD key score member [score member ...]
+        (
+            "ZADD",
+            &["leaderboard", "9500", "player:42"],
+            "ZADD leaderboard ? ?",
+        ),
+        // XADD key * field value [field value ...]
+        (
+            "XADD",
+            &["stream:events", "*", "action", "login", "user", "alice"],
+            "XADD stream:events ? ? ? ? ?",
+        ),
+        // -- ShowFirst(2): key + field visible, value masked --
+        // HSET key field value
+        (
+            "HSET",
+            &["user:1001", "email", "alice@example.com"],
+            "HSET user:1001 email ?",
+        ),
+        // HSET key field value field value (multiple field-value pairs)
+        (
+            "HSET",
+            &["user:1001", "email", "a@b.com", "name", "Alice"],
+            "HSET user:1001 email ? ? ?",
+        ),
+        // HMSET key field value [field value ...]
+        (
+            "HMSET",
+            &["product:500", "price", "29.99", "stock", "150"],
+            "HMSET product:500 price ? ? ?",
+        ),
+        // HSETNX key field value
+        (
+            "HSETNX",
+            &["user:1001", "created_at", "2026-01-01"],
+            "HSETNX user:1001 created_at ?",
+        ),
+        // LSET key index value
+        (
+            "LSET",
+            &["queue:jobs", "0", "updated-payload"],
+            "LSET queue:jobs 0 ?",
+        ),
+        // LINSERT key BEFORE|AFTER pivot element
+        (
+            "LINSERT",
+            &["playlist", "BEFORE", "track:5", "track:new"],
+            "LINSERT playlist BEFORE ? ?",
+        ),
+        // LPOS key element [RANK rank] [COUNT count]
+        (
+            "LPOS",
+            &["queue:jobs", "target-item", "RANK", "1", "COUNT", "2"],
+            "LPOS queue:jobs target-item ? ? ? ?",
+        ),
+        // -- InterleavedKeyValue: keys visible, values masked --
+        // MSET key value [key value ...]
+        ("MSET", &["config:retries", "5"], "MSET config:retries ?"),
+        (
+            "MSET",
+            &[
+                "user:1:name",
+                "Alice",
+                "user:2:name",
+                "Bob",
+                "user:3:name",
+                "Carol",
+            ],
+            "MSET user:1:name ? user:2:name ? user:3:name ?",
+        ),
+        // MSETNX key value [key value ...]
+        (
+            "MSETNX",
+            &["lock:a", "owner1", "lock:b", "owner2"],
+            "MSETNX lock:a ? lock:b ?",
+        ),
+        // -- ShowAll: all arguments are non-sensitive --
+        // GET key
+        ("GET", &["session:abc"], "GET session:abc"),
+        // DEL key [key ...]
+        (
+            "DEL",
+            &["temp:1", "temp:2", "temp:3"],
+            "DEL temp:1 temp:2 temp:3",
+        ),
+        // HGET key field
+        ("HGET", &["user:1001", "email"], "HGET user:1001 email"),
+        // KEYS pattern
+        ("KEYS", &["user:*"], "KEYS user:*"),
+        // SINTERCARD numkeys key [key ...] [LIMIT limit]
+        (
+            "SINTERCARD",
+            &["2", "set:a", "set:b", "LIMIT", "10"],
+            "SINTERCARD 2 set:a set:b LIMIT 10",
+        ),
+        // SCAN cursor [MATCH pattern] [COUNT count]
+        (
+            "SCAN",
+            &["0", "MATCH", "user:*", "COUNT", "100"],
+            "SCAN 0 MATCH user:* COUNT 100",
+        ),
+        // -- Edge cases --
+        // Unknown/future command defaults to ShowAll
+        ("CUSTOMCMD", &["arg1", "arg2"], "CUSTOMCMD arg1 arg2"),
+    ];
+
     #[test]
-    fn test_serialize_set_hides_value() {
-        let cmd = make_cmd("SET", &["mykey", "secret-password"]);
-        let result = serialize_query_text(&cmd).unwrap();
-        assert_eq!(result, "SET mykey ?");
-        assert!(!result.contains("secret"));
+    fn test_serialize_query_text() {
+        for (cmd_name, args, expected) in QUERY_TEXT_CASES {
+            let cmd = make_cmd(cmd_name, args);
+            let result = serialize_query_text(&cmd).unwrap();
+            assert_eq!(&result, expected, "query: {cmd_name} {}", args.join(" "));
+        }
     }
 
     #[test]
-    fn test_serialize_set_with_options_hides_value_and_options() {
-        let cmd = make_cmd("SET", &["mykey", "secret", "EX", "60"]);
-        let result = serialize_query_text(&cmd).unwrap();
-        assert_eq!(result, "SET mykey ? ? ?");
-    }
-
-    #[test]
-    fn test_serialize_get_shows_all() {
-        let cmd = make_cmd("GET", &["mykey"]);
-        let result = serialize_query_text(&cmd).unwrap();
-        assert_eq!(result, "GET mykey");
-    }
-
-    #[test]
-    fn test_serialize_hset_shows_key_and_field() {
-        let cmd = make_cmd("HSET", &["myhash", "field1", "secret-value"]);
-        let result = serialize_query_text(&cmd).unwrap();
-        assert_eq!(result, "HSET myhash field1 ?");
-        assert!(!result.contains("secret"));
-    }
-
-    #[test]
-    fn test_serialize_del_shows_all_keys() {
-        let cmd = make_cmd("DEL", &["key1", "key2", "key3"]);
-        let result = serialize_query_text(&cmd).unwrap();
-        assert_eq!(result, "DEL key1 key2 key3");
-    }
-
-    #[test]
-    fn test_serialize_auth_hides_everything() {
-        let cmd = make_cmd("AUTH", &["my-password"]);
-        let result = serialize_query_text(&cmd).unwrap();
-        assert_eq!(result, "AUTH ?");
-        assert!(!result.contains("password"));
-    }
-
-    #[test]
-    fn test_serialize_auth_with_username_hides_everything() {
-        let cmd = make_cmd("AUTH", &["username", "password"]);
-        let result = serialize_query_text(&cmd).unwrap();
-        assert_eq!(result, "AUTH ? ?");
-    }
-
-    #[test]
-    fn test_serialize_echo_hides_everything() {
-        let cmd = make_cmd("ECHO", &["hello world"]);
-        let result = serialize_query_text(&cmd).unwrap();
-        assert_eq!(result, "ECHO ?");
-    }
-
-    #[test]
-    fn test_serialize_command_only_no_args() {
+    fn test_serialize_query_text_no_args() {
         let cmd = redis::cmd("PING");
         let result = serialize_query_text(&cmd).unwrap();
         assert_eq!(result, "PING");
     }
 
     #[test]
-    fn test_serialize_mset_shows_first_key_only() {
-        let cmd = make_cmd("MSET", &["k1", "v1", "k2", "v2"]);
-        let result = serialize_query_text(&cmd).unwrap();
-        assert_eq!(result, "MSET k1 ? ? ?");
+    fn test_masking_pattern_case_insensitive() {
+        assert!(matches!(
+            masking_pattern("set"),
+            MaskingPattern::ShowFirst(1)
+        ));
+        assert!(matches!(
+            masking_pattern("Set"),
+            MaskingPattern::ShowFirst(1)
+        ));
+        assert!(matches!(
+            masking_pattern("hset"),
+            MaskingPattern::ShowFirst(2)
+        ));
+        assert!(matches!(masking_pattern("auth"), MaskingPattern::MaskAll));
+        assert!(matches!(
+            masking_pattern("mset"),
+            MaskingPattern::InterleavedKeyValue
+        ));
+        assert!(matches!(masking_pattern("get"), MaskingPattern::ShowAll));
     }
 }
