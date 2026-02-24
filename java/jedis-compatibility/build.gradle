@@ -31,6 +31,9 @@ dependencies {
     // Apache Commons Pool 2 for connection pooling - part of public API
     api group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
 
+    // Apache Commons Lang 3 for utility classes like Pair
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
+
     // Test dependencies
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '5.2.0'
