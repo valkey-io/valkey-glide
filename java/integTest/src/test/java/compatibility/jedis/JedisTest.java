@@ -32,11 +32,13 @@ import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
 import redis.clients.jedis.params.HGetExParams;
 import redis.clients.jedis.params.HSetExParams;
+import redis.clients.jedis.params.LCSParams;
 import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.AccessControlLogEntry;
 import redis.clients.jedis.resps.AccessControlUser;
+import redis.clients.jedis.resps.LCSMatchResult;
 import redis.clients.jedis.resps.ScanResult;
 import redis.clients.jedis.util.KeyValue;
 
@@ -397,26 +399,27 @@ public class JedisTest {
         jedis.set(key2, "mynewtext");
 
         // Test LCS - returns the longest common subsequence (default: returns string)
-        redis.clients.jedis.params.LCSParams defaultParams =
-                redis.clients.jedis.params.LCSParams.LCSParams();
-        redis.clients.jedis.resps.LCSMatchResult lcsResult = jedis.lcs(key1, key2, defaultParams);
+        LCSParams defaultParams = LCSParams.LCSParams();
+        LCSMatchResult lcsResult = jedis.lcs(key1, key2, defaultParams);
         assertNotNull(lcsResult, "LCS should return a result");
         assertNotNull(lcsResult.getMatchString(), "LCS should return a match string");
         assertTrue(lcsResult.getMatchString().contains("my"), "LCS should contain common subsequence");
 
         // Test LCS with LEN option - returns only length
-        redis.clients.jedis.params.LCSParams lenParams =
-                redis.clients.jedis.params.LCSParams.LCSParams().len();
-        redis.clients.jedis.resps.LCSMatchResult lcsLenResult = jedis.lcs(key1, key2, lenParams);
+        LCSParams lenParams = LCSParams.LCSParams().len();
+        LCSMatchResult lcsLenResult = jedis.lcs(key1, key2, lenParams);
         assertNotNull(lcsLenResult, "LCS LEN should return a result");
         assertTrue(lcsLenResult.getLen() > 0, "LCS length should be positive");
 
-        // Test LCS with IDX option - returns match indices
-        redis.clients.jedis.params.LCSParams idxParams =
-                redis.clients.jedis.params.LCSParams.LCSParams().idx();
-        redis.clients.jedis.resps.LCSMatchResult lcsIdxResult = jedis.lcs(key1, key2, idxParams);
+        // Test LCS with IDX option - returns match indices with positions
+        LCSParams idxParams = LCSParams.LCSParams().idx();
+        LCSMatchResult lcsIdxResult = jedis.lcs(key1, key2, idxParams);
         assertNotNull(lcsIdxResult, "LCS IDX should return a result");
         assertTrue(lcsIdxResult.getLen() > 0, "LCS IDX should contain length");
+        assertNotNull(lcsIdxResult.getMatches(), "LCS IDX should contain matches");
+        assertFalse(
+                lcsIdxResult.getMatches().isEmpty(),
+                "LCS IDX matches should not be empty for 'ohmytext' vs 'mynewtext'");
 
         // Test binary version
         byte[] bkey1 = ("bkey1:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
@@ -424,11 +427,11 @@ public class JedisTest {
         jedis.set(bkey1, "ohmytext".getBytes(StandardCharsets.UTF_8));
         jedis.set(bkey2, "mynewtext".getBytes(StandardCharsets.UTF_8));
 
-        redis.clients.jedis.resps.LCSMatchResult blcsResult = jedis.lcs(bkey1, bkey2, defaultParams);
+        LCSMatchResult blcsResult = jedis.lcs(bkey1, bkey2, defaultParams);
         assertNotNull(blcsResult, "LCS binary should return a result");
         assertNotNull(blcsResult.getMatchString(), "LCS binary should return match string");
 
-        redis.clients.jedis.resps.LCSMatchResult blcsLenResult = jedis.lcs(bkey1, bkey2, lenParams);
+        LCSMatchResult blcsLenResult = jedis.lcs(bkey1, bkey2, lenParams);
         assertTrue(blcsLenResult.getLen() > 0, "LCS binary length should be positive");
     }
 

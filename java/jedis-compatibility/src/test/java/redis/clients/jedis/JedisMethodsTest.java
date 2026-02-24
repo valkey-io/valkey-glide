@@ -7,8 +7,10 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import redis.clients.jedis.params.LCSParams;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
+import redis.clients.jedis.resps.LCSMatchResult;
 
 /**
  * Unit tests for Jedis method signatures and API contracts. Tests that required methods exist with
@@ -388,14 +390,10 @@ public class JedisMethodsTest {
         assertEquals(byte[].class, getrangeBinary.getReturnType());
 
         // Test lcs methods (takes LCSParams and returns LCSMatchResult)
-        Method lcsString =
-                jedisClass.getMethod(
-                        "lcs", String.class, String.class, redis.clients.jedis.params.LCSParams.class);
-        assertEquals(redis.clients.jedis.resps.LCSMatchResult.class, lcsString.getReturnType());
+        Method lcsString = jedisClass.getMethod("lcs", String.class, String.class, LCSParams.class);
+        assertEquals(LCSMatchResult.class, lcsString.getReturnType());
 
-        Method lcsBinary =
-                jedisClass.getMethod(
-                        "lcs", byte[].class, byte[].class, redis.clients.jedis.params.LCSParams.class);
-        assertEquals(redis.clients.jedis.resps.LCSMatchResult.class, lcsBinary.getReturnType());
+        Method lcsBinary = jedisClass.getMethod("lcs", byte[].class, byte[].class, LCSParams.class);
+        assertEquals(LCSMatchResult.class, lcsBinary.getReturnType());
     }
 }

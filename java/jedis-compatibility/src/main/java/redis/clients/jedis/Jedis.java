@@ -1931,13 +1931,14 @@ public final class Jedis implements Closeable {
                         Long len = glideClient.lcsLen(keyA, keyB).get();
                         return new LCSMatchResult(null, null, len);
                     } else if (params.isIdx()) {
-                        // IDX option: return match indices
-                        Map<String, Object> result = glideClient.lcsIdx(keyA, keyB).get();
-                        // Convert GLIDE result to LCSMatchResult format
-                        // Note: This is a simplified conversion - full implementation would need
-                        // to properly parse the GLIDE result map structure
-                        Long len = result.containsKey("len") ? ((Number) result.get("len")).longValue() : 0L;
-                        return new LCSMatchResult(null, null, len);
+                        // IDX option: return match indices with positions
+                        Map<String, Object> result;
+                        try {
+                            result = callLcsIdxWithParams(keyA, keyB, params);
+                        } catch (Exception e) {
+                            throw new JedisException("LCS IDX execution failed", e);
+                        }
+                        return convertLcsIdxResultToMatchResult(result);
                     } else {
                         // Default: return the LCS string
                         String matchString = glideClient.lcs(keyA, keyB).get();
@@ -1969,10 +1970,14 @@ public final class Jedis implements Closeable {
                         Long len = glideClient.lcsLen(keyAGs, keyBGs).get();
                         return new LCSMatchResult(null, null, len);
                     } else if (params.isIdx()) {
-                        // IDX option: return match indices
-                        Map<String, Object> result = glideClient.lcsIdx(keyAGs, keyBGs).get();
-                        Long len = result.containsKey("len") ? ((Number) result.get("len")).longValue() : 0L;
-                        return new LCSMatchResult(null, null, len);
+                        // IDX option: return match indices with positions
+                        Map<String, Object> result;
+                        try {
+                            result = callLcsIdxWithParams(keyAGs, keyBGs, params);
+                        } catch (Exception e) {
+                            throw new JedisException("LCS IDX execution failed", e);
+                        }
+                        return convertLcsIdxResultToMatchResult(result);
                     } else {
                         // Default: return the LCS string
                         GlideString matchString = glideClient.lcs(keyAGs, keyBGs).get();
@@ -1980,6 +1985,74 @@ public final class Jedis implements Closeable {
                         return new LCSMatchResult(matchStr, null, matchStr != null ? matchStr.length() : 0);
                     }
                 });
+    }
+
+    /** Calls the appropriate GLIDE lcsIdx method based on LCSParams options. */
+    private Map<String, Object> callLcsIdxWithParams(String keyA, String keyB, LCSParams params)
+            throws Exception {
+        Long minMatchLen = params.getMinMatchLen();
+        if (params.isWithMatchLen()) {
+            return minMatchLen != null
+                    ? glideClient.lcsIdxWithMatchLen(keyA, keyB, minMatchLen).get()
+                    : glideClient.lcsIdxWithMatchLen(keyA, keyB).get();
+        }
+        return minMatchLen != null
+                ? glideClient.lcsIdx(keyA, keyB, minMatchLen).get()
+                : glideClient.lcsIdx(keyA, keyB).get();
+    }
+
+    /** Calls the appropriate GLIDE lcsIdx method based on LCSParams options (binary version). */
+    private Map<String, Object> callLcsIdxWithParams(
+            GlideString keyA, GlideString keyB, LCSParams params) throws Exception {
+        Long minMatchLen = params.getMinMatchLen();
+        if (params.isWithMatchLen()) {
+            return minMatchLen != null
+                    ? glideClient.lcsIdxWithMatchLen(keyA, keyB, minMatchLen).get()
+                    : glideClient.lcsIdxWithMatchLen(keyA, keyB).get();
+        }
+        return minMatchLen != null
+                ? glideClient.lcsIdx(keyA, keyB, minMatchLen).get()
+                : glideClient.lcsIdx(keyA, keyB).get();
+    }
+
+    /**
+     * Converts GLIDE lcsIdx map result to LCSMatchResult with matches populated.
+     *
+     * <p>GLIDE returns matches as Long[][][] where each match is {{startA, endA}, {startB, endB}}.
+     * With WITHMATCHLEN, each match may be {{startA, endA}, {startB, endB}, matchLen}.
+     */
+    private LCSMatchResult convertLcsIdxResultToMatchResult(Map<String, Object> result) {
+        long len = result.containsKey("len") ? ((Number) result.get("len")).longValue() : 0L;
+        Object matchesObj = result.get("matches");
+        List<LCSMatchResult.MatchedPosition> matches = new ArrayList<>();
+
+        if (matchesObj instanceof Object[]) {
+            Object[] matchesArr = (Object[]) matchesObj;
+            for (Object matchObj : matchesArr) {
+                if (matchObj instanceof Object[]) {
+                    Object[] match = (Object[]) matchObj;
+                    if (match.length >= 2 && match[0] instanceof Object[] && match[1] instanceof Object[]) {
+                        Object[] posA = (Object[]) match[0];
+                        Object[] posB = (Object[]) match[1];
+                        if (posA.length >= 2 && posB.length >= 2) {
+                            long startA = ((Number) posA[0]).longValue();
+                            long endA = ((Number) posA[1]).longValue();
+                            long startB = ((Number) posB[0]).longValue();
+                            long endB = ((Number) posB[1]).longValue();
+                            long matchLen =
+                                    match.length >= 3 && match[2] instanceof Number
+                                            ? ((Number) match[2]).longValue()
+                                            : (endA - startA + 1);
+                            LCSMatchResult.Position a = new LCSMatchResult.Position(startA, endA);
+                            LCSMatchResult.Position b = new LCSMatchResult.Position(startB, endB);
+                            matches.add(new LCSMatchResult.MatchedPosition(a, b, matchLen));
+                        }
+                    }
+                }
+            }
+        }
+
+        return new LCSMatchResult(null, matches, len);
     }
 
     /**

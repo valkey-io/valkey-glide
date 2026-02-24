@@ -5,7 +5,7 @@ package redis.clients.jedis.params;
  * LCSParams compatibility class for Valkey GLIDE wrapper. Represents parameters for the LCS
  * (Longest Common Subsequence) command.
  */
-public class LCSParams {
+public class LCSParams implements IParams {
 
     private boolean len = false;
     private boolean idx = false;
