@@ -890,3 +890,298 @@ func TestClusterConfig_TcpNoDelay(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Nil(t, request.TcpNodelay)
 }
+
+// ============================================================================
+// Compression Configuration Tests
+// ============================================================================
+
+func TestCompressionConfiguration_Default(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration()
+
+	assert.NoError(t, compressionConfig.Validate())
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	assert.True(t, pb.Enabled)
+	assert.Equal(t, protobuf.CompressionBackend_ZSTD, pb.Backend)
+	assert.Nil(t, pb.CompressionLevel)
+	assert.Equal(t, uint32(64), pb.MinCompressionSize)
+}
+
+func TestCompressionConfiguration_WithLZ4Backend(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithBackend(LZ4)
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	assert.True(t, pb.Enabled)
+	assert.Equal(t, protobuf.CompressionBackend_LZ4, pb.Backend)
+}
+
+func TestCompressionConfiguration_WithCompressionLevel(t *testing.T) {
+	var level int32 = 10
+	compressionConfig := NewCompressionConfiguration().
+		WithCompressionLevel(level)
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, pb.CompressionLevel)
+	assert.Equal(t, level, *pb.CompressionLevel)
+}
+
+func TestCompressionConfiguration_WithMinCompressionSize(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithMinCompressionSize(128)
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(128), pb.MinCompressionSize)
+}
+
+func TestCompressionConfiguration_AllFieldsSet(t *testing.T) {
+	var level int32 = 5
+	compressionConfig := NewCompressionConfiguration().
+		WithBackend(ZSTD).
+		WithCompressionLevel(level).
+		WithMinCompressionSize(256)
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	assert.True(t, pb.Enabled)
+	assert.Equal(t, protobuf.CompressionBackend_ZSTD, pb.Backend)
+	assert.NotNil(t, pb.CompressionLevel)
+	assert.Equal(t, level, *pb.CompressionLevel)
+	assert.Equal(t, uint32(256), pb.MinCompressionSize)
+}
+
+func TestCompressionConfiguration_ValidationMinSizeTooSmall(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithMinCompressionSize(MinCompressionSize - 1)
+
+	err := compressionConfig.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), fmt.Sprintf("min_compression_size must be at least %d bytes", MinCompressionSize))
+}
+
+func TestCompressionConfiguration_ValidationMinSizeZero(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithMinCompressionSize(0)
+
+	err := compressionConfig.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), fmt.Sprintf("min_compression_size must be at least %d bytes", MinCompressionSize))
+}
+
+func TestCompressionConfiguration_ValidationMinSizeExact(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithMinCompressionSize(MinCompressionSize)
+
+	err := compressionConfig.Validate()
+	assert.NoError(t, err)
+}
+
+func TestCompressionConfiguration_ToProtobufFailsOnInvalidConfig(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithMinCompressionSize(MinCompressionSize - 1)
+
+	_, err := compressionConfig.toProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), fmt.Sprintf("min_compression_size must be at least %d bytes", MinCompressionSize))
+}
+
+func TestStandaloneConfig_WithCompression(t *testing.T) {
+	var level int32 = 3
+	compressionConfig := NewCompressionConfiguration().
+		WithBackend(ZSTD).
+		WithCompressionLevel(level).
+		WithMinCompressionSize(128)
+
+	clientConfig := NewClientConfiguration().
+		WithCompressionConfiguration(compressionConfig)
+
+	result, err := clientConfig.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, result.CompressionConfig)
+	assert.True(t, result.CompressionConfig.Enabled)
+	assert.Equal(t, protobuf.CompressionBackend_ZSTD, result.CompressionConfig.Backend)
+	assert.NotNil(t, result.CompressionConfig.CompressionLevel)
+	assert.Equal(t, level, *result.CompressionConfig.CompressionLevel)
+	assert.Equal(t, uint32(128), result.CompressionConfig.MinCompressionSize)
+}
+
+func TestClusterConfig_WithCompression(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithBackend(LZ4)
+
+	clientConfig := NewClusterClientConfiguration().
+		WithCompressionConfiguration(compressionConfig)
+
+	result, err := clientConfig.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, result.CompressionConfig)
+	assert.True(t, result.CompressionConfig.Enabled)
+	assert.Equal(t, protobuf.CompressionBackend_LZ4, result.CompressionConfig.Backend)
+	assert.Nil(t, result.CompressionConfig.CompressionLevel)
+	assert.Equal(t, uint32(64), result.CompressionConfig.MinCompressionSize)
+}
+
+func TestStandaloneConfig_WithoutCompression(t *testing.T) {
+	clientConfig := NewClientConfiguration()
+
+	result, err := clientConfig.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, result.CompressionConfig)
+}
+
+func TestClusterConfig_WithoutCompression(t *testing.T) {
+	clientConfig := NewClusterClientConfiguration()
+
+	result, err := clientConfig.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Nil(t, result.CompressionConfig)
+}
+
+func TestStandaloneConfig_WithInvalidCompression(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithMinCompressionSize(MinCompressionSize - 1)
+
+	clientConfig := NewClientConfiguration().
+		WithCompressionConfiguration(compressionConfig)
+
+	_, err := clientConfig.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid compression configuration")
+}
+
+func TestClusterConfig_WithInvalidCompression(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithMinCompressionSize(MinCompressionSize - 1)
+
+	clientConfig := NewClusterClientConfiguration().
+		WithCompressionConfiguration(compressionConfig)
+
+	_, err := clientConfig.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid compression configuration")
+}
+
+func TestCompressionConfiguration_NegativeLevel(t *testing.T) {
+	// Negative levels are valid for some backends (e.g., ZSTD supports negative levels)
+	var level int32 = -5
+	compressionConfig := NewCompressionConfiguration().
+		WithCompressionLevel(level)
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, pb.CompressionLevel)
+	assert.Equal(t, level, *pb.CompressionLevel)
+}
+
+func TestCompressionConfiguration_WithEnabledTrue(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithEnabled(true)
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	assert.True(t, pb.Enabled)
+}
+
+func TestCompressionConfiguration_WithEnabledFalse(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithEnabled(false)
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	assert.False(t, pb.Enabled)
+	// Other fields should still be set
+	assert.Equal(t, protobuf.CompressionBackend_ZSTD, pb.Backend)
+	assert.Equal(t, uint32(64), pb.MinCompressionSize)
+}
+
+func TestCompressionConfiguration_WithEnabledToggle(t *testing.T) {
+	// Start enabled, disable, re-enable
+	compressionConfig := NewCompressionConfiguration().
+		WithEnabled(false).
+		WithEnabled(true)
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	assert.True(t, pb.Enabled)
+}
+
+func TestStandaloneConfig_WithDisabledCompression(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithEnabled(false)
+
+	clientConfig := NewClientConfiguration().
+		WithCompressionConfiguration(compressionConfig)
+
+	result, err := clientConfig.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, result.CompressionConfig)
+	assert.False(t, result.CompressionConfig.Enabled)
+}
+
+func TestClusterConfig_WithDisabledCompression(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithEnabled(false)
+
+	clientConfig := NewClusterClientConfiguration().
+		WithCompressionConfiguration(compressionConfig)
+
+	result, err := clientConfig.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, result.CompressionConfig)
+	assert.False(t, result.CompressionConfig.Enabled)
+}
+
+func TestConfig_AllFieldsSetWithCompression(t *testing.T) {
+	// Test that compression config works alongside all other config fields
+	username := "username"
+	password := "password"
+	timeout := 3 * time.Second
+	clientName := "client name"
+	retries, factor, base := 5, 10, 50
+	databaseId := 1
+	var level int32 = 3
+
+	compressionConfig := NewCompressionConfiguration().
+		WithBackend(ZSTD).
+		WithCompressionLevel(level).
+		WithMinCompressionSize(128)
+
+	config := NewClientConfiguration().
+		WithUseTLS(true).
+		WithReadFrom(PreferReplica).
+		WithCredentials(NewServerCredentials(username, password)).
+		WithRequestTimeout(timeout).
+		WithClientName(clientName).
+		WithReconnectStrategy(NewBackoffStrategy(retries, factor, base)).
+		WithDatabaseId(databaseId).
+		WithCompressionConfiguration(compressionConfig)
+
+	expected := &protobuf.ConnectionRequest{
+		TlsMode:            protobuf.TlsMode_SecureTls,
+		ReadFrom:           protobuf.ReadFrom_PreferReplica,
+		ClusterModeEnabled: false,
+		AuthenticationInfo: &protobuf.AuthenticationInfo{Username: username, Password: password},
+		RequestTimeout:     uint32(timeout.Milliseconds()),
+		ClientName:         clientName,
+		ConnectionRetryStrategy: &protobuf.ConnectionRetryStrategy{
+			NumberOfRetries: uint32(retries),
+			Factor:          uint32(factor),
+			ExponentBase:    uint32(base),
+		},
+		DatabaseId: uint32(databaseId),
+		CompressionConfig: &protobuf.CompressionConfig{
+			Enabled:            true,
+			Backend:            protobuf.CompressionBackend_ZSTD,
+			CompressionLevel:   &level,
+			MinCompressionSize: 128,
+		},
+	}
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+}
