@@ -6,7 +6,7 @@ import base64
 import json
 import os
 import random
-from typing import List, cast
+from typing import List, Union, cast
 
 import pytest
 from glide_shared.commands.batch import Batch, ClusterBatch
@@ -234,6 +234,356 @@ class TestBasicCompression:
 
             # Cleanup
             no_compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_compression_mget_decompression(self, compression_client: TGlideClient):
+        """Test MGET decompression of compressed values."""
+        num_keys = 5
+        keys_and_values = []
+
+        # Get initial statistics
+        initial_stats = compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Set multiple compressed values
+        for i in range(num_keys):
+            key = f"mget_test_{i}_{get_random_string(8)}"
+            value = generate_compressible_text(1024)  # 1KB
+            keys_and_values.append((key, value))
+            compression_client.set(key, value)
+
+        # Verify compression was applied
+        stats = compression_client.get_statistics()
+        assert (
+            stats["total_values_compressed"] > initial_compressed
+        ), "Values should be compressed"
+
+        # Use MGET to retrieve all values
+        keys = [k for k, _ in keys_and_values]
+        retrieved_values = compression_client.mget(cast(List[Union[str, bytes]], keys))
+
+        # Verify all values are properly decompressed
+        for i, (key, expected_value) in enumerate(keys_and_values):
+            retrieved = retrieved_values[i]
+            assert isinstance(
+                retrieved, bytes
+            ), f"MGET should return bytes for key {key}"
+            assert retrieved.decode() == expected_value, (
+                f"MGET should return decompressed value for key {key}. "
+                f"Expected: {expected_value[:50]}..., Got: {retrieved.decode()[:50]}..."
+            )
+
+        # Cleanup
+        compression_client.delete(cast(List[Union[str, bytes]], keys))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_compression_getex_decompression(self, compression_client: TGlideClient):
+        """Test GETEX decompression of compressed values."""
+        key = f"getex_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)  # 1KB
+
+        # Get initial statistics
+        initial_stats = compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Set compressed value
+        compression_client.set(key, value)
+
+        # Verify compression was applied
+        stats = compression_client.get_statistics()
+        assert (
+            stats["total_values_compressed"] > initial_compressed
+        ), "Value should be compressed"
+
+        # Use GETEX to retrieve and set expiration
+        retrieved = compression_client.getex(key, None)  # type: ignore[arg-type]
+
+        # Verify value is properly decompressed
+        assert isinstance(retrieved, bytes), "GETEX should return bytes"
+        assert retrieved.decode() == value, (
+            f"GETEX should return decompressed value. "
+            f"Expected: {value[:50]}..., Got: {retrieved.decode()[:50]}..."
+        )
+
+        # Verify expiration was set
+        ttl = compression_client.ttl(key)
+        assert ttl > 0 and ttl <= 10, "GETEX should set expiration"
+
+        # Cleanup
+        compression_client.delete(cast(List[Union[str, bytes]], [key]))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_compression_getdel_decompression(self, compression_client: TGlideClient):
+        """Test GETDEL decompression of compressed values."""
+        key = f"getdel_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)  # 1KB
+
+        # Get initial statistics
+        initial_stats = compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Set compressed value
+        compression_client.set(key, value)
+
+        # Verify compression was applied
+        stats = compression_client.get_statistics()
+        assert (
+            stats["total_values_compressed"] > initial_compressed
+        ), "Value should be compressed"
+
+        # Use GETDEL to retrieve and delete
+        retrieved = compression_client.getdel(key)
+
+        # Verify value is properly decompressed
+        assert isinstance(retrieved, bytes), "GETDEL should return bytes"
+        assert retrieved.decode() == value, (
+            f"GETDEL should return decompressed value. "
+            f"Expected: {value[:50]}..., Got: {retrieved.decode()[:50]}..."
+        )
+
+        # Verify key was deleted
+        assert compression_client.get(key) is None, "GETDEL should delete the key"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_compression_mset_compression(self, compression_client: TGlideClient):
+        """Test MSET compression of values."""
+        num_keys = 5
+        key_value_map = {}
+
+        # Get initial statistics
+        initial_stats = compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Create key-value pairs
+        for i in range(num_keys):
+            key = f"mset_test_{i}_{get_random_string(8)}"
+            value = generate_compressible_text(1024)  # 1KB
+            key_value_map[key] = value
+
+        # Use MSET to set all values
+        compression_client.mset(
+            cast(dict[Union[str, bytes], Union[str, bytes]], key_value_map)
+        )
+
+        # Verify compression was applied to all values
+        stats = compression_client.get_statistics()
+        compressed_count = stats["total_values_compressed"] - initial_compressed
+        assert (
+            compressed_count >= num_keys
+        ), f"MSET should compress values above threshold. Compressed: {compressed_count}, Expected: >= {num_keys}"
+
+        # Verify all values can be retrieved and decompressed
+        for key, expected_value in key_value_map.items():
+            retrieved = compression_client.get(key)
+            assert retrieved == expected_value.encode(), f"Value mismatch for key {key}"
+
+        # Cleanup
+        keys_to_delete = cast(List[Union[str, bytes]], list(key_value_map.keys()))
+        compression_client.delete(keys_to_delete)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_compression_setex_compression(self, compression_client: TGlideClient):
+        """Test SETEX compression of values."""
+        key = f"setex_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)  # 1KB
+
+        # Get initial statistics
+        initial_stats = compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Use SETEX via custom command
+        result = compression_client.custom_command(
+            cast(List[Union[str, bytes]], ["SETEX", key, "10", value])
+        )
+        assert result == OK
+
+        # Verify compression was applied
+        stats = compression_client.get_statistics()
+        assert (
+            stats["total_values_compressed"] > initial_compressed
+        ), "SETEX should compress values above threshold"
+
+        # Verify value can be retrieved and decompressed
+        retrieved = compression_client.get(key)
+        assert (
+            retrieved == value.encode()
+        ), "SETEX value should be decompressed correctly"
+
+        # Verify expiration was set
+        ttl = compression_client.ttl(key)
+        assert ttl > 0 and ttl <= 10, "SETEX should set expiration"
+
+        # Cleanup
+        compression_client.delete(cast(List[Union[str, bytes]], [key]))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_compression_psetex_compression(self, compression_client: TGlideClient):
+        """Test PSETEX compression of values."""
+        key = f"psetex_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)  # 1KB
+
+        # Get initial statistics
+        initial_stats = compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Use PSETEX via custom command (10000ms = 10s)
+        result = compression_client.custom_command(
+            cast(List[Union[str, bytes]], ["PSETEX", key, "10000", value])
+        )
+        assert result == OK
+
+        # Verify compression was applied
+        stats = compression_client.get_statistics()
+        assert (
+            stats["total_values_compressed"] > initial_compressed
+        ), "PSETEX should compress values above threshold"
+
+        # Verify value can be retrieved and decompressed
+        retrieved = compression_client.get(key)
+        assert (
+            retrieved == value.encode()
+        ), "PSETEX value should be decompressed correctly"
+
+        # Verify expiration was set
+        ttl = compression_client.ttl(key)
+        assert ttl > 0 and ttl <= 10, "PSETEX should set expiration"
+
+        # Cleanup
+        compression_client.delete(cast(List[Union[str, bytes]], [key]))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_compression_setnx_compression(self, compression_client: TGlideClient):
+        """Test SETNX compression of values."""
+        key = f"setnx_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)  # 1KB
+
+        # Get initial statistics
+        initial_stats = compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Use SETNX via custom command
+        result = compression_client.custom_command(
+            cast(List[Union[str, bytes]], ["SETNX", key, value])
+        )
+        assert result == 1  # SETNX returns 1 when key is set
+
+        # Verify compression was applied
+        stats = compression_client.get_statistics()
+        assert (
+            stats["total_values_compressed"] > initial_compressed
+        ), "SETNX should compress values above threshold"
+
+        # Verify value can be retrieved and decompressed
+        retrieved = compression_client.get(key)
+        assert (
+            retrieved == value.encode()
+        ), "SETNX value should be decompressed correctly"
+
+        # Verify SETNX doesn't overwrite existing key
+        result2 = compression_client.custom_command(
+            cast(List[Union[str, bytes]], ["SETNX", key, "different_value"])
+        )
+        assert result2 == 0  # SETNX returns 0 when key already exists
+
+        # Value should remain unchanged
+        retrieved2 = compression_client.get(key)
+        assert retrieved2 == value.encode(), "SETNX should not overwrite existing key"
+
+        # Cleanup
+        compression_client.delete(cast(List[Union[str, bytes]], [key]))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_compression_custom_command_decompression(
+        self, compression_client: TGlideClient
+    ):
+        """Test custom command decompression of compressed values."""
+        key = f"custom_test_{get_random_string(8)}"
+        value = generate_compressible_text(1024)  # 1KB
+
+        # Get initial statistics
+        initial_stats = compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Set compressed value using regular SET
+        compression_client.set(key, value)
+
+        # Verify compression was applied
+        stats = compression_client.get_statistics()
+        assert (
+            stats["total_values_compressed"] > initial_compressed
+        ), "Value should be compressed"
+
+        # Use custom GET command to retrieve value
+        retrieved = compression_client.custom_command(
+            cast(List[Union[str, bytes]], ["GET", key])
+        )
+
+        # Verify value is properly decompressed
+        assert isinstance(retrieved, bytes), "Custom GET should return bytes"
+        assert retrieved.decode() == value, (
+            f"Custom GET should return decompressed value. "
+            f"Expected: {value[:50]}..., Got: {retrieved.decode()[:50]}..."
+        )
+
+        # Cleanup
+        compression_client.delete(cast(List[Union[str, bytes]], [key]))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_compression_custom_mget_decompression(
+        self, compression_client: TGlideClient
+    ):
+        """Test custom MGET command decompression of compressed values."""
+        num_keys = 3
+        keys_and_values = []
+
+        # Get initial statistics
+        initial_stats = compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Set multiple compressed values
+        for i in range(num_keys):
+            key = f"custom_mget_test_{i}_{get_random_string(8)}"
+            value = generate_compressible_text(1024)  # 1KB
+            keys_and_values.append((key, value))
+            compression_client.set(key, value)
+
+        # Verify compression was applied
+        stats = compression_client.get_statistics()
+        assert (
+            stats["total_values_compressed"] > initial_compressed
+        ), "Values should be compressed"
+
+        # Use custom MGET command to retrieve all values
+        keys = [k for k, _ in keys_and_values]
+        retrieved_values = compression_client.custom_command(
+            cast(List[Union[str, bytes]], ["MGET"] + keys)
+        )
+
+        # Verify all values are properly decompressed
+        assert isinstance(retrieved_values, list), "Custom MGET should return a list"
+        assert len(retrieved_values) == num_keys, f"Should return {num_keys} values"
+
+        for i, (key, expected_value) in enumerate(keys_and_values):
+            retrieved = retrieved_values[i]
+            assert isinstance(
+                retrieved, bytes
+            ), f"Custom MGET should return bytes for key {key}"
+            assert retrieved.decode() == expected_value, (
+                f"Custom MGET should return decompressed value for key {key}. "
+                f"Expected: {expected_value[:50]}..., Got: {retrieved.decode()[:50]}..."
+            )
+
+        # Cleanup
+        compression_client.delete(cast(List[Union[str, bytes]], keys))
 
 
 class TestCompressionDataTypes:
@@ -514,6 +864,83 @@ class TestCompressionBatch:
 
         # Cleanup
         compression_client.delete(keys)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_compression_batch_mset_mget(
+        self, compression_client: TGlideClient, cluster_mode: bool
+    ):
+        """Test MSET/MGET compression in batch operations."""
+        num_keys = 50
+        key_prefix = f"batch_mset_mget_{get_random_string(8)}"
+        key_value_map = {}
+
+        # Get initial statistics
+        initial_stats = compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+        initial_original_bytes = initial_stats["total_original_bytes"]
+        initial_bytes_compressed = initial_stats["total_bytes_compressed"]
+
+        # Create key-value pairs
+        for i in range(num_keys):
+            key = f"{key_prefix}_{i}"
+            value = generate_compressible_text(2048)  # 2KB each
+            key_value_map[key] = value
+
+        # Create batch with MSET
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(compression_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+
+        # Add MSET to batch
+        batch.mset(cast(dict[Union[str, bytes], Union[str, bytes]], key_value_map))
+
+        # Execute batch
+        if isinstance(compression_client, GlideClient):
+            results = cast(GlideClient, compression_client).exec(
+                cast(Batch, batch), raise_on_error=True
+            )
+        else:
+            results = cast(GlideClusterClient, compression_client).exec(
+                cast(ClusterBatch, batch), raise_on_error=True
+            )
+        assert results is not None
+        assert results[0] == OK  # MSET should return OK
+
+        # Verify compression was applied to all values
+        stats = compression_client.get_statistics()
+        compressed_count = stats["total_values_compressed"] - initial_compressed
+        assert (
+            compressed_count >= num_keys
+        ), f"MSET should compress all {num_keys} values, got {compressed_count}"
+
+        # Verify invariant: compressed bytes <= original bytes
+        bytes_added_original = stats["total_original_bytes"] - initial_original_bytes
+        bytes_added_compressed = (
+            stats["total_bytes_compressed"] - initial_bytes_compressed
+        )
+        assert (
+            bytes_added_compressed <= bytes_added_original
+        ), f"Batch MSET: Compressed size ({bytes_added_compressed}) should be <= original size ({bytes_added_original})"
+
+        # Use MGET to retrieve all values and verify decompression
+        keys = list(key_value_map.keys())
+        retrieved_values = compression_client.mget(cast(List[Union[str, bytes]], keys))
+
+        # Verify all values are properly decompressed
+        for i, (key, expected_value) in enumerate(key_value_map.items()):
+            retrieved = retrieved_values[i]
+            assert isinstance(
+                retrieved, bytes
+            ), f"MGET should return bytes for key {key}"
+            assert (
+                retrieved.decode() == expected_value
+            ), f"MGET should return decompressed value for key {key}"
+
+        # Cleanup
+        compression_client.delete(cast(List[Union[str, bytes]], keys))
 
 
 class TestCompressionEdgeCases:
