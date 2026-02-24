@@ -579,9 +579,15 @@ fn serialize_query_text(cmd: &Cmd) -> Option<String> {
     Some(parts.join(" "))
 }
 
+// OTel semantic conventions require `db.system.name` = "redis" for Redis-compatible clients.
+// See: https://opentelemetry.io/docs/specs/semconv/db/redis/
+// TODO: Determine this dynamically based on the connected engine (Valkey vs Redis)
+// once the OTel spec defines a "valkey" value.
+const DB_SYSTEM_NAME: &str = "redis";
+
 /// Sets connection-level OTel DB attributes on a span (no command-specific attributes).
 fn set_db_connection_attributes(span: &GlideSpan, client: &Client) {
-    span.set_attribute("db.system.name", "redis");
+    span.set_attribute("db.system.name", DB_SYSTEM_NAME);
     span.set_attribute("server.address", client.server_address());
     span.set_attribute_i64("server.port", client.server_port() as i64);
     span.set_attribute("db.namespace", client.db_namespace());
