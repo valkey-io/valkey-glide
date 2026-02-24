@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #![allow(dead_code)]
+use crate::test_constants::HOSTNAME_TLS;
 use futures::Future;
 use glide_core::{
     client::{Client, StandaloneClient},
@@ -400,9 +401,15 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
         .wait()
         .expect("failed to create CA cert");
 
-    // Build x509v3 extensions file with SAN for 127.0.0.1
-    fs::write(&ext_file, b"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,DNS:localhost")
-        .expect("failed to create x509v3 extensions file");
+    // Build x509v3 extensions file with SAN for 127.0.0.1, ::1, localhost, and test hostname
+    fs::write(
+        &ext_file,
+        format!(
+            "keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,IP:::1,DNS:localhost,DNS:{}",
+            HOSTNAME_TLS
+        ),
+    )
+    .expect("failed to create x509v3 extensions file");
 
     // Read redis key
     let mut key_cmd = process::Command::new("openssl")
