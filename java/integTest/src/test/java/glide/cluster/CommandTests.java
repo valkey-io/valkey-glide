@@ -3352,8 +3352,8 @@ public class CommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     public void script_large_keys_and_or_args(GlideClusterClient clusterClient) {
-        String str1 = new String(new char[1 << 12]).replace("\\0", "0"); // 4k
-        String str2 = new String(new char[1 << 12]).replace("\\0", "0"); // 4k
+        String str1 = new String(new char[1 << 12]).replace('\0', '0'); // 4k
+        String str2 = new String(new char[1 << 12]).replace('\0', '0'); // 4k
 
         try (Script script = new Script("return KEYS[1]", false)) {
             // 1 very big key
@@ -3456,7 +3456,7 @@ public class CommandTests {
         String sha1_2 = script2.getHash();
         String sha1_3 = script3.getHash();
         String nonExistentSha1 =
-                new String(new char[40]).replace("\\0", "0"); // A SHA1 that doesn't exist
+                new String(new char[40]).replace('\0', '0'); // A SHA1 that doesn't exist
 
         // Check existence of scripts
         Boolean[] result =
@@ -3492,7 +3492,7 @@ public class CommandTests {
         GlideString sha1_2 = gs(script2.getHash());
         GlideString sha1_3 = gs(script3.getHash());
         GlideString nonExistentSha1 =
-                gs(new String(new char[40]).replace("\\0", "0")); // A SHA1 that doesn't exist
+                gs(new String(new char[40]).replace('\0', '0')); // A SHA1 that doesn't exist
 
         // Check existence of scripts
         Boolean[] result =
@@ -3602,7 +3602,6 @@ public class CommandTests {
                         .contains("no scripts in execution right now"));
     }
 
-    @Timeout(20)
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
@@ -3611,88 +3610,64 @@ public class CommandTests {
         waitForNotBusy(clusterClient::scriptKill);
 
         String key = UUID.randomUUID().toString();
-        RequestRoutingConfiguration.Route route =
-                new RequestRoutingConfiguration.SlotKeyRoute(key, PRIMARY);
-        String code = createLongRunningLuaScript(6, false);
-        Script script = new Script(code, false);
+        // Route to the same node where the script will run (based on the key)
+        Route route = new SlotKeyRoute(key, PRIMARY);
+        // Create a script that writes data (making it unkillable) and runs for 10 seconds
+        String code = createLongRunningLuaScript(10, false);
 
-        CompletableFuture<Object> promise = new CompletableFuture<>();
-        promise.complete(null);
+        try (Script script = new Script(code, false);
+                GlideClusterClient testClient =
+                        GlideClusterClient.createClient(
+                                        commonClusterClientConfig()
+                                                .requestTimeout(15000)
+                                                .advancedConfiguration(
+                                                        AdvancedGlideClusterClientConfiguration.builder()
+                                                                .connectionTimeout(15000)
+                                                                .build())
+                                                .build())
+                                .get()) {
 
-        try (GlideClusterClient testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
-                        .get()) {
-            try {
-                // run the script without await
-                promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
+            CompletableFuture<Object> scriptFuture =
+                    testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
 
-                Thread.sleep(1000);
-
-                // To prevent timeout issues, ensure script is actually running before trying to kill it
-                int timeout = 4000; // ms
-                while (timeout >= 0) {
-                    try {
-                        clusterClient.ping().get(); // Dummy test command
-                    } catch (ExecutionException err) {
-                        if (err.getCause() instanceof RequestException) {
-
-                            // Check if the script is executing
-                            if (err.getMessage().toLowerCase().contains("valkey is busy running a script")) {
-                                break;
-                            }
-
-                            // Try rerunning the script if 2 seconds have passed and if the exception has not
-                            // changed to "busy running a script"
-                            if (timeout <= 2000
-                                    && err.getMessage().toLowerCase().contains("no scripts in execution right now")) {
-                                promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
-                                Thread.sleep(1000);
-                            }
-                        }
-                    }
-                    timeout -= 500;
-                }
-
-                boolean foundUnkillable = false;
-                timeout = 4000; // ms
-                while (timeout >= 0) {
-                    try {
-                        // valkey kills a script with 5 sec delay
-                        // but this will always throw an error in the test
-                        clusterClient.scriptKill(route).get();
-                    } catch (ExecutionException execException) {
-                        // looking for an error with "unkillable" in the message
-                        // at that point we can break the loop
-                        if (execException.getCause() instanceof RequestException
-                                && execException.getMessage().toLowerCase().contains("unkillable")) {
-                            foundUnkillable = true;
-                            break;
-                        }
-
-                        if (execException.getCause() instanceof RequestException
-                                && execException
-                                        .getMessage()
-                                        .toLowerCase()
-                                        .contains("no scripts in execution right now")) {
-                            promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
-                            Thread.sleep(1000);
-                        }
-                    }
-                    Thread.sleep(500);
-                    timeout -= 500;
-                }
-                assertTrue(foundUnkillable);
-            } finally {
-                // If script wasn't killed, and it didn't time out - it blocks the server and cause rest
-                // test to fail.
-                // wait for the script to complete (we cannot kill it)
+            // Wait for the script to start executing and block the node
+            boolean nodeIsBusy = false;
+            for (int i = 0; i < 20; i++) {
                 try {
-                    promise.get();
+                    clusterClient.ping(route).get();
+                    // ping succeeded — script hasn't blocked the node yet, keep waiting
+                } catch (ExecutionException e) {
+                    if (e.getCause() instanceof RequestException
+                            && e.getMessage().toLowerCase().contains("busy")) {
+                        nodeIsBusy = true;
+                        break; // node is busy running the script
+                    }
+                }
+                Thread.sleep(500);
+            }
+            try {
+                assertTrue(nodeIsBusy, "Expected the node to be busy running the script");
+
+                // The node is busy with a write script — scriptKill should fail with "unkillable"
+                ExecutionException killException =
+                        assertThrows(ExecutionException.class, () -> clusterClient.scriptKill(route).get());
+                assertInstanceOf(RequestException.class, killException.getCause());
+                assertTrue(
+                        killException.getMessage().toLowerCase().contains("unkillable"),
+                        "Expected to find 'unkillable' error for write script");
+            } finally {
+                // Always wait for the unkillable script to finish before closing the client,
+                // even if the assertion above fails. Leaving a running script blocks the
+                // server and causes the next parameterized iteration to get connection errors.
+                try {
+                    scriptFuture.get();
                 } catch (Exception ignored) {
                 }
-                script.close();
             }
         }
+        // Confirm the cluster is healthy before the next iteration (RESP2 -> RESP3).
+        waitForNotBusy(clusterClient::scriptKill);
+        clusterClient.ping().get();
     }
 
     /**
