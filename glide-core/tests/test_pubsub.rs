@@ -3,6 +3,7 @@
 // These tests require the real synchronizer implementation, not the mock
 #![cfg(not(feature = "mock-pubsub"))]
 
+mod test_constants;
 mod utilities;
 
 use redis::PubSubSubscriptionKind;

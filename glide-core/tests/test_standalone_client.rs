@@ -5,7 +5,7 @@ mod utilities;
 
 #[cfg(test)]
 mod standalone_client_tests {
-    use crate::test_constants::HOST_IPV4;
+    use crate::test_constants::{HOST_IPV4, HOST_IPV6};
     use crate::utilities::mocks::{Mock, ServerMock};
     use std::collections::HashMap;
 
@@ -962,6 +962,58 @@ mod standalone_client_tests {
                     .expect("Failed to create client with custom root cert");
 
             // Verify connection works by sending a command
+            let ping_result = client.send_command(&redis::cmd("PING")).await;
+            assert_eq!(
+                ping_result.unwrap(),
+                Value::SimpleString("PONG".to_string())
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_tls_connection_with_ipv6_succeeds() {
+        block_on_all(async move {
+            let tempdir = tempfile::Builder::new()
+                .prefix("tls_ipv6_test")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+
+            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                redis::ConnectionAddr::TcpTls {
+                    host: HOST_IPV6.to_string(),
+                    port: get_available_port(),
+                    insecure: false,
+                    tls_params: None,
+                },
+                Some(tls_paths),
+                &[],
+                false,
+                |cmd| cmd.spawn().expect("Failed to spawn server"),
+            );
+
+            let server_addr = server.get_client_addr();
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+            let mut connection_request = create_connection_request(
+                &[server_addr],
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            connection_request.root_certs = vec![ca_cert_bytes.into()];
+
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .expect("Failed to create client with IPv6 address");
+
             let ping_result = client.send_command(&redis::cmd("PING")).await;
             assert_eq!(
                 ping_result.unwrap(),

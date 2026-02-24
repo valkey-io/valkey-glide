@@ -1,12 +1,15 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #![cfg(feature = "socket-layer")]
+
+mod test_constants;
+mod utilities;
+
 use glide_core::*;
 use rsevents::{Awaitable, EventState, ManualResetEvent};
 use std::io::prelude::*;
 use std::sync::{Arc, Mutex};
 use std::{os::unix::net::UnixStream, thread};
-mod utilities;
 use integer_encoding::VarInt;
 use utilities::cluster::*;
 use utilities::*;
