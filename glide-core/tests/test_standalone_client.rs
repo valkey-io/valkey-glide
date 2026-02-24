@@ -1,9 +1,11 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+mod test_constants;
 mod utilities;
 
 #[cfg(test)]
 mod standalone_client_tests {
+    use crate::test_constants::HOST_IPV4;
     use crate::utilities::mocks::{Mock, ServerMock};
     use std::collections::HashMap;
 
@@ -660,7 +662,7 @@ mod standalone_client_tests {
 
             let server = RedisServer::new_with_addr_tls_modules_and_spawner(
                 redis::ConnectionAddr::TcpTls {
-                    host: "127.0.0.1".to_string(),
+                    host: HOST_IPV4.to_string(),
                     port: get_available_port(),
                     insecure: false,
                     tls_params: None,
@@ -724,7 +726,7 @@ mod standalone_client_tests {
 
             let server = RedisServer::new_with_addr_tls_modules_and_spawner(
                 redis::ConnectionAddr::TcpTls {
-                    host: "127.0.0.1".to_string(),
+                    host: HOST_IPV4.to_string(),
                     port: get_available_port(),
                     insecure: false,
                     tls_params: None,
@@ -775,7 +777,7 @@ mod standalone_client_tests {
     fn test_tls_connection_fails_with_invalid_cert_bytes() {
         block_on_all(async move {
             let server_addr = redis::ConnectionAddr::TcpTls {
-                host: "127.0.0.1".to_string(),
+                host: HOST_IPV4.to_string(),
                 port: get_available_port(),
                 insecure: false,
                 tls_params: None,
@@ -814,7 +816,7 @@ mod standalone_client_tests {
     fn test_tls_connection_fails_with_custom_certs_and_no_tls() {
         block_on_all(async move {
             let server_addr =
-                redis::ConnectionAddr::Tcp("127.0.0.1".to_string(), get_available_port());
+                redis::ConnectionAddr::Tcp(HOST_IPV4.to_string(), get_available_port());
 
             let mut connection_request = create_connection_request(
                 &[server_addr],
@@ -868,7 +870,7 @@ mod standalone_client_tests {
 
             let server = RedisServer::new_with_addr_tls_modules_and_spawner(
                 redis::ConnectionAddr::TcpTls {
-                    host: "127.0.0.1".to_string(),
+                    host: HOST_IPV4.to_string(),
                     port: get_available_port(),
                     insecure: false,
                     tls_params: None,
@@ -924,7 +926,7 @@ mod standalone_client_tests {
 
             let server = RedisServer::new_with_addr_tls_modules_and_spawner(
                 redis::ConnectionAddr::TcpTls {
-                    host: "127.0.0.1".to_string(),
+                    host: HOST_IPV4.to_string(),
                     port: get_available_port(),
                     insecure: false,
                     tls_params: None,

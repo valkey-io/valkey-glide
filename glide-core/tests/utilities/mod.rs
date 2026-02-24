@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #![allow(dead_code)]
-use crate::test_constants::HOSTNAME_TLS;
+use crate::test_constants::{HOSTNAME_TLS, HOST_IPV4, HOST_IPV6};
 use futures::Future;
 use glide_core::{
     client::{Client, StandaloneClient},
@@ -116,13 +116,13 @@ impl RedisServer {
                 let redis_port = get_available_port();
                 if tls {
                     redis::ConnectionAddr::TcpTls {
-                        host: "127.0.0.1".to_string(),
+                        host: HOST_IPV4.to_string(),
                         port: redis_port,
                         insecure: true,
                         tls_params: None,
                     }
                 } else {
-                    redis::ConnectionAddr::Tcp("127.0.0.1".to_string(), redis_port)
+                    redis::ConnectionAddr::Tcp(HOST_IPV4.to_string(), redis_port)
                 }
             }
             ServerType::Unix => {
@@ -401,12 +401,12 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
         .wait()
         .expect("failed to create CA cert");
 
-    // Build x509v3 extensions file with SAN for 127.0.0.1, ::1, localhost, and test hostname
+    // Build x509v3 extensions file with SAN for IPv4, IPv6, localhost, and test hostname
     fs::write(
         &ext_file,
         format!(
-            "keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,IP:::1,DNS:localhost,DNS:{}",
-            HOSTNAME_TLS
+            "keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:{},IP:{},DNS:localhost,DNS:{}",
+            HOST_IPV4, HOST_IPV6, HOSTNAME_TLS
         ),
     )
     .expect("failed to create x509v3 extensions file");
