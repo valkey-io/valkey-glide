@@ -3,10 +3,14 @@ package redis.clients.jedis;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import glide.api.models.commands.ScriptDebugMode;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import redis.clients.jedis.args.FlushMode;
+import redis.clients.jedis.args.FunctionRestorePolicy;
+import redis.clients.jedis.commands.ProtocolCommand;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
 
@@ -196,8 +200,7 @@ public class JedisMethodsTest {
         assertEquals(String.class, scriptFlush.getReturnType());
 
         // Test scriptFlush(FlushMode) exists
-        Method scriptFlushWithMode =
-                jedisClass.getMethod("scriptFlush", redis.clients.jedis.args.FlushMode.class);
+        Method scriptFlushWithMode = jedisClass.getMethod("scriptFlush", FlushMode.class);
         assertEquals(String.class, scriptFlushWithMode.getReturnType());
 
         // Test scriptKill() exists
@@ -245,8 +248,7 @@ public class JedisMethodsTest {
 
         // Test functionRestore(byte[], FunctionRestorePolicy) exists
         Method functionRestoreWithPolicy =
-                jedisClass.getMethod(
-                        "functionRestore", byte[].class, redis.clients.jedis.args.FunctionRestorePolicy.class);
+                jedisClass.getMethod("functionRestore", byte[].class, FunctionRestorePolicy.class);
         assertEquals(String.class, functionRestoreWithPolicy.getReturnType());
 
         // Test functionFlush() exists
@@ -254,8 +256,7 @@ public class JedisMethodsTest {
         assertEquals(String.class, functionFlush.getReturnType());
 
         // Test functionFlush(FlushMode) exists
-        Method functionFlushWithMode =
-                jedisClass.getMethod("functionFlush", redis.clients.jedis.args.FlushMode.class);
+        Method functionFlushWithMode = jedisClass.getMethod("functionFlush", FlushMode.class);
         assertEquals(String.class, functionFlushWithMode.getReturnType());
 
         // Test functionKill() exists
@@ -344,5 +345,110 @@ public class JedisMethodsTest {
         Method aclDryRun =
                 jedisClass.getMethod("aclDryRun", String.class, String.class, String[].class);
         assertEquals(String.class, aclDryRun.getReturnType());
+    }
+
+    @Test
+    public void testEchoMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test echo(String) exists
+        Method echoString = jedisClass.getMethod("echo", String.class);
+        assertEquals(String.class, echoString.getReturnType());
+
+        // Test echo(byte[]) exists
+        Method echoBinary = jedisClass.getMethod("echo", byte[].class);
+        assertEquals(byte[].class, echoBinary.getReturnType());
+    }
+
+    @Test
+    public void testClientIdMethodSignature() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test clientId() exists
+        Method clientId = jedisClass.getMethod("clientId");
+        assertEquals(long.class, clientId.getReturnType());
+    }
+
+    @Test
+    public void testClientGetNameMethodSignature() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test clientGetName() exists
+        Method clientGetName = jedisClass.getMethod("clientGetName");
+        assertEquals(String.class, clientGetName.getReturnType());
+    }
+
+    @Test
+    public void testCustomCommandMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test customCommand(String...) exists
+        Method customCommand = jedisClass.getMethod("customCommand", String[].class);
+        assertEquals(Object.class, customCommand.getReturnType());
+
+        // Test sendCommand(ProtocolCommand) exists (already in Jedis)
+        Method sendCommand = jedisClass.getMethod("sendCommand", ProtocolCommand.class);
+        assertEquals(Object.class, sendCommand.getReturnType());
+
+        // Test sendCommand(ProtocolCommand, byte[]...) exists (already in Jedis)
+        Method sendCommandWithBinaryArgs =
+                jedisClass.getMethod("sendCommand", ProtocolCommand.class, byte[][].class);
+        assertEquals(Object.class, sendCommandWithBinaryArgs.getReturnType());
+    }
+
+    @Test
+    public void testTransactionMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test multi() exists
+        Method multi = jedisClass.getMethod("multi");
+        assertEquals(Jedis.class, multi.getReturnType());
+
+        // Test exec() exists
+        Method exec = jedisClass.getMethod("exec");
+        assertEquals(List.class, exec.getReturnType());
+
+        // Test discard() exists
+        Method discard = jedisClass.getMethod("discard");
+        assertEquals(String.class, discard.getReturnType());
+    }
+
+    @Test
+    public void testWatchMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test watch(String...) exists
+        Method watchString = jedisClass.getMethod("watch", String[].class);
+        assertEquals(String.class, watchString.getReturnType());
+
+        // Test watch(byte[]...) exists
+        Method watchBinary = jedisClass.getMethod("watch", byte[][].class);
+        assertEquals(String.class, watchBinary.getReturnType());
+
+        // Test unwatch() exists
+        Method unwatch = jedisClass.getMethod("unwatch");
+        assertEquals(String.class, unwatch.getReturnType());
+    }
+
+    @Test
+    public void testScriptShowMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test scriptShow(String) exists
+        Method scriptShowString = jedisClass.getMethod("scriptShow", String.class);
+        assertEquals(String.class, scriptShowString.getReturnType());
+
+        // Test scriptShow(byte[]) exists
+        Method scriptShowBinary = jedisClass.getMethod("scriptShow", byte[].class);
+        assertEquals(byte[].class, scriptShowBinary.getReturnType());
+    }
+
+    @Test
+    public void testScriptDebugMethodSignature() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test scriptDebug(ScriptDebugMode) exists
+        Method scriptDebug = jedisClass.getMethod("scriptDebug", ScriptDebugMode.class);
+        assertEquals(String.class, scriptDebug.getReturnType());
     }
 }
