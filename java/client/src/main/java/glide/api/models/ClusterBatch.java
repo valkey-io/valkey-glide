@@ -1,6 +1,13 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static command_request.CommandRequestOuterClass.RequestType.ClusterInfo;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterLinks;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMyId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMyShardId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterNodes;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterShards;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterSlots;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
@@ -136,6 +143,86 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     public <ArgType> ClusterBatch pubsubShardChannels(@NonNull ArgType pattern) {
         checkTypeOrThrow(pattern);
         protobufBatch.addCommands(buildCommand(PubSubShardChannels, newArgsBuilder().add(pattern)));
+        return getThis();
+    }
+
+    /**
+     * Gets information and statistics about the cluster state.
+     *
+     * @see <a href="https://valkey.io/commands/cluster-info/">valkey.io</a> for details.
+     * @return Command response - A <code>String</code> containing cluster state information.
+     */
+    public ClusterBatch clusterInfo() {
+        protobufBatch.addCommands(buildCommand(ClusterInfo));
+        return getThis();
+    }
+
+    /**
+     * Gets a list of all nodes in the cluster and their attributes.
+     *
+     * @see <a href="https://valkey.io/commands/cluster-nodes/">valkey.io</a> for details.
+     * @return Command response - A <code>String</code> containing node information.
+     */
+    public ClusterBatch clusterNodes() {
+        protobufBatch.addCommands(buildCommand(ClusterNodes));
+        return getThis();
+    }
+
+    /**
+     * Returns details about the shards of the cluster.
+     *
+     * @apiNote Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/cluster-shards/">valkey.io</a> for details.
+     * @return Command response - An <code>array</code> of shard information maps.
+     */
+    public ClusterBatch clusterShards() {
+        protobufBatch.addCommands(buildCommand(ClusterShards));
+        return getThis();
+    }
+
+    /**
+     * Returns the mapping of hash slots to nodes.
+     *
+     * @see <a href="https://valkey.io/commands/cluster-slots/">valkey.io</a> for details.
+     * @return Command response - A <code>two-dimensional array</code> of slot mappings.
+     */
+    public ClusterBatch clusterSlots() {
+        protobufBatch.addCommands(buildCommand(ClusterSlots));
+        return getThis();
+    }
+
+    /**
+     * Returns information about the TCP links to and from each node in the cluster.
+     *
+     * @apiNote Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/cluster-links/">valkey.io</a> for details.
+     * @return Command response - An <code>array</code> of link information maps.
+     */
+    public ClusterBatch clusterLinks() {
+        protobufBatch.addCommands(buildCommand(ClusterLinks));
+        return getThis();
+    }
+
+    /**
+     * Returns the unique identifier (ID) of the current node.
+     *
+     * @see <a href="https://valkey.io/commands/cluster-myid/">valkey.io</a> for details.
+     * @return Command response - A <code>String</code> containing the node ID.
+     */
+    public ClusterBatch clusterMyId() {
+        protobufBatch.addCommands(buildCommand(ClusterMyId));
+        return getThis();
+    }
+
+    /**
+     * Returns the shard ID of the current node.
+     *
+     * @apiNote Valkey 7.2 and above.
+     * @see <a href="https://valkey.io/commands/cluster-myshardid/">valkey.io</a> for details.
+     * @return Command response - A <code>String</code> containing the shard ID.
+     */
+    public ClusterBatch clusterMyShardId() {
+        protobufBatch.addCommands(buildCommand(ClusterMyShardId));
         return getThis();
     }
 }
