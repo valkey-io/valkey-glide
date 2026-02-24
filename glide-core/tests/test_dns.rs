@@ -35,17 +35,6 @@ mod dns_tests {
         env::var("VALKEY_GLIDE_DNS_TESTS_ENABLED").is_ok()
     }
 
-    /// Setup TLS infrastructure and return (tempdir, tls_paths, ca_cert_bytes)
-    fn setup_tls() -> (tempfile::TempDir, utilities::TlsFilePaths, Vec<u8>) {
-        let tempdir = tempfile::Builder::new()
-            .prefix("dns_tls_test")
-            .tempdir()
-            .expect("Failed to create temp dir");
-        let tls_paths = build_keys_and_certs_for_tls(&tempdir);
-        let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
-        (tempdir, tls_paths, ca_cert_bytes)
-    }
-
     /// Create connection request with TLS configuration
     fn create_tls_connection_request(
         addr: redis::ConnectionAddr,
@@ -196,7 +185,8 @@ mod dns_tests {
         }
 
         block_on_all(async move {
-            let (_tempdir, tls_paths, ca_cert_bytes) = setup_tls();
+            let tls_paths = build_tls_file_paths();
+            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
 
             let (addr, _server) = if cluster_mode {
                 let cluster = utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
@@ -259,7 +249,8 @@ mod dns_tests {
         }
 
         block_on_all(async move {
-            let (_tempdir, tls_paths, ca_cert_bytes) = setup_tls();
+            let tls_paths = build_tls_file_paths();
+            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
 
             let (addr, _server) = if cluster_mode {
                 let cluster = utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
@@ -301,7 +292,10 @@ mod dns_tests {
                     .is_err()
             };
 
-            assert!(is_err, "Expected connection to fail with hostname not in cert");
+            assert!(
+                is_err,
+                "Expected connection to fail with hostname not in cert"
+            );
             drop(_server); // Keep server alive
         });
     }

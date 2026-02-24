@@ -5,17 +5,16 @@ mod utilities;
 
 #[cfg(test)]
 mod standalone_client_tests {
+    use super::*;
     use crate::test_constants::{HOST_IPV4, HOST_IPV6};
     use crate::utilities::mocks::{Mock, ServerMock};
-    use std::collections::HashMap;
-
-    use super::*;
     use glide_core::{
         client::{Client as GlideClient, ConnectionError, StandaloneClient},
         connection_request::{ProtocolVersion, ReadFrom},
     };
     use redis::{FromRedisValue, Value};
     use rstest::rstest;
+    use std::collections::HashMap;
     use utilities::*;
 
     async fn get_connected_clients(client: &mut StandaloneClient) -> usize {
@@ -653,11 +652,7 @@ mod standalone_client_tests {
     fn test_tls_connection_with_custom_root_cert() {
         block_on_all(async move {
             // Create a dedicated TLS server with custom certificates
-            let tempdir = tempfile::Builder::new()
-                .prefix("tls_test")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let tls_paths = build_tls_file_paths();
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
 
             let server = RedisServer::new_with_addr_tls_modules_and_spawner(
@@ -710,18 +705,10 @@ mod standalone_client_tests {
     fn test_tls_connection_fails_with_wrong_root_cert() {
         block_on_all(async move {
             // Create a TLS server with one set of certificates
-            let tempdir1 = tempfile::Builder::new()
-                .prefix("tls_test_server")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let server_tls_paths = build_keys_and_certs_for_tls(&tempdir1);
+            let server_tls_paths = build_tls_file_paths();
 
             // Create different CA certificate for client
-            let tempdir2 = tempfile::Builder::new()
-                .prefix("tls_test_client")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let client_tls_paths = build_keys_and_certs_for_tls(&tempdir2);
+            let client_tls_paths = build_tls_file_paths();
             let wrong_ca_cert_bytes = client_tls_paths.read_ca_cert_as_bytes();
 
             let server = RedisServer::new_with_addr_tls_modules_and_spawner(
@@ -853,19 +840,11 @@ mod standalone_client_tests {
     fn test_tls_connection_with_multiple_root_certs_first_invalid() {
         block_on_all(async move {
             // Create server with valid certificates
-            let tempdir_server = tempfile::Builder::new()
-                .prefix("tls_test_server")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let server_tls_paths = build_keys_and_certs_for_tls(&tempdir_server);
+            let server_tls_paths = build_tls_file_paths();
             let valid_ca_cert_bytes = server_tls_paths.read_ca_cert_as_bytes();
 
             // Create invalid CA certificate
-            let tempdir_invalid = tempfile::Builder::new()
-                .prefix("tls_test_invalid")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let invalid_tls_paths = build_keys_and_certs_for_tls(&tempdir_invalid);
+            let invalid_tls_paths = build_tls_file_paths();
             let invalid_ca_cert_bytes = invalid_tls_paths.read_ca_cert_as_bytes();
 
             let server = RedisServer::new_with_addr_tls_modules_and_spawner(
@@ -917,12 +896,10 @@ mod standalone_client_tests {
     fn test_tls_connection_with_with_client_tls_auth() {
         block_on_all(async move {
             // Create a dedicated TLS server with custom certificates
-            let tempdir = tempfile::Builder::new()
-                .prefix("tls_test")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let tls_paths = build_tls_file_paths();
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+            let client_cert_bytes = tls_paths.read_redis_cert_as_bytes();
+            let client_key_bytes = tls_paths.read_redis_key_as_bytes();
 
             let server = RedisServer::new_with_addr_tls_modules_and_spawner(
                 redis::ConnectionAddr::TcpTls {
@@ -931,7 +908,7 @@ mod standalone_client_tests {
                     insecure: false,
                     tls_params: None,
                 },
-                Some(tls_paths.clone()),
+                Some(tls_paths),
                 &[],
                 true,
                 |cmd| cmd.spawn().expect("Failed to spawn server"),
@@ -952,8 +929,8 @@ mod standalone_client_tests {
             );
             connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
             connection_request.root_certs = vec![ca_cert_bytes.into()];
-            connection_request.client_cert = tls_paths.read_redis_cert_as_bytes().clone().into();
-            connection_request.client_key = tls_paths.read_redis_key_as_bytes().clone().into();
+            connection_request.client_cert = client_cert_bytes.into();
+            connection_request.client_key = client_key_bytes.into();
 
             // Test that connection works with custom root cert and client TLS auth
             let mut client =
@@ -975,11 +952,7 @@ mod standalone_client_tests {
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_tls_connection_with_ipv6_succeeds() {
         block_on_all(async move {
-            let tempdir = tempfile::Builder::new()
-                .prefix("tls_ipv6_test")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let tls_paths = build_tls_file_paths();
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
 
             let server = RedisServer::new_with_addr_tls_modules_and_spawner(

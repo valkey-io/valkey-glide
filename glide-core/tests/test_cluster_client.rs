@@ -5,20 +5,24 @@ mod utilities;
 
 #[cfg(test)]
 mod cluster_client_tests {
+    use crate::test_constants::HOST_IPV6;
     use std::collections::HashMap;
 
     use super::*;
     use cluster::{LONG_CLUSTER_TEST_TIMEOUT, setup_cluster_with_replicas};
-    use glide_core::client::Client;
-    use glide_core::connection_request::ProtocolVersion as GlideProtocolVersion;
-    use glide_core::connection_request::{
-        self, PubSubChannelsOrPatterns, PubSubSubscriptions, ReadFrom,
+    use glide_core::{
+        client::Client,
+        connection_request::{
+            self, ProtocolVersion as GlideProtocolVersion, PubSubChannelsOrPatterns,
+            PubSubSubscriptions, ReadFrom,
+        },
     };
-    use redis::cluster_routing::{
-        MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
+    use redis::{
+        InfoDict, Value,
+        cluster_routing::{
+            MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
+        },
     };
-    use redis::{InfoDict, Value};
-
     use rstest::rstest;
     use utilities::cluster::{SHORT_CLUSTER_TEST_TIMEOUT, setup_test_basics_internal};
     use utilities::*;
@@ -593,12 +597,7 @@ mod cluster_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_cluster_tls_connection_with_custom_root_cert() {
         block_on_all(async move {
-            // Create a dedicated TLS cluster with custom certificates
-            let tempdir = tempfile::Builder::new()
-                .prefix("tls_cluster_test")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let tls_paths = build_tls_file_paths();
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
 
             let cluster = utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
@@ -637,18 +636,10 @@ mod cluster_client_tests {
     fn test_cluster_tls_connection_fails_with_wrong_root_cert() {
         block_on_all(async move {
             // Create a TLS cluster with one set of certificates
-            let tempdir1 = tempfile::Builder::new()
-                .prefix("tls_cluster_server")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let server_tls_paths = build_keys_and_certs_for_tls(&tempdir1);
+            let server_tls_paths = build_tls_file_paths();
 
             // Create different CA certificate for client
-            let tempdir2 = tempfile::Builder::new()
-                .prefix("tls_cluster_client")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let client_tls_paths = build_keys_and_certs_for_tls(&tempdir2);
+            let client_tls_paths = build_tls_file_paths();
             let wrong_ca_cert_bytes = client_tls_paths.read_ca_cert_as_bytes();
 
             let cluster =
@@ -682,11 +673,7 @@ mod cluster_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_cluster_tls_connection_with_ipv6_succeeds() {
         block_on_all(async move {
-            let tempdir = tempfile::Builder::new()
-                .prefix("tls_ipv6_cluster_test")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let tls_paths = build_tls_file_paths();
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
 
             let cluster = utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
@@ -694,7 +681,7 @@ mod cluster_client_tests {
             let first_addr = cluster.get_server_addresses()[0].clone();
             let ipv6_addr = match first_addr {
                 redis::ConnectionAddr::TcpTls { port, .. } => redis::ConnectionAddr::TcpTls {
-                    host: "::1".to_string(),
+                    host: HOST_IPV6.to_string(),
                     port,
                     insecure: false,
                     tls_params: None,

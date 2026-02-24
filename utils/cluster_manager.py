@@ -513,8 +513,6 @@ def create_servers(
             ca_file,
             "--tls-auth-clients",  # Make it so client doesn't have to send cert
             "no",
-            "--bind",
-            host,
             "--port",
             "0",
         ]
