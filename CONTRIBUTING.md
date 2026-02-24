@@ -31,6 +31,7 @@ Contributions via pull requests are much appreciated. Before sending us a pull r
 1. You are working against the latest source on the *main* branch.
 2. You check existing open, and recently merged, pull requests to make sure someone else hasn't addressed the problem already.
 3. You open an issue to discuss any significant changes before starting the work - we would hate for your time to be wasted.
+   - A significant change can include management commands, which most of the time will require core changes, or any modification that spans multiple components or language bindings.
 
 To send us a pull request, please:
 

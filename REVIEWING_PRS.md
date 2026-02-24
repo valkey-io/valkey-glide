@@ -56,6 +56,12 @@ The repository uses an automated [stale bot](.github/workflows/stale.yml) to man
 
 If your PR is marked stale but you're still working on it, just push an update or leave a comment to reset the timer. If a closed PR is still relevant, you can reopen it or open a new one.
 
+## Maintainer Takeover of PRs
+
+As maintainers, we may sometimes take over a PR to get it across the finish line. This depends on a number of criteria, but most often it happens when the original contributor has become unresponsive or the PR has gone stale for too long.
+
+Before taking over, a maintainer will leave a comment on the PR indicating their intent and allow the original contributor a reasonable period of time to respond. If there is no response, maintainers reserve the right to take over the PR and complete it, or close it if they deem it no longer necessary.
+
 ## Related Resources
 
 - [Submitting PRs](./SUBMITTING_PRS.md) — How to prepare and open a pull request
