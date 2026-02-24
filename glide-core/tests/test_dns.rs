@@ -35,6 +35,50 @@ mod dns_tests {
         env::var("VALKEY_GLIDE_DNS_TESTS_ENABLED").is_ok()
     }
 
+    /// Setup TLS infrastructure and return (tempdir, tls_paths, ca_cert_bytes)
+    fn setup_tls() -> (tempfile::TempDir, utilities::TlsFilePaths, Vec<u8>) {
+        let tempdir = tempfile::Builder::new()
+            .prefix("dns_tls_test")
+            .tempdir()
+            .expect("Failed to create temp dir");
+        let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+        let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+        (tempdir, tls_paths, ca_cert_bytes)
+    }
+
+    /// Create connection request with TLS configuration
+    fn create_tls_connection_request(
+        addr: redis::ConnectionAddr,
+        cluster_mode: bool,
+        ca_cert_bytes: Vec<u8>,
+    ) -> glide_core::connection_request::ConnectionRequest {
+        let mut connection_request = create_connection_request(
+            &[addr],
+            &TestConfiguration {
+                use_tls: true,
+                cluster_mode: if cluster_mode {
+                    ClusterMode::Enabled
+                } else {
+                    ClusterMode::Disabled
+                },
+                shared_server: false,
+                ..Default::default()
+            },
+        );
+        connection_request.tls_mode = TlsMode::SecureTls.into();
+        connection_request.root_certs = vec![ca_cert_bytes.into()];
+        connection_request
+    }
+
+    /// Extract port from ConnectionAddr
+    fn extract_port(addr: &redis::ConnectionAddr) -> u16 {
+        match addr {
+            redis::ConnectionAddr::Tcp(_, p) => *p,
+            redis::ConnectionAddr::TcpTls { port, .. } => *port,
+            _ => panic!("Unexpected address type"),
+        }
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -45,7 +89,7 @@ mod dns_tests {
         }
 
         block_on_all(async move {
-            if cluster_mode {
+            let addr = if cluster_mode {
                 let test_basics =
                     utilities::cluster::setup_test_basics_internal(TestConfiguration {
                         use_tls: false,
@@ -54,32 +98,7 @@ mod dns_tests {
                         ..Default::default()
                     })
                     .await;
-
-                let cluster = test_basics.cluster.as_ref().unwrap();
-                let first_addr = cluster.get_server_addresses()[0].clone();
-                let port = match first_addr {
-                    redis::ConnectionAddr::Tcp(_, p) => p,
-                    _ => panic!("Expected TCP address"),
-                };
-
-                let hostname_addr = redis::ConnectionAddr::Tcp(HOSTNAME_NO_TLS.to_string(), port);
-                let connection_request = create_connection_request(
-                    &[hostname_addr],
-                    &TestConfiguration {
-                        use_tls: false,
-                        cluster_mode: ClusterMode::Enabled,
-                        shared_server: false,
-                        ..Default::default()
-                    },
-                );
-
-                let mut client = Client::new(connection_request.into(), None)
-                    .await
-                    .expect("Failed to connect with valid hostname");
-
-                let mut ping_cmd = redis::cmd("PING");
-                let result = client.send_command(&mut ping_cmd, None).await.unwrap();
-                assert_eq!(result, Value::SimpleString("PONG".to_string()));
+                test_basics.cluster.as_ref().unwrap().get_server_addresses()[0].clone()
             } else {
                 let test_basics = setup_test_basics_internal(&TestConfiguration {
                     use_tls: false,
@@ -87,33 +106,40 @@ mod dns_tests {
                     ..Default::default()
                 })
                 .await;
+                test_basics.server.as_ref().unwrap().get_client_addr()
+            };
 
-                let server = test_basics.server.as_ref().unwrap();
-                let addr = server.get_client_addr();
-                let port = match addr {
-                    redis::ConnectionAddr::Tcp(_, p) => p,
-                    _ => panic!("Expected TCP address"),
-                };
-
-                let hostname_addr = redis::ConnectionAddr::Tcp(HOSTNAME_NO_TLS.to_string(), port);
-                let connection_request = create_connection_request(
-                    &[hostname_addr],
-                    &TestConfiguration {
-                        use_tls: false,
-                        shared_server: false,
-                        ..Default::default()
+            let hostname_addr =
+                redis::ConnectionAddr::Tcp(HOSTNAME_NO_TLS.to_string(), extract_port(&addr));
+            let connection_request = create_connection_request(
+                &[hostname_addr],
+                &TestConfiguration {
+                    use_tls: false,
+                    cluster_mode: if cluster_mode {
+                        ClusterMode::Enabled
+                    } else {
+                        ClusterMode::Disabled
                     },
-                );
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
 
+            let mut ping_cmd = redis::cmd("PING");
+            let result = if cluster_mode {
+                let mut client = Client::new(connection_request.into(), None)
+                    .await
+                    .expect("Failed to connect with valid hostname");
+                client.send_command(&mut ping_cmd, None).await.unwrap()
+            } else {
                 let mut client =
                     StandaloneClient::create_client(connection_request.into(), None, None, None)
                         .await
                         .expect("Failed to connect with valid hostname");
+                client.send_command(&mut ping_cmd).await.unwrap()
+            };
 
-                let mut ping_cmd = redis::cmd("PING");
-                let result = client.send_command(&mut ping_cmd).await.unwrap();
-                assert_eq!(result, Value::SimpleString("PONG".to_string()));
-            }
+            assert_eq!(result, Value::SimpleString("PONG".to_string()));
         });
     }
 
@@ -170,48 +196,12 @@ mod dns_tests {
         }
 
         block_on_all(async move {
-            let tempdir = tempfile::Builder::new()
-                .prefix("dns_tls_test")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
-            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+            let (_tempdir, tls_paths, ca_cert_bytes) = setup_tls();
 
-            if cluster_mode {
+            let (addr, _server) = if cluster_mode {
                 let cluster = utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
-
-                let first_addr = cluster.get_server_addresses()[0].clone();
-                let port = match first_addr {
-                    redis::ConnectionAddr::TcpTls { port, .. } => port,
-                    _ => panic!("Expected TLS address"),
-                };
-
-                let hostname_addr = redis::ConnectionAddr::TcpTls {
-                    host: HOSTNAME_TLS.to_string(),
-                    port,
-                    insecure: false,
-                    tls_params: None,
-                };
-
-                let mut connection_request = create_connection_request(
-                    &[hostname_addr],
-                    &TestConfiguration {
-                        use_tls: true,
-                        cluster_mode: ClusterMode::Enabled,
-                        shared_server: false,
-                        ..Default::default()
-                    },
-                );
-                connection_request.tls_mode = TlsMode::SecureTls.into();
-                connection_request.root_certs = vec![ca_cert_bytes.into()];
-
-                let mut client = Client::new(connection_request.into(), None)
-                    .await
-                    .expect("Failed to connect with hostname in cert");
-
-                let mut ping_cmd = redis::cmd("PING");
-                let result = client.send_command(&mut ping_cmd, None).await.unwrap();
-                assert_eq!(result, Value::SimpleString("PONG".to_string()));
+                let addr = cluster.get_server_addresses()[0].clone();
+                (addr, None)
             } else {
                 let server = RedisServer::new_with_addr_tls_modules_and_spawner(
                     redis::ConnectionAddr::TcpTls {
@@ -225,30 +215,37 @@ mod dns_tests {
                     false,
                     |cmd| cmd.spawn().expect("Failed to spawn server"),
                 );
-
-                let server_addr = server.get_client_addr();
+                let addr = server.get_client_addr();
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                (addr, Some(server))
+            };
 
-                let mut connection_request = create_connection_request(
-                    &[server_addr],
-                    &TestConfiguration {
-                        use_tls: true,
-                        shared_server: false,
-                        ..Default::default()
-                    },
-                );
-                connection_request.tls_mode = TlsMode::SecureTls.into();
-                connection_request.root_certs = vec![ca_cert_bytes.into()];
+            let hostname_addr = redis::ConnectionAddr::TcpTls {
+                host: HOSTNAME_TLS.to_string(),
+                port: extract_port(&addr),
+                insecure: false,
+                tls_params: None,
+            };
 
+            let connection_request =
+                create_tls_connection_request(hostname_addr, cluster_mode, ca_cert_bytes);
+
+            let mut ping_cmd = redis::cmd("PING");
+            let result = if cluster_mode {
+                let mut client = Client::new(connection_request.into(), None)
+                    .await
+                    .expect("Failed to connect with hostname in cert");
+                client.send_command(&mut ping_cmd, None).await.unwrap()
+            } else {
                 let mut client =
                     StandaloneClient::create_client(connection_request.into(), None, None, None)
                         .await
                         .expect("Failed to connect with hostname in cert");
+                client.send_command(&mut ping_cmd).await.unwrap()
+            };
 
-                let mut ping_cmd = redis::cmd("PING");
-                let result = client.send_command(&mut ping_cmd).await.unwrap();
-                assert_eq!(result, Value::SimpleString("PONG".to_string()));
-            }
+            assert_eq!(result, Value::SimpleString("PONG".to_string()));
+            drop(_server); // Keep server alive
         });
     }
 
@@ -262,46 +259,12 @@ mod dns_tests {
         }
 
         block_on_all(async move {
-            let tempdir = tempfile::Builder::new()
-                .prefix("dns_tls_negative_test")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
-            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+            let (_tempdir, tls_paths, ca_cert_bytes) = setup_tls();
 
-            if cluster_mode {
+            let (addr, _server) = if cluster_mode {
                 let cluster = utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
-
-                let first_addr = cluster.get_server_addresses()[0].clone();
-                let port = match first_addr {
-                    redis::ConnectionAddr::TcpTls { port, .. } => port,
-                    _ => panic!("Expected TLS address"),
-                };
-
-                let hostname_addr = redis::ConnectionAddr::TcpTls {
-                    host: HOSTNAME_NO_TLS.to_string(),
-                    port,
-                    insecure: false,
-                    tls_params: None,
-                };
-
-                let mut connection_request = create_connection_request(
-                    &[hostname_addr],
-                    &TestConfiguration {
-                        use_tls: true,
-                        cluster_mode: ClusterMode::Enabled,
-                        shared_server: false,
-                        ..Default::default()
-                    },
-                );
-                connection_request.tls_mode = TlsMode::SecureTls.into();
-                connection_request.root_certs = vec![ca_cert_bytes.into()];
-
-                let result = Client::new(connection_request.into(), None).await;
-                assert!(
-                    result.is_err(),
-                    "Expected connection to fail with hostname not in cert"
-                );
+                let addr = cluster.get_server_addresses()[0].clone();
+                (addr, None)
             } else {
                 let server = RedisServer::new_with_addr_tls_modules_and_spawner(
                     redis::ConnectionAddr::TcpTls {
@@ -315,39 +278,31 @@ mod dns_tests {
                     false,
                     |cmd| cmd.spawn().expect("Failed to spawn server"),
                 );
-
-                let server_addr = server.get_client_addr();
+                let addr = server.get_client_addr();
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                (addr, Some(server))
+            };
 
-                let hostname_addr = match server_addr {
-                    redis::ConnectionAddr::TcpTls { port, .. } => redis::ConnectionAddr::TcpTls {
-                        host: HOSTNAME_NO_TLS.to_string(),
-                        port,
-                        insecure: false,
-                        tls_params: None,
-                    },
-                    _ => panic!("Expected TLS address"),
-                };
+            let hostname_addr = redis::ConnectionAddr::TcpTls {
+                host: HOSTNAME_NO_TLS.to_string(),
+                port: extract_port(&addr),
+                insecure: false,
+                tls_params: None,
+            };
 
-                let mut connection_request = create_connection_request(
-                    &[hostname_addr],
-                    &TestConfiguration {
-                        use_tls: true,
-                        shared_server: false,
-                        ..Default::default()
-                    },
-                );
-                connection_request.tls_mode = TlsMode::SecureTls.into();
-                connection_request.root_certs = vec![ca_cert_bytes.into()];
+            let connection_request =
+                create_tls_connection_request(hostname_addr, cluster_mode, ca_cert_bytes);
 
-                let result =
-                    StandaloneClient::create_client(connection_request.into(), None, None, None)
-                        .await;
-                assert!(
-                    result.is_err(),
-                    "Expected connection to fail with hostname not in cert"
-                );
-            }
+            let is_err = if cluster_mode {
+                Client::new(connection_request.into(), None).await.is_err()
+            } else {
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .is_err()
+            };
+
+            assert!(is_err, "Expected connection to fail with hostname not in cert");
+            drop(_server); // Keep server alive
         });
     }
 }
