@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.concurrent.CompletableFuture;
 
@@ -396,4 +397,174 @@ public interface ClusterManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<ClusterValue<String>> clusterMyShardId(Route route);
+
+    /**
+     * Returns the hash slot number for the given key.<br>
+     * The command will be routed to a random node.
+     *
+     * <p>The hash slot determines which node in a cluster is responsible for a given key. Valkey
+     * Cluster uses 16384 hash slots (0-16383). Keys are mapped to slots using CRC16 of the key modulo
+     * 16384.
+     *
+     * @see <a href="https://valkey.io/commands/cluster-keyslot/">valkey.io</a> for details.
+     * @param key The key to get the hash slot for.
+     * @return The hash slot number (0-16383) for the given key.
+     * @example
+     *     <pre>{@code
+     * long slot = clusterClient.clusterKeySlot("mykey").get();
+     * System.out.println("Key 'mykey' belongs to slot: " + slot);
+     * // Output: Key 'mykey' belongs to slot: 14687
+     * }</pre>
+     */
+    CompletableFuture<Long> clusterKeySlot(String key);
+
+    /**
+     * Returns the hash slot number for the given binary key.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/cluster-keyslot/">valkey.io</a> for details.
+     * @param key The binary key to get the hash slot for.
+     * @return The hash slot number (0-16383) for the given key.
+     * @example
+     *     <pre>{@code
+     * long slot = clusterClient.clusterKeySlot(gs("mykey")).get();
+     * System.out.println("Binary key belongs to slot: " + slot);
+     * }</pre>
+     */
+    CompletableFuture<Long> clusterKeySlot(GlideString key);
+
+    /**
+     * Returns the number of keys in the specified hash slot.<br>
+     * The command will be routed to the node responsible for the specified slot.
+     *
+     * @see <a href="https://valkey.io/commands/cluster-countkeysinslot/">valkey.io</a> for details.
+     * @param slot The hash slot number (0-16383) to count keys in.
+     * @return The number of keys in the specified slot.
+     * @example
+     *     <pre>{@code
+     * long keyCount = clusterClient.clusterCountKeysInSlot(12345).get();
+     * System.out.println("Number of keys in slot 12345: " + keyCount);
+     * // Output: Number of keys in slot 12345: 42
+     * }</pre>
+     */
+    CompletableFuture<Long> clusterCountKeysInSlot(long slot);
+
+    /**
+     * Returns an array of keys in the specified hash slot.<br>
+     * The command will be routed to the node responsible for the specified slot.
+     *
+     * @see <a href="https://valkey.io/commands/cluster-getkeysinslot/">valkey.io</a> for details.
+     * @param slot The hash slot number (0-16383) to retrieve keys from.
+     * @param count The maximum number of keys to return. Must be positive.
+     * @return An array of up to <code>count</code> keys belonging to the specified slot. Returns an
+     *     empty array if the slot is empty or does not exist.
+     * @example
+     *     <pre>{@code
+     * String[] keys = clusterClient.clusterGetKeysInSlot(12345, 10).get();
+     * System.out.println("First 10 keys in slot 12345:");
+     * for (String key : keys) {
+     *     System.out.println("  " + key);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<String[]> clusterGetKeysInSlot(long slot, long count);
+
+    /**
+     * Returns an array of binary keys in the specified hash slot.<br>
+     * The command will be routed to the node responsible for the specified slot.
+     *
+     * @see <a href="https://valkey.io/commands/cluster-getkeysinslot/">valkey.io</a> for details.
+     * @param slot The hash slot number (0-16383) to retrieve keys from.
+     * @param count The maximum number of keys to return. Must be positive.
+     * @return An array of up to <code>count</code> binary keys belonging to the specified slot.
+     *     Returns an empty array if the slot is empty or does not exist.
+     * @example
+     *     <pre>{@code
+     * GlideString[] keys = clusterClient.clusterGetKeysInSlotBinary(12345, 10).get();
+     * System.out.println("First 10 binary keys in slot 12345: " + keys.length + " keys");
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> clusterGetKeysInSlotBinary(long slot, long count);
+
+    /**
+     * Assigns hash slots to the current node.<br>
+     * The command will be routed to the node executing the command.
+     *
+     * @see <a href="https://valkey.io/commands/cluster-addslots/">valkey.io</a> for details.
+     * @param slots An array of hash slot numbers (0-16383) to assign to the node. Slots must not
+     *     already be assigned to any node.
+     * @return <code>"OK"</code> if the slots were successfully assigned.
+     * @example
+     *     <pre>{@code
+     * String result = clusterClient.clusterAddSlots(new long[]{1, 2, 3, 4, 5}).get();
+     * System.out.println("Slots assigned: " + result); // Output: Slots assigned: OK
+     * }</pre>
+     */
+    CompletableFuture<String> clusterAddSlots(long[] slots);
+
+    /**
+     * Assigns hash slot ranges to the current node.<br>
+     * The command will be routed to the node executing the command.
+     *
+     * <p>This command is more efficient than {@link #clusterAddSlots} when assigning multiple
+     * contiguous slot ranges, as it uses the CLUSTER ADDSLOTSRANGE command introduced in Valkey 7.0.
+     *
+     * @apiNote Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/cluster-addslotsrange/">valkey.io</a> for details.
+     * @param slotRanges A 2D array where each sub-array contains two elements: [start_slot, end_slot]
+     *     representing an inclusive range of slots to assign. All slots must be between 0-16383 and
+     *     not already assigned.
+     * @return <code>"OK"</code> if the slot ranges were successfully assigned.
+     * @example
+     *     <pre>{@code
+     * // Assign slots 0-100, 1000-2000, and 5000-5999
+     * long[][] ranges = {{0, 100}, {1000, 2000}, {5000, 5999}};
+     * String result = clusterClient.clusterAddSlotsRange(ranges).get();
+     * System.out.println("Slot ranges assigned: " + result); // Output: Slot ranges assigned: OK
+     * }</pre>
+     */
+    CompletableFuture<String> clusterAddSlotsRange(long[][] slotRanges);
+
+    /**
+     * Removes hash slots from the current node.<br>
+     * The command will be routed to the node executing the command.
+     *
+     * <p>Once a slot is removed, it becomes unassigned and can be assigned to another node or
+     * reassigned to the current node. This is typically used during cluster reconfiguration or before
+     * removing a node from the cluster.
+     *
+     * @see <a href="https://valkey.io/commands/cluster-delslots/">valkey.io</a> for details.
+     * @param slots An array of hash slot numbers (0-16383) to remove from the node. Slots must
+     *     currently be assigned to this node.
+     * @return <code>"OK"</code> if the slots were successfully removed.
+     * @example
+     *     <pre>{@code
+     * String result = clusterClient.clusterDelSlots(new long[]{1, 2, 3, 4, 5}).get();
+     * System.out.println("Slots removed: " + result); // Output: Slots removed: OK
+     * }</pre>
+     */
+    CompletableFuture<String> clusterDelSlots(long[] slots);
+
+    /**
+     * Removes hash slot ranges from the current node.<br>
+     * The command will be routed to the node executing the command.
+     *
+     * <p>This command is more efficient than {@link #clusterDelSlots} when removing multiple
+     * contiguous slot ranges, as it uses the CLUSTER DELSLOTSRANGE command introduced in Valkey 7.0.
+     *
+     * @apiNote Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/cluster-delslotsrange/">valkey.io</a> for details.
+     * @param slotRanges A 2D array where each sub-array contains two elements: [start_slot, end_slot]
+     *     representing an inclusive range of slots to remove. All slots must be between 0-16383 and
+     *     currently assigned to this node.
+     * @return <code>"OK"</code> if the slot ranges were successfully removed.
+     * @example
+     *     <pre>{@code
+     * // Remove slots 0-100, 1000-2000, and 5000-5999
+     * long[][] ranges = {{0, 100}, {1000, 2000}, {5000, 5999}};
+     * String result = clusterClient.clusterDelSlotsRange(ranges).get();
+     * System.out.println("Slot ranges removed: " + result); // Output: Slot ranges removed: OK
+     * }</pre>
+     */
+    CompletableFuture<String> clusterDelSlotsRange(long[][] slotRanges);
 }

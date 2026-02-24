@@ -3,7 +3,14 @@ package glide.api;
 
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlots;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlotsRange;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterCountKeysInSlot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterDelSlots;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterDelSlotsRange;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterGetKeysInSlot;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterInfo;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterKeySlot;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterLinks;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterMyId;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterMyShardId;
@@ -1832,5 +1839,69 @@ public class GlideClusterClient extends BaseClient
                         route instanceof SingleNodeRoute
                                 ? ClusterValue.of(handleStringResponse(response))
                                 : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Long> clusterKeySlot(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ClusterKeySlot, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> clusterKeySlot(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ClusterKeySlot, new GlideString[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> clusterCountKeysInSlot(long slot) {
+        return commandManager.submitNewCommand(
+                ClusterCountKeysInSlot, new String[] {Long.toString(slot)}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> clusterGetKeysInSlot(long slot, long count) {
+        return commandManager.submitNewCommand(
+                ClusterGetKeysInSlot,
+                new String[] {Long.toString(slot), Long.toString(count)},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> clusterGetKeysInSlotBinary(long slot, long count) {
+        return commandManager.submitNewCommand(
+                ClusterGetKeysInSlot,
+                new GlideString[] {gs(Long.toString(slot)), gs(Long.toString(count))},
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterAddSlots(long @NonNull [] slots) {
+        String[] args = Arrays.stream(slots).mapToObj(Long::toString).toArray(String[]::new);
+        return commandManager.submitNewCommand(ClusterAddSlots, args, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clusterAddSlotsRange(long @NonNull [][] slotRanges) {
+        String[] args =
+                Arrays.stream(slotRanges)
+                        .flatMap(range -> Arrays.stream(range).mapToObj(Long::toString))
+                        .toArray(String[]::new);
+        return commandManager.submitNewCommand(ClusterAddSlotsRange, args, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clusterDelSlots(long @NonNull [] slots) {
+        String[] args = Arrays.stream(slots).mapToObj(Long::toString).toArray(String[]::new);
+        return commandManager.submitNewCommand(ClusterDelSlots, args, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clusterDelSlotsRange(long @NonNull [][] slotRanges) {
+        String[] args =
+                Arrays.stream(slotRanges)
+                        .flatMap(range -> Arrays.stream(range).mapToObj(Long::toString))
+                        .toArray(String[]::new);
+        return commandManager.submitNewCommand(ClusterDelSlotsRange, args, this::handleStringResponse);
     }
 }
