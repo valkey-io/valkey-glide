@@ -328,14 +328,11 @@ impl GlideSpanInner {
     }
 
     /// Set a string attribute on this span.
-    pub fn set_attribute(&self, key: &str, value: &str) {
+    pub fn set_attribute(&self, key: &str, value: impl Into<opentelemetry::Value>) {
         self.span
             .write()
             .expect(SPAN_WRITE_LOCK_ERR)
-            .set_attribute(opentelemetry::KeyValue::new(
-                key.to_string(),
-                value.to_string(),
-            ));
+            .set_attribute(opentelemetry::KeyValue::new(key.to_string(), value.into()));
     }
 
     /// Set an integer attribute on this span.
@@ -453,7 +450,7 @@ impl GlideSpan {
     }
 
     /// Set a string attribute on this span.
-    pub fn set_attribute(&self, key: &str, value: &str) {
+    pub fn set_attribute(&self, key: &str, value: impl Into<opentelemetry::Value>) {
         self.inner.set_attribute(key, value)
     }
 
