@@ -676,4 +676,54 @@ mod cluster_client_tests {
             );
         });
     }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_tls_connection_with_ipv6_succeeds() {
+        block_on_all(async move {
+            let tempdir = tempfile::Builder::new()
+                .prefix("tls_ipv6_cluster_test")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+
+            let cluster = utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
+
+            let first_addr = cluster.get_server_addresses()[0].clone();
+            let ipv6_addr = match first_addr {
+                redis::ConnectionAddr::TcpTls { port, .. } => redis::ConnectionAddr::TcpTls {
+                    host: "::1".to_string(),
+                    port,
+                    insecure: false,
+                    tls_params: None,
+                },
+                _ => panic!("Expected TLS address"),
+            };
+
+            let mut connection_request = create_connection_request(
+                &[ipv6_addr],
+                &TestConfiguration {
+                    use_tls: true,
+                    cluster_mode: ClusterMode::Enabled,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            connection_request.root_certs = vec![ca_cert_bytes.into()];
+
+            let mut client = Client::new(connection_request.into(), None)
+                .await
+                .expect("Failed to create cluster client with IPv6 address");
+
+            let mut ping_cmd = redis::cmd("PING");
+            let ping_result = client.send_command(&mut ping_cmd, None).await;
+            assert_eq!(
+                ping_result.unwrap(),
+                Value::SimpleString("PONG".to_string())
+            );
+        });
+    }
 }
