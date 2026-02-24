@@ -3591,17 +3591,17 @@ public class CommandTests {
         String key = UUID.randomUUID().toString();
         // Route to the same node where the script will run (based on the key)
         Route route = new SlotKeyRoute(key, PRIMARY);
-        // Create a script that writes data (making it unkillable) and runs for 6 seconds
-        String code = createLongRunningLuaScript(6, false);
+        // Create a script that writes data (making it unkillable) and runs for 10 seconds
+        String code = createLongRunningLuaScript(10, false);
 
         try (Script script = new Script(code, false);
                 GlideClusterClient testClient =
                         GlideClusterClient.createClient(
                                         commonClusterClientConfig()
-                                                .requestTimeout(10000)
+                                                .requestTimeout(15000)
                                                 .advancedConfiguration(
                                                         AdvancedGlideClusterClientConfiguration.builder()
-                                                                .connectionTimeout(10000)
+                                                                .connectionTimeout(15000)
                                                                 .build())
                                                 .build())
                                 .get()) {
@@ -3609,28 +3609,34 @@ public class CommandTests {
             CompletableFuture<Object> scriptFuture =
                     testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
 
-            // Wait for the script to start executing on the server
+            // Wait for the script to start executing and block the node
             Thread.sleep(1000);
-
-            try {
-                // Try to kill the script - it should fail with "unkillable" since it has writes
-                boolean foundUnkillable = false;
-                for (int i = 0; i < 25 && !foundUnkillable; i++) {
-                    try {
-                        clusterClient.scriptKill(route).get();
-                    } catch (ExecutionException e) {
-                        if (e.getCause() instanceof RequestException) {
-                            String msg = e.getMessage().toLowerCase();
-                            if (msg.contains("unkillable")) {
-                                foundUnkillable = true;
-                            } else if (msg.contains("no scripts in execution")) {
-                                Thread.sleep(200);
-                            }
-                        }
+            boolean nodeIsBusy = false;
+            for (int i = 0; i < 8; i++) {
+                try {
+                    clusterClient.ping(route).get();
+                    // ping succeeded — script hasn't blocked the node yet, keep waiting
+                } catch (ExecutionException e) {
+                    if (e.getCause() instanceof RequestException
+                            && e.getMessage().toLowerCase().contains("busy")) {
+                        nodeIsBusy = true;
+                        break; // node is busy running the script
                     }
                 }
+                Thread.sleep(500);
+            }
+            try {
+                assertTrue(nodeIsBusy, "Expected the node to be busy running the script");
 
-                assertTrue(foundUnkillable, "Expected to find 'unkillable' error for write script");
+                // The node is busy with a write script — scriptKill should fail with "unkillable"
+                ExecutionException killException =
+                        assertThrows(
+                                ExecutionException.class,
+                                () -> clusterClient.scriptKill(route).get());
+                assertInstanceOf(RequestException.class, killException.getCause());
+                assertTrue(
+                        killException.getMessage().toLowerCase().contains("unkillable"),
+                        "Expected to find 'unkillable' error for write script");
             } finally {
                 // Always wait for the unkillable script to finish before closing the client,
                 // even if the assertion above fails. Leaving a running script blocks the
