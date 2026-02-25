@@ -18,7 +18,6 @@ use std::{
     env, fs, io, net::SocketAddr, net::TcpListener, ops::Deref, path::PathBuf, process,
     sync::Mutex, time::Duration,
 };
-use tempfile::TempDir;
 use tokio::sync::mpsc;
 use versions::Versioning;
 
@@ -165,6 +164,25 @@ impl RedisServer {
         RedisServer::new_with_addr_and_modules(addr, modules)
     }
 
+    pub fn new_with_tls(use_tls: bool, tls_paths: Option<TlsFilePaths>) -> RedisServer {
+        let redis_port = get_available_port();
+        let addr = if use_tls {
+            redis::ConnectionAddr::TcpTls {
+                host: HOST_IPV4.to_string(),
+                port: redis_port,
+                insecure: true,
+                tls_params: None,
+            }
+        } else {
+            redis::ConnectionAddr::Tcp(HOST_IPV4.to_string(), redis_port)
+        };
+
+        RedisServer::new_with_addr_tls_modules_and_spawner(addr, tls_paths, &[], false, |cmd| {
+            cmd.spawn()
+                .unwrap_or_else(|err| panic!("Failed to run {cmd:?}: {err}"))
+        })
+    }
+
     pub fn new_with_addr_and_modules(
         addr: redis::ConnectionAddr,
         modules: &[Module],
@@ -175,9 +193,7 @@ impl RedisServer {
         })
     }
 
-    pub fn new_with_addr_tls_modules_and_spawner<
-        F: FnOnce(&mut process::Command) -> process::Child,
-    >(
+    fn new_with_addr_tls_modules_and_spawner<F: FnOnce(&mut process::Command) -> process::Child>(
         addr: redis::ConnectionAddr,
         tls_paths: Option<TlsFilePaths>,
         modules: &[Module],
@@ -220,7 +236,10 @@ impl RedisServer {
                 }
             }
             redis::ConnectionAddr::TcpTls { ref host, port, .. } => {
-                let tls_paths = tls_paths.unwrap_or_else(build_tls_file_paths);
+                let tls_paths = tls_paths.unwrap_or_else(|| {
+                    let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+                    build_tls_file_paths(&tempdir)
+                });
                 let tls_auth_clients_arg_value = match tls_auth_clients {
                     true => "yes",
                     _ => "no",
@@ -373,18 +392,17 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct TlsFilePaths {
     redis_crt: PathBuf,
     redis_key: PathBuf,
     ca_crt: PathBuf,
-    _tempdir: TempDir,
 }
 
-/// Build and returns TLS file paths.
-pub fn build_tls_file_paths() -> TlsFilePaths {
+/// Build and returns TLS file paths using the provided temp directory.
+pub fn build_tls_file_paths(tempdir: &tempfile::TempDir) -> TlsFilePaths {
     // Based on shell script in redis's server tests
     // https://github.com/redis/redis/blob/8c291b97b95f2e011977b522acf77ead23e26f55/utils/gen-test-certs.sh
-    let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
 
     let temp_dir_path: &std::path::Path = tempdir.path();
     let ca_crt = temp_dir_path.join("ca.crt");
@@ -492,7 +510,6 @@ pub fn build_tls_file_paths() -> TlsFilePaths {
         redis_crt,
         redis_key,
         ca_crt,
-        _tempdir: tempdir,
     }
 }
 

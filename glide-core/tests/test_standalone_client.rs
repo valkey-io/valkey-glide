@@ -121,13 +121,7 @@ mod standalone_client_tests {
 
             assert!(info_clients.contains("connected_clients:2"));
 
-            // validate connection works
-            let ping_result = validation_client
-                .client
-                .send_command(&redis::cmd("PING"))
-                .await
-                .ok();
-            assert_eq!(ping_result, Some(Value::SimpleString("PONG".to_string())));
+            assert_connected(&mut validation_client.client).await;
         });
     }
 
@@ -616,19 +610,7 @@ mod standalone_client_tests {
                     "Sending first command to lazy client (PING) (protocol={protocol:?} on dedicated server)"
                 ),
             );
-            let ping_response = lazy_glide_client_enum
-                .send_command(&mut redis::cmd("PING"), None)
-                .await;
-            assert!(
-                ping_response.is_ok(),
-                "PING command failed (on dedicated server): {:?}. protocol={:?}",
-                ping_response.as_ref().err(),
-                protocol
-            );
-            assert_eq!(
-                ping_response.unwrap(),
-                redis::Value::SimpleString("PONG".to_string())
-            );
+            assert_connected(&mut lazy_glide_client_enum).await;
 
             // 8. Assert that a new connection was made by the lazy client on the dedicated server
             let clients_after_first_command = get_connected_clients(monitoring_client).await; // Pass &mut StandaloneClient
@@ -652,21 +634,10 @@ mod standalone_client_tests {
     fn test_tls_connection_with_custom_root_cert() {
         block_on_all(async move {
             // Create a dedicated TLS server with custom certificates
-            let tls_paths = build_tls_file_paths();
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
-
-            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
-                redis::ConnectionAddr::TcpTls {
-                    host: HOST_IPV4.to_string(),
-                    port: get_available_port(),
-                    insecure: false,
-                    tls_params: None,
-                },
-                Some(tls_paths),
-                &[],
-                false,
-                |cmd| cmd.spawn().expect("Failed to spawn server"),
-            );
+            let server = RedisServer::new_with_tls(true, Some(tls_paths));
 
             let server_addr = server.get_client_addr();
             // Skip wait_for_server_to_become_ready since it uses default OS verifier
@@ -690,12 +661,7 @@ mod standalone_client_tests {
                     .await
                     .expect("Failed to create client with custom root cert");
 
-            // Verify connection works by sending a command
-            let ping_result = client.send_command(&redis::cmd("PING")).await;
-            assert_eq!(
-                ping_result.unwrap(),
-                Value::SimpleString("PONG".to_string())
-            );
+            assert_connected(&mut client).await;
         });
     }
 
@@ -705,24 +671,15 @@ mod standalone_client_tests {
     fn test_tls_connection_fails_with_wrong_root_cert() {
         block_on_all(async move {
             // Create a TLS server with one set of certificates
-            let server_tls_paths = build_tls_file_paths();
+            let server_tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let server_tls_paths = build_tls_file_paths(&server_tempdir);
 
             // Create different CA certificate for client
-            let client_tls_paths = build_tls_file_paths();
+            let client_tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let client_tls_paths = build_tls_file_paths(&client_tempdir);
             let wrong_ca_cert_bytes = client_tls_paths.read_ca_cert_as_bytes();
 
-            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
-                redis::ConnectionAddr::TcpTls {
-                    host: HOST_IPV4.to_string(),
-                    port: get_available_port(),
-                    insecure: false,
-                    tls_params: None,
-                },
-                Some(server_tls_paths),
-                &[],
-                false,
-                |cmd| cmd.spawn().expect("Failed to spawn server"),
-            );
+            let server = RedisServer::new_with_tls(true, Some(server_tls_paths));
 
             let server_addr = server.get_client_addr();
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -840,25 +797,16 @@ mod standalone_client_tests {
     fn test_tls_connection_with_multiple_root_certs_first_invalid() {
         block_on_all(async move {
             // Create server with valid certificates
-            let server_tls_paths = build_tls_file_paths();
+            let server_tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let server_tls_paths = build_tls_file_paths(&server_tempdir);
             let valid_ca_cert_bytes = server_tls_paths.read_ca_cert_as_bytes();
 
             // Create invalid CA certificate
-            let invalid_tls_paths = build_tls_file_paths();
+            let invalid_tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let invalid_tls_paths = build_tls_file_paths(&invalid_tempdir);
             let invalid_ca_cert_bytes = invalid_tls_paths.read_ca_cert_as_bytes();
 
-            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
-                redis::ConnectionAddr::TcpTls {
-                    host: HOST_IPV4.to_string(),
-                    port: get_available_port(),
-                    insecure: false,
-                    tls_params: None,
-                },
-                Some(server_tls_paths),
-                &[],
-                false,
-                |cmd| cmd.spawn().expect("Failed to spawn server"),
-            );
+            let server = RedisServer::new_with_tls(true, Some(server_tls_paths));
 
             let server_addr = server.get_client_addr();
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -882,11 +830,7 @@ mod standalone_client_tests {
                     .await
                     .expect("Failed to create client with multiple root certs");
 
-            let ping_result = client.send_command(&redis::cmd("PING")).await;
-            assert_eq!(
-                ping_result.unwrap(),
-                Value::SimpleString("PONG".to_string())
-            );
+            assert_connected(&mut client).await;
         });
     }
 
@@ -896,23 +840,13 @@ mod standalone_client_tests {
     fn test_tls_connection_with_with_client_tls_auth() {
         block_on_all(async move {
             // Create a dedicated TLS server with custom certificates
-            let tls_paths = build_tls_file_paths();
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
             let client_cert_bytes = tls_paths.read_redis_cert_as_bytes();
             let client_key_bytes = tls_paths.read_redis_key_as_bytes();
 
-            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
-                redis::ConnectionAddr::TcpTls {
-                    host: HOST_IPV4.to_string(),
-                    port: get_available_port(),
-                    insecure: false,
-                    tls_params: None,
-                },
-                Some(tls_paths),
-                &[],
-                true,
-                |cmd| cmd.spawn().expect("Failed to spawn server"),
-            );
+            let server = RedisServer::new_with_tls(true, Some(tls_paths));
 
             let server_addr = server.get_client_addr();
             // Skip wait_for_server_to_become_ready since it uses default OS verifier
@@ -938,12 +872,7 @@ mod standalone_client_tests {
                     .await
                     .expect("Failed to create client with custom root cert");
 
-            // Verify connection works by sending a command
-            let ping_result = client.send_command(&redis::cmd("PING")).await;
-            assert_eq!(
-                ping_result.unwrap(),
-                Value::SimpleString("PONG".to_string())
-            );
+            assert_connected(&mut client).await;
         });
     }
 
@@ -952,21 +881,10 @@ mod standalone_client_tests {
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_tls_connection_with_ipv6_succeeds() {
         block_on_all(async move {
-            let tls_paths = build_tls_file_paths();
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
-
-            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
-                redis::ConnectionAddr::TcpTls {
-                    host: HOST_IPV6.to_string(),
-                    port: get_available_port(),
-                    insecure: false,
-                    tls_params: None,
-                },
-                Some(tls_paths),
-                &[],
-                false,
-                |cmd| cmd.spawn().expect("Failed to spawn server"),
-            );
+            let server = RedisServer::new_with_tls(true, Some(tls_paths));
 
             let server_addr = server.get_client_addr();
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -987,11 +905,7 @@ mod standalone_client_tests {
                     .await
                     .expect("Failed to create client with IPv6 address");
 
-            let ping_result = client.send_command(&redis::cmd("PING")).await;
-            assert_eq!(
-                ping_result.unwrap(),
-                Value::SimpleString("PONG".to_string())
-            );
+            assert_connected(&mut client).await;
         });
     }
 }

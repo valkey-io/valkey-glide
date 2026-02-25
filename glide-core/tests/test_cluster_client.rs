@@ -597,7 +597,8 @@ mod cluster_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_cluster_tls_connection_with_custom_root_cert() {
         block_on_all(async move {
-            let tls_paths = build_tls_file_paths();
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
 
             let cluster = utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
@@ -636,10 +637,12 @@ mod cluster_client_tests {
     fn test_cluster_tls_connection_fails_with_wrong_root_cert() {
         block_on_all(async move {
             // Create a TLS cluster with one set of certificates
-            let server_tls_paths = build_tls_file_paths();
+            let server_tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let server_tls_paths = build_tls_file_paths(&server_tempdir);
 
             // Create different CA certificate for client
-            let client_tls_paths = build_tls_file_paths();
+            let client_tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let client_tls_paths = build_tls_file_paths(&client_tempdir);
             let wrong_ca_cert_bytes = client_tls_paths.read_ca_cert_as_bytes();
 
             let cluster =
@@ -673,7 +676,8 @@ mod cluster_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_cluster_tls_connection_with_ipv6_succeeds() {
         block_on_all(async move {
-            let tls_paths = build_tls_file_paths();
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
 
             let cluster = utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
