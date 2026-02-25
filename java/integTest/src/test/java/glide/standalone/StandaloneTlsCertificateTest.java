@@ -59,8 +59,7 @@ public class StandaloneTlsCertificateTest {
                 TestUtilities.createStandaloneConfigWithRootCert(caCert, nodeAddr);
 
         try (GlideClient client = GlideClient.createClient(config).get()) {
-            String result = client.ping().get();
-            assertEquals("PONG", result);
+            TestUtilities.assertConnected(client);
         }
     }
 
@@ -74,8 +73,7 @@ public class StandaloneTlsCertificateTest {
                 TestUtilities.createStandaloneConfigWithRootCert(certBundle, nodeAddr);
 
         try (GlideClient client = GlideClient.createClient(config).get()) {
-            String result = client.ping().get();
-            assertEquals("PONG", result);
+            TestUtilities.assertConnected(client);
         }
     }
 
@@ -113,7 +111,7 @@ public class StandaloneTlsCertificateTest {
                 TestUtilities.createStandaloneConfigWithRootCert(caCert, ipv4Node);
 
         try (GlideClient client = GlideClient.createClient(config).get()) {
-            assertEquals("PONG", client.ping().get());
+            TestUtilities.assertConnected(client);
         }
     }
 
@@ -124,7 +122,7 @@ public class StandaloneTlsCertificateTest {
                 TestUtilities.createStandaloneConfigWithRootCert(caCert, ipv6Node);
 
         try (GlideClient client = GlideClient.createClient(config).get()) {
-            assertEquals("PONG", client.ping().get());
+            TestUtilities.assertConnected(client);
         }
     }
 
@@ -166,8 +164,7 @@ public class StandaloneTlsCertificateTest {
             ;
 
             try (GlideClient client = GlideClient.createClient(config).get()) {
-                String result = client.ping().get();
-                assertEquals("PONG", result);
+                TestUtilities.assertConnected(client);
             }
         } finally {
             Files.deleteIfExists(keyStorePath);

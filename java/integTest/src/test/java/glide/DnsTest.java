@@ -79,16 +79,6 @@ public class DnsTest {
     // -------------------
 
     @SneakyThrows
-    private static void assertConnected(BaseClient client) {
-        final String expected = "PONG";
-        if (client instanceof GlideClusterClient) {
-            assertEquals(expected, ((GlideClusterClient) client).ping().get());
-        } else {
-            assertEquals(expected, ((GlideClient) client).ping().get());
-        }
-    }
-
-    @SneakyThrows
     private static BaseClient buildClient(boolean clusterMode, boolean useTls, String hostname) {
 
         // Get port from test configuration.
@@ -101,8 +91,9 @@ public class DnsTest {
         String hostEntry = hosts[0].trim();
         int port = Integer.parseInt(hostEntry.substring(hostEntry.lastIndexOf(':') + 1));
 
-        // Build address with specified hostname.
+        // Build common arguments.
         NodeAddress address = NodeAddress.builder().host(hostname).port(port).build();
+        byte[] certificateBytes = getCaCertificate();
 
         // Build client configuration and client.
         if (clusterMode) {
@@ -110,7 +101,7 @@ public class DnsTest {
                     GlideClusterClientConfiguration.builder().address(address).useTLS(useTls);
             if (useTls) {
                 TlsAdvancedConfiguration tlsConfig =
-                        TlsAdvancedConfiguration.builder().rootCertificates(getCaCertificate()).build();
+                        TlsAdvancedConfiguration.builder().rootCertificates(certificateBytes).build();
                 builder.advancedConfiguration(
                         AdvancedGlideClusterClientConfiguration.builder()
                                 .tlsAdvancedConfiguration(tlsConfig)
@@ -122,7 +113,7 @@ public class DnsTest {
                     GlideClientConfiguration.builder().address(address).useTLS(useTls);
             if (useTls) {
                 TlsAdvancedConfiguration tlsConfig =
-                        TlsAdvancedConfiguration.builder().rootCertificates(getCaCertificate()).build();
+                        TlsAdvancedConfiguration.builder().rootCertificates(certificateBytes).build();
                 builder.advancedConfiguration(
                         AdvancedGlideClientConfiguration.builder().tlsAdvancedConfiguration(tlsConfig).build());
             }
