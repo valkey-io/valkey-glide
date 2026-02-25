@@ -193,7 +193,9 @@ impl RedisServer {
         })
     }
 
-    fn new_with_addr_tls_modules_and_spawner<F: FnOnce(&mut process::Command) -> process::Child>(
+    pub fn new_with_addr_tls_modules_and_spawner<
+        F: FnOnce(&mut process::Command) -> process::Child,
+    >(
         addr: redis::ConnectionAddr,
         tls_paths: Option<TlsFilePaths>,
         modules: &[Module],

@@ -679,8 +679,10 @@ mod cluster_client_tests {
             let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
             let tls_paths = build_tls_file_paths(&tempdir);
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
-
             let cluster = RedisCluster::new_with_tls(3, 0, Some(tls_paths));
+
+            // Wait to ensure server is ready before connecting.
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
 
             let default_address = cluster.get_server_addresses()[0].clone();
             let ipv6_addr = match default_address {

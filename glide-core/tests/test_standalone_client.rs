@@ -842,11 +842,23 @@ mod standalone_client_tests {
             // Create a dedicated TLS server with custom certificates
             let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
             let tls_paths = build_tls_file_paths(&tempdir);
+
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
             let client_cert_bytes = tls_paths.read_redis_cert_as_bytes();
             let client_key_bytes = tls_paths.read_redis_key_as_bytes();
 
-            let server = RedisServer::new_with_tls(true, Some(tls_paths));
+            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                redis::ConnectionAddr::TcpTls {
+                    host: "127.0.0.1".to_string(),
+                    port: get_available_port(),
+                    insecure: false,
+                    tls_params: None,
+                },
+                Some(tls_paths.clone()),
+                &[],
+                true,
+                |cmd| cmd.spawn().expect("Failed to spawn server"),
+            );
 
             let server_addr = server.get_client_addr();
             // Skip wait_for_server_to_become_ready since it uses default OS verifier
@@ -886,11 +898,22 @@ mod standalone_client_tests {
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
             let server = RedisServer::new_with_tls(true, Some(tls_paths));
 
-            let server_addr = server.get_client_addr();
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            // Wait to ensure server is ready before connecting.
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+
+            // Reuse the port but connect via the IPv6 loopback address.
+            let ipv6_addr = match server.get_client_addr() {
+                redis::ConnectionAddr::TcpTls { port, .. } => redis::ConnectionAddr::TcpTls {
+                    host: HOST_IPV6.to_string(),
+                    port,
+                    insecure: false,
+                    tls_params: None,
+                },
+                _ => panic!("Expected TLS address"),
+            };
 
             let mut connection_request = create_connection_request(
-                &[server_addr],
+                &[ipv6_addr],
                 &TestConfiguration {
                     use_tls: true,
                     shared_server: false,

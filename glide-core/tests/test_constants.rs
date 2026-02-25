@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 //! Shared test constants for Valkey GLIDE Rust core tests.
+#![allow(dead_code)]
 
 /// Test server IP addresses.
 pub const HOST_IPV4: &str = "127.0.0.1";
