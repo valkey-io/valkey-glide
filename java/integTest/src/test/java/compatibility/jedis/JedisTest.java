@@ -35,9 +35,12 @@ import redis.clients.jedis.params.HSetExParams;
 import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.params.ZAddParams;
+import redis.clients.jedis.params.ZRangeParams;
 import redis.clients.jedis.resps.AccessControlLogEntry;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.ScanResult;
+import redis.clients.jedis.resps.Tuple;
 import redis.clients.jedis.util.KeyValue;
 
 /**
@@ -3905,5 +3908,1576 @@ public class JedisTest {
             t = t.getCause();
         }
         return sb.toString();
+    }
+
+    // ========================================
+    // Sorted Set Commands Tests
+    // ========================================
+
+    @Test
+    void sortedset_zadd_single_member() {
+        String key = UUID.randomUUID().toString();
+
+        // Test ZADD with single member
+        long result = jedis.zadd(key, 1.0, "member1");
+        assertEquals(1, result, "ZADD should return 1 for new member");
+
+        // Verify member was added
+        Double score = jedis.zscore(key, "member1");
+        assertEquals(1.0, score, 0.001, "Member should have correct score");
+
+        // Test ZADD updating existing member
+        result = jedis.zadd(key, 2.0, "member1");
+        assertEquals(0, result, "ZADD should return 0 when updating existing member");
+
+        score = jedis.zscore(key, "member1");
+        assertEquals(2.0, score, 0.001, "Member score should be updated");
+    }
+
+    @Test
+    void sortedset_zadd_multiple_members() {
+        String key = UUID.randomUUID().toString();
+
+        // Test ZADD with multiple members
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+
+        long result = jedis.zadd(key, members);
+        assertEquals(3, result, "ZADD should return 3 for three new members");
+
+        // Verify all members were added
+        long cardinality = jedis.zcard(key);
+        assertEquals(3, cardinality, "Sorted set should have 3 members");
+
+        // Verify individual scores
+        assertEquals(1.0, jedis.zscore(key, "member1"), 0.001);
+        assertEquals(2.0, jedis.zscore(key, "member2"), 0.001);
+        assertEquals(3.0, jedis.zscore(key, "member3"), 0.001);
+    }
+
+    @Test
+    void sortedset_zadd_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member = "member1".getBytes();
+
+        // Test binary ZADD
+        long result = jedis.zadd(key, 5.5, member);
+        assertEquals(1, result, "Binary ZADD should return 1 for new member");
+
+        // Verify member was added
+        Double score = jedis.zscore(key, member);
+        assertEquals(5.5, score, 0.001, "Binary member should have correct score");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zaddIncr() {
+        String key = UUID.randomUUID().toString();
+
+        // Test ZADD INCR on non-existing member
+        double score = jedis.zaddIncr(key, 5.0, "member1");
+        assertEquals(5.0, score, 0.001, "ZADD INCR should return 5.0 for new member");
+
+        // Test ZADD INCR on existing member
+        score = jedis.zaddIncr(key, 2.5, "member1");
+        assertEquals(7.5, score, 0.001, "ZADD INCR should return 7.5 after increment");
+
+        // Verify final score
+        Double finalScore = jedis.zscore(key, "member1");
+        assertEquals(7.5, finalScore, 0.001, "Member should have incremented score");
+    }
+
+    @Test
+    void sortedset_zaddIncr_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member = "member1".getBytes();
+
+        // Test binary ZADD INCR
+        double score = jedis.zaddIncr(key, 3.14, member);
+        assertEquals(3.14, score, 0.001, "Binary ZADD INCR should return correct score");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrem() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        jedis.zadd(key, members);
+
+        // Test ZREM single member
+        long result = jedis.zrem(key, "member1");
+        assertEquals(1, result, "ZREM should return 1 for removed member");
+
+        // Test ZREM multiple members
+        result = jedis.zrem(key, "member2", "member3");
+        assertEquals(2, result, "ZREM should return 2 for two removed members");
+
+        // Verify all members removed
+        long cardinality = jedis.zcard(key);
+        assertEquals(0, cardinality, "Sorted set should be empty");
+
+        // Test ZREM on non-existing member
+        result = jedis.zrem(key, "nonexistent");
+        assertEquals(0, result, "ZREM should return 0 for non-existing member");
+    }
+
+    @Test
+    void sortedset_zrem_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member1 = "member1".getBytes();
+        byte[] member2 = "member2".getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put(member1, 1.0);
+        members.put(member2, 2.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZREM
+        long result = jedis.zrem(key, member1, member2);
+        assertEquals(2, result, "Binary ZREM should return 2 for two removed members");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zcard() {
+        String key = UUID.randomUUID().toString();
+
+        // Test ZCARD on non-existing key
+        long result = jedis.zcard(key);
+        assertEquals(0, result, "ZCARD should return 0 for non-existing key");
+
+        // Add members
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        jedis.zadd(key, members);
+
+        // Test ZCARD on existing sorted set
+        result = jedis.zcard(key);
+        assertEquals(3, result, "ZCARD should return 3 for three members");
+    }
+
+    @Test
+    void sortedset_zcard_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Test binary ZCARD
+        long result = jedis.zcard(key);
+        assertEquals(0, result, "Binary ZCARD should return 0 for non-existing key");
+
+        // Add member and test again
+        jedis.zadd(key, 1.0, "member1".getBytes());
+        result = jedis.zcard(key);
+        assertEquals(1, result, "Binary ZCARD should return 1");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zscore() {
+        String key = UUID.randomUUID().toString();
+
+        // Test ZSCORE on non-existing key
+        Double result = jedis.zscore(key, "member1");
+        assertNull(result, "ZSCORE should return null for non-existing key");
+
+        // Add member
+        jedis.zadd(key, 5.5, "member1");
+
+        // Test ZSCORE on existing member
+        result = jedis.zscore(key, "member1");
+        assertEquals(5.5, result, 0.001, "ZSCORE should return correct score");
+
+        // Test ZSCORE on non-existing member
+        result = jedis.zscore(key, "nonexistent");
+        assertNull(result, "ZSCORE should return null for non-existing member");
+    }
+
+    @Test
+    void sortedset_zscore_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member = "member1".getBytes();
+
+        // Add member
+        jedis.zadd(key, 7.7, member);
+
+        // Test binary ZSCORE
+        Double result = jedis.zscore(key, member);
+        assertEquals(7.7, result, 0.001, "Binary ZSCORE should return correct score");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zmscore() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "ZMSCORE command requires Valkey 6.2.0 or higher");
+
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        jedis.zadd(key, members);
+
+        // Test ZMSCORE
+        List<Double> scores = jedis.zmscore(key, "member1", "nonexistent", "member3");
+        assertEquals(3, scores.size(), "ZMSCORE should return 3 scores");
+        assertEquals(1.0, scores.get(0), 0.001, "First score should be correct");
+        assertNull(scores.get(1), "Non-existing member should have null score");
+        assertEquals(3.0, scores.get(2), 0.001, "Third score should be correct");
+    }
+
+    @Test
+    void sortedset_zmscore_binary() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "ZMSCORE command requires Valkey 6.2.0 or higher");
+
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member1 = "member1".getBytes();
+        byte[] member2 = "member2".getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put(member1, 1.5);
+        members.put(member2, 2.5);
+        jedis.zadd(key, members);
+
+        // Test binary ZMSCORE
+        List<Double> scores = jedis.zmscore(key, member1, member2);
+        assertEquals(2, scores.size(), "Binary ZMSCORE should return 2 scores");
+        assertEquals(1.5, scores.get(0), 0.001);
+        assertEquals(2.5, scores.get(1), 0.001);
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrange() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        members.put("member4", 4.0);
+        jedis.zadd(key, members);
+
+        // Test ZRANGE full range
+        List<String> range = jedis.zrange(key, 0, -1);
+        assertEquals(4, range.size(), "ZRANGE should return all 4 members");
+        assertEquals("member1", range.get(0), "First member should be lowest score");
+        assertEquals("member4", range.get(3), "Last member should be highest score");
+
+        // Test ZRANGE partial range
+        range = jedis.zrange(key, 1, 2);
+        assertEquals(2, range.size(), "ZRANGE should return 2 members");
+        assertEquals("member2", range.get(0));
+        assertEquals("member3", range.get(1));
+
+        // Test ZRANGE with negative indices
+        range = jedis.zrange(key, -2, -1);
+        assertEquals(2, range.size(), "ZRANGE should support negative indices");
+        assertEquals("member3", range.get(0));
+        assertEquals("member4", range.get(1));
+
+        // Test ZRANGE on non-existing key
+        range = jedis.zrange("nonexistent", 0, -1);
+        assertTrue(range.isEmpty(), "ZRANGE should return empty list for non-existing key");
+    }
+
+    @Test
+    void sortedset_zrange_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 1.0);
+        members.put("member2".getBytes(), 2.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZRANGE
+        List<byte[]> range = jedis.zrange(key, 0, -1);
+        assertEquals(2, range.size(), "Binary ZRANGE should return 2 members");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrangeWithScores() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        jedis.zadd(key, members);
+
+        // Test ZRANGE WITHSCORES
+        List<Tuple> rangeWithScores = jedis.zrangeWithScores(key, 0, -1);
+        assertEquals(3, rangeWithScores.size(), "ZRANGE WITHSCORES should return 3 members");
+        assertEquals("member1", rangeWithScores.get(0).getElement());
+        assertEquals(1.0, rangeWithScores.get(0).getScore(), 0.001);
+        assertEquals("member2", rangeWithScores.get(1).getElement());
+        assertEquals(2.0, rangeWithScores.get(1).getScore(), 0.001);
+        assertEquals("member3", rangeWithScores.get(2).getElement());
+        assertEquals(3.0, rangeWithScores.get(2).getScore(), 0.001);
+
+        // Test partial range with scores
+        List<Tuple> partialRange = jedis.zrangeWithScores(key, 0, 1);
+        assertEquals(2, partialRange.size(), "ZRANGE WITHSCORES should return 2 members");
+        assertEquals("member1", partialRange.get(0).getElement());
+        assertEquals("member2", partialRange.get(1).getElement());
+    }
+
+    @Test
+    void sortedset_zrangeWithScores_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 10.0);
+        members.put("member2".getBytes(), 20.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZRANGE WITHSCORES
+        List<Tuple> rangeWithScores = jedis.zrangeWithScores(key, 0, -1);
+        assertEquals(2, rangeWithScores.size(), "Binary ZRANGE WITHSCORES should return 2 members");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrank() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data with distinct scores
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        jedis.zadd(key, members);
+
+        // Test ZRANK
+        Long rank = jedis.zrank(key, "member1");
+        assertEquals(0L, rank, "member1 should have rank 0 (lowest score)");
+
+        rank = jedis.zrank(key, "member2");
+        assertEquals(1L, rank, "member2 should have rank 1");
+
+        rank = jedis.zrank(key, "member3");
+        assertEquals(2L, rank, "member3 should have rank 2 (highest score)");
+
+        // Test ZRANK on non-existing member
+        rank = jedis.zrank(key, "nonexistent");
+        assertNull(rank, "ZRANK should return null for non-existing member");
+
+        // Test ZRANK on non-existing key
+        rank = jedis.zrank("nonexistent_key", "member1");
+        assertNull(rank, "ZRANK should return null for non-existing key");
+    }
+
+    @Test
+    void sortedset_zrank_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member = "member1".getBytes();
+
+        // Setup
+        jedis.zadd(key, 1.0, member);
+        jedis.zadd(key, 2.0, "member2".getBytes());
+
+        // Test binary ZRANK
+        Long rank = jedis.zrank(key, member);
+        assertEquals(0L, rank, "Binary ZRANK should return correct rank");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrevrank() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        jedis.zadd(key, members);
+
+        // Test ZREVRANK (reverse order: high to low)
+        Long revrank = jedis.zrevrank(key, "member3");
+        assertEquals(0L, revrank, "member3 should have revrank 0 (highest score)");
+
+        revrank = jedis.zrevrank(key, "member2");
+        assertEquals(1L, revrank, "member2 should have revrank 1");
+
+        revrank = jedis.zrevrank(key, "member1");
+        assertEquals(2L, revrank, "member1 should have revrank 2 (lowest score)");
+
+        // Test ZREVRANK on non-existing member
+        revrank = jedis.zrevrank(key, "nonexistent");
+        assertNull(revrank, "ZREVRANK should return null for non-existing member");
+    }
+
+    @Test
+    void sortedset_zrevrank_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member = "member1".getBytes();
+
+        // Setup
+        jedis.zadd(key, 1.0, member);
+        jedis.zadd(key, 2.0, "member2".getBytes());
+
+        // Test binary ZREVRANK
+        Long revrank = jedis.zrevrank(key, "member2".getBytes());
+        assertEquals(0L, revrank, "Binary ZREVRANK should return 0 for highest score");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zcount() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        members.put("member4", 4.0);
+        members.put("member5", 5.0);
+        jedis.zadd(key, members);
+
+        // Test ZCOUNT with inclusive range
+        long count = jedis.zcount(key, 2.0, 4.0);
+        assertEquals(3, count, "ZCOUNT should return 3 for range [2.0, 4.0]");
+
+        // Test ZCOUNT with full range
+        count = jedis.zcount(key, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
+        assertEquals(5, count, "ZCOUNT should return 5 for full range");
+
+        // Test ZCOUNT with no matches
+        count = jedis.zcount(key, 10.0, 20.0);
+        assertEquals(0, count, "ZCOUNT should return 0 for range with no members");
+
+        // Test ZCOUNT on non-existing key
+        count = jedis.zcount("nonexistent", 0.0, 10.0);
+        assertEquals(0, count, "ZCOUNT should return 0 for non-existing key");
+    }
+
+    @Test
+    void sortedset_zcount_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 1.0);
+        members.put("member2".getBytes(), 2.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZCOUNT
+        long count = jedis.zcount(key, 1.0, 2.0);
+        assertEquals(2, count, "Binary ZCOUNT should return 2");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zincrby() {
+        String key = UUID.randomUUID().toString();
+
+        // Test ZINCRBY on non-existing member (creates with increment as score)
+        double score = jedis.zincrby(key, 5.0, "member1");
+        assertEquals(5.0, score, 0.001, "ZINCRBY should return 5.0 for new member");
+
+        // Test ZINCRBY on existing member
+        score = jedis.zincrby(key, 2.5, "member1");
+        assertEquals(7.5, score, 0.001, "ZINCRBY should return 7.5 after increment");
+
+        // Test ZINCRBY with negative increment
+        score = jedis.zincrby(key, -3.0, "member1");
+        assertEquals(4.5, score, 0.001, "ZINCRBY should support negative increments");
+
+        // Verify final score
+        Double finalScore = jedis.zscore(key, "member1");
+        assertEquals(4.5, finalScore, 0.001, "Member should have final incremented score");
+    }
+
+    @Test
+    void sortedset_zincrby_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member = "member1".getBytes();
+
+        // Test binary ZINCRBY
+        double score = jedis.zincrby(key, 10.5, member);
+        assertEquals(10.5, score, 0.001, "Binary ZINCRBY should return correct score");
+
+        score = jedis.zincrby(key, 5.0, member);
+        assertEquals(15.5, score, 0.001, "Binary ZINCRBY should increment correctly");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zpopmin() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("5.0.0"),
+                "ZPOPMIN command requires Valkey 5.0.0 or higher");
+
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        members.put("member4", 4.0);
+        jedis.zadd(key, members);
+
+        // Test ZPOPMIN with count
+        List<Tuple> popped = jedis.zpopmin(key, 2);
+        assertEquals(2, popped.size(), "ZPOPMIN should return 2 members");
+        assertEquals(
+                "member1", popped.get(0).getElement(), "ZPOPMIN should include lowest scored member");
+        assertEquals(1.0, popped.get(0).getScore(), 0.001);
+        assertEquals("member2", popped.get(1).getElement(), "ZPOPMIN should include second lowest");
+        assertEquals(2.0, popped.get(1).getScore(), 0.001);
+
+        // Verify members were removed
+        long cardinality = jedis.zcard(key);
+        assertEquals(2, cardinality, "Sorted set should have 2 members remaining");
+
+        // Test ZPOPMIN on non-existing key
+        List<Tuple> poppedEmpty = jedis.zpopmin("nonexistent", 1);
+        assertTrue(poppedEmpty.isEmpty(), "ZPOPMIN should return empty list for non-existing key");
+    }
+
+    @Test
+    void sortedset_zpopmin_binary() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("5.0.0"),
+                "ZPOPMIN command requires Valkey 5.0.0 or higher");
+
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 1.0);
+        members.put("member2".getBytes(), 2.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZPOPMIN
+        List<Tuple> popped = jedis.zpopmin(key, 1);
+        assertEquals(1, popped.size(), "Binary ZPOPMIN should return 1 member");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zpopmax() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("5.0.0"),
+                "ZPOPMAX command requires Valkey 5.0.0 or higher");
+
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        members.put("member4", 4.0);
+        jedis.zadd(key, members);
+
+        // Test ZPOPMAX with count
+        List<Tuple> popped = jedis.zpopmax(key, 2);
+        assertEquals(2, popped.size(), "ZPOPMAX should return 2 members");
+        assertEquals(
+                "member4", popped.get(0).getElement(), "ZPOPMAX should include highest scored member");
+        assertEquals(4.0, popped.get(0).getScore(), 0.001);
+        assertEquals("member3", popped.get(1).getElement(), "ZPOPMAX should include second highest");
+        assertEquals(3.0, popped.get(1).getScore(), 0.001);
+
+        // Verify members were removed
+        long cardinality = jedis.zcard(key);
+        assertEquals(2, cardinality, "Sorted set should have 2 members remaining");
+
+        // Test ZPOPMAX on non-existing key
+        List<Tuple> poppedEmpty = jedis.zpopmax("nonexistent", 1);
+        assertTrue(poppedEmpty.isEmpty(), "ZPOPMAX should return empty list for non-existing key");
+    }
+
+    @Test
+    void sortedset_zpopmax_binary() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("5.0.0"),
+                "ZPOPMAX command requires Valkey 5.0.0 or higher");
+
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 1.0);
+        members.put("member2".getBytes(), 2.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZPOPMAX
+        List<Tuple> popped = jedis.zpopmax(key, 1);
+        assertEquals(1, popped.size(), "Binary ZPOPMAX should return 1 member");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zunionstore() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members1 = new HashMap<>();
+        members1.put("member1", 1.0);
+        members1.put("member2", 2.0);
+        jedis.zadd(key1, members1);
+
+        Map<String, Double> members2 = new HashMap<>();
+        members2.put("member2", 3.0);
+        members2.put("member3", 4.0);
+        jedis.zadd(key2, members2);
+
+        // Test ZUNIONSTORE
+        long result = jedis.zunionstore(destKey, key1, key2);
+        assertEquals(3, result, "ZUNIONSTORE should return 3 (union has 3 unique members)");
+
+        // Verify union result
+        long cardinality = jedis.zcard(destKey);
+        assertEquals(3, cardinality, "Destination should have 3 members");
+
+        // Verify scores (default aggregation is SUM)
+        Double score = jedis.zscore(destKey, "member2");
+        assertEquals(5.0, score, 0.001, "member2 score should be sum of both sets (2.0 + 3.0)");
+
+        // Cleanup
+        jedis.del(key1, key2, destKey);
+    }
+
+    @Test
+    void sortedset_zunionstore_binary() {
+        byte[] key1 = UUID.randomUUID().toString().getBytes();
+        byte[] key2 = UUID.randomUUID().toString().getBytes();
+        byte[] destKey = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members1 = new HashMap<>();
+        members1.put("member1".getBytes(), 1.0);
+        jedis.zadd(key1, members1);
+
+        Map<byte[], Double> members2 = new HashMap<>();
+        members2.put("member2".getBytes(), 2.0);
+        jedis.zadd(key2, members2);
+
+        // Test binary ZUNIONSTORE
+        long result = jedis.zunionstore(destKey, key1, key2);
+        assertEquals(2, result, "Binary ZUNIONSTORE should return 2");
+
+        // Cleanup
+        jedis.del(key1);
+        jedis.del(key2);
+        jedis.del(destKey);
+    }
+
+    @Test
+    void sortedset_zinterstore() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members1 = new HashMap<>();
+        members1.put("member1", 1.0);
+        members1.put("member2", 2.0);
+        members1.put("member3", 3.0);
+        jedis.zadd(key1, members1);
+
+        Map<String, Double> members2 = new HashMap<>();
+        members2.put("member2", 4.0);
+        members2.put("member3", 5.0);
+        members2.put("member4", 6.0);
+        jedis.zadd(key2, members2);
+
+        // Test ZINTERSTORE
+        long result = jedis.zinterstore(destKey, key1, key2);
+        assertEquals(2, result, "ZINTERSTORE should return 2 (intersection has 2 common members)");
+
+        // Verify intersection result
+        long cardinality = jedis.zcard(destKey);
+        assertEquals(2, cardinality, "Destination should have 2 members");
+
+        // Verify scores (default aggregation is SUM)
+        Double score = jedis.zscore(destKey, "member2");
+        assertEquals(6.0, score, 0.001, "member2 score should be sum (2.0 + 4.0)");
+
+        score = jedis.zscore(destKey, "member3");
+        assertEquals(8.0, score, 0.001, "member3 score should be sum (3.0 + 5.0)");
+
+        // Verify non-common members are not in result
+        assertNull(jedis.zscore(destKey, "member1"), "member1 should not be in intersection");
+        assertNull(jedis.zscore(destKey, "member4"), "member4 should not be in intersection");
+
+        // Cleanup
+        jedis.del(key1, key2, destKey);
+    }
+
+    @Test
+    void sortedset_zinterstore_binary() {
+        byte[] key1 = UUID.randomUUID().toString().getBytes();
+        byte[] key2 = UUID.randomUUID().toString().getBytes();
+        byte[] destKey = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members1 = new HashMap<>();
+        members1.put("common".getBytes(), 1.0);
+        jedis.zadd(key1, members1);
+
+        Map<byte[], Double> members2 = new HashMap<>();
+        members2.put("common".getBytes(), 2.0);
+        jedis.zadd(key2, members2);
+
+        // Test binary ZINTERSTORE
+        long result = jedis.zinterstore(destKey, key1, key2);
+        assertEquals(1, result, "Binary ZINTERSTORE should return 1");
+
+        // Cleanup
+        jedis.del(key1);
+        jedis.del(key2);
+        jedis.del(destKey);
+    }
+
+    @Test
+    void sortedset_zremrangebyrank() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        members.put("member4", 4.0);
+        members.put("member5", 5.0);
+        jedis.zadd(key, members);
+
+        // Test ZREMRANGEBYRANK
+        long removed = jedis.zremrangebyrank(key, 0, 2);
+        assertEquals(3, removed, "ZREMRANGEBYRANK should remove 3 members (ranks 0, 1, 2)");
+
+        // Verify remaining members
+        long cardinality = jedis.zcard(key);
+        assertEquals(2, cardinality, "Sorted set should have 2 members remaining");
+
+        List<String> remaining = jedis.zrange(key, 0, -1);
+        assertEquals("member4", remaining.get(0), "member4 should remain");
+        assertEquals("member5", remaining.get(1), "member5 should remain");
+
+        // Test ZREMRANGEBYRANK with negative indices
+        jedis.del(key);
+        jedis.zadd(key, members);
+        removed = jedis.zremrangebyrank(key, -2, -1);
+        assertEquals(2, removed, "ZREMRANGEBYRANK should remove last 2 members");
+
+        // Test ZREMRANGEBYRANK on non-existing key
+        removed = jedis.zremrangebyrank("nonexistent", 0, 10);
+        assertEquals(0, removed, "ZREMRANGEBYRANK should return 0 for non-existing key");
+    }
+
+    @Test
+    void sortedset_zremrangebyrank_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 1.0);
+        members.put("member2".getBytes(), 2.0);
+        members.put("member3".getBytes(), 3.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZREMRANGEBYRANK
+        long removed = jedis.zremrangebyrank(key, 0, 1);
+        assertEquals(2, removed, "Binary ZREMRANGEBYRANK should remove 2 members");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zremrangebyscore() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        members.put("member4", 4.0);
+        members.put("member5", 5.0);
+        jedis.zadd(key, members);
+
+        // Test ZREMRANGEBYSCORE
+        long removed = jedis.zremrangebyscore(key, 2.0, 4.0);
+        assertEquals(3, removed, "ZREMRANGEBYSCORE should remove 3 members (scores 2.0, 3.0, 4.0)");
+
+        // Verify remaining members
+        long cardinality = jedis.zcard(key);
+        assertEquals(2, cardinality, "Sorted set should have 2 members remaining");
+
+        List<String> remaining = jedis.zrange(key, 0, -1);
+        assertEquals("member1", remaining.get(0), "member1 should remain");
+        assertEquals("member5", remaining.get(1), "member5 should remain");
+
+        // Test ZREMRANGEBYSCORE with no matches
+        removed = jedis.zremrangebyscore(key, 10.0, 20.0);
+        assertEquals(0, removed, "ZREMRANGEBYSCORE should return 0 for range with no members");
+
+        // Test ZREMRANGEBYSCORE on non-existing key
+        removed = jedis.zremrangebyscore("nonexistent", 0.0, 10.0);
+        assertEquals(0, removed, "ZREMRANGEBYSCORE should return 0 for non-existing key");
+    }
+
+    @Test
+    void sortedset_zremrangebyscore_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 1.0);
+        members.put("member2".getBytes(), 2.0);
+        members.put("member3".getBytes(), 3.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZREMRANGEBYSCORE
+        long removed = jedis.zremrangebyscore(key, 1.0, 2.0);
+        assertEquals(2, removed, "Binary ZREMRANGEBYSCORE should remove 2 members");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zscan() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        jedis.zadd(key, members);
+
+        // Test ZSCAN
+        ScanResult<Tuple> result = jedis.zscan(key, "0");
+        assertNotNull(result, "ZSCAN should return non-null result");
+        assertNotNull(result.getCursor(), "ZSCAN should return cursor");
+        assertNotNull(result.getResult(), "ZSCAN should return results");
+
+        List<Tuple> entries = result.getResult();
+        assertEquals(3, entries.size(), "ZSCAN should return 3 entries");
+
+        // Verify all members are present
+        Set<String> memberNames = new HashSet<>();
+        for (Tuple tuple : entries) {
+            memberNames.add(tuple.getElement());
+        }
+        assertTrue(memberNames.contains("member1"), "ZSCAN should include member1");
+        assertTrue(memberNames.contains("member2"), "ZSCAN should include member2");
+        assertTrue(memberNames.contains("member3"), "ZSCAN should include member3");
+
+        // Test ZSCAN on non-existing key
+        ScanResult<Tuple> resultEmpty = jedis.zscan("nonexistent", "0");
+        assertTrue(
+                resultEmpty.getResult().isEmpty(), "ZSCAN should return empty result for non-existing key");
+    }
+
+    @Test
+    void sortedset_zscan_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 1.0);
+        members.put("member2".getBytes(), 2.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZSCAN
+        ScanResult<Tuple> result = jedis.zscan(key, "0".getBytes());
+        assertNotNull(result, "Binary ZSCAN should return non-null result");
+        assertEquals(2, result.getResult().size(), "Binary ZSCAN should return 2 entries");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_edge_cases() {
+        String key = UUID.randomUUID().toString();
+
+        // Test operations on non-existing sorted set
+        assertEquals(0, jedis.zcard(key), "ZCARD should return 0 for non-existing key");
+        assertNull(jedis.zscore(key, "member"), "ZSCORE should return null for non-existing key");
+        assertNull(jedis.zrank(key, "member"), "ZRANK should return null for non-existing key");
+        assertNull(jedis.zrevrank(key, "member"), "ZREVRANK should return null for non-existing key");
+
+        List<String> emptyRange = jedis.zrange(key, 0, -1);
+        assertTrue(emptyRange.isEmpty(), "ZRANGE should return empty list for non-existing key");
+
+        List<Tuple> emptyRangeWithScores = jedis.zrangeWithScores(key, 0, -1);
+        assertTrue(
+                emptyRangeWithScores.isEmpty(),
+                "ZRANGE WITHSCORES should return empty list for non-existing key");
+
+        // Test ZREM on non-existing key
+        long removed = jedis.zrem(key, "member1", "member2");
+        assertEquals(0, removed, "ZREM should return 0 for non-existing key");
+
+        // Test ZCOUNT on non-existing key
+        long count = jedis.zcount(key, 0.0, 10.0);
+        assertEquals(0, count, "ZCOUNT should return 0 for non-existing key");
+
+        // Test operations with duplicate members
+        jedis.zadd(key, 1.0, "member1");
+        jedis.zadd(key, 2.0, "member1"); // Update score
+        assertEquals(1, jedis.zcard(key), "Sorted set should still have 1 member after update");
+        assertEquals(2.0, jedis.zscore(key, "member1"), 0.001, "Score should be updated");
+
+        // Test ZINCRBY creating new member
+        double score = jedis.zincrby(key, 5.0, "new_member");
+        assertEquals(5.0, score, 0.001, "ZINCRBY should create member with increment as score");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_comprehensive_workflow() {
+        String key = UUID.randomUUID().toString();
+
+        // Build a leaderboard
+        jedis.zadd(key, 100.0, "player1");
+        jedis.zadd(key, 200.0, "player2");
+        jedis.zadd(key, 150.0, "player3");
+
+        // Check leaderboard size
+        assertEquals(3, jedis.zcard(key), "Leaderboard should have 3 players");
+
+        // Get top 2 players
+        List<String> topPlayers = jedis.zrange(key, -2, -1);
+        assertEquals(2, topPlayers.size(), "Should get top 2 players");
+        assertEquals("player3", topPlayers.get(0), "player3 should be second");
+        assertEquals("player2", topPlayers.get(1), "player2 should be first");
+
+        // Get rankings
+        assertEquals(0L, jedis.zrank(key, "player1"), "player1 should be rank 0");
+        assertEquals(1L, jedis.zrank(key, "player3"), "player3 should be rank 1");
+        assertEquals(2L, jedis.zrank(key, "player2"), "player2 should be rank 2");
+
+        // Reverse rankings
+        assertEquals(2L, jedis.zrevrank(key, "player1"), "player1 should be revrank 2");
+        assertEquals(0L, jedis.zrevrank(key, "player2"), "player2 should be revrank 0");
+
+        // Increment a player's score
+        double newScore = jedis.zincrby(key, 100.0, "player1");
+        assertEquals(200.0, newScore, 0.001, "player1 should now have score 200");
+
+        // Count players in score range
+        long count = jedis.zcount(key, 150.0, 250.0);
+        assertEquals(3, count, "Should have 3 players in range [150, 250]");
+
+        // Remove bottom player
+        List<Tuple> removed = jedis.zpopmin(key, 1);
+        assertEquals(1, removed.size(), "Should remove 1 player");
+        assertEquals("player3", removed.get(0).getElement(), "Should remove player3");
+
+        // Final verification
+        assertEquals(2, jedis.zcard(key), "Leaderboard should have 2 players remaining");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrangestore() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String sourceKey = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
+
+        // Setup source sorted set
+        jedis.zadd(sourceKey, 1.0, "one");
+        jedis.zadd(sourceKey, 2.0, "two");
+        jedis.zadd(sourceKey, 3.0, "three");
+
+        // Store range in destination
+        Long count = jedis.zrangestore(destKey, sourceKey, 0, 1);
+        assertEquals(2L, count, "Should store 2 elements");
+
+        // Verify destination
+        List<String> result = jedis.zrange(destKey, 0, -1);
+        assertEquals(2, result.size());
+        assertEquals("one", result.get(0));
+        assertEquals("two", result.get(1));
+
+        // Cleanup
+        jedis.del(sourceKey, destKey);
+    }
+
+    @Test
+    void sortedset_zrangestore_binary() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        byte[] sourceKey = UUID.randomUUID().toString().getBytes();
+        byte[] destKey = UUID.randomUUID().toString().getBytes();
+
+        jedis.zadd(sourceKey, 1.0, "one".getBytes());
+        jedis.zadd(sourceKey, 2.0, "two".getBytes());
+
+        Long count = jedis.zrangestore(destKey, sourceKey, 0, 1);
+        assertEquals(2L, count);
+
+        jedis.del(sourceKey, destKey);
+    }
+
+    @Test
+    void sortedset_zrankWithScore() {
+        String minVersion = "7.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        redis.clients.jedis.resps.KeyValue<Long, Double> result = jedis.zrankWithScore(key, "two");
+        assertNotNull(result);
+        assertEquals(1L, result.getKey());
+        assertEquals(2.0, result.getValue(), 0.001);
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrevrankWithScore() {
+        String minVersion = "7.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        redis.clients.jedis.resps.KeyValue<Long, Double> result = jedis.zrevrankWithScore(key, "two");
+        assertNotNull(result);
+        assertEquals(1L, result.getKey());
+        assertEquals(2.0, result.getValue(), 0.001);
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zlexcount() {
+        String key = UUID.randomUUID().toString();
+
+        // Add members with same score for lexicographical ordering
+        jedis.zadd(key, 0.0, "a");
+        jedis.zadd(key, 0.0, "b");
+        jedis.zadd(key, 0.0, "c");
+        jedis.zadd(key, 0.0, "d");
+
+        Long count = jedis.zlexcount(key, "[a", "[c");
+        assertEquals(3L, count, "Should count 3 members (a, b, c)");
+
+        count = jedis.zlexcount(key, "(a", "(d");
+        assertEquals(2L, count, "Should count 2 members (b, c)");
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zlexcount_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        jedis.zadd(key, 0.0, "a".getBytes());
+        jedis.zadd(key, 0.0, "b".getBytes());
+        jedis.zadd(key, 0.0, "c".getBytes());
+
+        Long count = jedis.zlexcount(key, "[a".getBytes(), "[c".getBytes());
+        assertEquals(3L, count);
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zdiff() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key1, 3.0, "three");
+
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 2.0, "two");
+
+        List<String> diff = jedis.zdiff(key1, key2);
+        assertEquals(1, diff.size());
+        assertEquals("three", diff.get(0));
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zdiffWithScores() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key1, 3.0, "three");
+
+        jedis.zadd(key2, 1.0, "one");
+
+        List<Tuple> diff = jedis.zdiffWithScores(key1, key2);
+        assertEquals(2, diff.size());
+        assertEquals("two", diff.get(0).getElement());
+        assertEquals(2.0, diff.get(0).getScore(), 0.001);
+        assertEquals("three", diff.get(1).getElement());
+        assertEquals(3.0, diff.get(1).getScore(), 0.001);
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zdiffstore() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+
+        Long count = jedis.zdiffstore(destKey, key1, key2);
+        assertEquals(1L, count);
+
+        List<String> result = jedis.zrange(destKey, 0, -1);
+        assertEquals(1, result.size());
+        assertEquals("two", result.get(0));
+
+        jedis.del(key1, key2, destKey);
+    }
+
+    @Test
+    void sortedset_zunion() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 3.0, "three");
+
+        List<String> union = jedis.zunion(key1, key2);
+        assertEquals(3, union.size());
+        assertTrue(union.contains("one"));
+        assertTrue(union.contains("two"));
+        assertTrue(union.contains("three"));
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zunionWithScores() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 3.0, "three");
+
+        List<Tuple> union = jedis.zunionWithScores(key1, key2);
+        assertEquals(3, union.size());
+        // Results are sorted by score
+        assertEquals("one", union.get(0).getElement());
+        assertEquals(2.0, union.get(0).getScore(), 0.001); // 1.0 + 1.0
+        assertEquals("two", union.get(1).getElement());
+        assertEquals(2.0, union.get(1).getScore(), 0.001);
+        assertEquals("three", union.get(2).getElement());
+        assertEquals(3.0, union.get(2).getScore(), 0.001);
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zinter() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 3.0, "three");
+
+        List<String> inter = jedis.zinter(key1, key2);
+        assertEquals(1, inter.size());
+        assertEquals("one", inter.get(0));
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zinterWithScores() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 3.0, "three");
+
+        List<Tuple> inter = jedis.zinterWithScores(key1, key2);
+        assertEquals(1, inter.size());
+        assertEquals("one", inter.get(0).getElement());
+        assertEquals(2.0, inter.get(0).getScore(), 0.001); // 1.0 + 1.0
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zintercard() {
+        String minVersion = "7.0.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key1, 3.0, "three");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 2.0, "two");
+
+        Long cardinality = jedis.zintercard(key1, key2);
+        assertEquals(2L, cardinality);
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zmpop() {
+        String minVersion = "7.0.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 3.0, "three");
+
+        // Pop min from first non-empty key
+        redis.clients.jedis.resps.KeyValue<byte[], List<Tuple>> result =
+                jedis.zmpop(redis.clients.jedis.args.SortedSetOption.MIN, key1.getBytes(), key2.getBytes());
+        assertNotNull(result);
+        assertArrayEquals(key1.getBytes(), result.getKey());
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zremrangebylex() {
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 0.0, "a");
+        jedis.zadd(key, 0.0, "b");
+        jedis.zadd(key, 0.0, "c");
+        jedis.zadd(key, 0.0, "d");
+
+        Long removed = jedis.zremrangebylex(key, "[a", "[c");
+        assertEquals(3L, removed, "Should remove 3 members (a, b, c)");
+
+        Long remaining = jedis.zcard(key);
+        assertEquals(1L, remaining, "Should have 1 member remaining");
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrandmember() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        String member = jedis.zrandmember(key);
+        assertNotNull(member);
+        assertTrue(List.of("one", "two", "three").contains(member));
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrandmemberWithCount() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        List<String> members = jedis.zrandmemberWithCount(key, 2);
+        assertNotNull(members);
+        assertEquals(2, members.size());
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrandmemberWithCountWithScores() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        List<Tuple> membersWithScores = jedis.zrandmemberWithCountWithScores(key, 2);
+        assertNotNull(membersWithScores);
+        assertEquals(2, membersWithScores.size());
+
+        // Each tuple should have member and score
+        for (Tuple tuple : membersWithScores) {
+            assertNotNull(tuple.getElement()); // member
+            assertNotNull(tuple.getScore()); // score
+        }
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zadd_with_params() {
+        String key = UUID.randomUUID().toString();
+
+        // Test zadd with ZAddParams (NX - only add if doesn't exist)
+        ZAddParams nxParams = new ZAddParams().nx();
+        long added = jedis.zadd(key, 1.0, "one", nxParams);
+        assertEquals(1, added);
+
+        // Try adding same member with NX - should not update
+        added = jedis.zadd(key, 2.0, "one", nxParams);
+        assertEquals(0, added);
+        assertEquals(1.0, jedis.zscore(key, "one"));
+
+        // Test with XX - only update existing
+        ZAddParams xxParams = new ZAddParams().xx();
+        added = jedis.zadd(key, 2.0, "one", xxParams);
+        assertEquals(0, added); // 0 new members added, but updated
+        assertEquals(2.0, jedis.zscore(key, "one"));
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrevrange() {
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        // Get range in reverse order (highest to lowest score)
+        List<String> result = jedis.zrevrange(key, 0, 1);
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertEquals("three", result.get(0)); // highest score
+        assertEquals("two", result.get(1));
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zscan_with_params() {
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "member1");
+        jedis.zadd(key, 2.0, "member2");
+        jedis.zadd(key, 3.0, "member3");
+        jedis.zadd(key, 4.0, "other1");
+
+        // Scan with pattern matching
+        ScanParams params = new ScanParams().match("member*").count(10);
+        ScanResult<Tuple> result = jedis.zscan(key, "0", params);
+
+        assertNotNull(result);
+        assertNotNull(result.getResult());
+        assertTrue(result.getResult().size() >= 3); // Should match member1, member2, member3
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrange_with_params() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+        jedis.zadd(key, 4.0, "four");
+
+        // Test range by score
+        ZRangeParams byScore = ZRangeParams.zrangeByScoreParams(1.5, 3.5);
+        List<String> result = jedis.zrange(key, byScore);
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertTrue(result.contains("two"));
+        assertTrue(result.contains("three"));
+
+        // Test range by index
+        ZRangeParams byIndex = ZRangeParams.zrangeParams(0, 1);
+        result = jedis.zrange(key, byIndex);
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertEquals("one", result.get(0));
+        assertEquals("two", result.get(1));
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrangestore_with_params() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String srcKey = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
+
+        jedis.zadd(srcKey, 1.0, "one");
+        jedis.zadd(srcKey, 2.0, "two");
+        jedis.zadd(srcKey, 3.0, "three");
+        jedis.zadd(srcKey, 4.0, "four");
+
+        // Store range by score
+        ZRangeParams byScore = ZRangeParams.zrangeByScoreParams(1.5, 3.5);
+        long stored = jedis.zrangestore(destKey, srcKey, byScore);
+        assertEquals(2, stored);
+
+        // Verify destination has the correct members
+        List<String> result = jedis.zrange(destKey, 0, -1);
+        assertEquals(2, result.size());
+        assertTrue(result.contains("two"));
+        assertTrue(result.contains("three"));
+
+        jedis.del(srcKey, destKey);
     }
 }
