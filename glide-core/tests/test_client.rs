@@ -39,7 +39,7 @@ pub(crate) mod shared_client_tests {
     use utilities::cluster::*;
     use utilities::*;
 
-    #[cfg(feature = "iam_tests")]
+    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
     use glide_core::connection_request::{
         AuthenticationInfo, IamCredentials, ServiceType, TlsMode,
     };
@@ -927,6 +927,7 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    #[cfg(feature = "iam_mock_tests")]
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -1062,6 +1063,7 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    #[cfg(feature = "iam_tests")]
     #[rstest]
     #[serial_test::serial]
     fn test_iam_cluster_refresh_token_after_connection_kill_and_token_expired() {
