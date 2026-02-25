@@ -19,7 +19,6 @@ import {
     RequestError,
     ServiceType,
     IamAuthConfig,
-    Logger,
 } from "../build-ts";
 import {
     flushAndCloseClient,
