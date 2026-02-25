@@ -113,8 +113,9 @@ impl ::std::fmt::Display for NodeAddress {
 }
 
 /// Connection metadata used for OTel span attributes.
-/// Currently holds a single address; will be extended to hold
-/// multiple addresses for cluster mode in a follow-up PR.
+/// Currently reports the initial connection address; in cluster mode this may
+/// not reflect the node that actually handled a given command.
+/// See: https://github.com/valkey-io/valkey-glide/issues/5443
 #[derive(Clone, Debug)]
 pub struct OTelMetadata {
     pub addresses: Vec<NodeAddress>,

@@ -2046,6 +2046,9 @@ impl Client {
             .unwrap_or(false)
     }
 
+    /// Returns the server address for OTel `server.address` attribute.
+    /// In cluster mode this returns the initial connection address, not the
+    /// node that handled the command. See: https://github.com/valkey-io/valkey-glide/issues/5443
     pub fn server_address(&self) -> &str {
         self.otel_metadata
             .addresses
@@ -2054,6 +2057,9 @@ impl Client {
             .unwrap_or("unknown")
     }
 
+    /// Returns the server port for OTel `server.port` attribute.
+    /// In cluster mode this returns the initial connection port, not the
+    /// node that handled the command. See: https://github.com/valkey-io/valkey-glide/issues/5443
     pub fn server_port(&self) -> u16 {
         self.otel_metadata
             .addresses
