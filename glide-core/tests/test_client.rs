@@ -927,41 +927,89 @@ pub(crate) mod shared_client_tests {
         });
     }
 
-    #[cfg(feature = "iam_tests")]
     #[rstest]
     #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_iam_refresh_token(#[values(false, true)] use_cluster: bool) {
-        block_on_all(async {
-            remove_test_credentials();
+        block_on_all(async move {
+            // Set mock AWS credentials
+            unsafe {
+                std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
+                std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+                std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+            }
+
+            // Cleanup function to restore original credentials
+            let cleanup = || unsafe {
+                std::env::remove_var("AWS_ACCESS_KEY_ID");
+                std::env::remove_var("AWS_SECRET_ACCESS_KEY");
+                std::env::remove_var("AWS_SESSION_TOKEN");
+            };
 
             let cluster_name = if use_cluster {
-                "iam-auth-test"
+                "test-cluster"
             } else {
-                "iam-auth-standalone"
+                "test-standalone"
             };
-            let username = "iam-auth";
+            let username = "default";
             let region = "us-east-1";
-            let endpoint = if use_cluster {
-                ELASTICACHE_CLUSTER_IAM_ENDPOINT
-            } else {
-                ELASTICACHE_STANDALONE_IAM_ENDPOINT
+
+            // Create test basics with regular authentication first
+            let test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Get the server address
+            let address = match &test_basics.server {
+                BackingServer::Standalone(server) => server
+                    .as_ref()
+                    .map(|s| s.get_client_addr())
+                    .unwrap_or(get_shared_server_address(false)),
+                BackingServer::Cluster(cluster) => {
+                    if let Some(cluster) = cluster.as_ref() {
+                        let addresses = cluster.get_server_addresses();
+                        addresses[0].clone()
+                    } else {
+                        // Using shared cluster
+                        let addresses = get_shared_cluster_addresses(false);
+                        addresses[0].clone()
+                    }
+                }
             };
 
-            // Use the provided endpoint and port
-            let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
+            // Create IAM connection request with mock credentials
+            let iam_credentials = IamCredentials {
+                cluster_name: cluster_name.into(),
+                region: region.into(),
+                service_type: ServiceType::ELASTICACHE.into(),
+                refresh_interval_seconds: Some(5), // Fast refresh for testing
+                ..Default::default()
+            };
 
-            // Create IAM connection request
-            let connection_request = create_iam_connection_request(
-                &[address],
-                cluster_name,
-                username,
-                region,
-                None, // Use default refresh interval
-                use_cluster,
-                ServiceType::ELASTICACHE,
-            );
+            let auth_info = AuthenticationInfo {
+                password: String::new().into(),
+                username: username.into(),
+                iam_credentials: protobuf::MessageField::some(iam_credentials),
+                ..Default::default()
+            };
 
-            // Attempt to create client with IAM authentication
+            let addresses_info = vec![get_address_info(&address)];
+
+            let connection_request = glide_core::connection_request::ConnectionRequest {
+                addresses: addresses_info,
+                tls_mode: TlsMode::NoTls.into(),
+                cluster_mode_enabled: use_cluster,
+                request_timeout: 10000,
+                authentication_info: protobuf::MessageField::some(auth_info),
+                ..Default::default()
+            };
+
+            // Create client with IAM authentication
             let client_result = Client::new(connection_request.into(), None).await;
 
             match client_result {
@@ -1003,33 +1051,17 @@ pub(crate) mod shared_client_tests {
                             "PING after refresh #{i} should succeed: {ping_result:?}"
                         );
                     }
+
+                    cleanup();
                 }
                 Err(err) => {
-                    // In case of failure, print error and assert that it is not a non-connection/auth error
-                    let error_msg = err.to_string();
-                    // If DNS lookup failed, provide a clearer message
-                    if error_msg.contains("failed to lookup address")
-                        || error_msg.contains("Name or service not known")
-                    {
-                        // Uncomment this when you have a real AWS environment
-                        panic!(
-                            "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
-                            endpoint, error_msg
-                        );
-                    }
-
-                    // Other errors will fall here, indicating problems with IAM token generation or connection/auth
-                    // Uncomment this when you have a real AWS environment
-                    panic!(
-                        "Failed to create client with IAM authentication: {}",
-                        error_msg
-                    );
+                    cleanup();
+                    panic!("Failed to create client with IAM authentication: {}", err);
                 }
             }
         });
     }
 
-    #[cfg(feature = "iam_tests")]
     #[rstest]
     #[serial_test::serial]
     fn test_iam_cluster_refresh_token_after_connection_kill_and_token_expired() {

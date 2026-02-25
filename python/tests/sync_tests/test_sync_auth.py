@@ -386,6 +386,9 @@ class TestSyncAuthCommands:
             result = client.custom_command(["PING"])
             assert result == b"PONG"
 
+            # Test manual token refresh
+            client.refresh_iam_token()
+
             # Test basic operations
             client.set("iam_test_key", "iam_test_value")
             value = client.get("iam_test_key")

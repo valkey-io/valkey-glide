@@ -90,6 +90,10 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), value1, getResult.Value())
 
+	// Test manual token refresh
+	_, err = client.RefreshIamToken(context.Background())
+	assert.NoError(suite.T(), err)
+
 	// Verify operations still work after token refresh
 	key2 := uuid.NewString()
 	value2 := "iam_test_value2"

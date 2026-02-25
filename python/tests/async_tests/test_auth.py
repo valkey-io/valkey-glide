@@ -393,6 +393,9 @@ class TestAuthCommands:
             value = await client.get("iam_test_key")
             assert value == b"iam_test_value"
 
+            # Test manual token refresh
+            await client.refresh_iam_token()
+
             # Verify operations still work after token refresh
             await client.set("iam_test_key2", "iam_test_value2")
             value2 = await client.get("iam_test_key2")

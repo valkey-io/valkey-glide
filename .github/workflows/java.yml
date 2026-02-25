@@ -158,6 +158,9 @@ jobs:
               working-directory: java
               shell: bash
               run: |
+                  export AWS_ACCESS_KEY_ID=test_access_key 
+                  export AWS_SECRET_ACCESS_KEY=test_secret_key 
+                  export AWS_SESSION_TOKEN=test_session_token
                   if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
                       # Enable integration tests on Windows with WSL
                       ./gradlew.bat --build-cache --continue build test -x javadoc
