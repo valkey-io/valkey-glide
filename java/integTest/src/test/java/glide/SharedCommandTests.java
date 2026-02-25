@@ -4746,7 +4746,8 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void smismember_binary_with_large_response_preserves_boolean_array_values(BaseClient client) {
+    public void smismember_binary_with_large_response_preserves_boolean_array_values(
+            BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
         final int memberCount = 1900; // >16KB in DirectByteBuffer array fast-path
 
@@ -4761,7 +4762,8 @@ public class SharedCommandTests {
         }
 
         assertEquals(
-                existingMembers.size(), client.sadd(key, existingMembers.toArray(new GlideString[0])).get());
+                existingMembers.size(),
+                client.sadd(key, existingMembers.toArray(new GlideString[0])).get());
 
         Boolean[] result = client.smismember(key, queryMembers).get();
 
@@ -6332,7 +6334,8 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void zmscore_binary_with_large_response_preserves_double_and_null_values(BaseClient client) {
+    public void zmscore_binary_with_large_response_preserves_double_and_null_values(
+            BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
         final int memberCount = 2200; // >16KB in DirectByteBuffer array fast-path
 
