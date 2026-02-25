@@ -20,6 +20,8 @@ use test_constants::*;
 
 #[cfg(test)]
 mod dns_tests {
+    use super::*;
+    use crate::utilities::{cluster::RedisCluster, cluster::SHORT_CLUSTER_TEST_TIMEOUT, *};
     use glide_core::{
         client::{Client, StandaloneClient},
         connection_request::TlsMode,
@@ -27,13 +29,10 @@ mod dns_tests {
     use once_cell::sync::Lazy;
     use rstest::rstest;
     use std::env;
-    use super::*;
-    use crate::utilities::{cluster::RedisCluster, cluster::SHORT_CLUSTER_TEST_TIMEOUT, *};
 
     // Shared temp directory and TLS paths for all DNS tests
-    static TLS_TEMPDIR: Lazy<tempfile::TempDir> = Lazy::new(|| {
-        tempfile::tempdir().expect("Failed to create temp dir for TLS certs")
-    });
+    static TLS_TEMPDIR: Lazy<tempfile::TempDir> =
+        Lazy::new(|| tempfile::tempdir().expect("Failed to create temp dir for TLS certs"));
     static TLS_PATHS: Lazy<TlsFilePaths> = Lazy::new(|| build_tls_file_paths(&TLS_TEMPDIR));
     static CA_CERT_BYTES: Lazy<Vec<u8>> = Lazy::new(|| TLS_PATHS.read_ca_cert_as_bytes());
 
