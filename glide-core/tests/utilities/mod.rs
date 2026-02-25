@@ -236,10 +236,7 @@ impl RedisServer {
                 }
             }
             redis::ConnectionAddr::TcpTls { ref host, port, .. } => {
-                let tls_paths = tls_paths.unwrap_or_else(|| {
-                    let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
-                    build_tls_file_paths(&tempdir)
-                });
+                let tls_paths = tls_paths.unwrap_or_else(|| build_tls_file_paths(&tempdir));
                 let tls_auth_clients_arg_value = match tls_auth_clients {
                     true => "yes",
                     _ => "no",

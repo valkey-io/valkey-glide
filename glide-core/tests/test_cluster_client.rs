@@ -5,7 +5,7 @@ mod utilities;
 
 #[cfg(test)]
 mod cluster_client_tests {
-    use crate::test_constants::HOST_IPV6;
+    use crate::{test_constants::HOST_IPV6, utilities::cluster::RedisCluster};
     use std::collections::HashMap;
 
     use super::*;
@@ -680,10 +680,10 @@ mod cluster_client_tests {
             let tls_paths = build_tls_file_paths(&tempdir);
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
 
-            let cluster = utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
+            let cluster = RedisCluster::new_with_tls(3, 0, Some(tls_paths));
 
-            let first_addr = cluster.get_server_addresses()[0].clone();
-            let ipv6_addr = match first_addr {
+            let default_address = cluster.get_server_addresses()[0].clone();
+            let ipv6_addr = match default_address {
                 redis::ConnectionAddr::TcpTls { port, .. } => redis::ConnectionAddr::TcpTls {
                     host: HOST_IPV6.to_string(),
                     port,
@@ -709,12 +709,7 @@ mod cluster_client_tests {
                 .await
                 .expect("Failed to create cluster client with IPv6 address");
 
-            let mut ping_cmd = redis::cmd("PING");
-            let ping_result = client.send_command(&mut ping_cmd, None).await;
-            assert_eq!(
-                ping_result.unwrap(),
-                Value::SimpleString("PONG".to_string())
-            );
+            assert_connected(&mut client).await;
         });
     }
 }

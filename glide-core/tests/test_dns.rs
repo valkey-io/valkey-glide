@@ -161,7 +161,7 @@ mod dns_tests {
 
     #[rstest]
     #[serial_test::serial]
-    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_standalone_connect_with_valid_hostname_no_tls() {
         if !dns_tests_enabled() {
             return;
@@ -177,7 +177,7 @@ mod dns_tests {
 
     #[rstest]
     #[serial_test::serial]
-    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_standalone_connect_with_invalid_hostname_no_tls() {
         if !dns_tests_enabled() {
             return;
@@ -191,7 +191,7 @@ mod dns_tests {
 
     #[rstest]
     #[serial_test::serial]
-    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_standalone_tls_connect_with_hostname_in_cert() {
         if !dns_tests_enabled() {
             return;
@@ -207,7 +207,7 @@ mod dns_tests {
 
     #[rstest]
     #[serial_test::serial]
-    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_standalone_tls_connect_with_hostname_not_in_cert() {
         if !dns_tests_enabled() {
             return;
