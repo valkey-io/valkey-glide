@@ -70,7 +70,7 @@ blockingSocketTimeoutMillis
 - ⚠️ Sorted set operations (ZADD, ZREM, ZRANGE) - **Available via `sendCommand()` only**
 - ✅ Key operations (DEL, EXISTS, EXPIRE, TTL)
 - ✅ Connection commands (PING, SELECT)
-- ✅ Pub/Sub (PUBLISH, PUBSUB CHANNELS, PUBSUB NUMSUB, PUBSUB NUMPAT). `publish()` returns `0` instead of the actual subscriber count due to GLIDE API limitations (see [issue #5354](https://github.com/valkey-io/valkey-glide/issues/5354)). For subscription management and message handling, use GLIDE's native `StandaloneSubscriptionConfiguration` or `ClusterSubscriptionConfiguration` at client creation time.
+- ✅ Pub/Sub (PUBLISH, PUBSUB CHANNELS, PUBSUB NUMSUB, PUBSUB NUMPAT). `publish()` returns `0` instead of the actual subscriber count due to GLIDE API limitations (see [issue #5354](https://github.com/valkey-io/valkey-glide/issues/5354)). For subscription management and message handling, use GLIDE's native dynamic pubsub APIs for subscribing to channels and handling messages at runtime.
 - ✅ Generic commands via `sendCommand()` (Protocol.Command types only)
 
 ### Client Types
@@ -97,7 +97,7 @@ blockingSocketTimeoutMillis
 ### Advanced Features
 - **Transactions**: MULTI/EXEC transaction blocks not supported
 - **Pipelining**: Jedis pipelining functionality unavailable
-- **Pub/Sub with JedisPubSub callbacks**: Jedis-style `JedisPubSub` callback listeners are not supported. For PubSub functionality with message handling, configure GLIDE's native `StandaloneSubscriptionConfiguration` or `ClusterSubscriptionConfiguration` at client creation time to receive messages via callbacks or message queues. The compatibility layer only provides `publish()` and `pubsub*()` inspection commands.
+- **Pub/Sub with JedisPubSub callbacks**: Jedis-style `JedisPubSub` callback listeners are not supported. For PubSub functionality with message handling, use GLIDE's native dynamic pubsub APIs to subscribe to channels and handle messages at runtime. The compatibility layer only provides `publish()` and `pubsub*()` inspection commands.
 - **Lua scripting**: EVAL/EVALSHA commands not supported
 - **Modules**: Redis module commands not available
 - **Typed sorted set methods**: No dedicated methods like `zadd()`, `zrem()` - use `sendCommand()` instead

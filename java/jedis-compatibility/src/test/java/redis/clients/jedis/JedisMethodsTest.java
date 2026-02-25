@@ -146,17 +146,11 @@ public class JedisMethodsTest {
         Method pubsubChannelsPattern = jedisClass.getMethod("pubsubChannels", String.class);
         assertEquals(List.class, pubsubChannelsPattern.getReturnType());
 
-        Method pubsubChannelsBinary = jedisClass.getMethod("pubsubChannels", byte[].class);
-        assertEquals(List.class, pubsubChannelsBinary.getReturnType());
-
         Method pubsubNumPat = jedisClass.getMethod("pubsubNumPat");
-        assertEquals(long.class, pubsubNumPat.getReturnType());
+        assertEquals(Long.class, pubsubNumPat.getReturnType());
 
         Method pubsubNumSub = jedisClass.getMethod("pubsubNumSub", String[].class);
         assertEquals(Map.class, pubsubNumSub.getReturnType());
-
-        Method pubsubNumSubBinary = jedisClass.getMethod("pubsubNumSub", byte[][].class);
-        assertEquals(Map.class, pubsubNumSubBinary.getReturnType());
     }
 
     public void testEvalMethodSignatures() throws NoSuchMethodException {

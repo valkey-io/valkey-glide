@@ -1150,20 +1150,6 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Helper method to convert a GlideString array to a List of byte arrays.
-     *
-     * @param glideStrings the GlideString array to convert
-     * @return a List of byte arrays
-     */
-    private static List<byte[]> convertGlideStringArrayToByteArrayList(GlideString[] glideStrings) {
-        List<byte[]> result = new ArrayList<>();
-        for (GlideString gs : glideStrings) {
-            result.add(gs.getBytes());
-        }
-        return result;
-    }
-
-    /**
      * Delete one or more keys.
      *
      * @param key the key to delete
@@ -7592,24 +7578,6 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Returns the list of currently active channels (binary version).
-     *
-     * @param pattern glob-style pattern (pass null or empty array for all channels)
-     * @return list of channel names
-     */
-    public List<byte[]> pubsubChannels(final byte[] pattern) {
-        return executeCommandWithGlide(
-                "PUBSUB CHANNELS",
-                () -> {
-                    GlideString[] arr =
-                            pattern == null || pattern.length == 0
-                                    ? glideClient.pubsubChannelsBinary().get()
-                                    : glideClient.pubsubChannels(GlideString.of(pattern)).get();
-                    return convertGlideStringArrayToByteArrayList(arr);
-                });
-    }
-
-    /**
      * Loads a Lua script into the server's script cache and returns its SHA1 digest.
      *
      * <p><b>Implementation Note:</b> This method uses {@code customCommand} because GLIDE Java does
@@ -7636,7 +7604,7 @@ public final class Jedis implements Closeable {
      *
      * @return the number of unique patterns
      */
-    public long pubsubNumPat() {
+    public Long pubsubNumPat() {
         return executeCommandWithGlide("PUBSUB NUMPAT", () -> glideClient.pubsubNumPat().get());
     }
 
@@ -7648,26 +7616,6 @@ public final class Jedis implements Closeable {
      */
     public Map<String, Long> pubsubNumSub(String... channels) {
         return executeCommandWithGlide("PUBSUB NUMSUB", () -> glideClient.pubsubNumSub(channels).get());
-    }
-
-    /**
-     * Returns the number of subscribers for the specified channels (binary version).
-     *
-     * @param channels channel names
-     * @return map of channel name to subscriber count
-     */
-    public Map<byte[], Long> pubsubNumSub(final byte[]... channels) {
-        return executeCommandWithGlide(
-                "PUBSUB NUMSUB",
-                () -> {
-                    GlideString[] glideChannels = convertToGlideStringArray(channels);
-                    Map<GlideString, Long> result = glideClient.pubsubNumSub(glideChannels).get();
-                    Map<byte[], Long> out = new HashMap<>();
-                    for (Map.Entry<GlideString, Long> e : result.entrySet()) {
-                        out.put(e.getKey().getBytes(), e.getValue());
-                    }
-                    return out;
-                });
     }
 
     /**

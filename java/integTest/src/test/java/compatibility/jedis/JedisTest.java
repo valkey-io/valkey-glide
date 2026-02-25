@@ -1665,7 +1665,8 @@ public class JedisTest {
                 "PUBSUB CHANNELS with pattern should not contain channel without subscribers");
 
         // Test PUBSUB NUMPAT command
-        long numPat = jedis.pubsubNumPat();
+        Long numPat = jedis.pubsubNumPat();
+        assertNotNull(numPat, "PUBSUB NUMPAT should return a non-null value");
         assertTrue(numPat >= 0, "PUBSUB NUMPAT should return a non-negative value");
 
         // Test PUBSUB NUMSUB command
@@ -1689,40 +1690,6 @@ public class JedisTest {
                 0L,
                 receivedBinary,
                 "PUBLISH binary should return 0 (GLIDE API limitation - see issue #5354)");
-
-        // Test PUBSUB CHANNELS binary
-        List<byte[]> channelsBinary = jedis.pubsubChannels(channelBytes);
-        assertNotNull(channelsBinary, "PUBSUB CHANNELS binary should return a non-null list");
-        assertTrue(
-                channelsBinary instanceof List, "PUBSUB CHANNELS binary should return a List instance");
-        // Channel won't be in the list since there are no active subscriptions
-        boolean containsChannel =
-                channelsBinary.stream().anyMatch(ch -> Arrays.equals(ch, channelBytes));
-        assertFalse(
-                containsChannel, "PUBSUB CHANNELS binary should not contain channel without subscribers");
-
-        // Test PUBSUB NUMSUB binary
-        Map<byte[], Long> numSubBinary = jedis.pubsubNumSub(channelBytes);
-        assertNotNull(numSubBinary, "PUBSUB NUMSUB binary should return a non-null map");
-        assertTrue(numSubBinary instanceof Map, "PUBSUB NUMSUB binary should return a Map instance");
-        // Verify map contains the requested channel
-        boolean containsChannelKey =
-                numSubBinary.keySet().stream().anyMatch(key -> Arrays.equals(key, channelBytes));
-        assertTrue(containsChannelKey, "PUBSUB NUMSUB binary should contain the requested channel");
-        // Get subscriber count for the channel
-        Long subscriberCount =
-                numSubBinary.entrySet().stream()
-                        .filter(entry -> Arrays.equals(entry.getKey(), channelBytes))
-                        .map(Map.Entry::getValue)
-                        .findFirst()
-                        .orElse(null);
-        assertNotNull(
-                subscriberCount, "PUBSUB NUMSUB binary should return subscriber count for channel");
-        assertEquals(
-                0L,
-                subscriberCount,
-                "PUBSUB NUMSUB binary should return 0 subscribers for channel without active"
-                        + " subscriptions");
     }
 
     @Test
