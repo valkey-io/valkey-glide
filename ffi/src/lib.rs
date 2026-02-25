@@ -2187,7 +2187,6 @@ fn extract_command_name(request_type: RequestType, context: &str) -> Option<Stri
     Some(command_name)
 }
 
-
 /// Creates an OpenTelemetry span with the given name and returns a pointer to the span as u64.
 #[unsafe(no_mangle)]
 pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
