@@ -259,10 +259,7 @@ pub struct Client {
     // Optional compression manager for automatic compression/decompression
     compression_manager: Option<Arc<CompressionManager>>,
     pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
-    // Connection metadata for OTel span attributes
-    server_address: String,
-    server_port: u16,
-    db_namespace: String,
+    otel_metadata: types::OTelMetadata,
 }
 
 async fn run_with_timeout<T>(
@@ -443,7 +440,7 @@ impl Client {
 
         self.update_stored_database_id(database_id).await?;
         // Keep OTel db.namespace in sync
-        self.db_namespace = database_id.to_string();
+        self.otel_metadata.db_namespace = database_id.to_string();
         Ok(())
     }
 
@@ -1928,13 +1925,19 @@ impl Client {
             )
             .await;
 
-            // Extract connection metadata for OTel span attributes
-            let (server_address, server_port) = request
-                .addresses
-                .first()
-                .map(|addr| (addr.host.clone(), get_port(addr)))
-                .unwrap_or_else(|| ("unknown".to_string(), 6379));
-            let db_namespace = request.database_id.to_string();
+            // Extract connection metadata for OTel span attributes.
+            // Port 0 is normalized to the default (6379) for OTel reporting.
+            let otel_metadata = types::OTelMetadata {
+                addresses: request
+                    .addresses
+                    .iter()
+                    .map(|addr| types::NodeAddress {
+                        host: addr.host.clone(),
+                        port: get_port(addr),
+                    })
+                    .collect(),
+                db_namespace: request.database_id.to_string(),
+            };
 
             // Create the Client first without IAM token manager
             let client = Self {
@@ -1944,9 +1947,7 @@ impl Client {
                 compression_manager: compression_manager.clone(),
                 iam_token_manager: None,
                 pubsub_synchronizer: pubsub_synchronizer.clone(),
-                server_address,
-                server_port,
-                db_namespace,
+                otel_metadata,
             };
 
             let client_arc = Arc::new(RwLock::new(client));
@@ -2046,15 +2047,23 @@ impl Client {
     }
 
     pub fn server_address(&self) -> &str {
-        &self.server_address
+        self.otel_metadata
+            .addresses
+            .first()
+            .map(|a| a.host.as_str())
+            .unwrap_or("unknown")
     }
 
     pub fn server_port(&self) -> u16 {
-        self.server_port
+        self.otel_metadata
+            .addresses
+            .first()
+            .map(|a| a.port)
+            .unwrap_or(6379)
     }
 
     pub fn db_namespace(&self) -> &str {
-        &self.db_namespace
+        &self.otel_metadata.db_namespace
     }
 }
 
@@ -2106,7 +2115,7 @@ mod tests {
 
     use redis::Cmd;
 
-    use crate::client::types::{ConnectionRequest, NodeAddress};
+    use crate::client::types::{ConnectionRequest, NodeAddress, OTelMetadata};
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, RequestTimeoutOption, TimeUnit, get_request_timeout,
     };
@@ -2372,9 +2381,13 @@ mod tests {
             iam_token_manager: None,
             compression_manager: None,
             pubsub_synchronizer,
-            server_address: "localhost".to_string(),
-            server_port: 6379,
-            db_namespace: "0".to_string(),
+            otel_metadata: OTelMetadata {
+                addresses: vec![NodeAddress {
+                    host: "localhost".to_string(),
+                    port: 6379,
+                }],
+                db_namespace: "0".to_string(),
+            },
         }
     }
 

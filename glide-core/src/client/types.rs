@@ -112,6 +112,15 @@ impl ::std::fmt::Display for NodeAddress {
     }
 }
 
+/// Connection metadata used for OTel span attributes.
+/// Currently holds a single address; will be extended to hold
+/// multiple addresses for cluster mode in a follow-up PR.
+#[derive(Clone, Debug)]
+pub struct OTelMetadata {
+    pub addresses: Vec<NodeAddress>,
+    pub db_namespace: String,
+}
+
 #[derive(PartialEq, Eq, Clone, Default, Debug)]
 pub enum ReadFrom {
     #[default]
