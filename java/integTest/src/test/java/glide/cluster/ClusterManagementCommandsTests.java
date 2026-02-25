@@ -17,6 +17,7 @@ import glide.api.GlideClusterClient;
 import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterValue;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -25,6 +26,12 @@ import org.junit.jupiter.api.Timeout;
 
 @Timeout(30) // seconds
 public class ClusterManagementCommandsTests {
+
+    /** Expected length of node IDs and shard IDs (40-character hex strings). */
+    private static final int NODE_ID_LENGTH = 40;
+
+    /** Total number of hash slots in a cluster. */
+    private static final int TOTAL_CLUSTER_SLOTS = 16384;
 
     private static GlideClusterClient client;
 
@@ -55,7 +62,9 @@ public class ClusterManagementCommandsTests {
 
         // Verify cluster is healthy
         assertTrue(info.contains("cluster_state:ok"), "Cluster should be in OK state");
-        assertTrue(info.contains("cluster_slots_assigned:16384"), "All 16384 slots should be assigned");
+        assertTrue(
+                info.contains("cluster_slots_assigned:" + TOTAL_CLUSTER_SLOTS),
+                "All " + TOTAL_CLUSTER_SLOTS + " slots should be assigned");
     }
 
     @SneakyThrows
@@ -117,7 +126,7 @@ public class ClusterManagementCommandsTests {
 
         // Verify node ID is 40-character hex string
         String nodeId = parts[0];
-        assertEquals(40, nodeId.length(), "Node ID should be 40 characters");
+        assertEquals(NODE_ID_LENGTH, nodeId.length(), "Node ID should be 40 characters");
         assertTrue(nodeId.matches("[0-9a-f]+"), "Node ID should be hexadecimal");
 
         // Verify address format (ip:port@cport or ip:port)
@@ -251,7 +260,7 @@ public class ClusterManagementCommandsTests {
         assertInstanceOf(String.class, masterNode[2]); // Node ID
 
         String nodeId = (String) masterNode[2];
-        assertEquals(40, nodeId.length(), "Node ID should be 40 characters");
+        assertEquals(NODE_ID_LENGTH, nodeId.length(), "Node ID should be 40 characters");
     }
 
     @SneakyThrows
@@ -322,7 +331,7 @@ public class ClusterManagementCommandsTests {
         String nodeId = client.clusterMyId().get();
 
         assertNotNull(nodeId);
-        assertEquals(40, nodeId.length(), "Node ID should be 40 characters");
+        assertEquals(NODE_ID_LENGTH, nodeId.length(), "Node ID should be 40 characters");
         assertTrue(nodeId.matches("[0-9a-f]+"), "Node ID should be hexadecimal");
     }
 
@@ -340,7 +349,7 @@ public class ClusterManagementCommandsTests {
         // Verify each node returns a valid ID
         for (Map.Entry<String, String> entry : idsMap.entrySet()) {
             String nodeId = entry.getValue();
-            assertEquals(40, nodeId.length(), "Each node ID should be 40 characters");
+            assertEquals(NODE_ID_LENGTH, nodeId.length(), "Each node ID should be 40 characters");
             assertTrue(nodeId.matches("[0-9a-f]+"), "Each node ID should be hexadecimal");
         }
 
@@ -360,7 +369,7 @@ public class ClusterManagementCommandsTests {
         String shardId = client.clusterMyShardId().get();
 
         assertNotNull(shardId);
-        assertEquals(40, shardId.length(), "Shard ID should be 40 characters");
+        assertEquals(NODE_ID_LENGTH, shardId.length(), "Shard ID should be 40 characters");
         assertTrue(shardId.matches("[0-9a-f]+"), "Shard ID should be hexadecimal");
     }
 
@@ -383,7 +392,7 @@ public class ClusterManagementCommandsTests {
         // Verify each shard ID is valid
         for (Map.Entry<String, String> entry : shardIdsMap.entrySet()) {
             String shardId = entry.getValue();
-            assertEquals(40, shardId.length(), "Each shard ID should be 40 characters");
+            assertEquals(NODE_ID_LENGTH, shardId.length(), "Each shard ID should be 40 characters");
             assertTrue(shardId.matches("[0-9a-f]+"), "Each shard ID should be hexadecimal");
         }
     }
@@ -408,7 +417,7 @@ public class ClusterManagementCommandsTests {
         // Verify clusterMyId result
         assertInstanceOf(String.class, results[1]);
         String nodeId = (String) results[1];
-        assertEquals(40, nodeId.length());
+        assertEquals(NODE_ID_LENGTH, nodeId.length());
 
         // Verify clusterNodes result
         assertInstanceOf(String.class, results[2]);
@@ -493,8 +502,8 @@ public class ClusterManagementCommandsTests {
         String shardId = (String) results[0];
         String nodeId = (String) results[1];
 
-        assertEquals(40, shardId.length());
-        assertEquals(40, nodeId.length());
+        assertEquals(NODE_ID_LENGTH, shardId.length());
+        assertEquals(NODE_ID_LENGTH, nodeId.length());
     }
 
     @SneakyThrows
@@ -530,7 +539,7 @@ public class ClusterManagementCommandsTests {
             totalSlots += (end - start + 1);
         }
 
-        assertEquals(16384, totalSlots, "All 16384 slots should be assigned");
+        assertEquals(TOTAL_CLUSTER_SLOTS, totalSlots, "All 16384 slots should be assigned");
     }
 
     @SneakyThrows
@@ -540,18 +549,17 @@ public class ClusterManagementCommandsTests {
         int numRequests = 10;
 
         @SuppressWarnings("unchecked")
-        java.util.concurrent.CompletableFuture<String>[] futures =
-                new java.util.concurrent.CompletableFuture[numRequests];
+        CompletableFuture<String>[] futures = new CompletableFuture[numRequests];
 
         for (int i = 0; i < numRequests; i++) {
             futures[i] = client.clusterInfo();
         }
 
         // Wait for all to complete
-        java.util.concurrent.CompletableFuture.allOf(futures).get();
+        CompletableFuture.allOf(futures).get();
 
         // Verify all responses are valid
-        for (java.util.concurrent.CompletableFuture<String> future : futures) {
+        for (CompletableFuture<String> future : futures) {
             String info = future.get();
             assertNotNull(info);
             assertTrue(info.contains("cluster_state:"));
