@@ -10,10 +10,12 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.args.FlushMode;
 import redis.clients.jedis.args.FunctionRestorePolicy;
+import redis.clients.jedis.params.LCSParams;
 import redis.clients.jedis.params.XAddParams;
 import redis.clients.jedis.params.XTrimParams;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
+import redis.clients.jedis.resps.LCSMatchResult;
 import redis.clients.jedis.resps.StreamInfo;
 import redis.clients.jedis.resps.StreamPendingSummary;
 
@@ -351,6 +353,54 @@ public class JedisMethodsTest {
     }
 
     @Test
+    public void testHashCommandMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test hrandfieldWithCount alias methods
+        Method hrandfieldWithCountString =
+                jedisClass.getMethod("hrandfieldWithCount", String.class, long.class);
+        assertEquals(List.class, hrandfieldWithCountString.getReturnType());
+
+        Method hrandfieldWithCountBinary =
+                jedisClass.getMethod("hrandfieldWithCount", byte[].class, long.class);
+        assertEquals(List.class, hrandfieldWithCountBinary.getReturnType());
+    }
+
+    @Test
+    public void testStringCommandMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        // Test msetnx methods
+        Method msetnxString = jedisClass.getMethod("msetnx", String[].class);
+        assertEquals(long.class, msetnxString.getReturnType());
+
+        Method msetnxBinary = jedisClass.getMethod("msetnx", byte[][].class);
+        assertEquals(long.class, msetnxBinary.getReturnType());
+
+        // Test setrange methods
+        Method setrangeString =
+                jedisClass.getMethod("setrange", String.class, long.class, String.class);
+        assertEquals(long.class, setrangeString.getReturnType());
+
+        Method setrangeBinary =
+                jedisClass.getMethod("setrange", byte[].class, long.class, byte[].class);
+        assertEquals(long.class, setrangeBinary.getReturnType());
+
+        // Test getrange methods
+        Method getrangeString = jedisClass.getMethod("getrange", String.class, long.class, long.class);
+        assertEquals(String.class, getrangeString.getReturnType());
+
+        Method getrangeBinary = jedisClass.getMethod("getrange", byte[].class, long.class, long.class);
+        assertEquals(byte[].class, getrangeBinary.getReturnType());
+
+        // Test lcs methods (takes LCSParams and returns LCSMatchResult)
+        Method lcsString = jedisClass.getMethod("lcs", String.class, String.class, LCSParams.class);
+        assertEquals(LCSMatchResult.class, lcsString.getReturnType());
+
+        Method lcsBinary = jedisClass.getMethod("lcs", byte[].class, byte[].class, LCSParams.class);
+        assertEquals(LCSMatchResult.class, lcsBinary.getReturnType());
+    }
+
     public void testStreamMethodSignaturesExist() throws NoSuchMethodException {
         Class<Jedis> jedisClass = Jedis.class;
 
