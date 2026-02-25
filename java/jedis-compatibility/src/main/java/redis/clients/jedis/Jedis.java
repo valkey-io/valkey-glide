@@ -75,6 +75,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import redis.clients.jedis.args.BitCountOption;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.args.FlushMode;
 import redis.clients.jedis.args.FunctionRestorePolicy;
 import redis.clients.jedis.args.ListDirection;
 import redis.clients.jedis.args.ListPosition;
@@ -7612,11 +7613,11 @@ public final class Jedis implements Closeable {
      * @example
      *     <pre>{@code
      * // Flush asynchronously (non-blocking)
-     * String result = jedis.flushDB(redis.clients.jedis.args.FlushMode.ASYNC);
+     * String result = jedis.flushDB(FlushMode.ASYNC);
      * assert result.equals("OK");
      * }</pre>
      */
-    public String flushDB(redis.clients.jedis.args.FlushMode mode) {
+    public String flushDB(FlushMode mode) {
         return executeCommandWithGlide(
                 "FLUSHDB", () -> glideClient.flushdb(mode.toGlideFlushMode()).get());
     }
@@ -7647,11 +7648,11 @@ public final class Jedis implements Closeable {
      * @example
      *     <pre>{@code
      * // Flush all databases asynchronously (non-blocking)
-     * String result = jedis.flushAll(redis.clients.jedis.args.FlushMode.ASYNC);
+     * String result = jedis.flushAll(FlushMode.ASYNC);
      * assert result.equals("OK");
      * }</pre>
      */
-    public String flushAll(redis.clients.jedis.args.FlushMode mode) {
+    public String flushAll(FlushMode mode) {
         return executeCommandWithGlide(
                 "FLUSHALL", () -> glideClient.flushall(mode.toGlideFlushMode()).get());
     }
@@ -7879,7 +7880,7 @@ public final class Jedis implements Closeable {
      * @return "OK"
      * @see <a href="https://valkey.io/commands/script-flush/">SCRIPT FLUSH</a>
      */
-    public String scriptFlush(redis.clients.jedis.args.FlushMode flushMode) {
+    public String scriptFlush(FlushMode flushMode) {
         return executeCommandWithGlide(
                 "SCRIPT FLUSH", () -> glideClient.scriptFlush(flushMode.toGlideFlushMode()).get());
     }
@@ -7995,7 +7996,7 @@ public final class Jedis implements Closeable {
      * @see <a href="https://valkey.io/commands/function-flush/">FUNCTION FLUSH</a>
      * @since Valkey 7.0 and above
      */
-    public String functionFlush(redis.clients.jedis.args.FlushMode mode) {
+    public String functionFlush(FlushMode mode) {
         return executeCommandWithGlide(
                 "FUNCTION FLUSH", () -> glideClient.functionFlush(mode.toGlideFlushMode()).get());
     }

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import redis.clients.jedis.args.FlushMode;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
 
@@ -156,16 +157,14 @@ public class JedisMethodsTest {
         Method flushDBMethod = jedisClass.getMethod("flushDB");
         assertEquals(String.class, flushDBMethod.getReturnType());
 
-        Method flushDBFlushModeMethod =
-                jedisClass.getMethod("flushDB", redis.clients.jedis.args.FlushMode.class);
+        Method flushDBFlushModeMethod = jedisClass.getMethod("flushDB", FlushMode.class);
         assertEquals(String.class, flushDBFlushModeMethod.getReturnType());
 
         // Test flushAll() methods
         Method flushAllMethod = jedisClass.getMethod("flushAll");
         assertEquals(String.class, flushAllMethod.getReturnType());
 
-        Method flushAllFlushModeMethod =
-                jedisClass.getMethod("flushAll", redis.clients.jedis.args.FlushMode.class);
+        Method flushAllFlushModeMethod = jedisClass.getMethod("flushAll", FlushMode.class);
         assertEquals(String.class, flushAllFlushModeMethod.getReturnType());
 
         // Test configRewrite() method
@@ -213,9 +212,9 @@ public class JedisMethodsTest {
                     assertNotNull(jedisClass.getMethod("configResetStat"));
                     assertNotNull(jedisClass.getMethod("dbsize"));
                     assertNotNull(jedisClass.getMethod("flushDB"));
-                    assertNotNull(jedisClass.getMethod("flushDB", redis.clients.jedis.args.FlushMode.class));
+                    assertNotNull(jedisClass.getMethod("flushDB", FlushMode.class));
                     assertNotNull(jedisClass.getMethod("flushAll"));
-                    assertNotNull(jedisClass.getMethod("flushAll", redis.clients.jedis.args.FlushMode.class));
+                    assertNotNull(jedisClass.getMethod("flushAll", FlushMode.class));
                     assertNotNull(jedisClass.getMethod("time"));
                     assertNotNull(jedisClass.getMethod("lastsave"));
                     assertNotNull(jedisClass.getMethod("lolwut"));
@@ -289,8 +288,7 @@ public class JedisMethodsTest {
         assertEquals(String.class, scriptFlush.getReturnType());
 
         // Test scriptFlush(FlushMode) exists
-        Method scriptFlushWithMode =
-                jedisClass.getMethod("scriptFlush", redis.clients.jedis.args.FlushMode.class);
+        Method scriptFlushWithMode = jedisClass.getMethod("scriptFlush", FlushMode.class);
         assertEquals(String.class, scriptFlushWithMode.getReturnType());
 
         // Test scriptKill() exists
@@ -347,8 +345,7 @@ public class JedisMethodsTest {
         assertEquals(String.class, functionFlush.getReturnType());
 
         // Test functionFlush(FlushMode) exists
-        Method functionFlushWithMode =
-                jedisClass.getMethod("functionFlush", redis.clients.jedis.args.FlushMode.class);
+        Method functionFlushWithMode = jedisClass.getMethod("functionFlush", FlushMode.class);
         assertEquals(String.class, functionFlushWithMode.getReturnType());
 
         // Test functionKill() exists

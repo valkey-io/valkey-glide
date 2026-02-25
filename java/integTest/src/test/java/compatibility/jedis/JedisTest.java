@@ -25,6 +25,7 @@ import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.Protocol;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.args.FlushMode;
 import redis.clients.jedis.args.ListDirection;
 import redis.clients.jedis.args.ListPosition;
 import redis.clients.jedis.exceptions.JedisException;
@@ -3571,7 +3572,7 @@ public class JedisTest {
         jedis.set("sync_key2", "value2");
         assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
 
-        String syncResult = jedis.flushDB(redis.clients.jedis.args.FlushMode.SYNC);
+        String syncResult = jedis.flushDB(FlushMode.SYNC);
         assertEquals("OK", syncResult, "FLUSHDB with SYNC mode should return OK");
         assertEquals(0, jedis.dbsize(), "Database should be empty after FLUSHDB SYNC");
 
@@ -3580,7 +3581,7 @@ public class JedisTest {
         jedis.set("async_key2", "value2");
         assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
 
-        String asyncResult = jedis.flushDB(redis.clients.jedis.args.FlushMode.ASYNC);
+        String asyncResult = jedis.flushDB(FlushMode.ASYNC);
         assertEquals("OK", asyncResult, "FLUSHDB with ASYNC mode should return OK");
         // Note: ASYNC mode may not complete immediately, but the command should succeed
     }
@@ -3626,7 +3627,7 @@ public class JedisTest {
         jedis.set("sync_key2", "value2");
         assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
 
-        String syncResult = jedis.flushAll(redis.clients.jedis.args.FlushMode.SYNC);
+        String syncResult = jedis.flushAll(FlushMode.SYNC);
         assertEquals("OK", syncResult, "FLUSHALL with SYNC mode should return OK");
         assertEquals(0, jedis.dbsize(), "All databases should be empty after FLUSHALL SYNC");
 
@@ -3635,7 +3636,7 @@ public class JedisTest {
         jedis.set("async_key2", "value2");
         assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
 
-        String asyncResult = jedis.flushAll(redis.clients.jedis.args.FlushMode.ASYNC);
+        String asyncResult = jedis.flushAll(FlushMode.ASYNC);
         assertEquals("OK", asyncResult, "FLUSHALL with ASYNC mode should return OK");
         // Note: ASYNC mode may not complete immediately, but the command should succeed
     }
