@@ -104,7 +104,6 @@ blockingSocketTimeoutMillis
 - **Pub/Sub**: Redis publish/subscribe not implemented
 - ✅ **Lua scripting**: Full support for EVAL/EVALSHA, SCRIPT management, and Valkey Functions (FCALL/FUNCTION *)
 - **Modules**: Redis module commands not available
-- **Typed sorted set methods**: No dedicated methods like `zadd()`, `zrem()` - use `sendCommand()` instead
 
 ### Configuration Limitations
 - **Complex SSL configurations**: Jedis `JedisClientConfig` SSL parameters cannot be mapped to Valkey GLIDE `GlideClientConfiguration`
