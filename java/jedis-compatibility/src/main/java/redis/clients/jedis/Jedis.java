@@ -51,6 +51,14 @@ import glide.api.models.commands.scan.SScanOptionsBinary;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.scan.ZScanOptionsBinary;
+import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamClaimOptions;
+import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamPendingOptions;
+import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
+import glide.api.models.commands.stream.StreamReadOptions;
+import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
 import java.io.Closeable;
 import java.nio.charset.Charset;
@@ -89,6 +97,8 @@ import redis.clients.jedis.params.HSetExParams;
 import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.params.XAddParams;
+import redis.clients.jedis.params.XTrimParams;
 import redis.clients.jedis.params.ZAddParams;
 import redis.clients.jedis.params.ZIncrByParams;
 import redis.clients.jedis.params.ZParams;
@@ -98,6 +108,12 @@ import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
 import redis.clients.jedis.resps.LibraryInfo;
 import redis.clients.jedis.resps.ScanResult;
+import redis.clients.jedis.resps.StreamConsumerInfo;
+import redis.clients.jedis.resps.StreamEntry;
+import redis.clients.jedis.resps.StreamGroupInfo;
+import redis.clients.jedis.resps.StreamInfo;
+import redis.clients.jedis.resps.StreamPendingEntry;
+import redis.clients.jedis.resps.StreamPendingSummary;
 import redis.clients.jedis.resps.Tuple;
 import redis.clients.jedis.util.GlideStringSetWrapper;
 import redis.clients.jedis.util.KeyValue;
@@ -6136,6 +6152,713 @@ public final class Jedis implements Closeable {
         }
 
         return builder.build();
+    }
+
+    // ========== STREAM COMMANDS (GLIDE type-safe API) ==========
+
+    /** Convert GLIDE stream entry map (id -> field-value pairs) to List of StreamEntry. */
+    private static List<StreamEntry> toStreamEntryList(Map<String, String[][]> idToFields) {
+        if (idToFields == null) {
+            return Collections.emptyList();
+        }
+        List<StreamEntry> out = new ArrayList<>();
+        for (Map.Entry<String, String[][]> e : idToFields.entrySet()) {
+            Map<String, String> fields = new HashMap<>();
+            String[][] pairs = e.getValue();
+            if (pairs != null) {
+                for (String[] kv : pairs) {
+                    if (kv != null && kv.length >= 2) {
+                        fields.put(kv[0], kv[1]);
+                    }
+                }
+            }
+            out.add(new StreamEntry(new StreamEntryID(e.getKey()), fields));
+        }
+        return out;
+    }
+
+    /** Convert GLIDE xread response to Map of stream key to List of StreamEntry. */
+    private static Map<String, List<StreamEntry>> toStreamReadResponse(
+            Map<String, Map<String, String[][]>> response) {
+        if (response == null) {
+            return Collections.emptyMap();
+        }
+        Map<String, List<StreamEntry>> out = new HashMap<>();
+        for (Map.Entry<String, Map<String, String[][]>> e : response.entrySet()) {
+            out.put(e.getKey(), toStreamEntryList(e.getValue()));
+        }
+        return out;
+    }
+
+    /**
+     * Adds an entry to the stream at key. Uses GLIDE type-safe xadd.
+     *
+     * @param key stream key
+     * @param hash field-value map
+     * @return generated entry ID
+     */
+    public StreamEntryID xadd(String key, Map<String, String> hash) {
+        return executeCommandWithGlide(
+                "XADD",
+                () -> {
+                    String id = glideClient.xadd(key, hash).get();
+                    return id == null ? null : new StreamEntryID(id);
+                });
+    }
+
+    /**
+     * Adds an entry to the stream at key with optional entry id. Uses GLIDE type-safe xadd.
+     *
+     * @param key stream key
+     * @param id entry id (use "*" for auto-generate)
+     * @param hash field-value map
+     * @return generated or specified entry ID
+     */
+    public StreamEntryID xadd(String key, StreamEntryID id, Map<String, String> hash) {
+        return executeCommandWithGlide(
+                "XADD",
+                () -> {
+                    StreamAddOptions opts =
+                            StreamAddOptions.builder().id(id != null ? id.toString() : "*").build();
+                    String result = glideClient.xadd(key, hash, opts).get();
+                    return result == null ? null : new StreamEntryID(result);
+                });
+    }
+
+    /**
+     * Adds an entry to the stream at key with options. Uses GLIDE type-safe xadd.
+     *
+     * @param key stream key
+     * @param hash field-value map
+     * @param makeStream if false, NOMKSTREAM is sent
+     * @return generated entry ID, or null if stream did not exist and makeStream was false
+     */
+    public StreamEntryID xadd(String key, Map<String, String> hash, boolean makeStream) {
+        return executeCommandWithGlide(
+                "XADD",
+                () -> {
+                    StreamAddOptions opts = StreamAddOptions.builder().makeStream(makeStream).build();
+                    String result = glideClient.xadd(key, hash, opts).get();
+                    return result == null ? null : new StreamEntryID(result);
+                });
+    }
+
+    /**
+     * Adds an entry to the stream at key with XAddParams. Uses GLIDE type-safe xadd.
+     *
+     * @param key stream key
+     * @param params add parameters
+     * @param hash field-value map
+     * @return generated entry ID, or null if stream did not exist and makeStream was false
+     */
+    public StreamEntryID xadd(String key, XAddParams params, Map<String, String> hash) {
+        return executeCommandWithGlide(
+                "XADD",
+                () -> {
+                    String result = glideClient.xadd(key, hash, params.toStreamAddOptions()).get();
+                    return result == null ? null : new StreamEntryID(result);
+                });
+    }
+
+    /**
+     * Adds an entry to the stream at key with XAddParams - binary version. Uses GLIDE type-safe xadd.
+     *
+     * @param key stream key
+     * @param params add parameters
+     * @param hash field-value map
+     * @return generated entry ID as byte[], or null if stream did not exist and makeStream was false
+     */
+    public byte[] xadd(byte[] key, XAddParams params, Map<byte[], byte[]> hash) {
+        return executeCommandWithGlide(
+                "XADD",
+                () -> {
+                    // Convert byte[] map to String map
+                    Map<String, String> stringHash = new HashMap<>();
+                    for (Map.Entry<byte[], byte[]> entry : hash.entrySet()) {
+                        stringHash.put(new String(entry.getKey()), new String(entry.getValue()));
+                    }
+
+                    String result =
+                            glideClient.xadd(new String(key), stringHash, params.toStreamAddOptions()).get();
+                    return result == null ? null : result.getBytes();
+                });
+    }
+
+    /** Returns the number of entries in the stream. Uses GLIDE xlen. */
+    public long xlen(String key) {
+        return executeCommandWithGlide("XLEN", () -> glideClient.xlen(key).get());
+    }
+
+    /**
+     * Returns the number of entries in the stream - binary version. Uses GLIDE xlen.
+     *
+     * @param key stream key
+     * @return number of entries in the stream
+     */
+    public long xlen(byte[] key) {
+        return executeCommandWithGlide("XLEN", () -> glideClient.xlen(new String(key)).get());
+    }
+
+    /** Removes entries by id from the stream. Uses GLIDE xdel. */
+    public long xdel(String key, String... ids) {
+        return executeCommandWithGlide("XDEL", () -> glideClient.xdel(key, ids).get());
+    }
+
+    /** Removes entries by id from the stream. Uses GLIDE xdel. */
+    public long xdel(String key, StreamEntryID... ids) {
+        String[] idStrs = new String[ids.length];
+        for (int i = 0; i < ids.length; i++) {
+            idStrs[i] = ids[i].toString();
+        }
+        return executeCommandWithGlide("XDEL", () -> glideClient.xdel(key, idStrs).get());
+    }
+
+    /**
+     * Removes entries by id from the stream - binary version. Uses GLIDE xdel.
+     *
+     * @param key stream key
+     * @param ids entry IDs to delete
+     * @return number of entries deleted
+     */
+    public long xdel(byte[] key, byte[]... ids) {
+        String[] idStrs = new String[ids.length];
+        for (int i = 0; i < ids.length; i++) {
+            idStrs[i] = new String(ids[i]);
+        }
+        return executeCommandWithGlide("XDEL", () -> glideClient.xdel(new String(key), idStrs).get());
+    }
+
+    /**
+     * Returns entries in the stream in range [start, end]. Uses GLIDE xrange.
+     *
+     * @param key stream key
+     * @param start start id ("-" for minimum)
+     * @param end end id ("+" for maximum)
+     */
+    public List<StreamEntry> xrange(String key, String start, String end) {
+        return executeCommandWithGlide(
+                "XRANGE",
+                () -> {
+                    StreamRange s =
+                            "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+                    StreamRange e =
+                            "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
+                    Map<String, String[][]> raw = glideClient.xrange(key, s, e).get();
+                    return toStreamEntryList(raw);
+                });
+    }
+
+    /** Returns up to count entries in the stream in range [start, end]. Uses GLIDE xrange. */
+    public List<StreamEntry> xrange(String key, String start, String end, long count) {
+        return executeCommandWithGlide(
+                "XRANGE",
+                () -> {
+                    StreamRange s =
+                            "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+                    StreamRange e =
+                            "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
+                    Map<String, String[][]> raw = glideClient.xrange(key, s, e, count).get();
+                    return raw == null ? Collections.emptyList() : toStreamEntryList(raw);
+                });
+    }
+
+    /** Returns entries in the stream in reverse order [end, start]. Uses GLIDE xrevrange. */
+    public List<StreamEntry> xrevrange(String key, String end, String start) {
+        return executeCommandWithGlide(
+                "XREVRANGE",
+                () -> {
+                    StreamRange e =
+                            "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
+                    StreamRange s =
+                            "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+                    Map<String, String[][]> raw = glideClient.xrevrange(key, e, s).get();
+                    return toStreamEntryList(raw);
+                });
+    }
+
+    /** Returns up to count entries in reverse order. Uses GLIDE xrevrange. */
+    public List<StreamEntry> xrevrange(String key, String end, String start, long count) {
+        return executeCommandWithGlide(
+                "XREVRANGE",
+                () -> {
+                    StreamRange e =
+                            "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
+                    StreamRange s =
+                            "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+                    Map<String, String[][]> raw = glideClient.xrevrange(key, e, s, count).get();
+                    return raw == null ? Collections.emptyList() : toStreamEntryList(raw);
+                });
+    }
+
+    /**
+     * Returns entries in the stream in range [start, end] - binary version. Uses GLIDE xrange.
+     *
+     * @param key stream key
+     * @param start start id
+     * @param end end id
+     * @return list of stream entries
+     */
+    public List<StreamEntry> xrange(byte[] key, byte[] start, byte[] end) {
+        return xrange(new String(key), new String(start), new String(end));
+    }
+
+    /**
+     * Returns up to count entries in the stream in range [start, end] - binary version. Uses GLIDE
+     * xrange.
+     *
+     * @param key stream key
+     * @param start start id
+     * @param end end id
+     * @param count maximum number of entries
+     * @return list of stream entries
+     */
+    public List<StreamEntry> xrange(byte[] key, byte[] start, byte[] end, int count) {
+        return xrange(new String(key), new String(start), new String(end), count);
+    }
+
+    /**
+     * Returns entries in the stream in reverse order [end, start] - binary version. Uses GLIDE
+     * xrevrange.
+     *
+     * @param key stream key
+     * @param end end id
+     * @param start start id
+     * @return list of stream entries
+     */
+    public List<StreamEntry> xrevrange(byte[] key, byte[] end, byte[] start) {
+        return xrevrange(new String(key), new String(end), new String(start));
+    }
+
+    /**
+     * Returns up to count entries in reverse order - binary version. Uses GLIDE xrevrange.
+     *
+     * @param key stream key
+     * @param end end id
+     * @param start start id
+     * @param count maximum number of entries
+     * @return list of stream entries
+     */
+    public List<StreamEntry> xrevrange(byte[] key, byte[] end, byte[] start, int count) {
+        return xrevrange(new String(key), new String(end), new String(start), count);
+    }
+
+    /**
+     * Reads from multiple streams. Uses GLIDE xread.
+     *
+     * @param keysAndIds map of stream key to start id ("0" or "0-0" for beginning)
+     * @return map of stream key to list of entries read
+     */
+    public Map<String, List<StreamEntry>> xread(Map<String, String> keysAndIds) {
+        return executeCommandWithGlide(
+                "XREAD",
+                () -> {
+                    Map<String, Map<String, String[][]>> raw =
+                            glideClient.xread(keysAndIds, StreamReadOptions.builder().build()).get();
+                    return toStreamReadResponse(raw);
+                });
+    }
+
+    /**
+     * Reads from multiple streams with count and/or block. Uses GLIDE xread.
+     *
+     * @param count max entries per stream (null to omit)
+     * @param block block milliseconds (null to omit)
+     * @param keysAndIds map of stream key to start id
+     */
+    public Map<String, List<StreamEntry>> xread(
+            Long count, Long block, Map<String, String> keysAndIds) {
+        return executeCommandWithGlide(
+                "XREAD",
+                () -> {
+                    StreamReadOptions.StreamReadOptionsBuilder b = StreamReadOptions.builder();
+                    if (count != null) b.count(count);
+                    if (block != null) b.block(block);
+                    Map<String, Map<String, String[][]>> raw = glideClient.xread(keysAndIds, b.build()).get();
+                    return toStreamReadResponse(raw);
+                });
+    }
+
+    /** Trims the stream by max length. Uses GLIDE xtrim. */
+    public long xtrim(String key, long maxLen) {
+        return executeCommandWithGlide(
+                "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MaxLen(maxLen)).get());
+    }
+
+    /** Trims the stream by max length (exact or approximate). Uses GLIDE xtrim. */
+    public long xtrim(String key, long maxLen, boolean exact) {
+        return executeCommandWithGlide(
+                "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MaxLen(exact, maxLen)).get());
+    }
+
+    /** Trims the stream by minimum id. Uses GLIDE xtrim. */
+    public long xtrim(String key, String minId) {
+        return executeCommandWithGlide(
+                "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MinId(minId)).get());
+    }
+
+    /**
+     * Trims the stream using XTrimParams. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param params trim parameters
+     * @return number of entries deleted
+     */
+    public long xtrim(String key, XTrimParams params) {
+        return executeCommandWithGlide(
+                "XTRIM", () -> glideClient.xtrim(key, params.toStreamTrimOptions()).get());
+    }
+
+    /**
+     * Trims the stream by max length - binary version. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param maxLen maximum length
+     * @return number of entries deleted
+     */
+    public long xtrim(byte[] key, long maxLen) {
+        return executeCommandWithGlide(
+                "XTRIM",
+                () -> glideClient.xtrim(new String(key), new StreamTrimOptions.MaxLen(maxLen)).get());
+    }
+
+    /**
+     * Trims the stream by max length (exact or approximate) - binary version. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param maxLen maximum length
+     * @param exact if true, trim exactly; if false, trim approximately
+     * @return number of entries deleted
+     */
+    public long xtrim(byte[] key, long maxLen, boolean exact) {
+        return executeCommandWithGlide(
+                "XTRIM",
+                () ->
+                        glideClient.xtrim(new String(key), new StreamTrimOptions.MaxLen(exact, maxLen)).get());
+    }
+
+    /**
+     * Trims the stream using XTrimParams - binary version. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param params trim parameters
+     * @return number of entries deleted
+     */
+    public long xtrim(byte[] key, XTrimParams params) {
+        return xtrim(new String(key), params);
+    }
+
+    /** Creates a consumer group. Uses GLIDE xgroupCreate. */
+    public String xgroupCreate(String key, String groupName, String id) {
+        return executeCommandWithGlide(
+                "XGROUP CREATE", () -> glideClient.xgroupCreate(key, groupName, id).get());
+    }
+
+    /** Creates a consumer group, optionally creating the stream. Uses GLIDE xgroupCreate. */
+    public String xgroupCreate(String key, String groupName, String id, boolean makeStream) {
+        return executeCommandWithGlide(
+                "XGROUP CREATE",
+                () ->
+                        glideClient
+                                .xgroupCreate(
+                                        key, groupName, id, StreamGroupOptions.builder().mkStream(makeStream).build())
+                                .get());
+    }
+
+    /** Destroys a consumer group. Uses GLIDE xgroupDestroy. */
+    public boolean xgroupDestroy(String key, String groupName) {
+        return executeCommandWithGlide(
+                "XGROUP DESTROY", () -> glideClient.xgroupDestroy(key, groupName).get());
+    }
+
+    /** Sets the last delivered id of a group. Uses GLIDE xgroupSetId. */
+    public String xgroupSetId(String key, String groupName, String id) {
+        return executeCommandWithGlide(
+                "XGROUP SETID", () -> glideClient.xgroupSetId(key, groupName, id).get());
+    }
+
+    /** Creates a consumer in the group. Uses GLIDE xgroupCreateConsumer. */
+    public boolean xgroupCreateConsumer(String key, String group, String consumer) {
+        return executeCommandWithGlide(
+                "XGROUP CREATECONSUMER",
+                () -> glideClient.xgroupCreateConsumer(key, group, consumer).get());
+    }
+
+    /** Deletes a consumer from the group. Uses GLIDE xgroupDelConsumer. */
+    public long xgroupDelConsumer(String key, String group, String consumer) {
+        return executeCommandWithGlide(
+                "XGROUP DELCONSUMER", () -> glideClient.xgroupDelConsumer(key, group, consumer).get());
+    }
+
+    /**
+     * Reads from streams as a consumer in a group. Uses GLIDE xreadgroup.
+     *
+     * @param keysAndIds map of stream key to id (typically "&gt;" for new entries)
+     */
+    public Map<String, List<StreamEntry>> xreadgroup(
+            String group, String consumer, Map<String, String> keysAndIds) {
+        return executeCommandWithGlide(
+                "XREADGROUP",
+                () -> {
+                    Map<String, Map<String, String[][]>> raw =
+                            glideClient
+                                    .xreadgroup(keysAndIds, group, consumer, StreamReadGroupOptions.builder().build())
+                                    .get();
+                    return toStreamReadResponse(raw);
+                });
+    }
+
+    /** Reads from streams as a consumer with options. Uses GLIDE xreadgroup. */
+    public Map<String, List<StreamEntry>> xreadgroup(
+            String group,
+            String consumer,
+            Map<String, String> keysAndIds,
+            Long count,
+            Long block,
+            boolean noack) {
+        return executeCommandWithGlide(
+                "XREADGROUP",
+                () -> {
+                    StreamReadGroupOptions.StreamReadGroupOptionsBuilder b = StreamReadGroupOptions.builder();
+                    if (count != null) b.count(count);
+                    if (block != null) b.block(block);
+                    if (noack) b.noack();
+                    Map<String, Map<String, String[][]>> raw =
+                            glideClient.xreadgroup(keysAndIds, group, consumer, b.build()).get();
+                    return toStreamReadResponse(raw);
+                });
+    }
+
+    /** Acknowledges messages. Uses GLIDE xack. */
+    public long xack(String key, String group, String... ids) {
+        return executeCommandWithGlide("XACK", () -> glideClient.xack(key, group, ids).get());
+    }
+
+    /** Acknowledges messages. Uses GLIDE xack. */
+    public long xack(String key, String group, StreamEntryID... ids) {
+        String[] idStrs = new String[ids.length];
+        for (int i = 0; i < ids.length; i++) {
+            idStrs[i] = ids[i].toString();
+        }
+        return executeCommandWithGlide("XACK", () -> glideClient.xack(key, group, idStrs).get());
+    }
+
+    /**
+     * Returns pending summary for the group. Uses GLIDE xpending. Converts response to
+     * StreamPendingSummary (total, minId, maxId, consumerMessageCount).
+     */
+    public StreamPendingSummary xpending(String key, String group) {
+        return executeCommandWithGlide(
+                "XPENDING",
+                () -> {
+                    Object[] arr = glideClient.xpending(key, group).get();
+                    if (arr == null || arr.length < 4) {
+                        return new StreamPendingSummary(0L, null, null, Collections.emptyMap());
+                    }
+                    long total =
+                            arr[0] instanceof Long ? (Long) arr[0] : Long.parseLong(String.valueOf(arr[0]));
+                    String minIdStr = String.valueOf(arr[1]);
+                    String maxIdStr = String.valueOf(arr[2]);
+                    StreamEntryID minId = null;
+                    StreamEntryID maxId = null;
+                    if (minIdStr != null && !minIdStr.isEmpty() && !"null".equals(minIdStr)) {
+                        minId = new StreamEntryID(minIdStr);
+                    }
+                    if (maxIdStr != null && !maxIdStr.isEmpty() && !"null".equals(maxIdStr)) {
+                        maxId = new StreamEntryID(maxIdStr);
+                    }
+                    Map<String, Long> consumerCounts = new HashMap<>();
+                    if (arr.length > 3 && arr[3] instanceof Object[]) {
+                        for (Object o : (Object[]) arr[3]) {
+                            if (o instanceof Object[] && ((Object[]) o).length >= 2) {
+                                Object[] pair = (Object[]) o;
+                                String name = String.valueOf(pair[0]);
+                                long count =
+                                        pair[1] instanceof Long
+                                                ? (Long) pair[1]
+                                                : Long.parseLong(String.valueOf(pair[1]));
+                                consumerCounts.put(name, count);
+                            }
+                        }
+                    }
+                    return new StreamPendingSummary(total, minId, maxId, consumerCounts);
+                });
+    }
+
+    /** Returns pending entries in range. Uses GLIDE xpending. */
+    public List<StreamPendingEntry> xpending(
+            String key, String group, StreamRange start, StreamRange end, long count) {
+        return executeCommandWithGlide(
+                "XPENDING",
+                () -> {
+                    Object[][] raw =
+                            glideClient
+                                    .xpending(key, group, start, end, count, StreamPendingOptions.builder().build())
+                                    .get();
+                    if (raw == null) return Collections.emptyList();
+                    List<StreamPendingEntry> list = new ArrayList<>();
+                    for (Object[] row : raw) {
+                        if (row != null && row.length >= 4) {
+                            StreamEntryID id = new StreamEntryID(String.valueOf(row[0]));
+                            String consumer = String.valueOf(row[1]);
+                            long idle =
+                                    row[2] instanceof Long ? (Long) row[2] : Long.parseLong(String.valueOf(row[2]));
+                            long delivered =
+                                    row[3] instanceof Long ? (Long) row[3] : Long.parseLong(String.valueOf(row[3]));
+                            list.add(new StreamPendingEntry(id, consumer, idle, delivered));
+                        }
+                    }
+                    return list;
+                });
+    }
+
+    /** Returns pending entries in id range. Uses GLIDE xpending. */
+    public List<StreamPendingEntry> xpending(
+            String key, String group, String start, String end, long count) {
+        StreamRange s =
+                "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+        StreamRange e = "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
+        return xpending(key, group, s, e, count);
+    }
+
+    /** Claims pending messages. Uses GLIDE xclaim. */
+    public List<StreamEntry> xclaim(
+            String key, String group, String consumer, long minIdleTime, String... ids) {
+        return executeCommandWithGlide(
+                "XCLAIM",
+                () -> {
+                    Map<String, String[][]> raw =
+                            glideClient.xclaim(key, group, consumer, minIdleTime, ids).get();
+                    return toStreamEntryList(raw);
+                });
+    }
+
+    /** Claims pending messages with options. Uses GLIDE xclaim. */
+    public List<StreamEntry> xclaim(
+            String key,
+            String group,
+            String consumer,
+            long minIdleTime,
+            StreamClaimOptions options,
+            String... ids) {
+        return executeCommandWithGlide(
+                "XCLAIM",
+                () -> {
+                    Map<String, String[][]> raw =
+                            glideClient.xclaim(key, group, consumer, minIdleTime, ids, options).get();
+                    return toStreamEntryList(raw);
+                });
+    }
+
+    /**
+     * Auto-claims pending messages. Uses GLIDE xautoclaim. Returns Object[]: [String nextStartId,
+     * List of StreamEntry claimed].
+     */
+    public Object[] xautoclaim(
+            String key, String group, String consumer, long minIdleTime, String start) {
+        return executeCommandWithGlide(
+                "XAUTOCLAIM", () -> glideClient.xautoclaim(key, group, consumer, minIdleTime, start).get());
+    }
+
+    /** Auto-claims pending messages with count. Uses GLIDE xautoclaim. */
+    public Object[] xautoclaim(
+            String key, String group, String consumer, long minIdleTime, String start, long count) {
+        return executeCommandWithGlide(
+                "XAUTOCLAIM",
+                () -> glideClient.xautoclaim(key, group, consumer, minIdleTime, start, count).get());
+    }
+
+    /**
+     * Returns stream info. Uses GLIDE xinfoStream. Returns raw Map; for StreamInfo use {@link
+     * #xinfoStreamAsInfo(String)}.
+     */
+    public Map<String, Object> xinfoStream(String key) {
+        return executeCommandWithGlide("XINFO STREAM", () -> glideClient.xinfoStream(key).get());
+    }
+
+    /** Returns stream info as StreamInfo. Uses GLIDE xinfoStream and converts response. */
+    public StreamInfo xinfoStreamAsInfo(String key) {
+        return executeCommandWithGlide(
+                "XINFO STREAM",
+                () -> {
+                    Map<String, Object> raw = glideClient.xinfoStream(key).get();
+                    if (raw == null) return null;
+                    Map<String, Object> converted = new HashMap<>(raw);
+                    Object lastId = raw.get(StreamInfo.LAST_GENERATED_ID);
+                    if (lastId instanceof String) {
+                        converted.put(StreamInfo.LAST_GENERATED_ID, new StreamEntryID((String) lastId));
+                    }
+                    Object firstEntry = raw.get(StreamInfo.FIRST_ENTRY);
+                    if (firstEntry != null) {
+                        converted.put(StreamInfo.FIRST_ENTRY, parseStreamEntryFromInfo(firstEntry));
+                    }
+                    Object lastEntry = raw.get(StreamInfo.LAST_ENTRY);
+                    if (lastEntry != null) {
+                        converted.put(StreamInfo.LAST_ENTRY, parseStreamEntryFromInfo(lastEntry));
+                    }
+                    return new StreamInfo(converted);
+                });
+    }
+
+    private static StreamEntry parseStreamEntryFromInfo(Object entry) {
+        if (entry == null) return null;
+        if (entry instanceof StreamEntry) return (StreamEntry) entry;
+        if (entry instanceof Object[]) {
+            Object[] arr = (Object[]) entry;
+            if (arr.length >= 2) {
+                String id = String.valueOf(arr[0]);
+                Map<String, String> fields = new HashMap<>();
+                Object second = arr[1];
+                if (second instanceof Object[]) {
+                    Object[] pairs = (Object[]) second;
+                    for (int i = 0; i + 1 < pairs.length; i += 2) {
+                        fields.put(String.valueOf(pairs[i]), String.valueOf(pairs[i + 1]));
+                    }
+                } else if (second instanceof String[]) {
+                    String[] pairs = (String[]) second;
+                    for (int i = 0; i + 1 < pairs.length; i += 2) {
+                        fields.put(pairs[i], pairs[i + 1]);
+                    }
+                }
+                return new StreamEntry(new StreamEntryID(id), fields);
+            }
+        }
+        return null;
+    }
+
+    /** Returns consumer groups info. Uses GLIDE xinfoGroups. */
+    public List<StreamGroupInfo> xinfoGroups(String key) {
+        return executeCommandWithGlide(
+                "XINFO GROUPS",
+                () -> {
+                    Map<String, Object>[] raw = glideClient.xinfoGroups(key).get();
+                    if (raw == null) return Collections.emptyList();
+                    List<StreamGroupInfo> list = new ArrayList<>();
+                    for (Map<String, Object> m : raw) {
+                        Map<String, Object> converted = new HashMap<>(m);
+                        Object lastDelivered = m.get(StreamGroupInfo.LAST_DELIVERED);
+                        if (lastDelivered instanceof String) {
+                            converted.put(
+                                    StreamGroupInfo.LAST_DELIVERED, new StreamEntryID((String) lastDelivered));
+                        }
+                        list.add(new StreamGroupInfo(converted));
+                    }
+                    return list;
+                });
+    }
+
+    /** Returns consumers info for a group. Uses GLIDE xinfoConsumers. */
+    public List<StreamConsumerInfo> xinfoConsumers(String key, String groupName) {
+        return executeCommandWithGlide(
+                "XINFO CONSUMERS",
+                () -> {
+                    Map<String, Object>[] raw = glideClient.xinfoConsumers(key, groupName).get();
+                    if (raw == null) return Collections.emptyList();
+                    List<StreamConsumerInfo> list = new ArrayList<>();
+                    for (Map<String, Object> m : raw) {
+                        list.add(new StreamConsumerInfo(m));
+                    }
+                    return list;
+                });
     }
 
     /** Helper method to convert Jedis ScanParams to GLIDE ZScanOptions. */
