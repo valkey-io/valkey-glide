@@ -23260,7 +23260,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: js-sys:0.3.88
+Package: js-sys:0.3.90
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34929,7 +34929,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: regex-syntax:0.8.9
+Package: regex-syntax:0.8.10
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35609,7 +35609,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: rustls:0.23.36
+Package: rustls:0.23.37
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -47789,7 +47789,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen:0.2.111
+Package: wasm-bindgen:0.2.113
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -48018,7 +48018,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-futures:0.4.61
+Package: wasm-bindgen-futures:0.4.63
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -48247,7 +48247,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro:0.2.111
+Package: wasm-bindgen-macro:0.2.113
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -48476,7 +48476,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro-support:0.2.111
+Package: wasm-bindgen-macro-support:0.2.113
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -48705,7 +48705,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-shared:0.2.111
+Package: wasm-bindgen-shared:0.2.113
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -50281,7 +50281,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: web-sys:0.3.88
+Package: web-sys:0.3.90
 
 The following copyrights and licenses were found in the source code of this package:
 
