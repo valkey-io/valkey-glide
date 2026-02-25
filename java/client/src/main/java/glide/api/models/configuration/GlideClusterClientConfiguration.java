@@ -2,7 +2,6 @@
 package glide.api.models.configuration;
 
 import glide.api.GlideClusterClient;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
 
@@ -35,7 +34,5 @@ public class GlideClusterClientConfiguration extends BaseClientConfiguration {
     private final ClusterSubscriptionConfiguration subscriptionConfiguration;
 
     /** Advanced configuration settings for the client. */
-    @Builder.Default
-    private final AdvancedGlideClusterClientConfiguration advancedConfiguration =
-            AdvancedGlideClusterClientConfiguration.builder().build();
+    private final AdvancedGlideClusterClientConfiguration advancedConfiguration;
 }

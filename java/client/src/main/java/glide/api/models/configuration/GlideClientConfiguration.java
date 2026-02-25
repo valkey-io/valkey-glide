@@ -2,7 +2,6 @@
 package glide.api.models.configuration;
 
 import glide.api.GlideClient;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
@@ -38,7 +37,5 @@ public class GlideClientConfiguration extends BaseClientConfiguration {
     private final StandaloneSubscriptionConfiguration subscriptionConfiguration;
 
     /** Advanced configuration settings for the client. */
-    @Builder.Default
-    private final AdvancedGlideClientConfiguration advancedConfiguration =
-            AdvancedGlideClientConfiguration.builder().build();
+    private final AdvancedGlideClientConfiguration advancedConfiguration;
 }
