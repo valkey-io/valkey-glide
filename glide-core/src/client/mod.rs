@@ -1928,14 +1928,17 @@ impl Client {
             // Extract connection metadata for OTel span attributes.
             // Port 0 is normalized to the default (6379) for OTel reporting.
             let otel_metadata = types::OTelMetadata {
-                addresses: request
+                address: request
                     .addresses
-                    .iter()
+                    .first()
                     .map(|addr| types::NodeAddress {
                         host: addr.host.clone(),
                         port: get_port(addr),
                     })
-                    .collect(),
+                    .unwrap_or_else(|| types::NodeAddress {
+                        host: "unknown".to_string(),
+                        port: 6379,
+                    }),
                 db_namespace: request.database_id.to_string(),
             };
 
@@ -2046,26 +2049,16 @@ impl Client {
             .unwrap_or(false)
     }
 
-    /// Returns the server address for OTel `server.address` attribute.
-    /// In cluster mode this returns the initial connection address, not the
-    /// node that handled the command. See: https://github.com/valkey-io/valkey-glide/issues/5443
+    /// Returns the initial connection address, used as the default
+    /// OTel `server.address` span attribute.
     pub fn server_address(&self) -> &str {
-        self.otel_metadata
-            .addresses
-            .first()
-            .map(|a| a.host.as_str())
-            .unwrap_or("unknown")
+        &self.otel_metadata.address.host
     }
 
-    /// Returns the server port for OTel `server.port` attribute.
-    /// In cluster mode this returns the initial connection port, not the
-    /// node that handled the command. See: https://github.com/valkey-io/valkey-glide/issues/5443
+    /// Returns the initial connection port, used as the default
+    /// OTel `server.port` span attribute.
     pub fn server_port(&self) -> u16 {
-        self.otel_metadata
-            .addresses
-            .first()
-            .map(|a| a.port)
-            .unwrap_or(6379)
+        self.otel_metadata.address.port
     }
 
     pub fn db_namespace(&self) -> &str {
@@ -2388,10 +2381,10 @@ mod tests {
             compression_manager: None,
             pubsub_synchronizer,
             otel_metadata: OTelMetadata {
-                addresses: vec![NodeAddress {
+                address: NodeAddress {
                     host: "localhost".to_string(),
                     port: 6379,
-                }],
+                },
                 db_namespace: "0".to_string(),
             },
         }
