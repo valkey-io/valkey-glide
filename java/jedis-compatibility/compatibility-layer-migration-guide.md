@@ -66,10 +66,13 @@ blockingSocketTimeoutMillis
 - ✅ Basic string operations (GET, SET, MGET, MSET)
 - ✅ Hash operations (HGET, HSET, HMGET, HMSET)
 - ✅ List operations (LPUSH, RPUSH, LPOP, RPOP)
-- ⚠️ Set operations (SADD, SREM, SMEMBERS) - **Available via `sendCommand()` only**
+- ✅ Set operations (SADD, SREM, SMEMBERS, SCARD, SISMEMBER, SMISMEMBER, SPOP, SRANDMEMBER, SMOVE, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SSCAN) via type-safe methods
 - ⚠️ Sorted set operations (ZADD, ZREM, ZRANGE) - **Available via `sendCommand()` only**
+- ✅ Stream operations (XADD, XLEN, XDEL, XRANGE, XREVRANGE, XREAD, XTRIM, XGROUP CREATE/DESTROY/SETID, XREADGROUP, XACK, XPENDING, XCLAIM, XAUTOCLAIM, XINFO STREAM/GROUPS/CONSUMERS)
+  - **Note:** `XSETID` is not supported (only `XGROUP SETID` is available)
 - ✅ Key operations (DEL, EXISTS, EXPIRE, TTL)
 - ✅ Connection commands (PING, SELECT)
+- ✅ ACL commands (ACL LIST, ACL GETUSER, ACL SETUSER, ACL DELUSER, ACL CAT, ACL GENPASS, ACL LOG, ACL LOG RESET, ACL WHOAMI, ACL USERS, ACL SAVE, ACL LOAD, ACL DRYRUN)
 - ✅ Generic commands via `sendCommand()` (Protocol.Command types only)
 
 ### Client Types
@@ -97,9 +100,8 @@ blockingSocketTimeoutMillis
 - **Transactions**: MULTI/EXEC transaction blocks not supported
 - **Pipelining**: Jedis pipelining functionality unavailable
 - **Pub/Sub**: Redis publish/subscribe not implemented
-- **Lua scripting**: EVAL/EVALSHA commands not supported
+- ✅ **Lua scripting**: Full support for EVAL/EVALSHA, SCRIPT management, and Valkey Functions (FCALL/FUNCTION *)
 - **Modules**: Redis module commands not available
-- **Typed set/sorted set methods**: No dedicated methods like `sadd()`, `zadd()` - use `sendCommand()` instead
 
 ### Configuration Limitations
 - **Complex SSL configurations**: Jedis `JedisClientConfig` SSL parameters cannot be mapped to Valkey GLIDE `GlideClientConfiguration`
