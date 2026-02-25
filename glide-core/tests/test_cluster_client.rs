@@ -756,7 +756,9 @@ mod cluster_client_tests {
                     let replica_addr = &addresses[1];
                     let (replica_host, replica_port) = match replica_addr {
                         redis::ConnectionAddr::Tcp(h, p) => (h.clone(), *p),
-                        redis::ConnectionAddr::TcpTls { host: h, port: p, .. } => (h.clone(), *p),
+                        redis::ConnectionAddr::TcpTls {
+                            host: h, port: p, ..
+                        } => (h.clone(), *p),
                         _ => panic!("Unexpected connection type"),
                     };
                     let mut cmd = redis::cmd("CLUSTER");
@@ -765,24 +767,37 @@ mod cluster_client_tests {
                         host: replica_host,
                         port: replica_port,
                     });
-                    let _ = test_basics.client.send_command(&mut cmd, Some(routing)).await;
+                    let _ = test_basics
+                        .client
+                        .send_command(&mut cmd, Some(routing))
+                        .await;
                 }
                 "SHUTDOWN" | "SEGFAULT" => {
                     // Ungraceful failover via primary crash
                     let primary_addr = &addresses[0];
                     let (host, port) = match primary_addr {
                         redis::ConnectionAddr::Tcp(h, p) => (h.clone(), *p),
-                        redis::ConnectionAddr::TcpTls { host: h, port: p, .. } => (h.clone(), *p),
+                        redis::ConnectionAddr::TcpTls {
+                            host: h, port: p, ..
+                        } => (h.clone(), *p),
                         _ => panic!("Unexpected connection type"),
                     };
-                    let mut cmd = redis::cmd(if failover_method == "SHUTDOWN" { "SHUTDOWN" } else { "DEBUG" });
+                    let mut cmd = redis::cmd(if failover_method == "SHUTDOWN" {
+                        "SHUTDOWN"
+                    } else {
+                        "DEBUG"
+                    });
                     if failover_method == "SHUTDOWN" {
                         cmd.arg("NOSAVE");
                     } else {
                         cmd.arg("SEGFAULT");
                     }
-                    let routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress { host, port });
-                    let _ = test_basics.client.send_command(&mut cmd, Some(routing)).await;
+                    let routing =
+                        RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress { host, port });
+                    let _ = test_basics
+                        .client
+                        .send_command(&mut cmd, Some(routing))
+                        .await;
                 }
                 _ => panic!("Unknown failover method"),
             }
