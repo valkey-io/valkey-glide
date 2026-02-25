@@ -838,23 +838,10 @@ fn test_batch_span_error_handling() {
     }
 }
 
-// ============================================================================
-// Tests for Bug Fix: CustomCommand Span Creation
-// ============================================================================
-//
-// These tests verify the fix for the bug where create_otel_span() and
-// create_otel_span_with_parent() failed when RequestType::CustomCommand was passed.
-// The bug occurred because Cmd::new() has no pre-set command bytes for custom commands
-// like EVAL and EVALSHA.
-//
-// Fix: Fall back to "CustomCommand" as span name when cmd.command() returns None.
-
 #[test]
 fn test_custom_command_span_creation() {
     logger_core::init(Some(logger_core::Level::Debug), None);
 
-    // Test creating span with CustomCommand request type
-    // This should now succeed with fallback to "CustomCommand" name
     let span_ptr = create_otel_span(RequestType::CustomCommand);
     assert_ne!(
         span_ptr, 0,
@@ -883,8 +870,6 @@ fn test_custom_command_span_with_parent() {
     let parent_span_ptr = unsafe { create_named_otel_span(parent_name.as_ptr()) };
     assert_ne!(parent_span_ptr, 0, "Parent span creation should succeed");
 
-    // Test creating CustomCommand span as child of parent
-    // This should now succeed with fallback to "CustomCommand" name
     let child_span_ptr =
         unsafe { create_otel_span_with_parent(RequestType::CustomCommand, parent_span_ptr) };
     assert_ne!(
@@ -916,8 +901,6 @@ fn test_custom_command_span_with_parent() {
 fn test_multiple_custom_command_spans() {
     logger_core::init(Some(logger_core::Level::Debug), None);
 
-    // Test creating multiple CustomCommand spans
-    // CustomCommand is used for EVAL, EVALSHA, and other user-defined commands
     let mut span_ptrs = Vec::new();
 
     for i in 0..5 {
@@ -968,8 +951,6 @@ fn test_custom_command_hierarchy() {
     let batch_span_ptr = unsafe { create_batch_otel_span_with_parent(root_span_ptr) };
     assert_ne!(batch_span_ptr, 0, "Batch span creation should succeed");
 
-    // Create CustomCommand spans as children of batch span
-    // This simulates a batch operation containing custom commands (EVAL, EVALSHA, etc.)
     let custom_span_1 =
         unsafe { create_otel_span_with_parent(RequestType::CustomCommand, batch_span_ptr) };
     let custom_span_2 =
@@ -1126,10 +1107,6 @@ fn test_custom_command_with_invalid_parent() {
 fn test_regression_no_error_logs_for_custom_command() {
     logger_core::init(Some(logger_core::Level::Debug), None);
 
-    // This test verifies that CustomCommand no longer produces error logs
-    // Before the fix, this would log: "ERROR logger_core: ffi_otel - create_otel_span: Command has no bytes available"
-
-    // Create CustomCommand span - should succeed without errors
     let span_ptr = create_otel_span(RequestType::CustomCommand);
     assert_ne!(
         span_ptr, 0,

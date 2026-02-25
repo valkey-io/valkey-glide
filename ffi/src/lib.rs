@@ -2140,8 +2140,6 @@ pub(crate) unsafe fn get_pipeline_options(
     )
 }
 
-/// Creates an OpenTelemetry span with the given name and returns a pointer to the span as u64.
-///
 /// Helper function to extract and validate command name from RequestType.
 /// Returns the command name or None if validation fails.
 /// Falls back to "CustomCommand" for user-defined commands (e.g., EVAL, EVALSHA).
@@ -2189,6 +2187,8 @@ fn extract_command_name(request_type: RequestType, context: &str) -> Option<Stri
     Some(command_name)
 }
 
+
+/// Creates an OpenTelemetry span with the given name and returns a pointer to the span as u64.
 #[unsafe(no_mangle)]
 pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
     let command_name = match extract_command_name(request_type, "create_otel_span") {
