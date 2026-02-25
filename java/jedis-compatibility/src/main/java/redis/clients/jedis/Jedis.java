@@ -88,6 +88,7 @@ import redis.clients.jedis.commands.ProtocolCommand;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.BitPosParams;
+import redis.clients.jedis.params.GeoSearchParam;
 import redis.clients.jedis.params.GetExParams;
 import redis.clients.jedis.params.HGetExParams;
 import redis.clients.jedis.params.HSetExParams;
@@ -2560,6 +2561,8 @@ public final class Jedis implements Closeable {
      *
      * @param key the key
      * @return the sorted elements
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
      */
     public List<String> sort(String key) {
         return executeCommandWithGlide(
@@ -2575,6 +2578,8 @@ public final class Jedis implements Closeable {
      *
      * @param key the key
      * @return the sorted elements
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
      */
     public List<byte[]> sort(final byte[] key) {
         return executeCommandWithGlide(
@@ -2595,6 +2600,8 @@ public final class Jedis implements Closeable {
      * @param key the key
      * @param sortingParameters sorting parameters (BY, LIMIT, GET, ASC/DESC, ALPHA)
      * @return the sorted elements
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
      */
     public List<String> sort(String key, String... sortingParameters) {
         checkNotClosed();
@@ -11501,6 +11508,8 @@ public final class Jedis implements Closeable {
      *
      * @param key the key of the object
      * @return the encoding of the object, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
      */
     public String objectEncoding(String key) {
         return executeCommandWithGlide("OBJECT", () -> glideClient.objectEncoding(key).get());
@@ -11511,6 +11520,8 @@ public final class Jedis implements Closeable {
      *
      * @param key the key of the object
      * @return the encoding of the object, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
      */
     public byte[] objectEncoding(final byte[] key) {
         return executeCommandWithGlide(
@@ -11526,6 +11537,8 @@ public final class Jedis implements Closeable {
      *
      * @param key the key of the object
      * @return the frequency counter, or null if the key does not exist or LFU is not enabled
+     * @see <a href="https://valkey.io/commands/object-freq/">valkey.io</a> for details.
+     * @since Valkey 4.0.0
      */
     public Long objectFreq(String key) {
         try {
@@ -11547,6 +11560,8 @@ public final class Jedis implements Closeable {
      *
      * @param key the key of the object
      * @return the frequency counter, or null if the key does not exist or LFU is not enabled
+     * @see <a href="https://valkey.io/commands/object-freq/">valkey.io</a> for details.
+     * @since Valkey 4.0.0
      */
     public Long objectFreq(final byte[] key) {
         try {
@@ -11568,6 +11583,8 @@ public final class Jedis implements Closeable {
      *
      * @param key the key of the object
      * @return the idle time in seconds, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-idletime/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
      */
     public Long objectIdletime(String key) {
         return executeCommandWithGlide("OBJECT", () -> glideClient.objectIdletime(key).get());
@@ -11578,6 +11595,8 @@ public final class Jedis implements Closeable {
      *
      * @param key the key of the object
      * @return the idle time in seconds, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-idletime/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
      */
     public Long objectIdletime(final byte[] key) {
         return executeCommandWithGlide(
@@ -11589,6 +11608,8 @@ public final class Jedis implements Closeable {
      *
      * @param key the key of the object
      * @return the reference count, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-refcount/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
      */
     public Long objectRefcount(String key) {
         return executeCommandWithGlide("OBJECT", () -> glideClient.objectRefcount(key).get());
@@ -11599,6 +11620,8 @@ public final class Jedis implements Closeable {
      *
      * @param key the key of the object
      * @return the reference count, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-refcount/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
      */
     public Long objectRefcount(final byte[] key) {
         return executeCommandWithGlide(
@@ -11609,6 +11632,8 @@ public final class Jedis implements Closeable {
      * Returns help information about the OBJECT command.
      *
      * @return a list of help messages describing OBJECT subcommands
+     * @see <a href="https://valkey.io/commands/object-help/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public List<String> objectHelp() {
         return executeCommandWithGlide(
@@ -11631,6 +11656,8 @@ public final class Jedis implements Closeable {
      * Returns help information about the OBJECT command (binary version).
      *
      * @return a list of help messages describing OBJECT subcommands
+     * @see <a href="https://valkey.io/commands/object-help/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public List<byte[]> objectHelpBinary() {
         return executeCommandWithGlide(
@@ -12210,8 +12237,7 @@ public final class Jedis implements Closeable {
      * @param params the search parameters
      * @return a list of members within the specified area
      */
-    public List<GeoRadiusResponse> geosearch(
-            String key, redis.clients.jedis.params.GeoSearchParam params) {
+    public List<GeoRadiusResponse> geosearch(String key, GeoSearchParam params) {
         return executeCommandWithGlide(
                 "GEOSEARCH",
                 () -> {
@@ -12266,8 +12292,7 @@ public final class Jedis implements Closeable {
      * @param params the search parameters
      * @return a list of members within the specified area
      */
-    public List<GeoRadiusResponse> geosearch(
-            final byte[] key, redis.clients.jedis.params.GeoSearchParam params) {
+    public List<GeoRadiusResponse> geosearch(final byte[] key, GeoSearchParam params) {
         return executeCommandWithGlide(
                 "GEOSEARCH",
                 () -> {
@@ -12563,8 +12588,7 @@ public final class Jedis implements Closeable {
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
      */
-    public long geosearchStore(
-            String dest, String src, redis.clients.jedis.params.GeoSearchParam params) {
+    public long geosearchStore(String dest, String src, GeoSearchParam params) {
         return executeCommandWithGlide(
                 "GEOSEARCHSTORE",
                 () -> {
@@ -12608,8 +12632,7 @@ public final class Jedis implements Closeable {
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
      */
-    public long geosearchStore(
-            final byte[] dest, final byte[] src, redis.clients.jedis.params.GeoSearchParam params) {
+    public long geosearchStore(final byte[] dest, final byte[] src, GeoSearchParam params) {
         return executeCommandWithGlide(
                 "GEOSEARCHSTORE",
                 () -> {
@@ -12657,8 +12680,7 @@ public final class Jedis implements Closeable {
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
      */
-    public long geosearchStoreStoreDist(
-            String dest, String src, redis.clients.jedis.params.GeoSearchParam params) {
+    public long geosearchStoreStoreDist(String dest, String src, GeoSearchParam params) {
         return executeCommandWithGlide(
                 "GEOSEARCHSTORE",
                 () -> {
@@ -12707,8 +12729,7 @@ public final class Jedis implements Closeable {
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
      */
-    public long geosearchStoreStoreDist(
-            final byte[] dest, final byte[] src, redis.clients.jedis.params.GeoSearchParam params) {
+    public long geosearchStoreStoreDist(final byte[] dest, final byte[] src, GeoSearchParam params) {
         return executeCommandWithGlide(
                 "GEOSEARCHSTORE",
                 () -> {
