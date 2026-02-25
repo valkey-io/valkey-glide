@@ -517,6 +517,11 @@ pub(crate) struct InnerCore<C> {
     slot_refresh_state: SlotRefreshState,
     initial_nodes: Vec<ConnectionInfo>,
     glide_connection_options: GlideConnectionOptions,
+    /// Lock to ensure mutual exclusion between topology refresh operations and connection validation.
+    ///
+    /// This prevents validation from removing connections that were just created
+    /// during topology discovery but haven't been assigned slots yet.
+    pub(crate) topology_refresh_lock: tokio::sync::Mutex<()>,
 }
 
 pub(crate) type Core<C> = Arc<InnerCore<C>>;
@@ -1266,6 +1271,7 @@ where
             slot_refresh_state: SlotRefreshState::new(slots_refresh_rate_limiter),
             initial_nodes: initial_nodes.to_vec(),
             glide_connection_options,
+            topology_refresh_lock: tokio::sync::Mutex::new(()),
         });
         let mut connection = ClusterConnInner {
             inner,
@@ -1459,17 +1465,14 @@ where
     // In addition, the validation is done by peeking at the state of the underlying transport w/o overhead of additional commands to server.
     // If we're during slot refresh, we skip the validation to avoid interfering with the slot refresh process.
     async fn validate_all_user_connections(inner: Arc<InnerCore<C>>) {
-        // If slot refresh is in progress, skip validation
-        // The reason is that during slot refresh, connections might be created before being assigned slots,
-        // and we don't want to drop those connections and interfere with that process.
-        //
-        // Note: This is a best-effort check due to a potential race condition - both tasks
-        // are spawned to tokio's multi-threaded runtime and can run in parallel, so
-        // `refresh_slots` could start right after this check returns false.
-        // TODO: Implement more robust synchronization - see https://github.com/valkey-io/valkey-glide/issues/5227
-        if inner.slot_refresh_state.in_progress.load(Ordering::Relaxed) {
-            return;
-        }
+        // Try to acquire the topology refresh lock - if we can't, it means a slot refresh is in progress.
+        let _guard = match inner.topology_refresh_lock.try_lock() {
+            Ok(guard) => guard,
+            Err(_) => {
+                debug!("Skipping connection validation - topology refresh in progress");
+                return;
+            }
+        };
 
         let mut all_valid_conns = HashMap::new();
         // prep connections and clean out these w/o assigned slots, as we might have established connections to unwanted hosts
@@ -2095,6 +2098,16 @@ where
         policy: &RefreshPolicy,
         trigger: SlotRefreshTrigger,
     ) -> RedisResult<()> {
+        let _guard = inner.topology_refresh_lock.lock().await;
+        Self::refresh_slots_and_subscriptions_with_retries_inner(inner.clone(), policy, trigger)
+            .await
+    }
+
+    async fn refresh_slots_and_subscriptions_with_retries_inner(
+        inner: Arc<InnerCore<C>>,
+        policy: &RefreshPolicy,
+        trigger: SlotRefreshTrigger,
+    ) -> RedisResult<()> {
         let SlotRefreshState {
             in_progress,
             last_run,
@@ -2165,9 +2178,11 @@ where
         inner: Arc<InnerCore<C>>,
         policy: &RefreshPolicy,
     ) -> RedisResult<bool> {
+        let _guard = inner.topology_refresh_lock.lock().await;
+
         let topology_changed = Self::check_for_topology_diff(inner.clone()).await;
         if topology_changed {
-            Self::refresh_slots_and_subscriptions_with_retries(
+            Self::refresh_slots_and_subscriptions_with_retries_inner(
                 inner.clone(),
                 policy,
                 SlotRefreshTrigger::RuntimeRefresh,
