@@ -100,7 +100,6 @@ blockingSocketTimeoutMillis
 - **Pub/Sub with JedisPubSub callbacks**: Jedis-style `JedisPubSub` callback listeners are not supported. For PubSub functionality with message handling, use GLIDE's native dynamic pubsub APIs to subscribe to channels and handle messages at runtime. The compatibility layer only provides `publish()` and `pubsub*()` inspection commands.
 - **Lua scripting**: EVAL/EVALSHA commands not supported
 - **Modules**: Redis module commands not available
-- **Typed sorted set methods**: No dedicated methods like `zadd()`, `zrem()` - use `sendCommand()` instead
 
 ### Configuration Limitations
 - **Complex SSL configurations**: Jedis `JedisClientConfig` SSL parameters cannot be mapped to Valkey GLIDE `GlideClientConfiguration`
