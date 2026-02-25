@@ -671,6 +671,8 @@ fn serialize_array_to_bytes(
     _encoding_utf8: bool,
 ) -> Result<Vec<u8>, crate::errors::FFIError> {
     const NULL_VALUE: i32 = -1;
+    const FALSE_BOOL: u8 = 0;
+    const TRUE_BOOL: u8 = 1;
 
     let mut bytes = Vec::new();
 
@@ -716,6 +718,20 @@ fn serialize_array_to_bytes(
             redis::Value::Int(n) => {
                 bytes.push(b':'); // Integer marker
                 bytes.extend_from_slice(&n.to_be_bytes());
+            }
+            redis::Value::Double(n) => {
+                bytes.push(b','); // Double marker
+                bytes.extend_from_slice(&n.to_be_bytes());
+            }
+            redis::Value::Boolean(b) => {
+                bytes.push(b'?'); // Boolean marker
+                bytes.push(if b { TRUE_BOOL } else { FALSE_BOOL });
+            }
+            redis::Value::BigNumber(n) => {
+                let data = n.to_string().into_bytes();
+                bytes.push(b'('); // BigNumber marker
+                bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
+                bytes.extend_from_slice(&data);
             }
             _ => {
                 // For complex nested types, store as serialized string representation
@@ -881,4 +897,57 @@ fn get_glide_core_client_cache_safe(env: &mut JNIEnv) -> Result<GlideCoreClientC
     }
 
     Ok(guard.as_ref().cloned().unwrap())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::serialize_array_to_bytes;
+    use redis::{Value, parse_redis_value};
+
+    #[test]
+    fn serialize_array_to_bytes_encodes_bool_double_bignumber_and_nil() {
+        let big_number_value = parse_redis_value(b"(123456789012345678901234567890\r\n").unwrap();
+        let Value::BigNumber(big_number) = big_number_value else {
+            panic!("expected big number from parser");
+        };
+
+        let payload = vec![
+            Value::Boolean(true),
+            Value::Double(42.25),
+            Value::BigNumber(big_number),
+            Value::Nil,
+        ];
+
+        let bytes = match serialize_array_to_bytes(payload, false) {
+            Ok(bytes) => bytes,
+            Err(err) => panic!("serialization failed: {err}"),
+        };
+
+        // Array header: '*' + 4-byte element count.
+        assert_eq!(bytes[0], b'*');
+        assert_eq!(u32::from_be_bytes(bytes[1..5].try_into().unwrap()), 4);
+
+        // Element 1: boolean true ('?'+1).
+        assert_eq!(bytes[5], b'?');
+        assert_eq!(bytes[6], 1);
+
+        // Element 2: double (',' + 8 bytes).
+        assert_eq!(bytes[7], b',');
+        let decoded_double = f64::from_be_bytes(bytes[8..16].try_into().unwrap());
+        assert_eq!(decoded_double, 42.25);
+
+        // Element 3: big number ('(' + len + utf8 digits).
+        assert_eq!(bytes[16], b'(');
+        let big_number_len = u32::from_be_bytes(bytes[17..21].try_into().unwrap()) as usize;
+        let big_number_text = std::str::from_utf8(&bytes[21..21 + big_number_len]).unwrap();
+        assert_eq!(big_number_text, "123456789012345678901234567890");
+
+        // Element 4: null bulk string ('$' + -1).
+        let null_offset = 21 + big_number_len;
+        assert_eq!(bytes[null_offset], b'$');
+        assert_eq!(
+            i32::from_be_bytes(bytes[null_offset + 1..null_offset + 5].try_into().unwrap()),
+            -1
+        );
+    }
 }

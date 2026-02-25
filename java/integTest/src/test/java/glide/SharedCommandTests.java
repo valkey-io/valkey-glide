@@ -4746,6 +4746,37 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void smismember_binary_with_large_response_preserves_boolean_array_values(
+            BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        final int memberCount = 1900; // >16KB in DirectByteBuffer array fast-path
+
+        GlideString[] queryMembers = new GlideString[memberCount];
+        List<GlideString> existingMembers = new ArrayList<>();
+        for (int i = 0; i < memberCount; i++) {
+            GlideString member = gs("m-" + i);
+            queryMembers[i] = member;
+            if (i % 3 == 0) {
+                existingMembers.add(member);
+            }
+        }
+
+        assertEquals(
+                existingMembers.size(),
+                client.sadd(key, existingMembers.toArray(new GlideString[0])).get());
+
+        Boolean[] result = client.smismember(key, queryMembers).get();
+
+        assertEquals(memberCount, result.length);
+        for (int i = 0; i < memberCount; i++) {
+            assertNotNull(result[i], "SMISMEMBER should return booleans, never nil");
+            assertEquals(i % 3 == 0, result[i]);
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void sdiffstore(BaseClient client) {
         String key1 = "{key}-1-" + UUID.randomUUID();
         String key2 = "{key}-2-" + UUID.randomUUID();
@@ -6298,6 +6329,39 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class, () -> client.zmscore(key2, new String[] {"one"}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zmscore_binary_with_large_response_preserves_double_and_null_values(
+            BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        final int memberCount = 2200; // >16KB in DirectByteBuffer array fast-path
+
+        GlideString[] members = new GlideString[memberCount];
+        Map<GlideString, Double> membersScores = new LinkedHashMap<>();
+        for (int i = 0; i < memberCount; i++) {
+            GlideString member = gs("member-" + i);
+            members[i] = member;
+            if (i % 4 == 0) {
+                membersScores.put(member, i + 0.5);
+            }
+        }
+
+        assertEquals(membersScores.size(), client.zadd(key, membersScores).get());
+
+        Double[] result = client.zmscore(key, members).get();
+
+        assertEquals(memberCount, result.length);
+        for (int i = 0; i < memberCount; i++) {
+            if (i % 4 == 0) {
+                assertNotNull(result[i], "Existing member score should not be nil");
+                assertEquals(i + 0.5, result[i]);
+            } else {
+                assertNull(result[i], "Missing member should stay null");
+            }
+        }
     }
 
     @SneakyThrows
