@@ -1524,10 +1524,7 @@ where
             let inner_clone = inner.clone();
             let address_clone_for_task = address.clone();
 
-            let mut node_option = inner
-                .conn_lock
-                .read()
-                .remove_node(&address);
+            let mut node_option = inner.conn_lock.read().remove_node(&address);
 
             if !check_existing_conn {
                 node_option = None;
@@ -1552,10 +1549,7 @@ where
                 )));
                 let mut first_attempt = true;
                 for backoff_duration in infinite_backoff_iter {
-                    let cluster_params = inner_clone
-                        .cluster_params
-                        .read()
-                        .clone();
+                    let cluster_params = inner_clone.cluster_params.read().clone();
 
                     node_result = get_or_create_conn(
                         &address_clone_for_task,
@@ -2178,12 +2172,7 @@ where
         .await;
 
         if let Ok((_, found_topology_hash)) = topology_result {
-            if inner
-                .conn_lock
-                .read()
-                .get_current_topology_hash()
-                != found_topology_hash
-            {
+            if inner.conn_lock.read().get_current_topology_hash() != found_topology_hash {
                 return true;
             }
         }
@@ -2240,8 +2229,7 @@ where
         let nodes = new_slots.all_node_addresses();
         let nodes_len = nodes.len();
 
-        let cluster_params = inner
-            .get_cluster_param(|params| params.clone());
+        let cluster_params = inner.get_cluster_param(|params| params.clone());
         let glide_connection_options = &inner.glide_connection_options;
 
         // Find existing connections (by address or DNS resolution) or create new ones
@@ -2258,10 +2246,7 @@ where
                 // Issue: https://github.com/valkey-io/valkey-glide/issues/5298
                 let result = tokio::time::timeout(connection_timeout, async {
                     // Check for existing connection by direct address
-                    let node = inner
-                        .conn_lock
-                        .read()
-                        .node_for_address(&addr);
+                    let node = inner.conn_lock.read().node_for_address(&addr);
 
                     let node = match node {
                         Some(n) => Some(n),
@@ -2272,8 +2257,7 @@ where
                             if let Some((host, port)) = get_host_and_port_from_addr(&addr) {
                                 let conn = get_socket_addrs(host, port).await.ok().and_then(
                                     |mut socket_addresses| {
-                                        let conn_lock =
-                                            inner.conn_lock.read();
+                                        let conn_lock = inner.conn_lock.read();
                                         socket_addresses.find_map(|socket_addr| {
                                             conn_lock.node_for_address(&socket_addr.to_string())
                                         })
@@ -2330,8 +2314,8 @@ where
         // Clear the refresh tasks of the prev instance
         // TODO - Maybe we can take the running refresh tasks and use them instead of running new connection creation
         write_guard.refresh_conn_state.clear_refresh_state();
-        let read_from_replicas = inner
-            .get_cluster_param(|params| params.read_from_replicas.clone());
+        let read_from_replicas =
+            inner.get_cluster_param(|params| params.read_from_replicas.clone());
         *write_guard = ConnectionsContainer::new(
             new_slots,
             new_connections,
@@ -2374,11 +2358,7 @@ where
         slot: u16,
         new_primary: Arc<String>,
     ) -> RedisResult<()> {
-        let curr_shard_addrs = inner
-            .conn_lock
-            .read()
-            .slot_map
-            .shard_addrs_for_slot(slot);
+        let curr_shard_addrs = inner.conn_lock.read().slot_map.shard_addrs_for_slot(slot);
         // let curr_shard_addrs = connections_container.slot_map.shard_addrs_for_slot(slot);
         // Check if the new primary is part of the current shard and update if required
         if let Some(curr_shard_addrs) = curr_shard_addrs {
@@ -2649,9 +2629,7 @@ where
                     Ok(Response::Single(Value::Okay))
                 }
                 Operation::GetUsername => {
-                    let username = match core
-                        .get_cluster_param(|params| params.username.clone())
-                    {
+                    let username = match core.get_cluster_param(|params| params.username.clone()) {
                         Some(username) => Value::SimpleString(username),
                         None => Value::Nil,
                     };
@@ -2889,10 +2867,8 @@ where
                         );
 
                         // Step 5: Retry the connection lookup after waiting for the reconnect task.
-                        if let Some((conn, address)) = core
-                            .conn_lock
-                            .read()
-                            .connection_for_route(&route)
+                        if let Some((conn, address)) =
+                            core.conn_lock.read().connection_for_route(&route)
                         {
                             conn_check = ConnectionCheck::Found((conn, address));
                         } else {
@@ -2914,10 +2890,7 @@ where
                 return Ok((address, conn.await));
             }
             InternalSingleNodeRouting::ByAddress(address) => {
-                let conn_option = core
-                    .conn_lock
-                    .read()
-                    .connection_for_address(&address);
+                let conn_option = core.conn_lock.read().connection_for_address(&address);
                 if let Some((address, conn)) = conn_option {
                     return Ok((address, conn.await));
                 } else {
@@ -2963,10 +2936,7 @@ where
                 }
 
                 // Try fetching the connection after the notifier resolves
-                let conn_option = core
-                    .conn_lock
-                    .read()
-                    .connection_for_address(&address);
+                let conn_option = core.conn_lock.read().connection_for_address(&address);
 
                 if let Some((address, conn)) = conn_option {
                     debug!("get_connection: Connection found for address: {}", address);
@@ -3120,17 +3090,12 @@ where
         retry: u32,
         retry_params: RetryParams,
     ) {
-        let is_primary = core
-            .conn_lock
-            .read()
-            .is_primary(&address);
+        let is_primary = core.conn_lock.read().is_primary(&address);
 
         if !is_primary {
             // If the connection is a replica, remove the connection and retry.
             // The connection will be established again on the next call to refresh slots once the replica is no longer in loading state.
-            core.conn_lock
-                .read()
-                .remove_node(&address);
+            core.conn_lock.read().remove_node(&address);
         } else {
             // If the connection is primary, just sleep and retry
             let sleep_duration = retry_params.wait_time_for_retry(retry);
@@ -3642,8 +3607,8 @@ async fn calculate_topology_from_random_nodes<C>(
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    let refresh_topology_from_initial_nodes = inner
-        .get_cluster_param(|p| p.refresh_topology_from_initial_nodes);
+    let refresh_topology_from_initial_nodes =
+        inner.get_cluster_param(|p| p.refresh_topology_from_initial_nodes);
 
     // During initial connection, use existing connections to avoid double DNS lookup
     let use_initial_nodes_lookup = refresh_topology_from_initial_nodes
@@ -3702,11 +3667,9 @@ where
             .ok()
             .and_then(|value| get_host_and_port_from_addr(addr).map(|(host, _)| (host, value)))
     });
-    let tls_mode = inner
-        .get_cluster_param(|params| params.tls);
+    let tls_mode = inner.get_cluster_param(|params| params.tls);
 
-    let read_from_replicas = inner
-        .get_cluster_param(|params| params.read_from_replicas.clone());
+    let read_from_replicas = inner.get_cluster_param(|params| params.read_from_replicas.clone());
     TopologyQueryResult {
         topology_result: calculate_topology(
             topology_values,
