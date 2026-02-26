@@ -116,7 +116,8 @@ jobs:
             - name: Set up JDK ${{ matrix.java }}
               uses: actions/setup-java@v4
               with:
-                  distribution: ${{ matrix.java == '8' && runner.arch == 'ARM64' && runner.os == 'macOS' && 'zulu' || 'temurin' }}
+                  # Temurin doesn't have Java 8; use corretto (or zulu for ARM64 macOS)
+                  distribution: ${{ matrix.java == '8' && (runner.arch == 'ARM64' && runner.os == 'macOS' && 'zulu' || 'corretto') || 'temurin' }}
                   java-version: ${{ matrix.java }}
 
             - name: Set up JDK 11 (for Java 8 compilation)
@@ -231,7 +232,8 @@ jobs:
             - name: Set up JDK ${{ matrix.java }}
               uses: actions/setup-java@v4
               with:
-                  distribution: ${{ matrix.java == '8' && runner.arch == 'ARM64' && runner.os == 'macOS' && 'zulu' || 'temurin' }}
+                  # Temurin doesn't have Java 8; use corretto (or zulu for ARM64 macOS)
+                  distribution: ${{ matrix.java == '8' && (runner.arch == 'ARM64' && runner.os == 'macOS' && 'zulu' || 'corretto') || 'temurin' }}
                   java-version: ${{ matrix.java }}
 
             - name: Set up JDK 11 (for Java 8 compilation)
@@ -341,11 +343,20 @@ jobs:
                   echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
                     yum update -y
-                    yum install -y git tar java-${{ matrix.java }}-amazon-corretto-devel.x86_64
-                    # Set JAVA_HOME to use the installed JDK
-                    export JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64
-                    echo "JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64" >> $GITHUB_ENV
-                    echo "/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64/bin" >> $GITHUB_PATH
+                    # AL2023 uses different package naming for Java 8 vs 11+
+                    if [[ "${{ matrix.java }}" == "8" ]]; then
+                      # Install both Java 8 (compilation target) and Java 11 (Gradle runtime)
+                      # Spotless plugin 7.x and Gradle 8.x require JVM 11+ to run
+                      yum install -y git tar java-1.8.0-amazon-corretto-devel java-11-amazon-corretto-devel
+                      export JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto
+                      echo "JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto" >> $GITHUB_ENV
+                      echo "/usr/lib/jvm/java-11-amazon-corretto/bin" >> $GITHUB_PATH
+                    else
+                      yum install -y git tar java-${{ matrix.java }}-amazon-corretto-devel
+                      export JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto
+                      echo "JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto" >> $GITHUB_ENV
+                      echo "/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto/bin" >> $GITHUB_PATH
+                    fi
                     # Create gradle user home and disable auto-download
                     mkdir -p ~/.gradle
                     echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
@@ -415,7 +426,13 @@ jobs:
                   GLIDE_CONTAINER_BUILD: true
               run: |
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
-                      export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-amazon-corretto.x86_64
+                      if [[ "${{ matrix.java }}" == "8" ]]; then
+                          # Use JDK 11 to run Gradle (required by Spotless 7.x / Gradle 8.x)
+                          # The toolchain config in build.gradle handles compiling to Java 8 bytecode
+                          export JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto
+                      else
+                          export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-amazon-corretto
+                      fi
                   else
                       # TODO: Fix java version. Java matrix tests are currently broken for all OS and Java 11 is always used.
                       # On other OS, build auto-downloads Java 11 but this doesn't work on Alpine
