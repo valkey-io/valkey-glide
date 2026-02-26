@@ -891,21 +891,21 @@ mod standalone_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_tls_connection_with_ipv6_succeeds() {
+    fn test_tls_connection_with_ip_succeeds(#[values(HOST_IPV4, HOST_IPV6)] host: &str) {
         block_on_all(async move {
             let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
             let tls_paths = build_tls_file_paths(&tempdir);
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
 
-            let ipv6_addr = redis::ConnectionAddr::TcpTls {
-                host: HOST_IPV6.to_string(),
+            let ip_addr = redis::ConnectionAddr::TcpTls {
+                host: host.to_string(),
                 port: get_available_port(),
                 insecure: false,
                 tls_params: None,
             };
 
             let _server = RedisServer::new_with_addr_tls_modules_and_spawner(
-                ipv6_addr.clone(),
+                ip_addr.clone(),
                 Some(tls_paths.clone()),
                 &[],
                 false,
@@ -916,7 +916,7 @@ mod standalone_client_tests {
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
 
             let mut connection_request = create_connection_request(
-                &[ipv6_addr],
+                &[ip_addr],
                 &TestConfiguration {
                     use_tls: true,
                     shared_server: false,
@@ -929,7 +929,7 @@ mod standalone_client_tests {
             let mut client =
                 StandaloneClient::create_client(connection_request.into(), None, None, None)
                     .await
-                    .expect("Failed to create client with IPv6 address");
+                    .expect("Failed to create client with IP address");
 
             assert_connected(&mut client).await;
         });
