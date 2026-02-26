@@ -88,6 +88,10 @@ glide-core = { path = ".", features = [
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(standalone_heartbeat)', 'cfg(feature, values("iam_tests"))'] }
 
+[lints.clippy]
+await_holding_lock = "deny"
+mutex_atomic = "warn"
+
 [build-dependencies]
 protobuf-codegen = "3"
 

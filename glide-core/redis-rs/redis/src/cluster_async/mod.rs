@@ -3110,7 +3110,11 @@ where
         let mut poll_flush_action = PollFlushAction::None;
 
         let mut pending_requests = Vec::new();
-        let mut rx_guard = self.inner.pending_requests_rx.lock().unwrap();
+        let mut rx_guard = self
+            .inner
+            .pending_requests_rx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         while let Ok(request) = rx_guard.try_recv() {
             pending_requests.push(request);
         }
@@ -3247,7 +3251,11 @@ where
                     .as_mut()
                     .respond(Err(self.refresh_error.take().unwrap()));
             } else {
-                let mut rx_guard = self.inner.pending_requests_rx.lock().unwrap();
+                let mut rx_guard = self
+                    .inner
+                    .pending_requests_rx
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
                 if let Ok(request) = rx_guard.try_recv() {
                     let _ = request.sender.send(Err(self.refresh_error.take().unwrap()));
                 }
