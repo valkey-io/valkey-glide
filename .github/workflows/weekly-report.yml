@@ -1,0 +1,116 @@
+name: Weekly Issues & PRs Report
+
+on:
+  push:
+    branches:
+      - github-slack-notifier  # TEMP: remove before merging
+  schedule:
+    - cron: '0 0 * * 6'  # Every Friday 4 PM PST (midnight Saturday UTC)
+  workflow_dispatch:
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gather weekly activity
+        id: gather
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const since = new Date();
+            since.setDate(since.getDate() - 7);
+            const sinceDate = since.toISOString().split('T')[0];
+            const repo = 'valkey-io/valkey-glide';
+
+            const queries = [
+              { label: '🆕 New Issues',           q: `repo:${repo} is:issue created:>=${sinceDate}` },
+              { label: '✅ Closed Issues',         q: `repo:${repo} is:issue is:closed closed:>=${sinceDate}` },
+              { label: '🆕 New PRs',               q: `repo:${repo} is:pr created:>=${sinceDate}` },
+              { label: '✅ Closed/Merged PRs',     q: `repo:${repo} is:pr is:closed closed:>=${sinceDate}` },
+            ];
+
+            // Paginate through all results for a search query
+            async function fetchAll(q) {
+              let items = [];
+              let page = 1;
+              while (true) {
+                const res = await github.rest.search.issuesAndPullRequests({
+                  q, sort: 'created', order: 'desc', per_page: 100, page
+                });
+                items = items.concat(res.data.items);
+                if (items.length >= res.data.total_count || res.data.items.length < 100) break;
+                page++;
+              }
+              return items;
+            }
+
+            let slackBlocks = [
+              { type: 'header', text: { type: 'plain_text', text: `📋 Weekly Report — valkey-glide (since ${sinceDate})` } }
+            ];
+
+            for (const { label, q } of queries) {
+              const items = await fetchAll(q);
+
+              slackBlocks.push({
+                type: 'section',
+                text: { type: 'mrkdwn', text: `*${label}* (${items.length})` }
+              });
+              slackBlocks.push({ type: 'divider' });
+
+              if (items.length === 0) {
+                slackBlocks.push({
+                  type: 'section',
+                  text: { type: 'mrkdwn', text: '_None this week._' }
+                });
+              } else {
+                const lines = items.map(item => {
+                  const state = item.pull_request?.merged_at ? 'merged' : item.state;
+                  return `• <${item.html_url}|#${item.number}> ${item.title} — _${item.user.login}_ (${state})`;
+                });
+
+                // Slack blocks have a 3000 char text limit, so chunk carefully
+                let chunk = [];
+                let chunkLen = 0;
+                for (const line of lines) {
+                  if (chunkLen + line.length + 1 > 2900 && chunk.length > 0) {
+                    slackBlocks.push({
+                      type: 'section',
+                      text: { type: 'mrkdwn', text: chunk.join('\n') }
+                    });
+                    chunk = [];
+                    chunkLen = 0;
+                  }
+                  chunk.push(line);
+                  chunkLen += line.length + 1;
+                }
+                if (chunk.length > 0) {
+                  slackBlocks.push({
+                    type: 'section',
+                    text: { type: 'mrkdwn', text: chunk.join('\n') }
+                  });
+                }
+              }
+            }
+
+            // Slack messages have a 50 block limit — if we exceed it, split into multiple messages
+            const fs = require('fs');
+            const maxBlocks = 50;
+            const payloads = [];
+            for (let i = 0; i < slackBlocks.length; i += maxBlocks) {
+              payloads.push({ blocks: slackBlocks.slice(i, i + maxBlocks) });
+            }
+            fs.writeFileSync('/tmp/slack_payloads.json', JSON.stringify(payloads));
+            core.setOutput('payload_count', payloads.length);
+
+      - name: Send Slack messages
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.TEST_SLACK_WEBHOOK_URL }}
+        run: |
+          PAYLOADS=$(cat /tmp/slack_payloads.json)
+          COUNT=$(echo "$PAYLOADS" | jq length)
+          for i in $(seq 0 $((COUNT - 1))); do
+            echo "$PAYLOADS" | jq ".[$i]" | \
+              curl -s -X POST -H 'Content-type: application/json' \
+                --data @- "$SLACK_WEBHOOK_URL"
+            sleep 1  # avoid rate limiting between messages
+          done
