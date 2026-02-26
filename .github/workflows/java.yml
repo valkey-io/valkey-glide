@@ -330,7 +330,7 @@ jobs:
               run: docker compose down -v
 
     test-dns-failover:
-        name: DNS Failover
+        name: DNS Failover Test
         timeout-minutes: 30
         runs-on: ubuntu-latest
         steps:
