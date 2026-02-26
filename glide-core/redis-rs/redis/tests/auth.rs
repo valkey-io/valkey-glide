@@ -177,7 +177,7 @@ mod auth {
             loop {
                 match cmd("get")
                     .arg("foo")
-                    .query_async::<Value>(&mut connection_should_succeed)
+                    .query_async::<_, Value>(&mut connection_should_succeed)
                     .await
                 {
                     Ok(val) => return val,
