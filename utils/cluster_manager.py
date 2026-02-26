@@ -143,7 +143,7 @@ def generate_tls_certs():
 
     f = open(ext_file, "w")
     f.write(
-        f"keyUsage = digitalSignature keyEncipherment\\nsubjectAltName = IP:{DEFAULT_HOST_IPV4},IP:{DEFAULT_HOST_IPV6},DNS:localhost,DNS:{HOSTNAME_TLS}"
+        f"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:{DEFAULT_HOST_IPV4},IP:{DEFAULT_HOST_IPV6},DNS:localhost,DNS:{HOSTNAME_TLS}"
     )
     f.close()
 
@@ -1095,7 +1095,7 @@ def main():
         type=str,
         help="Host address (default: %(default)s)",
         required=False,
-        default="127.0.0.1",
+        default=DEFAULT_HOST_IPV4,
     )
 
     parser.add_argument(
