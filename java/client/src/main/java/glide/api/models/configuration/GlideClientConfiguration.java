@@ -39,6 +39,6 @@ public class GlideClientConfiguration extends BaseClientConfiguration {
 
     /** Advanced configuration settings for the client. */
     @Builder.Default
-    private final AdvancedGlideClientConfiguration advancedConfiguration = AdvancedGlideClientConfiguration.builder()
-            .build();
+    private final AdvancedGlideClientConfiguration advancedConfiguration =
+            AdvancedGlideClientConfiguration.builder().build();
 }
