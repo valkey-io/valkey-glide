@@ -967,4 +967,275 @@ mod standalone_client_tests {
             );
         });
     }
+
+    // ==================== Read-Only Mode Tests ====================
+
+    /// Creates mock responses for a replica-only server (no primary detection needed)
+    fn create_replica_only_responses() -> HashMap<String, Value> {
+        let mut responses = std::collections::HashMap::new();
+        responses.insert(
+            "*1\r\n$4\r\nPING\r\n".to_string(),
+            Value::BulkString(b"PONG".to_vec()),
+        );
+        // GET command response
+        responses.insert(
+            "*2\r\n$3\r\nGET\r\n$3\r\nfoo\r\n".to_string(),
+            Value::BulkString(b"bar".to_vec()),
+        );
+        // SET command response (for testing write blocking)
+        responses.insert(
+            "*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n".to_string(),
+            Value::Okay,
+        );
+        responses
+    }
+
+    fn create_replica_only_mock() -> ServerMock {
+        let listener = get_listener_on_available_port();
+        ServerMock::new_with_listener(create_replica_only_responses(), listener)
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_connects_without_primary() {
+        // Create a mock server that doesn't respond to INFO REPLICATION as a primary
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+
+        block_on_all(async {
+            // This should succeed because read_only mode doesn't require a primary
+            let client_result =
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
+            assert!(
+                client_result.is_ok(),
+                "read_only mode should connect without requiring a primary node"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_blocks_write_commands() {
+        // Use a primary mock so the connection succeeds, then test write blocking
+        let servers = create_primary_mock_with_replicas(0);
+        let mock = &servers[0];
+
+        let mut get_cmd = redis::cmd("GET");
+        get_cmd.arg("foo");
+        mock.add_response(&get_cmd, "$3\r\nbar\r\n".to_string());
+
+        let addresses = get_mock_addresses(&servers);
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+
+        block_on_all(async {
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .unwrap();
+
+            // Write command should be blocked before reaching the server
+            let mut set_cmd = redis::cmd("SET");
+            set_cmd.arg("foo").arg("bar");
+            let result = client.send_command(&set_cmd).await;
+            assert!(result.is_err(), "Write command should be blocked");
+            let err = result.unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("write commands are not allowed in read-only mode"),
+                "Error message should indicate write commands are not allowed, got: {}",
+                err
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_allows_read_commands() {
+        // Use a primary mock so the connection succeeds
+        let servers = create_primary_mock_with_replicas(0);
+        let mock = &servers[0];
+
+        let mut get_cmd = redis::cmd("GET");
+        get_cmd.arg("foo");
+        mock.add_response(&get_cmd, "$3\r\nbar\r\n".to_string());
+
+        let addresses = get_mock_addresses(&servers);
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+
+        block_on_all(async {
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .unwrap();
+
+            // Read command should be allowed
+            let result = client.send_command(&get_cmd).await;
+            assert!(
+                result.is_ok(),
+                "Read command should be allowed in read-only mode, got error: {:?}",
+                result.err()
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_rejects_az_affinity() {
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+        connection_request.read_from = ReadFrom::AZAffinity.into();
+        connection_request.client_az = "us-east-1a".into();
+
+        block_on_all(async {
+            let result =
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
+            assert!(
+                result.is_err(),
+                "AZAffinity should be rejected with read_only mode"
+            );
+            let err = format!("{:?}", result.unwrap_err());
+            assert!(
+                err.contains("read-only mode is not compatible with AZAffinity"),
+                "Error message should indicate AZAffinity incompatibility, got: {}",
+                err
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_rejects_az_affinity_replicas_and_primary() {
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+        connection_request.read_from = ReadFrom::AZAffinityReplicasAndPrimary.into();
+        connection_request.client_az = "us-east-1a".into();
+
+        block_on_all(async {
+            let result =
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
+            assert!(
+                result.is_err(),
+                "AZAffinityReplicasAndPrimary should be rejected with read_only mode"
+            );
+            let err = format!("{:?}", result.unwrap_err());
+            assert!(
+                err.contains("read-only mode is not compatible with AZAffinity"),
+                "Error message should indicate AZAffinity incompatibility, got: {}",
+                err
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_accepts_prefer_replica() {
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+        connection_request.read_from = ReadFrom::PreferReplica.into();
+
+        block_on_all(async {
+            let result =
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
+            assert!(
+                result.is_ok(),
+                "PreferReplica should be accepted with read_only mode"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_accepts_primary_read_from() {
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+        connection_request.read_from = ReadFrom::Primary.into();
+
+        block_on_all(async {
+            let result =
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
+            assert!(
+                result.is_ok(),
+                "Primary ReadFrom should be accepted with read_only mode (reads go to connected nodes)"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_skips_info_replication() {
+        // Create a mock that tracks received commands
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+
+        block_on_all(async {
+            let _client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .unwrap();
+
+            // In read_only mode, INFO REPLICATION should not be sent
+            // The mock should only receive connection-related commands, not INFO REPLICATION
+            // Note: This test verifies the behavior indirectly - if INFO REPLICATION was sent,
+            // the mock would fail because it doesn't have a response for it
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_normal_mode_requires_primary() {
+        // Create a mock that responds as a replica (not primary)
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        // read_only is false by default
+
+        block_on_all(async {
+            let result =
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
+            // Normal mode should fail because no primary is found
+            assert!(
+                result.is_err(),
+                "Normal mode should fail without a primary node"
+            );
+        });
+    }
 }
