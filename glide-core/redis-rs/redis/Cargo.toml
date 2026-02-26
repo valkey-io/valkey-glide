@@ -45,6 +45,7 @@ tokio-util = { version = "0.7", optional = true }
 tokio = { version = "1", features = ["rt", "net", "time", "sync"] }
 socket2 = { version = "0.6", features = ["all"], optional = true }
 dispose = { version = "0.5", optional = true }
+parking_lot = "0.12"
 
 # Only needed for the connection manager
 arc-swap = { version = "1.7" }
