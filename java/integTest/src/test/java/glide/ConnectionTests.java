@@ -27,7 +27,6 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -144,8 +143,7 @@ public class ConnectionTests {
         // Get Replica Count for current cluster
         long nReplicas =
                 getReplicaCount(
-                        configSetClient,
-                        new RequestRoutingConfiguration.SlotKeyRoute("key", PRIMARY));
+                        configSetClient, new RequestRoutingConfiguration.SlotKeyRoute("key", PRIMARY));
         long nGetCalls = 3 * nReplicas;
         String getCmdstat = String.format("cmdstat_get:calls=%d", 3);
 

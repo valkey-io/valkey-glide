@@ -1899,8 +1899,7 @@ public class CommandTests {
         // function has been replicated before we attempt to call it on the replica.
         long replicaCount = getReplicaCount(clusterClient, primaryRoute);
         clusterClient
-                .customCommand(
-                        new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
+                .customCommand(new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
                 .get();
 
         // fcall on a replica should fail with a readonly error, because the function
@@ -1939,8 +1938,7 @@ public class CommandTests {
 
         // Wait for the updated function to replicate to the replica
         clusterClient
-                .customCommand(
-                        new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
+                .customCommand(new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
                 .get();
 
         // fcall should succeed now
@@ -1975,8 +1973,7 @@ public class CommandTests {
         // function has been replicated before we attempt to call it on the replica.
         long replicaCount = getReplicaCount(clusterClient, primaryRoute);
         clusterClient
-                .customCommand(
-                        new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
+                .customCommand(new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
                 .get();
 
         // fcall on a replica should fail with a readonly error, because the function
@@ -2015,8 +2012,7 @@ public class CommandTests {
 
         // Wait for the updated function to replicate to the replica
         clusterClient
-                .customCommand(
-                        new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
+                .customCommand(new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
                 .get();
 
         // fcall should succeed now
