@@ -1,14 +1,11 @@
 //! Adds async IO support to redis.
 use crate::cmd::{cmd, Cmd};
-use crate::connection::{
-    get_resp3_hello_command_error, PubSubSubscriptionKind, RedisConnectionInfo,
-};
+use crate::connection::{get_resp3_hello_command_error, RedisConnectionInfo};
 use crate::pipeline::PipelineRetryStrategy;
 use crate::types::{
     ErrorKind, FromRedisValue, InfoDict, ProtocolVersion, RedisError, RedisFuture, RedisResult,
     Value,
 };
-use crate::PushKind;
 use ::tokio::io::{AsyncRead, AsyncWrite};
 use async_trait::async_trait;
 use futures_util::Future;
@@ -29,7 +26,7 @@ pub mod tokio;
 #[async_trait]
 pub(crate) trait RedisRuntime: AsyncStream + Send + Sync + Sized + 'static {
     /// Performs a TCP connection
-    async fn connect_tcp(socket_addr: SocketAddr) -> RedisResult<Self>;
+    async fn connect_tcp(socket_addr: SocketAddr, tcp_nodelay: bool) -> RedisResult<Self>;
 
     // Performs a TCP TLS connection
     async fn connect_tcp_tls(
@@ -37,6 +34,7 @@ pub(crate) trait RedisRuntime: AsyncStream + Send + Sync + Sized + 'static {
         socket_addr: SocketAddr,
         insecure: bool,
         tls_params: &Option<TlsConnParams>,
+        tcp_nodelay: bool,
     ) -> RedisResult<Self>;
 
     /// Performs a UNIX connection
@@ -92,6 +90,12 @@ pub trait ConnectionLike {
 
     /// Set the connection availibility zone
     fn set_az(&mut self, _az: Option<String>) {}
+
+    /// Update the node address used for PubSub tracking.
+    /// Default implementation does nothing - only MultiplexedConnection implements this.
+    fn update_push_manager_node_address(&mut self, _address: String) {
+        // Default: no-op
+    }
 }
 
 /// Implements ability to notify about disconnection events
@@ -231,83 +235,6 @@ where
         crate::connection::client_set_info_pipeline(connection_info.lib_name.as_deref())
             .query_async(con)
             .await;
-
-    // resubscribe
-    if connection_info.protocol != ProtocolVersion::RESP3 {
-        return Ok(());
-    }
-    static KIND_TO_COMMAND: [(PubSubSubscriptionKind, &str); 3] = [
-        (PubSubSubscriptionKind::Exact, "SUBSCRIBE"),
-        (PubSubSubscriptionKind::Pattern, "PSUBSCRIBE"),
-        (PubSubSubscriptionKind::Sharded, "SSUBSCRIBE"),
-    ];
-
-    if connection_info.pubsub_subscriptions.is_none() {
-        return Ok(());
-    }
-
-    for (subscription_kind, channels_patterns) in
-        connection_info.pubsub_subscriptions.as_ref().unwrap()
-    {
-        for channel_pattern in channels_patterns.iter() {
-            let mut subscribe_command =
-                cmd(KIND_TO_COMMAND[Into::<usize>::into(*subscription_kind)].1);
-            subscribe_command.arg(channel_pattern);
-
-            // This is a quite intricate code - Per RESP3, subscriptions commands do not return anything.
-            // Instead, push messages will be pushed for each channel. Thus, this is not a typycal request-response pattern.
-            // The act of pushing is asyncronous with the regard to the subscription command, and might be delayed for some time after the server state was already updated.
-            // (i.e. the behaviour is implementation defined).
-            // We will assume the configured time out is enough for the server to push the notifications.
-            match subscribe_command.query_async(con).await {
-                Ok(Value::Push { kind, data }) => {
-                    match *subscription_kind {
-                        PubSubSubscriptionKind::Exact => {
-                            if kind != PushKind::Subscribe
-                                || Value::BulkString(channel_pattern.clone()) != data[0]
-                            {
-                                fail!((
-                                    ErrorKind::ResponseError,
-                                    // TODO: Consider printing the exact command
-                                    "Failed to restore Exact subscription channels"
-                                ));
-                            }
-                        }
-                        PubSubSubscriptionKind::Pattern => {
-                            if kind != PushKind::PSubscribe
-                                || Value::BulkString(channel_pattern.clone()) != data[0]
-                            {
-                                fail!((
-                                    ErrorKind::ResponseError,
-                                    // TODO: Consider printing the exact command
-                                    "Failed to restore Pattern subscription channels"
-                                ));
-                            }
-                        }
-                        PubSubSubscriptionKind::Sharded => {
-                            if kind != PushKind::SSubscribe
-                                || Value::BulkString(channel_pattern.clone()) != data[0]
-                            {
-                                fail!((
-                                    ErrorKind::ResponseError,
-                                    // TODO: Consider printing the exact command
-                                    "Failed to restore Sharded subscription channels"
-                                ));
-                            }
-                        }
-                    }
-                }
-                _ => {
-                    fail!((
-                        ErrorKind::ResponseError,
-                        // TODO: Consider printing the exact command
-                        "Failed to receive subscription notification while restoring subscription channels"
-                    ));
-                }
-            }
-        }
-    }
-
     Ok(())
 }
 

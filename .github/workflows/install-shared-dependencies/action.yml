@@ -9,6 +9,7 @@ inputs:
             - amazon-linux
             - macos
             - ubuntu
+            - windows
     target:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
         type: string
@@ -21,8 +22,13 @@ inputs:
             - aarch64-apple-darwin
             - aarch64-unknown-linux-musl
             - x86_64-unknown-linux-musl
+            - x86_64-pc-windows-msvc
     engine-version:
         description: "Engine version to install"
+        required: false
+        type: string
+    language:
+        description: "The language being built (optional, for language-specific setup)"
         required: false
         type: string
     github-token:
@@ -61,6 +67,21 @@ runs:
           if: "${{ inputs.os == 'amazon-linux' }}"
           run: |
               yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
+
+        - name: Setup WSL (Windows only)
+          if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
+          uses: Vampire/setup-wsl@v6
+          with:
+              distribution: Ubuntu-22.04
+              use-cache: true
+              update: true
+              additional-packages: python3 python3-pip build-essential git pkg-config libssl-dev
+
+        - name: Setup Python for Windows
+          if: "${{ inputs.os == 'windows' }}"
+          uses: actions/setup-python@v5
+          with:
+              python-version: "3.x"
 
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"

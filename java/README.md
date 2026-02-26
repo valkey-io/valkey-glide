@@ -2,6 +2,10 @@
 
 Valkey General Language Independent Driver for the Enterprise (GLIDE), is an open-source Valkey client library. Valkey GLIDE is one of the official client libraries for Valkey, and it supports all Valkey commands. Valkey GLIDE supports Valkey 7.2 and above, and Redis open-source 6.2, 7.0 and 7.2. Application programmers use Valkey GLIDE to safely and reliably connect their applications to Valkey- and Redis OSS- compatible services. Valkey GLIDE is designed for reliability, optimized performance, and high-availability, for Valkey and Redis OSS based applications. It is sponsored and supported by AWS, and is pre-configured with best practices learned from over a decade of operating Redis OSS-compatible services used by hundreds of thousands of customers. To help ensure consistency in application development and operations, Valkey GLIDE is implemented using a core driver framework, written in Rust, with language specific extensions. This design ensures consistency in features across languages and reduces overall complexity.
 
+## Documentations
+
+See GLIDE's Java [documentation site](https://glide.valkey.io/languages/java).
+
 # Getting Started - Java Wrapper
 
 ## System Requirements
@@ -66,6 +70,7 @@ linux-aarch_64
 linux-x86_64
 linux_musl-aarch_64
 linux_musl-x86_64
+windows-x86_64
 ```
 
 Gradle:
@@ -100,6 +105,11 @@ dependencies {
 // linux_musl-x86_64
 dependencies {
     implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'linux_musl-x86_64'
+}
+
+// windows-x86_64
+dependencies {
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'windows-x86_64'
 }
 
 // with osdetector - does not work for musl
@@ -163,6 +173,14 @@ Maven:
    <version>[1.0.0,)</version>
 </dependency>
 
+<!-- windows-x86_64 -->
+<dependency>
+   <groupId>io.valkey</groupId>
+   <artifactId>valkey-glide</artifactId>
+   <classifier>windows-x86_64</classifier>
+   <version>[1.0.0,)</version>
+</dependency>
+
 <!-- with os-maven-plugin -->
 <build>
     <extensions>
@@ -202,6 +220,9 @@ libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "linux_mu
 
 // linux_musl-x86_64
 libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "linux_musl-x86_64"
+
+// windows-x86_64
+libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "windows-x86_64"
 ```
 
 ## Setting up the Java module
@@ -323,6 +344,98 @@ public class Main {
 }
 ```
 
+## PubSub Configuration and Monitoring
+
+### Dynamic PubSub with Reconciliation
+
+Valkey GLIDE supports dynamic PubSub with automatic subscription reconciliation. Configure the reconciliation interval to ensure subscriptions remain synchronized:
+
+```java
+import glide.api.GlideClient;
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.AdvancedGlideClientConfiguration;
+import glide.api.models.configuration.NodeAddress;
+
+GlideClientConfiguration config = GlideClientConfiguration.builder()
+    .address(NodeAddress.builder().host("localhost").port(6379).build())
+    .advancedConfig(
+        AdvancedGlideClientConfiguration.builder()
+            .pubsubReconciliationIntervalMs(5000) // Reconcile every 5 seconds
+            .build()
+    )
+    .build();
+
+try (GlideClient client = GlideClient.createClient(config).get()) {
+    // Subscribe to channels dynamically
+    client.subscribe(Set.of("news", "updates")).get();
+    
+    // Get subscription state
+    var state = client.getSubscriptions().get();
+    System.out.println("Desired subscriptions: " + state.desiredSubscriptions);
+    System.out.println("Actual subscriptions: " + state.actualSubscriptions);
+    
+    // Unsubscribe
+    client.unsubscribe(Set.of("news")).get();
+}
+```
+
+### Monitoring Subscription Health
+
+Monitor subscription health and reconciliation status using `getStatistics()`:
+
+```java
+try (GlideClient client = GlideClient.createClient(config).get()) {
+    // Subscribe to channels
+    client.subscribe(Set.of("channel1", "channel2")).get();
+    
+    // Get statistics
+    Map<String, String> stats = client.getStatistics();
+    
+    // Available metrics:
+    // - total_connections: Number of active connections
+    // - total_clients: Number of client instances
+    // - total_values_compressed: Count of compressed values
+    // - total_values_decompressed: Count of decompressed values
+    // - total_original_bytes: Original data size before compression
+    // - total_bytes_compressed: Compressed data size
+    // - total_bytes_decompressed: Decompressed data size
+    // - compression_skipped_count: Times compression was skipped
+    // - subscription_out_of_sync_count: Failed reconciliation attempts
+    // - subscription_last_sync_timestamp: Last successful sync (milliseconds since epoch)
+    
+    System.out.println("Out of sync count: " + stats.get("subscription_out_of_sync_count"));
+    System.out.println("Last sync timestamp: " + stats.get("subscription_last_sync_timestamp"));
+}
+```
+
+### Sharded PubSub (Cluster Mode, Redis 7.0+)
+
+For cluster mode, you can use sharded PubSub channels:
+
+```java
+import glide.api.GlideClusterClient;
+import glide.api.models.configuration.GlideClusterClientConfiguration;
+
+GlideClusterClientConfiguration config = GlideClusterClientConfiguration.builder()
+    .address(NodeAddress.builder().host("localhost").port(7001).build())
+    .advancedConfig(
+        AdvancedGlideClusterClientConfiguration.builder()
+            .pubsubReconciliationIntervalMs(5000)
+            .build()
+    )
+    .build();
+
+try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
+    // Subscribe to sharded channels
+    client.ssubscribe(Set.of("shard-channel-1", "shard-channel-2")).get();
+    
+    // Get subscription state
+    var state = client.getSubscriptions().get();
+    System.out.println("Sharded subscriptions: " + 
+        state.actualSubscriptions.get(PubSubChannelMode.Sharded));
+}
+```
+
 ### Scala and Kotlin Examples
 See [our Scala and Kotlin examples](../examples/) to learn how to use Valkey GLIDE in Scala and Kotlin projects.
 
@@ -358,4 +471,4 @@ The following arguments are accepted:
 * `tls`: Valkey TLS configured
 
 ### Known issues
-* Conflict in netty and protobuf internal valkey glide dependencies with project dependencies using valkey glide. Issue link: https://github.com/valkey-io/valkey-glide/issues/3402. Workarounds mentioned in this issue: https://github.com/valkey-io/valkey-glide/issues/3367 
+* Conflict in netty and protobuf internal valkey glide dependencies with project dependencies using valkey glide. Issue link: https://github.com/valkey-io/valkey-glide/issues/3402. Workarounds mentioned in this issue: https://github.com/valkey-io/valkey-glide/issues/3367

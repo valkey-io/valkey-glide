@@ -117,6 +117,8 @@ from .config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
+    CompressionBackend,
+    CompressionConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     IamAuthConfig,
@@ -158,6 +160,11 @@ from .exceptions import (
     RequestError,
     TimeoutError,
 )
+from .opentelemetry import (
+    OpenTelemetryConfig,
+    OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig,
+)
 from .routes import (
     AllNodes,
     AllPrimaries,
@@ -183,6 +190,8 @@ __all__ = [
     # Config
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
+    "CompressionBackend",
+    "CompressionConfiguration",
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
@@ -327,4 +336,8 @@ __all__ = [
     "FtAggregateSortProperty",
     "FtProfileOptions",
     "QueryType",
+    # OpenTelemetry
+    "OpenTelemetryConfig",
+    "OpenTelemetryMetricsConfig",
+    "OpenTelemetryTracesConfig",
 ]

@@ -10,16 +10,54 @@ use jni::JNIEnv;
 use jni::JavaVM;
 use jni::objects::{GlobalRef, JClass, JObject, JStaticMethodID, JValue};
 use jni::signature;
-use jni::sys::{jlong, jstring};
-use redis::{RedisError, Value as ServerValue};
+use jni::sys::{JNI_VERSION_1_8, jint, jlong, jstring};
+use parking_lot::Mutex;
+use redis::{RedisError as ServerError, Value as ServerValue};
+use std::ffi::c_void;
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, channel};
 use std::thread;
 use tokio::runtime::Runtime;
 
+#[unsafe(no_mangle)]
+pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
+    // Cache JavaVM env for later use
+    let _ = JVM.set(Arc::new(vm));
+
+    // Pre-cache MethodCache and JavaValueConversionCache with correct classloader context
+    // GlideCoreClientCache and RegistryMethodCache will be cached automatically later
+    if let Some(jvm) = JVM.get()
+        && let Ok(mut env) = jvm.get_env()
+    {
+        let _ = get_method_cache(&mut env);
+        let _ = crate::get_java_value_conversion_cache(&mut env);
+    }
+
+    JNI_VERSION_1_8
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn JNI_OnUnload(_vm: *const JavaVM, _reserved: *const c_void) {
+    // Clean up global references by setting cached Options to None
+    // This triggers Drop on GlobalRef objects, which calls delete_global_ref
+    // Note: All cache functions use unsafe transmute to return static references
+    // from OnceLock data that lives for the entire program duration
+
+    if let Some(cache_mutex) = METHOD_CACHE.get() {
+        *cache_mutex.lock() = None;
+    }
+
+    if let Some(cache_mutex) = GLIDE_CORE_CLIENT_CACHE.get() {
+        *cache_mutex.lock() = None;
+    }
+
+    // Clean up caches in lib.rs
+    crate::cleanup_global_caches();
+}
+
 // Type aliases for complex types
 type PushMessageTuple = (Vec<u8>, Vec<u8>, Option<Vec<u8>>);
-type CallbackResult = Result<ServerValue, RedisError>;
+type CallbackResult = Result<ServerValue, ServerError>;
 
 // Runtime and JVM statics
 pub static JVM: std::sync::OnceLock<Arc<JavaVM>> = std::sync::OnceLock::new();
@@ -35,6 +73,8 @@ const DEFAULT_CALLBACK_WORKER_THREADS: usize = 2;
 static NATIVE_BUFFER_REGISTRY: std::sync::OnceLock<dashmap::DashMap<u64, Vec<u8>>> =
     std::sync::OnceLock::new();
 static NEXT_NATIVE_BUFFER_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+static TIMED_OUT_CALLBACKS: std::sync::OnceLock<dashmap::DashMap<jlong, ()>> =
+    std::sync::OnceLock::new();
 
 fn get_native_buffer_registry() -> &'static dashmap::DashMap<u64, Vec<u8>> {
     NATIVE_BUFFER_REGISTRY.get_or_init(dashmap::DashMap::new)
@@ -54,6 +94,20 @@ pub fn register_native_buffer(bytes: Vec<u8>) -> (u64, *mut u8, usize) {
 pub fn free_native_buffer(id: u64) -> bool {
     let registry = get_native_buffer_registry();
     registry.remove(&id).is_some()
+}
+
+fn get_timed_out_callbacks() -> &'static dashmap::DashMap<jlong, ()> {
+    TIMED_OUT_CALLBACKS.get_or_init(dashmap::DashMap::new)
+}
+
+pub fn mark_callback_timed_out(callback_id: jlong) {
+    let registry = get_timed_out_callbacks();
+    registry.insert(callback_id, ());
+}
+
+fn take_timed_out_callback(callback_id: jlong) -> bool {
+    let registry = get_timed_out_callbacks();
+    registry.remove(&callback_id).is_some()
 }
 
 /// Initialize or return the shared Tokio runtime.
@@ -130,38 +184,27 @@ pub async fn ensure_client_for_handle(handle_id: u64) -> Result<GlideClient> {
     if let Some(mut cfg) = pending {
         cfg.lazy_connect = false;
 
-        // Setup push channel if subscriptions configured
-        let has_pubsub = cfg
-            .pubsub_subscriptions
-            .as_ref()
-            .map(|m| !m.is_empty())
-            .unwrap_or(false);
+        // Always setup push channel for push message support
+        // This enables dynamic subscriptions to work,
+        // even when no initial subscriptions are configured
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
 
-        let (tx_opt, rx_opt) = if has_pubsub {
-            let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
-            (Some(tx), Some(rx))
-        } else {
-            (None, None)
-        };
-
-        let client = create_glide_client(cfg, tx_opt).await?;
+        let client = create_glide_client(cfg, Some(tx)).await?;
         table.insert(handle_id, client.clone());
 
-        // Handle push notifications if needed
-        if let Some(mut rx) = rx_opt {
-            let jvm_arc = JVM.get().cloned();
-            let handle_for_java = handle_id as jlong;
-            get_runtime().spawn(async move {
-                while let Some(push) = rx.recv().await {
-                    if let Some(jvm) = jvm_arc.as_ref()
-                        && let Ok(mut env) = jvm.attach_current_thread_permanently()
-                    {
-                        // Handle push notification callback to Java
-                        handle_push_notification(&mut env, handle_for_java, push);
-                    }
+        // Always spawn push notification handler
+        let jvm_arc = JVM.get().cloned();
+        let handle_for_java = handle_id as jlong;
+        get_runtime().spawn(async move {
+            while let Some(push) = rx.recv().await {
+                if let Some(jvm) = jvm_arc.as_ref()
+                    && let Ok(mut env) = jvm.attach_current_thread_as_daemon()
+                {
+                    // Handle push notification callback to Java
+                    handle_push_notification(&mut env, handle_for_java, push);
                 }
-            });
-        }
+            }
+        });
 
         return Ok(table.get(&handle_id).unwrap().value().clone());
     }
@@ -213,7 +256,7 @@ pub(crate) fn handle_push_notification(env: &mut JNIEnv, handle_id: jlong, push:
             let jc_obj: JObject = jc.into();
             let jp_obj: JObject = jp.map(Into::into).unwrap_or(JObject::null());
 
-            if let Ok(cache) = get_glide_core_client_cache(env) {
+            if let Ok(cache) = get_glide_core_client_cache_safe(env) {
                 unsafe {
                     let _ = env.call_static_method_unchecked(
                         &cache.class,
@@ -242,12 +285,11 @@ pub(crate) struct MethodCache {
     complete_error_with_code_method: JStaticMethodID,
 }
 
-static METHOD_CACHE: std::sync::OnceLock<parking_lot::Mutex<Option<MethodCache>>> =
-    std::sync::OnceLock::new();
+static METHOD_CACHE: std::sync::OnceLock<Mutex<Option<MethodCache>>> = std::sync::OnceLock::new();
 
 /// Get or initialize the method cache.
 pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
-    let cache_mutex = METHOD_CACHE.get_or_init(|| parking_lot::Mutex::new(None));
+    let cache_mutex = METHOD_CACHE.get_or_init(|| Mutex::new(None));
 
     {
         let cache_guard = cache_mutex.lock();
@@ -340,33 +382,39 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
     })
 }
 
+/// Drop callbacks that already timed out on the Java side.
 fn process_callback_job(
     jvm: Arc<JavaVM>,
     callback_id: jlong,
     result: CallbackResult,
     binary_mode: bool,
 ) {
-    match jvm.attach_current_thread_permanently() {
+    if take_timed_out_callback(callback_id) {
+        return;
+    }
+
+    match jvm.attach_current_thread_as_daemon() {
         Ok(mut env) => match result {
             Ok(server_value) => {
                 let _ = env.push_local_frame(16);
 
-                // Direct conversion with size-based routing
                 let java_result = if should_use_direct_buffer(&server_value) {
-                    // For large data (>16KB): Use DirectByteBuffer
                     create_direct_byte_buffer(&mut env, server_value, !binary_mode)
                 } else {
-                    // For small data (<16KB): Regular JNI objects
                     crate::resp_value_to_java(&mut env, server_value, !binary_mode)
                 };
+
+                if take_timed_out_callback(callback_id) {
+                    let _ = unsafe { env.pop_local_frame(&JObject::null()) };
+                    return;
+                }
 
                 match java_result {
                     Ok(java_result) => {
                         let _ = complete_java_callback(&mut env, callback_id, &java_result);
                     }
                     Err(e) => {
-                        // Use ClientError for conversion failures
-                        let error_code = 0; // UNSPECIFIED error type
+                        let error_code = 0;
                         let error_msg = format!("Response conversion failed: {e}");
                         let _ = complete_java_callback_with_error_code(
                             &mut env,
@@ -378,10 +426,13 @@ fn process_callback_job(
                 }
                 let _ = unsafe { env.pop_local_frame(&JObject::null()) };
             }
-            Err(redis_err) => {
-                // Always use error codes for consistent error handling
-                let error_code = error_type(&redis_err) as i32;
-                let error_msg = error_message(&redis_err);
+            Err(server_err) => {
+                if take_timed_out_callback(callback_id) {
+                    return;
+                }
+
+                let error_code = error_type(&server_err) as i32;
+                let error_msg = error_message(&server_err);
                 let _ = complete_java_callback_with_error_code(
                     &mut env,
                     callback_id,
@@ -595,7 +646,7 @@ fn register_buffer_cleaner<'local>(
     buffer: &JObject<'local>,
     id: u64,
 ) -> Result<(), crate::errors::FFIError> {
-    let cache = get_glide_core_client_cache(env).map_err(|_e| {
+    let cache = get_glide_core_client_cache_safe(env).map_err(|_e| {
         // Map to a representative JNI error variant
         jni::errors::Error::JNIEnvMethodNotFound("GlideCoreClient cache")
     })?;
@@ -619,14 +670,22 @@ fn serialize_array_to_bytes(
     arr: Vec<ServerValue>,
     _encoding_utf8: bool,
 ) -> Result<Vec<u8>, crate::errors::FFIError> {
+    const NULL_VALUE: i32 = -1;
+    const FALSE_BOOL: u8 = 0;
+    const TRUE_BOOL: u8 = 1;
+
     let mut bytes = Vec::new();
 
     // Write array marker and length
-    bytes.push(b'*'); // Redis array prefix
+    bytes.push(b'*'); // RESP array prefix
     bytes.extend_from_slice(&(arr.len() as u32).to_be_bytes());
 
     for value in arr {
         match value {
+            redis::Value::Nil => {
+                bytes.push(b'$'); // Bulk string marker
+                bytes.extend_from_slice(&NULL_VALUE.to_be_bytes()); // -1 indicates null in binary format
+            }
             redis::Value::BulkString(data) => {
                 bytes.push(b'$'); // Bulk string marker
                 bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
@@ -659,6 +718,20 @@ fn serialize_array_to_bytes(
             redis::Value::Int(n) => {
                 bytes.push(b':'); // Integer marker
                 bytes.extend_from_slice(&n.to_be_bytes());
+            }
+            redis::Value::Double(n) => {
+                bytes.push(b','); // Double marker
+                bytes.extend_from_slice(&n.to_be_bytes());
+            }
+            redis::Value::Boolean(b) => {
+                bytes.push(b'?'); // Boolean marker
+                bytes.push(if b { TRUE_BOOL } else { FALSE_BOOL });
+            }
+            redis::Value::BigNumber(n) => {
+                let data = n.to_string().into_bytes();
+                bytes.push(b'('); // BigNumber marker
+                bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
+                bytes.extend_from_slice(&data);
             }
             _ => {
                 // For complex nested types, store as serialized string representation
@@ -723,14 +796,46 @@ pub fn get_optional_string_param_raw(env: &mut JNIEnv, param: jstring) -> Option
     }
 }
 
-/// JNI init hook to ensure JVM cached for push callbacks
+/// JNI init hook to cache JVM and GlideCoreClient class/methods with correct classloader context.
+///
+/// This is called from `GlideCoreClient`'s static initializer in Java. We cache the class and
+/// method IDs here rather than in `JNI_OnLoad` because `GlideCoreClient` may not be findable
+/// via `env.find_class()` during `JNI_OnLoad` in environments with non-standard classloaders
+/// (AWS Lambda, Spring Boot with nested JARs). The `class` parameter passed by JNI is already
+/// loaded by the application classloader, bypassing `find_class` issues entirely.
+///
+/// Other caches (`MethodCache`, `JavaValueConversionCache`) are safe to initialize in
+/// `JNI_OnLoad` because they only reference standard Java classes (`java/lang/Long`,
+/// `java/util/HashMap`, etc.) which are always available from the bootstrap classloader.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideCoreClient_onNativeInit(
-    env: JNIEnv,
-    _class: JClass,
+    mut env: JNIEnv,
+    class: JClass,
 ) {
+    // Cache JVM
     if let Ok(jvm) = env.get_java_vm() {
         let _ = JVM.set(Arc::new(jvm));
+    }
+
+    // Cache GlideCoreClient class and method IDs with correct classloader context.
+    // The 'class' parameter is GlideCoreClient, already loaded by the application classloader.
+    if let Ok(global) = env.new_global_ref(&class)
+        && let (Ok(on_native_push), Ok(register_cleaner)) = (
+            env.get_static_method_id(&class, "onNativePush", "(J[B[B[B)V"),
+            env.get_static_method_id(
+                &class,
+                "registerNativeBufferCleaner",
+                "(Ljava/nio/ByteBuffer;J)V",
+            ),
+        )
+    {
+        let cache = GlideCoreClientCache {
+            class: global,
+            on_native_push,
+            register_native_buffer_cleaner: register_cleaner,
+        };
+        let cache_mutex = GLIDE_CORE_CLIENT_CACHE.get_or_init(|| Mutex::new(None));
+        *cache_mutex.lock() = Some(cache);
     }
 }
 
@@ -752,34 +857,97 @@ struct GlideCoreClientCache {
     register_native_buffer_cleaner: JStaticMethodID,
 }
 
-static GLIDE_CORE_CLIENT_CACHE: std::sync::OnceLock<
-    parking_lot::Mutex<Option<GlideCoreClientCache>>,
-> = std::sync::OnceLock::new();
+static GLIDE_CORE_CLIENT_CACHE: std::sync::OnceLock<Mutex<Option<GlideCoreClientCache>>> =
+    std::sync::OnceLock::new();
 
-fn get_glide_core_client_cache(env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
-    let cache_mutex = GLIDE_CORE_CLIENT_CACHE.get_or_init(|| parking_lot::Mutex::new(None));
+/// Get GlideCoreClient cache, with fallback dynamic initialization.
+///
+/// Preferred path: return the cache populated by `onNativeInit` (correct classloader context).
+/// Fallback: if `onNativeInit` wasn't called or failed, attempt `find_class` with the provided
+/// `env`. This may fail in non-standard classloader environments but keeps the client resilient
+/// in standard JVM setups.
+fn get_glide_core_client_cache_safe(env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
+    let cache_mutex = GLIDE_CORE_CLIENT_CACHE.get_or_init(|| Mutex::new(None));
     {
         let guard = cache_mutex.lock();
-        if let Some(c) = guard.as_ref() {
-            return Ok(c.clone());
+        if let Some(ref cache) = *guard {
+            return Ok(cache.clone());
         }
     }
+
+    // Fallback: try to initialize dynamically using the provided env
     let class = env.find_class("glide/internal/GlideCoreClient")?;
     let global = env.new_global_ref(&class)?;
     let on_native_push = env.get_static_method_id(&class, "onNativePush", "(J[B[B[B)V")?;
-    let register_native_buffer_cleaner = env.get_static_method_id(
+    let register_cleaner = env.get_static_method_id(
         &class,
         "registerNativeBufferCleaner",
         "(Ljava/nio/ByteBuffer;J)V",
     )?;
+
     let cache = GlideCoreClientCache {
         class: global,
         on_native_push,
-        register_native_buffer_cleaner,
+        register_native_buffer_cleaner: register_cleaner,
     };
-    {
-        let mut guard = cache_mutex.lock();
-        *guard = Some(cache.clone());
+
+    let mut guard = cache_mutex.lock();
+    if guard.is_none() {
+        *guard = Some(cache);
     }
-    Ok(cache)
+
+    Ok(guard.as_ref().cloned().unwrap())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::serialize_array_to_bytes;
+    use redis::{Value, parse_redis_value};
+
+    #[test]
+    fn serialize_array_to_bytes_encodes_bool_double_bignumber_and_nil() {
+        let big_number_value = parse_redis_value(b"(123456789012345678901234567890\r\n").unwrap();
+        let Value::BigNumber(big_number) = big_number_value else {
+            panic!("expected big number from parser");
+        };
+
+        let payload = vec![
+            Value::Boolean(true),
+            Value::Double(42.25),
+            Value::BigNumber(big_number),
+            Value::Nil,
+        ];
+
+        let bytes = match serialize_array_to_bytes(payload, false) {
+            Ok(bytes) => bytes,
+            Err(err) => panic!("serialization failed: {err}"),
+        };
+
+        // Array header: '*' + 4-byte element count.
+        assert_eq!(bytes[0], b'*');
+        assert_eq!(u32::from_be_bytes(bytes[1..5].try_into().unwrap()), 4);
+
+        // Element 1: boolean true ('?'+1).
+        assert_eq!(bytes[5], b'?');
+        assert_eq!(bytes[6], 1);
+
+        // Element 2: double (',' + 8 bytes).
+        assert_eq!(bytes[7], b',');
+        let decoded_double = f64::from_be_bytes(bytes[8..16].try_into().unwrap());
+        assert_eq!(decoded_double, 42.25);
+
+        // Element 3: big number ('(' + len + utf8 digits).
+        assert_eq!(bytes[16], b'(');
+        let big_number_len = u32::from_be_bytes(bytes[17..21].try_into().unwrap()) as usize;
+        let big_number_text = std::str::from_utf8(&bytes[21..21 + big_number_len]).unwrap();
+        assert_eq!(big_number_text, "123456789012345678901234567890");
+
+        // Element 4: null bulk string ('$' + -1).
+        let null_offset = 21 + big_number_len;
+        assert_eq!(bytes[null_offset], b'$');
+        assert_eq!(
+            i32::from_be_bytes(bytes[null_offset + 1..null_offset + 5].try_into().unwrap()),
+            -1
+        );
+    }
 }

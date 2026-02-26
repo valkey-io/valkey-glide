@@ -272,7 +272,14 @@ public class ConnectionTests {
         //  We expect the calls to be distributed evenly among the replicas
         long matchingEntries =
                 infoData.values().stream().filter(value -> value.contains(getCmdstat)).count();
-        assertEquals(4, matchingEntries);
+        // TODO: Remove the override after fixing Windows Replicas issues
+        // https://github.com/valkey-io/valkey-glide/issues/5210
+        long expectedReplicas = 4;
+        if (isWindows()) {
+            expectedReplicas = 0;
+        }
+
+        assertEquals(expectedReplicas, matchingEntries);
         azTestClient.close();
     }
 
@@ -418,6 +425,116 @@ public class ConnectionTests {
         assertEquals(1, matchingEntries, "Exactly one primary in AZ should handle all calls");
 
         // Verify total GET calls
+        long totalGetCalls =
+                infoData.values().stream()
+                        .filter(value -> value.contains("cmdstat_get:calls="))
+                        .mapToInt(
+                                value -> {
+                                    int startIndex =
+                                            value.indexOf("cmdstat_get:calls=") + "cmdstat_get:calls=".length();
+                                    int endIndex = value.indexOf(",", startIndex);
+                                    return Integer.parseInt(value.substring(startIndex, endIndex));
+                                })
+                        .sum();
+        assertEquals(nGetCalls, totalGetCalls, "Total GET calls mismatch");
+
+        azTestClient.close();
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_az_affinity_replicas_and_primary_prioritizes_replicas_over_primary() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
+        // Windows integration tests has replicas set to zero. This is set because of the resource
+        // limitation
+        // on Github Action using Windows runner with WSL, which is making the server with replicas hang
+        // and not be fully initialized
+        // TODO: Remove the skip after fixing Windows Replicas issues
+        // https://github.com/valkey-io/valkey-glide/issues/5210
+        assumeTrue(!isWindows(), "Skip on Windows");
+
+        String clientAz = "us-east-1b"; // Client is in 1B
+        String otherAz = "us-east-1a"; // Other nodes in 1A
+        int nGetCalls = 4;
+        String getCmdstat = String.format("cmdstat_get:calls=%d", nGetCalls);
+        int slot = 12182; // slot for key "foo"
+
+        // Create client for setting the configs
+        GlideClusterClient configSetClient =
+                GlideClusterClient.createClient(azClusterClientConfig().requestTimeout(2000).build()).get();
+
+        // Reset stats
+        assertEquals(configSetClient.configResetStat().get(), OK);
+
+        // Set ALL nodes to otherAz (us-east-1a)
+        configSetClient.configSet(Map.of("availability-zone", otherAz), ALL_NODES).get();
+
+        // Set REPLICA for slot to clientAz (us-east-1b)
+        configSetClient
+                .configSet(
+                        Map.of("availability-zone", clientAz),
+                        new RequestRoutingConfiguration.SlotIdRoute(slot, REPLICA))
+                .get();
+
+        // Verify setup: Primary should be in otherAz (1A)
+        ClusterValue<Map<String, String>> primaryAzResult =
+                configSetClient
+                        .configGet(
+                                new String[] {"availability-zone"},
+                                new RequestRoutingConfiguration.SlotIdRoute(slot, PRIMARY))
+                        .get();
+        assertEquals(
+                otherAz,
+                primaryAzResult.getSingleValue().get("availability-zone"),
+                "Primary for slot " + slot + " should be in: " + otherAz);
+
+        configSetClient.close();
+
+        // Create test client with AZ_AFFINITY_REPLICAS_AND_PRIMARY configuration
+        // Client is in us-east-1b, same as the replica
+        GlideClusterClient azTestClient =
+                GlideClusterClient.createClient(
+                                azClusterClientConfig()
+                                        .readFrom(ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY)
+                                        .clientAZ(clientAz)
+                                        .requestTimeout(2000)
+                                        .build())
+                        .get();
+
+        // Execute GET commands - these should go to the replica in clientAz (1B)
+        for (int i = 0; i < nGetCalls; i++) {
+            azTestClient.get("foo").get();
+        }
+
+        ClusterValue<String> infoResult =
+                azTestClient.info(new InfoOptions.Section[] {InfoOptions.Section.ALL}, ALL_NODES).get();
+        Map<String, String> infoData = infoResult.getMultiValue();
+
+        // Check that a REPLICA in client's AZ (1B) handled all GET calls
+        long replicaMatchingEntries =
+                infoData.values().stream()
+                        .filter(
+                                value ->
+                                        value.contains(getCmdstat)
+                                                && value.contains(clientAz)
+                                                && value.contains("role:slave"))
+                        .count();
+        assertEquals(
+                1,
+                replicaMatchingEntries,
+                "Exactly one replica in client's AZ (" + clientAz + ") should handle all GET calls");
+
+        // Verify that the PRIMARY did NOT receive any GET calls
+        boolean primaryReceivedGets =
+                infoData.values().stream()
+                        .anyMatch(
+                                value -> value.contains("role:master") && value.contains("cmdstat_get:calls="));
+
+        assertFalse(
+                primaryReceivedGets,
+                "Primary should NOT receive GET calls when a replica is available in client's AZ");
+
+        // Verify total GET calls equals expected
         long totalGetCalls =
                 infoData.values().stream()
                         .filter(value -> value.contains("cmdstat_get:calls="))
@@ -595,5 +712,132 @@ public class ConnectionTests {
                         .refreshTopologyFromInitialNodes(false)
                         .build();
         assertFalse(config.isRefreshTopologyFromInitialNodes());
+    }
+
+    @Test
+    public void testPeriodicChecksDefault() {
+        // Test that periodicChecks defaults to ENABLED_DEFAULT_CONFIGS when not specified
+        AdvancedGlideClusterClientConfiguration config =
+                AdvancedGlideClusterClientConfiguration.builder().build();
+        assertEquals(PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS, config.getPeriodicChecks());
+    }
+
+    @Test
+    public void testPeriodicChecksDisabled() {
+        // Test that periodicChecks can be set to DISABLED
+        AdvancedGlideClusterClientConfiguration config =
+                AdvancedGlideClusterClientConfiguration.builder()
+                        .periodicChecks(PeriodicChecksStatus.DISABLED)
+                        .build();
+        assertEquals(PeriodicChecksStatus.DISABLED, config.getPeriodicChecks());
+    }
+
+    @Test
+    public void testPeriodicChecksEnabledExplicitly() {
+        // Test that periodicChecks can be explicitly set to ENABLED_DEFAULT_CONFIGS
+        AdvancedGlideClusterClientConfiguration config =
+                AdvancedGlideClusterClientConfiguration.builder()
+                        .periodicChecks(PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS)
+                        .build();
+        assertEquals(PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS, config.getPeriodicChecks());
+    }
+
+    @Test
+    public void testPeriodicChecksManualInterval() {
+        // Test that periodicChecks can be set to a manual interval
+        int durationInSec = 30;
+        PeriodicChecksManualInterval manualInterval =
+                PeriodicChecksManualInterval.builder().durationInSec(durationInSec).build();
+
+        AdvancedGlideClusterClientConfiguration config =
+                AdvancedGlideClusterClientConfiguration.builder().periodicChecks(manualInterval).build();
+
+        assertInstanceOf(PeriodicChecksManualInterval.class, config.getPeriodicChecks());
+        assertEquals(
+                durationInSec,
+                ((PeriodicChecksManualInterval) config.getPeriodicChecks()).getDurationInSec());
+    }
+
+    @Test
+    public void testPeriodicChecksManualIntervalValue() {
+        // Test that PeriodicChecksManualInterval stores the correct duration value
+        int durationInSec = 60;
+        PeriodicChecksManualInterval manualInterval =
+                PeriodicChecksManualInterval.builder().durationInSec(durationInSec).build();
+
+        assertEquals(durationInSec, manualInterval.getDurationInSec());
+    }
+
+    @Test
+    public void test_tcp_nodelay_default_value() {
+        // Verify default is null (not set)
+        var standaloneConfig = AdvancedGlideClientConfiguration.builder().build();
+        assertEquals(null, standaloneConfig.getTcpNoDelay());
+
+        var clusterConfig = AdvancedGlideClusterClientConfiguration.builder().build();
+        assertEquals(null, clusterConfig.getTcpNoDelay());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @SneakyThrows
+    public void test_tcp_nodelay_configuration(boolean clusterMode) {
+        // Test default (null - not set)
+        BaseClient defaultClient =
+                clusterMode
+                        ? GlideClusterClient.createClient(commonClusterClientConfig().build()).get()
+                        : GlideClient.createClient(commonClientConfig().build()).get();
+        if (clusterMode) {
+            assertEquals("PONG", ((GlideClusterClient) defaultClient).ping().get());
+        } else {
+            assertEquals("PONG", ((GlideClient) defaultClient).ping().get());
+        }
+        assertEquals("OK", defaultClient.set("key", "value").get());
+        assertEquals("value", defaultClient.get("key").get());
+        defaultClient.close();
+
+        // Test explicit true
+        BaseClient clientTrue;
+        if (clusterMode) {
+            var advancedConfig =
+                    AdvancedGlideClusterClientConfiguration.builder().tcpNoDelay(true).build();
+            clientTrue =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig().advancedConfiguration(advancedConfig).build())
+                            .get();
+            assertEquals("PONG", ((GlideClusterClient) clientTrue).ping().get());
+        } else {
+            var advancedConfig = AdvancedGlideClientConfiguration.builder().tcpNoDelay(true).build();
+            clientTrue =
+                    GlideClient.createClient(
+                                    commonClientConfig().advancedConfiguration(advancedConfig).build())
+                            .get();
+            assertEquals("PONG", ((GlideClient) clientTrue).ping().get());
+        }
+        assertEquals("OK", clientTrue.set("key2", "value2").get());
+        assertEquals("value2", clientTrue.get("key2").get());
+        clientTrue.close();
+
+        // Test explicit false
+        BaseClient clientFalse;
+        if (clusterMode) {
+            var advancedConfig =
+                    AdvancedGlideClusterClientConfiguration.builder().tcpNoDelay(false).build();
+            clientFalse =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig().advancedConfiguration(advancedConfig).build())
+                            .get();
+            assertEquals("PONG", ((GlideClusterClient) clientFalse).ping().get());
+        } else {
+            var advancedConfig = AdvancedGlideClientConfiguration.builder().tcpNoDelay(false).build();
+            clientFalse =
+                    GlideClient.createClient(
+                                    commonClientConfig().advancedConfiguration(advancedConfig).build())
+                            .get();
+            assertEquals("PONG", ((GlideClient) clientFalse).ping().get());
+        }
+        assertEquals("OK", clientFalse.set("key3", "value3").get());
+        assertEquals("value3", clientFalse.get("key3").get());
+        clientFalse.close();
     }
 }

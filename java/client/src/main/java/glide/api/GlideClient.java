@@ -7,7 +7,6 @@ import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
-import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
 import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
 import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
@@ -20,7 +19,9 @@ import static command_request.CommandRequestOuterClass.RequestType.FunctionList;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
+import static command_request.CommandRequestOuterClass.RequestType.GetSubscriptions;
 import static command_request.CommandRequestOuterClass.RequestType.Info;
+import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
@@ -53,12 +54,15 @@ import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.PubSubState;
+import glide.api.models.configuration.PubSubStateImpl;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 import lombok.NonNull;
@@ -135,13 +139,12 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> customCommand(@NonNull String[] args) {
-        return commandManager.submitNewCommand(CustomCommand, args, this::handleObjectOrNullResponse);
+        return commandManager.submitCustomCommand(args, this::handleObjectOrNullResponse);
     }
 
     @Override
     public CompletableFuture<Object> customCommand(@NonNull GlideString[] args) {
-        return commandManager.submitNewCommand(
-                CustomCommand, args, this::handleBinaryObjectOrNullResponse);
+        return commandManager.submitCustomCommand(args, this::handleBinaryObjectOrNullResponse);
     }
 
     @Deprecated
@@ -492,6 +495,44 @@ public class GlideClient extends BaseClient
                 RandomKey, BaseClient.EMPTY_GLIDE_STRING_ARRAY, this::handleGlideStringOrNullResponse);
     }
 
+    /**
+     * Returns all keys matching <code>pattern</code>.
+     *
+     * @see <a href="https://valkey.io/commands/keys/">valkey.io</a> for details.
+     * @param pattern The pattern to match keys against.
+     * @return An array of keys matching the pattern. If no keys match, returns an empty array.
+     * @example
+     *     <pre>{@code
+     * String[] keys = client.keys("key*").get();
+     * System.out.println("Found keys: " + Arrays.toString(keys));
+     * }</pre>
+     */
+    public CompletableFuture<String[]> keys(String pattern) {
+        return commandManager.submitNewCommand(
+                Keys,
+                new String[] {pattern},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    /**
+     * Returns all keys matching <code>pattern</code>.
+     *
+     * @see <a href="https://valkey.io/commands/keys/">valkey.io</a> for details.
+     * @param pattern The pattern to match keys against.
+     * @return An array of keys matching the pattern. If no keys match, returns an empty array.
+     * @example
+     *     <pre>{@code
+     * GlideString[] keys = client.keys(gs("key*")).get();
+     * System.out.println("Found keys: " + Arrays.toString(keys));
+     * }</pre>
+     */
+    public CompletableFuture<GlideString[]> keys(GlideString pattern) {
+        return commandManager.submitNewCommand(
+                Keys,
+                new GlideString[] {pattern},
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+    }
+
     @Override
     public CompletableFuture<Object[]> scan(@NonNull String cursor) {
         return commandManager.submitNewCommand(Scan, new String[] {cursor}, this::handleArrayResponse);
@@ -514,5 +555,95 @@ public class GlideClient extends BaseClient
             @NonNull GlideString cursor, @NonNull ScanOptions options) {
         GlideString[] arguments = new ArgsBuilder().add(cursor).add(options.toArgs()).toArray();
         return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponseBinary);
+    }
+
+    /**
+     * Gets the current subscription state for this client.
+     *
+     * <p>Returns the desired and actual subscription states, which may differ if subscriptions are
+     * being reconciled after a connection loss.
+     *
+     * <p>The returned {@link PubSubState} contains:
+     *
+     * <ul>
+     *   <li><b>Desired subscriptions</b>: The channels/patterns the client intends to be subscribed
+     *       to
+     *   <li><b>Actual subscriptions</b>: The channels/patterns currently subscribed on the server
+     * </ul>
+     *
+     * @return A {@link CompletableFuture} that completes with a {@link PubSubState} containing:
+     *     <ul>
+     *       <li>{@link
+     *           glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode#EXACT
+     *           EXACT} - Set of exact channel names
+     *       <li>{@link
+     *           glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode#PATTERN
+     *           PATTERN} - Set of pattern subscriptions
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Get current subscription state
+     * PubSubState<PubSubChannelMode> state = client.getSubscriptions().get();
+     *
+     * // Check desired subscriptions
+     * Set<String> desiredChannels = state.getDesiredSubscriptions()
+     *     .getOrDefault(PubSubChannelMode.EXACT, Set.of());
+     * System.out.println("Desired channels: " + desiredChannels);
+     *
+     * // Check actual subscriptions
+     * Set<String> actualChannels = state.getActualSubscriptions()
+     *     .getOrDefault(PubSubChannelMode.EXACT, Set.of());
+     * System.out.println("Actual channels: " + actualChannels);
+     * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/pubsub-channels/">valkey.io</a> for PUBSUB CHANNELS
+     * @see <a href="https://valkey.io/commands/pubsub-numpat/">valkey.io</a> for PUBSUB NUMPAT
+     */
+    public CompletableFuture<PubSubState<StandaloneSubscriptionConfiguration.PubSubChannelMode>>
+            getSubscriptions() {
+        return commandManager.submitNewCommand(
+                GetSubscriptions,
+                EMPTY_STRING_ARRAY,
+                response -> {
+                    Object[] parsed = (Object[]) parseSubscriptionState(response);
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object[]> desiredMap = (Map<String, Object[]>) parsed[0];
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object[]> actualMap = (Map<String, Object[]>) parsed[1];
+
+                    Map<StandaloneSubscriptionConfiguration.PubSubChannelMode, Set<String>> desired =
+                            new java.util.HashMap<>();
+                    Map<StandaloneSubscriptionConfiguration.PubSubChannelMode, Set<String>> actual =
+                            new java.util.HashMap<>();
+
+                    for (Map.Entry<String, Object[]> entry : desiredMap.entrySet()) {
+                        String key = entry.getKey();
+                        Set<String> values =
+                                java.util.Arrays.stream(entry.getValue())
+                                        .map(Object::toString)
+                                        .collect(java.util.stream.Collectors.toSet());
+                        if ("Exact".equals(key)) {
+                            desired.put(StandaloneSubscriptionConfiguration.PubSubChannelMode.EXACT, values);
+                        } else if ("Pattern".equals(key)) {
+                            desired.put(StandaloneSubscriptionConfiguration.PubSubChannelMode.PATTERN, values);
+                        }
+                    }
+
+                    for (Map.Entry<String, Object[]> entry : actualMap.entrySet()) {
+                        String key = entry.getKey();
+                        Set<String> values =
+                                java.util.Arrays.stream(entry.getValue())
+                                        .map(Object::toString)
+                                        .collect(java.util.stream.Collectors.toSet());
+                        if ("Exact".equals(key)) {
+                            actual.put(StandaloneSubscriptionConfiguration.PubSubChannelMode.EXACT, values);
+                        } else if ("Pattern".equals(key)) {
+                            actual.put(StandaloneSubscriptionConfiguration.PubSubChannelMode.PATTERN, values);
+                        }
+                    }
+
+                    return new PubSubStateImpl<>(desired, actual);
+                });
     }
 }

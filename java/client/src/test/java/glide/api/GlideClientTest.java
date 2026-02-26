@@ -21,7 +21,6 @@ import static command_request.CommandRequestOuterClass.RequestType.ConfigResetSt
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
 import static command_request.CommandRequestOuterClass.RequestType.Copy;
-import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
 import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
@@ -101,7 +100,9 @@ import static command_request.CommandRequestOuterClass.RequestType.ObjectRefCoun
 import static command_request.CommandRequestOuterClass.RequestType.PExpire;
 import static command_request.CommandRequestOuterClass.RequestType.PExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.PExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.PSubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.PTTL;
+import static command_request.CommandRequestOuterClass.RequestType.PUnsubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.Persist;
 import static command_request.CommandRequestOuterClass.RequestType.PfAdd;
 import static command_request.CommandRequestOuterClass.RequestType.PfCount;
@@ -146,12 +147,14 @@ import static command_request.CommandRequestOuterClass.RequestType.SetRange;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
 import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.Strlen;
+import static command_request.CommandRequestOuterClass.RequestType.SubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.TTL;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.Touch;
 import static command_request.CommandRequestOuterClass.RequestType.Type;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static command_request.CommandRequestOuterClass.RequestType.Unlink;
+import static command_request.CommandRequestOuterClass.RequestType.UnsubscribeBlocking;
 import static command_request.CommandRequestOuterClass.RequestType.Wait;
 import static command_request.CommandRequestOuterClass.RequestType.Watch;
 import static command_request.CommandRequestOuterClass.RequestType.XAck;
@@ -281,13 +284,7 @@ import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArrayBinary;
 import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueGlideStringArray;
 import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueStringArray;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -418,8 +415,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.submitNewCommand(eq(CustomCommand), eq(arguments), any()))
-                .thenReturn(testResponse);
+        when(commandManager.submitCustomCommand(eq(arguments), any())).thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object> response = service.customCommand(arguments);
@@ -442,8 +438,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.submitNewCommand(eq(CustomCommand), eq(arguments), any()))
-                .thenReturn(testResponse);
+        when(commandManager.submitCustomCommand(eq(arguments), any())).thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object> response = service.customCommand(arguments);
@@ -1075,6 +1070,109 @@ public class GlideClientTest {
                 .thenReturn(fetchValueResponse);
 
         CompletableFuture<String> finalValue = service.get(key);
+        assertEquals(value, finalValue.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void set_with_SetOptions_and_binary_condition_OnlyIfEqual_success() {
+        // setup
+        GlideString key = gs("key");
+        GlideString value = gs(new byte[] {(byte) 0xFF});
+        GlideString newValue = gs("new value");
+
+        assertFalse(value.canConvertToString());
+
+        // Set `key` to `value` initially
+        CompletableFuture<String> initialSetResponse = new CompletableFuture<>();
+        initialSetResponse.complete("OK");
+        GlideString[] initialArguments = new GlideString[] {key, value};
+        when(commandManager.<String>submitNewCommand(eq(pSet), eq(initialArguments), any()))
+                .thenReturn(initialSetResponse);
+
+        CompletableFuture<String> initialResponse = service.set(key, value);
+        assertNotNull(initialResponse);
+        assertEquals("OK", initialResponse.get());
+
+        // Set `key` to `newValue` with the correct condition
+        SetOptions setOptions =
+                SetOptions.builder()
+                        .conditionalSetOnlyIfEqualTo(value) // Key must currently have `value`
+                        .expiry(Expiry.UnixSeconds(60L))
+                        .build();
+        GlideString[] correctConditionArguments =
+                new GlideString[] {
+                    key, newValue, gs(ONLY_IF_EQUAL.getValkeyApi()), value, gs("EXAT"), gs("60")
+                };
+        CompletableFuture<String> correctSetResponse = new CompletableFuture<>();
+        correctSetResponse.complete("OK");
+        when(commandManager.<String>submitNewCommand(eq(pSet), eq(correctConditionArguments), any()))
+                .thenReturn(correctSetResponse);
+
+        CompletableFuture<String> correctResponse = service.set(key, newValue, setOptions);
+        assertNotNull(correctResponse);
+        assertEquals("OK", correctResponse.get());
+
+        // Verify that the key is now set to `newValue`
+        CompletableFuture<GlideString> fetchValueResponse = new CompletableFuture<>();
+        fetchValueResponse.complete(newValue);
+        when(commandManager.<GlideString>submitNewCommand(eq(Get), eq(new GlideString[] {key}), any()))
+                .thenReturn(fetchValueResponse);
+
+        CompletableFuture<GlideString> finalValue = service.get(key);
+        assertEquals(newValue, finalValue.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void set_with_SetOptions_and_binary_condition_OnlyIfEqual_fails() {
+        // Key-Value setup
+        GlideString key = gs("key");
+        GlideString value = gs(new byte[] {(byte) 0xFF});
+        GlideString newValue = gs(new byte[] {(byte) 0xC0, (byte) 0xAF});
+
+        assertFalse(value.canConvertToString());
+        assertFalse(newValue.canConvertToString());
+
+        // Set `key` to `value` initially
+        CompletableFuture<String> initialSetResponse = new CompletableFuture<>();
+        initialSetResponse.complete("OK");
+        GlideString[] initialArguments = new GlideString[] {key, value};
+        when(commandManager.<String>submitNewCommand(eq(pSet), eq(initialArguments), any()))
+                .thenReturn(initialSetResponse);
+
+        CompletableFuture<String> initialResponse = service.set(key, value);
+        assertNotNull(initialResponse);
+        assertEquals("OK", initialResponse.get());
+
+        // Attempt to set `key` to `newValue` with the wrong condition
+        SetOptions wrongConditionOptions =
+                SetOptions.builder()
+                        .conditionalSetOnlyIfEqualTo(newValue) // Incorrect: current value of key is `value`
+                        .expiry(Expiry.UnixSeconds(60L))
+                        .build();
+
+        GlideString[] wrongConditionArguments =
+                new GlideString[] {
+                    key, newValue, gs(ONLY_IF_EQUAL.getValkeyApi()), newValue, gs("EXAT"), gs("60")
+                };
+
+        CompletableFuture<String> failedSetResponse = new CompletableFuture<>();
+        failedSetResponse.complete(null);
+        when(commandManager.<String>submitNewCommand(eq(pSet), eq(wrongConditionArguments), any()))
+                .thenReturn(failedSetResponse);
+
+        CompletableFuture<String> failedResponse = service.set(key, newValue, wrongConditionOptions);
+        assertNotNull(failedResponse);
+        assertNull(failedResponse.get()); // Ensure the set operation failed
+
+        // Verify that the key remains set to `value`
+        CompletableFuture<GlideString> fetchValueResponse = new CompletableFuture<>();
+        fetchValueResponse.complete(value);
+        when(commandManager.<GlideString>submitNewCommand(eq(Get), eq(new GlideString[] {key}), any()))
+                .thenReturn(fetchValueResponse);
+
+        CompletableFuture<GlideString> finalValue = service.get(key);
         assertEquals(value, finalValue.get());
     }
 
@@ -1921,6 +2019,61 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(values, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void mget_binary_with_large_values_returns_null_for_missing_keys() {
+        // Test for large binary data with mget command
+
+        // Create 16KB of data to trigger DirectByteBuffer path
+        byte[] largeData = new byte[16 * 1024];
+        java.util.Arrays.fill(largeData, (byte) 0x00);
+
+        GlideString[] keys = {gs("key1"), gs("missing"), gs("key2")};
+        GlideString[] values = {gs("value1"), null, gs(largeData)};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(values);
+
+        when(commandManager.<GlideString[]>submitNewCommand(eq(MGet), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        CompletableFuture<GlideString[]> response = service.mget(keys);
+        GlideString[] payload = response.get();
+
+        assertEquals(testResponse, response);
+        assertEquals(3, payload.length);
+        assertEquals(gs("value1"), payload[0]);
+        assertNull(payload[1], "Missing key should return null, not GlideString('nil')");
+        assertArrayEquals(largeData, payload[2].getBytes());
+    }
+
+    @SneakyThrows
+    @Test
+    public void mget_string_with_large_values_returns_null_for_missing_keys() {
+        // String version should also handle null correctly with large data
+
+        // Create 16KB string to trigger DirectByteBuffer path
+        String largeString = "x".repeat(16 * 1024);
+
+        String[] keys = {"key1", "missing", "key2"};
+        String[] values = {"value1", null, largeString};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(values);
+
+        when(commandManager.<String[]>submitNewCommand(eq(MGet), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        CompletableFuture<String[]> response = service.mget(keys);
+        String[] payload = response.get();
+
+        assertEquals(testResponse, response);
+        assertEquals(3, payload.length);
+        assertEquals("value1", payload[0]);
+        assertNull(payload[1], "Missing key should return null");
+        assertEquals(largeString, payload[2]);
     }
 
     @SneakyThrows
@@ -4743,7 +4896,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Object>>submitNewCommand(eq(BZMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, Object>>submitBlockingCommand(
+                        eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -4769,7 +4923,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Object>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Object>>submitBlockingCommand(
                         eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -4797,7 +4951,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Object>>submitNewCommand(eq(BZMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, Object>>submitBlockingCommand(
+                        eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -4827,7 +4982,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Object>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Object>>submitBlockingCommand(
                         eq(BZMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -5172,7 +5327,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMin), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMin), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5197,7 +5352,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMin), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMin), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5271,7 +5426,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMax), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMax), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5296,7 +5451,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMax), eq(arguments), any()))
+        when(commandManager.<Object[]>submitBlockingCommand(eq(BZPopMax), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -7966,7 +8121,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Map<String, String[][]>>>submitNewCommand(
+        when(commandManager.<Map<String, Map<String, String[][]>>>submitBlockingCommand(
                         eq(XRead), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -8008,7 +8163,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitBlockingCommand(
                         eq(XRead), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -8851,7 +9006,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<String, Map<String, String[][]>>>submitNewCommand(
+        when(commandManager.<Map<String, Map<String, String[][]>>>submitBlockingCommand(
                         eq(XReadGroup), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -8901,7 +9056,7 @@ public class GlideClientTest {
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitBlockingCommand(
                         eq(XReadGroup), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -10265,7 +10420,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(BLPop), eq(arguments), any()))
+        when(commandManager.<String[]>submitBlockingCommand(eq(BLPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -10290,7 +10445,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString[]>submitNewCommand(eq(BLPop), eq(arguments), any()))
+        when(commandManager.<GlideString[]>submitBlockingCommand(eq(BLPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -10415,7 +10570,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(BRPop), eq(arguments), any()))
+        when(commandManager.<String[]>submitBlockingCommand(eq(BRPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -10440,7 +10595,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString[]>submitNewCommand(eq(BRPop), eq(arguments), any()))
+        when(commandManager.<GlideString[]>submitBlockingCommand(eq(BRPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12037,7 +12192,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, String[]>>submitNewCommand(eq(BLMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, String[]>>submitBlockingCommand(
+                        eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12069,7 +12225,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+        when(commandManager.<Map<GlideString, GlideString[]>>submitBlockingCommand(
                         eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -12109,7 +12265,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<String, String[]>>submitNewCommand(eq(BLMPop), eq(arguments), any()))
+        when(commandManager.<Map<String, String[]>>submitBlockingCommand(
+                        eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12148,7 +12305,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+        when(commandManager.<Map<GlideString, GlideString[]>>submitBlockingCommand(
                         eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
@@ -12641,7 +12798,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(BLMove), eq(arguments), any()))
+        when(commandManager.<String>submitBlockingCommand(eq(BLMove), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -12669,7 +12826,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString>submitNewCommand(eq(BLMove), eq(arguments), any()))
+        when(commandManager.<GlideString>submitBlockingCommand(eq(BLMove), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -14540,7 +14697,8 @@ public class GlideClientTest {
         testResponse.complete(result);
 
         // match on protobuf request
-        when(commandManager.<Long>submitNewCommand(eq(Wait), eq(args), any())).thenReturn(testResponse);
+        when(commandManager.<Long>submitBlockingCommand(eq(Wait), eq(args), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Long> response = service.wait(numreplicas, timeout);
@@ -15976,5 +16134,78 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void subscribe_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(eq(SubscribeBlocking), any(String[].class), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.subscribe(Set.of("channel1", "channel2"), 5000);
+
+        // verify
+        assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void unsubscribe_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(eq(UnsubscribeBlocking), any(String[].class), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.unsubscribe(Set.of("channel1"), 1000);
+
+        // verify
+        assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void psubscribe_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(eq(PSubscribeBlocking), any(String[].class), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.psubscribe(Set.of("pattern*"), 3000);
+
+        // verify
+        assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void punsubscribe_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(
+                        eq(PUnsubscribeBlocking), any(String[].class), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.punsubscribe(Set.of("pattern*"), 2000);
+
+        // verify
+        assertNull(response.get());
     }
 }

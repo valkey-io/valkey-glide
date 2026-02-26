@@ -55,7 +55,11 @@ mod cluster_client_tests {
 
             let mut cmd = redis::cmd("INFO");
             cmd.arg("REPLICATION");
-            let info = test_basics.client.send_command(&cmd, None).await.unwrap();
+            let info = test_basics
+                .client
+                .send_command(&mut cmd, None)
+                .await
+                .unwrap();
             let info = redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
             let (primaries, replicas) = count_primaries_and_replicas(info);
             assert_eq!(primaries, 3);
@@ -79,7 +83,7 @@ mod cluster_client_tests {
             let info = test_basics
                 .client
                 .send_command(
-                    &cmd,
+                    &mut cmd,
                     Some(RoutingInfo::MultiNode((
                         MultipleNodeRoutingInfo::AllMasters,
                         None,
@@ -110,7 +114,7 @@ mod cluster_client_tests {
             let info = test_basics
                 .client
                 .send_command(
-                    &cmd,
+                    &mut cmd,
                     Some(RoutingInfo::MultiNode((
                         MultipleNodeRoutingInfo::AllNodes,
                         None,
@@ -141,7 +145,7 @@ mod cluster_client_tests {
             let info = test_basics
                 .client
                 .send_command(
-                    &cmd,
+                    &mut cmd,
                     Some(RoutingInfo::SingleNode(
                         SingleNodeRoutingInfo::SpecificNode(Route::new(0, SlotAddr::Master)),
                     )),
@@ -172,7 +176,7 @@ mod cluster_client_tests {
             let info = test_basics
                 .client
                 .send_command(
-                    &cmd,
+                    &mut cmd,
                     Some(RoutingInfo::SingleNode(
                         SingleNodeRoutingInfo::SpecificNode(Route::new(
                             0,
@@ -206,7 +210,7 @@ mod cluster_client_tests {
             let info = test_basics
                 .client
                 .send_command(
-                    &cmd,
+                    &mut cmd,
                     Some(RoutingInfo::SingleNode(
                         SingleNodeRoutingInfo::SpecificNode(Route::new(
                             0,
@@ -239,11 +243,11 @@ mod cluster_client_tests {
             .await;
 
             // get engine version
-            let cmd = redis::cmd("INFO");
+            let mut cmd = redis::cmd("INFO");
             let info = test_basics
                 .client
                 .send_command(
-                    &cmd,
+                    &mut cmd,
                     Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
                 )
                 .await
@@ -317,7 +321,7 @@ mod cluster_client_tests {
             "Querying CLIENT LIST on all shared cluster primaries via AllMasters routing.",
         );
 
-        match client.send_command(&cmd, Some(routing_info)).await {
+        match client.send_command(&mut cmd, Some(routing_info)).await {
             Ok(Value::Map(node_results_map)) => {
                 for (_node_addr_value, node_result_value) in node_results_map {
                     match node_result_value {
@@ -404,7 +408,7 @@ mod cluster_client_tests {
 
             let client_info = test_basics
                 .client
-                .send_command(&client_info_cmd, None)
+                .send_command(&mut client_info_cmd, None)
                 .await
                 .unwrap();
             let client_info_str = match client_info {
@@ -422,7 +426,7 @@ mod cluster_client_tests {
 
             let res = test_basics
                 .client
-                .send_command(&client_info_cmd, None)
+                .send_command(&mut client_info_cmd, None)
                 .await;
             match res {
                 Err(err) => {
@@ -433,7 +437,8 @@ mod cluster_client_tests {
                     );
                     let client_info = repeat_try_create(|| async {
                         let mut client = test_basics.client.clone();
-                        let response = client.send_command(&client_info_cmd, None).await.ok()?;
+                        let mut cmd = client_info_cmd.clone();
+                        let response = client.send_command(&mut cmd, None).await.ok()?;
                         match response {
                             redis::Value::BulkString(bytes) => {
                                 Some(String::from_utf8_lossy(&bytes).to_string())
@@ -553,7 +558,7 @@ mod cluster_client_tests {
                 ),
             );
             let ping_response = lazy_glide_client
-                .send_command(&redis::cmd("PING"), None)
+                .send_command(&mut redis::cmd("PING"), None)
                 .await;
             assert!(
                 ping_response.is_ok(),
@@ -578,6 +583,95 @@ mod cluster_client_tests {
             assert!(
                 clients_after_first_command > clients_before_lazy_init,
                 "Lazy client (on dedicated cluster A) should establish new connections after the first command. Before: {clients_before_lazy_init}, After: {clients_after_first_command}. protocol={protocol:?}"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_tls_connection_with_custom_root_cert() {
+        block_on_all(async move {
+            // Create a dedicated TLS cluster with custom certificates
+            let tempdir = tempfile::Builder::new()
+                .prefix("tls_cluster_test")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+
+            let cluster = utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
+            let cluster_addresses = cluster.get_server_addresses();
+
+            // Create connection request with custom root certificate
+            let mut connection_request = create_connection_request(
+                &cluster_addresses,
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    cluster_mode: ClusterMode::Enabled,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            connection_request.root_certs = vec![ca_cert_bytes.into()];
+
+            // Test that connection works with custom root cert
+            let mut client = Client::new(connection_request.into(), None)
+                .await
+                .expect("Failed to create cluster client with custom root cert");
+
+            // Verify connection works by sending a command
+            let ping_result = client.send_command(&mut redis::cmd("PING"), None).await;
+            assert_eq!(
+                ping_result.unwrap(),
+                Value::SimpleString("PONG".to_string())
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_tls_connection_fails_with_wrong_root_cert() {
+        block_on_all(async move {
+            // Create a TLS cluster with one set of certificates
+            let tempdir1 = tempfile::Builder::new()
+                .prefix("tls_cluster_server")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let server_tls_paths = build_keys_and_certs_for_tls(&tempdir1);
+
+            // Create different CA certificate for client
+            let tempdir2 = tempfile::Builder::new()
+                .prefix("tls_cluster_client")
+                .tempdir()
+                .expect("Failed to create temp dir");
+            let client_tls_paths = build_keys_and_certs_for_tls(&tempdir2);
+            let wrong_ca_cert_bytes = client_tls_paths.read_ca_cert_as_bytes();
+
+            let cluster =
+                utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(server_tls_paths));
+            let cluster_addresses = cluster.get_server_addresses();
+
+            // Try to connect with wrong root certificate
+            let mut connection_request = create_connection_request(
+                &cluster_addresses,
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    cluster_mode: ClusterMode::Enabled,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            connection_request.root_certs = vec![wrong_ca_cert_bytes.into()];
+
+            // Connection should fail due to certificate mismatch
+            let client_result = Client::new(connection_request.into(), None).await;
+            assert!(
+                client_result.is_err(),
+                "Expected cluster connection to fail with wrong root certificate"
             );
         });
     }

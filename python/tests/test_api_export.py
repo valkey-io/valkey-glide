@@ -67,6 +67,8 @@ excluded_sync_symbols = [
     "CURR_DIR",  # Assignment
     "LIB_FILE",  # Assignment
     "find_libglide_ffi",  # FunctionDef
+    # python/glide-sync/glide_sync/_glide_ffi.py
+    "GlideFFI",  # Assignment (singleton instance)
     # python/glide-sync/glide_sync/sync_commands/cluster_commands.py
     "ClusterCommands",  # ClassDef
     # python/glide-sync/glide_sync/sync_commands/core.py
@@ -91,6 +93,9 @@ excluded_shared_symbols = [
     # python/glide-shared/glide_shared/config.py
     "BaseClientConfiguration",  # ClassDef
     "AdvancedBaseClientConfiguration",  # ClassDef
+    "load_root_certificates_from_file",  # FunctionDef
+    "load_client_certificate_from_file",  # FunctionDef
+    "load_client_key_from_file",  # FunctionDef
     # python/glide-shared/glide_shared/protobuf_codec.py
     "ProtobufCodec",  # ClassDef
     "PartialMessageException",  # Exception

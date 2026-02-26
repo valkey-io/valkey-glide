@@ -22,6 +22,7 @@ use jni::objects::{
     GlobalRef, JByteArray, JClass, JMethodID, JObject, JObjectArray, JStaticMethodID, JString,
 };
 use jni::sys::{jint, jlong};
+use parking_lot::Mutex;
 use redis::Value;
 use std::str::FromStr;
 use std::sync::{Arc, OnceLock};
@@ -41,11 +42,17 @@ pub struct RegistryMethodCache {
     retrieve_method: JStaticMethodID,
 }
 
-static REGISTRY_METHOD_CACHE: OnceLock<RegistryMethodCache> = OnceLock::new();
+static REGISTRY_METHOD_CACHE: OnceLock<Mutex<Option<RegistryMethodCache>>> = OnceLock::new();
 
 fn get_registry_method_cache(env: &mut JNIEnv) -> Result<&'static RegistryMethodCache, FFIError> {
-    if let Some(cache) = REGISTRY_METHOD_CACHE.get() {
-        return Ok(cache);
+    let cache_mutex = REGISTRY_METHOD_CACHE.get_or_init(|| Mutex::new(None));
+    {
+        let guard = cache_mutex.lock();
+        if let Some(ref cache) = *guard {
+            return Ok(unsafe {
+                std::mem::transmute::<&RegistryMethodCache, &RegistryMethodCache>(cache)
+            });
+        }
     }
 
     let class = env.find_class("glide/managers/JniResponseRegistry")?;
@@ -58,10 +65,32 @@ fn get_registry_method_cache(env: &mut JNIEnv) -> Result<&'static RegistryMethod
     };
 
     // If another thread initialized concurrently, prefer the existing value.
-    let _ = REGISTRY_METHOD_CACHE.set(cache);
-    Ok(REGISTRY_METHOD_CACHE
-        .get()
-        .expect("RegistryMethodCache should be initialized"))
+    {
+        let mut guard = cache_mutex.lock();
+        if guard.is_none() {
+            *guard = Some(cache);
+        }
+    }
+
+    let guard = cache_mutex.lock();
+    let cache_ref = guard
+        .as_ref()
+        .expect("RegistryMethodCache should be initialized");
+    Ok(unsafe { std::mem::transmute::<&RegistryMethodCache, &RegistryMethodCache>(cache_ref) })
+}
+
+/// Get registry method cache using correct classloader context
+fn get_registry_method_cache_safe(
+    fallback_env: &mut JNIEnv,
+) -> Result<&'static RegistryMethodCache, FFIError> {
+    // Try cached JVM env first
+    if let Some(cached_jvm) = jni_client::JVM.get()
+        && let Ok(mut cached_env) = cached_jvm.get_env()
+    {
+        return get_registry_method_cache(&mut cached_env);
+    }
+    // Otherwise fallback to provided env
+    get_registry_method_cache(fallback_env)
 }
 
 // Internal helper: execute a parsed CommandRequest and complete Java callback
@@ -86,7 +115,7 @@ async fn execute_command_request_and_complete(
         let root_span_ptr_opt = command_request.root_span_ptr;
         match &command_request.command {
             Some(protobuf_bridge::command_request::Command::SingleCommand(command)) => {
-                let cmd = protobuf_bridge::create_valkey_command(command).map_err(|e| {
+                let mut cmd = protobuf_bridge::create_valkey_command(command).map_err(|e| {
                     redis::RedisError::from((
                         redis::ErrorKind::ClientError,
                         "Failed to create command",
@@ -108,7 +137,7 @@ async fn execute_command_request_and_complete(
                     None
                 };
 
-                let exec = client.send_command(&cmd, routing).await;
+                let exec = client.send_command(&mut cmd, routing).await;
 
                 if let Some(root_span_ptr) = root_span_ptr_opt
                     && root_span_ptr != 0
@@ -316,7 +345,7 @@ fn resp_value_to_java<'local>(
             Ok(JObject::from(ok))
         }
         Value::Int(num) => {
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let cls = to_local_jclass(env, &cache.long_class)?;
             let arg = jni::sys::jvalue {
                 j: num as jni::sys::jlong,
@@ -339,7 +368,7 @@ fn resp_value_to_java<'local>(
         }
         Value::Array(array) => array_to_java_array(env, array, encoding_utf8),
         Value::Map(map) => {
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let cls = to_local_jclass(env, &cache.linked_hash_map_class)?;
             let linked_hash_map =
                 unsafe { env.new_object_unchecked(cls, cache.linked_hash_map_ctor, &[])? };
@@ -367,7 +396,7 @@ fn resp_value_to_java<'local>(
             Ok(linked_hash_map)
         }
         Value::Double(float) => {
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             // Use cached Double.valueOf for minimal overhead
             let jclass = to_local_jclass(env, &cache.double_class)?;
             let obj = unsafe {
@@ -382,7 +411,7 @@ fn resp_value_to_java<'local>(
             Ok(obj)
         }
         Value::Boolean(bool) => {
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let jclass = to_local_jclass(env, &cache.boolean_class)?;
             let z = if bool { 1 } else { 0 };
             let obj = unsafe {
@@ -408,7 +437,7 @@ fn resp_value_to_java<'local>(
             // BigNumbers in Valkey are represented as strings
             let big_int_str = num.to_string();
             let java_string = env.new_string(big_int_str)?;
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let cls = to_local_jclass(env, &cache.big_integer_class)?;
             let raw = java_string.into_raw();
             let obj = unsafe {
@@ -423,7 +452,7 @@ fn resp_value_to_java<'local>(
             Ok(obj)
         }
         Value::Set(array) => {
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let cls = to_local_jclass(env, &cache.hash_set_class)?;
             let set = unsafe { env.new_object_unchecked(cls, cache.hash_set_ctor, &[])? };
 
@@ -446,7 +475,7 @@ fn resp_value_to_java<'local>(
         Value::Attribute { data, attributes } => {
             // Convert Valkey Attribute to Java Map<String, Object>
             // Create a HashMap with both data and attributes
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let cls = to_local_jclass(env, &cache.hash_map_class)?;
             let hash_map = unsafe { env.new_object_unchecked(cls, cache.hash_map_ctor, &[])? };
 
@@ -489,7 +518,7 @@ fn resp_value_to_java<'local>(
         //   - "values" which corresponds to the array of values received, stored as `Object[]`
         // Only string messages are supported now by Valkey and `redis-rs`.
         Value::Push { kind, data } => {
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let cls = to_local_jclass(env, &cache.hash_map_class)?;
             let hash_map = unsafe { env.new_object_unchecked(cls, cache.hash_map_ctor, &[])? };
 
@@ -532,7 +561,7 @@ fn resp_value_to_java<'local>(
         Value::ServerError(server_error) => {
             let err_msg = error_message(&server_error.into());
             let jmsg = env.new_string(err_msg)?;
-            let cache = get_java_value_conversion_cache(env)?;
+            let cache = get_java_value_conversion_cache_safe(env)?;
             let cls = to_local_jclass(env, &cache.request_exception_class)?;
             let raw = jmsg.into_raw();
             let obj = unsafe {
@@ -610,7 +639,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
                     return Ok(JObject::null());
                 }
 
-                let cache = get_registry_method_cache(env)?;
+                let cache = get_registry_method_cache_safe(env)?;
                 let class_j = to_local_jclass(env, &cache.class)?;
                 let result = unsafe {
                     env.call_static_method_unchecked(
@@ -659,7 +688,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
                     return Ok(JObject::null());
                 }
 
-                let cache = get_registry_method_cache(env)?;
+                let cache = get_registry_method_cache_safe(env)?;
                 let class_j = to_local_jclass(env, &cache.class)?;
                 let result = unsafe {
                     env.call_static_method_unchecked(
@@ -996,6 +1025,62 @@ pub extern "system" fn Java_glide_ffi_resolvers_StatisticsResolver_getStatistics
         &format!("{}", Telemetry::total_clients()),
     );
 
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "total_values_compressed",
+        &format!("{}", Telemetry::total_values_compressed()),
+    );
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "total_values_decompressed",
+        &format!("{}", Telemetry::total_values_decompressed()),
+    );
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "total_original_bytes",
+        &format!("{}", Telemetry::total_original_bytes()),
+    );
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "total_bytes_compressed",
+        &format!("{}", Telemetry::total_bytes_compressed()),
+    );
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "total_bytes_decompressed",
+        &format!("{}", Telemetry::total_bytes_decompressed()),
+    );
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "compression_skipped_count",
+        &format!("{}", Telemetry::compression_skipped_count()),
+    );
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "subscription_out_of_sync_count",
+        &format!("{}", Telemetry::subscription_out_of_sync_count()),
+    );
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "subscription_last_sync_timestamp",
+        &format!("{}", Telemetry::subscription_last_sync_timestamp()),
+    );
+
     map
 }
 
@@ -1243,22 +1328,13 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
 
             // Direct client creation (no lazy loading for simplified implementation)
             let runtime = get_runtime();
-            // Enable push channel if pubsub subscriptions are present
-            let mut rx_opt: Option<tokio::sync::mpsc::UnboundedReceiver<redis::PushInfo>> = None;
 
-            // Check if pubsub subscriptions exist in the connection request
-            let has_pubsub = connection_request.pubsub_subscriptions.is_some();
+            // Always create push channel to support dynamic subscriptions via customCommand
+            // This matches the behavior of socket_listener.rs which always creates push channels
+            let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
 
-            let tx_opt: Option<tokio::sync::mpsc::UnboundedSender<redis::PushInfo>> = if has_pubsub
-            {
-                let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
-                rx_opt = Some(rx);
-                Some(tx)
-            } else {
-                None
-            };
-
-            match runtime.block_on(async { create_glide_client(connection_request, tx_opt).await })
+            match runtime
+                .block_on(async { create_glide_client(connection_request, Some(tx)).await })
             {
                 Ok(client) => {
                     let safe_handle = jni_client::generate_safe_handle();
@@ -1267,20 +1343,19 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                     // Store in handle table
                     handle_table.insert(safe_handle, client);
 
-                    // If we created a push channel, spawn a forwarder to deliver pushes to Java
-                    if let Some(mut rx) = rx_opt {
-                        let jvm_arc = jni_client::JVM.get().cloned();
-                        let handle_for_java = safe_handle as jlong;
-                        get_runtime().spawn(async move {
-                            while let Some(push) = rx.recv().await {
-                                if let Some(jvm) = jvm_arc.as_ref()
-                                    && let Ok(mut env) = jvm.attach_current_thread_permanently()
-                                {
-                                    handle_push_notification(&mut env, handle_for_java, push);
-                                }
+                    // Always spawn push forwarder to deliver pushes to Java
+                    let jvm_arc = jni_client::JVM.get().cloned();
+                    let handle_for_java = safe_handle as jlong;
+                    get_runtime().spawn(async move {
+                        let mut rx = rx;
+                        while let Some(push) = rx.recv().await {
+                            if let Some(jvm) = jvm_arc.as_ref()
+                                && let Ok(mut env) = jvm.attach_current_thread_as_daemon()
+                            {
+                                handle_push_notification(&mut env, handle_for_java, push);
                             }
-                        });
-                    }
+                        }
+                    });
 
                     Some(safe_handle as jlong)
                 }
@@ -1439,13 +1514,23 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_getClientInfo<'loca
     .unwrap_or(JString::default())
 }
 
-/// Get glide-core default timeout in milliseconds
+/// Get glide-core default connection timeout in milliseconds
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_internal_GlideNativeBridge_getGlideCoreDefaultTimeoutMs(
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_getGlideCoreDefaultConnectionTimeoutMs(
     _env: JNIEnv,
     _class: JClass,
 ) -> jlong {
-    // Return glide-core's default timeout in milliseconds
+    // Return glide-core's default connection timeout in milliseconds
+    glide_core::client::DEFAULT_CONNECTION_TIMEOUT.as_millis() as jlong
+}
+
+/// Get glide-core default request timeout in milliseconds
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_getGlideCoreDefaultRequestTimeoutMs(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jlong {
+    // Return glide-core's default request timeout in milliseconds
     glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as jlong
 }
 
@@ -1457,6 +1542,16 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_getGlideCoreDefault
 ) -> jint {
     // Return glide-core's default max inflight requests
     glide_core::client::DEFAULT_MAX_INFLIGHT_REQUESTS as jint
+}
+
+/// Mark a callback as timed out on the native side.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_markTimedOut(
+    _env: JNIEnv,
+    _class: JClass,
+    callback_id: jlong,
+) {
+    jni_client::mark_callback_timed_out(callback_id);
 }
 
 /// Execute a batch (pipeline/transaction) asynchronously using FFI-imported logic
@@ -1493,16 +1588,18 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                 }
             };
 
-            // Extract the batch from the command request
-            let batch = match &command_request.command {
+            // Extract optional root span pointer from the request (if provided by Java)
+            let root_span_ptr_opt = command_request.root_span_ptr;
+            let route = command_request.route.0.map(|r| *r);
+
+            // Extract the batch from the command request (take ownership to avoid clone)
+            let batch = match command_request.command {
                 Some(command_request::Command::Batch(batch)) => batch,
                 _ => {
                     log::error!("Expected batch command in request");
                     return Some(());
                 }
             };
-            // Extract optional root span pointer from the request (if provided by Java)
-            let root_span_ptr_opt = command_request.root_span_ptr;
 
             let handle_id = client_ptr as u64;
             let jvm = match env.get_java_vm() {
@@ -1512,10 +1609,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                     return Some(());
                 }
             };
-
-            // Spawn async task for batch execution using existing glide-core patterns
-            let batch_clone = batch.clone();
-            let route = command_request.route.0.map(|r| *r);
             let runtime = get_runtime();
             runtime.spawn(async move {
                 let client_result = ensure_client_for_handle(handle_id).await;
@@ -1536,13 +1629,13 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             }
                             // Create pipeline using existing FFI approach
                             let mut pipeline =
-                                redis::Pipeline::with_capacity(batch_clone.commands.len());
-                            if batch_clone.is_atomic {
+                                redis::Pipeline::with_capacity(batch.commands.len());
+                            if batch.is_atomic {
                                 pipeline.atomic();
                             }
 
                             // Add commands to pipeline using existing bridge logic
-                            for cmd in &batch_clone.commands {
+                            for cmd in &batch.commands {
                                 match protobuf_bridge::create_valkey_command(cmd) {
                                     Ok(valkey_cmd) => pipeline.add_command(valkey_cmd),
                                     Err(e) => {
@@ -1566,13 +1659,13 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                 })?;
 
                             // Execute using existing client methods
-                            let exec_res = if batch_clone.is_atomic {
+                            let exec_res = if batch.is_atomic {
                                 client
                                     .send_transaction(
                                         &pipeline,
                                         routing,
-                                        batch_clone.timeout,
-                                        batch_clone.raise_on_error.unwrap_or(true),
+                                        batch.timeout,
+                                        batch.raise_on_error.unwrap_or(true),
                                     )
                                     .await
                             } else {
@@ -1580,13 +1673,13 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                     .send_pipeline(
                                         &pipeline,
                                         routing,
-                                        batch_clone.raise_on_error.unwrap_or(true),
-                                        batch_clone.timeout,
+                                        batch.raise_on_error.unwrap_or(true),
+                                        batch.timeout,
                                         redis::PipelineRetryStrategy {
-                                            retry_server_error: batch_clone
+                                            retry_server_error: batch
                                                 .retry_server_error
                                                 .unwrap_or(false),
-                                            retry_connection_error: batch_clone
+                                            retry_connection_error: batch
                                                 .retry_connection_error
                                                 .unwrap_or(false),
                                         },
@@ -2307,13 +2400,20 @@ pub struct JavaValueConversionCache {
     request_exception_ctor: JMethodID,
 }
 
-static JAVA_VALUE_CONVERSION_CACHE: OnceLock<JavaValueConversionCache> = OnceLock::new();
+static JAVA_VALUE_CONVERSION_CACHE: OnceLock<Mutex<Option<JavaValueConversionCache>>> =
+    OnceLock::new();
 
 fn get_java_value_conversion_cache(
     env: &mut JNIEnv,
 ) -> Result<&'static JavaValueConversionCache, FFIError> {
-    if let Some(cache) = JAVA_VALUE_CONVERSION_CACHE.get() {
-        return Ok(cache);
+    let cache_mutex = JAVA_VALUE_CONVERSION_CACHE.get_or_init(|| Mutex::new(None));
+    {
+        let guard = cache_mutex.lock();
+        if let Some(ref cache) = *guard {
+            return Ok(unsafe {
+                std::mem::transmute::<&JavaValueConversionCache, &JavaValueConversionCache>(cache)
+            });
+        }
     }
 
     let long_cls = env.find_class("java/lang/Long")?;
@@ -2384,10 +2484,45 @@ fn get_java_value_conversion_cache(
     };
 
     // Prefer existing value if concurrently initialized
-    let _ = JAVA_VALUE_CONVERSION_CACHE.set(cache);
-    Ok(JAVA_VALUE_CONVERSION_CACHE
-        .get()
-        .expect("JavaValueConversionCache should be initialized"))
+    {
+        let mut guard = cache_mutex.lock();
+        if guard.is_none() {
+            *guard = Some(cache);
+        }
+    }
+
+    let guard = cache_mutex.lock();
+    let cache_ref = guard
+        .as_ref()
+        .expect("JavaValueConversionCache should be initialized");
+    Ok(unsafe {
+        std::mem::transmute::<&JavaValueConversionCache, &JavaValueConversionCache>(cache_ref)
+    })
+}
+
+/// Get Java value conversion cache using correct classloader context
+fn get_java_value_conversion_cache_safe(
+    fallback_env: &mut JNIEnv,
+) -> Result<&'static JavaValueConversionCache, FFIError> {
+    // Try cached JVM env first
+    if let Some(cached_jvm) = jni_client::JVM.get()
+        && let Ok(mut cached_env) = cached_jvm.get_env()
+    {
+        return get_java_value_conversion_cache(&mut cached_env);
+    }
+    // Otherwise fallback to provided env
+    get_java_value_conversion_cache(fallback_env)
+}
+
+/// Clean up global references in lib.rs caches
+pub(crate) fn cleanup_global_caches() {
+    if let Some(cache_mutex) = JAVA_VALUE_CONVERSION_CACHE.get() {
+        *cache_mutex.lock() = None;
+    }
+
+    if let Some(cache_mutex) = REGISTRY_METHOD_CACHE.get() {
+        *cache_mutex.lock() = None;
+    }
 }
 
 fn to_local_jclass<'a>(env: &mut JNIEnv<'a>, global: &GlobalRef) -> Result<JClass<'a>, FFIError> {

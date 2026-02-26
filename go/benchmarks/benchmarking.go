@@ -128,6 +128,8 @@ func createClients(config *benchmarkConfig) ([]benchmarkClient, error) {
 			client = &goRedisBenchmarkClient{}
 		case valkeyGlide:
 			client = &glideBenchmarkClient{}
+		case valkeyGlideCompressed:
+			client = &glideCompressedBenchmarkClient{}
 		}
 
 		err := client.connect(config.connectionSettings)

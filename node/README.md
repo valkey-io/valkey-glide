@@ -14,8 +14,7 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE) is the off
 
 ## Documentation
 
-See GLIDE's [documentation site](https://valkey.io/valkey-glide/).  
-Visit our [wiki](https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper) for examples and further details on TLS, Read strategy, Timeouts and various other configurations.
+See GLIDE's Node.js [documentation site](https://glide.valkey.io/languages/nodejs).  
 
 ## Supported Engine Versions
 
@@ -47,7 +46,7 @@ Tests are running on:
 
 ## NodeJS supported version
 
-Node.js 16 or higher.
+Node.js 20 or higher.
 **For npm users on linux it is recommended to use npm >=11 since it support optional download base on libc, yarn users should not be concerned**
 
 - Note: The library is dependent on the [protobufjs library](https://protobufjs.github.io/protobuf.js/#installation), which add a size to the package. The package is using the protobufjs/minimal version, hence, if size matter, bundlers should be able to strip the unused code. It should reduce the size of the dependency from 19kb gzipped to 6.5kb gzipped.

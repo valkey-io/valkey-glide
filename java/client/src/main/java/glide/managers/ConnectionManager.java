@@ -4,14 +4,19 @@ package glide.managers;
 import static connection_request.ConnectionRequestOuterClass.*;
 
 import glide.api.models.configuration.AdvancedBaseClientConfiguration;
+import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.PeriodicChecksConfig;
+import glide.api.models.configuration.PeriodicChecksManualInterval;
+import glide.api.models.configuration.PeriodicChecksStatus;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConfigurationError;
+import glide.api.models.exceptions.GlideException;
 import glide.internal.AsyncRegistry;
 import glide.internal.GlideNativeBridge;
 import java.util.concurrent.CompletableFuture;
@@ -29,7 +34,7 @@ public class ConnectionManager {
     private static final String DEFAULT_LIB_NAME = "GlideJava";
 
     /** Native client handle for operations */
-    private long nativeClientHandle = 0;
+    private volatile long nativeClientHandle = 0;
 
     private int maxInflightRequests = 0;
     private int requestTimeoutMs = 5000;
@@ -70,7 +75,7 @@ public class ConnectionManager {
                         this.requestTimeoutMs =
                                 configuration.getRequestTimeout() != null
                                         ? configuration.getRequestTimeout()
-                                        : (int) GlideNativeBridge.getGlideCoreDefaultTimeoutMs();
+                                        : (int) GlideNativeBridge.getGlideCoreDefaultRequestTimeoutMs();
 
                         boolean insecureTls = resolveInsecureTls(configuration);
                         int connectionTimeoutMs = resolveConnectionTimeout(configuration);
@@ -230,13 +235,37 @@ public class ConnectionManager {
                         // Set cluster mode
                         requestBuilder.setClusterModeEnabled(isCluster);
 
-                        // Set refresh topology from initial nodes for cluster mode
+                        // Set topology configs for cluster mode
                         if (isCluster) {
                             GlideClusterClientConfiguration clusterConfig =
                                     (GlideClusterClientConfiguration) configuration;
-                            if (clusterConfig.getAdvancedConfiguration() != null) {
+
+                            AdvancedGlideClusterClientConfiguration advancedConfig =
+                                    clusterConfig.getAdvancedConfiguration();
+
+                            if (advancedConfig != null) {
+                                // Set refresh topology from initial nodes
                                 requestBuilder.setRefreshTopologyFromInitialNodes(
-                                        clusterConfig.getAdvancedConfiguration().isRefreshTopologyFromInitialNodes());
+                                        advancedConfig.isRefreshTopologyFromInitialNodes());
+
+                                // Set periodic checks configuration
+                                PeriodicChecksConfig periodicChecks = advancedConfig.getPeriodicChecks();
+                                if (periodicChecks instanceof PeriodicChecksStatus) {
+                                    PeriodicChecksStatus status = (PeriodicChecksStatus) periodicChecks;
+                                    if (status == PeriodicChecksStatus.DISABLED) {
+                                        requestBuilder.setPeriodicChecksDisabled(
+                                                PeriodicChecksDisabled.newBuilder().build());
+                                    }
+                                    // ENABLED_DEFAULT_CONFIGS → use server default, don't set anything
+                                } else if (periodicChecks instanceof PeriodicChecksManualInterval) {
+                                    PeriodicChecksManualInterval manualInterval =
+                                            (PeriodicChecksManualInterval) periodicChecks;
+                                    requestBuilder.setPeriodicChecksManualInterval(
+                                            connection_request.ConnectionRequestOuterClass.PeriodicChecksManualInterval
+                                                    .newBuilder()
+                                                    .setDurationInSec(manualInterval.getDurationInSec())
+                                                    .build());
+                                }
                             }
                         }
 
@@ -253,7 +282,7 @@ public class ConnectionManager {
                             requestBuilder.setReadFrom(ReadFrom.PreferReplica);
                         } else if ("AZ_AFFINITY".equals(readFromName)) {
                             requestBuilder.setReadFrom(ReadFrom.AZAffinity);
-                        } else if ("AZ_AFFINITY_PREFER_PRIMARY".equals(readFromName)) {
+                        } else if ("AZ_AFFINITY_REPLICAS_AND_PRIMARY".equals(readFromName)) {
                             requestBuilder.setReadFrom(ReadFrom.AZAffinityReplicasAndPrimary);
                         }
 
@@ -297,6 +326,12 @@ public class ConnectionManager {
                             requestBuilder.setConnectionRetryStrategy(retryBuilder.build());
                         }
 
+                        // Set root certificates if provided from user configuration
+                        byte[] rootCerts = extractRootCertificates(configuration);
+                        if (rootCerts != null) {
+                            requestBuilder.addRootCerts(com.google.protobuf.ByteString.copyFrom(rootCerts));
+                        }
+
                         // Set pubsub subscriptions
                         if (subExact.length > 0 || subPattern.length > 0 || subSharded.length > 0) {
                             PubSubSubscriptions.Builder subBuilder = PubSubSubscriptions.newBuilder();
@@ -337,6 +372,18 @@ public class ConnectionManager {
                             requestBuilder.setPubsubSubscriptions(subBuilder.build());
                         }
 
+                        // Set TCP_NODELAY option (only if explicitly configured)
+                        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+                        if (advanced != null && advanced.getTcpNoDelay() != null) {
+                            requestBuilder.setTcpNodelay(advanced.getTcpNoDelay());
+                        }
+
+                        // Set PubSub reconciliation interval (only if explicitly configured)
+                        if (advanced != null && advanced.getPubsubReconciliationIntervalMs() != null) {
+                            requestBuilder.setPubsubReconciliationIntervalMs(
+                                    advanced.getPubsubReconciliationIntervalMs());
+                        }
+
                         // Build and serialize to bytes
                         ConnectionRequest request = requestBuilder.build();
                         byte[] requestBytes = request.toByteArray();
@@ -350,10 +397,10 @@ public class ConnectionManager {
 
                         return null; // Success
                     } catch (Exception e) {
-                        if (e instanceof ClosingException) {
-                            throw e;
+                        if (e instanceof GlideException) {
+                            throw (GlideException) e;
                         }
-                        throw new RuntimeException("Failed to create client", e);
+                        throw new ClosingException("Failed to create client: " + e.getMessage());
                     }
                 });
     }
@@ -399,7 +446,10 @@ public class ConnectionManager {
                 nativeClientHandle = 0;
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to close client", e);
+            if (e instanceof GlideException) {
+                throw (GlideException) e;
+            }
+            throw new ClosingException("Failed to close client: " + e.getMessage());
         }
     }
 
@@ -465,7 +515,7 @@ public class ConnectionManager {
         if (advanced != null && advanced.getConnectionTimeout() != null) {
             return advanced.getConnectionTimeout();
         }
-        return (int) GlideNativeBridge.getGlideCoreDefaultTimeoutMs();
+        return (int) GlideNativeBridge.getGlideCoreDefaultConnectionTimeoutMs();
     }
 
     private static boolean resolveInsecureTls(BaseClientConfiguration configuration) {
@@ -482,6 +532,18 @@ public class ConnectionManager {
             return true;
         }
         return false;
+    }
+
+    private static byte[] extractRootCertificates(BaseClientConfiguration configuration) {
+        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+        if (advanced == null) {
+            return null;
+        }
+        TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
+        if (tlsConfig == null) {
+            return null;
+        }
+        return tlsConfig.getRootCertificates();
     }
 
     private static AdvancedBaseClientConfiguration extractAdvancedConfiguration(

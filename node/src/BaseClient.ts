@@ -910,7 +910,32 @@ export interface AdvancedBaseClientConfiguration {
          * - Default: false (verification is enforced).
          */
         insecure?: boolean;
+
+        /**
+         * Custom root certificate data for TLS connections.
+         *
+         * - When provided, these certificates will be used instead of the system's default trust store.
+         *   If not provided, the system's default certificate trust store will be used.
+         *
+         * - The certificate data should be in PEM format as a string or Buffer.
+         *
+         * - This is useful when connecting to servers with self-signed certificates or custom certificate authorities.
+         */
+        rootCertificates?: string | Buffer;
     };
+
+    /**
+     * Controls TCP_NODELAY socket option (Nagle's algorithm).
+     *
+     * - When `true`, disables Nagle's algorithm for lower latency by sending packets immediately without buffering.
+     *   This is optimal for Redis/Valkey workloads with many small requests.
+     *
+     * - When `false`, enables Nagle's algorithm to reduce network overhead by buffering small packets.
+     *   This may increase latency by up to 200ms but reduces the number of packets sent.
+     *
+     * - If not explicitly set, a default value of `true` will be used by the Rust core.
+     */
+    tcpNoDelay?: boolean;
 }
 
 /**
@@ -1176,7 +1201,12 @@ export class BaseClient {
 
             if (typeof message.respPointer === "number") {
                 // Response from type number
-                pointer = new PointerResponse(message.respPointer);
+                const long = Long.fromNumber(message.respPointer);
+                pointer = new PointerResponse(
+                    message.respPointer,
+                    long.high,
+                    long.low,
+                );
             } else {
                 // Response from type long
                 pointer = new PointerResponse(
@@ -9195,14 +9225,35 @@ export class BaseClient {
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
 
+        // Set TCP_NODELAY if explicitly configured
+        if (options.tcpNoDelay !== undefined) {
+            request.tcpNodelay = options.tcpNoDelay;
+        }
+
         // Apply TLS configuration if present
-        if (options.tlsAdvancedConfiguration?.insecure) {
-            if (request.tlsMode === connection_request.TlsMode.SecureTls) {
-                request.tlsMode = connection_request.TlsMode.InsecureTls;
-            } else if (request.tlsMode === connection_request.TlsMode.NoTls) {
+        if (options.tlsAdvancedConfiguration) {
+            // request.tlsMode is either SecureTls or InsecureTls here
+            if (request.tlsMode === connection_request.TlsMode.NoTls) {
                 throw new ConfigurationError(
-                    "InsecureTls cannot be enabled when useTLS is disabled.",
+                    "TLS advanced configuration cannot be set when useTLS is disabled.",
                 );
+            }
+
+            // If options.tlsAdvancedConfiguration.insecure is true then use InsecureTls mode
+            if (options.tlsAdvancedConfiguration.insecure) {
+                request.tlsMode = connection_request.TlsMode.InsecureTls;
+            }
+
+            if (options.tlsAdvancedConfiguration.rootCertificates) {
+                const certData =
+                    typeof options.tlsAdvancedConfiguration.rootCertificates ===
+                    "string"
+                        ? Buffer.from(
+                              options.tlsAdvancedConfiguration.rootCertificates,
+                              "utf-8",
+                          )
+                        : options.tlsAdvancedConfiguration.rootCertificates;
+                request.rootCerts = [new Uint8Array(certData)];
             }
         }
     }
@@ -9270,8 +9321,14 @@ export class BaseClient {
         ) => TConnection,
     ): Promise<TConnection> {
         const connection = constructor(connectedSocket, options);
+        const connectStart = Date.now();
         await connection.connectToServer(options);
-        Logger.log("info", "Client lifetime", "connected to server");
+        const connectTime = Date.now() - connectStart;
+        Logger.log(
+            "info",
+            "Client lifetime",
+            `connected to server in ${connectTime}ms`,
+        );
         return connection;
     }
 
@@ -9298,15 +9355,30 @@ export class BaseClient {
             options?: BaseClientConfiguration,
         ) => TConnection,
     ): Promise<TConnection> {
+        const overallStart = Date.now();
         const path = await StartSocketConnection();
+        const socketStart = Date.now();
         const socket = await this.GetSocket(path);
+        const socketTime = Date.now() - socketStart;
+        Logger.log(
+            "info",
+            "Client lifetime",
+            `socket connection established in ${socketTime}ms`,
+        );
 
         try {
-            return await this.__createClientInternal<TConnection>(
+            const client = await this.__createClientInternal<TConnection>(
                 options,
                 socket,
                 constructor,
             );
+            const totalTime = Date.now() - overallStart;
+            Logger.log(
+                "info",
+                "Client lifetime",
+                `total client creation time: ${totalTime}ms`,
+            );
+            return client;
         } catch (err) {
             // Ensure socket is closed
             socket.end();

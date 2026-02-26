@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -218,6 +219,15 @@ func getServerVersion(suite *GlideTestSuite) string {
 			WithUseTLS(suite.tls).
 			WithRequestTimeout(5 * time.Second)
 
+		// If TLS is enabled, try to load custom certificates
+		if suite.tls {
+			if certData, certErr := loadCaCertificateForTests(); certErr == nil {
+				tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+				advancedConfig := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+				clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
+			}
+		}
+
 		client, err := glide.NewClient(clientConfig)
 		if err == nil && client != nil {
 			defer client.Close()
@@ -239,6 +249,15 @@ func getServerVersion(suite *GlideTestSuite) string {
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(5 * time.Second)
+
+	// If TLS is enabled, try to load custom certificates
+	if suite.tls {
+		if certData, certErr := loadCaCertificateForTests(); certErr == nil {
+			tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+			advancedConfig := config.NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+			clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
+		}
+	}
 
 	client, err := glide.NewClusterClient(clientConfig)
 	if err == nil && client != nil {
@@ -379,10 +398,26 @@ func (suite *GlideTestSuite) getTimeoutClients() []interfaces.BaseClientCommands
 }
 
 func (suite *GlideTestSuite) defaultClientConfig() *config.ClientConfiguration {
-	return config.NewClientConfiguration().
+	clientConfig := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(5 * time.Second)
+
+	// Set default connection timeout for tests
+	advancedConfig := config.NewAdvancedClientConfiguration().
+		WithConnectionTimeout(10 * time.Second)
+
+	// If TLS is enabled, try to load custom certificates
+	if suite.tls {
+		if certData, certErr := loadCaCertificateForTests(); certErr == nil {
+			tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+			advancedConfig = advancedConfig.WithTlsConfiguration(tlsConfig)
+		}
+	}
+
+	clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
+
+	return clientConfig
 }
 
 func (suite *GlideTestSuite) defaultClient() *glide.Client {
@@ -406,10 +441,26 @@ func (suite *GlideTestSuite) client(config *config.ClientConfiguration) (*glide.
 }
 
 func (suite *GlideTestSuite) defaultClusterClientConfig() *config.ClusterClientConfiguration {
-	return config.NewClusterClientConfiguration().
+	clientConfig := config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(suite.tls).
 		WithRequestTimeout(5 * time.Second)
+
+	// Set default connection timeout for tests
+	advancedConfig := config.NewAdvancedClusterClientConfiguration().
+		WithConnectionTimeout(10 * time.Second)
+
+	// If TLS is enabled, try to load custom certificates
+	if suite.tls {
+		if certData, certErr := loadCaCertificateForTests(); certErr == nil {
+			tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+			advancedConfig = advancedConfig.WithTlsConfiguration(tlsConfig)
+		}
+	}
+
+	clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
+
+	return clientConfig
 }
 
 func (suite *GlideTestSuite) defaultClusterClient() *glide.ClusterClient {
@@ -815,4 +866,22 @@ func getChannelMode(sharded bool) TestChannelMode {
 
 type PubSubQueuer interface {
 	GetQueue() (*glide.PubSubMessageQueue, error)
+}
+
+// loadCaCertificateForTests loads the CA certificate for TLS tests.
+// It looks for the certificate in the utils/tls_crts directory.
+// Returns the certificate data or an error if not found.
+func loadCaCertificateForTests() ([]byte, error) {
+	glideHome := os.Getenv("GLIDE_HOME_DIR")
+	if glideHome == "" {
+		glideHome = "../.."
+	}
+
+	caCertPath := filepath.Join(glideHome, "utils", "tls_crts", "ca.crt")
+	absPath, err := filepath.Abs(caCertPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return config.LoadRootCertificatesFromFile(absPath)
 }

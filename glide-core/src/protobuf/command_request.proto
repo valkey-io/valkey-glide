@@ -222,7 +222,7 @@ enum RequestType {
     RPush                          = 821;
     RPushX                         = 822;
 
-    //// Pub/Sub commands
+    //// Pub/Sub commands (subscription commands are lazy variants)
 
     PSubscribe                     = 901;
     Publish                        = 902;
@@ -237,6 +237,15 @@ enum RequestType {
     Subscribe                      = 911;
     SUnsubscribe                   = 912;
     Unsubscribe                    = 913;
+
+    // Dynamic Pub/Sub commands (Blocking variants)
+    SubscribeBlocking              = 914;
+    UnsubscribeBlocking            = 915;
+    PSubscribeBlocking             = 916;
+    PUnsubscribeBlocking           = 917;
+    SSubscribeBlocking             = 918;
+    SUnsubscribeBlocking           = 919;
+    GetSubscriptions               = 920;
 
     //// Scripting and Functions commands
 
@@ -272,7 +281,7 @@ enum RequestType {
     AclLoad                        = 1107;
     AclLog                         = 1108;
     AclSave                        = 1109;
-    AclSetSser                     = 1110;
+    AclSetUser                     = 1110;
     AclUsers                       = 1111;
     AclWhoami                      = 1112;
     BgRewriteAof                   = 1113;

@@ -6,10 +6,8 @@ import warnings
 
 from glide.glide import (
     ClusterScanCursor,
-    OpenTelemetryConfig,
-    OpenTelemetryMetricsConfig,
-    OpenTelemetryTracesConfig,
     Script,
+    get_min_compressed_size,
 )
 from glide_shared import (
     OK,
@@ -40,6 +38,8 @@ from glide_shared import (
     ClusterBatch,
     ClusterBatchOptions,
     ClusterTransaction,
+    CompressionBackend,
+    CompressionConfiguration,
     ConditionalChange,
     ConfigurationError,
     ConnectionError,
@@ -100,6 +100,9 @@ from glide_shared import (
     ObjectType,
     OffsetOptions,
     OnlyIfEqual,
+    OpenTelemetryConfig,
+    OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig,
     OrderBy,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
@@ -160,10 +163,17 @@ from glide_shared import (
     json_batch,
 )
 
-from .async_commands import ft, glide_json
+from .async_commands import (
+    ALL_CHANNELS,
+    ALL_PATTERNS,
+    ALL_SHARDED_CHANNELS,
+    ft,
+    glide_json,
+)
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger
+from .opentelemetry import OpenTelemetry
 
 _glide_module = sys.modules[__name__]
 
@@ -220,6 +230,8 @@ __all__ = [
     "TGlideClient",
     "GlideClient",
     "GlideClusterClient",
+    # Internal utilities
+    "get_min_compressed_size",
     "Batch",
     "ClusterBatch",
     "ClusterTransaction",
@@ -235,11 +247,14 @@ __all__ = [
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
+    "CompressionBackend",
+    "CompressionConfiguration",
     "ReadFrom",
     "ServerCredentials",
     "ServiceType",
     "IamAuthConfig",
     "NodeAddress",
+    "OpenTelemetry",
     "OpenTelemetryConfig",
     "OpenTelemetryMetricsConfig",
     "OpenTelemetryTracesConfig",
@@ -328,6 +343,9 @@ __all__ = [
     "ClusterScanCursor",
     # PubSub
     "PubSubMsg",
+    "ALL_CHANNELS",
+    "ALL_PATTERNS",
+    "ALL_SHARDED_CHANNELS",
     # Json
     "glide_json",
     "json_batch",

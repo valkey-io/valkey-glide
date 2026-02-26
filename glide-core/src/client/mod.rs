@@ -3,6 +3,10 @@
 mod types;
 
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
+use crate::compression::CompressionBackendType;
+use crate::compression::lz4_backend::Lz4Backend;
+use crate::compression::zstd_backend::ZstdBackend;
+use crate::compression::{CompressionConfig, CompressionManager};
 use crate::scripts_container::get_script;
 use futures::FutureExt;
 use logger_core::{log_debug, log_error, log_info, log_warn};
@@ -31,7 +35,11 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
+use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
+use crate::request_type::RequestType;
 use redis::InfoDict;
+use std::future::Future;
+use std::pin::Pin;
 use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock, mpsc, oneshot};
 use versions::Versioning;
@@ -41,8 +49,6 @@ pub const DEFAULT_RETRIES: u32 = 3;
 /// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
-/// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
-pub const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 
 /// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
@@ -61,6 +67,20 @@ pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 /// A 3-second interval provides a reasonable balance between connection validation
 /// and performance overhead.
 pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
+
+/// Extract RequestType from a Redis command for decompression processing
+/// SIMPLIFIED VERSION: Only supports basic GET commands for decompression.
+fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
+    // Get the command name (first argument)
+    let command_name = cmd.command()?;
+    let command_str = String::from_utf8_lossy(&command_name).to_uppercase();
+
+    // Map command names to RequestType - only basic GET supported for decompression
+    match command_str.as_str() {
+        "GET" => Some(RequestType::Get),
+        _ => None, // Unknown command, no compression/decompression needed
+    }
+}
 
 /// A static Glide runtime instance
 static RUNTIME: OnceCell<GlideRt> = OnceCell::new();
@@ -146,7 +166,6 @@ pub async fn get_valkey_connection_info(
     let db = connection_request.database_id;
     let client_name = connection_request.client_name.clone();
     let lib_name = connection_request.lib_name.clone();
-    let pubsub_subscriptions = connection_request.pubsub_subscriptions.clone();
 
     match &connection_request.authentication_info {
         Some(info) => {
@@ -166,7 +185,6 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
-                    pubsub_subscriptions,
                 }
             } else {
                 // Regular password-based authentication
@@ -177,7 +195,6 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
-                    pubsub_subscriptions,
                 }
             }
         }
@@ -186,23 +203,27 @@ pub async fn get_valkey_connection_info(
             protocol,
             client_name,
             lib_name,
-            pubsub_subscriptions,
             ..Default::default()
         },
     }
 }
 
+use redis::{TlsCertificates, retrieve_tls_certificates};
+
+// tls_params should be only set if tls_mode is SecureTls
+// this should be validated before calling this function
 pub(super) fn get_connection_info(
     address: &NodeAddress,
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
+    tls_params: Option<redis::TlsConnParams>,
 ) -> redis::ConnectionInfo {
     let addr = if tls_mode != TlsMode::NoTls {
         redis::ConnectionAddr::TcpTls {
             host: address.host.to_string(),
             port: get_port(address),
             insecure: tls_mode == TlsMode::InsecureTls,
-            tls_params: None,
+            tls_params,
         }
     } else {
         redis::ConnectionAddr::Tcp(address.host.to_string(), get_port(address))
@@ -235,6 +256,9 @@ pub struct Client {
     inflight_requests_allowed: Arc<AtomicIsize>,
     // IAM token manager for automatic credential refresh
     iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
+    // Optional compression manager for automatic compression/decompression
+    compression_manager: Option<Arc<CompressionManager>>,
+    pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
 }
 
 async fn run_with_timeout<T>(
@@ -487,6 +511,210 @@ impl Client {
             }
         }
     }
+
+    /// Checks if the given command is an AUTH command.
+    /// Returns true if the command is "AUTH", false otherwise.
+    fn is_auth_command(&self, cmd: &Cmd) -> bool {
+        cmd.command().is_some_and(|bytes| bytes == b"AUTH")
+    }
+
+    /// Extracts authentication information from an AUTH command.
+    /// Returns (username, password) tuple where username is None for password-only auth.
+    ///
+    /// AUTH command formats:
+    /// - AUTH password (args: \[password\])
+    /// - AUTH username password (args: \[username, password\])
+    fn extract_auth_info(&self, cmd: &Cmd) -> (Option<String>, Option<String>) {
+        // Get the first argument
+        let first_arg = cmd
+            .arg_idx(1)
+            .and_then(|bytes| std::str::from_utf8(bytes).ok().map(|s| s.to_string()));
+
+        // Get the second argument
+        let second_arg = cmd
+            .arg_idx(2)
+            .and_then(|bytes| std::str::from_utf8(bytes).ok().map(|s| s.to_string()));
+
+        match (first_arg, second_arg) {
+            // AUTH username password
+            (Some(username), Some(password)) => (Some(username), Some(password)),
+            // AUTH password
+            (Some(password), None) => (None, Some(password)),
+            // Invalid AUTH command
+            _ => (None, None),
+        }
+    }
+
+    /// Handles AUTH command processing after successful execution.
+    /// Updates username and password state for standalone, cluster, and lazy clients.
+    async fn handle_auth_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
+        let (username, password) = self.extract_auth_info(cmd);
+
+        // Update username if provided
+        if username.is_some() {
+            self.update_stored_username(username).await?;
+        }
+
+        // Update password if provided (updateConnectionPassword handles this, so we track it too)
+        if password.is_some() {
+            self.update_stored_password(password).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Updates the stored username for different client types.
+    async fn update_stored_username(&self, username: Option<String>) -> RedisResult<()> {
+        let mut guard = self.internal_client.write().await;
+        match &mut *guard {
+            ClientWrapper::Standalone(client) => {
+                client.update_connection_username(username).await?;
+                Ok(())
+            }
+            ClientWrapper::Cluster { client } => {
+                client.update_connection_username(username).await?;
+                Ok(())
+            }
+            ClientWrapper::Lazy(_) => {
+                unreachable!("Lazy client should have been initialized")
+            }
+        }
+    }
+
+    /// Updates the stored password for different client types.
+    async fn update_stored_password(&self, password: Option<String>) -> RedisResult<()> {
+        let mut guard = self.internal_client.write().await;
+        match &mut *guard {
+            ClientWrapper::Standalone(client) => {
+                client.update_connection_password(password).await?;
+                Ok(())
+            }
+            ClientWrapper::Cluster { client } => {
+                client.update_connection_password(password).await?;
+                Ok(())
+            }
+            ClientWrapper::Lazy(_) => {
+                unreachable!("Lazy client should have been initialized")
+            }
+        }
+    }
+
+    /// Checks if the given command is a HELLO command.
+    /// Returns true if the command is "HELLO", false otherwise.
+    fn is_hello_command(&self, cmd: &Cmd) -> bool {
+        cmd.command().is_some_and(|bytes| bytes == b"HELLO")
+    }
+
+    /// Extracts protocol version and optional auth info from a HELLO command.
+    /// Returns (protocol_version, username, password, client_name) tuple.
+    ///
+    /// HELLO command formats:
+    /// - HELLO 3
+    /// - HELLO 3 AUTH username password
+    /// - HELLO 3 SETNAME clientname
+    /// - HELLO 3 AUTH username password SETNAME clientname
+    fn extract_hello_info(
+        &self,
+        cmd: &Cmd,
+    ) -> (
+        Option<redis::ProtocolVersion>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ) {
+        // Get protocol version (first argument)
+        let protocol = cmd.arg_idx(1).and_then(|bytes| {
+            std::str::from_utf8(bytes).ok().and_then(|s| match s {
+                "2" => Some(redis::ProtocolVersion::RESP2),
+                "3" => Some(redis::ProtocolVersion::RESP3),
+                _ => None,
+            })
+        });
+
+        let mut username = None;
+        let mut password = None;
+        let mut client_name = None;
+
+        // Parse optional arguments (AUTH username password, SETNAME name)
+        let mut idx = 2;
+        while let Some(arg) = cmd.arg_idx(idx) {
+            if let Ok(arg_str) = std::str::from_utf8(arg) {
+                match arg_str.to_uppercase().as_str() {
+                    "AUTH" => {
+                        // Next two args are username and password
+                        username = cmd.arg_idx(idx + 1).and_then(|bytes| {
+                            std::str::from_utf8(bytes).ok().map(|s| s.to_string())
+                        });
+                        password = cmd.arg_idx(idx + 2).and_then(|bytes| {
+                            std::str::from_utf8(bytes).ok().map(|s| s.to_string())
+                        });
+                        idx += 3;
+                    }
+                    "SETNAME" => {
+                        // Next arg is client name
+                        client_name = cmd.arg_idx(idx + 1).and_then(|bytes| {
+                            std::str::from_utf8(bytes).ok().map(|s| s.to_string())
+                        });
+                        idx += 2;
+                    }
+                    _ => {
+                        idx += 1;
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        (protocol, username, password, client_name)
+    }
+
+    /// Handles HELLO command processing after successful execution.
+    /// Updates protocol version and optionally auth info and client name.
+    async fn handle_hello_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
+        let (protocol, username, password, client_name) = self.extract_hello_info(cmd);
+
+        // Update protocol version if provided
+        if let Some(protocol) = protocol {
+            self.update_stored_protocol(protocol).await?;
+        }
+
+        // Update username if provided
+        if username.is_some() {
+            self.update_stored_username(username).await?;
+        }
+
+        // Update password if provided
+        if password.is_some() {
+            self.update_stored_password(password).await?;
+        }
+
+        // Update client name if provided
+        if client_name.is_some() {
+            self.update_stored_client_name(client_name).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Updates the stored protocol version for different client types.
+    async fn update_stored_protocol(&self, protocol: redis::ProtocolVersion) -> RedisResult<()> {
+        let mut guard = self.internal_client.write().await;
+        match &mut *guard {
+            ClientWrapper::Standalone(client) => {
+                client.update_connection_protocol(protocol).await?;
+                Ok(())
+            }
+            ClientWrapper::Cluster { client } => {
+                client.update_connection_protocol(protocol).await?;
+                Ok(())
+            }
+            ClientWrapper::Lazy(_) => {
+                unreachable!("Lazy client should have been initialized")
+            }
+        }
+    }
+
     async fn get_or_initialize_client(&self) -> RedisResult<ClientWrapper> {
         {
             let guard = self.internal_client.read().await;
@@ -518,19 +746,30 @@ impl Client {
             // Create the appropriate client based on configuration
             let real_client = if config.cluster_mode_enabled {
                 // Create cluster client
-                let client = create_cluster_client(config, push_sender, iam_manager_ref).await?;
+                let client = create_cluster_client(
+                    config,
+                    push_sender,
+                    iam_manager_ref,
+                    self.pubsub_synchronizer.clone(),
+                )
+                .await?;
                 ClientWrapper::Cluster { client }
             } else {
                 // Create standalone client
-                let client = StandaloneClient::create_client(config, push_sender, iam_manager_ref)
-                    .await
-                    .map_err(|e| {
-                        RedisError::from((
-                            ErrorKind::IoError,
-                            "Standalone connect failed",
-                            format!("{e:?}"),
-                        ))
-                    })?;
+                let client = StandaloneClient::create_client(
+                    config,
+                    push_sender,
+                    iam_manager_ref,
+                    Some(self.pubsub_synchronizer.clone()),
+                )
+                .await
+                .map_err(|e| {
+                    RedisError::from((
+                        ErrorKind::IoError,
+                        "Standalone connect failed",
+                        format!("{e:?}"),
+                    ))
+                })?;
                 ClientWrapper::Standalone(client)
             };
 
@@ -538,6 +777,23 @@ impl Client {
             *guard = real_client;
         }
 
+        // We must drop the guard so the pubsub synchronizer can acquire it when subscribing
+        // to channels provided via config. Keeping the guard would cause a deadlock. We wait
+        // for the subscription here to ensure the lazy client is subscribed immediately upon creation.
+        drop(guard);
+        if let Err(e) = self
+            .pubsub_synchronizer
+            .wait_for_sync(0, None, None, None)
+            .await
+        {
+            log_warn(
+                "Client::new",
+                format!("Failed to establish initial subscriptions within timeout: {e:?}"),
+            );
+        }
+
+        // Re-acquire for the return
+        let guard = self.internal_client.read().await;
         Ok(guard.clone()) // ✅ Return clone of the now-initialized wrapper
     }
 
@@ -545,20 +801,28 @@ impl Client {
     /// This function will route the command to the correct node, and retry if needed.
     pub fn send_command<'a>(
         &'a mut self,
-        cmd: &'a Cmd,
+        cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             let client = self.get_or_initialize_client().await?;
 
-            let expected_type = expected_type_for_cmd(cmd);
+            if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
+                return result;
+            }
+
+            // let expected_type = expected_type_for_cmd(cmd);
             let request_timeout = match get_request_timeout(cmd, self.request_timeout) {
                 Ok(request_timeout) => request_timeout,
                 Err(err) => return Err(err),
             };
 
+            // Clone compression_manager reference before moving into async block
+            let compression_manager = self.compression_manager.clone();
+
             let result = run_with_timeout(request_timeout, async move {
-                match client {
+                let expected_type = expected_type_for_cmd(cmd);
+                let value  = match client {
                     ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
                     ClientWrapper::Cluster {mut client } => {
                         let final_routing =
@@ -590,21 +854,57 @@ impl Client {
                     },
                     ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
                 }
-                .and_then(|value| convert_to_expected_type(value, expected_type))
+                .and_then(|value| {
+                    // Apply decompression if compression manager is available
+                    let processed_value = if let Some(ref compression_manager) = compression_manager {
+                        // Extract request type from command for decompression
+                        if let Some(request_type) = extract_request_type_from_cmd(cmd) {
+                            match crate::compression::process_response_for_decompression(
+                                value.clone(),
+                                request_type,
+                                Some(compression_manager.as_ref())
+                            ) {
+                                Ok(decompressed_value) => decompressed_value,
+                                Err(e) => {
+                                    log_warn(
+                                        "send_command_decompression",
+                                        format!("Failed to decompress response: {}", e),
+                                    );
+                                    value // Return original value on decompression failure
+                                }
+                            }
+                        } else {
+                            value // No request type found, return original value
+                        }
+                    } else {
+                        value // No compression manager, return original value
+                    };
+                    convert_to_expected_type(processed_value, expected_type)
+                })?;
+
+                // Intercept CLIENT SETNAME commands after regular processing
+                // Only handle CLIENT SETNAME commands if they executed successfully (no error)
+                if self.is_client_set_name_command(cmd) {
+                    self.handle_client_set_name_command(cmd).await?;
+                }
+                // Intercept SELECT commands after regular processing
+                // Only handle SELECT commands if they executed successfully (no error)
+                if self.is_select_command(cmd) {
+                    self.handle_select_command(cmd).await?;
+                }
+                // Intercept AUTH commands after regular processing
+                // Only handle AUTH commands if they executed successfully (no error)
+                if self.is_auth_command(cmd) {
+                    self.handle_auth_command(cmd).await?;
+                }
+                // Intercept HELLO commands after regular processing
+                // Only handle HELLO commands if they executed successfully (no error)
+                if self.is_hello_command(cmd) {
+                    self.handle_hello_command(cmd).await?;
+                }
+                Ok(value)
             })
             .await?;
-
-            // Intercept CLIENT SETNAME commands after regular processing
-            // Only handle CLIENT SETNAME commands if they executed successfully (no error)
-            if self.is_client_set_name_command(cmd) {
-                self.handle_client_set_name_command(cmd).await?;
-            }
-
-            // Intercept SELECT commands after regular processing
-            // Only handle SELECT commands if they executed successfully (no error)
-            if self.is_select_command(cmd) {
-                self.handle_select_command(cmd).await?;
-            }
 
             Ok(result)
         })
@@ -883,8 +1183,8 @@ impl Client {
     ) -> redis::RedisResult<Value> {
         let _ = self.get_or_initialize_client().await?;
 
-        let eval = eval_cmd(hash, keys, args);
-        let result = self.send_command(&eval, routing.clone()).await;
+        let mut eval = eval_cmd(hash, keys, args);
+        let result = self.send_command(&mut eval, routing.clone()).await;
         let Err(err) = result else {
             return result;
         };
@@ -892,9 +1192,9 @@ impl Client {
             let Some(code) = get_script(hash) else {
                 return Err(err);
             };
-            let load = load_cmd(&code);
-            self.send_command(&load, None).await?;
-            self.send_command(&eval, routing).await
+            let mut load = load_cmd(&code);
+            self.send_command(&mut load, None).await?;
+            self.send_command(&mut eval, routing).await
         } else {
             Err(err)
         }
@@ -1006,7 +1306,7 @@ impl Client {
             cmd.arg(&username);
         }
         cmd.arg(pass);
-        self.send_command(&cmd, Some(routing)).await
+        self.send_command(&mut cmd, Some(routing)).await
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
@@ -1036,23 +1336,39 @@ impl Client {
     /// IAM token refresh callback function
     ///
     /// On new token, spawns a task that write-locks the `Client` and calls
-    /// `update_connection_password(Some(new_token), true)`. Uses a strong `Arc<RwLock<Client>>`.
-    /// Note: this can form a retain cycle; call `stop_refresh_task()` and drop the manager to tear down.
+    /// `update_connection_password(Some(new_token), true)`.
+    ///
+    /// Uses a **Weak** reference to break the reference cycle between Client and IAMTokenManager.
     fn iam_callback(
-        client_arc: Arc<tokio::sync::RwLock<Client>>,
+        client_weak: std::sync::Weak<tokio::sync::RwLock<Client>>,
     ) -> impl Fn(String) + Send + 'static {
         move |new_token: String| {
-            let client_arc = Arc::clone(&client_arc);
+            let client_weak = client_weak.clone();
             tokio::spawn(async move {
-                let mut client = client_arc.write().await;
-                let result = client
-                    .update_connection_password(Some(new_token.clone()), true)
-                    .await;
+                // Try to upgrade Weak to Arc - this will fail if Client has been dropped
+                if let Some(client_arc) = client_weak.upgrade() {
+                    let mut client = client_arc.write().await;
+                    let result = client
+                        .update_connection_password(Some(new_token.clone()), true)
+                        .await;
 
-                if let Err(e) = result {
-                    log_error(
+                    if let Err(e) = result {
+                        log_error(
+                            "IAM token refresh",
+                            format!(
+                                "Failed to update connection password with immediate auth: {e}"
+                            ),
+                        );
+                    } else {
+                        log_debug(
+                            "IAM token refresh",
+                            "Successfully updated connection password",
+                        );
+                    }
+                } else {
+                    log_debug(
                         "IAM token refresh",
-                        format!("Failed to update connection password with immediate auth: {e}"),
+                        "Client has been dropped, skipping password update",
                     );
                 }
             });
@@ -1061,17 +1377,18 @@ impl Client {
 
     /// Create an `IAMTokenManager` when IAM auth is configured.
     ///
-    /// Uses a **strong** `Arc<RwLock<Client>>` in the refresh callback so the callback
-    /// can always reach the client. (Note: this can create a retain cycle unless you
-    /// stop the refresh task and drop the manager explicitly.)
+    /// Uses a **Weak** reference to the client in the refresh callback to avoid reference cycles.
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
         client_arc: std::sync::Arc<tokio::sync::RwLock<Client>>,
     ) -> Option<std::sync::Arc<crate::iam::IAMTokenManager>> {
         if let Some(iam_config) = &auth_info.iam_config {
             if let Some(username) = &auth_info.username {
-                // Set up callback to update connection password when token refreshes
-                let iam_callback = Self::iam_callback(std::sync::Arc::clone(&client_arc));
+                log_debug("IAM", "Creating IAM token manager with Weak reference");
+
+                // Use Weak reference to break reference cycle
+                let client_weak = Arc::downgrade(&client_arc);
+                let iam_callback = Self::iam_callback(client_weak);
 
                 match crate::iam::IAMTokenManager::new(
                     iam_config.cluster_name.clone(),
@@ -1085,6 +1402,7 @@ impl Client {
                 {
                     Ok(mut token_manager) => {
                         token_manager.start_refresh_task();
+                        log_info("IAM", "IAM token manager started successfully");
                         Some(std::sync::Arc::new(token_manager))
                     }
                     Err(e) => {
@@ -1124,6 +1442,55 @@ impl Client {
         Ok(())
     }
 }
+/// Trait for executing PubSub commands on the internal client wrapper
+pub trait PubSubCommandApplier: Send + Sync {
+    /// Send a subscription command (SUBSCRIBE, UNSUBSCRIBE, etc.)
+    /// If routing is provided, use it; otherwise use default routing logic
+    fn apply_pubsub_command<'a>(
+        &'a mut self,
+        cmd: &'a mut Cmd,
+        routing: Option<SingleNodeRoutingInfo>,
+    ) -> Pin<Box<dyn Future<Output = RedisResult<Value>> + Send + 'a>>;
+}
+
+/// Implement the trait for ClientWrapper
+impl PubSubCommandApplier for ClientWrapper {
+    fn apply_pubsub_command<'a>(
+        &'a mut self,
+        cmd: &'a mut Cmd,
+        routing: Option<SingleNodeRoutingInfo>,
+    ) -> Pin<Box<dyn Future<Output = RedisResult<Value>> + Send + 'a>> {
+        Box::pin(async move {
+            match self {
+                ClientWrapper::Standalone(client) => {
+                    // For standalone mode, send unsubscribe commands to all nodes.
+                    // This handles ElastiCache scenarios where DNS address could change
+                    // So we can't know which node we subscribed to
+                    if let Some(command) = cmd.command() {
+                        let cmd_upper = command.to_ascii_uppercase();
+                        if cmd_upper == b"UNSUBSCRIBE" || cmd_upper == b"PUNSUBSCRIBE" {
+                            return client
+                                .send_request_to_all_nodes(cmd, Some(ResponsePolicy::AllSucceeded))
+                                .await;
+                        }
+                    }
+                    client.send_command(cmd).await
+                }
+                ClientWrapper::Cluster { client } => {
+                    let final_routing = routing
+                        .map(RoutingInfo::SingleNode)
+                        .or_else(|| RoutingInfo::for_routable(cmd))
+                        .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random));
+                    client.route_command(cmd, final_routing).await
+                }
+                ClientWrapper::Lazy(_) => Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Client not initialized",
+                ))),
+            }
+        })
+    }
+}
 
 fn load_cmd(code: &[u8]) -> Cmd {
     let mut cmd = redis::cmd("SCRIPT");
@@ -1153,22 +1520,84 @@ async fn create_cluster_client(
     request: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
+    pubsub_synchronizer: Arc<dyn crate::pubsub::PubSubSynchronizer>,
 ) -> RedisResult<redis::cluster_async::ClusterConnection> {
     let tls_mode = request.tls_mode.unwrap_or_default();
 
     let valkey_connection_info = get_valkey_connection_info(&request, iam_token_manager).await;
-    let initial_nodes: Vec<_> = request
-        .addresses
-        .into_iter()
-        .map(|address| get_connection_info(&address, tls_mode, valkey_connection_info.clone()))
-        .collect();
+
+    let has_root_certs = !request.root_certs.is_empty();
+    let has_client_cert = !request.client_cert.is_empty();
+    let has_client_key = !request.client_key.is_empty();
+    if has_client_cert != has_client_key {
+        return Err(RedisError::from((
+            ErrorKind::InvalidClientConfig,
+            "client_cert and client_key must both be provided or both be empty",
+        )));
+    }
+
+    let (tls_params, tls_certificates) = if has_root_certs || has_client_cert || has_client_key {
+        if tls_mode == TlsMode::NoTls {
+            return Err(RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "TLS certificates provided but TLS is disabled",
+            )));
+        }
+
+        let root_cert = if has_root_certs {
+            let mut combined_certs = Vec::new();
+            for cert in &request.root_certs {
+                if cert.is_empty() {
+                    return Err(RedisError::from((
+                        ErrorKind::InvalidClientConfig,
+                        "Root certificate cannot be empty byte string",
+                    )));
+                }
+                combined_certs.extend_from_slice(cert);
+            }
+            Some(combined_certs)
+        } else {
+            None
+        };
+
+        let client_tls = if has_client_cert && has_client_key {
+            Some(redis::ClientTlsConfig {
+                client_cert: request.client_cert.clone(),
+                client_key: request.client_key.clone(),
+            })
+        } else {
+            None
+        };
+
+        let tls_certs = TlsCertificates {
+            client_tls,
+            root_cert,
+        };
+        let params = retrieve_tls_certificates(tls_certs.clone())?;
+        (Some(params), Some(tls_certs))
+    } else {
+        (None, None)
+    };
     let periodic_topology_checks = match request.periodic_checks {
         Some(PeriodicCheck::Disabled) => None,
         Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
         Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
         None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
     };
-    let connection_timeout = to_duration(request.connection_timeout, DEFAULT_CONNECTION_TIMEOUT);
+    let connection_timeout = request.get_connection_timeout();
+    let initial_nodes: Vec<_> = request
+        .addresses
+        .into_iter()
+        .map(|address| {
+            get_connection_info(
+                &address,
+                tls_mode,
+                valkey_connection_info.clone(),
+                tls_params.clone(),
+            )
+        })
+        .collect();
+
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
         .connection_timeout(connection_timeout)
         .retries(DEFAULT_RETRIES);
@@ -1199,9 +1628,9 @@ async fn create_cluster_client(
             redis::cluster::TlsMode::Insecure
         };
         builder = builder.tls(tls);
-    }
-    if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions.clone() {
-        builder = builder.pubsub_subscriptions(pubsub_subscriptions);
+        if let Some(certs) = tls_certificates {
+            builder = builder.certs(certs);
+        }
     }
 
     let retry_strategy = match request.connection_retry_strategy {
@@ -1218,11 +1647,15 @@ async fn create_cluster_client(
     builder =
         builder.refresh_topology_from_initial_nodes(request.refresh_topology_from_initial_nodes);
 
+    builder = builder.tcp_nodelay(request.tcp_nodelay);
+
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
     let client = builder.build()?;
-    let mut con = client.get_async_connection(push_sender).await?;
+    let mut con = client
+        .get_async_connection(push_sender, Some(pubsub_synchronizer))
+        .await?;
 
     // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,
     // preventing scenarios where the client becomes inoperable or, worse, unaware that sharded pubsub messages are not being received.
@@ -1234,7 +1667,7 @@ async fn create_cluster_client(
     // However, this approach would leave the application unaware that the subscriptions were not applied, requiring the user to analyze logs to identify the issue.
     // Instead, we explicitly check the engine version here and fail the connection creation if it is incompatible with sharded subscriptions.
 
-    if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions
+    if let Some(pubsub_subscriptions) = &request.pubsub_subscriptions
         && pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded)
     {
         let info_res = con
@@ -1278,6 +1711,7 @@ pub enum ConnectionError {
     Cluster(redis::RedisError),
     Timeout,
     IoError(std::io::Error),
+    Configuration(String),
 }
 
 impl std::fmt::Debug for ConnectionError {
@@ -1287,6 +1721,7 @@ impl std::fmt::Debug for ConnectionError {
             Self::Cluster(arg0) => f.debug_tuple("Cluster").field(arg0).finish(),
             Self::IoError(arg0) => f.debug_tuple("IoError").field(arg0).finish(),
             Self::Timeout => write!(f, "Timeout"),
+            Self::Configuration(arg0) => f.debug_tuple("Configuration").field(arg0).finish(),
         }
     }
 }
@@ -1298,6 +1733,7 @@ impl std::fmt::Display for ConnectionError {
             ConnectionError::Cluster(err) => write!(f, "{err}"),
             ConnectionError::IoError(err) => write!(f, "{err}"),
             ConnectionError::Timeout => f.write_str("connection attempt timed out"),
+            ConnectionError::Configuration(msg) => write!(f, "configuration error: {msg}"),
         }
     }
 }
@@ -1338,9 +1774,16 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     } else {
         "\nStandalone mode"
     };
-    let request_timeout = format_optional_value("Request timeout", request.request_timeout);
-    let connection_timeout =
-        format_optional_value("Connection timeout", request.connection_timeout);
+    let request_timeout = format!(
+        "\nRequest timeout: {}",
+        request
+            .request_timeout
+            .unwrap_or(DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32)
+    );
+    let connection_timeout = format!(
+        "\nConnection timeout: {}",
+        request.get_connection_timeout().as_millis()
+    );
     let database_id = format!("\ndatabase ID: {}", request.database_id);
     let rfr_strategy = request
         .read_from
@@ -1402,12 +1845,38 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     )
 }
 
+/// Create a compression manager from the given configuration
+/// Returns None if compression is disabled or not configured
+fn create_compression_manager(
+    compression_config: Option<CompressionConfig>,
+) -> Result<Option<Arc<CompressionManager>>, ConnectionError> {
+    let Some(config) = compression_config else {
+        return Ok(None);
+    };
+
+    if !config.enabled {
+        return Ok(None);
+    }
+
+    let backend: Box<dyn crate::compression::CompressionBackend> = match config.backend {
+        CompressionBackendType::Zstd => Box::new(ZstdBackend::new()),
+        CompressionBackendType::Lz4 => Box::new(Lz4Backend::new()),
+    };
+
+    let manager = CompressionManager::new(backend, config).map_err(|e| {
+        ConnectionError::Configuration(format!("Failed to create compression manager: {}", e))
+    })?;
+
+    Ok(Some(Arc::new(manager)))
+}
+
 impl Client {
     pub async fn new(
         request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
-        const DEFAULT_CLIENT_CREATION_TIMEOUT: Duration = Duration::from_secs(10);
+        // Add buffer to connection_timeout to allow inner connection logic to fully execute before the outer timeout triggers
+        let client_creation_timeout = request.get_connection_timeout() + Duration::from_millis(500);
 
         log_info(
             "Connection configuration",
@@ -1421,7 +1890,15 @@ impl Client {
             inflight_requests_limit.try_into().unwrap(),
         ));
 
-        tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
+        // Create compression manager from configuration
+        let compression_manager = create_compression_manager(request.compression_config.clone())?;
+
+        let reconciliation_interval = match request.pubsub_reconciliation_interval_ms {
+            Some(ms) if ms > 0 => Some(Duration::from_millis(ms as u64)),
+            _ => None,
+        };
+
+        tokio::time::timeout(client_creation_timeout, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
             let internal_client_arc =
@@ -1430,12 +1907,26 @@ impl Client {
                     push_sender: push_sender.clone(),
                 }))));
 
+            let initial_subscriptions = request.pubsub_subscriptions.clone();
+
+            let pubsub_synchronizer = create_pubsub_synchronizer(
+                push_sender.clone(),
+                initial_subscriptions,
+                request.cluster_mode_enabled,
+                Arc::downgrade(&internal_client_arc),
+                reconciliation_interval,
+                request_timeout,
+            )
+            .await;
+
             // Create the Client first without IAM token manager
             let client = Self {
                 internal_client: internal_client_arc.clone(),
                 request_timeout,
                 inflight_requests_allowed,
+                compression_manager: compression_manager.clone(),
                 iam_token_manager: None,
+                pubsub_synchronizer: pubsub_synchronizer.clone(),
             };
 
             let client_arc = Arc::new(RwLock::new(client));
@@ -1453,16 +1944,21 @@ impl Client {
                 client_guard.iam_token_manager = iam_token_manager.clone();
             }
 
-            let internal_client = if request.lazy_connect {
+            let is_lazy = request.lazy_connect;
+            let internal_client = if is_lazy {
                 ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request,
                     push_sender,
                 }))
             } else if request.cluster_mode_enabled {
-                let client =
-                    create_cluster_client(request, push_sender, iam_token_manager.as_ref())
-                        .await
-                        .map_err(ConnectionError::Cluster)?;
+                let client = create_cluster_client(
+                    request,
+                    push_sender,
+                    iam_token_manager.as_ref(),
+                    pubsub_synchronizer.clone(),
+                )
+                .await
+                .map_err(ConnectionError::Cluster)?;
                 ClientWrapper::Cluster { client }
             } else {
                 ClientWrapper::Standalone(
@@ -1470,6 +1966,7 @@ impl Client {
                         request,
                         push_sender,
                         iam_token_manager.as_ref(),
+                        Some(pubsub_synchronizer.clone()),
                     )
                     .await
                     .map_err(ConnectionError::Standalone)?,
@@ -1480,6 +1977,19 @@ impl Client {
             {
                 let mut guard = internal_client_arc.write().await;
                 *guard = internal_client;
+            }
+
+            if !is_lazy {
+                pubsub_synchronizer.trigger_reconciliation();
+                if let Err(e) = pubsub_synchronizer.wait_for_sync(0, None, None, None).await {
+                    log_error(
+                        "Client::new",
+                        format!(
+                            "Failed to establish initial subscriptions within timeout: {:?}",
+                            e
+                        ),
+                    );
+                }
             }
 
             // Return the client from the Arc
@@ -1493,12 +2003,33 @@ impl Client {
         .await
         .map_err(|_| ConnectionError::Timeout)?
     }
+
+    /// Get the compression manager if compression is enabled
+    ///
+    /// # Returns
+    /// * `Some(Arc<CompressionManager>)` - If compression is enabled and configured
+    /// * `None` - If compression is disabled or not configured
+    pub fn compression_manager(&self) -> Option<Arc<CompressionManager>> {
+        self.compression_manager.clone()
+    }
+
+    /// Check if compression is enabled for this client
+    ///
+    /// # Returns
+    /// * `true` if compression is enabled and configured
+    /// * `false` if compression is disabled or not configured
+    pub fn is_compression_enabled(&self) -> bool {
+        self.compression_manager
+            .as_ref()
+            .map(|manager| manager.is_enabled())
+            .unwrap_or(false)
+    }
 }
 
 pub trait GlideClientForTests {
     fn send_command<'a>(
         &'a mut self,
-        cmd: &'a Cmd,
+        cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value>;
 }
@@ -1506,7 +2037,7 @@ pub trait GlideClientForTests {
 impl GlideClientForTests for Client {
     fn send_command<'a>(
         &'a mut self,
-        cmd: &'a Cmd,
+        cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value> {
         self.send_command(cmd, routing)
@@ -1516,10 +2047,24 @@ impl GlideClientForTests for Client {
 impl GlideClientForTests for StandaloneClient {
     fn send_command<'a>(
         &'a mut self,
-        cmd: &'a Cmd,
+        cmd: &'a mut Cmd,
         _routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value> {
         self.send_command(cmd).boxed()
+    }
+}
+
+// This is used for pubsub tests
+impl GlideClientForTests for ClusterConnection {
+    fn send_command<'a>(
+        &'a mut self,
+        cmd: &'a mut redis::Cmd,
+        routing: Option<RoutingInfo>,
+    ) -> redis::RedisFuture<'a, Value> {
+        let final_routing =
+            routing.unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random));
+
+        async move { self.route_command(cmd, final_routing).await }.boxed()
     }
 }
 
@@ -1535,6 +2080,7 @@ mod tests {
     };
 
     use super::{Client, ClientWrapper, LazyClient, get_timeout_from_cmd_arg};
+    use std::sync::Weak;
 
     #[test]
     fn test_get_timeout_from_cmd_returns_correct_duration_int() {
@@ -1754,6 +2300,7 @@ mod tests {
 
     /// Helper function to create a test client for unit tests
     fn create_test_client() -> Client {
+        use crate::pubsub::create_pubsub_synchronizer;
         use std::sync::Arc;
         use std::sync::atomic::AtomicIsize;
         use tokio::sync::RwLock;
@@ -1774,11 +2321,25 @@ mod tests {
             push_sender: None,
         };
 
+        // Create runtime to initialize a stub pubsub synchronizer
+        // We do this in order to keep the pubsub_synchronizer in the client struct non-optional.
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let pubsub_synchronizer = rt.block_on(create_pubsub_synchronizer(
+            None,
+            None,
+            false,
+            Weak::new(),
+            None,
+            Duration::from_millis(250),
+        ));
+
         Client {
             internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),
             request_timeout: Duration::from_millis(250),
             inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
             iam_token_manager: None,
+            compression_manager: None,
+            pubsub_synchronizer,
         }
     }
 
@@ -1830,5 +2391,144 @@ mod tests {
             client.extract_client_name_from_client_set_name(&cmd),
             Some("test_name".to_string())
         );
+    }
+
+    #[test]
+    fn test_is_auth_command() {
+        let client = create_test_client();
+
+        // Test valid AUTH command with password
+        let mut cmd = Cmd::new();
+        cmd.arg("AUTH").arg("password123");
+        assert!(client.is_auth_command(&cmd));
+
+        // Test AUTH command with username and password
+        let mut cmd = Cmd::new();
+        cmd.arg("AUTH").arg("myuser").arg("password123");
+        assert!(client.is_auth_command(&cmd));
+
+        // Test non-AUTH command
+        let mut cmd = Cmd::new();
+        cmd.arg("SET").arg("key").arg("value");
+        assert!(!client.is_auth_command(&cmd));
+    }
+
+    #[test]
+    fn test_extract_auth_info() {
+        let client = create_test_client();
+
+        // Test AUTH with password only
+        let mut cmd = Cmd::new();
+        cmd.arg("AUTH").arg("password123");
+        let (username, password) = client.extract_auth_info(&cmd);
+        assert_eq!(username, None);
+        assert_eq!(password, Some("password123".to_string()));
+
+        // Test AUTH with username and password
+        let mut cmd = Cmd::new();
+        cmd.arg("AUTH").arg("myuser").arg("password123");
+        let (username, password) = client.extract_auth_info(&cmd);
+        assert_eq!(username, Some("myuser".to_string()));
+        assert_eq!(password, Some("password123".to_string()));
+
+        // Test AUTH with no arguments (invalid)
+        let mut cmd = Cmd::new();
+        cmd.arg("AUTH");
+        let (username, password) = client.extract_auth_info(&cmd);
+        assert_eq!(username, None);
+        assert_eq!(password, None);
+    }
+
+    #[test]
+    fn test_is_hello_command() {
+        let client = create_test_client();
+
+        // Test valid HELLO command
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO").arg("3");
+        assert!(client.is_hello_command(&cmd));
+
+        // Test HELLO with AUTH
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO")
+            .arg("3")
+            .arg("AUTH")
+            .arg("user")
+            .arg("pass");
+        assert!(client.is_hello_command(&cmd));
+
+        // Test non-HELLO command
+        let mut cmd = Cmd::new();
+        cmd.arg("PING");
+        assert!(!client.is_hello_command(&cmd));
+    }
+
+    #[test]
+    fn test_extract_hello_info() {
+        let client = create_test_client();
+
+        // Test HELLO 3
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO").arg("3");
+        let (protocol, username, password, client_name) = client.extract_hello_info(&cmd);
+        assert_eq!(protocol, Some(redis::ProtocolVersion::RESP3));
+        assert_eq!(username, None);
+        assert_eq!(password, None);
+        assert_eq!(client_name, None);
+
+        // Test HELLO 2
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO").arg("2");
+        let (protocol, username, password, client_name) = client.extract_hello_info(&cmd);
+        assert_eq!(protocol, Some(redis::ProtocolVersion::RESP2));
+        assert_eq!(username, None);
+        assert_eq!(password, None);
+        assert_eq!(client_name, None);
+
+        // Test HELLO 3 AUTH username password
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO")
+            .arg("3")
+            .arg("AUTH")
+            .arg("myuser")
+            .arg("mypass");
+        let (protocol, username, password, client_name) = client.extract_hello_info(&cmd);
+        assert_eq!(protocol, Some(redis::ProtocolVersion::RESP3));
+        assert_eq!(username, Some("myuser".to_string()));
+        assert_eq!(password, Some("mypass".to_string()));
+        assert_eq!(client_name, None);
+
+        // Test HELLO 3 SETNAME myclient
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO").arg("3").arg("SETNAME").arg("myclient");
+        let (protocol, username, password, client_name) = client.extract_hello_info(&cmd);
+        assert_eq!(protocol, Some(redis::ProtocolVersion::RESP3));
+        assert_eq!(username, None);
+        assert_eq!(password, None);
+        assert_eq!(client_name, Some("myclient".to_string()));
+
+        // Test HELLO 3 AUTH user pass SETNAME myclient
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO")
+            .arg("3")
+            .arg("AUTH")
+            .arg("myuser")
+            .arg("mypass")
+            .arg("SETNAME")
+            .arg("myclient");
+        let (protocol, username, password, client_name) = client.extract_hello_info(&cmd);
+        assert_eq!(protocol, Some(redis::ProtocolVersion::RESP3));
+        assert_eq!(username, Some("myuser".to_string()));
+        assert_eq!(password, Some("mypass".to_string()));
+        assert_eq!(client_name, Some("myclient".to_string()));
+
+        // Test HELLO with invalid protocol version
+        let mut cmd = Cmd::new();
+        cmd.arg("HELLO").arg("99");
+        let (protocol, username, password, client_name) = client.extract_hello_info(&cmd);
+        assert_eq!(protocol, None);
+        assert_eq!(username, None);
+        assert_eq!(password, None);
+        assert_eq!(client_name, None);
     }
 }

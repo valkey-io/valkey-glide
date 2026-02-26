@@ -29,12 +29,20 @@ public class NativeUtils {
     public static final String NATIVE_FOLDER_PATH_PREFIX = "nativeutils";
 
     /** Temporary directory which will contain the dynamic library files. */
-    private static File temporaryDir;
+    private static volatile File temporaryDir;
+
+    /** Track if the Glide library has already been loaded */
+    private static volatile boolean glideLibLoaded = false;
 
     /** Private constructor - this class will never be instanced */
     private NativeUtils() {}
 
-    public static void loadGlideLib() {
+    public static synchronized void loadGlideLib() {
+        // Check if already loaded to avoid multiple loads
+        if (glideLibLoaded) {
+            return;
+        }
+
         String glideLib = "/libglide_rs";
         try {
             String osName = System.getProperty("os.name").toLowerCase();
@@ -42,10 +50,13 @@ public class NativeUtils {
                 NativeUtils.loadLibraryFromJar(glideLib + ".dylib");
             } else if (osName.contains("linux")) {
                 NativeUtils.loadLibraryFromJar(glideLib + ".so");
+            } else if (osName.contains("windows")) {
+                NativeUtils.loadLibraryFromJar("/glide_rs.dll");
             } else {
                 throw new UnsupportedOperationException(
-                        "OS not supported. Glide is only available on Mac OS and Linux systems.");
+                        "OS not supported. Glide is only available on Mac OS, Linux, and Windows systems.");
             }
+            glideLibLoaded = true; // Mark as loaded after successful load
         } catch (java.io.IOException e) {
             e.printStackTrace();
         }
@@ -84,12 +95,17 @@ public class NativeUtils {
         }
 
         // Prepare temporary file
-        if (temporaryDir == null) {
-            temporaryDir = createTempDirectory(NATIVE_FOLDER_PATH_PREFIX);
-            temporaryDir.deleteOnExit();
+        File localTempDir;
+        synchronized (NativeUtils.class) {
+            if (temporaryDir == null) {
+                File createdDir = createTempDirectory(NATIVE_FOLDER_PATH_PREFIX);
+                createdDir.deleteOnExit();
+                temporaryDir = createdDir;
+            }
+            localTempDir = temporaryDir;
         }
 
-        File temp = new File(temporaryDir, filename);
+        File temp = new File(localTempDir, filename);
 
         try (InputStream is = NativeUtils.class.getResourceAsStream(path)) {
             if (is == null) {

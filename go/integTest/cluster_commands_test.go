@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"runtime"
 	"strings"
 	"time"
 
@@ -2612,8 +2613,6 @@ func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestScriptKillWithRoute() {
-	suite.T().Skip("Flaky Test: Wait until #2277 is resolved")
-
 	invokeClient, err := suite.clusterClient(suite.defaultClusterClientConfig())
 	require.NoError(suite.T(), err)
 	killClient := suite.defaultClusterClient()
@@ -2683,8 +2682,6 @@ func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestScriptKillUnkillableWithRoute() {
-	suite.T().Skip("Flaky Test: Wait until #2277 is resolved")
-
 	key := uuid.NewString()
 	invokeClient, err := suite.clusterClient(suite.defaultClusterClientConfig())
 	require.NoError(suite.T(), err)
@@ -2785,4 +2782,462 @@ func (suite *GlideTestSuite) TestBatchWithSingleNodeRoute() {
 		assert.NoError(suite.T(), err)
 		assert.Contains(suite.T(), res[0], "# Replication", "isAtomic = %v", isAtomic)
 	}
+}
+
+func (suite *GlideTestSuite) TestClusterScanEarlyTermination() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Ensure clean start
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
+	assert.NoError(t, err)
+
+	// Create a large number of keys to ensure multiple scan batches
+	keysToSet := make(map[string]string)
+	for i := 0; i < 1000; i++ {
+		key := "key-" + string(rune(i))
+		keysToSet[key] = "value"
+	}
+
+	_, err = client.MSet(context.Background(), keysToSet)
+	assert.NoError(t, err)
+
+	// Start scanning with small count to force multiple batches
+	cursor := models.NewClusterScanCursor()
+	opts := options.NewClusterScanOptions().SetCount(10)
+
+	// Fetch only first 2 batches then stop
+	batchCount := 0
+	maxBatches := 2
+
+	for !cursor.IsFinished() && batchCount < maxBatches {
+		result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
+		assert.NoError(t, err)
+		cursor = result.Cursor
+		batchCount++
+	}
+
+	// Verify we stopped early (cursor should not be finished)
+	assert.False(t, cursor.IsFinished(), "Cursor should not be finished after early termination")
+	assert.Equal(t, maxBatches, batchCount, "Should have fetched exactly 2 batches")
+
+	// The cursor should be cleaned up automatically when it goes out of scope
+	// This test verifies no memory leaks or hanging resources occur
+}
+
+func (suite *GlideTestSuite) TestClusterScanInvalidCursorError() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Ensure clean start
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
+	assert.NoError(t, err)
+
+	// Create keys
+	keysToSet := make(map[string]string)
+	for i := 0; i < 100; i++ {
+		key := "key-" + string(rune(i))
+		keysToSet[key] = "value"
+	}
+	_, err = client.MSet(context.Background(), keysToSet)
+	assert.NoError(t, err)
+
+	// Get a cursor from first scan
+	cursor := models.NewClusterScanCursor()
+	result, err := client.Scan(context.Background(), cursor)
+	assert.NoError(t, err)
+	cursor = result.Cursor
+
+	// Save the cursor ID
+	cursorID := cursor.GetCursor()
+
+	// Perform another scan to advance the cursor
+	result, err = client.Scan(context.Background(), cursor)
+	assert.NoError(t, err)
+
+	// Now try to use the old cursor ID - this should fail
+	// because the cursor state has moved forward
+	oldCursor := models.NewClusterScanCursorWithId(cursorID)
+	_, err = client.Scan(context.Background(), oldCursor)
+
+	// The Go client should validate cursor IDs and return an error
+	assert.Error(t, err, "Expected error when using stale cursor ID")
+	assert.Contains(t, err.Error(), "Invalid scan_state_cursor id",
+		"Error should indicate invalid cursor ID")
+}
+
+func (suite *GlideTestSuite) TestClusterScanWithAllowNonCoveredSlots() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Ensure clean start
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
+	assert.NoError(t, err)
+
+	// Create keys
+	keysToSet := make(map[string]string)
+	for i := 0; i < 50; i++ {
+		key := "key-" + string(rune(i))
+		keysToSet[key] = "value"
+	}
+	_, err = client.MSet(context.Background(), keysToSet)
+	assert.NoError(t, err)
+
+	// Scan with AllowNonCoveredSlots=true
+	cursor := models.NewClusterScanCursor()
+	opts := options.NewClusterScanOptions().
+		SetCount(10).
+		SetAllowNonCoveredSlots(true)
+
+	allKeys := []string{}
+	for !cursor.IsFinished() {
+		result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
+		if !assert.NoError(t, err) {
+			break
+		}
+		allKeys = append(allKeys, result.Keys...)
+		cursor = result.Cursor
+	}
+
+	// Should have scanned all keys
+	assert.GreaterOrEqual(t, len(allKeys), 50, "Should have scanned at least 50 keys")
+}
+
+func (suite *GlideTestSuite) TestClusterScanEarlyTerminationMemoryLeak() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Ensure clean start
+	_, err := client.FlushAllWithOptions(
+		context.Background(),
+		options.FlushClusterOptions{RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
+	)
+	assert.NoError(t, err)
+
+	// Create keys
+	keysToSet := make(map[string]string)
+	for i := 0; i < 1000; i++ {
+		key := "key-" + string(rune(i))
+		keysToSet[key] = "value"
+	}
+	_, err = client.MSet(context.Background(), keysToSet)
+	assert.NoError(t, err)
+
+	// Force GC and get baseline memory
+	runtime.GC()
+	var m1 runtime.MemStats
+	runtime.ReadMemStats(&m1)
+
+	// Perform many early-terminated scans
+	iterations := 100
+	for i := 0; i < iterations; i++ {
+		cursor := models.NewClusterScanCursor()
+		opts := options.NewClusterScanOptions().SetCount(10)
+
+		// Fetch only 2 batches then abandon cursor
+		for j := 0; j < 2 && !cursor.IsFinished(); j++ {
+			result, err := client.ScanWithOptions(context.Background(), cursor, *opts)
+			assert.NoError(t, err)
+			cursor = result.Cursor
+		}
+		// Cursor goes out of scope here - should be cleaned up
+	}
+
+	// Force GC and measure memory after
+	runtime.GC()
+	var m2 runtime.MemStats
+	runtime.ReadMemStats(&m2)
+
+	// Calculate memory growth (handle potential decrease)
+	var allocGrowth, heapGrowth int64
+	allocGrowth = int64(m2.Alloc) - int64(m1.Alloc)
+	heapGrowth = int64(m2.HeapAlloc) - int64(m1.HeapAlloc)
+
+	t.Logf("Memory stats after %d early-terminated scans:", iterations)
+	t.Logf("  Alloc growth: %d bytes (%.2f KB)", allocGrowth, float64(allocGrowth)/1024)
+	t.Logf("  Heap growth: %d bytes (%.2f KB)", heapGrowth, float64(heapGrowth)/1024)
+	t.Logf("  Total allocs: %d", m2.TotalAlloc-m1.TotalAlloc)
+	t.Logf("  Baseline heap: %d bytes, Final heap: %d bytes", m1.HeapAlloc, m2.HeapAlloc)
+
+	// Memory growth should be minimal (< 1MB for 100 iterations)
+	// Each iteration creates a cursor and fetches ~20 keys
+	// Negative growth is fine (GC cleaned up)
+	maxAcceptableGrowth := int64(1024 * 1024) // 1MB
+	if heapGrowth > maxAcceptableGrowth {
+		t.Errorf("Heap memory grew by %d bytes, expected < %d bytes. Possible memory leak.",
+			heapGrowth, maxAcceptableGrowth)
+	} else if heapGrowth < 0 {
+		t.Logf("Heap memory decreased by %d bytes - GC is working well", -heapGrowth)
+	} else {
+		t.Logf("Heap memory growth is acceptable: %d bytes", heapGrowth)
+	}
+}
+
+func (suite *GlideTestSuite) TestClusterInfo() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Test ClusterInfo without route
+	result, err := client.ClusterInfo(context.Background())
+	assert.NoError(t, err)
+	assert.Contains(t, result, "cluster_state:")
+	assert.Contains(t, result, "cluster_slots_assigned:")
+	assert.Contains(t, result, "cluster_known_nodes:")
+
+	// Test ClusterInfoWithRoute - single node
+	routeOption := options.RouteOption{Route: config.RandomRoute}
+	clusterResult, err := client.ClusterInfoWithRoute(context.Background(), routeOption)
+	assert.NoError(t, err)
+	assert.Contains(t, clusterResult.SingleValue(), "cluster_state:")
+
+	// Test ClusterInfoWithRoute - all nodes
+	routeOption = options.RouteOption{Route: config.AllNodes}
+	clusterResult, err = client.ClusterInfoWithRoute(context.Background(), routeOption)
+	assert.NoError(t, err)
+	for _, info := range clusterResult.MultiValue() {
+		assert.Contains(t, info, "cluster_state:")
+	}
+}
+
+func (suite *GlideTestSuite) TestClusterNodes() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Test ClusterNodes without route
+	result, err := client.ClusterNodes(context.Background())
+	assert.NoError(t, err)
+	// Result should contain node IDs and connection info
+	assert.Contains(t, result, "myself")
+	// Should have multiple lines (one per node)
+	lines := strings.Split(strings.TrimSpace(result), "\n")
+	assert.GreaterOrEqual(t, len(lines), 1)
+
+	// Test ClusterNodesWithRoute - single node
+	routeOption := options.RouteOption{Route: config.RandomRoute}
+	clusterResult, err := client.ClusterNodesWithRoute(context.Background(), routeOption)
+	assert.NoError(t, err)
+	assert.Contains(t, clusterResult.SingleValue(), "myself")
+}
+
+func (suite *GlideTestSuite) TestClusterShards() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// CLUSTER SHARDS requires Valkey 7.0+
+	if suite.serverVersion < "7.0.0" {
+		t.Skip("CLUSTER SHARDS requires Valkey 7.0 or above")
+	}
+
+	// Test ClusterShards without route
+	result, err := client.ClusterShards(context.Background())
+	assert.NoError(t, err)
+	assert.Greater(t, len(result), 0)
+
+	// Each shard should be non-nil and contain topology info (slots, nodes, and/or id)
+	for _, shard := range result {
+		assert.NotNil(t, shard)
+		_, hasSlots := shard["slots"]
+		_, hasNodes := shard["nodes"]
+		_, hasID := shard["id"]
+		assert.True(t, hasSlots || hasNodes || hasID || len(shard) > 0,
+			"Shard should have slots, nodes, id, or other topology info")
+	}
+}
+
+func (suite *GlideTestSuite) TestClusterShardsWithRoute() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// CLUSTER SHARDS requires Valkey 7.0+
+	if suite.serverVersion < "7.0.0" {
+		t.Skip("CLUSTER SHARDS requires Valkey 7.0 or above")
+	}
+
+	// Test with single node route
+	singleNodeRoute := options.RouteOption{Route: config.RandomRoute}
+	singleResult, err := client.ClusterShardsWithRoute(context.Background(), singleNodeRoute)
+	assert.NoError(t, err, "ClusterShardsWithRoute with single node route should not error")
+	assert.Greater(t, len(singleResult.SingleValue()), 0, "should return shard info")
+
+	// Test with multi-node route
+	multiNodeRoute := options.RouteOption{Route: config.AllNodes}
+	multiResult, err := client.ClusterShardsWithRoute(context.Background(), multiNodeRoute)
+	assert.NoError(t, err, "ClusterShardsWithRoute with multi-node route should not error")
+	assert.Greater(t, len(multiResult.MultiValue()), 0, "should return results from multiple nodes")
+
+	// Each node's result should have shard info
+	for nodeAddr, shards := range multiResult.MultiValue() {
+		assert.Greater(t, len(shards), 0, "node %s should return shard info", nodeAddr)
+	}
+}
+
+func (suite *GlideTestSuite) TestClusterKeySlot() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Test with various keys
+	testCases := []struct {
+		key          string
+		expectedSlot int64
+	}{
+		// These slot numbers are arbitrary and are only being used to test correct hash slotting
+		{"key", 12539},
+		{"hello", 866},
+		{"{user}:1", 5474},
+		{"{user}:2", 5474},
+		{"foo{bar}baz", 5061},
+	}
+
+	for _, tc := range testCases {
+		slot, err := client.ClusterKeySlot(context.Background(), tc.key)
+		assert.NoError(t, err, "unexpected error for key: %s", tc.key)
+		assert.GreaterOrEqual(t, slot, int64(0), "slot should be >= 0 for key: %s", tc.key)
+		assert.Less(t, slot, int64(16384), "slot should be < 16384 for key: %s", tc.key)
+		assert.Equal(t, tc.expectedSlot, slot, "slot mismatch for key: %s", tc.key)
+	}
+
+	// Keys with same hash tag should map to same slot
+	slot1, _ := client.ClusterKeySlot(context.Background(), "{user}:1")
+	slot2, _ := client.ClusterKeySlot(context.Background(), "{user}:2")
+	assert.Equal(t, slot1, slot2, "keys with same hash tag should map to same slot")
+}
+
+func (suite *GlideTestSuite) TestClusterMyId() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// Test ClusterMyId without route
+	result, err := client.ClusterMyId(context.Background())
+	assert.NoError(t, err, "ClusterMyId should not error")
+	// Node ID is 40 characters hex string
+	assert.Len(t, result, 40, "node ID should be 40 characters")
+
+	// Test ClusterMyIdWithRoute - single node
+	singleNodeRoute := options.RouteOption{Route: config.RandomRoute}
+	singleResult, err := client.ClusterMyIdWithRoute(context.Background(), singleNodeRoute)
+	assert.NoError(t, err, "ClusterMyIdWithRoute with single node route should not error")
+	assert.Len(t, singleResult.SingleValue(), 40, "node ID should be 40 characters")
+
+	// Test ClusterMyIdWithRoute - all nodes
+	routeOption := options.RouteOption{Route: config.AllNodes}
+	clusterResult, err := client.ClusterMyIdWithRoute(context.Background(), routeOption)
+	assert.NoError(t, err, "ClusterMyIdWithRoute with multi-node route should not error")
+	assert.Greater(t, len(clusterResult.MultiValue()), 0, "should return results from multiple nodes")
+	for nodeAddr, nodeId := range clusterResult.MultiValue() {
+		assert.Len(t, nodeId, 40, "node ID for %s should be 40 characters", nodeAddr)
+	}
+}
+
+func (suite *GlideTestSuite) TestClusterMyShardId() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// CLUSTER MYSHARDID requires Valkey 7.2+
+	if suite.serverVersion < "7.2.0" {
+		t.Skip("CLUSTER MYSHARDID requires Valkey 7.2 or above")
+	}
+
+	// Test ClusterMyShardId without route
+	result, err := client.ClusterMyShardId(context.Background())
+	assert.NoError(t, err, "ClusterMyShardId should not error")
+	// Shard ID is 40 characters hex string
+	assert.Len(t, result, 40, "shard ID should be 40 characters")
+
+	// Test ClusterMyShardIdWithRoute - single node
+	singleNodeRoute := options.RouteOption{Route: config.RandomRoute}
+	singleResult, err := client.ClusterMyShardIdWithRoute(context.Background(), singleNodeRoute)
+	assert.NoError(t, err, "ClusterMyShardIdWithRoute with single node route should not error")
+	assert.Len(t, singleResult.SingleValue(), 40, "shard ID should be 40 characters")
+
+	// Test ClusterMyShardIdWithRoute - all nodes
+	routeOption := options.RouteOption{Route: config.AllNodes}
+	clusterResult, err := client.ClusterMyShardIdWithRoute(context.Background(), routeOption)
+	assert.NoError(t, err, "ClusterMyShardIdWithRoute with multi-node route should not error")
+	assert.Greater(t, len(clusterResult.MultiValue()), 0, "should return results from multiple nodes")
+	for nodeAddr, shardId := range clusterResult.MultiValue() {
+		assert.Len(t, shardId, 40, "shard ID for %s should be 40 characters", nodeAddr)
+	}
+}
+
+func (suite *GlideTestSuite) TestClusterGetKeysInSlot() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// First, set some keys to ensure there are keys in a slot
+	key := "{testslot}:key1"
+	_, err := client.Set(context.Background(), key, "value1")
+	assert.NoError(t, err)
+
+	// Get the slot for our key
+	slot, err := client.ClusterKeySlot(context.Background(), key)
+	assert.NoError(t, err)
+
+	// Get keys in that slot
+	keys, err := client.ClusterGetKeysInSlot(context.Background(), slot, 10)
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, len(keys), 1)
+	assert.Contains(t, keys, key)
+
+	// Clean up
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestClusterCountKeysInSlot() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// First, set some keys in the same slot
+	keys := []string{"{counttest}:key1", "{counttest}:key2", "{counttest}:key3"}
+	for _, key := range keys {
+		_, err := client.Set(context.Background(), key, "value")
+		assert.NoError(t, err)
+	}
+
+	// Get the slot for our keys
+	slot, err := client.ClusterKeySlot(context.Background(), keys[0])
+	assert.NoError(t, err)
+
+	// Count keys in that slot
+	count, err := client.ClusterCountKeysInSlot(context.Background(), slot)
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, count, int64(3))
+
+	// Clean up
+	client.Del(context.Background(), keys)
+}
+
+func (suite *GlideTestSuite) TestClusterLinks() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+
+	// CLUSTER LINKS requires Valkey 7.0+
+	if suite.serverVersion < "7.0.0" {
+		t.Skip("CLUSTER LINKS requires Valkey 7.0 or above")
+	}
+
+	// Test ClusterLinks without route
+	result, err := client.ClusterLinks(context.Background())
+	assert.NoError(t, err)
+	// Should return array of link info
+	assert.NotNil(t, result)
+
+	// Each link should have connection info
+	for _, link := range result {
+		assert.NotNil(t, link)
+	}
+
+	// Test ClusterLinksWithRoute - single node
+	routeOption := options.RouteOption{Route: config.RandomRoute}
+	clusterResult, err := client.ClusterLinksWithRoute(context.Background(), routeOption)
+	assert.NoError(t, err)
+	assert.NotNil(t, clusterResult.SingleValue())
 }

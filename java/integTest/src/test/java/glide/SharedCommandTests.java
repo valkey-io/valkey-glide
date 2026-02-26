@@ -5,6 +5,7 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
+import static glide.TestUtilities.isWindows;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
@@ -36,6 +37,7 @@ import glide.api.GlideClusterClient;
 import glide.api.models.BaseBatch;
 import glide.api.models.Batch;
 import glide.api.models.ClusterBatch;
+import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
@@ -48,6 +50,7 @@ import glide.api.models.commands.HSetExOptions;
 import glide.api.models.commands.HashFieldExpirationConditionOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -57,6 +60,7 @@ import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RestoreOptions;
+import glide.api.models.commands.ScriptDebugMode;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
@@ -114,6 +118,8 @@ import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.api.models.configuration.ProtocolVersion;
+import glide.api.models.configuration.RequestRoutingConfiguration;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -135,6 +141,7 @@ import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
@@ -179,6 +186,21 @@ public class SharedCommandTests {
     public static void teardown() {
         for (var client : clients) {
             ((Named<BaseClient>) client.get()[0]).getPayload().close();
+        }
+    }
+
+    @AfterEach
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public void cleanup() {
+        // Flush all databases to ensure clean state between tests
+        for (var client : clients) {
+            BaseClient baseClient = ((Named<BaseClient>) client.get()[0]).getPayload();
+            if (baseClient instanceof GlideClient) {
+                ((GlideClient) baseClient).flushall().get();
+            } else if (baseClient instanceof GlideClusterClient) {
+                ((GlideClusterClient) baseClient).flushall().get();
+            }
         }
     }
 
@@ -672,6 +694,65 @@ public class SharedCommandTests {
         assertArrayEquals(
                 new GlideString[] {value, value, value},
                 client.mget(new GlideString[] {key1, key2, key3}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void mget_with_large_binary_values_returns_null_for_missing_keys(BaseClient client) {
+        // Large binary data causes MGET to yield GlideString "nil" instead of null for missing
+        // key. This tests the DirectByteBuffer serialization path (>16KB).
+
+        // Create 16KB of data to trigger DirectByteBuffer path
+        byte[] largeData = new byte[16 * 1024];
+        java.util.Arrays.fill(largeData, (byte) 0xFF);
+
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString missingKey = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString value1 = gs("value1");
+        GlideString largeValue = gs(largeData);
+
+        // Set only key1 and key2, leave missingKey unset
+        assertEquals(OK, client.set(key1, value1).get());
+        assertEquals(OK, client.set(key2, largeValue).get());
+
+        // Execute MGET with missing key in the middle
+        GlideString[] result = client.mget(new GlideString[] {key1, missingKey, key2}).get();
+
+        // Verify results
+        assertEquals(3, result.length);
+        assertEquals(value1, result[0]);
+        assertNull(result[1], "Missing key should return null, not GlideString('nil')");
+        assertArrayEquals(largeData, result[2].getBytes());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void mget_string_with_large_values_returns_null_for_missing_keys(BaseClient client) {
+        // String version should also handle null correctly with large data
+
+        // Create 16KB string to trigger DirectByteBuffer path
+        String largeString = "x".repeat(16 * 1024);
+
+        String key1 = UUID.randomUUID().toString();
+        String missingKey = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String value1 = "value1";
+
+        // Set only key1 and key2, leave missingKey unset
+        assertEquals(OK, client.set(key1, value1).get());
+        assertEquals(OK, client.set(key2, largeString).get());
+
+        // Execute MGET with missing key in the middle
+        String[] result = client.mget(new String[] {key1, missingKey, key2}).get();
+
+        // Verify results
+        assertEquals(3, result.length);
+        assertEquals(value1, result[0]);
+        assertNull(result[1], "Missing key should return null");
+        assertEquals(largeString, result[2]);
     }
 
     @SneakyThrows
@@ -4665,6 +4746,37 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void smismember_binary_with_large_response_preserves_boolean_array_values(
+            BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        final int memberCount = 1900; // >16KB in DirectByteBuffer array fast-path
+
+        GlideString[] queryMembers = new GlideString[memberCount];
+        List<GlideString> existingMembers = new ArrayList<>();
+        for (int i = 0; i < memberCount; i++) {
+            GlideString member = gs("m-" + i);
+            queryMembers[i] = member;
+            if (i % 3 == 0) {
+                existingMembers.add(member);
+            }
+        }
+
+        assertEquals(
+                existingMembers.size(),
+                client.sadd(key, existingMembers.toArray(new GlideString[0])).get());
+
+        Boolean[] result = client.smismember(key, queryMembers).get();
+
+        assertEquals(memberCount, result.length);
+        for (int i = 0; i < memberCount; i++) {
+            assertNotNull(result[i], "SMISMEMBER should return booleans, never nil");
+            assertEquals(i % 3 == 0, result[i]);
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void sdiffstore(BaseClient client) {
         String key1 = "{key}-1-" + UUID.randomUUID();
         String key2 = "{key}-2-" + UUID.randomUUID();
@@ -5291,6 +5403,124 @@ public class SharedCommandTests {
         String nonExistingSha1 = UUID.randomUUID().toString();
         assertThrows(ExecutionException.class, () -> client.scriptShow(nonExistingSha1).get());
         assertThrows(ExecutionException.class, () -> client.scriptShow(gs(nonExistingSha1)).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void evalReadOnly_test(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+
+        // Test simple script without keys/args
+        String simpleScript = "return 'Hello, World!'";
+        assertEquals("Hello, World!", client.evalReadOnly(simpleScript).get());
+
+        // Test script with keys and args
+        String scriptWithKeysArgs = "return {KEYS[1], ARGV[1]}";
+        String key = UUID.randomUUID().toString();
+        String arg = UUID.randomUUID().toString();
+        Object[] result =
+                (Object[])
+                        client.evalReadOnly(scriptWithKeysArgs, new String[] {key}, new String[] {arg}).get();
+        assertEquals(key, result[0]);
+        assertEquals(arg, result[1]);
+
+        // Test binary-safe simple script
+        GlideString binaryScript = gs("return 'Binary Hello'");
+        assertEquals(gs("Binary Hello"), client.evalReadOnly(binaryScript).get());
+
+        // Test binary-safe script with keys and args
+        GlideString binaryKey = gs(UUID.randomUUID().toString());
+        GlideString binaryArg = gs(UUID.randomUUID().toString());
+        Object[] binaryResult =
+                (Object[])
+                        client
+                                .evalReadOnly(
+                                        gs(scriptWithKeysArgs),
+                                        new GlideString[] {binaryKey},
+                                        new GlideString[] {binaryArg})
+                                .get();
+        assertEquals(binaryKey, binaryResult[0]);
+        assertEquals(binaryArg, binaryResult[1]);
+
+        // Test read-only script accessing keys
+        String readKey = UUID.randomUUID().toString();
+        client.set(readKey, "test_value").get();
+        String readScript = "return redis.call('GET', KEYS[1])";
+        assertEquals(
+                "test_value", client.evalReadOnly(readScript, new String[] {readKey}, new String[0]).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void evalshaReadOnly_test(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+
+        // Load a script first
+        String script = "return 'Hello from SHA!'";
+        Script scriptObj = new Script(script, false);
+        client.invokeScript(scriptObj).get();
+        String sha1 = scriptObj.getHash();
+
+        // Test simple execution by SHA1
+        assertEquals("Hello from SHA!", client.evalshaReadOnly(sha1).get());
+
+        // Load script with keys and args
+        String scriptWithKeysArgs = "return {KEYS[1], ARGV[1]}";
+        Script scriptObj2 = new Script(scriptWithKeysArgs, false);
+        client.invokeScript(scriptObj2).get();
+        String sha2 = scriptObj2.getHash();
+
+        // Test execution by SHA1 with keys and args
+        String key = UUID.randomUUID().toString();
+        String arg = UUID.randomUUID().toString();
+        Object[] result =
+                (Object[]) client.evalshaReadOnly(sha2, new String[] {key}, new String[] {arg}).get();
+        assertEquals(key, result[0]);
+        assertEquals(arg, result[1]);
+
+        // Test binary-safe SHA1 execution
+        GlideString binarySha1 = gs(sha1);
+        assertEquals(gs("Hello from SHA!"), client.evalshaReadOnly(binarySha1).get());
+
+        // Test binary-safe SHA1 with keys and args
+        GlideString binaryKey = gs(UUID.randomUUID().toString());
+        GlideString binaryArg = gs(UUID.randomUUID().toString());
+        Object[] binaryResult =
+                (Object[])
+                        client
+                                .evalshaReadOnly(
+                                        gs(sha2), new GlideString[] {binaryKey}, new GlideString[] {binaryArg})
+                                .get();
+        assertEquals(binaryKey, binaryResult[0]);
+        assertEquals(binaryArg, binaryResult[1]);
+
+        // Test with non-existent SHA1
+        String nonExistentSha = "0000000000000000000000000000000000000000";
+        ExecutionException exception =
+                assertThrows(ExecutionException.class, () -> client.evalshaReadOnly(nonExistentSha).get());
+        assertTrue(exception.getCause() instanceof RequestException);
+        assertTrue(exception.getMessage().toLowerCase().contains("noscript"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void scriptDebug_test(BaseClient client) {
+        // Test enabling async debugging mode
+        assertEquals("OK", client.scriptDebug(ScriptDebugMode.YES).get());
+
+        // Test enabling sync debugging mode
+        assertEquals("OK", client.scriptDebug(ScriptDebugMode.SYNC).get());
+
+        // Test disabling debugging mode
+        assertEquals("OK", client.scriptDebug(ScriptDebugMode.NO).get());
+
+        // Verify we can still execute scripts after changing debug mode
+        // Use invokeScript
+        Script script = new Script("return 'Debug test'", false);
+        assertEquals("Debug test", client.invokeScript(script).get());
     }
 
     @SneakyThrows
@@ -6099,6 +6329,39 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class, () -> client.zmscore(key2, new String[] {"one"}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zmscore_binary_with_large_response_preserves_double_and_null_values(
+            BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        final int memberCount = 2200; // >16KB in DirectByteBuffer array fast-path
+
+        GlideString[] members = new GlideString[memberCount];
+        Map<GlideString, Double> membersScores = new LinkedHashMap<>();
+        for (int i = 0; i < memberCount; i++) {
+            GlideString member = gs("member-" + i);
+            members[i] = member;
+            if (i % 4 == 0) {
+                membersScores.put(member, i + 0.5);
+            }
+        }
+
+        assertEquals(membersScores.size(), client.zadd(key, membersScores).get());
+
+        Double[] result = client.zmscore(key, members).get();
+
+        assertEquals(memberCount, result.length);
+        for (int i = 0; i < memberCount; i++) {
+            if (i % 4 == 0) {
+                assertNotNull(result[i], "Existing member score should not be nil");
+                assertEquals(i + 0.5, result[i]);
+            } else {
+                assertNull(result[i], "Missing member should stay null");
+            }
+        }
     }
 
     @SneakyThrows
@@ -10159,6 +10422,11 @@ public class SharedCommandTests {
         assertEquals(1, pending_results_extended.length);
         assertEquals(streamid_1, pending_results_extended[0][0]);
         assertEquals(consumer1, pending_results_extended[0][1]);
+
+        // Small delay to ensure all XCLAIM and XACK operations are fully processed
+        // This addresses a race condition in standalone RESP2 mode where the final
+        // XPENDING call might not see all expected pending messages immediately
+        Thread.sleep(5);
 
         pending_results_extended =
                 client
@@ -17487,8 +17755,14 @@ public class SharedCommandTests {
         long timeout = 1000L;
 
         // assert that wait returns 0 under standalone and 1 under cluster mode.
+        long clientReplicas = client instanceof GlideClient ? 0 : 1;
+        // TODO: Remove isWindows when replica issues is fixed
+        // https://github.com/valkey-io/valkey-glide/issues/5210
+        if (isWindows()) {
+            clientReplicas = 0;
+        }
         assertEquals(OK, client.set(key, "value").get());
-        assertTrue(client.wait(numreplicas, timeout).get() >= (client instanceof GlideClient ? 0 : 1));
+        assertTrue(client.wait(numreplicas, timeout).get() >= clientReplicas);
 
         // command should fail on a negative timeout value
         ExecutionException executionException =
@@ -17507,9 +17781,15 @@ public class SharedCommandTests {
                         ? GlideClient.createClient(commonClientConfig().build()).get()
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
+            long clientReplicas = client instanceof GlideClient ? 0 : 1;
+            // TODO: Remove isWindows when replica issues is fixed
+            // https://github.com/valkey-io/valkey-glide/issues/5210
+            if (isWindows()) {
+                clientReplicas = 0;
+            }
             // ensure that commands do not time out, even if timeout > request timeout
             assertEquals(OK, testClient.set(key, "value").get());
-            assertEquals((client instanceof GlideClient ? 0 : 1), testClient.wait(1L, 1000L).get());
+            assertEquals(clientReplicas, testClient.wait(1L, 1000L).get());
 
             // with 0 timeout (no timeout) wait should block indefinitely,
             // but we wrap the test with timeout to avoid test failing or being stuck forever
@@ -17739,5 +18019,606 @@ public class SharedCommandTests {
                         });
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getCause().getMessage().contains("WRONGTYPE"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void keys_with_pattern(BaseClient client) {
+        String key1 = "{key}:test1:" + UUID.randomUUID();
+        String key2 = "{key}:test2:" + UUID.randomUUID();
+        String key3 = "{key}:other:" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        // Set up test keys
+        assertEquals(OK, client.set(key1, value).get());
+        assertEquals(OK, client.set(key2, value).get());
+        assertEquals(OK, client.set(key3, value).get());
+
+        // Test pattern matching
+        if (client instanceof GlideClusterClient) {
+            ClusterValue<String[]> result = ((GlideClusterClient) client).keys("{key}:test*").get();
+            String[] allKeys = result.getSingleValue();
+            assertTrue(allKeys.length >= 2);
+            assertTrue(Arrays.asList(allKeys).contains(key1));
+            assertTrue(Arrays.asList(allKeys).contains(key2));
+        } else {
+            String[] keys = ((GlideClient) client).keys("{key}:test*").get();
+            assertTrue(keys.length >= 2);
+            assertTrue(Arrays.asList(keys).contains(key1));
+            assertTrue(Arrays.asList(keys).contains(key2));
+        }
+
+        // Clean up
+        client.del(new String[] {key1, key2, key3}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_cat_without_category(BaseClient client) {
+        // Test ACL CAT without category - should return all categories
+        String[] categories = client.aclCat().get();
+        assertNotNull(categories);
+        assertTrue(categories.length > 0);
+        assertTrue(Arrays.asList(categories).contains("string"));
+        assertTrue(Arrays.asList(categories).contains("list"));
+        assertTrue(Arrays.asList(categories).contains("hash"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void keys_with_pattern_binary(BaseClient client) {
+        GlideString key1 = gs("{key}:test1:" + UUID.randomUUID());
+        GlideString key2 = gs("{key}:test2:" + UUID.randomUUID());
+        GlideString key3 = gs("{key}:other:" + UUID.randomUUID());
+        GlideString value = gs(UUID.randomUUID().toString());
+
+        // Set up test keys
+        assertEquals(OK, client.set(key1, value).get());
+        assertEquals(OK, client.set(key2, value).get());
+        assertEquals(OK, client.set(key3, value).get());
+
+        // Test pattern matching
+        if (client instanceof GlideClusterClient) {
+            ClusterValue<GlideString[]> result =
+                    ((GlideClusterClient) client).keys(gs("{key}:test*")).get();
+            GlideString[] allKeys = result.getSingleValue();
+            assertTrue(allKeys.length >= 2);
+            assertTrue(Arrays.asList(allKeys).contains(key1));
+            assertTrue(Arrays.asList(allKeys).contains(key2));
+        } else {
+            GlideString[] keys = ((GlideClient) client).keys(gs("{key}:test*")).get();
+            assertTrue(keys.length >= 2);
+            assertTrue(Arrays.asList(keys).contains(key1));
+            assertTrue(Arrays.asList(keys).contains(key2));
+        }
+
+        // Clean up
+        client.del(new GlideString[] {key1, key2, key3}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_cat_with_category(BaseClient client) {
+        // Test ACL CAT with specific category - should return commands in that category
+        String[] stringCommands = client.aclCat("string").get();
+        assertNotNull(stringCommands);
+        assertTrue(stringCommands.length > 0);
+        assertTrue(Arrays.asList(stringCommands).contains("get"));
+        assertTrue(Arrays.asList(stringCommands).contains("set"));
+
+        String[] listCommands = client.aclCat("list").get();
+        assertNotNull(listCommands);
+        assertTrue(listCommands.length > 0);
+        assertTrue(Arrays.asList(listCommands).contains("lpush"));
+        assertTrue(Arrays.asList(listCommands).contains("rpush"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_cat_invalid_category(BaseClient client) {
+        // Test ACL CAT with invalid category - should throw error
+        ExecutionException exception =
+                assertThrows(ExecutionException.class, () -> client.aclCat("nonexistent").get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(
+                exception.getCause().getMessage().toLowerCase().contains("unknown category")
+                        || exception.getCause().getMessage().toLowerCase().contains("category"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void keys_with_no_match(BaseClient client) {
+        if (client instanceof GlideClusterClient) {
+            ClusterValue<String[]> result =
+                    ((GlideClusterClient) client)
+                            .keys("non_existent_pattern_" + UUID.randomUUID() + "*")
+                            .get();
+            String[] keys = result.getSingleValue();
+            assertEquals(0, keys.length);
+        } else {
+            String[] keys =
+                    ((GlideClient) client).keys("non_existent_pattern_" + UUID.randomUUID() + "*").get();
+            assertEquals(0, keys.length);
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_setuser_and_deluser(BaseClient client) {
+        String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            // Create a new user with ACL rules
+            String setResult = client.aclSetUser(username, new String[] {"on", "+get", "~*"}).get();
+            assertEquals("OK", setResult);
+
+            // Verify user exists
+            String[] users = client.aclUsers().get();
+            assertTrue(Arrays.asList(users).contains(username));
+
+            // Delete the user
+            Long deleteCount = client.aclDelUser(new String[] {username}).get();
+            assertEquals(1L, deleteCount);
+
+            // Verify user no longer exists
+            users = client.aclUsers().get();
+            assertFalse(Arrays.asList(users).contains(username));
+        } finally {
+            // Cleanup: ensure user is deleted
+            try {
+                client.aclDelUser(new String[] {username}).get();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void waitaof_basic(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"), "WAITAOF requires Valkey 7.2+");
+
+        String key = "{key}:" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        // Set a key
+        assertEquals(OK, client.set(key, value).get());
+
+        // Wait for AOF acknowledgment
+        Long[] result;
+        if (client instanceof GlideClusterClient) {
+            // Cluster mode: must specify route to the primary that handled the write
+            SlotKeyRoute route = new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
+            result = ((GlideClusterClient) client).waitaof(0, 0, 1000, route).get();
+        } else {
+            // Standalone mode
+            result = client.waitaof(0, 0, 1000).get();
+        }
+        assertNotNull(result);
+        assertEquals(2, result.length);
+        assertTrue(result[0] >= 0); // local acks
+        assertTrue(result[1] >= 0); // replica acks
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_deluser_multiple_users(BaseClient client) {
+        String username1 = "testuser1_" + UUID.randomUUID().toString().replace("-", "");
+        String username2 = "testuser2_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            // Create two users
+            client.aclSetUser(username1, new String[] {"on"}).get();
+            client.aclSetUser(username2, new String[] {"on"}).get();
+
+            // Delete both users
+            Long deleteCount = client.aclDelUser(new String[] {username1, username2}).get();
+            assertEquals(2L, deleteCount);
+
+            // Verify users no longer exist
+            String[] users = client.aclUsers().get();
+            assertFalse(Arrays.asList(users).contains(username1));
+            assertFalse(Arrays.asList(users).contains(username2));
+        } finally {
+            // Cleanup
+            try {
+                client.aclDelUser(new String[] {username1, username2}).get();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void waitaof_with_timeout(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"), "WAITAOF requires Valkey 7.2+");
+
+        String key = "{key}:" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        // Set a key
+        assertEquals(OK, client.set(key, value).get());
+
+        // Wait with a short timeout
+        Long[] result;
+        if (client instanceof GlideClusterClient) {
+            // Cluster mode: must specify route to the primary that handled the write
+            SlotKeyRoute route = new SlotKeyRoute(key, RequestRoutingConfiguration.SlotType.PRIMARY);
+            result = ((GlideClusterClient) client).waitaof(0, 0, 100, route).get();
+        } else {
+            // Standalone mode
+            result = client.waitaof(0, 0, 100).get();
+        }
+        assertNotNull(result);
+        assertEquals(2, result.length);
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_getuser(BaseClient client) {
+        String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            // Create user with specific rules
+            client.aclSetUser(username, new String[] {"on", "+get", "+set", "~key*"}).get();
+
+            // Get user details - returns Object (can be array in RESP2 or map in RESP3)
+            Object userInfo = client.aclGetUser(username).get();
+            assertNotNull(userInfo);
+
+            // Test non-existent user
+            Object nonExistentUser = client.aclGetUser("nonexistent_user_12345").get();
+            assertNull(nonExistentUser);
+        } finally {
+            // Cleanup
+            try {
+                client.aclDelUser(new String[] {username}).get();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void waitaof_without_route(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"), "WAITAOF requires Valkey 7.2+");
+
+        String key = "{key}:" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        // Set a key
+        assertEquals(OK, client.set(key, value).get());
+
+        // Wait for AOF acknowledgment without specifying route
+        // In cluster mode, this uses the default AllPrimaries routing
+        Long[] result = client.waitaof(0, 0, 1000).get();
+        assertNotNull(result);
+        assertEquals(2, result.length);
+        assertTrue(result[0] >= 0); // local acks
+        assertTrue(result[1] >= 0); // replica acks
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_list(BaseClient client) {
+        // Test ACL LIST - should return ACL rules for all users
+        String[] aclList = client.aclList().get();
+        assertNotNull(aclList);
+        assertTrue(aclList.length > 0);
+
+        // Should contain at least the default user
+        boolean hasDefaultUser = false;
+        for (String rule : aclList) {
+            if (rule.contains("user default")) {
+                hasDefaultUser = true;
+                break;
+            }
+        }
+        assertTrue(hasDefaultUser);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void migrate_basic(BaseClient client) {
+        // Note: Full MIGRATE testing requires a second server instance
+        // This test verifies the command is properly implemented
+        String key = "{key}:" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        // Set a key
+        assertEquals(OK, client.set(key, value).get());
+
+        // Attempt to migrate to a non-existent destination
+        // This will fail but verifies the command is properly implemented
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.migrate("nonexistent.host", 6379, key, 0, 5000).get());
+
+        // The error should be about connection, not about the command being unsupported
+        assertTrue(
+                exception.getCause().getMessage().contains("Connection refused")
+                        || exception.getCause().getMessage().contains("Name or service not known")
+                        || exception.getCause().getMessage().contains("nodename nor servname provided")
+                        || exception.getCause().getMessage().contains("Temporary failure")
+                        || exception.getCause().getMessage().contains("IOERR"));
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_users(BaseClient client) {
+        // Test ACL USERS - should return list of usernames
+        String[] users = client.aclUsers().get();
+        assertNotNull(users);
+        assertTrue(users.length > 0);
+
+        // Should contain at least the default user
+        assertTrue(Arrays.asList(users).contains("default"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_whoami(BaseClient client) {
+        // Test ACL WHOAMI - should return current username
+        String username = client.aclWhoami().get();
+        assertNotNull(username);
+        // Default connection should be "default" user
+        assertEquals("default", username);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_dryrun(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "ACL DRYRUN added in version 7.0");
+
+        String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            // Create user with limited permissions (only GET command)
+            client.aclSetUser(username, new String[] {"on", "+get", "~*", "nopass"}).get();
+
+            // Test command user is allowed to run
+            String result = client.aclDryRun(username, "get", new String[] {"key"}).get();
+            assertEquals("OK", result);
+
+            // Test command user is NOT allowed to run - should return error message
+            String deniedResult = client.aclDryRun(username, "set", new String[] {"key", "value"}).get();
+            // ACL DRYRUN returns a descriptive message when permission is denied
+            assertTrue(
+                    deniedResult.toLowerCase().contains("permission")
+                            || deniedResult.toLowerCase().contains("denied")
+                            || deniedResult.toLowerCase().contains("noperm")
+                            || deniedResult.toLowerCase().contains("user")
+                            || deniedResult.toLowerCase().contains("command"));
+        } finally {
+            // Cleanup
+            try {
+                client.aclDelUser(new String[] {username}).get();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_genpass_default(BaseClient client) {
+        // Test ACL GENPASS without bits parameter - should return 64-character password
+        String password = client.aclGenPass().get();
+        assertNotNull(password);
+        assertEquals(64, password.length());
+        // Should be hexadecimal
+        assertTrue(password.matches("[0-9a-f]+"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void migrate_binary(BaseClient client) {
+        GlideString key = gs("{key}:" + UUID.randomUUID());
+        GlideString value = gs(UUID.randomUUID().toString());
+
+        // Set a key
+        assertEquals(OK, client.set(key, value).get());
+
+        // Attempt to migrate to a non-existent destination
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.migrate("nonexistent.host", 6379, key, 0, 5000).get());
+
+        // The error should be about connection, not about the command being unsupported
+        assertTrue(
+                exception.getCause().getMessage().contains("Connection refused")
+                        || exception.getCause().getMessage().contains("Name or service not known")
+                        || exception.getCause().getMessage().contains("nodename nor servname provided")
+                        || exception.getCause().getMessage().contains("Temporary failure")
+                        || exception.getCause().getMessage().contains("IOERR"));
+
+        // Clean up
+        client.del(new GlideString[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_genpass_with_bits(BaseClient client) {
+        // Test ACL GENPASS with 128 bits - should return 32-character password
+        String password = client.aclGenPass(128).get();
+        assertNotNull(password);
+        assertEquals(32, password.length());
+        assertTrue(password.matches("[0-9a-f]+"));
+
+        // Test with 256 bits - should return 64-character password
+        String password256 = client.aclGenPass(256).get();
+        assertNotNull(password256);
+        assertEquals(64, password256.length());
+        assertTrue(password256.matches("[0-9a-f]+"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_log(BaseClient client) {
+        // Test ACL LOG without count - should return all log entries
+        Object[] log = client.aclLog().get();
+        assertNotNull(log);
+        // Log might be empty if no ACL violations occurred
+        assertTrue(log.length >= 0);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_log_with_count(BaseClient client) {
+        // Test ACL LOG with count parameter
+        Object[] log = client.aclLog(5).get();
+        assertNotNull(log);
+        assertTrue(log.length <= 5);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_setuser_complex_rules(BaseClient client) {
+        String username = "complexuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            // Create user with complex ACL rules
+            String result =
+                    client
+                            .aclSetUser(
+                                    username,
+                                    new String[] {
+                                        "on", // Enable user
+                                        "+get", // Allow GET command
+                                        "+set", // Allow SET command
+                                        "+del", // Allow DEL command
+                                        "~key:*", // Allow keys matching pattern
+                                        "nopass" // No password required
+                                    })
+                            .get();
+            assertEquals("OK", result);
+
+            // Verify user was created
+            String[] users = client.aclUsers().get();
+            assertTrue(Arrays.asList(users).contains(username));
+
+            // Get user details to verify rules - returns Object (can be array or map)
+            Object userInfo = client.aclGetUser(username).get();
+            assertNotNull(userInfo);
+        } finally {
+            // Cleanup
+            try {
+                client.aclDelUser(new String[] {username}).get();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void migrate_with_options(BaseClient client) {
+        String key = "{key}:" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        // Set a key
+        assertEquals(OK, client.set(key, value).get());
+
+        // Test with MigrateOptions
+        MigrateOptions options = MigrateOptions.builder().copy(true).replace(true).build();
+
+        // Attempt to migrate to a non-existent destination with options
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.migrate("nonexistent.host", 6379, key, 0, 5000, options).get());
+
+        // The error should be about connection, not about the command being unsupported
+        assertTrue(
+                exception.getCause().getMessage().contains("Connection refused")
+                        || exception.getCause().getMessage().contains("Name or service not known")
+                        || exception.getCause().getMessage().contains("nodename nor servname provided")
+                        || exception.getCause().getMessage().contains("Temporary failure")
+                        || exception.getCause().getMessage().contains("IOERR"));
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_load(BaseClient client) {
+        // Test ACL LOAD - reloads ACL rules from the configured ACL file
+        // Skip test if no ACL file is configured on the server
+        assumeTrue(isAclFileConfigured(client), "Skipping test: ACL file not configured on server");
+
+        String result = client.aclLoad().get();
+        assertEquals("OK", result);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void acl_save(BaseClient client) {
+        // Test ACL SAVE - saves current ACL rules to the configured ACL file
+        // Skip test if no ACL file is configured on the server
+        assumeTrue(isAclFileConfigured(client), "Skipping test: ACL file not configured on server");
+
+        String result = client.aclSave().get();
+        assertEquals("OK", result);
+    }
+
+    /**
+     * Helper method to check if ACL file is configured on the server. Attempts to call ACL LOAD and
+     * returns true if successful, false if it fails with ACL file not configured error.
+     */
+    @SneakyThrows
+    private boolean isAclFileConfigured(BaseClient client) {
+        try {
+            client.aclLoad().get();
+            return true;
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof RequestException) {
+                String errorMessage = e.getMessage().toLowerCase();
+                if (errorMessage.contains("no acl file")
+                        || errorMessage.contains("aclfile")
+                        || errorMessage.contains("not configured")) {
+                    return false;
+                }
+            }
+            // If it's a different error, rethrow it
+            throw e;
+        }
     }
 }

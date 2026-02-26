@@ -7,7 +7,7 @@ use crate::{
     connection::{connect, Connection, ConnectionInfo, ConnectionLike, IntoConnectionInfo},
     push_manager::PushInfo,
     retry_strategies::RetryStrategy,
-    types::{RedisResult, Value},
+    types::{ProtocolVersion, RedisResult, Value},
 };
 #[cfg(feature = "aio")]
 use std::net::IpAddr;
@@ -15,8 +15,10 @@ use std::net::IpAddr;
 use std::net::SocketAddr;
 #[cfg(feature = "aio")]
 use std::pin::Pin;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
+use crate::pubsub_synchronizer::PubSubSynchronizer;
 use crate::tls::{inner_build_with_tls, TlsCertificates};
 
 /// The client type.
@@ -96,6 +98,11 @@ pub struct GlideConnectionOptions {
     pub connection_timeout: Option<Duration>,
     /// Retry strategy configuration for reconnect attempts.
     pub connection_retry_strategy: Option<RetryStrategy>,
+    /// TCP_NODELAY socket option. When true, disables Nagle's algorithm for lower latency.
+    /// When false, enables Nagle's algorithm to reduce network overhead.
+    pub tcp_nodelay: bool,
+    /// Optional PubSub synchronizer for managing subscription state
+    pub pubsub_synchronizer: Option<Arc<dyn PubSubSynchronizer>>,
 }
 
 /// To enable async support you need to enable the feature: `tokio-comp`
@@ -115,7 +122,10 @@ impl Client {
         let (con, _ip) = match Runtime::locate() {
             #[cfg(feature = "tokio-comp")]
             Runtime::Tokio => {
-                self.get_simple_async_connection::<crate::aio::tokio::Tokio>(None)
+                // Note: tcp_nodelay is hardcoded to true (default) since this deprecated API
+                // doesn't accept GlideConnectionOptions. Modern code should use
+                // get_multiplexed_async_connection which allows configuring tcp_nodelay.
+                self.get_simple_async_connection::<crate::aio::tokio::Tokio>(None, true)
                     .await?
             }
         };
@@ -427,7 +437,9 @@ impl Client {
     where
         T: crate::aio::RedisRuntime,
     {
-        let (con, ip) = self.get_simple_async_connection::<T>(socket_addr).await?;
+        let (con, ip) = self
+            .get_simple_async_connection::<T>(socket_addr, glide_connection_options.tcp_nodelay)
+            .await?;
         crate::aio::MultiplexedConnection::new_with_response_timeout(
             &self.connection_info,
             con,
@@ -441,6 +453,7 @@ impl Client {
     async fn get_simple_async_connection<T>(
         &self,
         socket_addr: Option<SocketAddr>,
+        tcp_nodelay: bool,
     ) -> RedisResult<(
         Pin<Box<dyn crate::aio::AsyncStream + Send + Sync>>,
         Option<IpAddr>,
@@ -449,7 +462,8 @@ impl Client {
         T: crate::aio::RedisRuntime,
     {
         let (conn, ip) =
-            crate::aio::connect_simple::<T>(&self.connection_info, socket_addr).await?;
+            crate::aio::connect_simple::<T>(&self.connection_info, socket_addr, tcp_nodelay)
+                .await?;
         Ok((conn.boxed(), ip))
     }
 
@@ -519,11 +533,11 @@ impl Client {
     ///
     ///     let mut con = client.get_async_connection(None).await?;
     ///
-    ///     con.set("key1", b"foo").await?;
+    ///     con.set::<_, _, ()>("key1", b"foo").await?;
     ///
     ///     redis::cmd("SET")
     ///         .arg(&["key2", "bar"])
-    ///         .query_async(&mut con)
+    ///         .query_async::<_, ()>(&mut con)
     ///         .await?;
     ///
     ///     let result = redis::cmd("MGET")
@@ -587,6 +601,34 @@ impl Client {
     /// Updates the client_name in connection_info.
     pub fn update_client_name(&mut self, client_name: Option<String>) {
         self.connection_info.redis.client_name = client_name;
+    }
+
+    /// Updates the username in connection_info.
+    ///
+    /// This method updates the username field in the connection information,
+    /// which will be used for subsequent connections and reconnections.
+    /// Typically updated when AUTH command is used with a username.
+    ///
+    /// # Arguments
+    ///
+    /// * `username` - The username to use for authentication (None to clear)
+    ///
+    pub fn update_username(&mut self, username: Option<String>) {
+        self.connection_info.redis.username = username;
+    }
+
+    /// Updates the protocol version in connection_info.
+    ///
+    /// This method updates the protocol field in the connection information,
+    /// which will be used for subsequent connections and reconnections.
+    /// Typically updated when HELLO command is used to change protocol version.
+    ///
+    /// # Arguments
+    ///
+    /// * `protocol` - The protocol version to use (RESP2 or RESP3)
+    ///
+    pub fn update_protocol(&mut self, protocol: ProtocolVersion) {
+        self.connection_info.redis.protocol = protocol;
     }
 }
 

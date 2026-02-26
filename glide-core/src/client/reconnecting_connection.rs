@@ -20,7 +20,7 @@ use tokio::task;
 use tokio::time::timeout;
 use tokio_retry2::{Retry, RetryError};
 
-use super::{DEFAULT_CONNECTION_TIMEOUT, run_with_timeout};
+use super::{run_with_timeout, types::DEFAULT_CONNECTION_TIMEOUT};
 
 const WRITE_LOCK_ERR: &str = "Failed to acquire the write lock";
 const READ_LOCK_ERR: &str = "Failed to acquire the read lock";
@@ -123,6 +123,8 @@ async fn create_connection(
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     discover_az: bool,
     connection_timeout: Duration,
+    tcp_nodelay: bool,
+    pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
 ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
     let client = {
         let guard = connection_backend
@@ -140,16 +142,36 @@ async fn create_connection(
         discover_az,
         connection_timeout: Some(connection_timeout),
         connection_retry_strategy: Some(retry_strategy),
+        tcp_nodelay,
+        pubsub_synchronizer,
     };
 
+    // Wrap retry loop in timeout so total time respects connection_timeout
     let action = || async {
-        get_multiplexed_connection(&client, &connection_options)
+        client
+            .get_multiplexed_async_connection(connection_options.clone())
             .await
-            .map_err(RetryError::transient)
+            .map_err(|e| {
+                // Don't retry errors that won't resolve with retries
+                let is_permanent = matches!(
+                    e.kind(),
+                    redis::ErrorKind::AuthenticationFailed
+                        | redis::ErrorKind::InvalidClientConfig
+                        | redis::ErrorKind::RESP3NotSupported
+                ) || e.to_string().contains("NOAUTH")
+                    || e.to_string().contains("WRONGPASS");
+                if is_permanent {
+                    RetryError::permanent(e)
+                } else {
+                    RetryError::transient(e)
+                }
+            })
     };
+    let retry_future = Retry::spawn(retry_strategy.get_bounded_backoff_dur_iterator(), action);
+    let result = timeout(connection_timeout, retry_future).await;
 
-    match Retry::spawn(retry_strategy.get_bounded_backoff_dur_iterator(), action).await {
-        Ok(connection) => {
+    match result {
+        Ok(Ok(connection)) => {
             log_debug(
                 "connection creation",
                 format!(
@@ -169,7 +191,11 @@ async fn create_connection(
                 connection_options,
             })
         }
-        Err(err) => {
+        err => {
+            let err: RedisError = match err {
+                Ok(Err(e)) => e,
+                _ => std::io::Error::from(std::io::ErrorKind::TimedOut).into(),
+            };
             log_warn(
                 "connection creation",
                 format!(
@@ -193,17 +219,17 @@ async fn create_connection(
     }
 }
 
+// tls_params should be only set if tls_mode is SecureTls
+// this should be validated before calling this function
 fn get_client(
     address: &NodeAddress,
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
+    tls_params: Option<redis::TlsConnParams>,
 ) -> redis::Client {
-    redis::Client::open(super::get_connection_info(
-        address,
-        tls_mode,
-        redis_connection_info,
-    ))
-    .unwrap() // can unwrap, because [open] fails only on trying to convert input to ConnectionInfo, and we pass ConnectionInfo.
+    let connection_info =
+        super::get_connection_info(address, tls_mode, redis_connection_info, tls_params);
+    redis::Client::open(connection_info).unwrap() // can unwrap, because [open] fails only on trying to convert input to ConnectionInfo, and we pass ConnectionInfo.
 }
 
 impl ConnectionBackend {
@@ -214,6 +240,7 @@ impl ConnectionBackend {
 }
 
 impl ReconnectingConnection {
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn new(
         address: &NodeAddress,
         connection_retry_strategy: RetryStrategy,
@@ -222,13 +249,16 @@ impl ReconnectingConnection {
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         discover_az: bool,
         connection_timeout: Duration,
+        tls_params: Option<redis::TlsConnParams>,
+        tcp_nodelay: bool,
+        pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
             format!("Attempting connection to {address}"),
         );
 
-        let connection_info = get_client(address, tls_mode, redis_connection_info);
+        let connection_info = get_client(address, tls_mode, redis_connection_info, tls_params);
         let backend = ConnectionBackend {
             connection_info: RwLock::new(connection_info),
             connection_available_signal: ManualResetEvent::new(true),
@@ -240,6 +270,8 @@ impl ReconnectingConnection {
             push_sender,
             discover_az,
             connection_timeout,
+            tcp_nodelay,
+            pubsub_synchronizer,
         )
         .await
     }
@@ -359,6 +391,7 @@ impl ReconnectingConnection {
                                 .set();
                             *guard = ConnectionState::Connected(connection);
                         }
+
                         Telemetry::incr_total_connections(1);
                         return;
                     }
@@ -425,6 +458,42 @@ impl ReconnectingConnection {
             .write()
             .expect(WRITE_LOCK_ERR);
         client.update_client_name(new_client_name);
+    }
+
+    /// Updates the username that's saved inside connection_info, that will be used in case of disconnection from the server.
+    ///
+    /// This method is called when an AUTH command is successfully executed with a username to track the current user.
+    /// During reconnection, the stored username will be automatically used for authentication.
+    ///
+    /// # Arguments
+    /// * `new_username` - The username to store for future reconnections (None to clear)
+    ///
+    pub(crate) fn update_connection_username(&self, new_username: Option<String>) {
+        let mut client = self
+            .inner
+            .backend
+            .connection_info
+            .write()
+            .expect(WRITE_LOCK_ERR);
+        client.update_username(new_username);
+    }
+
+    /// Updates the protocol version that's saved inside connection_info, that will be used in case of disconnection from the server.
+    ///
+    /// This method is called when a HELLO command is successfully executed to track the current protocol version.
+    /// During reconnection, the stored protocol version will be automatically used for connection establishment.
+    ///
+    /// # Arguments
+    /// * `new_protocol` - The protocol version to store for future reconnections
+    ///
+    pub(crate) fn update_connection_protocol(&self, new_protocol: redis::ProtocolVersion) {
+        let mut client = self
+            .inner
+            .backend
+            .connection_info
+            .write()
+            .expect(WRITE_LOCK_ERR);
+        client.update_protocol(new_protocol);
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.

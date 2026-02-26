@@ -9739,3 +9739,686 @@ func (client *baseClient) Watch(ctx context.Context, keys []string) (string, err
 	}
 	return handleOkResponse(result)
 }
+
+// GetStatistics retrieves compression, connection, and PubSub statistics for this client.
+//
+// Return value:
+//
+//	A map[string]uint64 containing statistics:
+//	  - total_connections: Total number of connections opened to Valkey
+//	  - total_clients: Total number of GLIDE clients
+//	  - total_values_compressed: Number of values successfully compressed
+//	  - total_values_decompressed: Number of values successfully decompressed
+//	  - total_original_bytes: Total bytes of original data before compression
+//	  - total_bytes_compressed: Total bytes after compression
+//	  - total_bytes_decompressed: Total bytes after decompression
+//	  - compression_skipped_count: Number of times compression was skipped
+//	  - subscription_out_of_sync_count: Number of times subscriptions were out of sync during reconciliation
+//	  - subscription_last_sync_timestamp: Timestamp of last successful subscription sync (milliseconds since epoch)
+func (client *baseClient) GetStatistics() map[string]uint64 {
+	stats := C.get_statistics()
+	return map[string]uint64{
+		"total_connections":                uint64(stats.total_connections),
+		"total_clients":                    uint64(stats.total_clients),
+		"total_values_compressed":          uint64(stats.total_values_compressed),
+		"total_values_decompressed":        uint64(stats.total_values_decompressed),
+		"total_original_bytes":             uint64(stats.total_original_bytes),
+		"total_bytes_compressed":           uint64(stats.total_bytes_compressed),
+		"total_bytes_decompressed":         uint64(stats.total_bytes_decompressed),
+		"compression_skipped_count":        uint64(stats.compression_skipped_count),
+		"subscription_out_of_sync_count":   uint64(stats.subscription_out_of_sync_count),
+		"subscription_last_sync_timestamp": uint64(stats.subscription_last_sync_timestamp),
+	}
+}
+
+// AllChannels represents "unsubscribe from all channels".
+// Pass this to Unsubscribe or UnsubscribeBlocking to unsubscribe from all channels.
+var AllChannels []string = nil
+
+// AllPatterns represents "unsubscribe from all patterns".
+// Pass this to PUnsubscribe or PUnsubscribeBlocking to unsubscribe from all patterns.
+var AllPatterns []string = nil
+
+// Subscribe subscribes the client to the specified channels (lazy, non-blocking).
+// This command updates the client's internal desired subscription state without waiting
+// for server confirmation. It returns immediately after updating the local state.
+// The client will attempt to subscribe asynchronously in the background.
+//
+// Note: Use GetSubscriptions() to verify the actual server-side subscription state.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	channels - A slice of channel names to subscribe to.
+//
+// Return value:
+//
+//	An error if the operation fails.
+//
+// Example:
+//
+//	err := client.Subscribe(ctx, []string{"channel1", "channel2"})
+func (client *baseClient) Subscribe(ctx context.Context, channels []string) error {
+	_, err := client.executeCommand(ctx, C.Subscribe, channels)
+	return err
+}
+
+// SubscribeBlocking subscribes the client to the specified channels (blocking).
+// This command updates the client's internal desired subscription state and waits
+// for server confirmation.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	channels - A slice of channel names to subscribe to.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.SubscribeBlocking(ctx, []string{"channel1"}, 5000)
+func (client *baseClient) SubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
+	if timeoutMs < 0 {
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
+	}
+	args := append(channels, strconv.Itoa(timeoutMs))
+	_, err := client.executeCommand(ctx, C.SubscribeBlocking, args)
+	return err
+}
+
+// PSubscribe subscribes the client to the specified patterns (lazy, non-blocking).
+// This command updates the client's internal desired subscription state without waiting
+// for server confirmation. It returns immediately after updating the local state.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	patterns - A slice of patterns to subscribe to (e.g., []string{"news.*"}).
+//
+// Return value:
+//
+//	An error if the operation fails.
+//
+// Example:
+//
+//	err := client.PSubscribe(ctx, []string{"news.*", "updates.*"})
+func (client *baseClient) PSubscribe(ctx context.Context, patterns []string) error {
+	_, err := client.executeCommand(ctx, C.PSubscribe, patterns)
+	return err
+}
+
+// PSubscribeBlocking subscribes the client to the specified patterns (blocking).
+// This command updates the client's internal desired subscription state and waits
+// for server confirmation.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	patterns - A slice of patterns to subscribe to.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.PSubscribeBlocking(ctx, []string{"news.*"}, 5000)
+func (client *baseClient) PSubscribeBlocking(ctx context.Context, patterns []string, timeoutMs int) error {
+	if timeoutMs < 0 {
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
+	}
+	args := append(patterns, strconv.Itoa(timeoutMs))
+	_, err := client.executeCommand(ctx, C.PSubscribeBlocking, args)
+	return err
+}
+
+// Unsubscribe unsubscribes the client from the specified channels (lazy, non-blocking).
+// If no channels are specified, unsubscribes from all exact channels.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	channels - A slice of channel names to unsubscribe from. Empty slice unsubscribes from all.
+//
+// Return value:
+//
+//	An error if the operation fails.
+//
+// Example:
+//
+//	err := client.Unsubscribe(ctx, []string{"channel1"})
+//	err := client.Unsubscribe(ctx, []string{}) // Unsubscribe from all
+func (client *baseClient) Unsubscribe(ctx context.Context, channels []string) error {
+	_, err := client.executeCommand(ctx, C.Unsubscribe, channels)
+	return err
+}
+
+// UnsubscribeBlocking unsubscribes the client from the specified channels (blocking).
+// If no channels are specified (nil or empty slice), unsubscribes from all exact channels.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	channels - A slice of channel names to unsubscribe from. Pass nil or AllChannels to unsubscribe from all.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.UnsubscribeBlocking(ctx, []string{"channel1"}, 5000)
+//	err := client.UnsubscribeBlocking(ctx, AllChannels, 5000) // Unsubscribe from all
+func (client *baseClient) UnsubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
+	if timeoutMs < 0 {
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
+	}
+	args := append(channels, strconv.Itoa(timeoutMs))
+	_, err := client.executeCommand(ctx, C.UnsubscribeBlocking, args)
+	return err
+}
+
+// UnsubscribeAll unsubscribes the client from all exact channels (lazy, non-blocking).
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//
+// Return value:
+//
+//	An error if the operation fails.
+//
+// Example:
+//
+//	err := client.UnsubscribeAll(ctx)
+func (client *baseClient) UnsubscribeAll(ctx context.Context) error {
+	return client.Unsubscribe(ctx, nil)
+}
+
+// UnsubscribeAllBlocking unsubscribes the client from all exact channels (blocking).
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.UnsubscribeAllBlocking(ctx, 5000)
+func (client *baseClient) UnsubscribeAllBlocking(ctx context.Context, timeoutMs int) error {
+	return client.UnsubscribeBlocking(ctx, nil, timeoutMs)
+}
+
+// PUnsubscribe unsubscribes the client from the specified patterns (lazy, non-blocking).
+// If no patterns are specified, unsubscribes from all patterns.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	patterns - A slice of patterns to unsubscribe from. Empty slice unsubscribes from all.
+//
+// Return value:
+//
+//	An error if the operation fails.
+//
+// Example:
+//
+//	err := client.PUnsubscribe(ctx, []string{"news.*"})
+func (client *baseClient) PUnsubscribe(ctx context.Context, patterns []string) error {
+	_, err := client.executeCommand(ctx, C.PUnsubscribe, patterns)
+	return err
+}
+
+// PUnsubscribeBlocking unsubscribes the client from the specified patterns (blocking).
+// If no patterns are specified (nil or empty slice), unsubscribes from all patterns.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	patterns - A slice of patterns to unsubscribe from. Pass nil or AllPatterns to unsubscribe from all.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.PUnsubscribeBlocking(ctx, []string{"news.*"}, 5000)
+//	err := client.PUnsubscribeBlocking(ctx, AllPatterns, 5000) // Unsubscribe from all
+func (client *baseClient) PUnsubscribeBlocking(ctx context.Context, patterns []string, timeoutMs int) error {
+	if timeoutMs < 0 {
+		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
+	}
+	args := append(patterns, strconv.Itoa(timeoutMs))
+	_, err := client.executeCommand(ctx, C.PUnsubscribeBlocking, args)
+	return err
+}
+
+// PUnsubscribeAll unsubscribes the client from all patterns (lazy, non-blocking).
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//
+// Return value:
+//
+//	An error if the operation fails.
+//
+// Example:
+//
+//	err := client.PUnsubscribeAll(ctx)
+func (client *baseClient) PUnsubscribeAll(ctx context.Context) error {
+	return client.PUnsubscribe(ctx, nil)
+}
+
+// PUnsubscribeAllBlocking unsubscribes the client from all patterns (blocking).
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.PUnsubscribeAllBlocking(ctx, 5000)
+func (client *baseClient) PUnsubscribeAllBlocking(ctx context.Context, timeoutMs int) error {
+	return client.PUnsubscribeBlocking(ctx, nil, timeoutMs)
+}
+
+// GetSubscriptions retrieves both the desired and current subscription states.
+// This allows verification of synchronization between what the client intends to be
+// subscribed to (desired) and what it is actually subscribed to on the server (actual).
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//
+// Return value:
+//
+//	A PubSubState containing desired and actual subscriptions, or an error.
+//
+// Example:
+//
+//	state, err := client.GetSubscriptions(ctx)
+//	if err != nil {
+//	    return err
+//	}
+//	// Check if subscribed to a channel
+//	if _, ok := state.ActualSubscriptions[models.Exact]["channel1"]; ok {
+//	    fmt.Println("Subscribed to channel1")
+//	}
+func (client *baseClient) GetSubscriptions(ctx context.Context) (*models.PubSubState, error) {
+	response, err := client.executeCommand(ctx, C.GetSubscriptions, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handlePubSubStateResponse(response)
+}
+
+// AclCat returns a list of all ACL categories.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	An array of ACL categories.
+//
+// [valkey.io]: https://valkey.io/commands/acl-cat/
+func (client *baseClient) AclCat(ctx context.Context) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.AclCat, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// AclCatWithCategory returns a list of commands within the specified ACL category.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	category - The ACL category to list commands for.
+//
+// Return value:
+//
+//	An array of commands within the specified category.
+//
+// [valkey.io]: https://valkey.io/commands/acl-cat/
+func (client *baseClient) AclCatWithCategory(ctx context.Context, category string) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.AclCat, []string{category})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// AclDelUser deletes all specified ACL users and terminates their connections.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	usernames - An array of usernames to delete.
+//
+// Return value:
+//
+//	The number of users deleted.
+//
+// [valkey.io]: https://valkey.io/commands/acl-deluser/
+func (client *baseClient) AclDelUser(ctx context.Context, usernames []string) (int64, error) {
+	result, err := client.executeCommand(ctx, C.AclDelUser, usernames)
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// AclDryRun simulates the execution of a command by a user without actually executing it.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	username - The username to simulate command execution for.
+//	command - The command to simulate.
+//	args - The command arguments.
+//
+// Return value:
+//
+//	"OK" if the user can execute the command, otherwise a string describing why the command cannot be executed.
+//
+// [valkey.io]: https://valkey.io/commands/acl-dryrun/
+func (client *baseClient) AclDryRun(ctx context.Context, username string, command string, args []string) (string, error) {
+	cmdArgs := append([]string{username, command}, args...)
+	result, err := client.executeCommand(ctx, C.AclDryRun, cmdArgs)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkOrStringResponse(result)
+}
+
+// AclGenPass generates a random password for ACL users.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A randomly generated password string (64 hex characters by default).
+//
+// [valkey.io]: https://valkey.io/commands/acl-genpass/
+func (client *baseClient) AclGenPass(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.AclGenPass, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// AclGenPassWithBits generates a random password with the specified number of bits.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	bits - The number of bits for the password (must be between 1 and 4096).
+//
+// Return value:
+//
+//	A randomly generated password string.
+//
+// [valkey.io]: https://valkey.io/commands/acl-genpass/
+func (client *baseClient) AclGenPassWithBits(ctx context.Context, bits int64) (string, error) {
+	result, err := client.executeCommand(ctx, C.AclGenPass, []string{utils.IntToString(bits)})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// AclGetUser returns all ACL rules for the specified user.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	username - The username to get ACL rules for.
+//
+// Return value:
+//
+//	A value describing the ACL rules for the user, or nil if user doesn't exist.
+//
+// [valkey.io]: https://valkey.io/commands/acl-getuser/
+func (client *baseClient) AclGetUser(ctx context.Context, username string) (any, error) {
+	result, err := client.executeCommand(ctx, C.AclGetUser, []string{username})
+	if err != nil {
+		return nil, err
+	}
+	return handleInterfaceResponse(result)
+}
+
+// AclList returns a list of all ACL users and their rules in ACL configuration file format.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	An array of ACL rules for all users.
+//
+// [valkey.io]: https://valkey.io/commands/acl-list/
+func (client *baseClient) AclList(ctx context.Context) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.AclList, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// AclLoad reloads ACL rules from the configured ACL configuration file.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	"OK" on success.
+//
+// [valkey.io]: https://valkey.io/commands/acl-load/
+func (client *baseClient) AclLoad(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.AclLoad, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// AclLog returns the ACL security events log.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	An array of ACL security events.
+//
+// [valkey.io]: https://valkey.io/commands/acl-log/
+func (client *baseClient) AclLog(ctx context.Context) ([]any, error) {
+	result, err := client.executeCommand(ctx, C.AclLog, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyArrayOrNilResponse(result)
+}
+
+// AclLogWithCount returns the specified number of ACL security events from the log.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	count - The number of entries to return.
+//
+// Return value:
+//
+//	An array of ACL security events.
+//
+// [valkey.io]: https://valkey.io/commands/acl-log/
+func (client *baseClient) AclLogWithCount(ctx context.Context, count int64) ([]any, error) {
+	result, err := client.executeCommand(ctx, C.AclLog, []string{utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyArrayOrNilResponse(result)
+}
+
+// AclLogReset resets the ACL log.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	"OK" on success.
+//
+// [valkey.io]: https://valkey.io/commands/acl-log/
+func (client *baseClient) AclLogReset(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.AclLog, []string{"RESET"})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// AclSave saves the current ACL rules to the configured ACL configuration file.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	"OK" on success.
+//
+// [valkey.io]: https://valkey.io/commands/acl-save/
+func (client *baseClient) AclSave(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.AclSave, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// AclSetUser creates or modifies an ACL user and its rules.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	username - The username for the ACL user.
+//	rules - An array of ACL rules to apply to the user.
+//
+// Return value:
+//
+//	"OK" on success.
+//
+// [valkey.io]: https://valkey.io/commands/acl-setuser/
+func (client *baseClient) AclSetUser(ctx context.Context, username string, rules []string) (string, error) {
+	cmdArgs := append([]string{username}, rules...)
+	result, err := client.executeCommand(ctx, C.AclSetUser, cmdArgs)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// AclUsers returns a list of all ACL usernames.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	An array of ACL usernames.
+//
+// [valkey.io]: https://valkey.io/commands/acl-users/
+func (client *baseClient) AclUsers(ctx context.Context) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.AclUsers, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// AclWhoAmI returns the username of the current connection.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	The username of the current connection.
+//
+// [valkey.io]: https://valkey.io/commands/acl-whoami/
+func (client *baseClient) AclWhoAmI(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.AclWhoami, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}

@@ -94,7 +94,7 @@ jobs:
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
-        timeout-minutes: 35
+        timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 35 }}
         strategy:
             fail-fast: false
             matrix:
@@ -126,6 +126,7 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+                  language: java
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -155,11 +156,24 @@ jobs:
 
             - name: Build java client
               working-directory: java
-              run: ./gradlew --build-cache --continue build -x javadoc
+              shell: bash
+              run: |
+                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                      # Enable integration tests on Windows with WSL
+                      ./gradlew.bat --build-cache --continue build test -x javadoc
+                  else
+                      ./gradlew --build-cache --continue build test -x javadoc
+                  fi
 
             - name: Ensure no skipped files by linter
               working-directory: java
-              run: ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+              shell: bash
+              run: |
+                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                      ./gradlew.bat --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+                  else
+                      ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+                  fi
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
@@ -171,7 +185,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-reports-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
+                  name: test-reports-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
                       java/client/build/reports/**
                       java/integTest/build/reports/**
@@ -212,6 +226,7 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+                  language: java
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -253,6 +268,67 @@ jobs:
                       java/integTest/build/reports/**
                       utils/clusters/**
 
+    test-lambda-test:
+        name: Lambda Test (Linux ARM64)
+        timeout-minutes: 30
+        runs-on: ubuntu-24.04-arm
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up JDK 11
+              uses: actions/setup-java@v4
+              with:
+                  distribution: "temurin"
+                  java-version: 11
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ubuntu
+                  target: aarch64-unknown-linux-gnu
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  language: java
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "29.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Build and Publish valkey-glide
+              working-directory: java
+              run: ./gradlew publishToMavenLocal
+
+            - name: Build Lambda Test App
+              working-directory: java/e2e/lambda-test
+              run: ../../gradlew shadowJar
+
+            - name: Run Docker Test
+              working-directory: java/e2e/lambda-test
+              run: |
+                  docker compose up -d --build
+
+                  echo "Waiting for cluster init..."
+                  timeout 120s bash -c 'until docker compose logs valkey-cluster-init | grep "Cluster created successfully"; do sleep 5; done'
+
+                  echo "Invoking Lambda..."
+                  RESPONSE=$(curl -s -XPOST "http://localhost:8080/2015-03-31/functions/function/invocations" -d '{}')
+
+                  echo "Response: $RESPONSE"
+
+                  if [[ "$RESPONSE" == *"\"statusCode\":\"200\""* ]]; then
+                      echo "Test Passed!"
+                  else
+                      echo "Test Failed!"
+                      docker compose logs
+                      exit 1
+                  fi
+
+            - name: Cleanup Docker
+              if: always()
+              working-directory: java/e2e/lambda-test
+              run: docker compose down -v
+
     get-containers:
         runs-on: ubuntu-latest
         if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
@@ -273,7 +349,7 @@ jobs:
     test-java-container:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-containers]
-        timeout-minutes: 25
+        timeout-minutes: 60
         strategy:
             fail-fast: false
             matrix:
@@ -319,6 +395,7 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  language: java
                   engine-version: ${{ matrix.engine.version }}
 
             - name: Install protoc (protobuf)

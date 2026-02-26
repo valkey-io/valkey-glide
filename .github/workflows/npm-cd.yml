@@ -225,11 +225,11 @@ jobs:
               working-directory: ./node/rust-client
               id: build-action
               run: |
-                  npm install -g @napi-rs/cli@2
+                  npm install -g @napi-rs/cli@3
 
                   # Set up the env parameters for the build
                   if [[ "${{ matrix.build_type }}" == "musl" ]]; then
-                    additional_param="--zig"
+                    additional_param="--cross-compile"
                   fi
 
                   # Install needed dependencies
@@ -244,7 +244,7 @@ jobs:
 
                   # Build the native module
 
-                  # For GNU targets, we use the zig abi param set in the package.json to 2.17
+                  # For GNU targets, we use --use-napi-cross for GLIBC 2.17 compatibility
                   if [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
                     npm run build:release:gnu
 
@@ -326,7 +326,6 @@ jobs:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"
                   scope: "@valkey"
-                  token: ${{ secrets.NPM_AUTH_TOKEN }}
                   cache: "npm"
                   cache-dependency-path: node/package.json
 
@@ -339,7 +338,7 @@ jobs:
                   npm install --only=prod
 
                   # Install only dev dependencies needed for building TypeScript
-                  npm install --no-save typescript protobufjs-cli replace @napi-rs/cli@2
+                  npm install --no-save typescript protobufjs-cli replace @napi-rs/cli@3
 
             # Setup npm package directories using NAPI-RS artifacts command
             - name: Setup npm package directories
@@ -418,7 +417,7 @@ jobs:
 
             - name: Install NAPI-RS CLI
               shell: bash
-              run: npm install -g @napi-rs/cli@2
+              run: npm install -g @napi-rs/cli@3
 
             # Use prepublishOnly, which call to napi prepublish -t npm to set up everything properly, versions of native modules reflecting the base package version, and optional dependencies base on triples are added to the base package.
             - name: Publish packages
@@ -426,13 +425,13 @@ jobs:
               shell: bash
               working-directory: ./node/npm/glide
               env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
                   NPM_TAG: ${{ needs.get-build-parameters.outputs.npm_tag }}
+                  NPM_CONFIG_PROVENANCE: true
               run: |
                   package_name=$(cat package.json | jq -r .name)
                   version=$(cat package.json | jq -r .version)
                   echo "Publishing base package ${package_name}@${version} with tag ${NPM_TAG}"
-                  npm publish --tag ${NPM_TAG} --access public --scope=@valkey
+                  npm publish --tag ${NPM_TAG} --access public --provenance --scope=@valkey
 
                   # Check if the publish was successful
                   if [ $? -ne 0 ]; then
@@ -564,7 +563,6 @@ jobs:
               with:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"
-                  token: ${{ secrets.NPM_AUTH_TOKEN }}
                   scope: "@valkey"
 
             - name: Deprecate Published Packages

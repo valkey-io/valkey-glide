@@ -29,6 +29,8 @@ from glide_shared import (
     ClusterBatch,
     ClusterBatchOptions,
     ClusterTransaction,
+    CompressionBackend,
+    CompressionConfiguration,
     ConditionalChange,
     ConfigurationError,
     ConnectionError,
@@ -67,6 +69,8 @@ from glide_shared import (
     GeoSearchCount,
     GeospatialData,
     GeoUnit,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
     GlideError,
     HashFieldConditionalChange,
     IamAuthConfig,
@@ -88,6 +92,9 @@ from glide_shared import (
     ObjectType,
     OffsetOptions,
     OnlyIfEqual,
+    OpenTelemetryConfig,
+    OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig,
     OrderBy,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
@@ -148,19 +155,28 @@ from glide_shared import (
     json_batch,
 )
 
-from .config import GlideClientConfiguration, GlideClusterClientConfiguration
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger
-from .sync_commands import ft, glide_json
+from .opentelemetry import OpenTelemetry
+from .sync_commands import (
+    ALL_CHANNELS,
+    ALL_PATTERNS,
+    ALL_SHARDED_CHANNELS,
+    ft,
+    glide_json,
+)
 from .sync_commands.cluster_scan_cursor import ClusterScanCursor
 from .sync_commands.script import Script
+from .sync_commands.utils import get_min_compressed_size
 
 __all__ = [
     # Client
     "TGlideClient",
     "GlideClient",
     "GlideClusterClient",
+    # Internal utilities
+    "get_min_compressed_size",
     "Batch",
     "ClusterBatch",
     "TBatch",
@@ -176,6 +192,8 @@ __all__ = [
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
+    "CompressionBackend",
+    "CompressionConfiguration",
     "ReadFrom",
     "ServerCredentials",
     "ServiceType",
@@ -264,6 +282,9 @@ __all__ = [
     "UpdateOptions",
     # PubSub
     "PubSubMsg",
+    "ALL_CHANNELS",
+    "ALL_PATTERNS",
+    "ALL_SHARDED_CHANNELS",
     # Json
     "glide_json",
     "json_batch",
@@ -292,6 +313,11 @@ __all__ = [
     # Logger
     "Logger",
     "LogLevel",
+    # OpenTelemetry
+    "OpenTelemetry",
+    "OpenTelemetryConfig",
+    "OpenTelemetryMetricsConfig",
+    "OpenTelemetryTracesConfig",
     # Ft
     "DataType",
     "DistanceMetricType",

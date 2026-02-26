@@ -12,12 +12,25 @@ function parseOutput(input: string): {
     addresses: [string, number][];
 } {
     const lines = input.split(/\r\n|\r|\n/);
-    const clusterFolder = lines
-        .find((line) => line.startsWith("CLUSTER_FOLDER"))
-        ?.split("=")[1];
-    const ports = lines
-        .find((line) => line.startsWith("CLUSTER_NODES"))
-        ?.split("=")[1]
+    const clusterFolderLine = lines.find((line) =>
+        line.startsWith("CLUSTER_FOLDER="),
+    );
+    const clusterNodesLine = lines.find((line) =>
+        line.startsWith("CLUSTER_NODES="),
+    );
+
+    if (!clusterFolderLine || !clusterNodesLine) {
+        throw new Error(`Insufficient data in input: ${input}`);
+    }
+
+    const clusterFolder = clusterFolderLine.substring("CLUSTER_FOLDER=".length);
+    const nodes = clusterNodesLine.substring("CLUSTER_NODES=".length);
+
+    if (!clusterFolder || !nodes) {
+        throw new Error(`Insufficient data in input: ${input}`);
+    }
+
+    const ports = nodes
         .split(",")
         .map((address) => address.split(":"))
         .map((address) => [address[0], Number(address[1])]) as [
@@ -25,21 +38,22 @@ function parseOutput(input: string): {
         number,
     ][];
 
-    if (clusterFolder === undefined || ports === undefined) {
-        throw new Error(`Insufficient data in input: ${input}`);
-    }
-
     return {
         clusterFolder,
         addresses: ports,
     };
 }
 
-export type TestTLSConfig = {useTLS: boolean; advancedConfiguration?: {
-                    tlsAdvancedConfiguration?: {
-                        insecure?: boolean,
-                    },
-                },};
+export type TestTLSConfig = {
+    useTLS: boolean;
+    requestTimeout?: number;
+    advancedConfiguration?: {
+        tlsAdvancedConfiguration?: {
+            insecure?: boolean;
+            rootCertificates?: Buffer<ArrayBufferLike>;
+        };
+    };
+};
 
 export class ValkeyCluster {
     private addresses: [string, number][];
@@ -70,16 +84,20 @@ export class ValkeyCluster {
         loadModule?: string[],
     ): Promise<ValkeyCluster> {
         return new Promise<ValkeyCluster>((resolve, reject) => {
-            let command = ``;
+            const commandArgs = [
+                "start",
+                "-r",
+                `${replicaCount}`,
+                "-n",
+                `${shardCount}`,
+            ];
 
             if (tls) {
-                command += "--tls ";
+                commandArgs.unshift("--tls");
             }
 
-            command += `start -r ${replicaCount} -n ${shardCount}`;
-            
             if (cluster_mode) {
-                command += " --cluster-mode";
+                commandArgs.push("--cluster-mode");
             }
 
             if (loadModule) {
@@ -90,13 +108,13 @@ export class ValkeyCluster {
                 }
 
                 for (const module of loadModule) {
-                    command += ` --load-module ${module}`;
+                    commandArgs.push("--load-module", module);
                 }
             }
 
             execFile(
                 "python3",
-                [PY_SCRIPT_PATH, ...command.split(" ")],
+                [PY_SCRIPT_PATH, ...commandArgs],
                 (error, stdout) => {
                     if (error) {
                         reject(error);
@@ -104,7 +122,11 @@ export class ValkeyCluster {
                         const { clusterFolder, addresses } =
                             parseOutput(stdout);
                         resolve(
-                            getVersionCallback(addresses, cluster_mode, tlsConfig).then(
+                            getVersionCallback(
+                                addresses,
+                                cluster_mode,
+                                tlsConfig,
+                            ).then(
                                 (ver) =>
                                     new ValkeyCluster(
                                         ver,

@@ -23,7 +23,8 @@ use glide_core::start_socket_listener;
 use napi::bindgen_prelude::BigInt;
 use napi::bindgen_prelude::Either;
 use napi::bindgen_prelude::Uint8Array;
-use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
+use napi::bindgen_prelude::{BufferSlice, JsObjectValue, Null, Object, ToNapiValue};
+use napi::{Env, Error, Result, Status, Unknown};
 use napi_derive::napi;
 use num_traits::sign::Signed;
 use redis::{AsyncCommands, Value, aio::MultiplexedConnection};
@@ -148,7 +149,7 @@ impl AsyncClient {
 
     #[napi(ts_return_type = "Promise<string | Buffer | null>")]
     #[allow(dead_code)]
-    pub fn get(&self, env: Env, key: String) -> Result<JsObject> {
+    pub fn get<'a>(&self, env: &'a Env, key: String) -> Result<Object<'a>> {
         let (deferred, promise) = env.create_deferred()?;
 
         let mut connection = self.connection.clone();
@@ -165,7 +166,7 @@ impl AsyncClient {
 
     #[napi(ts_return_type = "Promise<string | Buffer | \"OK\" | null>")]
     #[allow(dead_code)]
-    pub fn set(&self, env: Env, key: String, value: String) -> Result<JsObject> {
+    pub fn set<'a>(&self, env: &'a Env, key: String, value: String) -> Result<Object<'a>> {
         let (deferred, promise) = env.create_deferred()?;
 
         let mut connection = self.connection.clone();
@@ -182,7 +183,7 @@ impl AsyncClient {
 }
 
 #[napi(js_name = "StartSocketConnection", ts_return_type = "Promise<string>")]
-pub fn start_socket_listener_external(env: Env) -> Result<JsObject> {
+pub fn start_socket_listener_external<'a>(env: &'a Env) -> Result<Object<'a>> {
     let (deferred, promise) = env.create_deferred()?;
 
     start_socket_listener(move |result| {
@@ -301,120 +302,130 @@ pub fn log(log_level: Level, log_identifier: String, message: String) {
 }
 
 #[napi(js_name = "InitInternalLogger")]
-pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
-    let logger_level = logger_core::init(level.map(|level| level.into()), file_name);
+pub fn init(level: Option<Level>, file_name: Option<String>) -> Level {
+    let logger_level = logger_core::init(level.map(|level| level.into()), file_name.as_deref());
     logger_level.into()
 }
 
-fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsUnknown> {
+fn resp_value_to_js<'a>(val: Value, js_env: &'a Env, string_decoder: bool) -> Result<Unknown<'a>> {
     match val {
-        Value::Nil => js_env.get_null().map(|val| val.into_unknown()),
+        Value::Nil => {
+            // Use ToNapiValue trait's into_unknown which wraps the unsafe calls
+            Null.into_unknown(js_env)
+        }
         Value::SimpleString(str) => {
             if string_decoder {
-                Ok(js_env
+                js_env
                     .create_string_from_std(str)
-                    .map(|val| val.into_unknown())?)
+                    .and_then(|val| val.into_unknown(js_env))
             } else {
-                Ok(js_env
-                    .create_buffer_with_data(str.as_bytes().to_vec())?
-                    .into_unknown())
+                BufferSlice::from_data(js_env, str.as_bytes().to_vec())?.into_unknown(js_env)
             }
         }
-        Value::Okay => js_env.create_string("OK").map(|val| val.into_unknown()),
-        Value::Int(num) => js_env.create_int64(num).map(|val| val.into_unknown()),
+        Value::Okay => js_env
+            .create_string("OK")
+            .and_then(|val| val.into_unknown(js_env)),
+        Value::Int(num) => js_env
+            .create_int64(num)
+            .and_then(|val| val.into_unknown(js_env)),
         Value::BulkString(data) => {
             if string_decoder {
                 let str = to_js_result(std::str::from_utf8(data.as_ref()))?;
-                Ok(js_env.create_string(str).map(|val| val.into_unknown())?)
+                js_env
+                    .create_string(str)
+                    .and_then(|val| val.into_unknown(js_env))
             } else {
-                Ok(js_env.create_buffer_with_data(data)?.into_unknown())
+                BufferSlice::from_data(js_env, data.to_vec())?.into_unknown(js_env)
             }
         }
         Value::Array(array) => {
-            let mut js_array_view = js_env.create_array_with_length(array.len())?;
+            let mut js_array_view = js_env.create_array(array.len() as u32)?;
             for (index, item) in array.into_iter().enumerate() {
                 js_array_view.set_element(
                     index as u32,
                     resp_value_to_js(item, js_env, string_decoder)?,
                 )?;
             }
-            Ok(js_array_view.into_unknown())
+            js_array_view.into_unknown(js_env)
         }
         Value::Map(map) => {
             // Convert map to array of key-value pairs instead of a `Record` (object),
             // because `Record` does not support `GlideString` as a key.
             // The result is in format `GlideRecord<T>`.
-            let mut js_array = js_env.create_array_with_length(map.len())?;
+            let mut js_array = js_env.create_array(map.len() as u32)?;
             for (idx, (key, value)) in (0_u32..).zip(map.into_iter()) {
-                let mut obj = js_env.create_object()?;
+                let mut obj = Object::new(js_env)?;
                 obj.set_named_property("key", resp_value_to_js(key, js_env, string_decoder)?)?;
                 obj.set_named_property("value", resp_value_to_js(value, js_env, string_decoder)?)?;
                 js_array.set_element(idx, obj)?;
             }
-            Ok(js_array.into_unknown())
+            js_array.into_unknown(js_env)
         }
-        Value::Double(float) => js_env.create_double(float).map(|val| val.into_unknown()),
-        Value::Boolean(bool) => js_env.get_boolean(bool).map(|val| val.into_unknown()),
+        Value::Double(float) => js_env
+            .create_double(float)
+            .and_then(|val| val.into_unknown(js_env)),
+        Value::Boolean(b) => {
+            // Use ToNapiValue trait's into_unknown which wraps the unsafe calls
+            b.into_unknown(js_env)
+        }
         // format is ignored, as per the RESP3 recommendations -
         // "Normal client libraries may ignore completely the difference between this"
         // "type and the String type, and return a string in both cases.""
         // https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md
         Value::VerbatimString { format: _, text } => {
             if string_decoder {
-                Ok(js_env
+                js_env
                     .create_string_from_std(text)
-                    .map(|val| val.into_unknown())?)
+                    .and_then(|val| val.into_unknown(js_env))
             } else {
                 // VerbatimString is binary safe -> convert it into such
-                Ok(js_env
-                    .create_buffer_with_data(text.as_bytes().to_vec())?
-                    .into_unknown())
+                BufferSlice::from_data(js_env, text.as_bytes().to_vec())?.into_unknown(js_env)
             }
         }
         Value::BigNumber(num) => {
-            let sign = num.is_negative();
-            let words = num.iter_u64_digits().collect();
-            js_env
-                .create_bigint_from_words(sign, words)
-                .and_then(|val| val.into_unknown())
+            let bigint = BigInt {
+                sign_bit: num.is_negative(),
+                words: num.iter_u64_digits().collect(),
+            };
+            bigint.into_unknown(js_env)
         }
         Value::Set(array) => {
             // TODO - return a set object instead of an array object
-            let mut js_array_view = js_env.create_array_with_length(array.len())?;
+            let mut js_array_view = js_env.create_array(array.len() as u32)?;
             for (index, item) in array.into_iter().enumerate() {
                 js_array_view.set_element(
                     index as u32,
                     resp_value_to_js(item, js_env, string_decoder)?,
                 )?;
             }
-            Ok(js_array_view.into_unknown())
+            js_array_view.into_unknown(js_env)
         }
         Value::Attribute { data, attributes } => {
-            let mut obj = js_env.create_object()?;
+            let mut obj = Object::new(js_env)?;
             let value = resp_value_to_js(*data, js_env, string_decoder)?;
             obj.set_named_property("value", value)?;
 
             let value = resp_value_to_js(Value::Map(attributes), js_env, string_decoder)?;
             obj.set_named_property("attributes", value)?;
 
-            Ok(obj.into_unknown())
+            obj.into_unknown(js_env)
         }
         Value::Push { kind, data } => {
-            let mut obj = js_env.create_object()?;
+            let mut obj = Object::new(js_env)?;
             obj.set_named_property("kind", format!("{kind:?}"))?;
             let js_array_view = data
                 .into_iter()
                 .map(|item| resp_value_to_js(item, js_env, string_decoder))
                 .collect::<Result<Vec<_>, _>>()?;
             obj.set_named_property("values", js_array_view)?;
-            Ok(obj.into_unknown())
+            obj.into_unknown(js_env)
         }
         Value::ServerError(error) => {
             let err_msg = error_message(&error.into());
             let err = Error::new(Status::Ok, err_msg);
             let mut js_error = js_env.create_error(err)?;
             js_error.set_named_property("name", "RequestError")?;
-            Ok(js_error.into_unknown())
+            js_error.into_unknown(js_env)
         }
     }
 }
@@ -422,12 +433,12 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
 #[napi(
     ts_return_type = "null | string | Uint8Array | number | {} | Boolean | BigInt | Set<any> | any[] | Buffer"
 )]
-pub fn value_from_split_pointer(
-    js_env: Env,
+pub fn value_from_split_pointer<'a>(
+    js_env: &'a Env,
     high_bits: u32,
     low_bits: u32,
     string_decoder: bool,
-) -> Result<JsUnknown> {
+) -> Result<Unknown<'a>> {
     let mut bytes = [0_u8; 8];
     (&mut bytes[..4])
         .write_u32::<LittleEndian>(low_bits)
@@ -683,12 +694,25 @@ impl Drop for ClusterScanCursor {
 }
 
 #[napi]
-pub fn get_statistics(env: Env) -> Result<JsObject> {
+pub fn get_statistics<'a>(env: &'a Env) -> Result<Object<'a>> {
     let total_connections = Telemetry::total_connections().to_string();
     let total_clients = Telemetry::total_clients().to_string();
-    let mut stats: JsObject = env.create_object()?;
+    let total_values_compressed = Telemetry::total_values_compressed().to_string();
+    let total_values_decompressed = Telemetry::total_values_decompressed().to_string();
+    let total_original_bytes = Telemetry::total_original_bytes().to_string();
+    let total_bytes_compressed = Telemetry::total_bytes_compressed().to_string();
+    let total_bytes_decompressed = Telemetry::total_bytes_decompressed().to_string();
+    let compression_skipped_count = Telemetry::compression_skipped_count().to_string();
+
+    let mut stats = Object::new(env)?;
     stats.set_named_property("total_connections", total_connections)?;
     stats.set_named_property("total_clients", total_clients)?;
+    stats.set_named_property("total_values_compressed", total_values_compressed)?;
+    stats.set_named_property("total_values_decompressed", total_values_decompressed)?;
+    stats.set_named_property("total_original_bytes", total_original_bytes)?;
+    stats.set_named_property("total_bytes_compressed", total_bytes_compressed)?;
+    stats.set_named_property("total_bytes_decompressed", total_bytes_decompressed)?;
+    stats.set_named_property("compression_skipped_count", compression_skipped_count)?;
 
     Ok(stats)
 }

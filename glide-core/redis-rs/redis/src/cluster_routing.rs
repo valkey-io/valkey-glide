@@ -38,6 +38,13 @@ pub enum AggregateOp {
     // Max, omitted due to dead code warnings. ATM this value isn't constructed anywhere
 }
 
+/// Array aggregating operators for element-wise operations.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ArrayAggregateOp {
+    /// Choose minimal value for each array element
+    Min,
+}
+
 /// Policy defining how to combine multiple responses into one.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ResponsePolicy {
@@ -51,6 +58,8 @@ pub enum ResponsePolicy {
     AggregateLogical(LogicalAggregateOp),
     /// Aggregate success results according to a numeric operator. Return error on any failed request or on a response that isn't an integer.
     Aggregate(AggregateOp),
+    /// Aggregate array responses element-wise according to a numeric operator. Return error on any failed request or on a response that isn't an array of integers.
+    AggregateArray(ArrayAggregateOp),
     /// Aggregate array responses into a single array. Return error on any failed request or on a response that isn't an array.
     CombineArrays,
     /// Handling is not defined by the Redis standard. Will receive a special case
@@ -202,6 +211,49 @@ pub fn logical_aggregate(values: Vec<Value>, op: LogicalAggregateOp) -> RedisRes
             .map(|result| Value::Int(result as i64))
             .collect(),
     ))
+}
+
+/// Aggregate array responses element-wise according to a numeric operator.
+pub fn aggregate_array(values: Vec<Value>, op: ArrayAggregateOp) -> RedisResult<Value> {
+    let initial_value = match op {
+        ArrayAggregateOp::Min => i64::MAX,
+    };
+    let results = values.into_iter().try_fold(Vec::new(), |acc, curr| {
+        let values = match curr {
+            Value::Array(values) => values,
+            _ => {
+                return RedisResult::Err(
+                    (
+                        ErrorKind::TypeError,
+                        "expected array of integers as response",
+                    )
+                        .into(),
+                );
+            }
+        };
+        let mut acc = if acc.is_empty() {
+            vec![initial_value; values.len()]
+        } else {
+            acc
+        };
+        for (index, value) in values.into_iter().enumerate() {
+            let int = match value {
+                Value::Int(int) => int,
+                _ => {
+                    return Err((
+                        ErrorKind::TypeError,
+                        "expected array of integers as response",
+                    )
+                        .into());
+                }
+            };
+            acc[index] = match op {
+                ArrayAggregateOp::Min => min(acc[index], int),
+            };
+        }
+        Ok(acc)
+    })?;
+    Ok(Value::Array(results.into_iter().map(Value::Int).collect()))
 }
 /// Aggregate array responses into a single map.
 pub fn combine_map_results(values: Vec<Value>) -> RedisResult<Value> {
@@ -541,7 +593,9 @@ impl ResponsePolicy {
 
             b"WAIT" => Some(ResponsePolicy::Aggregate(AggregateOp::Min)),
 
-            b"ACL SETUSER" | b"ACL DELUSER" | b"ACL SAVE" | b"CLIENT SETNAME"
+            b"WAITAOF" => Some(ResponsePolicy::AggregateArray(ArrayAggregateOp::Min)),
+
+            b"ACL SETUSER" | b"ACL DELUSER" | b"ACL SAVE" | b"AUTH" | b"CLIENT SETNAME"
             | b"CLIENT SETINFO" | b"CONFIG SET" | b"CONFIG RESETSTAT" | b"CONFIG REWRITE"
             | b"FLUSHALL" | b"FLUSHDB" | b"FUNCTION DELETE" | b"FUNCTION FLUSH"
             | b"FUNCTION LOAD" | b"FUNCTION RESTORE" | b"MEMORY PURGE" | b"MSET" | b"JSON.MSET"
@@ -590,6 +644,7 @@ enum RouteBy {
     SecondArgAfterKeyCount,
     SecondArgSlot,
     StreamsIndex,
+    ThirdArg,
     ThirdArgAfterKeyCount,
     Undefined,
 }
@@ -599,6 +654,7 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         b"ACL SETUSER"
         | b"ACL DELUSER"
         | b"ACL SAVE"
+        | b"AUTH"
         | b"CLIENT SETNAME"
         | b"CLIENT SETINFO"
         | b"SELECT"
@@ -648,9 +704,8 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"RANDOMKEY"
         | b"WAITAOF" => RouteBy::AllPrimaries,
 
-        b"MGET" | b"DEL" | b"EXISTS" | b"UNLINK" | b"TOUCH" | b"WATCH" => {
-            RouteBy::MultiShard(MultiSlotArgPattern::KeysOnly)
-        }
+        b"MGET" | b"DEL" | b"EXISTS" | b"UNLINK" | b"TOUCH" | b"WATCH" | b"SUBSCRIBE"
+        | b"PSUBSCRIBE" | b"SSUBSCRIBE" => RouteBy::MultiShard(MultiSlotArgPattern::KeysOnly),
 
         b"MSET" => RouteBy::MultiShard(MultiSlotArgPattern::KeyValuePairs),
         b"JSON.MGET" => RouteBy::MultiShard(MultiSlotArgPattern::KeysAndLastArg),
@@ -678,6 +733,8 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"OBJECT REFCOUNT"
         | b"JSON.DEBUG" => RouteBy::SecondArg,
 
+        b"MIGRATE" => RouteBy::ThirdArg,
+
         b"LMPOP" | b"SINTERCARD" | b"ZDIFF" | b"ZINTER" | b"ZINTERCARD" | b"ZMPOP" | b"ZUNION" => {
             RouteBy::SecondArgAfterKeyCount
         }
@@ -694,13 +751,13 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"ACL LOG"
         | b"ACL USERS"
         | b"ACL WHOAMI"
-        | b"AUTH"
         | b"BGSAVE"
         | b"CLIENT GETNAME"
         | b"CLIENT GETREDIR"
         | b"CLIENT ID"
         | b"CLIENT INFO"
         | b"CLIENT KILL"
+        | b"CLIENT LIST"
         | b"CLIENT PAUSE"
         | b"CLIENT REPLY"
         | b"CLIENT TRACKINGINFO"
@@ -765,6 +822,7 @@ impl RoutingInfo {
         match base_routing(cmd) {
             RouteBy::FirstKey
             | RouteBy::SecondArg
+            | RouteBy::ThirdArg
             | RouteBy::SecondArgAfterKeyCount
             | RouteBy::ThirdArgAfterKeyCount
             | RouteBy::SecondArgSlot
@@ -821,6 +879,8 @@ impl RoutingInfo {
             }
 
             RouteBy::SecondArg => r.arg_idx(2).map(|key| RoutingInfo::for_key(cmd, key)),
+
+            RouteBy::ThirdArg => r.arg_idx(3).map(|key| RoutingInfo::for_key(cmd, key)),
 
             RouteBy::SecondArgAfterKeyCount => {
                 let key_count = r
@@ -1247,7 +1307,7 @@ const WRITE_LK_ERR_SHARDADDRS: &str = "Failed to acquire write lock for ShardAdd
 /// to avoid the need to choose a replica each time
 /// a command is executed
 #[derive(Debug)]
-pub(crate) struct ShardAddrs {
+pub struct ShardAddrs {
     primary: RwLock<Arc<String>>,
     replicas: RwLock<Vec<Arc<String>>>,
 }
@@ -1299,7 +1359,8 @@ impl ShardAddrs {
         Self::new(primary, Vec::default())
     }
 
-    pub(crate) fn primary(&self) -> Arc<String> {
+    /// Returns the address of the primary node for this shard.
+    pub fn primary(&self) -> Arc<String> {
         self.primary.read().expect(READ_LK_ERR_SHARDADDRS).clone()
     }
 
@@ -2026,5 +2087,17 @@ mod tests_routing {
         let shard_addrs = create_shard_addrs("node1:6379", vec!["node2:6379", "node3:6379"]);
         let result = shard_addrs.attempt_shard_role_update(Arc::new("node4:6379".to_string()));
         assert_eq!(result, ShardUpdateResult::NodeNotFound);
+    }
+
+    #[test]
+    fn test_client_list_routing() {
+        let mut cmd = cmd("CLIENT");
+        cmd.arg("LIST");
+        let routing = RoutingInfo::for_routable(&cmd);
+        assert_eq!(
+            routing,
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
+            "CLIENT LIST should be routed to a random node"
+        );
     }
 }

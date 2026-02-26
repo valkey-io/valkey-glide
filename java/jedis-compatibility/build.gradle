@@ -10,6 +10,16 @@ repositories {
     mavenCentral()
 }
 
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Javadoc) {
+    options.encoding = 'UTF-8'
+    options.charSet = 'UTF-8'
+    options.docEncoding = 'UTF-8'
+}
+
 ext {
     // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
     arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
@@ -18,18 +28,11 @@ ext {
 dependencies {
     implementation project(':client')
 
-    // Transitive dependencies needed by GLIDE client
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.18.0'
-
-    implementation('com.google.protobuf:protobuf-java') {
-        version {
-            require '[4.29.1,5.0)'
-            prefer '4.29.1'
-        }
-    }
-
     // Apache Commons Pool 2 for connection pooling - part of public API
-    implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
+    api group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
+
+    // Apache Commons Lang 3 for utility classes like Pair
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
 
     // Test dependencies
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'

@@ -413,7 +413,10 @@ impl TestClusterContext {
         &self,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> redis::cluster_async::ClusterConnection {
-        self.client.get_async_connection(push_sender).await.unwrap()
+        self.client
+            .get_async_connection(push_sender, None)
+            .await
+            .unwrap()
     }
 
     #[cfg(feature = "cluster-async")]
@@ -793,6 +796,62 @@ impl TestClusterContext {
 
         // Return the RoutingInfo for the destination node.
         destination_route
+    }
+
+    /// Deletes a specific slot from its current node in the cluster.
+    ///
+    /// This function assumes that the slot is already present in the cluster and removes
+    /// it from the node currently responsible for it.
+    pub async fn delete_specific_slot(
+        &self,
+        slot_to_delete: u16,
+        slot_distribution: Option<Vec<(String, String, String, Vec<Vec<u16>>)>>,
+    ) -> RoutingInfo {
+        let mut cluster_conn = self.async_connection(None).await;
+
+        // Get or discover slot distribution
+        let distribution = match slot_distribution {
+            Some(dist) => dist,
+            None => {
+                let cluster_nodes = self.get_cluster_nodes().await;
+                self.get_slots_ranges_distribution(&cluster_nodes)
+            }
+        };
+
+        // Find the node currently responsible for the slot.
+        let current_node = distribution
+            .iter()
+            .find(|&(_, _, _, slots)| {
+                slots.iter().any(|slot_range| {
+                    slot_range[0] <= slot_to_delete && slot_to_delete <= slot_range[1]
+                })
+            })
+            .expect("No node found owning the given slot");
+
+        // Parse the current node's port and construct its RoutingInfo.
+        let current_port: u16 = current_node
+            .2
+            .parse()
+            .expect("Invalid port format for current node");
+        let current_host = current_node.1.clone();
+        let current_route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+            host: current_host,
+            port: current_port,
+        });
+
+        // Issue the CLUSTER DELSLOTS command to delete the slot from the current node.
+        let mut delete_cmd = cmd("CLUSTER");
+        delete_cmd.arg("DELSLOTS").arg(slot_to_delete);
+
+        if let Err(e) = cluster_conn
+            .route_command(&delete_cmd, current_route.clone())
+            .await
+        {
+            panic!("Failed to delete slot: {e}");
+        }
+
+        // Return the RoutingInfo for the node that had the slot.
+        current_route
     }
 
     /// Migrates a specific slot from its current node to a new destination node in the cluster.

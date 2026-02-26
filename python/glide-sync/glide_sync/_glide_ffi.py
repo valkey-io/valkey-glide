@@ -49,8 +49,7 @@ class _GlideFFI:
     def _init_ffi(self):
         self._ffi = FFI()
 
-        self._ffi.cdef(
-            """
+        self._ffi.cdef("""
             // ============== SCRIPT MANAGEMENT ==============
             typedef struct {
                 uint8_t* ptr;
@@ -293,10 +292,26 @@ class _GlideFFI:
             void drop_otel_span(uint64_t span_ptr);
             const char* init_open_telemetry(const OpenTelemetryConfig* open_telemetry_config);
 
+            // ============== STATISTICS ==============
+            typedef struct {
+                unsigned long total_connections;
+                unsigned long total_clients;
+                unsigned long total_values_compressed;
+                unsigned long total_values_decompressed;
+                unsigned long total_original_bytes;
+                unsigned long total_bytes_compressed;
+                unsigned long total_bytes_decompressed;
+                unsigned long compression_skipped_count;
+                unsigned long subscription_out_of_sync_count;
+                unsigned long subscription_last_sync_timestamp;
+            } Statistics;
+
+            Statistics get_statistics();
+
             // ============== UTILITY FUNCTIONS ==============
             void free_c_string(char* s);
-            """
-        )
+            unsigned long get_min_compressed_size();
+            """)
 
         # Load the shared library
         self._lib = self._ffi.dlopen(str(LIB_FILE.resolve()))
@@ -310,3 +325,7 @@ class _GlideFFI:
     def lib(self):
         """Access to the loaded library for calling functions."""
         return self._lib
+
+
+# Singleton instance accessor
+GlideFFI = _GlideFFI()
