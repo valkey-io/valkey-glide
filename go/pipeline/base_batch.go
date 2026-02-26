@@ -24,7 +24,7 @@ import (
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
 // the executed command.
 //
-// See [Valkey GLIDE Wiki] for details on the restrictions and limitations of the custom command API.
+// See [Valkey GLIDE Documentation] for details on the restrictions and limitations of the custom command API.
 //
 // This function should only be used for single-response commands. Commands that don't return complete response and awaits
 // (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's
@@ -38,7 +38,7 @@ import (
 //
 //	The returned value for the custom command.
 //
-// [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
+// [Valkey GLIDE Documentation]: https://glide.valkey.io/concepts/client-features/custom-commands/
 func (b *BaseBatch[T]) CustomCommand(args []string) *T {
 	return b.addCmd(C.CustomCommand, args)
 }
@@ -2079,7 +2079,7 @@ func (b *BaseBatch[T]) LInsert(key string, insertPosition constants.InsertPositi
 //	If no element could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blpop/
-// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+// [Blocking Commands]: https://glide.valkey.io/how-to/connection-management/#blocking-commands
 func (b *BaseBatch[T]) BLPop(keys []string, timeout time.Duration) *T {
 	return b.addCmdAndConverter(
 		C.BLPop,
@@ -2112,7 +2112,7 @@ func (b *BaseBatch[T]) BLPop(keys []string, timeout time.Duration) *T {
 //	If no element could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/brpop/
-// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+// [Blocking Commands]: https://glide.valkey.io/how-to/connection-management/#blocking-commands
 func (b *BaseBatch[T]) BRPop(keys []string, timeout time.Duration) *T {
 	return b.addCmdAndConverter(
 		C.BRPop,
@@ -2263,7 +2263,7 @@ func (b *BaseBatch[T]) LMPopCount(keys []string, listDirection constants.ListDir
 //	If no member could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
-// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+// [Blocking Commands]: https://glide.valkey.io/how-to/connection-management/#blocking-commands
 func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirection, timeout time.Duration) *T {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
@@ -2309,7 +2309,7 @@ func (b *BaseBatch[T]) BLMPop(keys []string, listDirection constants.ListDirecti
 //	If no member could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
-// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+// [Blocking Commands]: https://glide.valkey.io/how-to/connection-management/#blocking-commands
 func (b *BaseBatch[T]) BLMPopCount(
 	keys []string,
 	listDirection constants.ListDirection,
@@ -2418,7 +2418,7 @@ func (b *BaseBatch[T]) LMove(
 //	The popped element or `nil` if source does not exist or if the operation timed-out.
 //
 // [valkey.io]: https://valkey.io/commands/blmove/
-// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+// [Blocking Commands]: https://glide.valkey.io/how-to/connection-management/#blocking-commands
 func (b *BaseBatch[T]) BLMove(
 	source string,
 	destination string,
@@ -3395,7 +3395,7 @@ func (b *BaseBatch[T]) ZCard(key string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/bzpopmin/
 //
-// [Blocking commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+// [Blocking commands]: https://glide.valkey.io/how-to/connection-management/#blocking-commands
 func (b *BaseBatch[T]) BZPopMin(keys []string, timeout time.Duration) *T {
 	return b.addCmdAndConverter(
 		C.BZPopMin,
@@ -3436,7 +3436,7 @@ func (b *BaseBatch[T]) BZPopMin(keys []string, timeout time.Duration) *T {
 //	Returns `nil` if no member could be popped and the timeout expired.
 //
 // [valkey.io]: https://valkey.io/commands/bzmpop/
-// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+// [Blocking Commands]: https://glide.valkey.io/how-to/connection-management/#blocking-commands
 func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, timeout time.Duration) *T {
 	scoreFilterStr, err := scoreFilter.ToString()
 	if err != nil {
@@ -3486,7 +3486,7 @@ func (b *BaseBatch[T]) BZMPop(keys []string, scoreFilter constants.ScoreFilter, 
 //	Returns `nil` if no member could be popped and the timeout expired.
 //
 // [valkey.io]: https://valkey.io/commands/bzmpop/
-// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+// [Blocking Commands]: https://glide.valkey.io/how-to/connection-management/#blocking-commands
 func (b *BaseBatch[T]) BZMPopWithOptions(
 	keys []string,
 	scoreFilter constants.ScoreFilter,
@@ -5950,7 +5950,7 @@ func (b *BaseBatch[T]) ZLexCount(key string, rangeQuery options.RangeByLex) *T {
 //	If no member could be popped and the `timeout` expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/bzpopmax/
-// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+// [Blocking Commands]: https://glide.valkey.io/how-to/connection-management/#blocking-commands
 func (b *BaseBatch[T]) BZPopMax(keys []string, timeout time.Duration) *T {
 	args := append(keys, utils.FloatToString(timeout.Seconds()))
 	return b.addCmdAndConverter(C.BZPopMax, args, reflect.Slice, true, internal.ConvertKeyWithMemberAndScore)

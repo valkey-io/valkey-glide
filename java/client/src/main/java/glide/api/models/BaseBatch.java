@@ -375,8 +375,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @apiNote See <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command">Glide
+     * @apiNote See <a href="https://glide.valkey.io/concepts/client-features/custom-commands/">Glide
      *     Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command.
      * @return Command Response - The returned value for the custom command.
@@ -2816,7 +2815,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/bzpopmin/">valkey.io</a> for more details.
      * @apiNote <code>BZPOPMIN</code> is a client blocking command, see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *     href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The keys of the sorted sets.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
@@ -2882,7 +2881,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/bzpopmax/">valkey.io</a> for more details.
      * @apiNote <code>BZPOPMAX</code> is a client blocking command, see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *     href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The keys of the sorted sets.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
@@ -5186,7 +5185,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/brpop/">valkey.io</a> for details.
      * @apiNote <code>BRPOP</code> is a client blocking command, see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *     href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The <code>keys</code> of the lists to pop from.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
@@ -5247,7 +5246,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/blpop/">valkey.io</a> for details.
      * @apiNote <code>BLPOP</code> is a client blocking command, see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *     href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The <code>keys</code> of the lists to pop from.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
@@ -5440,7 +5439,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @apiNote <code>BZMPOP</code> is a client blocking command, see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *     href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -5472,7 +5471,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @apiNote <code>BZMPOP</code> is a client blocking command, see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *     href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -6283,7 +6282,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @apiNote <code>BLMPOP</code> is a client blocking command, see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *     href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
@@ -6324,7 +6323,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @apiNote <code>BLMPOP</code> is a client blocking command, see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *     href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
@@ -6578,7 +6577,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @apiNote <code>BLMove</code> is a client blocking command, see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *     href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @see <a href="https://valkey.io/commands/blmove/">valkey.io</a> for details.
      * @param source The key to the source list.

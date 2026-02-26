@@ -229,7 +229,7 @@ node/
 - **Development Setup:** [DEVELOPER.md](./DEVELOPER.md)
 - **Examples:** [../examples/node/](../examples/node/)
 - **API Documentation:** [Valkey GLIDE Node.js docs](https://valkey.io/valkey-glide/node/)
-- **Wiki:** [NodeJS wrapper wiki](https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper)
+- **Documentation:** [GLIDE Docs](https://glide.valkey.io/)
 - **Test Suites:** [tests/](./tests/) directory
 - **Package Manager Tests:** [pm-and-types-tests/](./pm-and-types-tests/)
 - **Rust Client:** [rust-client/](./rust-client/) directory
