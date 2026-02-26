@@ -287,6 +287,7 @@ import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueString
 import static glide.utils.Java8Utils.createList;
 import static glide.utils.Java8Utils.createMap;
 import static glide.utils.Java8Utils.createSet;
+import static glide.utils.Java8Utils.repeat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -2025,6 +2026,61 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(values, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void mget_binary_with_large_values_returns_null_for_missing_keys() {
+        // Test for large binary data with mget command
+
+        // Create 16KB of data to trigger DirectByteBuffer path
+        byte[] largeData = new byte[16 * 1024];
+        java.util.Arrays.fill(largeData, (byte) 0x00);
+
+        GlideString[] keys = {gs("key1"), gs("missing"), gs("key2")};
+        GlideString[] values = {gs("value1"), null, gs(largeData)};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(values);
+
+        when(commandManager.<GlideString[]>submitNewCommand(eq(MGet), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        CompletableFuture<GlideString[]> response = service.mget(keys);
+        GlideString[] payload = response.get();
+
+        assertEquals(testResponse, response);
+        assertEquals(3, payload.length);
+        assertEquals(gs("value1"), payload[0]);
+        assertNull(payload[1], "Missing key should return null, not GlideString('nil')");
+        assertArrayEquals(largeData, payload[2].getBytes());
+    }
+
+    @SneakyThrows
+    @Test
+    public void mget_string_with_large_values_returns_null_for_missing_keys() {
+        // String version should also handle null correctly with large data
+
+        // Create 16KB string to trigger DirectByteBuffer path
+        String largeString = repeat("x", 16 * 1024);
+
+        String[] keys = {"key1", "missing", "key2"};
+        String[] values = {"value1", null, largeString};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(values);
+
+        when(commandManager.<String[]>submitNewCommand(eq(MGet), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        CompletableFuture<String[]> response = service.mget(keys);
+        String[] payload = response.get();
+
+        assertEquals(testResponse, response);
+        assertEquals(3, payload.length);
+        assertEquals("value1", payload[0]);
+        assertNull(payload[1], "Missing key should return null");
+        assertEquals(largeString, payload[2]);
     }
 
     @SneakyThrows

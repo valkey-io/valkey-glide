@@ -33,6 +33,7 @@ import glide.ffi.resolvers.OpenTelemetryResolver;
 import glide.internal.GlideCoreClient;
 import glide.utils.BufferUtils;
 import glide.utils.Java8Utils;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Collections;
@@ -1001,6 +1002,20 @@ public class CommandManager {
                 case ':': // Integer
                     long intValue = buffer.getLong();
                     result[i] = intValue;
+                    break;
+
+                case ',': // Double
+                    result[i] = buffer.getDouble();
+                    break;
+
+                case '?': // Boolean
+                    result[i] = buffer.get() != 0;
+                    break;
+
+                case '(': // BigNumber
+                    int bigNumberLen = buffer.getInt();
+                    String bigNumberStr = BufferUtils.decodeUtf8(buffer, bigNumberLen);
+                    result[i] = new BigInteger(bigNumberStr);
                     break;
 
                 case '#': // Complex type (serialized as string)

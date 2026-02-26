@@ -123,6 +123,7 @@ import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.RequestRoutingConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.RequestException;
+import glide.utils.Java8Utils;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -144,6 +145,7 @@ import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
@@ -188,6 +190,21 @@ public class SharedCommandTests {
     public static void teardown() {
         for (Arguments client : clients) {
             ((Named<BaseClient>) client.get()[0]).getPayload().close();
+        }
+    }
+
+    @AfterEach
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public void cleanup() {
+        // Flush all databases to ensure clean state between tests
+        for (Arguments client : clients) {
+            BaseClient baseClient = ((Named<BaseClient>) client.get()[0]).getPayload();
+            if (baseClient instanceof GlideClient) {
+                ((GlideClient) baseClient).flushall().get();
+            } else if (baseClient instanceof GlideClusterClient) {
+                ((GlideClusterClient) baseClient).flushall().get();
+            }
         }
     }
 
@@ -681,6 +698,65 @@ public class SharedCommandTests {
         assertArrayEquals(
                 new GlideString[] {value, value, value},
                 client.mget(new GlideString[] {key1, key2, key3}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void mget_with_large_binary_values_returns_null_for_missing_keys(BaseClient client) {
+        // Large binary data causes MGET to yield GlideString "nil" instead of null for missing
+        // key. This tests the DirectByteBuffer serialization path (>16KB).
+
+        // Create 16KB of data to trigger DirectByteBuffer path
+        byte[] largeData = new byte[16 * 1024];
+        java.util.Arrays.fill(largeData, (byte) 0xFF);
+
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString missingKey = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString value1 = gs("value1");
+        GlideString largeValue = gs(largeData);
+
+        // Set only key1 and key2, leave missingKey unset
+        assertEquals(OK, client.set(key1, value1).get());
+        assertEquals(OK, client.set(key2, largeValue).get());
+
+        // Execute MGET with missing key in the middle
+        GlideString[] result = client.mget(new GlideString[] {key1, missingKey, key2}).get();
+
+        // Verify results
+        assertEquals(3, result.length);
+        assertEquals(value1, result[0]);
+        assertNull(result[1], "Missing key should return null, not GlideString('nil')");
+        assertArrayEquals(largeData, result[2].getBytes());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void mget_string_with_large_values_returns_null_for_missing_keys(BaseClient client) {
+        // String version should also handle null correctly with large data
+
+        // Create 16KB string to trigger DirectByteBuffer path
+        String largeString = Java8Utils.repeat("x", 16 * 1024);
+
+        String key1 = UUID.randomUUID().toString();
+        String missingKey = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String value1 = "value1";
+
+        // Set only key1 and key2, leave missingKey unset
+        assertEquals(OK, client.set(key1, value1).get());
+        assertEquals(OK, client.set(key2, largeString).get());
+
+        // Execute MGET with missing key in the middle
+        String[] result = client.mget(new String[] {key1, missingKey, key2}).get();
+
+        // Verify results
+        assertEquals(3, result.length);
+        assertEquals(value1, result[0]);
+        assertNull(result[1], "Missing key should return null");
+        assertEquals(largeString, result[2]);
     }
 
     @SneakyThrows
@@ -4675,6 +4751,37 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void smismember_binary_with_large_response_preserves_boolean_array_values(
+            BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        final int memberCount = 1900; // >16KB in DirectByteBuffer array fast-path
+
+        GlideString[] queryMembers = new GlideString[memberCount];
+        List<GlideString> existingMembers = new ArrayList<>();
+        for (int i = 0; i < memberCount; i++) {
+            GlideString member = gs("m-" + i);
+            queryMembers[i] = member;
+            if (i % 3 == 0) {
+                existingMembers.add(member);
+            }
+        }
+
+        assertEquals(
+                existingMembers.size(),
+                client.sadd(key, existingMembers.toArray(new GlideString[0])).get());
+
+        Boolean[] result = client.smismember(key, queryMembers).get();
+
+        assertEquals(memberCount, result.length);
+        for (int i = 0; i < memberCount; i++) {
+            assertNotNull(result[i], "SMISMEMBER should return booleans, never nil");
+            assertEquals(i % 3 == 0, result[i]);
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void sdiffstore(BaseClient client) {
         String key1 = "{key}-1-" + UUID.randomUUID();
         String key2 = "{key}-2-" + UUID.randomUUID();
@@ -6240,6 +6347,39 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class, () -> client.zmscore(key2, new String[] {"one"}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zmscore_binary_with_large_response_preserves_double_and_null_values(
+            BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        final int memberCount = 2200; // >16KB in DirectByteBuffer array fast-path
+
+        GlideString[] members = new GlideString[memberCount];
+        Map<GlideString, Double> membersScores = new LinkedHashMap<>();
+        for (int i = 0; i < memberCount; i++) {
+            GlideString member = gs("member-" + i);
+            members[i] = member;
+            if (i % 4 == 0) {
+                membersScores.put(member, i + 0.5);
+            }
+        }
+
+        assertEquals(membersScores.size(), client.zadd(key, membersScores).get());
+
+        Double[] result = client.zmscore(key, members).get();
+
+        assertEquals(memberCount, result.length);
+        for (int i = 0; i < memberCount; i++) {
+            if (i % 4 == 0) {
+                assertNotNull(result[i], "Existing member score should not be nil");
+                assertEquals(i + 0.5, result[i]);
+            } else {
+                assertNull(result[i], "Missing member should stay null");
+            }
+        }
     }
 
     @SneakyThrows
@@ -10347,6 +10487,11 @@ public class SharedCommandTests {
         assertEquals(1, pending_results_extended.length);
         assertEquals(streamid_1, pending_results_extended[0][0]);
         assertEquals(consumer1, pending_results_extended[0][1]);
+
+        // Small delay to ensure all XCLAIM and XACK operations are fully processed
+        // This addresses a race condition in standalone RESP2 mode where the final
+        // XPENDING call might not see all expected pending messages immediately
+        Thread.sleep(5);
 
         pending_results_extended =
                 client

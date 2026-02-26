@@ -26,7 +26,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
-import static org.junit.jupiter.api.Named.named;
 
 import glide.BatchTestUtilities.BatchBuilder;
 import glide.api.GlideClient;
@@ -41,14 +40,20 @@ import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -57,20 +62,24 @@ import org.junit.jupiter.params.provider.MethodSource;
 @Timeout(20) // seconds
 public class BatchTests {
 
+    private static final List<Arguments> clients = new ArrayList<>();
+
+    @BeforeAll
     @SneakyThrows
-    public static Stream<Arguments> getClients() {
-        return Stream.of(
+    public static void init() {
+        clients.add(
                 Arguments.of(
-                        named(
+                        Named.of(
                                 "RESP2",
                                 GlideClient.createClient(
                                                 commonClientConfig()
                                                         .requestTimeout(7000)
                                                         .protocol(ProtocolVersion.RESP2)
                                                         .build())
-                                        .get())),
+                                        .get())));
+        clients.add(
                 Arguments.of(
-                        named(
+                        Named.of(
                                 "RESP3",
                                 GlideClient.createClient(
                                                 commonClientConfig()
@@ -80,7 +89,30 @@ public class BatchTests {
                                         .get())));
     }
 
-    @ParameterizedTest
+    @AfterAll
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public static void teardown() {
+        for (Arguments client : clients) {
+            ((Named<GlideClient>) client.get()[0]).getPayload().close();
+        }
+    }
+
+    @AfterEach
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    public void cleanup() {
+        // Flush all databases to ensure clean state between tests
+        for (Arguments client : clients) {
+            ((Named<GlideClient>) client.get()[0]).getPayload().flushall().get();
+        }
+    }
+
+    public static Stream<Arguments> getClients() {
+        return clients.stream();
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void custom_command_info(GlideClient client, boolean isAtomic) {
@@ -89,7 +121,7 @@ public class BatchTests {
         assertTrue(((String) result[0]).contains("# Stats"));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void info_test(GlideClient client, boolean isAtomic) {
@@ -101,7 +133,7 @@ public class BatchTests {
         assertFalse(((String) result[1]).contains("# Stats"));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void ping_tests(GlideClient client, boolean isAtomic) {
@@ -201,7 +233,7 @@ public class BatchTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     public void test_batch_large_values(GlideClient client, boolean isAtomic) {
         // Skip on macOS - the macOS tests run on self hosted VMs which have resource limits
@@ -231,7 +263,7 @@ public class BatchTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     public void test_standalone_batch(GlideClient client, boolean isAtomic) {
         String key = UUID.randomUUID().toString();
@@ -261,7 +293,7 @@ public class BatchTests {
         assertArrayEquals(expectedResult, result);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void lastsave(GlideClient client, boolean isAtomic) {
@@ -271,7 +303,7 @@ public class BatchTests {
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void objectFreq(GlideClient client, boolean isAtomic) {
@@ -293,7 +325,7 @@ public class BatchTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void objectIdletime(GlideClient client, boolean isAtomic) {
@@ -306,7 +338,7 @@ public class BatchTests {
         assertTrue((long) response[1] >= 0L);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void objectRefcount(GlideClient client, boolean isAtomic) {
@@ -319,7 +351,7 @@ public class BatchTests {
         assertTrue((long) response[1] >= 0L);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void zrank_zrevrank_withscores(GlideClient client, boolean isAtomic) {
@@ -336,7 +368,7 @@ public class BatchTests {
         assertArrayEquals(new Object[] {2L, 1.0}, (Object[]) result[2]);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void copy(GlideClient client, boolean isAtomic) {
@@ -346,6 +378,7 @@ public class BatchTests {
         String copyKey2 = "{CopyKey}-2-" + UUID.randomUUID();
         Batch batch =
                 new Batch(isAtomic)
+                        .select(0) // Ensure we start in DB 0 (shared client may be in different DB)
                         .copy(copyKey1, copyKey2, 1, false)
                         .set(copyKey1, "one")
                         .set(copyKey2, "two")
@@ -358,6 +391,7 @@ public class BatchTests {
                         .get(copyKey2);
         Object[] expectedResult =
                 new Object[] {
+                    OK, // select(0)
                     false, // copy(copyKey1, copyKey2, 1, false)
                     OK, // set(copyKey1, "one")
                     OK, // set(copyKey2, "two")
@@ -370,11 +404,21 @@ public class BatchTests {
                     "one", // get(copyKey2)
                 };
 
-        Object[] result = client.exec(batch, true).get();
-        assertArrayEquals(expectedResult, result);
+        try {
+            Object[] result = client.exec(batch, true).get();
+            assertArrayEquals(expectedResult, result);
+        } finally {
+            // Cleanup: delete keys from DB 0, 1, 2 and switch back to DB 0
+            client.select(1).get();
+            client.del(new String[] {copyKey2}).get();
+            client.select(2).get();
+            client.del(new String[] {copyKey2}).get();
+            client.select(0).get();
+            client.del(new String[] {copyKey1, copyKey2}).get();
+        }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void watch(GlideClient client) {
@@ -430,7 +474,7 @@ public class BatchTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void watch_binary(GlideClient client) {
@@ -492,7 +536,7 @@ public class BatchTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void unwatch(GlideClient client) {
@@ -517,7 +561,7 @@ public class BatchTests {
         assertEquals(foobarString, client.get(key2).get());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void sort_and_sortReadOnly(GlideClient client, boolean isAtomic) {
@@ -606,7 +650,7 @@ public class BatchTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     public void waitTest(GlideClient client, boolean isAtomic) {
         // setup
@@ -629,7 +673,7 @@ public class BatchTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     public void scan_test(GlideClient client, boolean isAtomic) {
         assertEquals(OK, client.flushall().get());
@@ -652,7 +696,7 @@ public class BatchTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     public void scan_binary_test(GlideClient client, boolean isAtomic) {
         assertEquals(OK, client.flushall().get());
@@ -675,7 +719,7 @@ public class BatchTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     public void scan_with_options_test(GlideClient client, boolean isAtomic) {
         assertEquals(OK, client.flushall().get());
@@ -739,7 +783,7 @@ public class BatchTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     public void scan_binary_with_options_test(GlideClient client, boolean isAtomic) {
         assertEquals(OK, client.flushall().get());
@@ -805,7 +849,7 @@ public class BatchTests {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void test_batch_dump_restore(GlideClient client, boolean isAtomic) {
@@ -830,7 +874,7 @@ public class BatchTests {
         assertEquals(value, response[1]);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void test_batch_function_dump_restore(GlideClient client, boolean isAtomic) {
@@ -855,7 +899,7 @@ public class BatchTests {
         assertEquals(OK, response[0]);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void test_batch_xinfoStream(GlideClient client, boolean isAtomic) {
@@ -915,7 +959,7 @@ public class BatchTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     public void binary_strings(GlideClient client, boolean isAtomic) {
         String key = UUID.randomUUID().toString();
