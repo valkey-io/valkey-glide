@@ -1,6 +1,7 @@
 ## Pending 2.4
 
 #### Changes
+* CORE: Fix Tokio runtime blocking in cluster async code by replacing std::sync locks with async-safe alternatives ([#5450](https://github.com/valkey-io/valkey-glide/issues/5450))
 * Core: Maintain throughput during cluster failover by making reconnection non-blocking ([#4990](https://github.com/valkey-io/valkey-glide/issues/4990))
 
 #### Fixes
