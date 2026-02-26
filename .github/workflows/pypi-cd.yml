@@ -649,15 +649,29 @@ jobs:
                     echo "PYPY311_BIN=/opt/${PYPY_VERSION_3_11}/bin/pypy3" >> ${GITHUB_ENV}
 
                   elif [[ "${{ matrix.build.NAMED_OS }}" == "darwin" ]]; then
-                    # Use homebrew PyPy on macOS for proper SSL support
-                    # Note: homebrew only has pypy3.9 and pypy3.10, no pypy3.11
+                    # Use homebrew PyPy on macOS for 3.9 and 3.10 (proper SSL support)
                     brew install pypy3.9 pypy3.10 openssl@3
 
                     # Save full path to pypy binaries
                     # Homebrew names binaries as pypy3.9, pypy3.10 (not pypy3)
                     echo "PYPY39_BIN=$(brew --prefix pypy3.9)/bin/pypy3.9" >> ${GITHUB_ENV}
                     echo "PYPY310_BIN=$(brew --prefix pypy3.10)/bin/pypy3.10" >> ${GITHUB_ENV}
-                    echo "PYPY311_BIN=" >> ${GITHUB_ENV}  # Not available in homebrew, will be skipped
+
+                    # Manually download PyPy 3.11 (not available in homebrew)
+                    ARCH=$(uname -m)
+                    if [[ "$ARCH" == "arm64" ]]; then
+                      PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_arm64
+                    else
+                      PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
+                    fi
+
+                    echo "Downloading PyPy 3.11 for $ARCH"
+                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                    sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" -C /opt
+                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_11}/bin
+                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_11}/lib/*.dylib 2>/dev/null || true
+
+                    echo "PYPY311_BIN=/opt/${PYPY_VERSION_3_11}/bin/pypy3" >> ${GITHUB_ENV}
                   fi
 
             - name: Install dependencies for engine build
