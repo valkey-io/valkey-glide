@@ -40,8 +40,8 @@ import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Collections;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -93,7 +93,7 @@ public class BatchTests {
     @SneakyThrows
     @SuppressWarnings("unchecked")
     public static void teardown() {
-        for (var client : clients) {
+        for (Arguments client : clients) {
             ((Named<GlideClient>) client.get()[0]).getPayload().close();
         }
     }
@@ -103,7 +103,7 @@ public class BatchTests {
     @SuppressWarnings("unchecked")
     public void cleanup() {
         // Flush all databases to ensure clean state between tests
-        for (var client : clients) {
+        for (Arguments client : clients) {
             ((Named<GlideClient>) client.get()[0]).getPayload().flushall().get();
         }
     }

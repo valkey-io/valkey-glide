@@ -32,11 +32,10 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Collections;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
@@ -83,7 +82,7 @@ public class ClusterBatchTests {
     @SneakyThrows
     @SuppressWarnings("unchecked")
     public static void teardown() {
-        for (var client : clients) {
+        for (Arguments client : clients) {
             ((Named<GlideClusterClient>) client.get()[0]).getPayload().close();
         }
     }
@@ -93,7 +92,7 @@ public class ClusterBatchTests {
     @SuppressWarnings("unchecked")
     public void cleanup() {
         // Flush all databases to ensure clean state between tests
-        for (var client : clients) {
+        for (Arguments client : clients) {
             ((Named<GlideClusterClient>) client.get()[0]).getPayload().flushall().get();
         }
     }

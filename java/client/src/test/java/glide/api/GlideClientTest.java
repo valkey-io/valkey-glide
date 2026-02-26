@@ -287,6 +287,7 @@ import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueString
 import static glide.utils.Java8Utils.createList;
 import static glide.utils.Java8Utils.createMap;
 import static glide.utils.Java8Utils.createSet;
+import static glide.utils.Java8Utils.repeat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -2061,7 +2062,7 @@ public class GlideClientTest {
         // String version should also handle null correctly with large data
 
         // Create 16KB string to trigger DirectByteBuffer path
-        String largeString = "x".repeat(16 * 1024);
+        String largeString = repeat("x", 16 * 1024);
 
         String[] keys = {"key1", "missing", "key2"};
         String[] values = {"value1", null, largeString};

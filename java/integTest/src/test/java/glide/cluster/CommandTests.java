@@ -204,7 +204,7 @@ public class CommandTests {
     @SneakyThrows
     @SuppressWarnings("unchecked")
     public static void teardown() {
-        for (var client : clients) {
+        for (Arguments client : clients) {
             ((Named<GlideClusterClient>) client.get()[0]).getPayload().close();
         }
     }
@@ -214,7 +214,7 @@ public class CommandTests {
     @SuppressWarnings("unchecked")
     public void cleanup() {
         // Flush all databases to ensure clean state between tests
-        for (var client : clients) {
+        for (Arguments client : clients) {
             ((Named<GlideClusterClient>) client.get()[0]).getPayload().flushall().get();
         }
     }

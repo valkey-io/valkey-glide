@@ -123,6 +123,7 @@ import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.RequestRoutingConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.RequestException;
+import glide.utils.Java8Utils;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -197,7 +198,7 @@ public class SharedCommandTests {
     @SuppressWarnings("unchecked")
     public void cleanup() {
         // Flush all databases to ensure clean state between tests
-        for (var client : clients) {
+        for (Arguments client : clients) {
             BaseClient baseClient = ((Named<BaseClient>) client.get()[0]).getPayload();
             if (baseClient instanceof GlideClient) {
                 ((GlideClient) baseClient).flushall().get();
@@ -737,7 +738,7 @@ public class SharedCommandTests {
         // String version should also handle null correctly with large data
 
         // Create 16KB string to trigger DirectByteBuffer path
-        String largeString = "x".repeat(16 * 1024);
+        String largeString = Java8Utils.repeat("x", 16 * 1024);
 
         String key1 = UUID.randomUUID().toString();
         String missingKey = UUID.randomUUID().toString();

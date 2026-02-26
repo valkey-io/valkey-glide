@@ -3,6 +3,8 @@ package compatibility.jedis;
 
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
+import static glide.utils.Java8Utils.createList;
+import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
@@ -3412,9 +3414,9 @@ public class JedisTest {
     @Test
     void stream_xrange_xrevrange() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("a", "1"));
-        jedis.xadd(key, Map.of("b", "2"));
-        jedis.xadd(key, Map.of("c", "3"));
+        jedis.xadd(key, createMap("a", "1"));
+        jedis.xadd(key, createMap("b", "2"));
+        jedis.xadd(key, createMap("c", "3"));
 
         List<StreamEntry> range = jedis.xrange(key, "-", "+");
         assertNotNull(range);
@@ -3432,7 +3434,7 @@ public class JedisTest {
     @Test
     void stream_xread() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("x", "1"));
+        jedis.xadd(key, createMap("x", "1"));
 
         Map<String, String> keysAndIds = new HashMap<>();
         keysAndIds.put(key, "0-0");
@@ -3447,7 +3449,7 @@ public class JedisTest {
     void stream_xtrim() {
         String key = "stream:" + UUID.randomUUID();
         for (int i = 0; i < 10; i++) {
-            jedis.xadd(key, Map.of("i", String.valueOf(i)));
+            jedis.xadd(key, createMap("i", String.valueOf(i)));
         }
         long lenBefore = jedis.xlen(key);
         assertTrue(lenBefore >= 10, "Stream should have at least 10 entries");
@@ -3461,7 +3463,7 @@ public class JedisTest {
     @Test
     void stream_xgroup_create_destroy() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("init", "1"));
+        jedis.xadd(key, createMap("init", "1"));
 
         String group = "g1";
         String createResult = jedis.xgroupCreate(key, group, "0", true);
@@ -3474,7 +3476,7 @@ public class JedisTest {
     @Test
     void stream_xgroup_setid_createconsumer_delconsumer() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("a", "1"));
+        jedis.xadd(key, createMap("a", "1"));
         String group = "g2";
         jedis.xgroupCreate(key, group, "0", true);
 
@@ -3491,8 +3493,8 @@ public class JedisTest {
     @Test
     void stream_xreadgroup_xack() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("m1", "v1"));
-        jedis.xadd(key, Map.of("m2", "v2"));
+        jedis.xadd(key, createMap("m1", "v1"));
+        jedis.xadd(key, createMap("m2", "v2"));
         String group = "g3";
         jedis.xgroupCreate(key, group, "0", true);
 
@@ -3514,7 +3516,7 @@ public class JedisTest {
     @Test
     void stream_xpending() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("p", "1"));
+        jedis.xadd(key, createMap("p", "1"));
         String group = "g4";
         jedis.xgroupCreate(key, group, "0", true);
 
@@ -3529,7 +3531,7 @@ public class JedisTest {
     @Test
     void stream_xinfo_stream_and_groups() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("i", "1"));
+        jedis.xadd(key, createMap("i", "1"));
         jedis.xgroupCreate(key, "ginfo", "0", true);
 
         Map<String, Object> raw = jedis.xinfoStream(key);
@@ -3548,7 +3550,7 @@ public class JedisTest {
     @Test
     void stream_xinfo_consumers() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("c", "1"));
+        jedis.xadd(key, createMap("c", "1"));
         String group = "gcons";
         jedis.xgroupCreate(key, group, "0", true);
         jedis.xgroupCreateConsumer(key, group, "consumer1");
@@ -3584,9 +3586,9 @@ public class JedisTest {
 
         // Add entries using XAddParams
         XAddParams params = XAddParams.xAddParams();
-        Map<byte[], byte[]> hash1 = Map.of("a".getBytes(), "1".getBytes());
-        Map<byte[], byte[]> hash2 = Map.of("b".getBytes(), "2".getBytes());
-        Map<byte[], byte[]> hash3 = Map.of("c".getBytes(), "3".getBytes());
+        Map<byte[], byte[]> hash1 = createMap("a".getBytes(), "1".getBytes());
+        Map<byte[], byte[]> hash2 = createMap("b".getBytes(), "2".getBytes());
+        Map<byte[], byte[]> hash3 = createMap("c".getBytes(), "3".getBytes());
 
         jedis.xadd(key, params, hash1);
         jedis.xadd(key, params, hash2);
@@ -3611,7 +3613,7 @@ public class JedisTest {
         XAddParams addParams = XAddParams.xAddParams();
 
         for (int i = 0; i < 10; i++) {
-            Map<byte[], byte[]> hash = Map.of("i".getBytes(), String.valueOf(i).getBytes());
+            Map<byte[], byte[]> hash = createMap("i".getBytes(), String.valueOf(i).getBytes());
             jedis.xadd(key, addParams, hash);
         }
         long lenBefore = jedis.xlen(key);
@@ -3626,7 +3628,7 @@ public class JedisTest {
     @Test
     void stream_xadd_with_xaddparams() {
         String key = "stream:" + UUID.randomUUID();
-        Map<String, String> hash = Map.of("field", "value");
+        Map<String, String> hash = createMap("field", "value");
 
         // Test with custom ID
         XAddParams params = XAddParams.xAddParams().id("1000-0");
@@ -3643,10 +3645,10 @@ public class JedisTest {
         // Test with MAXLEN trimming (exact)
         String trimKey = "stream:" + UUID.randomUUID();
         for (int i = 0; i < 5; i++) {
-            jedis.xadd(trimKey, Map.of("i", String.valueOf(i)));
+            jedis.xadd(trimKey, createMap("i", String.valueOf(i)));
         }
         params = XAddParams.xAddParams().maxLenExact(3);
-        jedis.xadd(trimKey, params, Map.of("new", "entry"));
+        jedis.xadd(trimKey, params, createMap("new", "entry"));
         long len = jedis.xlen(trimKey);
         assertTrue(len <= 3, "Stream should be trimmed to exactly 3 entries");
     }
@@ -3655,7 +3657,7 @@ public class JedisTest {
     void stream_xtrim_with_xtrimparams() {
         String key = "stream:" + UUID.randomUUID();
         for (int i = 0; i < 10; i++) {
-            jedis.xadd(key, Map.of("i", String.valueOf(i)));
+            jedis.xadd(key, createMap("i", String.valueOf(i)));
         }
 
         // Test MAXLEN with XTrimParams (exact trimming)
@@ -3668,7 +3670,7 @@ public class JedisTest {
         // Test MAXLEN with approximate trimming
         String key3 = "stream:" + UUID.randomUUID();
         for (int i = 0; i < 10; i++) {
-            jedis.xadd(key3, Map.of("i", String.valueOf(i)));
+            jedis.xadd(key3, createMap("i", String.valueOf(i)));
         }
         params = XTrimParams.xTrimParams().maxLen(5);
         jedis.xtrim(key3, params);
@@ -3679,9 +3681,9 @@ public class JedisTest {
 
         // Test MINID with XTrimParams (exact trimming)
         String key2 = "stream:" + UUID.randomUUID();
-        StreamEntryID firstId = jedis.xadd(key2, Map.of("a", "1"));
-        jedis.xadd(key2, Map.of("b", "2"));
-        StreamEntryID thirdId = jedis.xadd(key2, Map.of("c", "3"));
+        StreamEntryID firstId = jedis.xadd(key2, createMap("a", "1"));
+        jedis.xadd(key2, createMap("b", "2"));
+        StreamEntryID thirdId = jedis.xadd(key2, createMap("c", "3"));
 
         params = XTrimParams.xTrimParams().minIdExact(thirdId);
         jedis.xtrim(key2, params);
@@ -5366,7 +5368,7 @@ public class JedisTest {
 
         String member = jedis.zrandmember(key);
         assertNotNull(member);
-        assertTrue(List.of("one", "two", "three").contains(member));
+        assertTrue(createList("one", "two", "three").contains(member));
 
         jedis.del(key);
     }

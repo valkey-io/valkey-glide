@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis;
 
+import static glide.utils.Java8Utils.createMap;
+
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
@@ -8627,7 +8629,7 @@ public final class Jedis implements Closeable {
      */
     public long zadd(String key, double score, String member) {
         return executeCommandWithGlide(
-                "ZADD", () -> glideClient.zadd(key, Map.of(member, score)).get());
+                "ZADD", () -> glideClient.zadd(key, createMap(member, score)).get());
     }
 
     /**
@@ -8641,7 +8643,7 @@ public final class Jedis implements Closeable {
      * @since Valkey 3.0.2
      */
     public long zadd(String key, double score, String member, ZAddParams params) {
-        return zadd(key, Map.of(member, score), params);
+        return zadd(key, createMap(member, score), params);
     }
 
     /**
@@ -8656,7 +8658,8 @@ public final class Jedis implements Closeable {
     public long zadd(final byte[] key, double score, final byte[] member) {
         return executeCommandWithGlide(
                 "ZADD",
-                () -> glideClient.zadd(GlideString.of(key), Map.of(GlideString.of(member), score)).get());
+                () ->
+                        glideClient.zadd(GlideString.of(key), createMap(GlideString.of(member), score)).get());
     }
 
     /**
@@ -8669,7 +8672,7 @@ public final class Jedis implements Closeable {
      * @return the number of elements added or updated, depending on the CH option
      */
     public long zadd(byte[] key, double score, byte[] member, ZAddParams params) {
-        return zadd(key, Map.of(member, score), params);
+        return zadd(key, createMap(member, score), params);
     }
 
     /**
