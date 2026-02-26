@@ -142,20 +142,10 @@ public class ConnectionTests {
         assertEquals(configSetClient.configResetStat().get(), OK);
 
         // Get Replica Count for current cluster
-        var clusterInfo =
-                configSetClient
-                        .customCommand(
-                                new String[] {"INFO", "REPLICATION"},
-                                new RequestRoutingConfiguration.SlotKeyRoute("key", PRIMARY))
-                        .get();
         long nReplicas =
-                Long.parseLong(
-                        Stream.of(((String) clusterInfo.getSingleValue()).split("\\R"))
-                                .map(line -> line.split(":", 2))
-                                .filter(parts -> parts.length == 2 && parts[0].trim().equals("connected_slaves"))
-                                .map(parts -> parts[1].trim())
-                                .findFirst()
-                                .get());
+                getReplicaCount(
+                        configSetClient,
+                        new RequestRoutingConfiguration.SlotKeyRoute("key", PRIMARY));
         long nGetCalls = 3 * nReplicas;
         String getCmdstat = String.format("cmdstat_get:calls=%d", 3);
 
