@@ -41,7 +41,7 @@
 //! - Invalid routing scenarios
 
 use crate::aio::ConnectionLike;
-use crate::cluster_async::{ClusterConnInner, Connect, InnerCore, RefreshPolicy, MUTEX_READ_ERR};
+use crate::cluster_async::{ClusterConnInner, Connect, InnerCore, RefreshPolicy};
 use crate::cluster_routing::SlotAddr;
 use crate::cluster_topology::SLOT_SIZE;
 use crate::{cmd, from_redis_value, ErrorKind, RedisError, RedisResult, Value};
@@ -555,7 +555,6 @@ where
         if let Some(addr) = core
             .conn_lock
             .read()
-            .expect(MUTEX_READ_ERR)
             .slot_map
             .node_address_for_slot(slot, SlotAddr::ReplicaRequired)
         {
