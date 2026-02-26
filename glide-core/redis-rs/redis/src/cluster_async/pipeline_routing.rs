@@ -766,8 +766,7 @@ where
     C: Clone + ConnectionLike + Connect + Send + Sync + 'static,
 {
     // TODO: add support for user-defined retry configurations
-    let retry_params = core
-        .get_cluster_param(|params| params.retry_params.clone());
+    let retry_params = core.get_cluster_param(|params| params.retry_params.clone());
 
     let mut retry = 0;
 
@@ -994,8 +993,7 @@ async fn handle_retry_logic<C>(
 where
     C: Clone + Sync + ConnectionLike + Send + Connect + 'static,
 {
-    let retry_params = core
-        .get_cluster_param(|params| params.retry_params.clone());
+    let retry_params = core.get_cluster_param(|params| params.retry_params.clone());
 
     if matches!(retry_method, RetryMethod::WaitAndRetry) {
         let sleep_duration = retry_params.wait_time_for_retry(retry);
