@@ -896,21 +896,24 @@ mod standalone_client_tests {
             let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
             let tls_paths = build_tls_file_paths(&tempdir);
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
-            let server = RedisServer::new_with_tls(true, Some(tls_paths));
+
+            let ipv6_addr = redis::ConnectionAddr::TcpTls {
+                host: HOST_IPV6.to_string(),
+                port: get_available_port(),
+                insecure: false,
+                tls_params: None,
+            };
+
+            let _server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                ipv6_addr.clone(),
+                Some(tls_paths.clone()),
+                &[],
+                false,
+                |cmd| cmd.spawn().expect("Failed to spawn server"),
+            );
 
             // Wait to ensure server is ready before connecting.
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-
-            // Reuse the port but connect via the IPv6 loopback address.
-            let ipv6_addr = match server.get_client_addr() {
-                redis::ConnectionAddr::TcpTls { port, .. } => redis::ConnectionAddr::TcpTls {
-                    host: HOST_IPV6.to_string(),
-                    port,
-                    insecure: false,
-                    tls_params: None,
-                },
-                _ => panic!("Expected TLS address"),
-            };
 
             let mut connection_request = create_connection_request(
                 &[ipv6_addr],
