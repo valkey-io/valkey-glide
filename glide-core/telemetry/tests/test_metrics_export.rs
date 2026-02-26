@@ -18,7 +18,6 @@ use opentelemetry_sdk::metrics::data::{
 };
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use std::fs;
-use std::path::PathBuf;
 use std::time::SystemTime;
 use telemetrylib::FileMetricExporter;
 use tempfile::TempDir;

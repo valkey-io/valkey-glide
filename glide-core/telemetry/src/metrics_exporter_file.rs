@@ -261,7 +261,7 @@ where
         dp.insert("count".to_owned(), Value::Number(point.count.into()));
         dp.insert("sum".to_owned(), value_serializer(point.sum));
 
-        // Add bucket counts
+        // Bucket counts are always u64 in the OTel SDK, independent of T
         let bucket_counts: Vec<Value> = point
             .bucket_counts
             .iter()
@@ -269,7 +269,7 @@ where
             .collect();
         dp.insert("bucket_counts".to_owned(), Value::Array(bucket_counts));
 
-        // Add bounds
+        // Bounds are always f64 in the OTel SDK, independent of T — serialized as strings for precision
         let bounds: Vec<Value> = point
             .bounds
             .iter()
