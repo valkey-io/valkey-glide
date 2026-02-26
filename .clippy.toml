@@ -1,5 +1,0 @@
-# Clippy configuration for Valkey GLIDE
-# Catches std::sync locks held across await points
-
-# Deny holding std::sync locks across await points
-await-holding-lock = "deny"
