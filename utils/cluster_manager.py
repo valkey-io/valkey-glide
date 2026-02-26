@@ -56,7 +56,6 @@ HOSTNAME_TLS: str = "valkey.glide.test.tls.com"
 DEFAULT_HOST_IPV4: str = "127.0.0.1"
 DEFAULT_HOST_IPV6: str = "::1"
 
-
 def get_command(commands: List[str]) -> str:
     for command in commands:
         try:
