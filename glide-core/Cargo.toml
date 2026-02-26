@@ -66,6 +66,7 @@ socket-layer = [
 ]
 standalone_heartbeat = []
 iam_tests = []
+iam_mock_tests = []
 mock-pubsub = []
 
 [dev-dependencies]
@@ -86,7 +87,7 @@ glide-core = { path = ".", features = [
 ] } # always enable this feature in tests.
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(standalone_heartbeat)', 'cfg(feature, values("iam_tests"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(standalone_heartbeat)', 'cfg(feature, values("iam_tests"))', 'cfg(feature, values("iam_mock_tests"))'] }
 
 [build-dependencies]
 protobuf-codegen = "3"

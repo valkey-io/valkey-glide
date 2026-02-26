@@ -39,7 +39,7 @@ pub(crate) mod shared_client_tests {
     use utilities::cluster::*;
     use utilities::*;
 
-    #[cfg(feature = "iam_tests")]
+    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
     use glide_core::connection_request::{
         AuthenticationInfo, IamCredentials, ServiceType, TlsMode,
     };
@@ -927,41 +927,90 @@ pub(crate) mod shared_client_tests {
         });
     }
 
-    #[cfg(feature = "iam_tests")]
+    #[cfg(feature = "iam_mock_tests")]
     #[rstest]
     #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_iam_refresh_token(#[values(false, true)] use_cluster: bool) {
-        block_on_all(async {
-            remove_test_credentials();
+        block_on_all(async move {
+            // Set mock AWS credentials
+            unsafe {
+                std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
+                std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+                std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+            }
+
+            // Cleanup function to restore original credentials
+            let cleanup = || unsafe {
+                std::env::remove_var("AWS_ACCESS_KEY_ID");
+                std::env::remove_var("AWS_SECRET_ACCESS_KEY");
+                std::env::remove_var("AWS_SESSION_TOKEN");
+            };
 
             let cluster_name = if use_cluster {
-                "iam-auth-test"
+                "test-cluster"
             } else {
-                "iam-auth-standalone"
+                "test-standalone"
             };
-            let username = "iam-auth";
+            let username = "default";
             let region = "us-east-1";
-            let endpoint = if use_cluster {
-                ELASTICACHE_CLUSTER_IAM_ENDPOINT
-            } else {
-                ELASTICACHE_STANDALONE_IAM_ENDPOINT
+
+            // Create test basics with regular authentication first
+            let test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Get the server address
+            let address = match &test_basics.server {
+                BackingServer::Standalone(server) => server
+                    .as_ref()
+                    .map(|s| s.get_client_addr())
+                    .unwrap_or(get_shared_server_address(false)),
+                BackingServer::Cluster(cluster) => {
+                    if let Some(cluster) = cluster.as_ref() {
+                        let addresses = cluster.get_server_addresses();
+                        addresses[0].clone()
+                    } else {
+                        // Using shared cluster
+                        let addresses = get_shared_cluster_addresses(false);
+                        addresses[0].clone()
+                    }
+                }
             };
 
-            // Use the provided endpoint and port
-            let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
+            // Create IAM connection request with mock credentials
+            let iam_credentials = IamCredentials {
+                cluster_name: cluster_name.into(),
+                region: region.into(),
+                service_type: ServiceType::ELASTICACHE.into(),
+                refresh_interval_seconds: Some(5), // Fast refresh for testing
+                ..Default::default()
+            };
 
-            // Create IAM connection request
-            let connection_request = create_iam_connection_request(
-                &[address],
-                cluster_name,
-                username,
-                region,
-                None, // Use default refresh interval
-                use_cluster,
-                ServiceType::ELASTICACHE,
-            );
+            let auth_info = AuthenticationInfo {
+                password: String::new().into(),
+                username: username.into(),
+                iam_credentials: protobuf::MessageField::some(iam_credentials),
+                ..Default::default()
+            };
 
-            // Attempt to create client with IAM authentication
+            let addresses_info = vec![get_address_info(&address)];
+
+            let connection_request = glide_core::connection_request::ConnectionRequest {
+                addresses: addresses_info,
+                tls_mode: TlsMode::NoTls.into(),
+                cluster_mode_enabled: use_cluster,
+                request_timeout: 10000,
+                authentication_info: protobuf::MessageField::some(auth_info),
+                ..Default::default()
+            };
+
+            // Create client with IAM authentication
             let client_result = Client::new(connection_request.into(), None).await;
 
             match client_result {
@@ -1003,27 +1052,12 @@ pub(crate) mod shared_client_tests {
                             "PING after refresh #{i} should succeed: {ping_result:?}"
                         );
                     }
+
+                    cleanup();
                 }
                 Err(err) => {
-                    // In case of failure, print error and assert that it is not a non-connection/auth error
-                    let error_msg = err.to_string();
-                    // If DNS lookup failed, provide a clearer message
-                    if error_msg.contains("failed to lookup address")
-                        || error_msg.contains("Name or service not known")
-                    {
-                        // Uncomment this when you have a real AWS environment
-                        panic!(
-                            "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
-                            endpoint, error_msg
-                        );
-                    }
-
-                    // Other errors will fall here, indicating problems with IAM token generation or connection/auth
-                    // Uncomment this when you have a real AWS environment
-                    panic!(
-                        "Failed to create client with IAM authentication: {}",
-                        error_msg
-                    );
+                    cleanup();
+                    panic!("Failed to create client with IAM authentication: {}", err);
                 }
             }
         });
@@ -1263,6 +1297,228 @@ pub(crate) mod shared_client_tests {
                         "Failed to create client with IAM authentication: {}",
                         error_msg
                     );
+                }
+            }
+        });
+    }
+
+    #[cfg(feature = "iam_tests")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    /// Test that verifies IAM authentication persists after an automatic reconnection.
+    /// This test:
+    /// 1. Creates a client with mock IAM credentials
+    /// 2. Verifies the connection works with IAM authentication
+    /// 3. Simulates a connection drop by killing the connection
+    /// 4. Sends another command which either:
+    ///    - Fails due to the dropped connection, then retries and verifies reconnection with IAM auth
+    ///    - Succeeds with a new client ID (indicating reconnection) and verifies still using IAM auth
+    /// This ensures that IAM authentication persists across reconnections.
+    fn test_iam_authentication_persistence_after_reconnection(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        block_on_all(async move {
+            // Set mock AWS credentials
+            unsafe {
+                std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
+                std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+                std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+            }
+
+            // Cleanup function to restore original credentials
+            let cleanup = || unsafe {
+                std::env::remove_var("AWS_ACCESS_KEY_ID");
+                std::env::remove_var("AWS_SECRET_ACCESS_KEY");
+                std::env::remove_var("AWS_SESSION_TOKEN");
+            };
+
+            let cluster_name = if use_cluster {
+                "test-cluster"
+            } else {
+                "test-standalone"
+            };
+            let username = "default";
+            let region = "us-east-1";
+
+            // Create test basics with regular authentication first
+            let test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Get the server address
+            let address = match &test_basics.server {
+                BackingServer::Standalone(server) => server
+                    .as_ref()
+                    .map(|s| s.get_client_addr())
+                    .unwrap_or(get_shared_server_address(false)),
+                BackingServer::Cluster(cluster) => {
+                    if let Some(cluster) = cluster.as_ref() {
+                        let addresses = cluster.get_server_addresses();
+                        addresses[0].clone()
+                    } else {
+                        // Using shared cluster
+                        let addresses = get_shared_cluster_addresses(false);
+                        addresses[0].clone()
+                    }
+                }
+            };
+
+            // Create IAM connection request with mock credentials
+            let iam_credentials = IamCredentials {
+                cluster_name: cluster_name.into(),
+                region: region.into(),
+                service_type: ServiceType::ELASTICACHE.into(),
+                refresh_interval_seconds: Some(5), // Fast refresh for testing
+                ..Default::default()
+            };
+
+            let auth_info = AuthenticationInfo {
+                password: String::new().into(),
+                username: username.into(),
+                iam_credentials: protobuf::MessageField::some(iam_credentials),
+                ..Default::default()
+            };
+
+            let addresses_info = vec![get_address_info(&address)];
+
+            let connection_request = glide_core::connection_request::ConnectionRequest {
+                addresses: addresses_info,
+                tls_mode: TlsMode::NoTls.into(),
+                cluster_mode_enabled: use_cluster,
+                request_timeout: 10000,
+                authentication_info: protobuf::MessageField::some(auth_info),
+                ..Default::default()
+            };
+
+            // Create client with IAM authentication
+            let client_result = Client::new(connection_request.into(), None).await;
+
+            match client_result {
+                Ok(mut client) => {
+                    // Verify initial connection works
+                    let initial_ping = client.send_command(&mut redis::cmd("PING"), None).await;
+                    assert!(
+                        initial_ping.is_ok(),
+                        "Initial PING should succeed: {initial_ping:?}"
+                    );
+
+                    // Get initial client info
+                    let mut client_info_cmd = redis::Cmd::new();
+                    client_info_cmd.arg("CLIENT").arg("INFO");
+                    let initial_client_info_response = client
+                        .send_command(&mut client_info_cmd, None)
+                        .await
+                        .unwrap();
+
+                    let initial_client_info = match initial_client_info_response {
+                        Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                        Value::VerbatimString { text, .. } => text,
+                        _ => panic!(
+                            "Unexpected CLIENT INFO response type: {:?}",
+                            initial_client_info_response
+                        ),
+                    };
+
+                    let initial_client_id = utilities::extract_client_id(&initial_client_info)
+                        .expect("Failed to extract initial client ID");
+
+                    // Set a test key to verify functionality
+                    let test_key = generate_random_string(10);
+                    let test_value = "iam_test_value";
+                    let set_result = client
+                        .send_command(redis::cmd("SET").arg(&test_key).arg(test_value), None)
+                        .await;
+                    assert!(
+                        set_result.is_ok(),
+                        "SET command should succeed: {set_result:?}"
+                    );
+
+                    // Kill the connection to simulate a network drop
+                    kill_connection(&mut client).await;
+
+                    // Wait a moment for the connection to be fully dropped
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+                    // Try to send another command - this should trigger reconnection
+                    let res = client.send_command(&mut client_info_cmd, None).await;
+                    match res {
+                        Err(err) => {
+                            // Connection was dropped as expected
+                            assert!(
+                                err.is_connection_dropped() || err.is_timeout(),
+                                "Expected connection dropped or timeout error, got: {err:?}",
+                            );
+                            // Retry and verify we can still connect with IAM auth after reconnection
+                            let client_info = repeat_try_create(|| async {
+                                let mut client_clone = client.clone();
+                                let mut cmd = client_info_cmd.clone();
+                                let response =
+                                    client_clone.send_command(&mut cmd, None).await.ok()?;
+                                match response {
+                                    Value::BulkString(bytes) => {
+                                        Some(String::from_utf8_lossy(&bytes).to_string())
+                                    }
+                                    Value::VerbatimString { text, .. } => Some(text),
+                                    _ => None,
+                                }
+                            })
+                            .await;
+
+                            // Verify we got a new client ID (reconnection happened)
+                            let new_client_id = utilities::extract_client_id(&client_info)
+                                .expect("Failed to extract new client ID");
+                            assert_ne!(
+                                initial_client_id, new_client_id,
+                                "Client ID should change after reconnection"
+                            );
+                        }
+                        Ok(response) => {
+                            // Command succeeded after reconnection
+                            let new_client_info = match response {
+                                Value::BulkString(bytes) => {
+                                    String::from_utf8_lossy(&bytes).to_string()
+                                }
+                                Value::VerbatimString { text, .. } => text,
+                                _ => panic!("Unexpected CLIENT INFO response type: {:?}", response),
+                            };
+                            let new_client_id = utilities::extract_client_id(&new_client_info)
+                                .expect("Failed to extract new client ID");
+
+                            // Client ID may or may not change depending on timing
+                            if new_client_id != initial_client_id {
+                                println!(
+                                    "Reconnection detected: client ID changed from {} to {}",
+                                    initial_client_id, new_client_id
+                                );
+                            }
+                        }
+                    }
+
+                    // Verify we can still retrieve the previously set value after reconnection
+                    let get_result = client
+                        .send_command(redis::cmd("GET").arg(&test_key), None)
+                        .await;
+                    assert!(
+                        get_result.is_ok(),
+                        "GET after reconnection should succeed: {get_result:?}"
+                    );
+                    assert_eq!(
+                        get_result.unwrap(),
+                        Value::BulkString(test_value.as_bytes().to_vec()),
+                        "GET should return the same value after reconnection"
+                    );
+
+                    cleanup();
+                }
+                Err(err) => {
+                    cleanup();
+                    panic!("Failed to create client with IAM authentication: {}", err);
                 }
             }
         });

@@ -15,7 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClient;
+import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.ServerCredentials;
+import glide.api.models.configuration.ServiceType;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
 import java.util.Map;
@@ -416,6 +418,122 @@ public class StandaloneClientTests {
         } finally {
             deleteAclUser(adminClient, username);
             adminClient.close();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_iam_authentication_with_mock_credentials() {
+        // NOTE: This test requires AWS credentials to be set as OS environment variables
+        // BEFORE the JVM starts. System.setProperty() does NOT work because the Rust AWS SDK
+        // reads from the OS process environment, not JVM properties.
+        //
+        // To run this test locally:
+        // AWS_ACCESS_KEY_ID=test_access_key AWS_SECRET_ACCESS_KEY=test_secret_key \
+        // AWS_SESSION_TOKEN=test_session_token ./gradlew :integTest:test \
+        // --tests "*.test_iam_authentication_with_mock_credentials"
+
+        // Skip test if AWS credentials are not set in OS environment
+        if (System.getenv("AWS_ACCESS_KEY_ID") == null) {
+            System.out.println("Skipping IAM test - AWS credentials not set in OS environment");
+            System.out.println(
+                    "Run with: AWS_ACCESS_KEY_ID=test_access_key AWS_SECRET_ACCESS_KEY=test_secret_key"
+                            + " AWS_SESSION_TOKEN=test_session_token ./gradlew :integTest:test");
+            return;
+        }
+        // Create IAM config
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName("test-cluster")
+                        .service(ServiceType.ELASTICACHE)
+                        .region("us-east-1")
+                        .refreshIntervalSeconds(5) // Fast refresh for testing
+                        .build();
+
+        // Create credentials with IAM config
+        ServerCredentials credentials =
+                ServerCredentials.builder().username("default").iamConfig(iamConfig).build();
+
+        // Create client with IAM authentication
+        try (GlideClient client =
+                GlideClient.createClient(
+                                commonClientConfig()
+                                        .credentials(credentials)
+                                        .useTLS(false) // Local server doesn't use TLS
+                                        .build())
+                        .get()) {
+
+            System.out.println("[DEBUG] Client created successfully with IAM auth");
+
+            // Verify connection works
+            String pingResult = client.ping().get();
+            assertEquals("PONG", pingResult);
+            System.out.println("[DEBUG] Initial PING successful: " + pingResult);
+
+            // Test basic operations
+            assertEquals("OK", client.set("iam_test_key", "iam_test_value").get());
+            assertEquals("iam_test_value", client.get("iam_test_key").get());
+            System.out.println("[DEBUG] Basic operations successful");
+
+            // Test manual token refresh
+            System.out.println("[DEBUG] About to call refreshIamToken()");
+            try {
+                client.refreshIamToken().get();
+                System.out.println("[DEBUG] refreshIamToken() succeeded");
+            } catch (Exception e) {
+                System.err.println("[DEBUG] refreshIamToken() failed: " + e.getMessage());
+                e.printStackTrace();
+                throw e;
+            }
+
+            // Verify operations still work after token refresh
+            assertEquals("OK", client.set("iam_test_key2", "iam_test_value2").get());
+            assertEquals("iam_test_value2", client.get("iam_test_key2").get());
+            System.out.println("[DEBUG] Operations after refresh successful");
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_iam_authentication_automatic_token_refresh()
+            throws InterruptedException, ExecutionException {
+        // NOTE: See test_iam_authentication_with_mock_credentials for setup instructions
+
+        // Skip test if AWS credentials are not set in OS environment
+        if (System.getenv("AWS_ACCESS_KEY_ID") == null) {
+            System.out.println("Skipping IAM test - AWS credentials not set in OS environment");
+            System.out.println(
+                    "Run with: AWS_ACCESS_KEY_ID=test_access_key AWS_SECRET_ACCESS_KEY=test_secret_key"
+                            + " AWS_SESSION_TOKEN=test_session_token ./gradlew :integTest:test");
+            return;
+        }
+        // Create IAM config with very short refresh interval
+        IamAuthConfig iamConfig =
+                IamAuthConfig.builder()
+                        .clusterName("test-cluster")
+                        .service(ServiceType.ELASTICACHE)
+                        .region("us-east-1")
+                        .refreshIntervalSeconds(2) // Very fast refresh for testing
+                        .build();
+
+        ServerCredentials credentials =
+                ServerCredentials.builder().username("default").iamConfig(iamConfig).build();
+
+        try (GlideClient client =
+                GlideClient.createClient(
+                                commonClientConfig().credentials(credentials).useTLS(false).build())
+                        .get()) {
+
+            // Verify initial connection
+            String pingResult = client.ping().get();
+            assertEquals("PONG", pingResult);
+
+            // Wait for automatic token refresh to occur
+            Thread.sleep(3000);
+
+            // Verify client still works after automatic refresh
+            assertEquals("OK", client.set("iam_auto_refresh_key", "iam_auto_refresh_value").get());
+            assertEquals("iam_auto_refresh_value", client.get("iam_auto_refresh_key").get());
         }
     }
 }

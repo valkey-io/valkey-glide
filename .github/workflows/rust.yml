@@ -126,7 +126,7 @@ jobs:
 
             - name: Run glide-core tests
               working-directory: ./glide-core
-              run: cargo test --features "proto,socket-layer,standalone_heartbeat"
+              run: cargo test --features "proto,socket-layer,standalone_heartbeat,iam_mock_tests"
 
             - name: Run glide-core telemetry tests
               working-directory: ./glide-core/telemetry
