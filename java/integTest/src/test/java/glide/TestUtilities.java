@@ -7,10 +7,9 @@ import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestConfiguration.TLS;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.utils.Java8Utils.createMap;
-
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,6 +26,7 @@ import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.cluster.ValkeyCluster;
 import java.nio.file.Files;
@@ -713,20 +713,15 @@ public class TestUtilities {
      */
     @SneakyThrows
     public static long getReplicaCount(GlideClusterClient client, Route primaryRoute) {
-        var replicationInfo =
+        ClusterValue<Object> replicationInfo =
                 client.customCommand(new String[] {"INFO", "REPLICATION"}, primaryRoute).get();
         return Long.parseLong(
                 Stream.of(((String) replicationInfo.getSingleValue()).split("\\R"))
                         .map(line -> line.split(":", 2))
-                        .filter(
-                                parts ->
-                                        parts.length == 2
-                                                && parts[0].trim().equals("connected_slaves"))
+                        .filter(parts -> parts.length == 2 && parts[0].trim().equals("connected_slaves"))
                         .map(parts -> parts[1].trim())
                         .findFirst()
                         .orElseThrow(
-                                () ->
-                                        new RuntimeException(
-                                                "connected_slaves not found in INFO REPLICATION")));
+                                () -> new RuntimeException("connected_slaves not found in INFO REPLICATION")));
     }
 }
