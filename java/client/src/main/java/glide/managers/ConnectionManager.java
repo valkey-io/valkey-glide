@@ -384,6 +384,14 @@ public class ConnectionManager {
                                     advanced.getPubsubReconciliationIntervalMs());
                         }
 
+                        // Set read-only mode for standalone clients
+                        if (configuration instanceof GlideClientConfiguration) {
+                            GlideClientConfiguration standaloneConfig = (GlideClientConfiguration) configuration;
+                            if (standaloneConfig.isReadOnly()) {
+                                requestBuilder.setReadOnly(true);
+                            }
+                        }
+
                         // Build and serialize to bytes
                         ConnectionRequest request = requestBuilder.build();
                         byte[] requestBytes = request.toByteArray();
