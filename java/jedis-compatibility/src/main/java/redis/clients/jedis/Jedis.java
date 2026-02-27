@@ -2,6 +2,7 @@
 package redis.clients.jedis;
 
 import glide.api.GlideClient;
+import glide.api.GlideClusterClient;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
@@ -1165,6 +1166,11 @@ public final class Jedis implements Closeable {
         T execute() throws InterruptedException, ExecutionException;
     }
 
+    @FunctionalInterface
+    private interface GlideClusterOperation<T> {
+        T execute(GlideClusterClient clusterClient) throws InterruptedException, ExecutionException;
+    }
+
     /**
      * Helper method that encapsulates the common try/catch pattern with connection checks. This
      * method handles the standard flow: checkNotClosed() -> ensureInitialized() -> execute operation
@@ -1184,6 +1190,22 @@ public final class Jedis implements Closeable {
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException(operationName + " operation failed", e);
         }
+    }
+
+    /**
+     * Helper method to execute GLIDE cluster operations. Since Jedis class is for standalone
+     * connections only, this method always throws an exception directing users to use JedisCluster.
+     *
+     * @param operationName the name of the operation for error messages
+     * @param operation the lambda containing the GLIDE cluster client operation
+     * @param <T> the return type of the operation
+     * @return never returns (always throws exception)
+     * @throws JedisException always, as cluster operations are not supported in standalone mode
+     */
+    private <T> T executeCommandWithGlideCluster(
+            String operationName, GlideClusterOperation<T> operation) {
+        throw new JedisException(
+                operationName + " is only available in cluster mode. Use JedisCluster instead.");
     }
 
     /**
@@ -8414,9 +8436,29 @@ public final class Jedis implements Closeable {
         return blmove(source, destination, ListDirection.RIGHT, ListDirection.LEFT, timeout);
     }
 
-    // ========================================
-    // Sorted Set Commands
-    // ========================================
+    /**
+     * Publishes a message to a channel.
+     *
+     * <p><b>Note:</b> This method currently returns {@code 0} instead of the actual subscriber count
+     * because the underlying GLIDE API does not expose this information. See <a
+     * href="https://github.com/valkey-io/valkey-glide/issues/5354">issue #5354</a> for tracking.
+     *
+     * @param channel the channel to publish to
+     * @param message the message to publish
+     * @return the number of clients that received the message (currently always returns {@code 0})
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public long publish(String channel, String message) {
+        return executeCommandWithGlide(
+                "PUBLISH",
+                () -> {
+                    // TODO(#5354): Return actual subscriber count when GLIDE API supports it
+                    glideClient.publish(message, channel).get();
+                    return 0L;
+                });
+    }
+
     // ==================== Scripting and Functions Commands ====================
 
     /**
@@ -8482,6 +8524,29 @@ public final class Jedis implements Closeable {
                     } catch (Exception e) {
                         throw new RuntimeException("Failed to execute script", e);
                     }
+                });
+    }
+
+    /**
+     * Publishes a message to a channel (binary version).
+     *
+     * <p><b>Note:</b> This method currently returns {@code 0} instead of the actual subscriber count
+     * because the underlying GLIDE API does not expose this information. See <a
+     * href="https://github.com/valkey-io/valkey-glide/issues/5354">issue #5354</a> for tracking.
+     *
+     * @param channel the channel to publish to
+     * @param message the message to publish
+     * @return the number of clients that received the message (currently always returns {@code 0})
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public long publish(final byte[] channel, final byte[] message) {
+        return executeCommandWithGlide(
+                "PUBLISH",
+                () -> {
+                    // TODO(#5354): Return actual subscriber count when GLIDE API supports it
+                    glideClient.publish(GlideString.of(message), GlideString.of(channel)).get();
+                    return 0L;
                 });
     }
 
@@ -8553,6 +8618,20 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Returns the list of currently active channels.
+     *
+     * @return list of channel names
+     */
+    public List<String> pubsubChannels() {
+        return executeCommandWithGlide(
+                "PUBSUB CHANNELS",
+                () -> {
+                    String[] arr = glideClient.pubsubChannels().get();
+                    return arr != null ? Arrays.asList(arr) : Collections.emptyList();
+                });
+    }
+
+    /**
      * Executes a read-only Lua script with keys and arguments.
      *
      * @param script the Lua 5.1 script to execute
@@ -8569,6 +8648,21 @@ public final class Jedis implements Closeable {
                     String[] keyArray = keys != null ? keys.toArray(new String[0]) : new String[0];
                     String[] argArray = args != null ? args.toArray(new String[0]) : new String[0];
                     return glideClient.evalReadOnly(script, keyArray, argArray).get();
+                });
+    }
+
+    /**
+     * Returns the list of currently active channels matching the given pattern.
+     *
+     * @param pattern glob-style pattern
+     * @return list of channel names
+     */
+    public List<String> pubsubChannels(String pattern) {
+        return executeCommandWithGlide(
+                "PUBSUB CHANNELS",
+                () -> {
+                    String[] arr = glideClient.pubsubChannels(pattern).get();
+                    return arr != null ? Arrays.asList(arr) : Collections.emptyList();
                 });
     }
 
@@ -8612,6 +8706,25 @@ public final class Jedis implements Closeable {
                     // Use customCommand since GLIDE Java doesn't expose a type-safe scriptLoad API
                     return (String) glideClient.customCommand(new String[] {"SCRIPT", "LOAD", script}).get();
                 });
+    }
+
+    /**
+     * Returns the number of unique patterns that are subscribed to by clients.
+     *
+     * @return the number of unique patterns
+     */
+    public Long pubsubNumPat() {
+        return executeCommandWithGlide("PUBSUB NUMPAT", () -> glideClient.pubsubNumPat().get());
+    }
+
+    /**
+     * Returns the number of subscribers for the specified channels.
+     *
+     * @param channels channel names
+     * @return map of channel name to subscriber count
+     */
+    public Map<String, Long> pubsubNumSub(String... channels) {
+        return executeCommandWithGlide("PUBSUB NUMSUB", () -> glideClient.pubsubNumSub(channels).get());
     }
 
     /**
@@ -8939,6 +9052,9 @@ public final class Jedis implements Closeable {
                 });
     }
 
+    // ========================================
+    // Sorted Set Commands
+    // ========================================
     /**
      * Adds one or more members to a sorted set, or updates the score if it already exists.
      *

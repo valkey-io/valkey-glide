@@ -76,7 +76,7 @@ blockingSocketTimeoutMillis
 - ✅ Object introspection (OBJECT ENCODING, OBJECT FREQ, OBJECT IDLETIME, OBJECT REFCOUNT)
 - ✅ Geospatial operations (GEOADD, GEOPOS, GEODIST, GEOHASH, GEOSEARCH, GEOSEARCHSTORE)
 - ✅ Connection commands (PING, SELECT)
-- ✅ ACL commands (ACL LIST, ACL GETUSER, ACL SETUSER, ACL DELUSER, ACL CAT, ACL GENPASS, ACL LOG, ACL LOG RESET, ACL WHOAMI, ACL USERS, ACL SAVE, ACL LOAD, ACL DRYRUN)
+- ✅ Pub/Sub (PUBLISH, PUBSUB CHANNELS, PUBSUB NUMSUB, PUBSUB NUMPAT). `publish()` returns `0` instead of the actual subscriber count due to GLIDE API limitations (see [issue #5354](https://github.com/valkey-io/valkey-glide/issues/5354)). For subscription management and message handling, use GLIDE's native dynamic pubsub APIs for subscribing to channels and handling messages at runtime.
 - ✅ Generic commands via `sendCommand()` (Protocol.Command types only)
 
 ### Client Types
@@ -103,8 +103,8 @@ blockingSocketTimeoutMillis
 ### Advanced Features
 - **Transactions**: MULTI/EXEC transaction blocks not supported
 - **Pipelining**: Jedis pipelining functionality unavailable
-- **Pub/Sub**: Redis publish/subscribe not implemented
-- ✅ **Lua scripting**: Full support for EVAL/EVALSHA, SCRIPT management, and Valkey Functions (FCALL/FUNCTION *)
+- **Pub/Sub with JedisPubSub callbacks**: Jedis-style `JedisPubSub` callback listeners are not supported. For PubSub functionality with message handling, use GLIDE's native dynamic pubsub APIs to subscribe to channels and handle messages at runtime. The compatibility layer only provides `publish()` and `pubsub*()` inspection commands.
+- **Lua scripting**: EVAL/EVALSHA commands not supported
 - **Modules**: Redis module commands not available
 
 ### Configuration Limitations

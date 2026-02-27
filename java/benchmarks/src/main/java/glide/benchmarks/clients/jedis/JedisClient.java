@@ -38,11 +38,20 @@ public class JedisClient implements SyncClient {
             jedisCluster =
                     new JedisCluster(
                             Set.of(new HostAndPort(connectionSettings.host, connectionSettings.port)),
-                            DefaultJedisClientConfig.builder().ssl(connectionSettings.useSsl).build());
+                            DefaultJedisClientConfig.builder()
+                                    .ssl(connectionSettings.useSsl)
+                                    .socketTimeoutMillis(60000) // 60 second timeout for bulk operations
+                                    .connectionTimeoutMillis(10000) // 10 second connection timeout
+                                    .build());
         } else {
+            DefaultJedisClientConfig config =
+                    DefaultJedisClientConfig.builder()
+                            .ssl(connectionSettings.useSsl)
+                            .socketTimeoutMillis(60000) // 60 second timeout
+                            .connectionTimeoutMillis(10000) // 10 second connection timeout
+                            .build();
             jedisStandalonePool =
-                    new JedisPool(
-                            connectionSettings.host, connectionSettings.port, connectionSettings.useSsl);
+                    new JedisPool(new HostAndPort(connectionSettings.host, connectionSettings.port), config);
         }
     }
 
