@@ -1,8 +1,8 @@
-### Install node 20 (or newer)
+### Install node 16 (or newer)
 ```
-curl -s https://deb.nodesource.com/setup_20.x | sudo bash
+curl -s https://deb.nodesource.com/setup_16.x | sudo bash
 apt-get install nodejs npm
-npm i -g npm@10
+npm i -g npm@8
 ```
 
 ## Install GLIDE package and build the example
