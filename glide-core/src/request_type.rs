@@ -846,7 +846,15 @@ impl RequestType {
         use crate::compression::CommandCompressionBehavior;
         match self {
             RequestType::Set => CommandCompressionBehavior::CompressValues,
+            RequestType::MSet => CommandCompressionBehavior::CompressValues,
+            RequestType::SetEx => CommandCompressionBehavior::CompressValues,
+            RequestType::PSetEx => CommandCompressionBehavior::CompressValues,
+            RequestType::SetNX => CommandCompressionBehavior::CompressValues,
             RequestType::Get => CommandCompressionBehavior::DecompressValues,
+            RequestType::MGet => CommandCompressionBehavior::DecompressValues,
+            RequestType::GetEx => CommandCompressionBehavior::DecompressValues,
+            RequestType::GetDel => CommandCompressionBehavior::DecompressValues,
+            RequestType::GetSet => CommandCompressionBehavior::DecompressValues,
             _ => CommandCompressionBehavior::NoCompression,
         }
     }

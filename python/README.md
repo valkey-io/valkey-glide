@@ -354,6 +354,71 @@ current_rate = OpenTelemetry.get_sample_percentage()
 
 ---
 
+## Compression Configuration (EXPERIMENTAL)
+
+**⚠️ WARNING: This feature is experimental and can result in incorrect responses from certain commands without careful use.**
+
+Valkey GLIDE supports automatic compression and decompression of string values to reduce memory usage and network bandwidth.
+
+**Incompatible Commands**: Compression is NOT compatible with commands that manipulate string data on the server:
+- APPEND, GETRANGE, SETRANGE, STRLEN, LCS
+- INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY
+- GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP
+
+Using these commands with compressed values will result in incorrect behavior or errors.
+
+### Basic Compression Setup
+
+```python
+# Async client
+from glide import GlideClientConfiguration, NodeAddress, GlideClient, CompressionConfiguration, CompressionBackend
+
+config = GlideClientConfiguration(
+    addresses=[NodeAddress("localhost", 6379)],
+    compression_configuration=CompressionConfiguration(
+        backend=CompressionBackend.ZSTD,  # or CompressionBackend.LZ4
+        min_compression_size=64,  # Only compress values >= 64 bytes
+        compression_level=3  # ZSTD: 1-22, LZ4: -128 to 12
+    )
+)
+client = await GlideClient.create(config)
+
+# Sync client
+from glide_sync import GlideClientConfiguration, NodeAddress, GlideClient, CompressionConfiguration, CompressionBackend
+
+config = GlideClientConfiguration(
+    addresses=[NodeAddress("localhost", 6379)],
+    compression_configuration=CompressionConfiguration(
+        backend=CompressionBackend.ZSTD,
+        min_compression_size=64,
+        compression_level=3
+    )
+)
+client = GlideClient.create(config)
+```
+
+### Supported Commands
+
+**Write Commands** (automatic compression):
+- SET, MSET, SETEX, PSETEX, SETNX
+
+**Read Commands** (automatic decompression):
+- GET, MGET, GETEX, GETDEL
+
+### Monitoring Compression
+
+Use `get_statistics()` to monitor compression effectiveness:
+
+```python
+stats = await client.get_statistics()  # or client.get_statistics() for sync
+print(f"Values compressed: {stats['total_values_compressed']}")
+print(f"Original bytes: {stats['total_original_bytes']}")
+print(f"Compressed bytes: {stats['total_bytes_compressed']}")
+print(f"Compression skipped: {stats['compression_skipped_count']}")
+```
+
+---
+
 For complete examples with error handling, please refer to:
 - [Async Cluster Example](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/cluster_example.py)
 - [Async Standalone Example](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/standalone_example.py)

@@ -69,15 +69,23 @@ pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
 
 /// Extract RequestType from a Redis command for decompression processing
-/// SIMPLIFIED VERSION: Only supports basic GET commands for decompression.
 fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
     // Get the command name (first argument)
     let command_name = cmd.command()?;
     let command_str = String::from_utf8_lossy(&command_name).to_uppercase();
 
-    // Map command names to RequestType - only basic GET supported for decompression
+    // Map command names to RequestType for decompression
     match command_str.as_str() {
         "GET" => Some(RequestType::Get),
+        "MGET" => Some(RequestType::MGet),
+        "GETEX" => Some(RequestType::GetEx),
+        "GETDEL" => Some(RequestType::GetDel),
+        "GETSET" => Some(RequestType::GetSet),
+        "SET" => Some(RequestType::Set),
+        "MSET" => Some(RequestType::MSet),
+        "SETEX" => Some(RequestType::SetEx),
+        "PSETEX" => Some(RequestType::PSetEx),
+        "SETNX" => Some(RequestType::SetNX),
         _ => None, // Unknown command, no compression/decompression needed
     }
 }
