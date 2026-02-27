@@ -5,7 +5,7 @@ mod utilities;
 
 #[cfg(test)]
 mod cluster_client_tests {
-    use crate::{test_constants::HOST_IPV6, utilities::cluster::RedisCluster};
+    use crate::utilities::cluster::RedisCluster;
     use std::collections::HashMap;
 
     use super::*;
@@ -674,7 +674,9 @@ mod cluster_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_cluster_tls_connection_with_ipv6_succeeds() {
+    fn test_cluster_tls_connection_with_ip_address_succeeds(
+        #[values(test_constants::HOST_IPV4, test_constants::HOST_IPV6)] host: &str,
+    ) {
         block_on_all(async move {
             let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
             let tls_paths = build_tls_file_paths(&tempdir);
@@ -685,9 +687,9 @@ mod cluster_client_tests {
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
 
             let default_address = cluster.get_server_addresses()[0].clone();
-            let ipv6_addr = match default_address {
+            let ip_addr = match default_address {
                 redis::ConnectionAddr::TcpTls { port, .. } => redis::ConnectionAddr::TcpTls {
-                    host: HOST_IPV6.to_string(),
+                    host: host.to_string(),
                     port,
                     insecure: false,
                     tls_params: None,
@@ -696,7 +698,7 @@ mod cluster_client_tests {
             };
 
             let mut connection_request = create_connection_request(
-                &[ipv6_addr],
+                &[ip_addr],
                 &TestConfiguration {
                     use_tls: true,
                     cluster_mode: ClusterMode::Enabled,
@@ -709,7 +711,7 @@ mod cluster_client_tests {
 
             let mut client = Client::new(connection_request.into(), None)
                 .await
-                .expect("Failed to create cluster client with IPv6 address");
+                .expect("Failed to create cluster client with IP address");
 
             assert_connected(&mut client).await;
         });
