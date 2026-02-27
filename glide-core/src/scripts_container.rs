@@ -47,17 +47,16 @@ pub async fn add_script_async(script: &[u8]) -> String {
 }
 
 pub fn add_script(script: &[u8]) -> String {
-    match tokio::runtime::Handle::try_current() {
-        Ok(handle) => handle.block_on(add_script_async(script)),
-        Err(_) => {
-            // No runtime exists, create a temporary one
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("Failed to create Tokio runtime");
-            rt.block_on(add_script_async(script))
-        }
-    }
+    let script = script.to_vec();
+    std::thread::spawn(move || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime")
+            .block_on(add_script_async(&script))
+    })
+    .join()
+    .expect("Thread panicked")
 }
 
 pub async fn get_script_async(hash: &str) -> Option<Arc<BytesMut>> {
@@ -69,14 +68,16 @@ pub async fn get_script_async(hash: &str) -> Option<Arc<BytesMut>> {
 }
 
 pub fn get_script(hash: &str) -> Option<Arc<BytesMut>> {
-    match tokio::runtime::Handle::try_current() {
-        Ok(handle) => handle.block_on(get_script_async(hash)),
-        Err(_) => tokio::runtime::Builder::new_current_thread()
+    let hash = hash.to_string();
+    std::thread::spawn(move || {
+        tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("Failed to create Tokio runtime")
-            .block_on(get_script_async(hash)),
-    }
+            .block_on(get_script_async(&hash))
+    })
+    .join()
+    .expect("Thread panicked")
 }
 
 pub async fn remove_script_async(hash: &str) {
@@ -106,14 +107,16 @@ pub async fn remove_script_async(hash: &str) {
 }
 
 pub fn remove_script(hash: &str) {
-    match tokio::runtime::Handle::try_current() {
-        Ok(handle) => handle.block_on(remove_script_async(hash)),
-        Err(_) => tokio::runtime::Builder::new_current_thread()
+    let hash = hash.to_string();
+    std::thread::spawn(move || {
+        tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("Failed to create Tokio runtime")
-            .block_on(remove_script_async(hash)),
-    }
+            .block_on(remove_script_async(&hash))
+    })
+    .join()
+    .expect("Thread panicked")
 }
 
 #[cfg(test)]
