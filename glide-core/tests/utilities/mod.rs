@@ -8,7 +8,7 @@ use glide_core::{
     connection_request::{self, AuthenticationInfo, NodeAddress, ProtocolVersion},
 };
 use once_cell::sync::Lazy;
-use rand::{Rng, distributions::Alphanumeric};
+use rand::{Rng, distributions::Alphanumeric, seq::IteratorRandom};
 use redis::{
     ConnectionAddr, GlideConnectionOptions, PushInfo, RedisConnectionInfo, RedisResult, Value,
     cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo},
@@ -89,10 +89,11 @@ pub enum Module {
 }
 
 pub fn get_available_port() -> u16 {
-    loop {
+
+    let attempts = 100;
+    for _ in 0..attempts {
         let port = rand::random::<u16>().max(6379);
 
-        // Check IPv4 address.
         let addr4 = format!("{}:{}", HOST_IPV4, port)
             .parse::<SocketAddr>()
             .unwrap()
@@ -103,7 +104,6 @@ pub fn get_available_port() -> u16 {
             continue;
         }
 
-        // Check IPv6 address.
         let addr6 = format!("[{}]:{}", HOST_IPV6, port)
             .parse::<SocketAddr>()
             .unwrap()
@@ -117,6 +117,8 @@ pub fn get_available_port() -> u16 {
 
         return port;
     }
+
+    panic!("Failed to find available port after {} attempts", attempts);
 }
 
 pub fn get_listener_on_available_port() -> TcpListener {
