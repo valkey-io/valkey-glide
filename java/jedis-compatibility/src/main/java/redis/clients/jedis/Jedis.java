@@ -24,6 +24,7 @@ import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
@@ -46,6 +47,11 @@ import glide.api.models.commands.bitmap.BitFieldOptions.SignedEncoding;
 import glide.api.models.commands.bitmap.BitFieldOptions.UnsignedEncoding;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.commands.geospatial.GeoSearchOrigin;
+import glide.api.models.commands.geospatial.GeoSearchShape;
+import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
+import glide.api.models.commands.geospatial.GeoUnit;
+import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.HScanOptionsBinary;
 import glide.api.models.commands.scan.SScanOptions;
@@ -93,12 +99,15 @@ import redis.clients.jedis.commands.ProtocolCommand;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.BitPosParams;
+import redis.clients.jedis.params.GeoSearchParam;
 import redis.clients.jedis.params.GetExParams;
 import redis.clients.jedis.params.HGetExParams;
 import redis.clients.jedis.params.HSetExParams;
+import redis.clients.jedis.params.LCSParams;
 import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.params.SortingParams;
 import redis.clients.jedis.params.XAddParams;
 import redis.clients.jedis.params.XTrimParams;
 import redis.clients.jedis.params.ZAddParams;
@@ -108,6 +117,10 @@ import redis.clients.jedis.params.ZRangeParams;
 import redis.clients.jedis.resps.AccessControlLogEntry;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
+import redis.clients.jedis.resps.GeoRadiusResponse;
+import redis.clients.jedis.resps.LCSMatchResult;
+import redis.clients.jedis.resps.LCSMatchResult.MatchedPosition;
+import redis.clients.jedis.resps.LCSMatchResult.Position;
 import redis.clients.jedis.resps.LibraryInfo;
 import redis.clients.jedis.resps.ScanResult;
 import redis.clients.jedis.resps.StreamConsumerInfo;
@@ -1294,7 +1307,7 @@ public final class Jedis implements Closeable {
                 }
                 return new GlideStringSetWrapper(glideSet);
             } else {
-                return new redis.clients.jedis.util.GlideStringSetWrapper(new HashSet<>());
+                return new GlideStringSetWrapper(new HashSet<>());
             }
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("KEYS operation failed", e);
@@ -1356,6 +1369,56 @@ public final class Jedis implements Closeable {
                         }
                     }
                     return glideClient.msetBinary(keyValueMap).get();
+                });
+    }
+
+    /**
+     * Set multiple key-value pairs, only if none of the keys exist.
+     *
+     * @param keysvalues alternating keys and values
+     * @return true if all keys were set, false if no key was set (at least one key already existed)
+     * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
+     * @since Valkey 1.0.1
+     */
+    public long msetnx(String... keysvalues) {
+        return executeCommandWithGlide(
+                "MSETNX",
+                () -> {
+                    if (keysvalues.length % 2 == 1) {
+                        throw new IllegalArgumentException("keysvalues must be of even length");
+                    }
+                    Map<String, String> keyValueMap = new HashMap<>();
+                    for (int i = 0; i < keysvalues.length; i += 2) {
+                        if (i + 1 < keysvalues.length) {
+                            keyValueMap.put(keysvalues[i], keysvalues[i + 1]);
+                        }
+                    }
+                    return glideClient.msetnx(keyValueMap).get() ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set multiple key-value pairs, only if none of the keys exist (binary version).
+     *
+     * @param keysvalues alternating keys and values
+     * @return true if all keys were set, false if no key was set (at least one key already existed)
+     * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
+     * @since Valkey 1.0.1
+     */
+    public long msetnx(final byte[]... keysvalues) {
+        return executeCommandWithGlide(
+                "MSETNX",
+                () -> {
+                    if (keysvalues.length % 2 == 1) {
+                        throw new IllegalArgumentException("keysvalues must be of even length");
+                    }
+                    Map<GlideString, GlideString> keyValueMap = new HashMap<>();
+                    for (int i = 0; i < keysvalues.length; i += 2) {
+                        if (i + 1 < keysvalues.length) {
+                            keyValueMap.put(GlideString.of(keysvalues[i]), GlideString.of(keysvalues[i + 1]));
+                        }
+                    }
+                    return glideClient.msetnxBinary(keyValueMap).get() ? 1L : 0L;
                 });
     }
 
@@ -1768,6 +1831,78 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Overwrites part of the string stored at key, starting at the specified offset, for the entire
+     * length of value. If the offset is larger than the current length of the string at key, the
+     * string is padded with zero-bytes to make offset fit. Non-existing keys are considered as empty
+     * strings, so this command will make sure it holds a string large enough to be able to set value
+     * at offset.
+     *
+     * @param key the key
+     * @param offset the offset at which to start overwriting
+     * @param value the value to set
+     * @return the length of the string after it was modified
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
+     * @since Valkey 2.2.0
+     */
+    public long setrange(String key, long offset, String value) {
+        return executeCommandWithGlide(
+                "SETRANGE", () -> glideClient.setrange(key, (int) offset, value).get());
+    }
+
+    /**
+     * Overwrites part of the string stored at key, starting at the specified offset (binary version).
+     *
+     * @param key the key
+     * @param offset the offset at which to start overwriting
+     * @param value the value to set
+     * @return the length of the string after it was modified
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
+     * @since Valkey 2.2.0
+     */
+    public long setrange(final byte[] key, long offset, final byte[] value) {
+        return executeCommandWithGlide(
+                "SETRANGE",
+                () -> glideClient.setrange(GlideString.of(key), (int) offset, GlideString.of(value)).get());
+    }
+
+    /**
+     * Returns the substring of the string value stored at key, determined by the offsets start and
+     * end (both are inclusive). Negative offsets can be used in order to provide an offset starting
+     * from the end of the string. So -1 means the last character, -2 the penultimate and so forth.
+     *
+     * @param key the key
+     * @param startOffset the start offset (inclusive)
+     * @param endOffset the end offset (inclusive)
+     * @return the substring
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
+     * @since Valkey 2.4.0
+     */
+    public String getrange(String key, long startOffset, long endOffset) {
+        return executeCommandWithGlide(
+                "GETRANGE", () -> glideClient.getrange(key, (int) startOffset, (int) endOffset).get());
+    }
+
+    /**
+     * Returns the substring of the string value stored at key (binary version).
+     *
+     * @param key the key
+     * @param startOffset the start offset (inclusive)
+     * @param endOffset the end offset (inclusive)
+     * @return the substring
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
+     * @since Valkey 2.4.0
+     */
+    public byte[] getrange(final byte[] key, long startOffset, long endOffset) {
+        return executeCommandWithGlide(
+                "GETRANGE",
+                () -> {
+                    GlideString result =
+                            glideClient.getrange(GlideString.of(key), (int) startOffset, (int) endOffset).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
      * Append a value to the end of the string stored at the specified key. If the key does not exist,
      * it is created and set as an empty string before performing the append operation. This operation
      * is atomic and efficient for building strings incrementally.
@@ -1785,6 +1920,7 @@ public final class Jedis implements Closeable {
      * @return the length of the string after the append operation (includes both original and
      *     appended content)
      * @throws JedisException if the operation fails or if the key contains a non-string value
+     * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
      * @since Valkey 2.0.0
      */
     public long append(final String key, final String value) {
@@ -1809,6 +1945,7 @@ public final class Jedis implements Closeable {
      * @return the length of the string after the append operation (includes both original and
      *     appended content)
      * @throws JedisException if the operation fails or if the key contains a non-string value
+     * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
      * @since Valkey 2.0.0
      */
     public long append(final byte[] key, final byte[] value) {
@@ -1821,6 +1958,8 @@ public final class Jedis implements Closeable {
      *
      * @param key the key
      * @return the length of the string, or 0 if key does not exist
+     * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
+     * @since Valkey 2.2.0
      */
     public long strlen(String key) {
         return executeCommandWithGlide("STRLEN", () -> glideClient.strlen(key).get());
@@ -1831,9 +1970,154 @@ public final class Jedis implements Closeable {
      *
      * @param key the key
      * @return the length of the string, or 0 if key does not exist
+     * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
+     * @since Valkey 2.2.0
      */
     public long strlen(final byte[] key) {
         return executeCommandWithGlide("STRLEN", () -> glideClient.strlen(GlideString.of(key)).get());
+    }
+
+    /**
+     * Calculate the longest common subsequence of keyA and keyB.
+     *
+     * @param keyA the first key
+     * @param keyB the second key
+     * @param params LCS parameters
+     * @return LCSMatchResult containing the result based on params
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
+     */
+    public LCSMatchResult lcs(String keyA, String keyB, LCSParams params) {
+        return executeCommandWithGlide(
+                "LCS",
+                () -> {
+                    if (params.isLen()) {
+                        // LEN option: return only length
+                        Long len = glideClient.lcsLen(keyA, keyB).get();
+                        return new LCSMatchResult(null, null, len);
+                    } else if (params.isIdx()) {
+                        // IDX option: return match indices with positions
+                        Map<String, Object> result;
+                        try {
+                            result = callLcsIdxWithParams(keyA, keyB, params);
+                        } catch (Exception e) {
+                            throw new JedisException("LCS IDX execution failed", e);
+                        }
+                        return convertLcsIdxResultToMatchResult(result);
+                    } else {
+                        // Default: return the LCS string
+                        String matchString = glideClient.lcs(keyA, keyB).get();
+                        return new LCSMatchResult(
+                                matchString, null, matchString != null ? matchString.length() : 0);
+                    }
+                });
+    }
+
+    /**
+     * Calculate the longest common subsequence of keyA and keyB (binary version).
+     *
+     * @param keyA the first key
+     * @param keyB the second key
+     * @param params LCS parameters
+     * @return LCSMatchResult containing the result based on params
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
+     */
+    public LCSMatchResult lcs(byte[] keyA, byte[] keyB, LCSParams params) {
+        return executeCommandWithGlide(
+                "LCS",
+                () -> {
+                    GlideString keyAGs = GlideString.of(keyA);
+                    GlideString keyBGs = GlideString.of(keyB);
+
+                    if (params.isLen()) {
+                        // LEN option: return only length
+                        Long len = glideClient.lcsLen(keyAGs, keyBGs).get();
+                        return new LCSMatchResult(null, null, len);
+                    } else if (params.isIdx()) {
+                        // IDX option: return match indices with positions
+                        Map<String, Object> result;
+                        try {
+                            result = callLcsIdxWithParams(keyAGs, keyBGs, params);
+                        } catch (Exception e) {
+                            throw new JedisException("LCS IDX execution failed", e);
+                        }
+                        return convertLcsIdxResultToMatchResult(result);
+                    } else {
+                        // Default: return the LCS string
+                        GlideString matchString = glideClient.lcs(keyAGs, keyBGs).get();
+                        String matchStr = matchString != null ? matchString.toString() : null;
+                        return new LCSMatchResult(matchStr, null, matchStr != null ? matchStr.length() : 0);
+                    }
+                });
+    }
+
+    /** Calls the appropriate GLIDE lcsIdx method based on LCSParams options. */
+    private Map<String, Object> callLcsIdxWithParams(String keyA, String keyB, LCSParams params)
+            throws Exception {
+        Long minMatchLen = params.getMinMatchLen();
+        if (params.isWithMatchLen()) {
+            return minMatchLen != null
+                    ? glideClient.lcsIdxWithMatchLen(keyA, keyB, minMatchLen).get()
+                    : glideClient.lcsIdxWithMatchLen(keyA, keyB).get();
+        }
+        return minMatchLen != null
+                ? glideClient.lcsIdx(keyA, keyB, minMatchLen).get()
+                : glideClient.lcsIdx(keyA, keyB).get();
+    }
+
+    /** Calls the appropriate GLIDE lcsIdx method based on LCSParams options (binary version). */
+    private Map<String, Object> callLcsIdxWithParams(
+            GlideString keyA, GlideString keyB, LCSParams params) throws Exception {
+        Long minMatchLen = params.getMinMatchLen();
+        if (params.isWithMatchLen()) {
+            return minMatchLen != null
+                    ? glideClient.lcsIdxWithMatchLen(keyA, keyB, minMatchLen).get()
+                    : glideClient.lcsIdxWithMatchLen(keyA, keyB).get();
+        }
+        return minMatchLen != null
+                ? glideClient.lcsIdx(keyA, keyB, minMatchLen).get()
+                : glideClient.lcsIdx(keyA, keyB).get();
+    }
+
+    /**
+     * Converts GLIDE lcsIdx map result to LCSMatchResult with matches populated.
+     *
+     * <p>GLIDE returns matches as Long[][][] where each match is {{startA, endA}, {startB, endB}}.
+     * With WITHMATCHLEN, each match may be {{startA, endA}, {startB, endB}, matchLen}.
+     */
+    private LCSMatchResult convertLcsIdxResultToMatchResult(Map<String, Object> result) {
+        long len = result.containsKey("len") ? ((Number) result.get("len")).longValue() : 0L;
+        Object matchesObj = result.get("matches");
+        List<MatchedPosition> matches = new ArrayList<>();
+
+        if (matchesObj instanceof Object[]) {
+            Object[] matchesArr = (Object[]) matchesObj;
+            for (Object matchObj : matchesArr) {
+                if (matchObj instanceof Object[]) {
+                    Object[] match = (Object[]) matchObj;
+                    if (match.length >= 2 && match[0] instanceof Object[] && match[1] instanceof Object[]) {
+                        Object[] posA = (Object[]) match[0];
+                        Object[] posB = (Object[]) match[1];
+                        if (posA.length >= 2 && posB.length >= 2) {
+                            long startA = ((Number) posA[0]).longValue();
+                            long endA = ((Number) posA[1]).longValue();
+                            long startB = ((Number) posB[0]).longValue();
+                            long endB = ((Number) posB[1]).longValue();
+                            long matchLen =
+                                    match.length >= 3 && match[2] instanceof Number
+                                            ? ((Number) match[2]).longValue()
+                                            : (endA - startA + 1);
+                            Position a = new Position(startA, endA);
+                            Position b = new Position(startB, endB);
+                            matches.add(new MatchedPosition(a, b, matchLen));
+                        }
+                    }
+                }
+            }
+        }
+
+        return new LCSMatchResult(null, matches, len);
     }
 
     /**
@@ -2571,6 +2855,8 @@ public final class Jedis implements Closeable {
      *
      * @param key the key
      * @return the sorted elements
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
      */
     public List<String> sort(String key) {
         return executeCommandWithGlide(
@@ -2582,11 +2868,34 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Sort the elements in a list, set, or sorted set (binary version).
+     *
+     * @param key the key
+     * @return the sorted elements
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public List<byte[]> sort(final byte[] key) {
+        return executeCommandWithGlide(
+                "SORT",
+                () -> {
+                    GlideString[] result = glideClient.sort(GlideString.of(key)).get();
+                    List<byte[]> out = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        out.add(gs.getBytes());
+                    }
+                    return out;
+                });
+    }
+
+    /**
      * Sort the elements in a list, set, or sorted set with options.
      *
      * @param key the key
      * @param sortingParameters sorting parameters (BY, LIMIT, GET, ASC/DESC, ALPHA)
      * @return the sorted elements
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
      */
     public List<String> sort(String key, String... sortingParameters) {
         checkNotClosed();
@@ -2786,15 +3095,6 @@ public final class Jedis implements Closeable {
                 : glide.api.models.commands.ListDirection.RIGHT;
     }
 
-    /** Helper method to convert String array to GlideString array. */
-    private static GlideString[] convertToGlideStringArray(String[] strings) {
-        GlideString[] glideStrings = new GlideString[strings.length];
-        for (int i = 0; i < strings.length; i++) {
-            glideStrings[i] = GlideString.of(strings[i]);
-        }
-        return glideStrings;
-    }
-
     /** Helper method to convert byte array to GlideString array. */
     private static GlideString[] convertToGlideStringArray(byte[][] bytes) {
         GlideString[] glideStrings = new GlideString[bytes.length];
@@ -2812,7 +3112,7 @@ public final class Jedis implements Closeable {
      * internally (which has proper hashCode/equals) and converts to byte[] lazily.
      */
     private static Set<byte[]> convertGlideStringsToByteArraySet(Set<GlideString> glideStrings) {
-        return new redis.clients.jedis.util.GlideStringSetWrapper(glideStrings);
+        return new GlideStringSetWrapper(glideStrings);
     }
 
     private static ScanResult<String> convertToScanResult(Object[] result) {
@@ -4485,7 +4785,7 @@ public final class Jedis implements Closeable {
             for (GlideString gs : keys) {
                 glideSet.add(gs);
             }
-            return new redis.clients.jedis.util.GlideStringSetWrapper(glideSet);
+            return new GlideStringSetWrapper(glideSet);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("HKEYS operation failed", e);
         }
@@ -4689,6 +4989,18 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Returns an array of random fields from the hash value stored at key. Alias for {@link
+     * #hrandfield(String, long)}.
+     *
+     * @param key the key of the hash
+     * @param count the number of fields to return
+     * @return an array of random fields from the hash
+     */
+    public List<String> hrandfieldWithCount(String key, long count) {
+        return hrandfield(key, count);
+    }
+
+    /**
      * Returns an array of random fields from the hash value stored at key (binary version).
      *
      * @param key the key of the hash
@@ -4708,6 +5020,18 @@ public final class Jedis implements Closeable {
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("HRANDFIELD operation failed", e);
         }
+    }
+
+    /**
+     * Returns an array of random fields from the hash value stored at key (binary version). Alias for
+     * {@link #hrandfield(byte[], long)}.
+     *
+     * @param key the key of the hash
+     * @param count the number of fields to return
+     * @return an array of random fields from the hash
+     */
+    public List<byte[]> hrandfieldWithCount(final byte[] key, final long count) {
+        return hrandfield(key, count);
     }
 
     /**
@@ -11861,6 +12185,1746 @@ public final class Jedis implements Closeable {
             builder.count(params.getCount());
         }
         return builder.build();
+    }
+
+    // ==================== SORT COMMANDS ====================
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key and returns the result. The
+     * sortReadonly command is a read-only variant of SORT that does not modify the key.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @return the sorted elements as a list
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
+     */
+    public List<String> sortReadonly(String key) {
+        return executeCommandWithGlide(
+                "SORT_RO",
+                () -> {
+                    String[] result = glideClient.sortReadOnly(key).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key and returns the result (binary
+     * version). The sortReadonly command is a read-only variant of SORT that does not modify the key.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @return the sorted elements as a list
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
+     */
+    public List<byte[]> sortReadonly(final byte[] key) {
+        return executeCommandWithGlide(
+                "SORT_RO",
+                () -> {
+                    GlideString[] result = glideClient.sortReadOnly(GlideString.of(key)).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<byte[]> out = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        out.add(gs.getBytes());
+                    }
+                    return out;
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key with sorting parameters and returns
+     * the result. The sortReadonly command is a read-only variant of SORT that does not modify the
+     * key.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param sortingParams the sorting parameters
+     * @return the sorted elements as a list
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
+     */
+    public List<String> sortReadonly(String key, SortingParams sortingParams) {
+        return executeCommandWithGlide(
+                "SORT_RO",
+                () -> {
+                    SortOptions options = convertSortingParamsToSortOptions(sortingParams);
+                    String[] result = glideClient.sortReadOnly(key, options).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key with sorting parameters and returns
+     * the result (binary version). The sortReadonly command is a read-only variant of SORT that does
+     * not modify the key.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param sortingParams the sorting parameters
+     * @return the sorted elements as a list
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
+     */
+    public List<byte[]> sortReadonly(final byte[] key, SortingParams sortingParams) {
+        return executeCommandWithGlide(
+                "SORT_RO",
+                () -> {
+                    SortOptionsBinary options = convertSortingParamsToSortOptionsBinary(sortingParams);
+                    GlideString[] result = glideClient.sortReadOnly(GlideString.of(key), options).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<byte[]> out = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        out.add(gs.getBytes());
+                    }
+                    return out;
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key and stores the result in destination.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param dstkey the destination key to store the sorted result
+     * @return the number of elements in the sorted result
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public long sort(String key, String dstkey) {
+        return executeCommandWithGlide("SORT", () -> glideClient.sortStore(key, dstkey).get());
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key and stores the result in destination
+     * (binary version).
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param dstkey the destination key to store the sorted result
+     * @return the number of elements in the sorted result
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public long sort(final byte[] key, final byte[] dstkey) {
+        return executeCommandWithGlide(
+                "SORT", () -> glideClient.sortStore(GlideString.of(key), GlideString.of(dstkey)).get());
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key with sorting parameters and stores
+     * the result in destination.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param sortingParameters the sorting parameters
+     * @param dstkey the destination key to store the sorted result
+     * @return the number of elements in the sorted result
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public long sort(String key, SortingParams sortingParameters, String dstkey) {
+        return executeCommandWithGlide(
+                "SORT",
+                () -> {
+                    SortOptions options = convertSortingParamsToSortOptions(sortingParameters);
+                    return glideClient.sortStore(key, dstkey, options).get();
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key with sorting parameters and stores
+     * the result in destination (binary version).
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param sortingParameters the sorting parameters
+     * @param dstkey the destination key to store the sorted result
+     * @return the number of elements in the sorted result
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public long sort(final byte[] key, SortingParams sortingParameters, final byte[] dstkey) {
+        return executeCommandWithGlide(
+                "SORT",
+                () -> {
+                    SortOptionsBinary options = convertSortingParamsToSortOptionsBinary(sortingParameters);
+                    return glideClient.sortStore(GlideString.of(key), GlideString.of(dstkey), options).get();
+                });
+    }
+
+    /** Convert SortingParams to GLIDE SortOptions. */
+    private static SortOptions convertSortingParamsToSortOptions(SortingParams params) {
+        if (params == null) {
+            return SortOptions.builder().build();
+        }
+
+        SortOptions.SortOptionsBuilder builder = SortOptions.builder();
+        String[] paramArray = params.getParams();
+
+        for (int i = 0; i < paramArray.length; i++) {
+            String param = paramArray[i].toUpperCase();
+
+            switch (param) {
+                case "BY":
+                    if (i + 1 < paramArray.length) {
+                        builder.byPattern(paramArray[++i]);
+                    }
+                    break;
+
+                case "LIMIT":
+                    if (i + 2 < paramArray.length) {
+                        try {
+                            long offset = Long.parseLong(paramArray[++i]);
+                            long count = Long.parseLong(paramArray[++i]);
+                            builder.limit(new SortBaseOptions.Limit(offset, count));
+                        } catch (NumberFormatException e) {
+                            // Skip invalid limit parameters
+                        }
+                    }
+                    break;
+
+                case "GET":
+                    if (i + 1 < paramArray.length) {
+                        builder.getPattern(paramArray[++i]);
+                    }
+                    break;
+
+                case "ASC":
+                    builder.orderBy(SortBaseOptions.OrderBy.ASC);
+                    break;
+
+                case "DESC":
+                    builder.orderBy(SortBaseOptions.OrderBy.DESC);
+                    break;
+
+                case "ALPHA":
+                    builder.alpha();
+                    break;
+
+                default:
+                    // Ignore unknown parameters
+                    break;
+            }
+        }
+
+        return builder.build();
+    }
+
+    /** Convert SortingParams to GLIDE SortOptionsBinary. */
+    private static SortOptionsBinary convertSortingParamsToSortOptionsBinary(SortingParams params) {
+        if (params == null) {
+            return SortOptionsBinary.builder().build();
+        }
+
+        SortOptionsBinary.SortOptionsBinaryBuilder builder = SortOptionsBinary.builder();
+        String[] paramArray = params.getParams();
+
+        for (int i = 0; i < paramArray.length; i++) {
+            String param = paramArray[i].toUpperCase();
+
+            switch (param) {
+                case "BY":
+                    if (i + 1 < paramArray.length) {
+                        builder.byPattern(GlideString.of(paramArray[++i]));
+                    }
+                    break;
+
+                case "LIMIT":
+                    if (i + 2 < paramArray.length) {
+                        try {
+                            long offset = Long.parseLong(paramArray[++i]);
+                            long count = Long.parseLong(paramArray[++i]);
+                            builder.limit(new SortBaseOptions.Limit(offset, count));
+                        } catch (NumberFormatException e) {
+                            // Skip invalid limit parameters
+                        }
+                    }
+                    break;
+
+                case "GET":
+                    if (i + 1 < paramArray.length) {
+                        builder.getPattern(GlideString.of(paramArray[++i]));
+                    }
+                    break;
+
+                case "ASC":
+                    builder.orderBy(SortBaseOptions.OrderBy.ASC);
+                    break;
+
+                case "DESC":
+                    builder.orderBy(SortBaseOptions.OrderBy.DESC);
+                    break;
+
+                case "ALPHA":
+                    builder.alpha();
+                    break;
+
+                default:
+                    // Ignore unknown parameters
+                    break;
+            }
+        }
+
+        return builder.build();
+    }
+
+    // ==================== WAIT COMMANDS ====================
+
+    /**
+     * Blocks the current client until all previous write commands are successfully transferred and
+     * acknowledged by at least numreplicas of replicas.
+     *
+     * @param replicas the number of replicas to wait for
+     * @param timeout the timeout in milliseconds
+     * @return the number of replicas that acknowledged the write commands
+     * @see <a href="https://valkey.io/commands/wait/">valkey.io</a> for details.
+     * @since Valkey 3.0.0
+     */
+    public long wait(long replicas, long timeout) {
+        return executeCommandWithGlide("WAIT", () -> glideClient.wait(replicas, timeout).get());
+    }
+
+    /**
+     * Blocks the current client until all previous write commands are successfully transferred and
+     * acknowledged by at least numreplicas of replicas.
+     *
+     * @param replicas the number of replicas to wait for
+     * @param timeout the timeout in milliseconds
+     * @return the number of replicas that acknowledged the write commands
+     * @see <a href="https://valkey.io/commands/wait/">valkey.io</a> for details.
+     * @since Valkey 3.0.0
+     */
+    public long waitReplicas(int replicas, long timeout) {
+        return executeCommandWithGlide("WAIT", () -> glideClient.wait((long) replicas, timeout).get());
+    }
+
+    /**
+     * Blocks the current client until all previous write commands are successfully transferred and
+     * acknowledged by at least numLocal and numReplicas of replicas and local persistence.
+     *
+     * @param numLocal the number of local acknowledgments required
+     * @param numReplicas the number of replica acknowledgments required
+     * @param timeout the timeout in milliseconds
+     * @return a KeyValue containing the number of local and replica acknowledgments
+     * @see <a href="https://valkey.io/commands/waitaof/">valkey.io</a> for details.
+     * @since Valkey 7.2.0
+     */
+    public KeyValue<Long, Long> waitAOF(long numLocal, long numReplicas, long timeout) {
+        return executeCommandWithGlide(
+                "WAITAOF",
+                () -> {
+                    Long[] result = glideClient.waitaof(numLocal, numReplicas, timeout).get();
+                    if (result != null && result.length >= 2) {
+                        return new KeyValue<>(result[0], result[1]);
+                    }
+                    return new KeyValue<>(0L, 0L);
+                });
+    }
+
+    // ==================== OBJECT COMMANDS ====================
+
+    /**
+     * Returns the internal encoding for the Valkey object stored at key.
+     *
+     * @param key the key of the object
+     * @return the encoding of the object, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
+     */
+    public String objectEncoding(String key) {
+        return executeCommandWithGlide("OBJECT", () -> glideClient.objectEncoding(key).get());
+    }
+
+    /**
+     * Returns the internal encoding for the Valkey object stored at key (binary version).
+     *
+     * @param key the key of the object
+     * @return the encoding of the object, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
+     */
+    public byte[] objectEncoding(final byte[] key) {
+        return executeCommandWithGlide(
+                "OBJECT",
+                () -> {
+                    String result = glideClient.objectEncoding(GlideString.of(key)).get();
+                    return result != null ? result.getBytes(VALKEY_CHARSET) : null;
+                });
+    }
+
+    /**
+     * Returns the logarithmic access frequency counter of a Valkey object stored at key.
+     *
+     * @param key the key of the object
+     * @return the frequency counter, or null if the key does not exist or LFU is not enabled
+     * @see <a href="https://valkey.io/commands/object-freq/">valkey.io</a> for details.
+     * @since Valkey 4.0.0
+     */
+    public Long objectFreq(String key) {
+        try {
+            return executeCommandWithGlide("OBJECT", () -> glideClient.objectFreq(key).get());
+        } catch (JedisException e) {
+            // Return null if LFU maxmemory policy is not enabled
+            if (e.getCause() != null
+                    && e.getCause().getMessage() != null
+                    && e.getCause().getMessage().contains("LFU maxmemory policy is not selected")) {
+                return null;
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Returns the logarithmic access frequency counter of a Valkey object stored at key (binary
+     * version).
+     *
+     * @param key the key of the object
+     * @return the frequency counter, or null if the key does not exist or LFU is not enabled
+     * @see <a href="https://valkey.io/commands/object-freq/">valkey.io</a> for details.
+     * @since Valkey 4.0.0
+     */
+    public Long objectFreq(final byte[] key) {
+        try {
+            return executeCommandWithGlide(
+                    "OBJECT", () -> glideClient.objectFreq(GlideString.of(key)).get());
+        } catch (JedisException e) {
+            // Return null if LFU maxmemory policy is not enabled
+            if (e.getCause() != null
+                    && e.getCause().getMessage() != null
+                    && e.getCause().getMessage().contains("LFU maxmemory policy is not selected")) {
+                return null;
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Returns the time in seconds since the last access to the value stored at key.
+     *
+     * @param key the key of the object
+     * @return the idle time in seconds, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-idletime/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
+     */
+    public Long objectIdletime(String key) {
+        return executeCommandWithGlide("OBJECT", () -> glideClient.objectIdletime(key).get());
+    }
+
+    /**
+     * Returns the time in seconds since the last access to the value stored at key (binary version).
+     *
+     * @param key the key of the object
+     * @return the idle time in seconds, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-idletime/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
+     */
+    public Long objectIdletime(final byte[] key) {
+        return executeCommandWithGlide(
+                "OBJECT", () -> glideClient.objectIdletime(GlideString.of(key)).get());
+    }
+
+    /**
+     * Returns the reference count of the object stored at key.
+     *
+     * @param key the key of the object
+     * @return the reference count, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-refcount/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
+     */
+    public Long objectRefcount(String key) {
+        return executeCommandWithGlide("OBJECT", () -> glideClient.objectRefcount(key).get());
+    }
+
+    /**
+     * Returns the reference count of the object stored at key (binary version).
+     *
+     * @param key the key of the object
+     * @return the reference count, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-refcount/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
+     */
+    public Long objectRefcount(final byte[] key) {
+        return executeCommandWithGlide(
+                "OBJECT", () -> glideClient.objectRefcount(GlideString.of(key)).get());
+    }
+
+    /**
+     * Returns help information about the OBJECT command.
+     *
+     * @return a list of help messages describing OBJECT subcommands
+     * @see <a href="https://valkey.io/commands/object-help/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<String> objectHelp() {
+        return executeCommandWithGlide(
+                "OBJECT",
+                () -> {
+                    Object result = glideClient.customCommand(new String[] {"OBJECT", "HELP"}).get();
+                    if (result instanceof Object[]) {
+                        Object[] array = (Object[]) result;
+                        List<String> helpMessages = new ArrayList<>(array.length);
+                        for (Object obj : array) {
+                            helpMessages.add(obj != null ? obj.toString() : null);
+                        }
+                        return helpMessages;
+                    }
+                    return Collections.emptyList();
+                });
+    }
+
+    /**
+     * Returns help information about the OBJECT command (binary version).
+     *
+     * @return a list of help messages describing OBJECT subcommands
+     * @see <a href="https://valkey.io/commands/object-help/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<byte[]> objectHelpBinary() {
+        return executeCommandWithGlide(
+                "OBJECT",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(
+                                            new GlideString[] {GlideString.of("OBJECT"), GlideString.of("HELP")})
+                                    .get();
+                    if (result instanceof Object[]) {
+                        Object[] array = (Object[]) result;
+                        List<byte[]> helpMessages = new ArrayList<>(array.length);
+                        for (Object obj : array) {
+                            if (obj instanceof GlideString) {
+                                helpMessages.add(((GlideString) obj).getBytes());
+                            } else if (obj instanceof String) {
+                                helpMessages.add(((String) obj).getBytes(VALKEY_CHARSET));
+                            } else if (obj != null) {
+                                helpMessages.add(obj.toString().getBytes(VALKEY_CHARSET));
+                            } else {
+                                helpMessages.add(null);
+                            }
+                        }
+                        return helpMessages;
+                    }
+                    return Collections.emptyList();
+                });
+    }
+
+    // ==================== GEO COMMANDS ====================
+
+    /**
+     * Adds geospatial members with their positions to the specified sorted set stored at key.
+     *
+     * @param key the key of the sorted set
+     * @param longitude the longitude of the member
+     * @param latitude the latitude of the member
+     * @param member the member name
+     * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public long geoadd(String key, double longitude, double latitude, String member) {
+        return executeCommandWithGlide(
+                "GEOADD",
+                () -> {
+                    Map<String, GeospatialData> data = new HashMap<>();
+                    data.put(member, new GeospatialData(longitude, latitude));
+                    return glideClient.geoadd(key, data).get();
+                });
+    }
+
+    /**
+     * Adds geospatial members with their positions to the specified sorted set stored at key (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param longitude the longitude of the member
+     * @param latitude the latitude of the member
+     * @param member the member name
+     * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public long geoadd(final byte[] key, double longitude, double latitude, final byte[] member) {
+        return executeCommandWithGlide(
+                "GEOADD",
+                () -> {
+                    Map<GlideString, GeospatialData> data = new HashMap<>();
+                    data.put(GlideString.of(member), new GeospatialData(longitude, latitude));
+                    return glideClient.geoadd(GlideString.of(key), data).get();
+                });
+    }
+
+    /**
+     * Adds multiple geospatial members with their positions to the specified sorted set stored at
+     * key.
+     *
+     * @param key the key of the sorted set
+     * @param memberCoordinateMap a map of member names to their coordinates
+     * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public long geoadd(String key, Map<String, GeoCoordinate> memberCoordinateMap) {
+        return executeCommandWithGlide(
+                "GEOADD",
+                () -> {
+                    Map<String, GeospatialData> data = new HashMap<>();
+                    for (Map.Entry<String, GeoCoordinate> entry : memberCoordinateMap.entrySet()) {
+                        data.put(
+                                entry.getKey(),
+                                new GeospatialData(
+                                        entry.getValue().getLongitude(), entry.getValue().getLatitude()));
+                    }
+                    return glideClient.geoadd(key, data).get();
+                });
+    }
+
+    /**
+     * Adds multiple geospatial members with their positions to the specified sorted set stored at key
+     * (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param memberCoordinateMap a map of member names to their coordinates
+     * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public long geoadd(final byte[] key, Map<byte[], GeoCoordinate> memberCoordinateMap) {
+        return executeCommandWithGlide(
+                "GEOADD",
+                () -> {
+                    Map<GlideString, GeospatialData> data = new HashMap<>();
+                    for (Map.Entry<byte[], GeoCoordinate> entry : memberCoordinateMap.entrySet()) {
+                        data.put(
+                                GlideString.of(entry.getKey()),
+                                new GeospatialData(
+                                        entry.getValue().getLongitude(), entry.getValue().getLatitude()));
+                    }
+                    return glideClient.geoadd(GlideString.of(key), data).get();
+                });
+    }
+
+    /**
+     * Returns the positions (longitude,latitude) of all the specified members of the geospatial index
+     * represented by the sorted set at key.
+     *
+     * @param key the key of the sorted set
+     * @param members the members for which to get the positions
+     * @return a list of coordinates corresponding to the given members
+     * @see <a href="https://valkey.io/commands/geopos/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public List<GeoCoordinate> geopos(String key, String... members) {
+        return executeCommandWithGlide(
+                "GEOPOS",
+                () -> {
+                    Double[][] result = glideClient.geopos(key, members).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoCoordinate> coordinates = new ArrayList<>();
+                    for (Double[] coord : result) {
+                        if (coord != null && coord.length >= 2 && coord[0] != null && coord[1] != null) {
+                            coordinates.add(new GeoCoordinate(coord[0], coord[1]));
+                        } else {
+                            coordinates.add(null);
+                        }
+                    }
+                    return coordinates;
+                });
+    }
+
+    /**
+     * Returns the positions (longitude,latitude) of all the specified members of the geospatial index
+     * represented by the sorted set at key (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param members the members for which to get the positions
+     * @return a list of coordinates corresponding to the given members
+     * @see <a href="https://valkey.io/commands/geopos/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public List<GeoCoordinate> geopos(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "GEOPOS",
+                () -> {
+                    GlideString[] glideMembers = new GlideString[members.length];
+                    for (int i = 0; i < members.length; i++) {
+                        glideMembers[i] = GlideString.of(members[i]);
+                    }
+                    Double[][] result = glideClient.geopos(GlideString.of(key), glideMembers).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoCoordinate> coordinates = new ArrayList<>();
+                    for (Double[] coord : result) {
+                        if (coord != null && coord.length >= 2 && coord[0] != null && coord[1] != null) {
+                            coordinates.add(new GeoCoordinate(coord[0], coord[1]));
+                        } else {
+                            coordinates.add(null);
+                        }
+                    }
+                    return coordinates;
+                });
+    }
+
+    /**
+     * Returns the distance between two members in the geospatial index represented by the sorted set
+     * at key.
+     *
+     * @param key the key of the sorted set
+     * @param member1 the first member
+     * @param member2 the second member
+     * @return the distance in meters, or null if one or both members do not exist
+     * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public Double geodist(String key, String member1, String member2) {
+        return executeCommandWithGlide(
+                "GEODIST", () -> glideClient.geodist(key, member1, member2).get());
+    }
+
+    /**
+     * Returns the distance between two members in the geospatial index represented by the sorted set
+     * at key (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param member1 the first member
+     * @param member2 the second member
+     * @return the distance in meters, or null if one or both members do not exist
+     * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public Double geodist(final byte[] key, final byte[] member1, final byte[] member2) {
+        return executeCommandWithGlide(
+                "GEODIST",
+                () ->
+                        glideClient
+                                .geodist(GlideString.of(key), GlideString.of(member1), GlideString.of(member2))
+                                .get());
+    }
+
+    /**
+     * Returns the distance between two members in the geospatial index with specified unit.
+     *
+     * @param key the key of the sorted set
+     * @param member1 the first member
+     * @param member2 the second member
+     * @param unit the unit of distance (m, km, mi, ft)
+     * @return the distance in the specified unit, or null if one or both members do not exist
+     * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public Double geodist(
+            String key, String member1, String member2, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEODIST",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    return glideClient.geodist(key, member1, member2, glideUnit).get();
+                });
+    }
+
+    /**
+     * Returns the distance between two members in the geospatial index with specified unit (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param member1 the first member
+     * @param member2 the second member
+     * @param unit the unit of distance (m, km, mi, ft)
+     * @return the distance in the specified unit, or null if one or both members do not exist
+     * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public Double geodist(
+            final byte[] key,
+            final byte[] member1,
+            final byte[] member2,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEODIST",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    return glideClient
+                            .geodist(
+                                    GlideString.of(key), GlideString.of(member1), GlideString.of(member2), glideUnit)
+                            .get();
+                });
+    }
+
+    /**
+     * Returns the GeoHash strings representing the positions of all the specified members in the
+     * geospatial index represented by the sorted set at key.
+     *
+     * @param key the key of the sorted set
+     * @param members the members for which to get the geohash
+     * @return a list of geohash strings corresponding to the given members
+     * @see <a href="https://valkey.io/commands/geohash/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public List<String> geohash(String key, String... members) {
+        return executeCommandWithGlide(
+                "GEOHASH",
+                () -> {
+                    String[] result = glideClient.geohash(key, members).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Returns the GeoHash strings representing the positions of all the specified members in the
+     * geospatial index represented by the sorted set at key (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param members the members for which to get the geohash
+     * @return a list of geohash strings corresponding to the given members
+     * @see <a href="https://valkey.io/commands/geohash/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public List<byte[]> geohash(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "GEOHASH",
+                () -> {
+                    GlideString[] glideMembers = new GlideString[members.length];
+                    for (int i = 0; i < members.length; i++) {
+                        glideMembers[i] = GlideString.of(members[i]);
+                    }
+                    GlideString[] result = glideClient.geohash(GlideString.of(key), glideMembers).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<byte[]> out = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        out.add(gs != null ? gs.getBytes() : null);
+                    }
+                    return out;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a given member and radius.
+     *
+     * @param key the key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            String key, String member, double radius, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOrigin origin = new GeoSearchOrigin.MemberOrigin(member);
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a given member and radius (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            final byte[] key, final byte[] member, double radius, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOriginBinary origin =
+                            new GeoSearchOrigin.MemberOriginBinary(GlideString.of(member));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a coordinate and radius.
+     *
+     * @param key the key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            String key, GeoCoordinate coord, double radius, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a coordinate and radius (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            final byte[] key, GeoCoordinate coord, double radius, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a given member and box (width x height).
+     *
+     * @param key the key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            String key,
+            String member,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOrigin origin = new GeoSearchOrigin.MemberOrigin(member);
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a given member and box (width x height) (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            final byte[] key,
+            final byte[] member,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOriginBinary origin =
+                            new GeoSearchOrigin.MemberOriginBinary(GlideString.of(member));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a coordinate and box (width x height).
+     *
+     * @param key the key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            String key,
+            GeoCoordinate coord,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a coordinate and box (width x height) (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            final byte[] key,
+            GeoCoordinate coord,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by the GeoSearchParam.
+     *
+     * @param key the key of the sorted set
+     * @param params the search parameters
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(String key, GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin = new GeoSearchOrigin.MemberOrigin(params.getFromMember());
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    // For simple search without options, use basic geosearch
+                    // Note: GLIDE's geosearch doesn't support all Jedis options like WITHCOORD, WITHDIST,
+                    // etc.
+                    // in the same way, so this is a simplified implementation
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by the GeoSearchParam (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param params the search parameters
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(final byte[] key, GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin =
+                                new GeoSearchOrigin.MemberOriginBinary(
+                                        GlideString.of(params.getFromMember().getBytes(VALKEY_CHARSET)));
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchstore(
+            String dest,
+            String src,
+            String member,
+            double radius,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOrigin origin = new GeoSearchOrigin.MemberOrigin(member);
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchstore(
+            final byte[] dest,
+            final byte[] src,
+            final byte[] member,
+            double radius,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOriginBinary origin =
+                            new GeoSearchOrigin.MemberOriginBinary(GlideString.of(member));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(
+            String dest,
+            String src,
+            GeoCoordinate coord,
+            double radius,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(
+            final byte[] dest,
+            final byte[] src,
+            GeoCoordinate coord,
+            double radius,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(
+            String dest,
+            String src,
+            String member,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOrigin origin = new GeoSearchOrigin.MemberOrigin(member);
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(
+            final byte[] dest,
+            final byte[] src,
+            final byte[] member,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOriginBinary origin =
+                            new GeoSearchOrigin.MemberOriginBinary(GlideString.of(member));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(
+            String dest,
+            String src,
+            GeoCoordinate coord,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(
+            final byte[] dest,
+            final byte[] src,
+            GeoCoordinate coord,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
+     * stores the result in a destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param params the search parameters
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(String dest, String src, GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin = new GeoSearchOrigin.MemberOrigin(params.getFromMember());
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
+     * stores the result in a destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param params the search parameters
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(final byte[] dest, final byte[] src, GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin =
+                                new GeoSearchOrigin.MemberOriginBinary(
+                                        GlideString.of(params.getFromMember().getBytes(VALKEY_CHARSET)));
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
+     * stores the result with distances in a destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param params the search parameters
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStoreStoreDist(String dest, String src, GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin = new GeoSearchOrigin.MemberOrigin(params.getFromMember());
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    // Use geosearchstore with STOREDIST option
+                    GeoSearchStoreOptions options = GeoSearchStoreOptions.builder().storeDist(true).build();
+                    return glideClient.geosearchstore(dest, src, origin, shape, options).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
+     * stores the result with distances in a destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param params the search parameters
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStoreStoreDist(final byte[] dest, final byte[] src, GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin =
+                                new GeoSearchOrigin.MemberOriginBinary(
+                                        GlideString.of(params.getFromMember().getBytes(VALKEY_CHARSET)));
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    // Use geosearchstore with STOREDIST option
+                    GeoSearchStoreOptions options = GeoSearchStoreOptions.builder().storeDist(true).build();
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape, options)
+                            .get();
+                });
+    }
+
+    // ==================== DEPRECATED GEO COMMANDS ====================
+    //
+    // The following georadius and georadiusByMember methods are DEPRECATED in Redis/Valkey 6.2.0+
+    // and are NOT supported in this Jedis compatibility layer.
+    //
+    // Use the GEOSEARCH and GEOSEARCHSTORE commands instead, which provide equivalent functionality
+    // with better performance and cleaner semantics.
+    //
+    // DEPRECATED METHODS NOT IMPLEMENTED:
+    //
+    // georadius methods (10 variants):
+    // - georadius(String key, double longitude, double latitude, double radius, GeoUnit unit)
+    // - georadius(byte[] key, double longitude, double latitude, double radius, GeoUnit unit)
+    // - georadiusReadonly(String key, double longitude, double latitude, double radius, GeoUnit unit)
+    // - georadiusReadonly(byte[] key, double longitude, double latitude, double radius, GeoUnit unit)
+    // - georadius(String key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadius(byte[] key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusReadonly(String key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusReadonly(byte[] key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusStore(String key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param, GeoRadiusStoreParam storeParam)
+    // - georadiusStore(byte[] key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param, GeoRadiusStoreParam storeParam)
+    //
+    // georadiusByMember methods (10 variants):
+    // - georadiusByMember(String key, String member, double radius, GeoUnit unit)
+    // - georadiusByMember(byte[] key, byte[] member, double radius, GeoUnit unit)
+    // - georadiusByMemberReadonly(String key, String member, double radius, GeoUnit unit)
+    // - georadiusByMemberReadonly(byte[] key, byte[] member, double radius, GeoUnit unit)
+    // - georadiusByMember(String key, String member, double radius, GeoUnit unit, GeoRadiusParam
+    // param)
+    // - georadiusByMember(byte[] key, byte[] member, double radius, GeoUnit unit, GeoRadiusParam
+    // param)
+    // - georadiusByMemberReadonly(String key, String member, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusByMemberReadonly(byte[] key, byte[] member, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusByMemberStore(String key, String member, double radius, GeoUnit unit, GeoRadiusParam
+    // param, GeoRadiusStoreParam storeParam)
+    // - georadiusByMemberStore(byte[] key, byte[] member, double radius, GeoUnit unit, GeoRadiusParam
+    // param, GeoRadiusStoreParam storeParam)
+    //
+    // Migration guide:
+    // - Replace georadius(..., longitude, latitude, radius, unit) with geosearch(...,
+    // GeoCoordinate(longitude, latitude), radius, unit)
+    // - Replace georadiusByMember(..., member, radius, unit) with geosearch(..., member, radius,
+    // unit)
+    // - Replace georadiusStore with geosearchStore using equivalent parameters
+    // - Replace georadiusByMemberStore with geosearchStore using member as origin
+    //
+    // ==================== END DEPRECATED GEO COMMANDS ====================
+
+    /** Convert Jedis GeoUnit to GLIDE GeoUnit. */
+    private static GeoUnit convertToGlideGeoUnit(redis.clients.jedis.args.GeoUnit unit) {
+        if (unit == null) {
+            return GeoUnit.METERS;
+        }
+        switch (unit) {
+            case M:
+                return GeoUnit.METERS;
+            case KM:
+                return GeoUnit.KILOMETERS;
+            case MI:
+                return GeoUnit.MILES;
+            case FT:
+                return GeoUnit.FEET;
+            default:
+                return GeoUnit.METERS;
+        }
     }
 
     // Static initialization block for cleanup hooks

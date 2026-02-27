@@ -39,7 +39,6 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -689,11 +688,14 @@ public class TestUtilities {
         return config;
     }
 
-    public static void createAndTestClient(GlideClusterClientConfiguration config)
-            throws InterruptedException, ExecutionException {
-        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
-            String result = client.ping().get();
-            assertEquals("PONG", result);
+    /** Assert that the given client is connected. */
+    @SneakyThrows
+    public static void assertConnected(BaseClient client) {
+        final String expected = "PONG";
+        if (client instanceof GlideClusterClient) {
+            assertEquals(expected, ((GlideClusterClient) client).ping().get());
+        } else {
+            assertEquals(expected, ((GlideClient) client).ping().get());
         }
     }
 }

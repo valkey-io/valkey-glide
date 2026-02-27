@@ -19,6 +19,7 @@ import java.security.KeyStore;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -61,7 +62,9 @@ public class ClusterTlsCertificateTest {
         GlideClusterClientConfiguration config =
                 TestUtilities.createClusterConfigWithRootCert(caCert, clusterNodes);
 
-        TestUtilities.createAndTestClient(config);
+        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
+            TestUtilities.assertConnected(client);
+        }
     }
 
     @Test
@@ -72,7 +75,9 @@ public class ClusterTlsCertificateTest {
         GlideClusterClientConfiguration config =
                 TestUtilities.createClusterConfigWithRootCert(certBundle, clusterNodes);
 
-        TestUtilities.createAndTestClient(config);
+        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
+            TestUtilities.assertConnected(client);
+        }
     }
 
     @Test
@@ -100,6 +105,30 @@ public class ClusterTlsCertificateTest {
                 () -> {
                     GlideClusterClient.createClient(config).get();
                 });
+    }
+
+    @Test
+    void testClusterTlsWithIpv4Succeeds() throws Exception {
+        NodeAddress ipv4Node =
+                NodeAddress.builder().host("127.0.0.1").port(clusterNodes.get(0).getPort()).build();
+        GlideClusterClientConfiguration config =
+                TestUtilities.createClusterConfigWithRootCert(caCert, Collections.singletonList(ipv4Node));
+
+        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
+            TestUtilities.assertConnected(client);
+        }
+    }
+
+    @Test
+    void testClusterTlsWithIpv6Succeeds() throws Exception {
+        NodeAddress ipv6Node =
+                NodeAddress.builder().host("::1").port(clusterNodes.get(0).getPort()).build();
+        GlideClusterClientConfiguration config =
+                TestUtilities.createClusterConfigWithRootCert(caCert, Collections.singletonList(ipv6Node));
+
+        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
+            TestUtilities.assertConnected(client);
+        }
     }
 
     @Test
@@ -134,7 +163,9 @@ public class ClusterTlsCertificateTest {
                             .advancedConfiguration(advancedConfig)
                             .build();
 
-            TestUtilities.createAndTestClient(config);
+            try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
+                TestUtilities.assertConnected(client);
+            }
         } finally {
             Files.deleteIfExists(keyStorePath);
         }

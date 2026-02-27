@@ -26,6 +26,11 @@ public class BaseClientConfigurationTest {
             return null;
         }
 
+        @Override
+        public AdvancedBaseClientConfiguration getAdvancedConfiguration() {
+            return null;
+        }
+
         public static class TestClientConfigurationBuilder
                 extends BaseClientConfigurationBuilder<
                         TestClientConfiguration, TestClientConfigurationBuilder> {
