@@ -29,14 +29,15 @@ pub async fn insert_cluster_scan_cursor_async(scan_state: ScanStateRC) -> String
 }
 
 pub fn insert_cluster_scan_cursor(scan_state: ScanStateRC) -> String {
-    match tokio::runtime::Handle::try_current() {
-        Ok(handle) => handle.block_on(insert_cluster_scan_cursor_async(scan_state)),
-        Err(_) => tokio::runtime::Builder::new_current_thread()
+    std::thread::spawn(move || {
+        tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("Failed to create Tokio runtime")
-            .block_on(insert_cluster_scan_cursor_async(scan_state)),
-    }
+            .block_on(insert_cluster_scan_cursor_async(scan_state))
+    })
+    .join()
+    .expect("Thread panicked")
 }
 
 pub async fn get_cluster_scan_cursor_async(id: String) -> RedisResult<ScanStateRC> {
@@ -56,14 +57,15 @@ pub async fn get_cluster_scan_cursor_async(id: String) -> RedisResult<ScanStateR
 }
 
 pub fn get_cluster_scan_cursor(id: String) -> RedisResult<ScanStateRC> {
-    match tokio::runtime::Handle::try_current() {
-        Ok(handle) => handle.block_on(get_cluster_scan_cursor_async(id)),
-        Err(_) => tokio::runtime::Builder::new_current_thread()
+    std::thread::spawn(move || {
+        tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("Failed to create Tokio runtime")
-            .block_on(get_cluster_scan_cursor_async(id)),
-    }
+            .block_on(get_cluster_scan_cursor_async(id))
+    })
+    .join()
+    .expect("Thread panicked")
 }
 
 pub async fn remove_scan_state_cursor_async(id: String) {
@@ -75,12 +77,13 @@ pub async fn remove_scan_state_cursor_async(id: String) {
 }
 
 pub fn remove_scan_state_cursor(id: String) {
-    match tokio::runtime::Handle::try_current() {
-        Ok(handle) => handle.block_on(remove_scan_state_cursor_async(id)),
-        Err(_) => tokio::runtime::Builder::new_current_thread()
+    std::thread::spawn(move || {
+        tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("Failed to create Tokio runtime")
-            .block_on(remove_scan_state_cursor_async(id)),
-    }
+            .block_on(remove_scan_state_cursor_async(id))
+    })
+    .join()
+    .expect("Thread panicked")
 }
