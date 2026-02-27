@@ -7,7 +7,6 @@ import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
-import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.PeriodicChecksConfig;
 import glide.api.models.configuration.PeriodicChecksManualInterval;
@@ -51,12 +50,6 @@ public class ConnectionManager {
         return CompletableFuture.supplyAsync(
                 () -> {
                     try {
-                        // Convert addresses to simple string array
-                        String[] addresses =
-                                configuration.getAddresses().stream()
-                                        .map(addr -> addr.getHost() + ":" + addr.getPort())
-                                        .toArray(String[]::new);
-
                         // Extract credentials
                         if (configuration.getCredentials() != null) {
                             this.credentials = configuration.getCredentials();
@@ -174,16 +167,10 @@ public class ConnectionManager {
                         // Build ConnectionRequest protobuf
                         ConnectionRequest.Builder requestBuilder = ConnectionRequest.newBuilder();
 
-                        // Add addresses
-                        for (String addr : addresses) {
-                            String[] parts = addr.split(":");
-                            if (parts.length == 2) {
-                                requestBuilder.addAddresses(
-                                        NodeAddress.newBuilder()
-                                                .setHost(parts[0])
-                                                .setPort(Integer.parseInt(parts[1]))
-                                                .build());
-                            }
+                        for (var addr : configuration.getAddresses()) {
+                            var nodeAddress =
+                                    NodeAddress.newBuilder().setHost(addr.getHost()).setPort(addr.getPort()).build();
+                            requestBuilder.addAddresses(nodeAddress);
                         }
 
                         // Set TLS mode
@@ -373,7 +360,7 @@ public class ConnectionManager {
                         }
 
                         // Set TCP_NODELAY option (only if explicitly configured)
-                        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+                        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
                         if (advanced != null && advanced.getTcpNoDelay() != null) {
                             requestBuilder.setTcpNodelay(advanced.getTcpNoDelay());
                         }
@@ -511,7 +498,7 @@ public class ConnectionManager {
     }
 
     private static int resolveConnectionTimeout(BaseClientConfiguration configuration) {
-        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
         if (advanced != null && advanced.getConnectionTimeout() != null) {
             return advanced.getConnectionTimeout();
         }
@@ -519,7 +506,7 @@ public class ConnectionManager {
     }
 
     private static boolean resolveInsecureTls(BaseClientConfiguration configuration) {
-        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
         if (advanced == null) {
             return false;
         }
@@ -535,7 +522,7 @@ public class ConnectionManager {
     }
 
     private static byte[] extractRootCertificates(BaseClientConfiguration configuration) {
-        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
         if (advanced == null) {
             return null;
         }
@@ -544,16 +531,5 @@ public class ConnectionManager {
             return null;
         }
         return tlsConfig.getRootCertificates();
-    }
-
-    private static AdvancedBaseClientConfiguration extractAdvancedConfiguration(
-            BaseClientConfiguration configuration) {
-        if (configuration instanceof GlideClientConfiguration) {
-            return ((GlideClientConfiguration) configuration).getAdvancedConfiguration();
-        }
-        if (configuration instanceof GlideClusterClientConfiguration) {
-            return ((GlideClusterClientConfiguration) configuration).getAdvancedConfiguration();
-        }
-        return null;
     }
 }

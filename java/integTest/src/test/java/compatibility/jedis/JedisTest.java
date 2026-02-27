@@ -20,11 +20,14 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.GeoCoordinate;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.Protocol;
+import redis.clients.jedis.StreamEntryID;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.args.GeoUnit;
 import redis.clients.jedis.args.ListDirection;
 import redis.clients.jedis.args.ListPosition;
 import redis.clients.jedis.exceptions.JedisException;
@@ -32,14 +35,25 @@ import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
 import redis.clients.jedis.params.HGetExParams;
 import redis.clients.jedis.params.HSetExParams;
+import redis.clients.jedis.params.LCSParams;
 import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.params.SortingParams;
+import redis.clients.jedis.params.XAddParams;
+import redis.clients.jedis.params.XTrimParams;
 import redis.clients.jedis.params.ZAddParams;
 import redis.clients.jedis.params.ZRangeParams;
 import redis.clients.jedis.resps.AccessControlLogEntry;
 import redis.clients.jedis.resps.AccessControlUser;
+import redis.clients.jedis.resps.LCSMatchResult;
 import redis.clients.jedis.resps.ScanResult;
+import redis.clients.jedis.resps.StreamConsumerInfo;
+import redis.clients.jedis.resps.StreamEntry;
+import redis.clients.jedis.resps.StreamGroupInfo;
+import redis.clients.jedis.resps.StreamInfo;
+import redis.clients.jedis.resps.StreamPendingEntry;
+import redis.clients.jedis.resps.StreamPendingSummary;
 import redis.clients.jedis.resps.Tuple;
 import redis.clients.jedis.util.KeyValue;
 
@@ -54,6 +68,17 @@ public class JedisTest {
     // Server configuration - dynamically resolved from CI environment
     private static final String valkeyHost;
     private static final int valkeyPort;
+
+    // Geo test constants
+    private static final double TEST_LONGITUDE_PALERMO = 13.361389;
+    private static final double TEST_LATITUDE_PALERMO = 38.115556;
+    private static final double TEST_LONGITUDE_CATANIA = 15.087269;
+    private static final double TEST_LATITUDE_CATANIA = 37.502669;
+    private static final double TEST_GEO_DISTANCE_MIN_METERS = 166000;
+    private static final double TEST_GEO_DISTANCE_MAX_METERS = 167000;
+    private static final double TEST_GEO_DISTANCE_MIN_KM = 166;
+    private static final double TEST_GEO_DISTANCE_MAX_KM = 167;
+    private static final double TEST_GEO_COORD_TOLERANCE = 0.01;
 
     // GLIDE compatibility layer instance
     private Jedis jedis;
@@ -314,6 +339,126 @@ public class JedisTest {
         assertEquals("value1", results.get(0), "First value should be correct");
         assertEquals("value2", results.get(1), "Second value should be correct");
         assertEquals("value3", results.get(2), "Third value should be correct");
+    }
+
+    @Test
+    void msetnx_command() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+
+        // Test MSETNX when all keys are new
+        long result = jedis.msetnx(key1, "value1", key2, "value2");
+        assertEquals(1L, result, "MSETNX should return 1 when all keys are new");
+        assertEquals("value1", jedis.get(key1), "First key should be set");
+        assertEquals("value2", jedis.get(key2), "Second key should be set");
+
+        // Test MSETNX when one key already exists
+        result = jedis.msetnx(key2, "newvalue2", key3, "value3");
+        assertEquals(0L, result, "MSETNX should return 0 when at least one key exists");
+        assertEquals("value2", jedis.get(key2), "Existing key should not be modified");
+        assertNull(jedis.get(key3), "New key should not be set when operation fails");
+
+        // Test binary version
+        byte[] bkey1 = ("bkey1:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] bkey2 = ("bkey2:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] bvalue1 = "bvalue1".getBytes(StandardCharsets.UTF_8);
+        byte[] bvalue2 = "bvalue2".getBytes(StandardCharsets.UTF_8);
+
+        result = jedis.msetnx(bkey1, bvalue1, bkey2, bvalue2);
+        assertEquals(1L, result, "MSETNX binary should return 1 when all keys are new");
+        assertArrayEquals(bvalue1, jedis.get(bkey1), "First binary key should be set");
+        assertArrayEquals(bvalue2, jedis.get(bkey2), "Second binary key should be set");
+    }
+
+    @Test
+    void setrange_getrange_commands() {
+        String key = UUID.randomUUID().toString();
+
+        // Test SETRANGE on non-existing key (creates key with zero-padding)
+        long length = jedis.setrange(key, 5, "world");
+        assertEquals(10L, length, "SETRANGE should return new string length");
+        String value = jedis.get(key);
+        assertTrue(value.endsWith("world"), "Value should end with 'world'");
+
+        // Test SETRANGE overwriting part of existing string
+        jedis.set(key, "Hello World");
+        length = jedis.setrange(key, 6, "Redis");
+        assertEquals(11L, length, "SETRANGE should return string length");
+        assertEquals("Hello Redis", jedis.get(key), "String should be modified correctly");
+
+        // Test GETRANGE
+        String substring = jedis.getrange(key, 0, 4);
+        assertEquals("Hello", substring, "GETRANGE should return correct substring");
+
+        substring = jedis.getrange(key, 6, 10);
+        assertEquals("Redis", substring, "GETRANGE should return correct substring");
+
+        // Test GETRANGE with negative indices
+        substring = jedis.getrange(key, -5, -1);
+        assertEquals("Redis", substring, "GETRANGE with negative indices should work");
+
+        // Test binary version
+        byte[] bkey = ("bkey:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] bvalue = "Hello".getBytes(StandardCharsets.UTF_8);
+        jedis.set(bkey, bvalue);
+
+        length = jedis.setrange(bkey, 6, "World".getBytes(StandardCharsets.UTF_8));
+        assertTrue(length >= 11, "SETRANGE binary should return string length");
+
+        byte[] bsubstring = jedis.getrange(bkey, 0, 4);
+        assertArrayEquals(
+                "Hello".getBytes(StandardCharsets.UTF_8),
+                bsubstring,
+                "GETRANGE binary should return correct substring");
+    }
+
+    @Test
+    void lcs_commands() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LCS requires Valkey 7.0.0+");
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        // Set up test data
+        jedis.set(key1, "ohmytext");
+        jedis.set(key2, "mynewtext");
+
+        // Test LCS - returns the longest common subsequence (default: returns string)
+        LCSParams defaultParams = LCSParams.LCSParams();
+        LCSMatchResult lcsResult = jedis.lcs(key1, key2, defaultParams);
+        assertNotNull(lcsResult, "LCS should return a result");
+        assertNotNull(lcsResult.getMatchString(), "LCS should return a match string");
+        assertTrue(lcsResult.getMatchString().contains("my"), "LCS should contain common subsequence");
+
+        // Test LCS with LEN option - returns only length
+        LCSParams lenParams = LCSParams.LCSParams().len();
+        LCSMatchResult lcsLenResult = jedis.lcs(key1, key2, lenParams);
+        assertNotNull(lcsLenResult, "LCS LEN should return a result");
+        assertTrue(lcsLenResult.getLen() > 0, "LCS length should be positive");
+
+        // Test LCS with IDX option - returns match indices with positions
+        LCSParams idxParams = LCSParams.LCSParams().idx();
+        LCSMatchResult lcsIdxResult = jedis.lcs(key1, key2, idxParams);
+        assertNotNull(lcsIdxResult, "LCS IDX should return a result");
+        assertTrue(lcsIdxResult.getLen() > 0, "LCS IDX should contain length");
+        assertNotNull(lcsIdxResult.getMatches(), "LCS IDX should contain matches");
+        assertFalse(
+                lcsIdxResult.getMatches().isEmpty(),
+                "LCS IDX matches should not be empty for 'ohmytext' vs 'mynewtext'");
+
+        // Test binary version
+        byte[] bkey1 = ("bkey1:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] bkey2 = ("bkey2:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.set(bkey1, "ohmytext".getBytes(StandardCharsets.UTF_8));
+        jedis.set(bkey2, "mynewtext".getBytes(StandardCharsets.UTF_8));
+
+        LCSMatchResult blcsResult = jedis.lcs(bkey1, bkey2, defaultParams);
+        assertNotNull(blcsResult, "LCS binary should return a result");
+        assertNotNull(blcsResult.getMatchString(), "LCS binary should return match string");
+
+        LCSMatchResult blcsLenResult = jedis.lcs(bkey1, bkey2, lenParams);
+        assertTrue(blcsLenResult.getLen() > 0, "LCS binary length should be positive");
     }
 
     @Test
@@ -3379,6 +3524,307 @@ public class JedisTest {
                 0, jedis.rpushx("non_existent_key", "value"), "RPUSHX on non-existent key should return 0");
     }
 
+    // ========== STREAM COMMANDS ==========
+
+    @Test
+    void stream_xadd_xlen_xdel() {
+        String key = "stream:" + UUID.randomUUID();
+        Map<String, String> hash = new HashMap<>();
+        hash.put("f1", "v1");
+        hash.put("f2", "v2");
+
+        StreamEntryID id = jedis.xadd(key, hash);
+        assertNotNull(id, "XADD should return entry ID");
+        assertTrue(id.getTime() > 0 || id.getSequence() >= 0, "XADD should return valid ID");
+
+        long len = jedis.xlen(key);
+        assertEquals(1, len, "XLEN should be 1 after one XADD");
+
+        long del = jedis.xdel(key, id.toString());
+        assertEquals(1, del, "XDEL should return 1");
+        assertEquals(0, jedis.xlen(key), "XLEN should be 0 after XDEL");
+    }
+
+    @Test
+    void stream_xrange_xrevrange() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("a", "1"));
+        jedis.xadd(key, Map.of("b", "2"));
+        jedis.xadd(key, Map.of("c", "3"));
+
+        List<StreamEntry> range = jedis.xrange(key, "-", "+");
+        assertNotNull(range);
+        assertTrue(range.size() >= 3, "XRANGE should return at least 3 entries");
+
+        List<StreamEntry> rev = jedis.xrevrange(key, "+", "-");
+        assertNotNull(rev);
+        assertTrue(rev.size() >= 3, "XREVRANGE should return at least 3 entries");
+
+        List<StreamEntry> limited = jedis.xrange(key, "-", "+", 2L);
+        assertNotNull(limited);
+        assertEquals(2, limited.size(), "XRANGE with COUNT 2 should return 2 entries");
+    }
+
+    @Test
+    void stream_xread() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("x", "1"));
+
+        Map<String, String> keysAndIds = new HashMap<>();
+        keysAndIds.put(key, "0-0");
+
+        Map<String, List<StreamEntry>> result = jedis.xread(keysAndIds);
+        assertNotNull(result);
+        assertTrue(result.containsKey(key));
+        assertFalse(result.get(key).isEmpty(), "XREAD should return entries from start");
+    }
+
+    @Test
+    void stream_xtrim() {
+        String key = "stream:" + UUID.randomUUID();
+        for (int i = 0; i < 10; i++) {
+            jedis.xadd(key, Map.of("i", String.valueOf(i)));
+        }
+        long lenBefore = jedis.xlen(key);
+        assertTrue(lenBefore >= 10, "Stream should have at least 10 entries");
+
+        long trimmed = jedis.xtrim(key, 5L);
+        assertTrue(trimmed >= 0, "XTRIM should return non-negative count");
+        long lenAfter = jedis.xlen(key);
+        assertTrue(lenAfter <= 5, "Stream length after XTRIM MAXLEN 5 should be <= 5");
+    }
+
+    @Test
+    void stream_xgroup_create_destroy() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("init", "1"));
+
+        String group = "g1";
+        String createResult = jedis.xgroupCreate(key, group, "0", true);
+        assertNotNull(createResult, "XGROUP CREATE should succeed");
+
+        boolean destroyed = jedis.xgroupDestroy(key, group);
+        assertTrue(destroyed, "XGROUP DESTROY should return true");
+    }
+
+    @Test
+    void stream_xgroup_setid_createconsumer_delconsumer() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("a", "1"));
+        String group = "g2";
+        jedis.xgroupCreate(key, group, "0", true);
+
+        String setidResult = jedis.xgroupSetId(key, group, "0");
+        assertNotNull(setidResult);
+
+        boolean created = jedis.xgroupCreateConsumer(key, group, "c1");
+        assertTrue(created, "XGROUP CREATECONSUMER should succeed");
+
+        long del = jedis.xgroupDelConsumer(key, group, "c1");
+        assertTrue(del >= 0, "XGROUP DELCONSUMER should return non-negative");
+    }
+
+    @Test
+    void stream_xreadgroup_xack() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("m1", "v1"));
+        jedis.xadd(key, Map.of("m2", "v2"));
+        String group = "g3";
+        jedis.xgroupCreate(key, group, "0", true);
+
+        Map<String, String> keysAndIds = new HashMap<>();
+        keysAndIds.put(key, ">");
+
+        Map<String, List<StreamEntry>> read = jedis.xreadgroup(group, "consumer1", keysAndIds);
+        assertNotNull(read);
+        assertTrue(read.containsKey(key));
+        List<StreamEntry> entries = read.get(key);
+        assertNotNull(entries);
+        assertFalse(entries.isEmpty(), "XREADGROUP should return entries");
+
+        String[] ids = entries.stream().map(e -> e.getID().toString()).toArray(String[]::new);
+        long ack = jedis.xack(key, group, ids);
+        assertEquals(entries.size(), ack, "XACK should acknowledge all read entries");
+    }
+
+    @Test
+    void stream_xpending() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("p", "1"));
+        String group = "g4";
+        jedis.xgroupCreate(key, group, "0", true);
+
+        StreamPendingSummary summary = jedis.xpending(key, group);
+        assertNotNull(summary);
+        assertTrue(summary.getTotal() >= 0, "XPENDING summary total should be non-negative");
+
+        List<StreamPendingEntry> pending = jedis.xpending(key, group, "-", "+", 10L);
+        assertNotNull(pending);
+    }
+
+    @Test
+    void stream_xinfo_stream_and_groups() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("i", "1"));
+        jedis.xgroupCreate(key, "ginfo", "0", true);
+
+        Map<String, Object> raw = jedis.xinfoStream(key);
+        assertNotNull(raw);
+        assertTrue(raw.containsKey("length") || raw.containsKey("last-generated-id"));
+
+        StreamInfo info = jedis.xinfoStreamAsInfo(key);
+        assertNotNull(info);
+        assertTrue(info.getLength() >= 1, "Stream should have at least 1 entry");
+
+        List<StreamGroupInfo> groups = jedis.xinfoGroups(key);
+        assertNotNull(groups);
+        assertFalse(groups.isEmpty(), "XINFO GROUPS should return at least one group");
+    }
+
+    @Test
+    void stream_xinfo_consumers() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("c", "1"));
+        String group = "gcons";
+        jedis.xgroupCreate(key, group, "0", true);
+        jedis.xgroupCreateConsumer(key, group, "consumer1");
+
+        List<StreamConsumerInfo> consumers = jedis.xinfoConsumers(key, group);
+        assertNotNull(consumers);
+        assertFalse(consumers.isEmpty(), "XINFO CONSUMERS should return at least one consumer");
+    }
+
+    @Test
+    void stream_binary_xlen_xdel() {
+        byte[] key = ("stream:" + UUID.randomUUID()).getBytes();
+        Map<byte[], byte[]> hash = new HashMap<>();
+        hash.put("f1".getBytes(), "v1".getBytes());
+        hash.put("f2".getBytes(), "v2".getBytes());
+
+        // Use XAddParams to add entry
+        XAddParams params = XAddParams.xAddParams();
+        byte[] id = jedis.xadd(key, params, hash);
+        assertNotNull(id, "Binary XADD should return entry ID");
+
+        long len = jedis.xlen(key);
+        assertEquals(1, len, "Binary XLEN should be 1 after one XADD");
+
+        long del = jedis.xdel(key, id);
+        assertEquals(1, del, "Binary XDEL should return 1");
+        assertEquals(0, jedis.xlen(key), "Binary XLEN should be 0 after XDEL");
+    }
+
+    @Test
+    void stream_binary_xrange_xrevrange() {
+        byte[] key = ("stream:" + UUID.randomUUID()).getBytes();
+
+        // Add entries using XAddParams
+        XAddParams params = XAddParams.xAddParams();
+        Map<byte[], byte[]> hash1 = Map.of("a".getBytes(), "1".getBytes());
+        Map<byte[], byte[]> hash2 = Map.of("b".getBytes(), "2".getBytes());
+        Map<byte[], byte[]> hash3 = Map.of("c".getBytes(), "3".getBytes());
+
+        jedis.xadd(key, params, hash1);
+        jedis.xadd(key, params, hash2);
+        jedis.xadd(key, params, hash3);
+
+        List<StreamEntry> range = jedis.xrange(key, "-".getBytes(), "+".getBytes());
+        assertNotNull(range);
+        assertTrue(range.size() >= 3, "Binary XRANGE should return at least 3 entries");
+
+        List<StreamEntry> rev = jedis.xrevrange(key, "+".getBytes(), "-".getBytes());
+        assertNotNull(rev);
+        assertTrue(rev.size() >= 3, "Binary XREVRANGE should return at least 3 entries");
+
+        List<StreamEntry> limited = jedis.xrange(key, "-".getBytes(), "+".getBytes(), 2);
+        assertNotNull(limited);
+        assertEquals(2, limited.size(), "Binary XRANGE with COUNT 2 should return 2 entries");
+    }
+
+    @Test
+    void stream_binary_xtrim() {
+        byte[] key = ("stream:" + UUID.randomUUID()).getBytes();
+        XAddParams addParams = XAddParams.xAddParams();
+
+        for (int i = 0; i < 10; i++) {
+            Map<byte[], byte[]> hash = Map.of("i".getBytes(), String.valueOf(i).getBytes());
+            jedis.xadd(key, addParams, hash);
+        }
+        long lenBefore = jedis.xlen(key);
+        assertTrue(lenBefore >= 10, "Stream should have at least 10 entries");
+
+        long trimmed = jedis.xtrim(key, 5L);
+        assertTrue(trimmed >= 0, "Binary XTRIM should return non-negative count");
+        long lenAfter = jedis.xlen(key);
+        assertTrue(lenAfter <= 5, "Stream length after binary XTRIM MAXLEN 5 should be <= 5");
+    }
+
+    @Test
+    void stream_xadd_with_xaddparams() {
+        String key = "stream:" + UUID.randomUUID();
+        Map<String, String> hash = Map.of("field", "value");
+
+        // Test with custom ID
+        XAddParams params = XAddParams.xAddParams().id("1000-0");
+        StreamEntryID id = jedis.xadd(key, params, hash);
+        assertNotNull(id);
+        assertEquals("1000-0", id.toString());
+
+        // Test with NOMKSTREAM
+        String nonExistentKey = "stream:" + UUID.randomUUID();
+        params = XAddParams.xAddParams().noMkStream();
+        StreamEntryID result = jedis.xadd(nonExistentKey, params, hash);
+        assertNull(result, "XADD with NOMKSTREAM should return null for non-existent stream");
+
+        // Test with MAXLEN trimming (exact)
+        String trimKey = "stream:" + UUID.randomUUID();
+        for (int i = 0; i < 5; i++) {
+            jedis.xadd(trimKey, Map.of("i", String.valueOf(i)));
+        }
+        params = XAddParams.xAddParams().maxLenExact(3);
+        jedis.xadd(trimKey, params, Map.of("new", "entry"));
+        long len = jedis.xlen(trimKey);
+        assertTrue(len <= 3, "Stream should be trimmed to exactly 3 entries");
+    }
+
+    @Test
+    void stream_xtrim_with_xtrimparams() {
+        String key = "stream:" + UUID.randomUUID();
+        for (int i = 0; i < 10; i++) {
+            jedis.xadd(key, Map.of("i", String.valueOf(i)));
+        }
+
+        // Test MAXLEN with XTrimParams (exact trimming)
+        XTrimParams params = XTrimParams.xTrimParams().maxLenExact(5);
+        long trimmed = jedis.xtrim(key, params);
+        assertTrue(trimmed >= 0, "XTRIM with XTrimParams should return non-negative count");
+        long len = jedis.xlen(key);
+        assertTrue(len <= 5, "Stream should be trimmed to exactly 5 entries");
+
+        // Test MAXLEN with approximate trimming
+        String key3 = "stream:" + UUID.randomUUID();
+        for (int i = 0; i < 10; i++) {
+            jedis.xadd(key3, Map.of("i", String.valueOf(i)));
+        }
+        params = XTrimParams.xTrimParams().maxLen(5);
+        jedis.xtrim(key3, params);
+        len = jedis.xlen(key3);
+        assertTrue(
+                len <= 10 && len >= 5,
+                "Stream with approximate trim should be reduced but may not be exact");
+
+        // Test MINID with XTrimParams (exact trimming)
+        String key2 = "stream:" + UUID.randomUUID();
+        StreamEntryID firstId = jedis.xadd(key2, Map.of("a", "1"));
+        jedis.xadd(key2, Map.of("b", "2"));
+        StreamEntryID thirdId = jedis.xadd(key2, Map.of("c", "3"));
+
+        params = XTrimParams.xTrimParams().minIdExact(thirdId);
+        jedis.xtrim(key2, params);
+        len = jedis.xlen(key2);
+        assertTrue(len == 1, "Stream should be trimmed to exactly entries >= minId");
+    }
+
     // --- ACL command integration tests ---
 
     @Test
@@ -3657,6 +4103,604 @@ public class JedisTest {
             t = t.getCause();
         }
         return sb.toString();
+    }
+
+    // ==================== SORT COMMANDS TESTS ====================
+
+    @Test
+    void sortReadonly_basic() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "SORT_RO requires Valkey 7.0.0+");
+
+        String key = "sortReadonlyList_" + UUID.randomUUID();
+        jedis.rpush(key, "3", "1", "2");
+
+        List<String> result = jedis.sortReadonly(key);
+        assertEquals(Arrays.asList("1", "2", "3"), result);
+    }
+
+    @Test
+    void sortReadonly_with_params() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "SORT_RO requires Valkey 7.0.0+");
+
+        String key = "sortReadonlyList_" + UUID.randomUUID();
+        jedis.rpush(key, "3", "1", "2");
+
+        SortingParams params = new SortingParams().desc().limit(0, 2);
+        List<String> result = jedis.sortReadonly(key, params);
+        assertEquals(Arrays.asList("3", "2"), result);
+    }
+
+    @Test
+    void sortReadonly_binary() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "SORT_RO requires Valkey 7.0.0+");
+
+        byte[] key = ("sortReadonlyListBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.rpush(key, "3".getBytes(), "1".getBytes(), "2".getBytes());
+
+        List<byte[]> result = jedis.sortReadonly(key);
+        assertEquals(3, result.size());
+        assertEquals("1", new String(result.get(0), StandardCharsets.UTF_8));
+        assertEquals("2", new String(result.get(1), StandardCharsets.UTF_8));
+        assertEquals("3", new String(result.get(2), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void sort_store_basic() {
+        String key = "sortStoreList_" + UUID.randomUUID();
+        String dest = "sortStoreDest_" + UUID.randomUUID();
+        jedis.rpush(key, "3", "1", "2");
+
+        long count = jedis.sort(key, dest);
+        assertEquals(3, count);
+
+        List<String> result = jedis.lrange(dest, 0, -1);
+        assertEquals(Arrays.asList("1", "2", "3"), result);
+    }
+
+    @Test
+    void sort_store_with_params() {
+        String key = "sortStoreList_" + UUID.randomUUID();
+        String dest = "sortStoreDest_" + UUID.randomUUID();
+        jedis.rpush(key, "3", "1", "2");
+
+        SortingParams params = new SortingParams().desc();
+        long count = jedis.sort(key, params, dest);
+        assertEquals(3, count);
+
+        List<String> result = jedis.lrange(dest, 0, -1);
+        assertEquals(Arrays.asList("3", "2", "1"), result);
+    }
+
+    @Test
+    void sort_store_binary() {
+        byte[] key = ("sortStoreListBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] dest = ("sortStoreDestBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.rpush(key, "3".getBytes(), "1".getBytes(), "2".getBytes());
+
+        long count = jedis.sort(key, dest);
+        assertEquals(3, count);
+    }
+
+    // ==================== WAIT COMMANDS TESTS ====================
+
+    @Test
+    void wait_basic() {
+        String key = "waitKey_" + UUID.randomUUID();
+        jedis.set(key, "value");
+
+        long replicas = jedis.wait(0L, 1000L);
+        assertTrue(replicas >= 0);
+    }
+
+    @Test
+    void waitaof_basic() {
+        // Skip if server version doesn't support WAITAOF (requires Valkey 7.2+)
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"), "WAITAOF requires Valkey 7.2.0 or higher");
+
+        String key = "waitaofKey_" + UUID.randomUUID();
+        jedis.set(key, "value");
+
+        KeyValue<Long, Long> result = jedis.waitAOF(0, 0, 1000);
+        assertNotNull(result);
+        assertTrue(result.getKey() >= 0);
+        assertTrue(result.getValue() >= 0);
+    }
+
+    // ==================== OBJECT COMMANDS TESTS ====================
+
+    @Test
+    void objectEncoding_string() {
+        String key = "objectEncodingKey_" + UUID.randomUUID();
+        jedis.set(key, "value");
+
+        String encoding = jedis.objectEncoding(key);
+        assertNotNull(encoding);
+        assertTrue(encoding.equals("embstr") || encoding.equals("raw") || encoding.equals("int"));
+    }
+
+    @Test
+    void objectEncoding_nonexistent() {
+        String key = "nonExistentKey_" + UUID.randomUUID();
+        String encoding = jedis.objectEncoding(key);
+        assertNull(encoding);
+    }
+
+    @Test
+    void objectEncoding_binary() {
+        byte[] key = ("objectEncodingKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.set(key, "value".getBytes());
+
+        byte[] encoding = jedis.objectEncoding(key);
+        assertNotNull(encoding);
+        String encodingStr = new String(encoding, StandardCharsets.UTF_8);
+        assertTrue(
+                encodingStr.equals("embstr") || encodingStr.equals("raw") || encodingStr.equals("int"));
+    }
+
+    @Test
+    void objectFreq_string() {
+        // Skip if server doesn't have maxmemory-policy=allkeys-lfu configured
+        String key = "objectFreqKey_" + UUID.randomUUID();
+        jedis.set(key, "value");
+        jedis.get(key); // Access to increase frequency
+
+        Long freq = jedis.objectFreq(key);
+        // freq can be null if LFU is not enabled
+        if (freq != null) {
+            assertTrue(freq >= 0);
+        }
+    }
+
+    @Test
+    void objectFreq_binary() {
+        byte[] key = ("objectFreqKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.set(key, "value".getBytes());
+        jedis.get(key);
+
+        Long freq = jedis.objectFreq(key);
+        // freq can be null if LFU is not enabled
+        if (freq != null) {
+            assertTrue(freq >= 0);
+        }
+    }
+
+    @Test
+    void objectIdletime_string() {
+        String key = "objectIdletimeKey_" + UUID.randomUUID();
+        jedis.set(key, "value");
+
+        Long idletime = jedis.objectIdletime(key);
+        assertNotNull(idletime);
+        assertTrue(idletime >= 0);
+    }
+
+    @Test
+    void objectIdletime_binary() {
+        byte[] key = ("objectIdletimeKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.set(key, "value".getBytes());
+
+        Long idletime = jedis.objectIdletime(key);
+        assertNotNull(idletime);
+        assertTrue(idletime >= 0);
+    }
+
+    @Test
+    void objectRefcount_string() {
+        String key = "objectRefcountKey_" + UUID.randomUUID();
+        jedis.set(key, "value");
+
+        Long refcount = jedis.objectRefcount(key);
+        assertNotNull(refcount);
+        assertTrue(refcount >= 1);
+    }
+
+    @Test
+    void objectRefcount_binary() {
+        byte[] key = ("objectRefcountKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.set(key, "value".getBytes());
+
+        Long refcount = jedis.objectRefcount(key);
+        assertNotNull(refcount);
+        assertTrue(refcount >= 1);
+    }
+
+    // ==================== GEO COMMANDS TESTS ====================
+
+    @Test
+    void geoadd_single_member() {
+        String key = "geoKey_" + UUID.randomUUID();
+        long result = jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        assertEquals(1, result);
+    }
+
+    @Test
+    void geoadd_multiple_members() {
+        String key = "geoKey_" + UUID.randomUUID();
+        Map<String, redis.clients.jedis.GeoCoordinate> members = new HashMap<>();
+        members.put(
+                "Palermo",
+                new redis.clients.jedis.GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO));
+        members.put(
+                "Catania",
+                new redis.clients.jedis.GeoCoordinate(TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA));
+
+        long result = jedis.geoadd(key, members);
+        assertEquals(2, result);
+    }
+
+    @Test
+    void geoadd_binary() {
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        long result =
+                jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        assertEquals(1, result);
+    }
+
+    @Test
+    void geopos_existing_members() {
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        List<redis.clients.jedis.GeoCoordinate> positions = jedis.geopos(key, "Palermo", "Catania");
+        assertEquals(2, positions.size());
+        assertNotNull(positions.get(0));
+        assertNotNull(positions.get(1));
+        assertTrue(
+                Math.abs(positions.get(0).getLongitude() - TEST_LONGITUDE_PALERMO)
+                        < TEST_GEO_COORD_TOLERANCE);
+        assertTrue(
+                Math.abs(positions.get(0).getLatitude() - TEST_LATITUDE_PALERMO)
+                        < TEST_GEO_COORD_TOLERANCE);
+    }
+
+    @Test
+    void geopos_nonexistent_member() {
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+
+        List<redis.clients.jedis.GeoCoordinate> positions = jedis.geopos(key, "Palermo", "NonExistent");
+        assertEquals(2, positions.size());
+        assertNotNull(positions.get(0));
+        assertNull(positions.get(1));
+    }
+
+    @Test
+    void geopos_binary() {
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+
+        List<redis.clients.jedis.GeoCoordinate> positions = jedis.geopos(key, "Palermo".getBytes());
+        assertEquals(1, positions.size());
+        assertNotNull(positions.get(0));
+    }
+
+    @Test
+    void geodist_meters() {
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        Double distance = jedis.geodist(key, "Palermo", "Catania");
+        assertNotNull(distance);
+        assertTrue(distance > TEST_GEO_DISTANCE_MIN_METERS && distance < TEST_GEO_DISTANCE_MAX_METERS);
+    }
+
+    @Test
+    void geodist_kilometers() {
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        Double distance = jedis.geodist(key, "Palermo", "Catania", GeoUnit.KM);
+        assertNotNull(distance);
+        assertTrue(distance > TEST_GEO_DISTANCE_MIN_KM && distance < TEST_GEO_DISTANCE_MAX_KM);
+    }
+
+    @Test
+    void geodist_binary() {
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
+
+        Double distance = jedis.geodist(key, "Palermo".getBytes(), "Catania".getBytes());
+        assertNotNull(distance);
+        assertTrue(distance > TEST_GEO_DISTANCE_MIN_METERS && distance < TEST_GEO_DISTANCE_MAX_METERS);
+    }
+
+    @Test
+    void geohash_existing_members() {
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        List<String> hashes = jedis.geohash(key, "Palermo", "Catania");
+        assertEquals(2, hashes.size());
+        assertNotNull(hashes.get(0));
+        assertNotNull(hashes.get(1));
+        assertTrue(hashes.get(0).length() > 0);
+        assertTrue(hashes.get(1).length() > 0);
+    }
+
+    @Test
+    void geohash_binary() {
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+
+        List<byte[]> hashes = jedis.geohash(key, "Palermo".getBytes());
+        assertEquals(1, hashes.size());
+        assertNotNull(hashes.get(0));
+        assertTrue(hashes.get(0).length > 0);
+    }
+
+    @Test
+    void geosearch_by_member() {
+        // Skip if server version doesn't support GEOSEARCH (requires Valkey 6.2+)
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, "Palermo", 200, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_binary() {
+        // Skip if server version doesn't support GEOSEARCH (requires Valkey 6.2+)
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
+
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, "Palermo".getBytes(), 200, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearchstore_by_member() {
+        // Skip if server version doesn't support GEOSEARCHSTORE (requires Valkey 6.2+)
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        String srcKey = "geoSrcKey_" + UUID.randomUUID();
+        String destKey = "geoDestKey_" + UUID.randomUUID();
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        long count = jedis.geosearchstore(destKey, srcKey, "Palermo", 200, GeoUnit.KM);
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void geosearchstore_binary() {
+        // Skip if server version doesn't support GEOSEARCHSTORE (requires Valkey 6.2+)
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        byte[] srcKey = ("geoSrcKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] destKey = ("geoDestKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
+
+        long count = jedis.geosearchstore(destKey, srcKey, "Palermo".getBytes(), 200, GeoUnit.KM);
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void sort_binary() {
+        byte[] key = ("sortList_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.rpush(key, "3".getBytes(), "1".getBytes(), "2".getBytes());
+
+        List<byte[]> sorted = jedis.sort(key);
+        assertNotNull(sorted);
+        assertEquals(3, sorted.size());
+        assertEquals("1", new String(sorted.get(0)));
+        assertEquals("2", new String(sorted.get(1)));
+        assertEquals("3", new String(sorted.get(2)));
+    }
+
+    @Test
+    void objectHelp() {
+        List<String> help = jedis.objectHelp();
+        assertNotNull(help);
+        assertFalse(help.isEmpty());
+        // Verify that the help contains information about object subcommands
+        assertTrue(
+                help.stream()
+                        .anyMatch(
+                                line ->
+                                        line.toLowerCase().contains("encoding")
+                                                || line.toLowerCase().contains("freq")));
+    }
+
+    @Test
+    void objectHelpBinary() {
+        List<byte[]> help = jedis.objectHelpBinary();
+        assertNotNull(help);
+        assertFalse(help.isEmpty());
+        // Convert first element to string to verify it contains help text
+        assertTrue(help.get(0) != null && help.get(0).length > 0);
+    }
+
+    @Test
+    void geosearch_by_coordinate() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        GeoCoordinate coord = new GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO);
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, coord, 200, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_by_coordinate_binary() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
+
+        GeoCoordinate coord = new GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO);
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, coord, 200, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_by_box() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, "Palermo", 400, 400, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_by_box_binary() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
+
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, "Palermo".getBytes(), 400, 400, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_by_coordinate_box() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.GeoCoordinate coord =
+                new redis.clients.jedis.GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO);
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, coord, 400, 400, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_with_params() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.params.GeoSearchParam params =
+                redis.clients.jedis.params.GeoSearchParam.fromMember("Palermo").byRadius(200, GeoUnit.KM);
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results = jedis.geosearch(key, params);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearchStore_by_coordinate() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        String srcKey = "geoSrcKey_" + UUID.randomUUID();
+        String destKey = "geoDestKey_" + UUID.randomUUID();
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.GeoCoordinate coord =
+                new redis.clients.jedis.GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO);
+        long count = jedis.geosearchStore(destKey, srcKey, coord, 200, GeoUnit.KM);
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void geosearchStore_by_box() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        String srcKey = "geoSrcKey_" + UUID.randomUUID();
+        String destKey = "geoDestKey_" + UUID.randomUUID();
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        long count = jedis.geosearchStore(destKey, srcKey, "Palermo", 400, 400, GeoUnit.KM);
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void geosearchStore_with_params() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        String srcKey = "geoSrcKey_" + UUID.randomUUID();
+        String destKey = "geoDestKey_" + UUID.randomUUID();
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.params.GeoSearchParam params =
+                redis.clients.jedis.params.GeoSearchParam.fromMember("Palermo").byRadius(200, GeoUnit.KM);
+        long count = jedis.geosearchStore(destKey, srcKey, params);
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void geosearchStoreStoreDist() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        String srcKey = "geoSrcKey_" + UUID.randomUUID();
+        String destKey = "geoDestKey_" + UUID.randomUUID();
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.params.GeoSearchParam params =
+                redis.clients.jedis.params.GeoSearchParam.fromMember("Palermo").byRadius(200, GeoUnit.KM);
+        long count = jedis.geosearchStoreStoreDist(destKey, srcKey, params);
+        assertTrue(count >= 1);
     }
 
     // ========================================
