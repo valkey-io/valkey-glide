@@ -499,6 +499,12 @@ where
                 ReadFromReplicaStrategy::RoundRobin => {
                     self.round_robin_read_from_replica(slot_map_value)
                 }
+                ReadFromReplicaStrategy::AllNodes => {
+                    // For ALL_NODES, the slot_map already handles round-robin across primary + replicas
+                    // We just need to get the address from the slot_map routing
+                    let addr = self.slot_map.slot_addr_for_route(route)?;
+                    self.connection_for_address(addr.as_str())
+                }
                 ReadFromReplicaStrategy::AZAffinity(az) => self
                     .round_robin_read_from_replica_with_az_awareness(
                         slot_map_value,

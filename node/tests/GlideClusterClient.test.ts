@@ -2970,6 +2970,77 @@ describe("GlideClusterClient", () => {
                 }
             },
         );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "should route GET commands to all nodes (primary and replicas) with allNodes strategy using protocol %p",
+            async (protocol) => {
+                if (cluster.checkIfServerVersionLessThan("8.0.0")) return;
+
+                let client;
+
+                try {
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                            { readFrom: "allNodes" },
+                        ),
+                    );
+
+                    await client.configResetStat({ route: "allNodes" });
+
+                    const get_calls = 200;
+
+                    for (let i = 0; i < get_calls; i++) {
+                        await client.get("foo");
+                    }
+
+                    const info_result = (await client.info({
+                        sections: [InfoOptions.All],
+                        route: "allNodes",
+                    })) as Record<string, string>;
+
+                    const nodes_with_gets = Object.values(info_result).filter(
+                        (info) => info.includes("cmdstat_get:calls="),
+                    ).length;
+
+                    expect(nodes_with_gets).toBeGreaterThan(1);
+
+                    const primary_received_gets = Object.values(
+                        info_result,
+                    ).some(
+                        (info) =>
+                            (info.includes("role:master") ||
+                                info.includes("role:primary")) &&
+                            info.includes("cmdstat_get:calls="),
+                    );
+
+                    expect(primary_received_gets).toBe(true);
+
+                    const replica_received_gets = Object.values(
+                        info_result,
+                    ).some(
+                        (info) =>
+                            info.includes("role:slave") &&
+                            info.includes("cmdstat_get:calls="),
+                    );
+
+                    expect(replica_received_gets).toBe(true);
+
+                    // Verify total GET calls
+                    const total_get_calls = Object.values(info_result)
+                        .filter((info) => info.includes("cmdstat_get:calls="))
+                        .reduce((sum, info) => {
+                            const match = info.match(/cmdstat_get:calls=(\d+)/);
+                            return sum + (match ? parseInt(match[1]) : 0);
+                        }, 0);
+
+                    expect(total_get_calls).toBe(get_calls);
+                } finally {
+                    client?.close();
+                }
+            },
+        );
     });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
