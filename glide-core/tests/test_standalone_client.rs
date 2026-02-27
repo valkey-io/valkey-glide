@@ -837,7 +837,7 @@ mod standalone_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_tls_connection_with_with_client_tls_auth() {
+    fn test_tls_connection_with_client_tls_auth() {
         block_on_all(async move {
             // Create a dedicated TLS server with custom certificates
             let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
