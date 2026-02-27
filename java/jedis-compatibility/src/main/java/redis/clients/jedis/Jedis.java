@@ -47,6 +47,7 @@ import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoSearchOrigin;
 import glide.api.models.commands.geospatial.GeoSearchShape;
+import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.HScanOptions;
@@ -116,6 +117,8 @@ import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
 import redis.clients.jedis.resps.GeoRadiusResponse;
 import redis.clients.jedis.resps.LCSMatchResult;
+import redis.clients.jedis.resps.LCSMatchResult.MatchedPosition;
+import redis.clients.jedis.resps.LCSMatchResult.Position;
 import redis.clients.jedis.resps.LibraryInfo;
 import redis.clients.jedis.resps.ScanResult;
 import redis.clients.jedis.resps.StreamConsumerInfo;
@@ -1302,7 +1305,7 @@ public final class Jedis implements Closeable {
                 }
                 return new GlideStringSetWrapper(glideSet);
             } else {
-                return new redis.clients.jedis.util.GlideStringSetWrapper(new HashSet<>());
+                return new GlideStringSetWrapper(new HashSet<>());
             }
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("KEYS operation failed", e);
@@ -2078,7 +2081,7 @@ public final class Jedis implements Closeable {
     private LCSMatchResult convertLcsIdxResultToMatchResult(Map<String, Object> result) {
         long len = result.containsKey("len") ? ((Number) result.get("len")).longValue() : 0L;
         Object matchesObj = result.get("matches");
-        List<LCSMatchResult.MatchedPosition> matches = new ArrayList<>();
+        List<MatchedPosition> matches = new ArrayList<>();
 
         if (matchesObj instanceof Object[]) {
             Object[] matchesArr = (Object[]) matchesObj;
@@ -2097,9 +2100,9 @@ public final class Jedis implements Closeable {
                                     match.length >= 3 && match[2] instanceof Number
                                             ? ((Number) match[2]).longValue()
                                             : (endA - startA + 1);
-                            LCSMatchResult.Position a = new LCSMatchResult.Position(startA, endA);
-                            LCSMatchResult.Position b = new LCSMatchResult.Position(startB, endB);
-                            matches.add(new LCSMatchResult.MatchedPosition(a, b, matchLen));
+                            Position a = new Position(startA, endA);
+                            Position b = new Position(startB, endB);
+                            matches.add(new MatchedPosition(a, b, matchLen));
                         }
                     }
                 }
@@ -3084,15 +3087,6 @@ public final class Jedis implements Closeable {
                 : glide.api.models.commands.ListDirection.RIGHT;
     }
 
-    /** Helper method to convert String array to GlideString array. */
-    private static GlideString[] convertToGlideStringArray(String[] strings) {
-        GlideString[] glideStrings = new GlideString[strings.length];
-        for (int i = 0; i < strings.length; i++) {
-            glideStrings[i] = GlideString.of(strings[i]);
-        }
-        return glideStrings;
-    }
-
     /** Helper method to convert byte array to GlideString array. */
     private static GlideString[] convertToGlideStringArray(byte[][] bytes) {
         GlideString[] glideStrings = new GlideString[bytes.length];
@@ -3110,7 +3104,7 @@ public final class Jedis implements Closeable {
      * internally (which has proper hashCode/equals) and converts to byte[] lazily.
      */
     private static Set<byte[]> convertGlideStringsToByteArraySet(Set<GlideString> glideStrings) {
-        return new redis.clients.jedis.util.GlideStringSetWrapper(glideStrings);
+        return new GlideStringSetWrapper(glideStrings);
     }
 
     private static ScanResult<String> convertToScanResult(Object[] result) {
@@ -4783,7 +4777,7 @@ public final class Jedis implements Closeable {
             for (GlideString gs : keys) {
                 glideSet.add(gs);
             }
-            return new redis.clients.jedis.util.GlideStringSetWrapper(glideSet);
+            return new GlideStringSetWrapper(glideSet);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("HKEYS operation failed", e);
         }
@@ -13726,10 +13720,7 @@ public final class Jedis implements Closeable {
                     }
 
                     // Use geosearchstore with STOREDIST option
-                    glide.api.models.commands.geospatial.GeoSearchStoreOptions options =
-                            glide.api.models.commands.geospatial.GeoSearchStoreOptions.builder()
-                                    .storeDist(true)
-                                    .build();
+                    GeoSearchStoreOptions options = GeoSearchStoreOptions.builder().storeDist(true).build();
                     return glideClient.geosearchstore(dest, src, origin, shape, options).get();
                 });
     }
@@ -13777,10 +13768,7 @@ public final class Jedis implements Closeable {
                     }
 
                     // Use geosearchstore with STOREDIST option
-                    glide.api.models.commands.geospatial.GeoSearchStoreOptions options =
-                            glide.api.models.commands.geospatial.GeoSearchStoreOptions.builder()
-                                    .storeDist(true)
-                                    .build();
+                    GeoSearchStoreOptions options = GeoSearchStoreOptions.builder().storeDist(true).build();
                     return glideClient
                             .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape, options)
                             .get();
