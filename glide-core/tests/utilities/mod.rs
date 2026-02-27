@@ -89,29 +89,28 @@ pub enum Module {
 }
 
 pub fn get_available_port() -> u16 {
-    let sock4 = Socket::new(Domain::IPV4, Type::STREAM, None).unwrap();
-    sock4.set_reuse_address(true).unwrap();
-
-    let sock6 = Socket::new(Domain::IPV6, Type::STREAM, None).unwrap();
-    sock6.set_reuse_address(true).unwrap();
-    sock6.set_only_v6(true).unwrap();
-
     loop {
         let port = rand::random::<u16>().max(6379);
 
-        // Check IPv4 and IPv6 ports
+        // Check IPv4 address.
         let addr4 = format!("{}:{}", HOST_IPV4, port)
             .parse::<SocketAddr>()
             .unwrap()
             .into();
+
+        let sock4 = Socket::new(Domain::IPV4, Type::STREAM, None).unwrap();
         if sock4.bind(&addr4).is_err() {
             continue;
         }
 
+        // Check IPv6 address.
         let addr6 = format!("[{}]:{}", HOST_IPV6, port)
             .parse::<SocketAddr>()
             .unwrap()
             .into();
+
+        let sock6 = Socket::new(Domain::IPV6, Type::STREAM, None).unwrap();
+        sock6.set_only_v6(true).unwrap();
         if sock6.bind(&addr6).is_err() {
             continue;
         }
