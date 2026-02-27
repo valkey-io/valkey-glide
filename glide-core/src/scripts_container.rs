@@ -51,9 +51,11 @@ pub fn add_script(script: &[u8]) -> String {
         Ok(handle) => handle.block_on(add_script_async(script)),
         Err(_) => {
             // No runtime exists, create a temporary one
-            tokio::runtime::Runtime::new()
-                .expect("Failed to create Tokio runtime")
-                .block_on(add_script_async(script))
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to create Tokio runtime");
+            rt.block_on(add_script_async(script))
         }
     }
 }
@@ -69,11 +71,11 @@ pub async fn get_script_async(hash: &str) -> Option<Arc<BytesMut>> {
 pub fn get_script(hash: &str) -> Option<Arc<BytesMut>> {
     match tokio::runtime::Handle::try_current() {
         Ok(handle) => handle.block_on(get_script_async(hash)),
-        Err(_) => {
-            tokio::runtime::Runtime::new()
-                .expect("Failed to create Tokio runtime")
-                .block_on(get_script_async(hash))
-        }
+        Err(_) => tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime")
+            .block_on(get_script_async(hash)),
     }
 }
 
@@ -106,11 +108,11 @@ pub async fn remove_script_async(hash: &str) {
 pub fn remove_script(hash: &str) {
     match tokio::runtime::Handle::try_current() {
         Ok(handle) => handle.block_on(remove_script_async(hash)),
-        Err(_) => {
-            tokio::runtime::Runtime::new()
-                .expect("Failed to create Tokio runtime")
-                .block_on(remove_script_async(hash))
-        }
+        Err(_) => tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime")
+            .block_on(remove_script_async(hash)),
     }
 }
 
