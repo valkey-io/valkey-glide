@@ -3581,7 +3581,7 @@ public class JedisTest {
         }
     }
 
-        // ========== STREAM COMMANDS ==========
+    // ========== STREAM COMMANDS ==========
 
     @Test
     void stream_xadd_xlen_xdel() {
