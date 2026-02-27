@@ -400,7 +400,7 @@ export type Score = number | "+inf" | "-inf";
 
 /**
  * Constant representing "all channels" for unsubscribe operations.
- * Use this to unsubscribe from all exact channels at once.
+ * Use this to unsubscribe from all channel subscriptions at once.
  *
  * @example
  * ```typescript
@@ -9535,7 +9535,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/subscribe/|valkey.io} for details.
      *
-     * @param channels - A set of channel names to subscribe to.
+     * @param channels - A collection of channel names to subscribe to.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns A promise that resolves immediately.
      *
@@ -9561,7 +9561,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/subscribe/|valkey.io} for details.
      *
-     * @param channels - A set of channel names to subscribe to.
+     * @param channels - A collection of channel names to subscribe to.
      * @param timeoutMs - Maximum time in milliseconds to wait. Use 0 for indefinite wait.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns A promise that resolves when subscription is confirmed or timeout occurs.
@@ -9642,7 +9642,7 @@ export class BaseClient {
 
     /**
      * Unsubscribes the client from the specified channels (non-blocking).
-     * Pass null to unsubscribe from all exact channels.
+     * Pass null or ALL_CHANNELS to unsubscribe from all exact channels.
      *
      * @see {@link https://valkey.io/commands/unsubscribe/|valkey.io} for details.
      *
@@ -9670,7 +9670,7 @@ export class BaseClient {
 
     /**
      * Unsubscribes the client from the specified channels (blocking).
-     * Pass null to unsubscribe from all exact channels.
+     * Pass null or ALL_CHANNELS to unsubscribe from all exact channels.
      *
      * @see {@link https://valkey.io/commands/unsubscribe/|valkey.io} for details.
      *
@@ -9700,7 +9700,7 @@ export class BaseClient {
 
     /**
      * Unsubscribes the client from the specified patterns (non-blocking).
-     * Pass null to unsubscribe from all patterns.
+     * Pass null or ALL_PATTERNS to unsubscribe from all patterns.
      *
      * @see {@link https://valkey.io/commands/punsubscribe/|valkey.io} for details.
      *
@@ -9728,7 +9728,7 @@ export class BaseClient {
 
     /**
      * Unsubscribes the client from the specified patterns (blocking).
-     * Pass null to unsubscribe from all patterns.
+     * Pass null or ALL_PATTERNS to unsubscribe from all patterns.
      *
      * @see {@link https://valkey.io/commands/punsubscribe/|valkey.io} for details.
      *

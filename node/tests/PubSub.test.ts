@@ -4856,6 +4856,100 @@ describe("PubSub", () => {
     );
 
     /**
+     * Tests dynamic subscription with pre-configured callback but no channels.
+     *
+     * This test verifies that a client can be created with only a callback and context
+     * (no pre-configured channels), and then dynamically subscribe to channels where
+     * the callback will catch messages from those channels.
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     * @param subscribeMode - Specifies lazy or blocking subscription mode.
+     */
+    it.each([
+        [true, Mode.Lazy],
+        [true, Mode.Blocking],
+        [false, Mode.Lazy],
+        [false, Mode.Blocking],
+    ])(
+        "dynamic_subscribe_with_preconfigured_callback_no_channels_%p_%p",
+        async (clusterMode, subscribeMode) => {
+            let listener: TGlideClient | null = null;
+            let sender: TGlideClient | null = null;
+
+            try {
+                const channel = getRandomKey();
+                const message = getRandomKey();
+
+                // Create callback context to collect messages
+                const callbackMessages: PubSubMsg[] = [];
+                const callback = newMessage;
+
+                // Create client with pre-configured callback but NO channels
+                const pubSub = createPubSubSubscription(
+                    clusterMode,
+                    {}, // No channels configured
+                    {}, // No channels configured
+                    callback,
+                    callbackMessages,
+                );
+
+                if (clusterMode) {
+                    listener = await GlideClusterClient.createClient({
+                        pubsubSubscriptions: pubSub,
+                        ...getOptions(clusterMode),
+                    });
+                    sender = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    listener = await GlideClient.createClient({
+                        pubsubSubscriptions: pubSub,
+                        ...getOptions(clusterMode),
+                    });
+                    sender = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
+                // Verify no messages in callback initially
+                expect(callbackMessages.length).toBe(0);
+
+                // Dynamically subscribe to channel
+                if (subscribeMode === Mode.Lazy) {
+                    await listener.subscribeLazy([channel]);
+                    // Allow time for subscription to propagate
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                } else {
+                    await listener.subscribe([channel], 5000);
+                }
+
+                // Publish message
+                expect(await sender.publish(message, channel)).toBeGreaterThan(
+                    0,
+                );
+
+                // Allow time for message delivery
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Verify callback received the message
+                expect(callbackMessages.length).toBe(1);
+                expect(callbackMessages[0].message).toEqual(message);
+                expect(callbackMessages[0].channel).toEqual(channel);
+                expect(callbackMessages[0].pattern).toBeNull();
+            } finally {
+                if (listener) {
+                    listener.close();
+                }
+
+                if (sender) {
+                    sender.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
      * Tests that subscription metrics exist in statistics.
 
      *

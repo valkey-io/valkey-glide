@@ -75,7 +75,7 @@ import {
 
 /**
  * Constant representing all sharded channels.
- * Use this with unsubscribe methods to unsubscribe from all sharded channels.
+ * Use this to unsubscribe from all sharded channel subscriptions at once..
  *
  * @example
  * ```typescript
@@ -2043,7 +2043,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/ssubscribe/|valkey.io} for details.
      *
-     * @param channels - A set of sharded channel names to subscribe to.
+     * @param channels - A collection of channel names to subscribe to.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns A promise that resolves immediately.
      *
@@ -2070,7 +2070,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/ssubscribe/|valkey.io} for details.
      *
-     * @param channels - A set of sharded channel names to subscribe to.
+     * @param channels - A collection of channel names to subscribe to.
      * @param timeoutMs - Maximum time in milliseconds to wait. Use 0 for indefinite wait.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns A promise that resolves when subscription is confirmed or timeout occurs.
@@ -2097,7 +2097,7 @@ export class GlideClusterClient extends BaseClient {
 
     /**
      * Unsubscribes the client from the specified sharded channels (non-blocking).
-     * Pass null to unsubscribe from all sharded channels.
+     * Pass null or ALL_CHANNELS to unsubscribe from all sharded channels.
      * Available since Valkey 7.0.
      *
      * @see {@link https://valkey.io/commands/sunsubscribe/|valkey.io} for details.
@@ -2126,7 +2126,7 @@ export class GlideClusterClient extends BaseClient {
 
     /**
      * Unsubscribes the client from the specified sharded channels (blocking).
-     * Pass null to unsubscribe from all sharded channels.
+     * Pass null or ALL_CHANNELS to unsubscribe from all sharded channels.
      * Available since Valkey 7.0.
      *
      * @see {@link https://valkey.io/commands/sunsubscribe/|valkey.io} for details.
