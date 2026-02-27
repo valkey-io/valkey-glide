@@ -683,8 +683,9 @@ public final class Jedis implements Closeable {
         if (config.getDatabase() != index) {
             logger.warning("Database selection may behave differently in GLIDE compatibility mode");
         }
-        // TO DO: GLIDE handles database selection differently. This is a placeholder implementation
-        // In case of Glide, the databaseId is set in  GlideClientConfiguration. Will need to re call
+        // TODO (#5457): GLIDE handles database selection differently. This is a placeholder
+        // implementation
+        // In case of Glide, the databaseId is set in GlideClientConfiguration. Will need to re call
         // the constructor for this to work.
 
         return "OK";
