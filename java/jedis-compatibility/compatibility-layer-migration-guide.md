@@ -63,11 +63,13 @@ blockingSocketTimeoutMillis
 ## Supported Features
 
 ### Core Commands
-- ✅ Basic string operations (GET, SET, MGET, MSET)
-- ✅ Hash operations (HGET, HSET, HMGET, HMSET)
-- ✅ List operations (LPUSH, RPUSH, LPOP, RPOP)
-- ✅ Set operations (SADD, SREM, SMEMBERS, SCARD, SISMEMBER, SMISMEMBER, SPOP, SRANDMEMBER, SMOVE, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SSCAN) via type-safe methods
+- ✅ Basic string operations (GET, SET, MGET, MSET, MSETNX, SETRANGE, GETRANGE, LCS, LCSLEN, LCSIDX)
+- ✅ Hash operations (HGET, HSET, HMGET, HMSET, HRANDFIELD with count and values)
+- ✅ List operations (LPUSH, RPUSH, LPOP with count, RPOP with count, LPOS with count, LMPOP, BLMPOP)
+- ✅ Set operations (SADD, SREM, SMEMBERS, SCARD, SISMEMBER, SMISMEMBER, SPOP with count, SRANDMEMBER with count, SMOVE, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SSCAN) via type-safe methods
 - ⚠️ Sorted set operations (ZADD, ZREM, ZRANGE) - **Available via `sendCommand()` only**
+- ✅ Stream operations (XADD, XLEN, XDEL, XRANGE, XREVRANGE, XREAD, XTRIM, XGROUP CREATE/DESTROY/SETID, XREADGROUP, XACK, XPENDING, XCLAIM, XAUTOCLAIM, XINFO STREAM/GROUPS/CONSUMERS)
+  - **Note:** `XSETID` is not supported (only `XGROUP SETID` is available)
 - ✅ Key operations (DEL, EXISTS, EXPIRE, TTL)
 - ✅ Sort operations (SORT_RO, SORT with STORE)
 - ✅ Wait operations (WAIT, WAITAOF)
