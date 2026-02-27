@@ -2,8 +2,6 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import * as net from "net";
-import { Writer } from "protobufjs/minimal";
 import { ClusterScanCursor, Script } from "../build-ts/native";
 import {
     command_request,
@@ -21,6 +19,7 @@ import {
     PubSubMsg,
     convertGlideRecordToRecord,
 } from "./BaseClient";
+import { RequestError } from "./Errors";
 import { ClusterBatch } from "./Batch";
 import {
     ClusterBatchOptions,
@@ -629,51 +628,9 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<GlideClusterClient> {
         return await super.createClientInternal(
             options,
-            (socket: net.Socket, options?: GlideClusterClientConfiguration) =>
-                new GlideClusterClient(socket, options),
+            (options?: GlideClusterClientConfiguration) =>
+                new GlideClusterClient(options),
         );
-    }
-    /**
-     * @internal
-     */
-    static async __createClient(
-        options: BaseClientConfiguration,
-        connectedSocket: net.Socket,
-    ): Promise<GlideClusterClient> {
-        return super.__createClientInternal(
-            options,
-            connectedSocket,
-            (socket, options) => new GlideClusterClient(socket, options),
-        );
-    }
-
-    /**
-     * @internal
-     */
-    protected scanOptionsToProto(
-        cursor: string,
-        options?: ClusterScanOptions,
-    ): command_request.ClusterScan {
-        const command = command_request.ClusterScan.create();
-        command.cursor = cursor;
-
-        if (options?.match) {
-            command.matchPattern =
-                typeof options.match === "string"
-                    ? Buffer.from(options.match)
-                    : options.match;
-        }
-
-        if (options?.count) {
-            command.count = options.count;
-        }
-
-        if (options?.type) {
-            command.objectType = options.type;
-        }
-
-        command.allowNonCoveredSlots = options?.allowNonCoveredSlots ?? false;
-        return command;
     }
 
     /**
@@ -684,40 +641,64 @@ export class GlideClusterClient extends BaseClient {
         options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         this.ensureClientIsOpen();
-        // separate decoder option from scan options
-        const { decoder = this.defaultDecoder, ...scanOptions } = options || {};
-        const cursorId = cursor.getCursor();
-        const command = this.scanOptionsToProto(cursorId, scanOptions);
+        const callbackIndex = this.getCallbackIndex();
 
-        return new Promise((resolve, reject) => {
-            const callbackIdx = this.getCallbackIndex();
-            this.promiseCallbackFunctions[callbackIdx] = [
-                (resolveAns: [typeof cursor, GlideString[]]) => {
-                    try {
-                        resolve([
-                            new ClusterScanCursor(resolveAns[0].toString()),
-                            resolveAns[1],
-                        ]);
-                    } catch (error) {
-                        reject(error);
+        return new Promise<[ClusterScanCursor, GlideString[]]>(
+            (resolve, reject) => {
+                // Store a custom handler that wraps the result
+                this.promiseCallbackFunctions[callbackIndex] = [
+                    (result: [GlideString, GlideString[]]) => {
+                        // Result is [cursor_string, keys_array]
+                        // Cursor may come back as Buffer or string
+                        let cursorStr: string;
+
+                        if (typeof result[0] === "string") {
+                            cursorStr = result[0];
+                        } else if (result[0] instanceof Buffer) {
+                            cursorStr = result[0].toString();
+                        } else if (result[0] instanceof Uint8Array) {
+                            cursorStr = new TextDecoder().decode(result[0]);
+                        } else {
+                            cursorStr = String(result[0]);
+                        }
+
+                        const newCursor = new ClusterScanCursor(cursorStr);
+                        resolve([newCursor, result[1]]);
+                    },
+                    reject,
+                    options?.decoder,
+                ];
+
+                // Convert match pattern to Uint8Array to preserve binary patterns
+                let matchPattern: Uint8Array | undefined;
+
+                if (options?.match) {
+                    if (typeof options.match === "string") {
+                        matchPattern = new TextEncoder().encode(options.match);
+                    } else if (options.match instanceof Uint8Array) {
+                        matchPattern = options.match;
                     }
-                },
-                reject,
-                decoder,
-            ];
-            this.writeOrBufferRequest(
-                new command_request.CommandRequest({
-                    callbackIdx,
-                    clusterScan: command,
-                }),
-                (message: command_request.CommandRequest, writer: Writer) => {
-                    command_request.CommandRequest.encodeDelimited(
-                        message,
-                        writer,
+                }
+
+                const success = this.clientHandle!.clusterScan(
+                    callbackIndex,
+                    cursor.getCursor(),
+                    matchPattern,
+                    options?.count ?? undefined,
+                    options?.type,
+                    options?.allowNonCoveredSlots,
+                );
+
+                if (!success) {
+                    this.availableCallbackSlots.push(callbackIndex);
+                    reject(
+                        new RequestError(
+                            "Inflight request limit exceeded. Please try again later.",
+                        ),
                     );
-                },
-            );
-        });
+                }
+            },
+        );
     }
 
     /**
@@ -1875,30 +1856,8 @@ export class GlideClusterClient extends BaseClient {
     private async createScriptInvocationWithRoutePromise<T = GlideString>(
         command: command_request.ScriptInvocation,
         options?: { args?: GlideString[] } & DecoderOption & RouteOption,
-    ) {
-        this.ensureClientIsOpen();
-
-        return new Promise<T>((resolve, reject) => {
-            const callbackIdx = this.getCallbackIndex();
-            this.promiseCallbackFunctions[callbackIdx] = [
-                resolve,
-                reject,
-                options?.decoder,
-            ];
-            this.writeOrBufferRequest(
-                new command_request.CommandRequest({
-                    callbackIdx,
-                    scriptInvocation: command,
-                    route: this.toProtobufRoute(options?.route),
-                }),
-                (message: command_request.CommandRequest, writer: Writer) => {
-                    command_request.CommandRequest.encodeDelimited(
-                        message,
-                        writer,
-                    );
-                },
-            );
-        });
+    ): Promise<T> {
+        return this.createScriptInvocationPromise<T>(command, options);
     }
 
     /**
