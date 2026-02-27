@@ -1918,6 +1918,7 @@ public final class Jedis implements Closeable {
      * @return the length of the string after the append operation (includes both original and
      *     appended content)
      * @throws JedisException if the operation fails or if the key contains a non-string value
+     * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
      * @since Valkey 2.0.0
      */
     public long append(final String key, final String value) {
@@ -1942,6 +1943,7 @@ public final class Jedis implements Closeable {
      * @return the length of the string after the append operation (includes both original and
      *     appended content)
      * @throws JedisException if the operation fails or if the key contains a non-string value
+     * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
      * @since Valkey 2.0.0
      */
     public long append(final byte[] key, final byte[] value) {
@@ -1954,6 +1956,8 @@ public final class Jedis implements Closeable {
      *
      * @param key the key
      * @return the length of the string, or 0 if key does not exist
+     * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
+     * @since Valkey 2.2.0
      */
     public long strlen(String key) {
         return executeCommandWithGlide("STRLEN", () -> glideClient.strlen(key).get());
@@ -1964,6 +1968,8 @@ public final class Jedis implements Closeable {
      *
      * @param key the key
      * @return the length of the string, or 0 if key does not exist
+     * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
+     * @since Valkey 2.2.0
      */
     public long strlen(final byte[] key) {
         return executeCommandWithGlide("STRLEN", () -> glideClient.strlen(GlideString.of(key)).get());
@@ -12706,6 +12712,8 @@ public final class Jedis implements Closeable {
      * @param latitude the latitude of the member
      * @param member the member name
      * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
      */
     public long geoadd(String key, double longitude, double latitude, String member) {
         return executeCommandWithGlide(
@@ -12726,6 +12734,8 @@ public final class Jedis implements Closeable {
      * @param latitude the latitude of the member
      * @param member the member name
      * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
      */
     public long geoadd(final byte[] key, double longitude, double latitude, final byte[] member) {
         return executeCommandWithGlide(
@@ -12744,6 +12754,8 @@ public final class Jedis implements Closeable {
      * @param key the key of the sorted set
      * @param memberCoordinateMap a map of member names to their coordinates
      * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
      */
     public long geoadd(String key, Map<String, GeoCoordinate> memberCoordinateMap) {
         return executeCommandWithGlide(
@@ -12767,6 +12779,8 @@ public final class Jedis implements Closeable {
      * @param key the key of the sorted set
      * @param memberCoordinateMap a map of member names to their coordinates
      * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
      */
     public long geoadd(final byte[] key, Map<byte[], GeoCoordinate> memberCoordinateMap) {
         return executeCommandWithGlide(
@@ -12790,6 +12804,8 @@ public final class Jedis implements Closeable {
      * @param key the key of the sorted set
      * @param members the members for which to get the positions
      * @return a list of coordinates corresponding to the given members
+     * @see <a href="https://valkey.io/commands/geopos/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
      */
     public List<GeoCoordinate> geopos(String key, String... members) {
         return executeCommandWithGlide(
@@ -12818,6 +12834,8 @@ public final class Jedis implements Closeable {
      * @param key the key of the sorted set
      * @param members the members for which to get the positions
      * @return a list of coordinates corresponding to the given members
+     * @see <a href="https://valkey.io/commands/geopos/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
      */
     public List<GeoCoordinate> geopos(final byte[] key, final byte[]... members) {
         return executeCommandWithGlide(
@@ -12851,6 +12869,8 @@ public final class Jedis implements Closeable {
      * @param member1 the first member
      * @param member2 the second member
      * @return the distance in meters, or null if one or both members do not exist
+     * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
      */
     public Double geodist(String key, String member1, String member2) {
         return executeCommandWithGlide(
@@ -12865,6 +12885,8 @@ public final class Jedis implements Closeable {
      * @param member1 the first member
      * @param member2 the second member
      * @return the distance in meters, or null if one or both members do not exist
+     * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
      */
     public Double geodist(final byte[] key, final byte[] member1, final byte[] member2) {
         return executeCommandWithGlide(
@@ -12883,6 +12905,8 @@ public final class Jedis implements Closeable {
      * @param member2 the second member
      * @param unit the unit of distance (m, km, mi, ft)
      * @return the distance in the specified unit, or null if one or both members do not exist
+     * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
      */
     public Double geodist(
             String key, String member1, String member2, redis.clients.jedis.args.GeoUnit unit) {
@@ -12903,6 +12927,8 @@ public final class Jedis implements Closeable {
      * @param member2 the second member
      * @param unit the unit of distance (m, km, mi, ft)
      * @return the distance in the specified unit, or null if one or both members do not exist
+     * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
      */
     public Double geodist(
             final byte[] key,
@@ -12927,6 +12953,8 @@ public final class Jedis implements Closeable {
      * @param key the key of the sorted set
      * @param members the members for which to get the geohash
      * @return a list of geohash strings corresponding to the given members
+     * @see <a href="https://valkey.io/commands/geohash/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
      */
     public List<String> geohash(String key, String... members) {
         return executeCommandWithGlide(
@@ -12944,6 +12972,8 @@ public final class Jedis implements Closeable {
      * @param key the key of the sorted set
      * @param members the members for which to get the geohash
      * @return a list of geohash strings corresponding to the given members
+     * @see <a href="https://valkey.io/commands/geohash/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
      */
     public List<byte[]> geohash(final byte[] key, final byte[]... members) {
         return executeCommandWithGlide(
@@ -12974,6 +13004,8 @@ public final class Jedis implements Closeable {
      * @param radius the radius of the search
      * @param unit the unit of the radius
      * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             String key, String member, double radius, redis.clients.jedis.args.GeoUnit unit) {
@@ -13004,6 +13036,8 @@ public final class Jedis implements Closeable {
      * @param radius the radius of the search
      * @param unit the unit of the radius
      * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             final byte[] key, final byte[] member, double radius, redis.clients.jedis.args.GeoUnit unit) {
@@ -13035,6 +13069,8 @@ public final class Jedis implements Closeable {
      * @param radius the radius of the search
      * @param unit the unit of the radius
      * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             String key, GeoCoordinate coord, double radius, redis.clients.jedis.args.GeoUnit unit) {
@@ -13067,6 +13103,8 @@ public final class Jedis implements Closeable {
      * @param radius the radius of the search
      * @param unit the unit of the radius
      * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             final byte[] key, GeoCoordinate coord, double radius, redis.clients.jedis.args.GeoUnit unit) {
@@ -13100,6 +13138,8 @@ public final class Jedis implements Closeable {
      * @param height the height of the search box
      * @param unit the unit of width and height
      * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             String key,
@@ -13136,6 +13176,8 @@ public final class Jedis implements Closeable {
      * @param height the height of the search box
      * @param unit the unit of width and height
      * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             final byte[] key,
@@ -13172,6 +13214,8 @@ public final class Jedis implements Closeable {
      * @param height the height of the search box
      * @param unit the unit of width and height
      * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             String key,
@@ -13210,6 +13254,8 @@ public final class Jedis implements Closeable {
      * @param height the height of the search box
      * @param unit the unit of width and height
      * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             final byte[] key,
@@ -13244,6 +13290,8 @@ public final class Jedis implements Closeable {
      * @param key the key of the sorted set
      * @param params the search parameters
      * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(String key, GeoSearchParam params) {
         return executeCommandWithGlide(
@@ -13299,6 +13347,8 @@ public final class Jedis implements Closeable {
      * @param key the key of the sorted set
      * @param params the search parameters
      * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(final byte[] key, GeoSearchParam params) {
         return executeCommandWithGlide(
@@ -13355,6 +13405,8 @@ public final class Jedis implements Closeable {
      * @param radius the radius of the search
      * @param unit the unit of the radius
      * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public long geosearchstore(
             String dest,
@@ -13382,6 +13434,8 @@ public final class Jedis implements Closeable {
      * @param radius the radius of the search
      * @param unit the unit of the radius
      * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public long geosearchstore(
             final byte[] dest,
@@ -13412,6 +13466,8 @@ public final class Jedis implements Closeable {
      * @param radius the radius of the search
      * @param unit the unit of the radius
      * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public long geosearchStore(
             String dest,
@@ -13441,6 +13497,8 @@ public final class Jedis implements Closeable {
      * @param radius the radius of the search
      * @param unit the unit of the radius
      * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public long geosearchStore(
             final byte[] dest,
@@ -13473,6 +13531,8 @@ public final class Jedis implements Closeable {
      * @param height the height of the search box
      * @param unit the unit of width and height
      * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public long geosearchStore(
             String dest,
@@ -13502,6 +13562,8 @@ public final class Jedis implements Closeable {
      * @param height the height of the search box
      * @param unit the unit of width and height
      * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public long geosearchStore(
             final byte[] dest,
@@ -13534,6 +13596,8 @@ public final class Jedis implements Closeable {
      * @param height the height of the search box
      * @param unit the unit of width and height
      * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public long geosearchStore(
             String dest,
@@ -13565,6 +13629,8 @@ public final class Jedis implements Closeable {
      * @param height the height of the search box
      * @param unit the unit of width and height
      * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public long geosearchStore(
             final byte[] dest,
@@ -13595,6 +13661,8 @@ public final class Jedis implements Closeable {
      * @param src the source key of the sorted set
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public long geosearchStore(String dest, String src, GeoSearchParam params) {
         return executeCommandWithGlide(
@@ -13639,6 +13707,8 @@ public final class Jedis implements Closeable {
      * @param src the source key of the sorted set
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public long geosearchStore(final byte[] dest, final byte[] src, GeoSearchParam params) {
         return executeCommandWithGlide(
@@ -13687,6 +13757,8 @@ public final class Jedis implements Closeable {
      * @param src the source key of the sorted set
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public long geosearchStoreStoreDist(String dest, String src, GeoSearchParam params) {
         return executeCommandWithGlide(
@@ -13733,6 +13805,8 @@ public final class Jedis implements Closeable {
      * @param src the source key of the sorted set
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
      */
     public long geosearchStoreStoreDist(final byte[] dest, final byte[] src, GeoSearchParam params) {
         return executeCommandWithGlide(
