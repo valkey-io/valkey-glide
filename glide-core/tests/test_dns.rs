@@ -28,17 +28,12 @@ mod dns_tests {
     };
     use once_cell::sync::Lazy;
     use rstest::rstest;
-    use std::env;
 
     // Shared temp directory and TLS paths for all DNS tests
     static TLS_TEMPDIR: Lazy<tempfile::TempDir> =
         Lazy::new(|| tempfile::tempdir().expect("Failed to create temp dir for TLS certs"));
     static TLS_PATHS: Lazy<TlsFilePaths> = Lazy::new(|| build_tls_file_paths(&TLS_TEMPDIR));
     static CA_CERT_BYTES: Lazy<Vec<u8>> = Lazy::new(|| TLS_PATHS.read_ca_cert_as_bytes());
-
-    fn dns_tests_enabled() -> bool {
-        env::var("VALKEY_GLIDE_DNS_TESTS_ENABLED").is_ok()
-    }
 
     fn extract_port(addr: &redis::ConnectionAddr) -> u16 {
         match addr {
@@ -162,11 +157,8 @@ mod dns_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    #[cfg_attr(not(dns_tests_enabled), ignore)]
     fn test_standalone_connect_with_valid_hostname_no_tls() {
-        if !dns_tests_enabled() {
-            return;
-        }
-
         block_on_all(async move {
             let (mut client, _server) = build_standalone_client(HOSTNAME_NO_TLS)
                 .await
@@ -178,11 +170,8 @@ mod dns_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    #[cfg_attr(not(dns_tests_enabled), ignore)]
     fn test_standalone_connect_with_invalid_hostname_no_tls() {
-        if !dns_tests_enabled() {
-            return;
-        }
-
         block_on_all(async move {
             let result = build_standalone_client("nonexistent.invalid").await;
             assert!(result.is_none());
@@ -192,11 +181,8 @@ mod dns_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    #[cfg_attr(not(dns_tests_enabled), ignore)]
     fn test_standalone_tls_connect_with_hostname_in_cert() {
-        if !dns_tests_enabled() {
-            return;
-        }
-
         block_on_all(async move {
             let (mut client, _server) = build_tls_standalone_client(HOSTNAME_TLS)
                 .await
@@ -208,11 +194,8 @@ mod dns_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    #[cfg_attr(not(dns_tests_enabled), ignore)]
     fn test_standalone_tls_connect_with_hostname_not_in_cert() {
-        if !dns_tests_enabled() {
-            return;
-        }
-
         block_on_all(async move {
             let result = build_tls_standalone_client(HOSTNAME_NO_TLS).await;
             assert!(result.is_none());
@@ -224,11 +207,8 @@ mod dns_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    #[cfg_attr(not(dns_tests_enabled), ignore)]
     fn test_cluster_connect_with_valid_hostname_no_tls() {
-        if !dns_tests_enabled() {
-            return;
-        }
-
         block_on_all(async move {
             let (mut client, _cluster) = build_cluster_client(HOSTNAME_NO_TLS)
                 .await
@@ -240,11 +220,8 @@ mod dns_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    #[cfg_attr(not(dns_tests_enabled), ignore)]
     fn test_cluster_connect_with_invalid_hostname_no_tls() {
-        if !dns_tests_enabled() {
-            return;
-        }
-
         block_on_all(async move {
             let result = build_cluster_client("nonexistent.invalid").await;
             assert!(result.is_none());
@@ -254,11 +231,8 @@ mod dns_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    #[cfg_attr(not(dns_tests_enabled), ignore)]
     fn test_cluster_tls_connect_with_hostname_in_cert() {
-        if !dns_tests_enabled() {
-            return;
-        }
-
         block_on_all(async move {
             let (mut client, _cluster) = build_tls_cluster_client(HOSTNAME_TLS)
                 .await
@@ -270,11 +244,8 @@ mod dns_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    #[cfg_attr(not(dns_tests_enabled), ignore)]
     fn test_cluster_tls_connect_with_hostname_not_in_cert() {
-        if !dns_tests_enabled() {
-            return;
-        }
-
         block_on_all(async move {
             let result = build_tls_cluster_client(HOSTNAME_NO_TLS).await;
             assert!(result.is_none());
