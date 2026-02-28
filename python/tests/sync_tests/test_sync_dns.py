@@ -52,7 +52,7 @@ def create_client_with_hostname(cluster_mode: bool, use_tls: bool, hostname: str
 class TestSyncDns:
     """Sync DNS resolution tests."""
 
-    def test_connect_with_valid_hostname_succeeds(self, _, cluster_mode: bool):
+    def test_connect_with_valid_hostname_succeeds(self, cluster_mode: bool):
         """Test connection with valid hostname (non-TLS)."""
         client = create_client_with_hostname(
             cluster_mode=cluster_mode,
@@ -63,7 +63,7 @@ class TestSyncDns:
         assert_connected_sync(client)
         client.close()
 
-    def test_connect_with_invalid_hostname_fails(self, _, cluster_mode: bool):
+    def test_connect_with_invalid_hostname_fails(self, cluster_mode: bool):
         """Test connection with invalid hostname (non-TLS)."""
         with pytest.raises(Exception):
             create_client_with_hostname(
@@ -72,7 +72,7 @@ class TestSyncDns:
                 hostname="nonexistent.invalid",
             )
 
-    def test_tls_with_hostname_in_certificate_succeeds(self, _, cluster_mode: bool):
+    def test_tls_with_hostname_in_certificate_succeeds(self, cluster_mode: bool):
         """Test TLS connection with hostname in certificate SAN."""
         client = create_client_with_hostname(
             cluster_mode=cluster_mode,
@@ -83,9 +83,8 @@ class TestSyncDns:
         assert_connected_sync(client)
         client.close()
 
-    def test_tls_with_hostname_not_in_certificate_fails(self, _, cluster_mode: bool):
+    def test_tls_with_hostname_not_in_certificate_fails(self, cluster_mode: bool):
         """Test TLS connection with hostname not in certificate SAN."""
-
         with pytest.raises(Exception):
             create_client_with_hostname(
                 cluster_mode=cluster_mode,

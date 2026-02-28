@@ -17,7 +17,6 @@ import os
 import pytest
 from glide_shared.config import NodeAddress
 
-
 from tests.async_tests.conftest import create_client
 from tests.test_constants import HOSTNAME_NO_TLS, HOSTNAME_TLS
 from tests.utils.utils import assert_connected, get_ca_certificate
@@ -54,7 +53,7 @@ async def create_client_with_hostname(cluster_mode: bool, use_tls: bool, hostnam
 class TestDns:
     """Async DNS resolution tests."""
 
-    async def test_connect_with_valid_hostname_succeeds(self, _, cluster_mode: bool):
+    async def test_connect_with_valid_hostname_succeeds(self, cluster_mode: bool):
         """Test connection with valid hostname (non-TLS)."""
         client = await create_client_with_hostname(
             cluster_mode=cluster_mode,
@@ -65,7 +64,7 @@ class TestDns:
         await assert_connected(client)
         await client.close()
 
-    async def test_connect_with_invalid_hostname_fails(self, _, cluster_mode: bool):
+    async def test_connect_with_invalid_hostname_fails(self, cluster_mode: bool):
         """Test connection with invalid hostname (non-TLS)."""
         with pytest.raises(Exception):
             await create_client_with_hostname(
@@ -74,9 +73,7 @@ class TestDns:
                 hostname="nonexistent.invalid",
             )
 
-    async def test_tls_with_hostname_in_certificate_succeeds(
-        self, _, cluster_mode: bool
-    ):
+    async def test_tls_with_hostname_in_certificate_succeeds(self, cluster_mode: bool):
         """Test TLS connection with hostname in certificate SAN."""
         client = await create_client_with_hostname(
             cluster_mode=cluster_mode,
@@ -87,9 +84,7 @@ class TestDns:
         await assert_connected(client)
         await client.close()
 
-    async def test_tls_with_hostname_not_in_certificate_fails(
-        self, _, cluster_mode: bool
-    ):
+    async def test_tls_with_hostname_not_in_certificate_fails(self, cluster_mode: bool):
         """Test TLS connection with hostname not in certificate SAN."""
         with pytest.raises(Exception):
             await create_client_with_hostname(

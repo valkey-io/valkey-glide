@@ -34,7 +34,6 @@ class TestSyncTls:
         Verify that connection fails when TLS is enabled but no certificate is provided.
         """
         certificate = None
-
         with pytest.raises(Exception):
             create_sync_client(
                 request=request,
@@ -53,7 +52,6 @@ class TestSyncTls:
         Verify that connection succeeds with custom root certificates.
         """
         certificate = get_ca_certificate()
-
         client = create_sync_client(
             request=request,
             cluster_mode=cluster_mode,
@@ -96,7 +94,6 @@ class TestSyncTls:
         Verify that empty certificate array returns an error.
         """
         empty_certificate = b""
-
         with pytest.raises(Exception):
             create_sync_client(
                 request=request,
