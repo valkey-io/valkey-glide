@@ -9,6 +9,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+// Helper to create a runtime for sync wrappers
+fn create_runtime() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to create Tokio runtime")
+}
+
 /// A script entry stored in the global container.
 ///
 /// `ScriptEntry` holds the compiled script bytes and a reference count
@@ -48,15 +56,9 @@ pub async fn add_script_async(script: &[u8]) -> String {
 
 pub fn add_script(script: &[u8]) -> String {
     let script = script.to_vec();
-    std::thread::spawn(move || {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to create Tokio runtime")
-            .block_on(add_script_async(&script))
-    })
-    .join()
-    .expect("Thread panicked")
+    std::thread::spawn(move || create_runtime().block_on(add_script_async(&script)))
+        .join()
+        .expect("Thread panicked")
 }
 
 pub async fn get_script_async(hash: &str) -> Option<Arc<BytesMut>> {
@@ -69,15 +71,9 @@ pub async fn get_script_async(hash: &str) -> Option<Arc<BytesMut>> {
 
 pub fn get_script(hash: &str) -> Option<Arc<BytesMut>> {
     let hash = hash.to_string();
-    std::thread::spawn(move || {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to create Tokio runtime")
-            .block_on(get_script_async(&hash))
-    })
-    .join()
-    .expect("Thread panicked")
+    std::thread::spawn(move || create_runtime().block_on(get_script_async(&hash)))
+        .join()
+        .expect("Thread panicked")
 }
 
 pub async fn remove_script_async(hash: &str) {
@@ -108,15 +104,9 @@ pub async fn remove_script_async(hash: &str) {
 
 pub fn remove_script(hash: &str) {
     let hash = hash.to_string();
-    std::thread::spawn(move || {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to create Tokio runtime")
-            .block_on(remove_script_async(&hash))
-    })
-    .join()
-    .expect("Thread panicked")
+    std::thread::spawn(move || create_runtime().block_on(remove_script_async(&hash)))
+        .join()
+        .expect("Thread panicked")
 }
 
 #[cfg(test)]

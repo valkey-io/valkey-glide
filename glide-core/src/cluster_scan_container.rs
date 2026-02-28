@@ -7,6 +7,14 @@ use redis::{RedisResult, ScanStateRC};
 use std::collections::HashMap;
 use tokio::sync::Mutex;
 
+// Helper to create a runtime for sync wrappers
+fn create_runtime() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to create Tokio runtime")
+}
+
 // This is a container for storing the cursor of a cluster scan.
 // The cursor for a cluster scan is a ref to the actual ScanState struct in redis-rs.
 // In order to avoid dropping it when it is passed between layers of the application,
@@ -30,11 +38,7 @@ pub async fn insert_cluster_scan_cursor_async(scan_state: ScanStateRC) -> String
 
 pub fn insert_cluster_scan_cursor(scan_state: ScanStateRC) -> String {
     std::thread::spawn(move || {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to create Tokio runtime")
-            .block_on(insert_cluster_scan_cursor_async(scan_state))
+        create_runtime().block_on(insert_cluster_scan_cursor_async(scan_state))
     })
     .join()
     .expect("Thread panicked")
@@ -57,15 +61,9 @@ pub async fn get_cluster_scan_cursor_async(id: String) -> RedisResult<ScanStateR
 }
 
 pub fn get_cluster_scan_cursor(id: String) -> RedisResult<ScanStateRC> {
-    std::thread::spawn(move || {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to create Tokio runtime")
-            .block_on(get_cluster_scan_cursor_async(id))
-    })
-    .join()
-    .expect("Thread panicked")
+    std::thread::spawn(move || create_runtime().block_on(get_cluster_scan_cursor_async(id)))
+        .join()
+        .expect("Thread panicked")
 }
 
 pub async fn remove_scan_state_cursor_async(id: String) {
@@ -77,13 +75,7 @@ pub async fn remove_scan_state_cursor_async(id: String) {
 }
 
 pub fn remove_scan_state_cursor(id: String) {
-    std::thread::spawn(move || {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to create Tokio runtime")
-            .block_on(remove_scan_state_cursor_async(id))
-    })
-    .join()
-    .expect("Thread panicked")
+    std::thread::spawn(move || create_runtime().block_on(remove_scan_state_cursor_async(id)))
+        .join()
+        .expect("Thread panicked")
 }
