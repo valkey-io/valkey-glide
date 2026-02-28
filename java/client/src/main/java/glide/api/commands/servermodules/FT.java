@@ -137,7 +137,7 @@ public class FT {
             @NonNull GlideString indexName,
             @NonNull FieldInfo[] schema,
             @NonNull FTCreateOptions options) {
-        var args =
+        GlideString[] args =
                 Stream.of(
                                 new GlideString[] {gs("FT.CREATE"), indexName},
                                 options.toArgs(),
@@ -184,7 +184,7 @@ public class FT {
             @NonNull String indexName,
             @NonNull String query,
             @NonNull FTSearchOptions options) {
-        var args =
+        GlideString[] args =
                 concatenateArrays(
                         new GlideString[] {gs("FT.SEARCH"), gs(indexName), gs(query)}, options.toArgs());
         return executeCommand(client, args, false);
@@ -223,7 +223,7 @@ public class FT {
             @NonNull GlideString indexName,
             @NonNull GlideString query,
             @NonNull FTSearchOptions options) {
-        var args =
+        GlideString[] args =
                 concatenateArrays(new GlideString[] {gs("FT.SEARCH"), indexName, query}, options.toArgs());
         return executeCommand(client, args, false);
     }
@@ -252,7 +252,7 @@ public class FT {
      */
     public static CompletableFuture<Object[]> search(
             @NonNull BaseClient client, @NonNull String indexName, @NonNull String query) {
-        var args = new GlideString[] {gs("FT.SEARCH"), gs(indexName), gs(query)};
+        GlideString[] args = new GlideString[] {gs("FT.SEARCH"), gs(indexName), gs(query)};
         return executeCommand(client, args, false);
     }
 
@@ -280,7 +280,7 @@ public class FT {
      */
     public static CompletableFuture<Object[]> search(
             @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull GlideString query) {
-        var args = new GlideString[] {gs("FT.SEARCH"), indexName, query};
+        GlideString[] args = new GlideString[] {gs("FT.SEARCH"), indexName, query};
         return executeCommand(client, args, false);
     }
 
@@ -426,7 +426,7 @@ public class FT {
     @SuppressWarnings("unchecked")
     public static CompletableFuture<Map<GlideString, Object>[]> aggregate(
             @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull GlideString query) {
-        var args = new GlideString[] {gs("FT.AGGREGATE"), indexName, query};
+        GlideString[] args = new GlideString[] {gs("FT.AGGREGATE"), indexName, query};
         return FT.<Object[]>executeCommand(client, args, false)
                 .thenApply(res -> castArray(res, Map.class));
     }
@@ -475,7 +475,7 @@ public class FT {
             @NonNull GlideString indexName,
             @NonNull GlideString query,
             @NonNull FTAggregateOptions options) {
-        var args =
+        GlideString[] args =
                 concatenateArrays(
                         new GlideString[] {gs("FT.AGGREGATE"), indexName, query}, options.toArgs());
         return FT.<Object[]>executeCommand(client, args, false)
@@ -526,7 +526,8 @@ public class FT {
             @NonNull BaseClient client,
             @NonNull GlideString indexName,
             @NonNull FTProfileOptions options) {
-        var args = concatenateArrays(new GlideString[] {gs("FT.PROFILE"), indexName}, options.toArgs());
+        GlideString[] args =
+                concatenateArrays(new GlideString[] {gs("FT.PROFILE"), indexName}, options.toArgs());
         return executeCommand(client, args, false);
     }
 
@@ -702,7 +703,7 @@ public class FT {
      */
     public static CompletableFuture<String> aliasadd(
             @NonNull BaseClient client, @NonNull GlideString aliasName, @NonNull GlideString indexName) {
-        var args = new GlideString[] {gs("FT.ALIASADD"), aliasName, indexName};
+        GlideString[] args = new GlideString[] {gs("FT.ALIASADD"), aliasName, indexName};
 
         return executeCommand(client, args, false);
     }
@@ -736,7 +737,7 @@ public class FT {
      */
     public static CompletableFuture<String> aliasdel(
             @NonNull BaseClient client, @NonNull GlideString aliasName) {
-        var args = new GlideString[] {gs("FT.ALIASDEL"), aliasName};
+        GlideString[] args = new GlideString[] {gs("FT.ALIASDEL"), aliasName};
 
         return executeCommand(client, args, false);
     }
@@ -774,7 +775,7 @@ public class FT {
      */
     public static CompletableFuture<String> aliasupdate(
             @NonNull BaseClient client, @NonNull GlideString aliasName, @NonNull GlideString indexName) {
-        var args = new GlideString[] {gs("FT.ALIASUPDATE"), aliasName, indexName};
+        GlideString[] args = new GlideString[] {gs("FT.ALIASUPDATE"), aliasName, indexName};
         return executeCommand(client, args, false);
     }
 

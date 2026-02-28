@@ -2,9 +2,13 @@
 package glide.internal;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import glide.api.BaseClient;
 import glide.ffi.resolvers.NativeUtils;
-import java.lang.ref.Cleaner;
+import java.lang.ref.PhantomReference;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -16,7 +20,39 @@ import java.util.concurrent.atomic.AtomicLong;
  * create connections - that responsibility belongs to ConnectionManager.
  */
 public class GlideCoreClient implements AutoCloseable {
-    private static final Cleaner CLEANER = Cleaner.create();
+    private static final ReferenceQueue<Object> CLEANUP_QUEUE = new ReferenceQueue<>();
+    private static final ConcurrentHashMap<PhantomReference<?>, Runnable> CLEANUP_ACTIONS =
+            new ConcurrentHashMap<>();
+
+    static {
+        // Start cleanup thread
+        Thread cleanupThread =
+                new Thread(
+                        () -> {
+                            while (true) {
+                                try {
+                                    PhantomReference<?> ref = (PhantomReference<?>) CLEANUP_QUEUE.remove();
+                                    Runnable action = CLEANUP_ACTIONS.remove(ref);
+                                    if (action != null) {
+                                        action.run();
+                                    }
+                                    ref.clear();
+                                } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    break;
+                                } catch (Exception e) {
+                                    // Log but don't stop cleanup thread
+                                    glide.api.logging.Logger.log(
+                                            glide.api.logging.Logger.Level.WARN,
+                                            "GlideCoreClient-Cleanup",
+                                            "Error in cleanup thread: " + e.getMessage());
+                                }
+                            }
+                        },
+                        "GlideCoreClient-Cleanup");
+        cleanupThread.setDaemon(true);
+        cleanupThread.start();
+    }
 
     static {
         // Load the native library
@@ -36,17 +72,16 @@ public class GlideCoreClient implements AutoCloseable {
 
     private static native void freeNativeBuffer(long id);
 
-    private static final java.util.concurrent.ConcurrentHashMap<
-                    Long, java.lang.ref.WeakReference<glide.api.BaseClient>>
-            clients = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Long, WeakReference<BaseClient>> clients =
+            new ConcurrentHashMap<>();
 
     /**
      * Empty 2D byte array constant for reuse in various contexts (script params, subPattern, etc.)
      */
     public static final byte[][] EMPTY_2D_BYTE_ARRAY = new byte[0][];
 
-    public static void registerClient(long handle, glide.api.BaseClient client) {
-        clients.put(handle, new java.lang.ref.WeakReference<>(client));
+    public static void registerClient(long handle, BaseClient client) {
+        clients.put(handle, new WeakReference<>(client));
     }
 
     public static void unregisterClient(long handle) {
@@ -61,18 +96,19 @@ public class GlideCoreClient implements AutoCloseable {
                 (pattern != null && pattern.length > 0)
                         ? new glide.api.models.PubSubMessage(msg, ch, glide.api.models.GlideString.of(pattern))
                         : new glide.api.models.PubSubMessage(msg, ch);
-        var ref = clients.get(handle);
+        WeakReference<BaseClient> ref = clients.get(handle);
         if (ref != null) {
-            var c = ref.get();
+            BaseClient c = ref.get();
             if (c != null) c.__enqueuePubSubMessage(m);
         }
     }
 
-    // Register a Java Cleaner to free native memory when the given ByteBuffer is GC'd
+    // Register cleanup action to free native memory when the given ByteBuffer is GC'd
     static void registerNativeBufferCleaner(java.nio.ByteBuffer buffer, long id) {
         if (buffer == null || id == 0) return;
-        CLEANER.register(
-                buffer,
+        PhantomReference<java.nio.ByteBuffer> ref = new PhantomReference<>(buffer, CLEANUP_QUEUE);
+        CLEANUP_ACTIONS.put(
+                ref,
                 () -> {
                     try {
                         freeNativeBuffer(id);
@@ -105,8 +141,8 @@ public class GlideCoreClient implements AutoCloseable {
     /** Cleanup coordination flag. */
     private final AtomicBoolean cleanupInProgress = new AtomicBoolean(false);
 
-    /** Cleaner to ensure native cleanup. */
-    private final Cleaner.Cleanable cleanable;
+    /** Phantom reference to ensure native cleanup. */
+    private final PhantomReference<GlideCoreClient> cleanupRef;
 
     /** Shared state for cleanup coordination. */
     private final NativeState nativeState;
@@ -138,9 +174,9 @@ public class GlideCoreClient implements AutoCloseable {
         // Create shared state for proper cleanup coordination
         this.nativeState = new NativeState(existingHandle);
 
-        // Register cleanup action with Cleaner - but don't double-close since handle is managed
-        // externally
-        this.cleanable = CLEANER.register(this, new CleanupAction(this.nativeState));
+        // Register cleanup action - but don't double-close since handle is managed externally
+        this.cleanupRef = new PhantomReference<>(this, CLEANUP_QUEUE);
+        CLEANUP_ACTIONS.put(this.cleanupRef, new CleanupAction(this.nativeState));
     }
 
     // ==================== COMMAND EXECUTION METHODS ====================
@@ -476,8 +512,12 @@ public class GlideCoreClient implements AutoCloseable {
             }
         }
 
-        // Also trigger the cleaner cleanup (safe to call multiple times)
-        cleanable.clean();
+        // Also trigger the cleanup action (safe to call multiple times)
+        Runnable action = CLEANUP_ACTIONS.remove(cleanupRef);
+        if (action != null) {
+            action.run();
+        }
+        cleanupRef.clear();
     }
 
     /** Shared state for cleanup coordination */

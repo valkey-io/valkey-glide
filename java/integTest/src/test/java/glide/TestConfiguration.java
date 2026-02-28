@@ -33,16 +33,16 @@ public final class TestConfiguration {
         System.out.printf("CLUSTER_TLS_HOSTS = %s\n", String.join(",", CLUSTER_TLS_HOSTS));
         System.out.printf("AZ_CLUSTER_HOSTS = %s\n", String.join(",", AZ_CLUSTER_HOSTS));
 
-        var result = getVersionFromStandalone();
+        Pair<Semver, Exception> result = getVersionFromStandalone();
         if (result.getKey() != null) {
             SERVER_VERSION = result.getKey();
         } else {
-            var errorStandalone = result.getValue();
+            Exception errorStandalone = result.getValue();
             result = getVersionFromCluster();
             if (result.getKey() != null) {
                 SERVER_VERSION = result.getKey();
             } else {
-                var errorCluster = result.getValue();
+                Exception errorCluster = result.getValue();
                 errorStandalone.printStackTrace(System.err);
                 System.err.println();
                 errorCluster.printStackTrace(System.err);

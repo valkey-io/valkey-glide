@@ -2,6 +2,8 @@
 package glide.api.models.configuration;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -133,6 +135,6 @@ public abstract class BaseClientConfiguration {
     @Builder.Default private final boolean lazyConnect = false;
 
     public List<NodeAddress> getAddresses() {
-        return List.copyOf(addresses);
+        return Collections.unmodifiableList(new ArrayList<>(addresses));
     }
 }
