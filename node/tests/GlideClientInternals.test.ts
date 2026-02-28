@@ -24,6 +24,9 @@ import {
     GlideReturnType,
     InfoOptions,
     isGlideRecord,
+    loadClientCertificateFromFile,
+    loadClientPrivateKeyFromFile,
+    loadRootCertificatesFromFile,
     MAX_REQUEST_ARGS_LEN,
     RequestError,
     SlotKeyTypes,
@@ -265,6 +268,18 @@ async function testSentValueMatches(config: {
 
         expect(counter).toEqual(1);
     });
+}
+
+class TestGlideClient extends GlideClient {
+    public constructor() {
+        super(new net.Socket());
+    }
+
+    public buildConnectionRequest(
+        options: GlideClientConfiguration,
+    ): connection_request.IConnectionRequest {
+        return this.createClientRequest(options);
+    }
 }
 
 describe("SocketConnectionInternals", () => {
@@ -724,6 +739,222 @@ describe("SocketConnectionInternals", () => {
             true,
         );
         closeTestResources(connection, server, socket);
+    });
+
+    describe("advanced TLS configuration", () => {
+        it("should set mTLS client certificate and private key as buffers", () => {
+            const client = new TestGlideClient();
+            const rootCert = Buffer.from("ROOT_CERT_DATA", "utf-8");
+            const clientCert = Buffer.from("CLIENT_CERT_DATA", "utf-8");
+            const clientKey = Buffer.from("CLIENT_KEY_DATA", "utf-8");
+
+            try {
+                const request = client.buildConnectionRequest({
+                    addresses: [{ host: "foo" }],
+                    useTLS: true,
+                    advancedConfiguration: {
+                        tlsAdvancedConfiguration: {
+                            rootCertificates: rootCert,
+                            clientCertificate: clientCert,
+                            clientPrivateKey: clientKey,
+                        },
+                    },
+                });
+
+                expect(request.rootCerts).toEqual([new Uint8Array(rootCert)]);
+                expect(request.clientCert).toEqual(new Uint8Array(clientCert));
+                expect(request.clientKey).toEqual(new Uint8Array(clientKey));
+            } finally {
+                client.close();
+            }
+        });
+
+        it("should set mTLS client certificate and private key from strings", () => {
+            const client = new TestGlideClient();
+            const clientCert = "CLIENT_CERT_DATA";
+            const clientKey = "CLIENT_KEY_DATA";
+
+            try {
+                const request = client.buildConnectionRequest({
+                    addresses: [{ host: "foo" }],
+                    useTLS: true,
+                    advancedConfiguration: {
+                        tlsAdvancedConfiguration: {
+                            clientCertificate: clientCert,
+                            clientPrivateKey: clientKey,
+                        },
+                    },
+                });
+
+                expect(request.clientCert).toEqual(
+                    new Uint8Array(Buffer.from(clientCert, "utf-8")),
+                );
+                expect(request.clientKey).toEqual(
+                    new Uint8Array(Buffer.from(clientKey, "utf-8")),
+                );
+            } finally {
+                client.close();
+            }
+        });
+
+        it("should fail when client certificate is provided without private key", () => {
+            const client = new TestGlideClient();
+
+            try {
+                expect(() =>
+                    client.buildConnectionRequest({
+                        addresses: [{ host: "foo" }],
+                        useTLS: true,
+                        advancedConfiguration: {
+                            tlsAdvancedConfiguration: {
+                                clientCertificate: "CLIENT_CERT_DATA",
+                            },
+                        },
+                    }),
+                ).toThrow(
+                    "clientCertificate is provided but clientPrivateKey is missing. mTLS requires both.",
+                );
+            } finally {
+                client.close();
+            }
+        });
+
+        it("should fail when client private key is provided without certificate", () => {
+            const client = new TestGlideClient();
+
+            try {
+                expect(() =>
+                    client.buildConnectionRequest({
+                        addresses: [{ host: "foo" }],
+                        useTLS: true,
+                        advancedConfiguration: {
+                            tlsAdvancedConfiguration: {
+                                clientPrivateKey: "CLIENT_KEY_DATA",
+                            },
+                        },
+                    }),
+                ).toThrow(
+                    "clientPrivateKey is provided but clientCertificate is missing. mTLS requires both.",
+                );
+            } finally {
+                client.close();
+            }
+        });
+
+        it("should fail when client certificate is empty", () => {
+            const client = new TestGlideClient();
+
+            try {
+                expect(() =>
+                    client.buildConnectionRequest({
+                        addresses: [{ host: "foo" }],
+                        useTLS: true,
+                        advancedConfiguration: {
+                            tlsAdvancedConfiguration: {
+                                clientCertificate: "",
+                                clientPrivateKey: "CLIENT_KEY_DATA",
+                            },
+                        },
+                    }),
+                ).toThrow(
+                    "clientCertificate cannot be empty; use undefined to omit it.",
+                );
+            } finally {
+                client.close();
+            }
+        });
+
+        it("should fail when client private key is empty", () => {
+            const client = new TestGlideClient();
+
+            try {
+                expect(() =>
+                    client.buildConnectionRequest({
+                        addresses: [{ host: "foo" }],
+                        useTLS: true,
+                        advancedConfiguration: {
+                            tlsAdvancedConfiguration: {
+                                clientCertificate: "CLIENT_CERT_DATA",
+                                clientPrivateKey: Buffer.alloc(0),
+                            },
+                        },
+                    }),
+                ).toThrow(
+                    "clientPrivateKey cannot be empty; use undefined to omit it.",
+                );
+            } finally {
+                client.close();
+            }
+        });
+    });
+
+    describe("TLS certificate file loaders", () => {
+        it("should load root certificates from a file", () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tls-root-"));
+            const certPath = path.join(tempDir, "ca.pem");
+            const certData = Buffer.from(
+                "-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----\n",
+                "utf-8",
+            );
+
+            try {
+                fs.writeFileSync(certPath, certData);
+                expect(loadRootCertificatesFromFile(certPath)).toEqual(
+                    certData,
+                );
+            } finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        it("should load client certificate and private key from files", () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tls-mtls-"));
+            const certPath = path.join(tempDir, "client.crt");
+            const keyPath = path.join(tempDir, "client.key");
+            const certData = Buffer.from(
+                "-----BEGIN CERTIFICATE-----\nCLIENT\n-----END CERTIFICATE-----\n",
+                "utf-8",
+            );
+            const keyData = Buffer.from(
+                "-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----\n",
+                "utf-8",
+            );
+
+            try {
+                fs.writeFileSync(certPath, certData);
+                fs.writeFileSync(keyPath, keyData);
+                expect(loadClientCertificateFromFile(certPath)).toEqual(
+                    certData,
+                );
+                expect(loadClientPrivateKeyFromFile(keyPath)).toEqual(keyData);
+            } finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        it("should fail when client certificate file does not exist", () => {
+            expect(() =>
+                loadClientCertificateFromFile(
+                    "/tmp/does-not-exist/client-cert.pem",
+                ),
+            ).toThrow("Client certificate file not found");
+        });
+
+        it("should fail when client private key file is empty", () => {
+            const tempDir = fs.mkdtempSync(
+                path.join(os.tmpdir(), "tls-empty-"),
+            );
+            const keyPath = path.join(tempDir, "client.key");
+
+            try {
+                fs.writeFileSync(keyPath, Buffer.alloc(0));
+                expect(() => loadClientPrivateKeyFromFile(keyPath)).toThrow(
+                    "Client private key file is empty",
+                );
+            } finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
     });
 
     it("should pass routing information from user", async () => {
