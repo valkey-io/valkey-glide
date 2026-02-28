@@ -9382,6 +9382,177 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_keys_command(self, glide_sync_client: TGlideClient):
+        # Test with empty database
+        glide_sync_client.flushall()
+        result = glide_sync_client.keys("*")
+        assert result == []
+
+        # Set up test keys
+        test_keys = [
+            "key1",
+            "key2", 
+            "key3",
+            "prefix:key1",
+            "prefix:key2",
+            "different:key1",
+            "test_key",
+            "another_test"
+        ]
+        
+        # Add keys to database
+        for key in test_keys:
+            glide_sync_client.set(key, f"value_{key}")
+
+        # Test getting all keys
+        all_keys = glide_sync_client.keys("*")
+        assert len(all_keys) == len(test_keys)
+        # Convert bytes to strings for comparison
+        all_keys_str = [key.decode() for key in all_keys]
+        for key in test_keys:
+            assert key in all_keys_str
+
+        # Test pattern matching with prefix
+        prefix_keys = glide_sync_client.keys("prefix:*")
+        assert len(prefix_keys) == 2
+        prefix_keys_str = [key.decode() for key in prefix_keys]
+        assert "prefix:key1" in prefix_keys_str
+        assert "prefix:key2" in prefix_keys_str
+
+        # Test pattern matching with suffix
+        test_suffix_keys = glide_sync_client.keys("*test*")
+        assert len(test_suffix_keys) == 2
+        test_suffix_keys_str = [key.decode() for key in test_suffix_keys]
+        assert "test_key" in test_suffix_keys_str
+        assert "another_test" in test_suffix_keys_str
+
+        # Test exact key match
+        exact_key = glide_sync_client.keys("key1")
+        assert len(exact_key) == 1
+        assert exact_key[0] == b"key1"
+
+        # Test non-matching pattern
+        no_match = glide_sync_client.keys("nonexistent*")
+        assert no_match == []
+
+        # Test question mark wildcard
+        question_keys = glide_sync_client.keys("key?")
+        assert len(question_keys) == 3
+        question_keys_str = [key.decode() for key in question_keys]
+        assert "key1" in question_keys_str
+        assert "key2" in question_keys_str
+        assert "key3" in question_keys_str
+
+        # Test character class pattern
+        glide_sync_client.set("keya", "value")
+        glide_sync_client.set("keyb", "value")
+        glide_sync_client.set("keyc", "value")
+        
+        char_class_keys = glide_sync_client.keys("key[abc]")
+        assert len(char_class_keys) == 3
+        char_class_keys_str = [key.decode() for key in char_class_keys]
+        assert "keya" in char_class_keys_str
+        assert "keyb" in char_class_keys_str
+        assert "keyc" in char_class_keys_str
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_keys_command_return_type(self, glide_sync_client: TGlideClient):
+        """Test that KEYS returns List[bytes] as expected by redis-py compatibility."""
+        glide_sync_client.flushall()
+        
+        # Set a key
+        glide_sync_client.set("test_key", "test_value")
+        
+        # Get keys
+        keys = glide_sync_client.keys("*")
+        
+        # Verify return type
+        assert isinstance(keys, list)
+        assert len(keys) == 1
+        assert isinstance(keys[0], bytes)
+        assert keys[0] == b"test_key"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_keys_command_special_characters(self, glide_sync_client: TGlideClient):
+        """Test KEYS command with special characters and escaping."""
+        glide_sync_client.flushall()
+        
+        # Set keys with special characters
+        special_keys = [
+            "key*with*stars",
+            "key?with?question",
+            "key[with]brackets",
+            "key\\with\\backslash",
+            "normal_key"
+        ]
+        
+        for key in special_keys:
+            glide_sync_client.set(key, "value")
+        
+        # Test escaping special characters
+        # Note: Redis KEYS command uses glob patterns, so we need to escape
+        star_keys = glide_sync_client.keys("key\\*with\\*stars")
+        assert len(star_keys) == 1
+        assert star_keys[0] == b"key*with*stars"
+        
+        # Test normal wildcard still works
+        all_keys = glide_sync_client.keys("*")
+        assert len(all_keys) == len(special_keys)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_keys_command_empty_pattern(self, glide_sync_client: TGlideClient):
+        """Test KEYS command with empty and edge case patterns."""
+        glide_sync_client.flushall()
+        
+        # Set some keys
+        glide_sync_client.set("key1", "value1")
+        glide_sync_client.set("key2", "value2")
+        
+        # Test empty pattern (should match nothing)
+        empty_keys = glide_sync_client.keys("")
+        assert empty_keys == []
+        
+        # Test single character patterns
+        single_char_keys = glide_sync_client.keys("?")
+        assert single_char_keys == []  # No single character keys
+        
+        # Test very specific pattern
+        specific_keys = glide_sync_client.keys("key1")
+        assert len(specific_keys) == 1
+        assert specific_keys[0] == b"key1"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_keys_command_large_dataset(self, glide_sync_client: TGlideClient):
+        """Test KEYS command performance warning scenario with larger dataset."""
+        glide_sync_client.flushall()
+        
+        # Create a moderate number of keys to test pattern matching
+        key_count = 50  # Reduced for test performance
+        for i in range(key_count):
+            glide_sync_client.set(f"test_key_{i:03d}", f"value_{i}")
+        
+        # Test getting all keys
+        all_keys = glide_sync_client.keys("*")
+        assert len(all_keys) == key_count
+        
+        # Test pattern matching
+        pattern_keys = glide_sync_client.keys("test_key_0*")
+        # Should match test_key_000 through test_key_049 (all start with 0)
+        pattern_keys_str = [key.decode() for key in pattern_keys]
+        expected_matches = [f"test_key_{i:03d}" for i in range(key_count) if str(i).startswith("0")]
+        assert len(pattern_keys) == len(expected_matches)
+        
+        # Verify all returned keys match the pattern
+        for key in pattern_keys:
+            key_str = key.decode()
+            assert key_str.startswith("test_key_0")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_dump_restore(self, glide_sync_client: TGlideClient):
         key1 = f"{{key}}-1{get_random_string(10)}"
         key2 = f"{{key}}-2{get_random_string(10)}"
@@ -9655,6 +9826,149 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_unwatch_with_route(self, glide_sync_client: GlideClusterClient):
         assert glide_sync_client.unwatch(RandomNode()) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_multi_exec_discard(self, glide_sync_client: TGlideClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        
+        # Test basic MULTI/EXEC transaction
+        assert glide_sync_client.multi() == "OK"
+        assert glide_sync_client.set(key1, "value1") == "QUEUED"
+        assert glide_sync_client.set(key2, "value2") == "QUEUED"
+        assert glide_sync_client.get(key1) == "QUEUED"
+        assert glide_sync_client.get(key2) == "QUEUED"
+        
+        result = glide_sync_client.exec()
+        assert result is not None
+        assert len(result) == 4
+        assert result[0] == OK
+        assert result[1] == OK
+        assert result[2] == b"value1"
+        assert result[3] == b"value2"
+        
+        # Verify keys were actually set
+        assert glide_sync_client.get(key1) == b"value1"
+        assert glide_sync_client.get(key2) == b"value2"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_discard_transaction(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        
+        # Set initial value
+        assert glide_sync_client.set(key, "initial") == OK
+        
+        # Start transaction and queue commands
+        assert glide_sync_client.multi() == "OK"
+        assert glide_sync_client.set(key, "discarded_value") == "QUEUED"
+        assert glide_sync_client.incr(key) == "QUEUED"  # This would fail, but we'll discard
+        
+        # Discard the transaction
+        assert glide_sync_client.discard() == "OK"
+        
+        # Verify the key still has the initial value
+        assert glide_sync_client.get(key) == b"initial"
+        
+        # Verify we can execute commands normally after discard
+        assert glide_sync_client.set(key, "after_discard") == OK
+        assert glide_sync_client.get(key) == b"after_discard"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_watch_multi_exec_success(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        
+        # Set initial value and watch the key
+        assert glide_sync_client.set(key, "initial") == OK
+        assert glide_sync_client.watch([key]) == OK
+        
+        # Start transaction
+        assert glide_sync_client.multi() == "OK"
+        assert glide_sync_client.set(key, "modified") == "QUEUED"
+        assert glide_sync_client.get(key) == "QUEUED"
+        
+        # Execute transaction (should succeed since key wasn't modified)
+        result = glide_sync_client.exec()
+        assert result is not None
+        assert len(result) == 2
+        assert result[0] == OK
+        assert result[1] == b"modified"
+        
+        # Verify the key was modified
+        assert glide_sync_client.get(key) == b"modified"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_watch_multi_exec_abort(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        
+        # Set initial value and watch the key
+        assert glide_sync_client.set(key, "initial") == OK
+        assert glide_sync_client.watch([key]) == OK
+        
+        # Start transaction
+        assert glide_sync_client.multi() == "OK"
+        assert glide_sync_client.set(key, "should_not_be_set") == "QUEUED"
+        
+        # Modify the watched key from outside the transaction
+        assert glide_sync_client.set(key, "external_modification") == OK
+        
+        # Execute transaction (should return None due to watched key modification)
+        result = glide_sync_client.exec()
+        assert result is None
+        
+        # Verify the key has the external modification, not the transaction value
+        assert glide_sync_client.get(key) == b"external_modification"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_transaction_error_handling(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        
+        # Set a string value
+        assert glide_sync_client.set(key, "not_a_number") == OK
+        
+        # Start transaction with a command that will fail
+        assert glide_sync_client.multi() == "OK"
+        assert glide_sync_client.set(key, "value1") == "QUEUED"
+        assert glide_sync_client.incr(key) == "QUEUED"  # This will fail since key is not a number
+        assert glide_sync_client.get(key) == "QUEUED"
+        
+        # Execute transaction - should return results with error
+        result = glide_sync_client.exec()
+        assert result is not None
+        assert len(result) == 3
+        assert result[0] == OK  # SET succeeded
+        assert isinstance(result[1], RequestError)  # INCR failed
+        assert result[2] == b"value1"  # GET succeeded
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_nested_multi_error(self, glide_sync_client: TGlideClient):
+        # Test that calling MULTI inside a transaction returns an error
+        assert glide_sync_client.multi() == "OK"
+        
+        with pytest.raises(RequestError, match="MULTI calls can not be nested"):
+            glide_sync_client.multi()
+        
+        # Clean up by discarding the transaction
+        assert glide_sync_client.discard() == "OK"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_exec_without_multi_error(self, glide_sync_client: TGlideClient):
+        # Test that calling EXEC without MULTI returns an error
+        with pytest.raises(RequestError, match="EXEC without MULTI"):
+            glide_sync_client.exec()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_discard_without_multi_error(self, glide_sync_client: TGlideClient):
+        # Test that calling DISCARD without MULTI returns an error
+        with pytest.raises(RequestError, match="DISCARD without MULTI"):
+            glide_sync_client.discard()
 
     @pytest.mark.skip_if_version_below("6.0.6")
     @pytest.mark.parametrize("cluster_mode", [True, False])

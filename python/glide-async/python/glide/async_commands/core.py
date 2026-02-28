@@ -7249,6 +7249,132 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.Watch, keys),
         )
 
+    async def multi(self) -> TOK:
+        """
+        Marks the start of a transaction block. Subsequent commands will be queued for atomic execution using `EXEC`.
+
+        See [valkey.io](https://valkey.io/commands/multi) for more details.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.multi()
+                'OK'
+            >>> await client.set("key", "value")
+                'QUEUED'
+            >>> await client.get("key")
+                'QUEUED'
+            >>> await client.exec()
+                ['OK', b'value']
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.Multi, []),
+        )
+
+    async def exec(self) -> Optional[List[TResult]]:
+        """
+        Executes all previously queued commands in a transaction and restores the connection state to normal.
+        When using `WATCH`, `EXEC` will execute commands only if the watched keys were not modified,
+        otherwise returns `None`.
+
+        See [valkey.io](https://valkey.io/commands/exec) for more details.
+
+        Returns:
+            Optional[List[TResult]]: An array of results from the executed commands, or `None` if the transaction was aborted due to a `WATCH` condition.
+
+        Examples:
+            >>> await client.multi()
+                'OK'
+            >>> await client.set("key", "value")
+                'QUEUED'
+            >>> await client.get("key")
+                'QUEUED'
+            >>> await client.exec()
+                ['OK', b'value']
+
+            >>> await client.watch("watched_key")
+                'OK'
+            >>> await client.multi()
+                'OK'
+            >>> await client.set("key", "value")
+                'QUEUED'
+            >>> # If watched_key is modified by another client here, exec returns None
+            >>> await client.exec()
+                None
+        """
+        return cast(
+            Optional[List[TResult]],
+            await self._execute_command(RequestType.Exec, []),
+        )
+
+    async def discard(self) -> TOK:
+        """
+        Flushes all previously queued commands in a transaction and restores the connection state to normal.
+
+        See [valkey.io](https://valkey.io/commands/discard) for more details.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.multi()
+                'OK'
+            >>> await client.set("key", "value")
+                'QUEUED'
+            >>> await client.discard()
+                'OK'
+            >>> await client.get("key")
+                None  # The SET command was discarded
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.Discard, []),
+        )
+
+    async def keys(self, pattern: TEncodable = "*") -> List[bytes]:
+        """
+        Returns all keys matching the given pattern.
+
+        See [valkey.io](https://valkey.io/commands/keys) for more details.
+
+        Warning:
+            This command is intended for debugging and special operations, such as changing
+            your keyspace layout. Don't use KEYS in your regular application code.
+            If you're looking for a way to find keys in a subset of your keyspace, consider
+            using SCAN or sets.
+
+        Args:
+            pattern (TEncodable): The pattern to match keys against. Defaults to "*" (all keys).
+                Supported glob-style patterns:
+                - h?llo matches hello, hallo and hxllo
+                - h*llo matches hllo and heeeello  
+                - h[ae]llo matches hello and hallo, but not hillo
+                - h[^e]llo matches hallo, hbllo, ... but not hello
+                - h[a-b]llo matches hallo and hbllo
+                Use \\ to escape special characters if you want to match them verbatim.
+
+        Returns:
+            List[bytes]: A list of keys matching the pattern.
+
+        Examples:
+            >>> await client.set("key1", "value1")
+                'OK'
+            >>> await client.set("key2", "value2")
+                'OK'
+            >>> await client.keys("*")
+                [b'key1', b'key2']
+            >>> await client.keys("key1")
+                [b'key1']
+            >>> await client.keys("nonexistent*")
+                []
+        """
+        return cast(
+            List[bytes],
+            await self._execute_command(RequestType.Keys, [pattern]),
+        )
+
     async def get_pubsub_message(self) -> PubSubMsg:
         """
         Returns the next pubsub message.
