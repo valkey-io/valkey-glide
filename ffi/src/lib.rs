@@ -2140,44 +2140,36 @@ pub(crate) unsafe fn get_pipeline_options(
     )
 }
 
-/// Creates an OpenTelemetry span with the given name and returns a pointer to the span as u64.
-///
-#[unsafe(no_mangle)]
-pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
+/// Helper function to extract and validate command name from RequestType.
+/// Returns the command name or None if validation fails.
+/// Falls back to "CustomCommand" for user-defined commands (e.g., EVAL, EVALSHA).
+fn extract_command_name(request_type: RequestType, context: &str) -> Option<String> {
     // Validate request type and extract command
     let cmd = match request_type.get_command() {
         Some(cmd) => cmd,
         None => {
             logger_core::log_error(
                 "ffi_otel",
-                "create_otel_span: RequestType has no command available",
+                format!("{context}: RequestType has no command available"),
             );
-            return 0;
+            return None;
         }
     };
 
-    // Validate command bytes
-    let cmd_bytes = match cmd.command() {
-        Some(bytes) => bytes,
-        None => {
-            logger_core::log_error(
-                "ffi_otel",
-                "create_otel_span: Command has no bytes available",
-            );
-            return 0;
-        }
-    };
-
-    // Validate UTF-8 encoding
-    let command_name = match std::str::from_utf8(cmd_bytes.as_slice()) {
-        Ok(name) => name,
-        Err(e) => {
-            logger_core::log_error(
-                "ffi_otel",
-                format!("create_otel_span: Command bytes are not valid UTF-8: {e}"),
-            );
-            return 0;
-        }
+    // Extract command name, falling back to "CustomCommand" for user-defined commands
+    // (e.g. EVAL) where the Cmd struct has no pre-set command bytes.
+    let command_name = match cmd.command() {
+        Some(bytes) => match std::str::from_utf8(bytes.as_slice()) {
+            Ok(name) => name.to_owned(),
+            Err(e) => {
+                logger_core::log_error(
+                    "ffi_otel",
+                    format!("{context}: Command bytes are not valid UTF-8: {e}"),
+                );
+                return None;
+            }
+        },
+        None => "CustomCommand".to_owned(),
     };
 
     // Validate command name length (reasonable limit to prevent abuse)
@@ -2185,15 +2177,26 @@ pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
         logger_core::log_error(
             "ffi_otel",
             format!(
-                "create_otel_span: Command name too long ({} chars), max 256",
+                "{context}: Command name too long ({} chars), max 256",
                 command_name.len()
             ),
         );
-        return 0;
+        return None;
     }
 
+    Some(command_name)
+}
+
+/// Creates an OpenTelemetry span with the given name and returns a pointer to the span as u64.
+#[unsafe(no_mangle)]
+pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
+    let command_name = match extract_command_name(request_type, "create_otel_span") {
+        Some(name) => name,
+        None => return 0,
+    };
+
     // Create span and convert to pointer
-    let span = GlideOpenTelemetry::new_span(command_name);
+    let span = GlideOpenTelemetry::new_span(&command_name);
     let arc = Arc::new(span);
     let ptr = Arc::into_raw(arc);
     let span_ptr = ptr as u64;
@@ -2406,53 +2409,10 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
     request_type: RequestType,
     parent_span_ptr: u64,
 ) -> u64 {
-    // Validate request type and extract command first (this should fail hard)
-    let cmd = match request_type.get_command() {
-        Some(cmd) => cmd,
-        None => {
-            logger_core::log_error(
-                "ffi_otel",
-                "create_otel_span_with_parent: RequestType has no command available",
-            );
-            return 0;
-        }
+    let command_name = match extract_command_name(request_type, "create_otel_span_with_parent") {
+        Some(name) => name,
+        None => return 0,
     };
-
-    // Validate command bytes
-    let cmd_bytes = match cmd.command() {
-        Some(bytes) => bytes,
-        None => {
-            logger_core::log_error(
-                "ffi_otel",
-                "create_otel_span_with_parent: Command has no bytes available",
-            );
-            return 0;
-        }
-    };
-
-    // Validate UTF-8 encoding
-    let command_name = match std::str::from_utf8(cmd_bytes.as_slice()) {
-        Ok(name) => name,
-        Err(e) => {
-            logger_core::log_error(
-                "ffi_otel",
-                format!("create_otel_span_with_parent: Command bytes are not valid UTF-8: {e}",),
-            );
-            return 0;
-        }
-    };
-
-    // Validate command name length (reasonable limit to prevent abuse)
-    if command_name.len() > 256 {
-        logger_core::log_error(
-            "ffi_otel",
-            format!(
-                "create_otel_span_with_parent: Command name too long ({} chars), max 256",
-                command_name.len()
-            ),
-        );
-        return 0;
-    }
 
     // Handle parent span pointer validation with graceful fallback
     if parent_span_ptr == 0 {
@@ -2461,7 +2421,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
             "create_otel_span_with_parent: parent_span_ptr is null (0), creating independent span as fallback",
         );
         // Graceful fallback: create independent span
-        let span = GlideOpenTelemetry::new_span(command_name);
+        let span = GlideOpenTelemetry::new_span(&command_name);
         let arc = Arc::new(span);
         let ptr = Arc::into_raw(arc);
         let span_ptr = ptr as u64;
@@ -2478,7 +2438,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
     let span = match unsafe { GlideOpenTelemetry::span_from_pointer(parent_span_ptr) } {
         Ok(parent_span) => {
             // Use existing add_span method to create child span
-            match parent_span.add_span(command_name) {
+            match parent_span.add_span(&command_name) {
                 Ok(child_span) => child_span,
                 Err(e) => {
                     logger_core::log_warn(
@@ -2488,7 +2448,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
                         ),
                     );
                     // Graceful fallback: create independent span
-                    GlideOpenTelemetry::new_span(command_name)
+                    GlideOpenTelemetry::new_span(&command_name)
                 }
             }
         }
@@ -2500,7 +2460,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
                 ),
             );
             // Graceful fallback: create independent span
-            GlideOpenTelemetry::new_span(command_name)
+            GlideOpenTelemetry::new_span(&command_name)
         }
     };
 
