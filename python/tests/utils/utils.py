@@ -659,12 +659,20 @@ def create_sync_client_config(
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
     inflight_requests_limit: Optional[int] = None,
+    root_pem_cacerts: Optional[bytes] = None,
+    client_cert_pem: Optional[bytes] = None,
+    client_key_pem: Optional[bytes] = None,
 ) -> Union[SyncGlideClusterClientConfiguration, SyncGlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
     else:
         use_tls = request.config.getoption("--tls")
-    tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
+    tls_adv_conf = TlsAdvancedConfiguration(
+        use_insecure_tls=tls_insecure,
+        root_pem_cacerts=root_pem_cacerts,
+        client_cert_pem=client_cert_pem,
+        client_key_pem=client_key_pem,
+    )
 
     # Create compression configuration if enabled
     compression_config = None
@@ -1799,11 +1807,50 @@ async def create_client_with_retry(config, max_retries: int = 3):
             time.sleep(base_delay + jitter)
 
 
+def create_sync_client_with_retry(config, max_retries: int = 3):
+    """
+    Create a SyncGlideClient or SyncGlideClusterClient with exponential backoff retry and jitter.
+
+    Args:
+        config: The client configuration (SyncGlideClientConfiguration or SyncGlideClusterClientConfiguration).
+        max_retries: Maximum number of retry attempts (default: 3).
+
+    Returns:
+        SyncGlideClient or SyncGlideClusterClient: The created client instance.
+
+    Raises:
+        Exception: If all retry attempts fail.
+    """
+    import time
+
+    is_cluster = isinstance(config, SyncGlideClusterClientConfiguration)
+    client_class = SyncGlideClusterClient if is_cluster else SyncGlideClient
+
+    for i in range(max_retries):
+        try:
+            return client_class.create(config)
+        except Exception:
+            if i == max_retries - 1:
+                raise
+            # Exponential backoff with jitter (±25%)
+            base_delay = 2**i
+            jitter = base_delay * random.uniform(-0.25, 0.25)
+            time.sleep(base_delay + jitter)
+
+
 async def assert_connected(client: TGlideClient) -> None:
     """
     Assert that the client is connected.
     """
     result = await client.ping()
+    assert result == b"PONG"
+
+
+def assert_connected_sync(client: TSyncGlideClient) -> None:
+    """
+    Assert that the sync client is connected.
+    """
+    result = client.ping()
     assert result == b"PONG"
 
 
