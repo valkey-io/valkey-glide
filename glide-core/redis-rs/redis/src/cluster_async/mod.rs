@@ -3151,22 +3151,20 @@ where
         }
         drop(rx_guard);
 
-        if !pending_requests.is_empty() {
-            for request in pending_requests.drain(..) {
-                // Drop the request if none is waiting for a response to free up resources for
-                // requests callers care about (load shedding). It will be ambiguous whether the
-                // request actually goes through regardless.
-                if request.sender.is_closed() {
-                    continue;
-                }
-
-                let future = Self::try_request(request.info.clone(), self.inner.clone()).boxed();
-                self.in_flight_requests.push(Box::pin(Request {
-                    retry_params: retry_params.clone(),
-                    request: Some(request),
-                    future: RequestState::Future { future },
-                }));
+        for request in pending_requests.drain(..) {
+            // Drop the request if none is waiting for a response to free up resources for
+            // requests callers care about (load shedding). It will be ambiguous whether the
+            // request actually goes through regardless.
+            if request.sender.is_closed() {
+                continue;
             }
+
+            let future = Self::try_request(request.info.clone(), self.inner.clone()).boxed();
+            self.in_flight_requests.push(Box::pin(Request {
+                retry_params: retry_params.clone(),
+                request: Some(request),
+                future: RequestState::Future { future },
+            }));
         }
 
         loop {
