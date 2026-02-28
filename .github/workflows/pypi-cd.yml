@@ -12,6 +12,7 @@ on:
             - .github/workflows/install-engine/action.yml
             - .github/json_matrices/**
             - .github/workflows/create-test-matrices/action.yml
+            - python/glide-async/pyproject.toml
     push:
         tags:
             - "v*.*"
@@ -188,9 +189,55 @@ jobs:
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - name: Install protoc 3.20.0
+              run: |
+                  PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+                  
+                  OS=$(uname -s)
+                  ARCH=$(uname -m)
+                  
+                  # Determine OS prefix
+                  if [[ "$OS" == "Linux" ]]; then
+                    OS_PREFIX="linux"
+                  elif [[ "$OS" == "Darwin" ]]; then
+                    OS_PREFIX="osx"
+                  else
+                    echo "Unsupported OS: $OS"
+                    exit 1
+                  fi
+                  
+                  # Determine architecture
+                  if [[ "$ARCH" == "x86_64" ]]; then
+                    PROTOC_ARCH="x86_64"
+                  elif [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
+                    PROTOC_ARCH="aarch_64"
+                  else
+                    echo "Unsupported architecture: $ARCH"
+                    exit 1
+                  fi
+                  
+                  # Use 3.20.0 (has all platform binaries including osx-aarch_64)
+                  PROTOC_ZIP="protoc-3.20.0-${OS_PREFIX}-${PROTOC_ARCH}.zip"
+                  echo "Downloading: $PROTOC_ZIP"
+                  
+                  curl -LO "$PB_REL/download/v3.20.0/$PROTOC_ZIP"
+                  
+                  # Install to a custom directory, not /usr/local
+                  sudo mkdir -p /opt/protoc
+                  sudo unzip -o "$PROTOC_ZIP" -d /opt/protoc
+                  
+                  # Add only the protoc bin directory to PATH
+                  echo "/opt/protoc/bin" >> $GITHUB_PATH
+                  
+                  /opt/protoc/bin/protoc --version
+
             - name: Generate protobuf files
               working-directory: ./python
               run: |
+                  # Verify correct protoc is used
+                  which protoc
+                  protoc --version
+                  
                   python3 dev.py protobuf
 
             - name: Include protobuf files in the package
@@ -262,7 +309,7 @@ jobs:
                   echo "/opt/${PYPY_VERSION_3_11}/bin:/opt/${PYPY_VERSION_3_10}/bin:/opt/${PYPY_VERSION_3_9}/bin" >> ${GITHUB_PATH}
 
                   sudo chmod -R a+rx /opt/pypy*/bin
-                  sudo chmod -R a+rx /opt/pypy*/lib/*.dylib
+                  sudo chmod -R a+rx /opt/pypy*/lib/*.dylib 2>/dev/null || true
 
             ### ASYNC CLIENT ###
 
@@ -276,7 +323,7 @@ jobs:
               with:
                   working-directory: ./python/glide-async
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.9 pypy3.10 pypy3.11' || 'python3.14' }}
+                  args: --release --strip --out wheels -i python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.9 pypy3.10 pypy3.11
                   manylinux: auto
                   container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
                   docker-options: --pull always --rm
@@ -354,7 +401,7 @@ jobs:
                   maturin-version: 0.14.17
                   working-directory: ./python/glide-async
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.9 pypy3.10 pypy3.11' || 'python3.14' }}
+                  args: --release --strip --out wheels -i python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.9 pypy3.10 pypy3.11
 
             ### SYNC CLIENT ###
 
@@ -390,7 +437,7 @@ jobs:
                   # we call cibuildwheel from the root folder in order to copy the whole folder tree to the docker
                   ${{ steps.python_cmd.outputs.cmd }} -m cibuildwheel python/glide-sync --output-dir python/glide-sync/wheels
               env:
-                  CIBW_BUILD: ${{ github.event_name != 'pull_request' && 'cp39-* cp310-* cp311-* cp312-* cp313-* cp314-* pp39-* pp310-* pp311-*' || 'cp314-*' }}
+                  CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* cp313-* cp314-* pp39-* pp310-* pp311-*"
                   CIBW_SKIP: "*-musl* *i686* *i386*"
                   CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
                   CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
@@ -402,7 +449,6 @@ jobs:
             ### UPLOAD WHEELS ###
 
             - name: Upload Python Async client wheels
-              if: github.event_name != 'pull_request'
               uses: actions/upload-artifact@v4
               with:
                   name: wheels-${{ matrix.build.TARGET }}-async
@@ -410,7 +456,6 @@ jobs:
                   if-no-files-found: error
 
             - name: Upload Python Sync client wheels
-              if: github.event_name != 'pull_request'
               uses: actions/upload-artifact@v4
               with:
                   name: wheels-${{ matrix.build.TARGET }}-sync
@@ -521,12 +566,10 @@ jobs:
                       python/glide-sync/dist/*.tar.gz
 
     test-release:
-        if: ${{ github.event_name == 'push' || inputs.publish_async== true || inputs.publish_sync == true }}
         name: Test the release
         runs-on: ${{ matrix.build.RUNNER }}
         needs:
             [
-                build-source-dist-and-publish-to-pypi,
                 publish-binaries,
                 load-platform-matrix,
             ]
@@ -542,138 +585,373 @@ jobs:
             - name: checkout
               uses: actions/checkout@v4
 
-            - name: Set up Python
+            - name: Set up Python 3.9
               uses: actions/setup-python@v5
               with:
-                  python-version: 3.12
+                  python-version: "3.9"
 
-            - name: Setup PyPy for testing
+            - name: Set up Python 3.10
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.10"
+
+            - name: Set up Python 3.11
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+
+            - name: Set up Python 3.12
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+
+            - name: Set up Python 3.13
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.13"
+
+            - name: Set up Python 3.14
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.14"
+
+            - name: Setup all PyPy versions for testing
               run: |
                   ARCH=$(uname -m)
 
                   if [[ "${{ matrix.build.NAMED_OS }}" == "linux" ]]; then
                     if [[ "$ARCH" == "x86_64" ]]; then
+                      PYPY_VERSION_3_9=pypy3.9-v7.3.16-linux64
                       PYPY_VERSION_3_10=pypy3.10-v7.3.19-linux64
-                      echo "Downloading PyPy 3.10 for x86_64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                      
+                      PYPY_VERSION_3_11=pypy3.11-v7.3.19-linux64
                     elif [[ "$ARCH" == "aarch64" ]]; then
+                      PYPY_VERSION_3_9=pypy3.9-v7.3.16-aarch64
                       PYPY_VERSION_3_10=pypy3.10-v7.3.19-aarch64
-                      echo "Downloading PyPy 3.10 for aarch64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      PYPY_VERSION_3_11=pypy3.11-v7.3.19-aarch64
                     fi
 
-                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/bin
+                    # Download and extract all PyPy versions for Linux
+                    for PYPY_VERSION in "$PYPY_VERSION_3_9" "$PYPY_VERSION_3_10" "$PYPY_VERSION_3_11"; do
+                      echo "Downloading ${PYPY_VERSION}"
+                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION}.tar.bz2"
+                      sudo tar -xf "${PYPY_VERSION}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      sudo chmod -R a+rx /opt/${PYPY_VERSION}/bin
+                    done
+
+                    # Add all PyPy versions to PATH
+                    echo "/opt/${PYPY_VERSION_3_11}/bin" >> ${GITHUB_PATH}
+                    echo "/opt/${PYPY_VERSION_3_10}/bin" >> ${GITHUB_PATH}
+                    echo "/opt/${PYPY_VERSION_3_9}/bin" >> ${GITHUB_PATH}
+
+                    # Save full path to pypy binaries (Linux uses pypy3 as binary name)
+                    echo "PYPY39_BIN=/opt/${PYPY_VERSION_3_9}/bin/pypy3" >> ${GITHUB_ENV}
+                    echo "PYPY310_BIN=/opt/${PYPY_VERSION_3_10}/bin/pypy3" >> ${GITHUB_ENV}
+                    echo "PYPY311_BIN=/opt/${PYPY_VERSION_3_11}/bin/pypy3" >> ${GITHUB_ENV}
 
                   elif [[ "${{ matrix.build.NAMED_OS }}" == "darwin" ]]; then
+                    # Use homebrew PyPy on macOS for 3.9 and 3.10 (proper SSL support)
+                    brew install pypy3.9 pypy3.10 openssl@3
+
+                    # Save full path to pypy binaries
+                    # Homebrew names binaries as pypy3.9, pypy3.10 (not pypy3)
+                    echo "PYPY39_BIN=$(brew --prefix pypy3.9)/bin/pypy3.9" >> ${GITHUB_ENV}
+                    echo "PYPY310_BIN=$(brew --prefix pypy3.10)/bin/pypy3.10" >> ${GITHUB_ENV}
+
+                    # Manually download PyPy 3.11 (not available in homebrew)
+                    ARCH=$(uname -m)
                     if [[ "$ARCH" == "arm64" ]]; then
-                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_arm64
-                      echo "Downloading PyPy 3.10 for arm64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                      
+                      PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_arm64
                     else
-                      PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_x86_64
-                      echo "Downloading PyPy 3.10 for x86_64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
                     fi
 
-                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/bin
-                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_10}/lib/*.dylib
+                    echo "Downloading PyPy 3.11 for $ARCH"
+                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                    sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" -C /opt
+                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_11}/bin
+                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_11}/lib/*.dylib 2>/dev/null || true
+
+                    echo "PYPY311_BIN=/opt/${PYPY_VERSION_3_11}/bin/pypy3" >> ${GITHUB_ENV}
                   fi
 
-                  echo "/opt/${PYPY_VERSION_3_10}/bin" >> ${GITHUB_PATH}
+            - name: Install dependencies for engine build
+              if: ${{ matrix.build.NAMED_OS == 'linux' }}
+              run: |
+                  sudo apt update -y
+                  sudo apt install -y libssl-dev
 
             - name: Install engine
               uses: ./.github/workflows/install-engine
               with:
                   engine-version: "8.0"
-                  target: ${{ matrix.build.target }}
+                  target: ${{ matrix.build.TARGET }}
 
-            - name: Check if RC and set a distribution tag for the package
-              shell: bash
-              env:
-                  RELEASE_VERSION: ${{ needs.publish-binaries.outputs.release_version }}
+            ### DOWNLOAD ARTIFACTS ###
+
+            - name: Download Async client wheels
+              uses: actions/download-artifact@v4
+              with:
+                  name: wheels-${{ matrix.build.TARGET }}-async
+                  path: ./wheels-async
+
+            - name: Download Sync client wheels
+              uses: actions/download-artifact@v4
+              with:
+                  name: wheels-${{ matrix.build.TARGET }}-sync
+                  path: ./wheels-sync
+
+            - name: List downloaded wheels
               run: |
-                  if [[ "$RELEASE_VERSION" == *"rc"* ]]
-                  then
-                    echo "This is a release candidate"
-                    echo "PIP_PRE=true" >> $GITHUB_ENV
-                  else
-                    echo "This is a stable release"
-                    echo "PIP_PRE=false" >> $GITHUB_ENV
-                  fi
+                  echo "=== Async wheels ==="
+                  ls -la ./wheels-async/
+                  echo "=== Sync wheels ==="
+                  ls -la ./wheels-sync/
 
-                  # Format the version for PyPI (remove leading 'v' and convert '-rc' to 'rc')
-                  PYPI_VERSION="${RELEASE_VERSION#v}"
-                  PYPI_VERSION="${PYPI_VERSION//-rc/rc}"
-                  echo "PYPI_VERSION=${PYPI_VERSION}" >> $GITHUB_ENV
+            ### TEST ALL CPYTHON + PROTOBUF COMBINATIONS ###
 
-            - name: Run the Async Client tests
-              if: ${{ inputs.publish_async == true }}
-              shell: bash
-              working-directory: ./utils/release-candidate-testing/python
-              run: |
-                  python -m venv venv
-                  source venv/bin/activate
-                  pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide
-                  fi
-                  python async_rc_test.py
-
-            - name: Run the Async Clients tests with PyPy
-              if: ${{ inputs.publish_async == true }}
+            - name: Test all CPython versions with all protobuf versions
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
-                  pypy3 -m venv pypy_venv
-                  source pypy_venv/bin/activate
-                  pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide
-                  fi
-                  pypy3 async_rc_test.py
+                  # Protobuf versions to test (first and latest of each major version)
+                  # 3.x: 3.20.0 (minimum), 3.20.3 (latest 3.20)
+                  # 4.x: 4.21.12 (first stable), 4.25.8 (latest)
+                  # 5.x: 5.26.1 (first 5.x), 5.29.6 (latest)
+                  # 6.x: 6.30.2 (first 6.x), 6.33.5 (latest)
+                  PROTOBUF_VERSIONS=("3.20.0" "3.20.3" "4.21.12" "4.25.8" "5.26.1" "5.29.6" "6.30.2" "6.33.5")
 
-            - name: Run the Sync Client tests
-              if: ${{ inputs.publish_sync == true }}
+                  # Function to get wheel pattern for CPython version (bash 3.2 compatible)
+                  get_cpython_wheel_pattern() {
+                    case "$1" in
+                      3.9)  echo "cp39" ;;
+                      3.10) echo "cp310" ;;
+                      3.11) echo "cp311" ;;
+                      3.12) echo "cp312" ;;
+                      3.13) echo "cp313" ;;
+                      3.14) echo "cp314" ;;
+                      *)    echo "" ;;
+                    esac
+                  }
+
+                  FAILED_TESTS=()
+
+                  for PY_VERSION in "3.9" "3.10" "3.11" "3.12" "3.13" "3.14"; do
+                    WHEEL_PATTERN=$(get_cpython_wheel_pattern "$PY_VERSION")
+
+                    for PROTOBUF_VERSION in "${PROTOBUF_VERSIONS[@]}"; do
+                      # Skip Python 3.14 with protobuf < 5.29 (known incompatibility)
+                      # Python 3.14 removed support for metaclasses with custom tp_new
+                      if [[ "$PY_VERSION" == "3.14" ]]; then
+                        PB_MAJOR=$(echo "$PROTOBUF_VERSION" | cut -d. -f1)
+                        PB_MINOR=$(echo "$PROTOBUF_VERSION" | cut -d. -f2)
+                        if [[ "$PB_MAJOR" -lt 5 ]] || [[ "$PB_MAJOR" -eq 5 && "$PB_MINOR" -lt 29 ]]; then
+                          echo ""
+                          echo "=============================================="
+                          echo "SKIPPING CPython ${PY_VERSION} with protobuf ${PROTOBUF_VERSION} (incompatible)"
+                          echo "=============================================="
+                          continue
+                        fi
+                      fi
+
+                      echo ""
+                      echo "=============================================="
+                      echo "Testing CPython ${PY_VERSION} with protobuf ${PROTOBUF_VERSION}"
+                      echo "=============================================="
+
+                      VENV_NAME="venv_cp${PY_VERSION//.}_pb${PROTOBUF_VERSION//.}"
+
+                      # Create fresh venv
+                      python${PY_VERSION} -m venv ${VENV_NAME}
+                      source ${VENV_NAME}/bin/activate
+                      pip install -U pip
+
+                      # Install the wheel (this brings in default protobuf)
+                      ASYNC_WHEEL=$(ls ${{ github.workspace }}/wheels-async/*${WHEEL_PATTERN}*.whl 2>/dev/null | head -1)
+                      SYNC_WHEEL=$(ls ${{ github.workspace }}/wheels-sync/*${WHEEL_PATTERN}*.whl 2>/dev/null | head -1)
+
+                      if [[ -z "$ASYNC_WHEEL" ]]; then
+                        echo "WARNING: No async wheel found for ${WHEEL_PATTERN}, skipping..."
+                        deactivate
+                        continue
+                      fi
+
+                      pip install "$ASYNC_WHEEL"
+
+                      # Force specific protobuf version
+                      pip install "protobuf==${PROTOBUF_VERSION}" --force-reinstall
+
+                      # Verify protobuf version
+                      INSTALLED_PB=$(pip show protobuf | grep Version | awk '{print $2}')
+                      echo "Installed protobuf version: ${INSTALLED_PB}"
+
+                      # Run async test
+                      echo "Running async test..."
+                      if python async_rc_test.py; then
+                        echo "✓ Async test PASSED for CPython ${PY_VERSION} + protobuf ${PROTOBUF_VERSION}"
+                      else
+                        echo "✗ Async test FAILED for CPython ${PY_VERSION} + protobuf ${PROTOBUF_VERSION}"
+                        FAILED_TESTS+=("async-cp${PY_VERSION}-pb${PROTOBUF_VERSION}")
+                      fi
+
+                      # Test sync client in same venv
+                      if [[ -n "$SYNC_WHEEL" ]]; then
+                        pip install "$SYNC_WHEEL"
+                        pip install "protobuf==${PROTOBUF_VERSION}" --force-reinstall
+
+                        echo "Running sync test..."
+                        if python sync_rc_test.py; then
+                          echo "✓ Sync test PASSED for CPython ${PY_VERSION} + protobuf ${PROTOBUF_VERSION}"
+                        else
+                          echo "✗ Sync test FAILED for CPython ${PY_VERSION} + protobuf ${PROTOBUF_VERSION}"
+                          FAILED_TESTS+=("sync-cp${PY_VERSION}-pb${PROTOBUF_VERSION}")
+                        fi
+                      fi
+
+                      deactivate
+                      rm -rf ${VENV_NAME}
+                    done
+                  done
+
+                  echo ""
+                  echo "=============================================="
+                  echo "CPython Test Summary"
+                  echo "=============================================="
+                  if [[ ${#FAILED_TESTS[@]} -eq 0 ]]; then
+                    echo "All CPython tests PASSED!"
+                  else
+                    echo "FAILED TESTS:"
+                    for test in "${FAILED_TESTS[@]}"; do
+                      echo "  - ${test}"
+                    done
+                    exit 1
+                  fi
+
+            ### TEST ALL PYPY + PROTOBUF COMBINATIONS ###
+
+            - name: Test all PyPy versions with all protobuf versions
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
-                  python -m venv venv
-                  source venv/bin/activate
-                  pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide-sync==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide-sync
-                  fi
-                  python sync_rc_test.py
+                  # Protobuf versions to test (first and latest of each major version)
+                  # 3.x: 3.20.0 (minimum), 3.20.3 (latest 3.20)
+                  # 4.x: 4.21.12 (first stable), 4.25.8 (latest)
+                  # 5.x: 5.26.1 (first 5.x), 5.29.6 (latest)
+                  # 6.x: 6.30.2 (first 6.x), 6.33.5 (latest)
+                  PROTOBUF_VERSIONS=("3.20.0" "3.20.3" "4.21.12" "4.25.8" "5.26.1" "5.29.6" "6.30.2" "6.33.5")
 
-            - name: Run the Sync Client tests with PyPy
-              if: ${{ inputs.publish_sync == true }}
-              shell: bash
-              working-directory: ./utils/release-candidate-testing/python
-              run: |
-                  pypy3 -m venv pypy_venv
-                  source pypy_venv/bin/activate
-                  pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide-sync==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide-sync
-                  fi
-                  pypy3 sync_rc_test.py
+                  # Functions to get PyPy wheel pattern and path (bash 3.2 compatible)
+                  get_pypy_wheel_pattern() {
+                    case "$1" in
+                      3.9)  echo "pp39" ;;
+                      3.10) echo "pp310" ;;
+                      3.11) echo "pp311" ;;
+                      *)    echo "" ;;
+                    esac
+                  }
 
-            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
-            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
+                  get_pypy_bin() {
+                    case "$1" in
+                      3.9)  echo "${PYPY39_BIN}" ;;
+                      3.10) echo "${PYPY310_BIN}" ;;
+                      3.11) echo "${PYPY311_BIN}" ;;
+                      *)    echo "" ;;
+                    esac
+                  }
+
+                  FAILED_TESTS=()
+
+                  for PY_VERSION in "3.9" "3.10" "3.11"; do
+                    WHEEL_PATTERN=$(get_pypy_wheel_pattern "$PY_VERSION")
+                    PYPY_BIN="$(get_pypy_bin "$PY_VERSION")"
+
+                    # Skip if path is empty or binary not found
+                    if [[ -z "$PYPY_BIN" ]] || [[ ! -x "$PYPY_BIN" ]]; then
+                      echo "INFO: PyPy ${PY_VERSION} not available, skipping..."
+                      continue
+                    fi
+
+                    for PROTOBUF_VERSION in "${PROTOBUF_VERSIONS[@]}"; do
+                      echo ""
+                      echo "=============================================="
+                      echo "Testing PyPy ${PY_VERSION} with protobuf ${PROTOBUF_VERSION}"
+                      echo "=============================================="
+
+                      VENV_NAME="venv_pp${PY_VERSION//.}_pb${PROTOBUF_VERSION//.}"
+
+                      # Create fresh venv
+                      ${PYPY_BIN} -m venv ${VENV_NAME}
+                      source ${VENV_NAME}/bin/activate
+
+                      # Debug: show venv bin contents and verify python works
+                      echo "Venv bin contents:"
+                      ls -la ${VENV_NAME}/bin/
+                      echo "Python interpreter: $(which python)"
+                      python --version
+
+                      pip install -U pip
+
+                      # Install the wheel
+                      ASYNC_WHEEL=$(ls ${{ github.workspace }}/wheels-async/*${WHEEL_PATTERN}*.whl 2>/dev/null | head -1)
+                      SYNC_WHEEL=$(ls ${{ github.workspace }}/wheels-sync/*${WHEEL_PATTERN}*.whl 2>/dev/null | head -1)
+
+                      if [[ -z "$ASYNC_WHEEL" ]]; then
+                        echo "WARNING: No async wheel found for ${WHEEL_PATTERN}, skipping..."
+                        deactivate
+                        continue
+                      fi
+
+                      pip install "$ASYNC_WHEEL"
+
+                      # Force specific protobuf version
+                      pip install "protobuf==${PROTOBUF_VERSION}" --force-reinstall
+
+                      # Verify protobuf version
+                      INSTALLED_PB=$(pip show protobuf | grep Version | awk '{print $2}')
+                      echo "Installed protobuf version: ${INSTALLED_PB}"
+
+                      # Run async test
+                      echo "Running async test..."
+                      if python async_rc_test.py; then
+                        echo "✓ Async test PASSED for PyPy ${PY_VERSION} + protobuf ${PROTOBUF_VERSION}"
+                      else
+                        echo "✗ Async test FAILED for PyPy ${PY_VERSION} + protobuf ${PROTOBUF_VERSION}"
+                        FAILED_TESTS+=("async-pp${PY_VERSION}-pb${PROTOBUF_VERSION}")
+                      fi
+
+                      # Test sync client in same venv
+                      if [[ -n "$SYNC_WHEEL" ]]; then
+                        pip install "$SYNC_WHEEL"
+                        pip install "protobuf==${PROTOBUF_VERSION}" --force-reinstall
+
+                        echo "Running sync test..."
+                        if python sync_rc_test.py; then
+                          echo "✓ Sync test PASSED for PyPy ${PY_VERSION} + protobuf ${PROTOBUF_VERSION}"
+                        else
+                          echo "✗ Sync test FAILED for PyPy ${PY_VERSION} + protobuf ${PROTOBUF_VERSION}"
+                          FAILED_TESTS+=("sync-pp${PY_VERSION}-pb${PROTOBUF_VERSION}")
+                        fi
+                      fi
+
+                      deactivate
+                      rm -rf ${VENV_NAME}
+                    done
+                  done
+
+                  echo ""
+                  echo "=============================================="
+                  echo "PyPy Test Summary"
+                  echo "=============================================="
+                  if [[ ${#FAILED_TESTS[@]} -eq 0 ]]; then
+                    echo "All PyPy tests PASSED!"
+                  else
+                    echo "FAILED TESTS:"
+                    for test in "${FAILED_TESTS[@]}"; do
+                      echo "  - ${test}"
+                    done
+                    exit 1
+                  fi
+
+            # Reset the repository
             - name: Reset repository
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
               shell: bash
