@@ -14,9 +14,13 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.exceptions.TimeoutException;
 import glide.internal.AsyncRegistry;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -210,6 +214,145 @@ public class TimeoutTests {
                             + " leaked");
         } finally {
             client.close();
+        }
+    }
+
+    /**
+     * Test 5: Timeout enforced under high concurrent load.
+     *
+     * <p>Manual test to verify command timeouts are enforced even under high load where connection
+     * acquisition may take time. This validates that the configured request timeout includes
+     * connection acquisition time, not just command execution time.
+     *
+     * <p>Regression test for: https://github.com/valkey-io/valkey-glide/issues/5284
+     *
+     * <p>To run this test manually: 1. Start Valkey with DEBUG commands enabled: valkey-server
+     * --enable-debug-command yes 2. Remove @Disabled annotation 3. Run: ./gradlew :integTest:test
+     * --tests "*timeout_enforced_under_high_load*"
+     *
+     * <p>Expected behavior WITH fix: - All commands timeout at ~30ms (configured timeout)
+     *
+     * <p>Expected behavior WITHOUT fix: - Commands timeout at 30ms + connection wait time (50-100ms+
+     * under contention)
+     */
+    @Disabled("Manual test - requires high load simulation")
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @SneakyThrows
+    public void timeout_enforced_under_high_load(boolean clusterMode) {
+        final int TIMEOUT_MS = 30;
+        final int NUM_CLIENTS = 50;
+
+        System.out.println("\n=== Timeout Under High Load Test ===");
+        System.out.println("Mode: " + (clusterMode ? "Cluster" : "Standalone"));
+        System.out.println("Timeout: " + TIMEOUT_MS + "ms");
+        System.out.println("Clients: " + NUM_CLIENTS);
+        System.out.println();
+
+        ExecutorService executor = Executors.newFixedThreadPool(NUM_CLIENTS);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(NUM_CLIENTS);
+
+        AtomicInteger timeoutCount = new AtomicInteger(0);
+        AtomicInteger successCount = new AtomicInteger(0);
+        List<Long> timeoutDurations = new CopyOnWriteArrayList<>();
+
+        List<Future<Void>> futures = new ArrayList<>();
+
+        // Create many clients that all execute a slow command simultaneously
+        // This creates contention in connection management
+        for (int i = 0; i < NUM_CLIENTS; i++) {
+            final int clientId = i;
+            futures.add(
+                    executor.submit(
+                            () -> {
+                                try {
+                                    BaseClient client =
+                                            clusterMode
+                                                    ? GlideClusterClient.createClient(
+                                                                    commonClusterClientConfig().requestTimeout(TIMEOUT_MS).build())
+                                                            .get()
+                                                    : GlideClient.createClient(
+                                                                    commonClientConfig().requestTimeout(TIMEOUT_MS).build())
+                                                            .get();
+
+                                    try {
+                                        startLatch.await();
+
+                                        // Single slow command per client
+                                        long start = System.nanoTime();
+                                        try {
+                                            if (clusterMode) {
+                                                ((GlideClusterClient) client)
+                                                        .customCommand(new String[] {"DEBUG", "SLEEP", "0.05"})
+                                                        .get();
+                                            } else {
+                                                ((GlideClient) client)
+                                                        .customCommand(new String[] {"DEBUG", "SLEEP", "0.05"})
+                                                        .get();
+                                            }
+                                            successCount.incrementAndGet();
+                                        } catch (ExecutionException e) {
+                                            if (e.getCause() instanceof TimeoutException) {
+                                                long duration = (System.nanoTime() - start) / 1_000_000;
+                                                timeoutDurations.add(duration);
+                                                timeoutCount.incrementAndGet();
+                                            } else {
+                                                throw e;
+                                            }
+                                        }
+                                    } finally {
+                                        client.close();
+                                    }
+                                } catch (Exception e) {
+                                    System.err.println("Client " + clientId + " error: " + e.getMessage());
+                                } finally {
+                                    doneLatch.countDown();
+                                }
+                                return null;
+                            }));
+        }
+
+        System.out.println("Starting " + NUM_CLIENTS + " clients...");
+        startLatch.countDown();
+
+        boolean completed = doneLatch.await(60, java.util.concurrent.TimeUnit.SECONDS);
+        assertTrue(completed, "Test should complete within 60 seconds");
+
+        executor.shutdown();
+        executor.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS);
+
+        System.out.println("\n=== Results ===");
+        System.out.println("Total clients: " + NUM_CLIENTS);
+        System.out.println("Timeouts: " + timeoutCount.get());
+        System.out.println("Successes: " + successCount.get());
+
+        if (!timeoutDurations.isEmpty()) {
+            long min = timeoutDurations.stream().min(Long::compare).orElse(0L);
+            long max = timeoutDurations.stream().max(Long::compare).orElse(0L);
+            long avg = (long) timeoutDurations.stream().mapToLong(Long::longValue).average().orElse(0);
+
+            System.out.println("\nTimeout durations:");
+            System.out.println("  Min: " + min + "ms");
+            System.out.println("  Max: " + max + "ms");
+            System.out.println("  Avg: " + avg + "ms");
+
+            long under40 = timeoutDurations.stream().filter(d -> d < 40).count();
+            long between40and60 = timeoutDurations.stream().filter(d -> d >= 40 && d < 60).count();
+            long over60 = timeoutDurations.stream().filter(d -> d >= 60).count();
+
+            System.out.println("\nDistribution:");
+            System.out.println("  < 40ms: " + under40 + " (expected with fix)");
+            System.out.println("  40-60ms: " + between40and60);
+            System.out.println("  > 60ms: " + over60 + " (indicates bug)");
+
+            long properTimeouts = timeoutDurations.stream().filter(d -> d < 50).count();
+            double properTimeoutPercent = (properTimeouts * 100.0) / timeoutDurations.size();
+
+            System.out.println("\nProper timeouts (< 50ms): " + properTimeoutPercent + "%");
+            assertTrue(
+                    properTimeoutPercent > 80,
+                    "Expected >80% of timeouts to be <50ms, got " + properTimeoutPercent + "%");
         }
     }
 }
