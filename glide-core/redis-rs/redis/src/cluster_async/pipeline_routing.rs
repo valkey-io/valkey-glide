@@ -1,7 +1,6 @@
 use crate::aio::ConnectionLike;
 use crate::cluster_async::ClusterConnInner;
 use crate::cluster_async::Connect;
-use crate::cluster_async::MUTEX_READ_ERR;
 use crate::cluster_routing::RoutingInfo;
 use crate::cluster_routing::SlotAddr;
 use crate::cluster_routing::{
@@ -201,7 +200,7 @@ where
                     match multi_node_routing {
                         MultipleNodeRoutingInfo::AllNodes | MultipleNodeRoutingInfo::AllMasters => {
                             let connections: Vec<_> = {
-                                let lock = core.conn_lock.read().expect(MUTEX_READ_ERR);
+                                let lock = core.conn_lock.read().await;
                                 if matches!(multi_node_routing, MultipleNodeRoutingInfo::AllNodes) {
                                     lock.all_node_connections().collect()
                                 } else {
@@ -324,7 +323,7 @@ where
     // inner_index is used to keep track of the index of the sub-commands in the multi slot routing info vector.
     for (inner_index, (route, indices)) in slots.iter().enumerate() {
         let conn = {
-            let lock = core.conn_lock.read().expect(MUTEX_READ_ERR);
+            let lock = core.conn_lock.read().await;
             lock.connection_for_route(route)
         };
         if let Some((address, conn)) = conn {
@@ -391,10 +390,9 @@ where
         collect_pipeline_requests(pipeline_map, retry, pipeline_retry_strategy);
 
     // Add the pending requests to the pending_requests queue
-    core.pending_requests
-        .lock()
-        .unwrap()
-        .extend(pending_requests.into_iter());
+    for request in pending_requests {
+        let _ = core.pending_requests_tx.send(request);
+    }
 
     // Wait for all receivers to complete and collect the responses
     let responses: Vec<_> = futures::future::join_all(receivers.into_iter())
@@ -770,7 +768,7 @@ where
     // TODO: add support for user-defined retry configurations
     let retry_params = core
         .get_cluster_param(|params| params.retry_params.clone())
-        .expect(MUTEX_READ_ERR);
+        .await;
 
     let mut retry = 0;
 
@@ -999,7 +997,7 @@ where
 {
     let retry_params = core
         .get_cluster_param(|params| params.retry_params.clone())
-        .expect(MUTEX_READ_ERR);
+        .await;
 
     if matches!(retry_method, RetryMethod::WaitAndRetry) {
         let sleep_duration = retry_params.wait_time_for_retry(retry);

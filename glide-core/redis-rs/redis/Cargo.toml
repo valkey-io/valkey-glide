@@ -18,6 +18,12 @@ rustdoc-args = ["--cfg", "docsrs"]
 [lib]
 bench = false
 
+[lints.clippy]
+# Prevent blocking the async runtime
+await_holding_lock = "deny"
+# Additional async safety lints
+mutex_atomic = "warn"
+
 [dependencies]
 # These two are generally really common simple dependencies so it does not seem
 # much of a point to optimize these, but these could in theory be removed for

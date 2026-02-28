@@ -4,7 +4,16 @@ use logger_core::log_debug;
 use nanoid::nanoid;
 use once_cell::sync::Lazy;
 use redis::{RedisResult, ScanStateRC};
-use std::{collections::HashMap, sync::Mutex};
+use std::collections::HashMap;
+use tokio::sync::Mutex;
+
+// Helper to create a runtime for sync wrappers
+fn create_runtime() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to create Tokio runtime")
+}
 
 // This is a container for storing the cursor of a cluster scan.
 // The cursor for a cluster scan is a ref to the actual ScanState struct in redis-rs.
@@ -17,9 +26,9 @@ use std::{collections::HashMap, sync::Mutex};
 static CONTAINER: Lazy<Mutex<HashMap<String, ScanStateRC>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
-pub fn insert_cluster_scan_cursor(scan_state: ScanStateRC) -> String {
+pub async fn insert_cluster_scan_cursor_async(scan_state: ScanStateRC) -> String {
     let id = nanoid!();
-    CONTAINER.lock().unwrap().insert(id.clone(), scan_state);
+    CONTAINER.lock().await.insert(id.clone(), scan_state);
     log_debug(
         "scan_state_cursor insert",
         format!("Inserted to container scan_state_cursor with id: `{id:?}`"),
@@ -27,8 +36,16 @@ pub fn insert_cluster_scan_cursor(scan_state: ScanStateRC) -> String {
     id
 }
 
-pub fn get_cluster_scan_cursor(id: String) -> RedisResult<ScanStateRC> {
-    let scan_state_rc = CONTAINER.lock().unwrap().get(&id).cloned();
+pub fn insert_cluster_scan_cursor(scan_state: ScanStateRC) -> String {
+    std::thread::spawn(move || {
+        create_runtime().block_on(insert_cluster_scan_cursor_async(scan_state))
+    })
+    .join()
+    .expect("Thread panicked")
+}
+
+pub async fn get_cluster_scan_cursor_async(id: String) -> RedisResult<ScanStateRC> {
+    let scan_state_rc = CONTAINER.lock().await.get(&id).cloned();
     log_debug(
         "scan_state_cursor get",
         format!("Retrieved from container scan_state_cursor with id: `{id:?}`"),
@@ -43,10 +60,22 @@ pub fn get_cluster_scan_cursor(id: String) -> RedisResult<ScanStateRC> {
     }
 }
 
-pub fn remove_scan_state_cursor(id: String) {
+pub fn get_cluster_scan_cursor(id: String) -> RedisResult<ScanStateRC> {
+    std::thread::spawn(move || create_runtime().block_on(get_cluster_scan_cursor_async(id)))
+        .join()
+        .expect("Thread panicked")
+}
+
+pub async fn remove_scan_state_cursor_async(id: String) {
+    CONTAINER.lock().await.remove(&id);
     log_debug(
         "scan_state_cursor remove",
         format!("Removed from container scan_state_cursor with id: `{id:?}`"),
     );
-    CONTAINER.lock().unwrap().remove(&id);
+}
+
+pub fn remove_scan_state_cursor(id: String) {
+    std::thread::spawn(move || create_runtime().block_on(remove_scan_state_cursor_async(id)))
+        .join()
+        .expect("Thread panicked")
 }
