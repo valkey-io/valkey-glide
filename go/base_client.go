@@ -10085,3 +10085,351 @@ func (client *baseClient) GetSubscriptions(ctx context.Context) (*models.PubSubS
 	}
 	return handlePubSubStateResponse(response)
 }
+
+// AclCat returns a list of all ACL categories.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	An array of ACL categories.
+//
+// [valkey.io]: https://valkey.io/commands/acl-cat/
+func (client *baseClient) AclCat(ctx context.Context) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.AclCat, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// AclCatWithCategory returns a list of commands within the specified ACL category.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	category - The ACL category to list commands for.
+//
+// Return value:
+//
+//	An array of commands within the specified category.
+//
+// [valkey.io]: https://valkey.io/commands/acl-cat/
+func (client *baseClient) AclCatWithCategory(ctx context.Context, category string) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.AclCat, []string{category})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// AclDelUser deletes all specified ACL users and terminates their connections.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	usernames - An array of usernames to delete.
+//
+// Return value:
+//
+//	The number of users deleted.
+//
+// [valkey.io]: https://valkey.io/commands/acl-deluser/
+func (client *baseClient) AclDelUser(ctx context.Context, usernames []string) (int64, error) {
+	result, err := client.executeCommand(ctx, C.AclDelUser, usernames)
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// AclDryRun simulates the execution of a command by a user without actually executing it.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	username - The username to simulate command execution for.
+//	command - The command to simulate.
+//	args - The command arguments.
+//
+// Return value:
+//
+//	"OK" if the user can execute the command, otherwise a string describing why the command cannot be executed.
+//
+// [valkey.io]: https://valkey.io/commands/acl-dryrun/
+func (client *baseClient) AclDryRun(ctx context.Context, username string, command string, args []string) (string, error) {
+	cmdArgs := append([]string{username, command}, args...)
+	result, err := client.executeCommand(ctx, C.AclDryRun, cmdArgs)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkOrStringResponse(result)
+}
+
+// AclGenPass generates a random password for ACL users.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A randomly generated password string (64 hex characters by default).
+//
+// [valkey.io]: https://valkey.io/commands/acl-genpass/
+func (client *baseClient) AclGenPass(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.AclGenPass, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// AclGenPassWithBits generates a random password with the specified number of bits.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	bits - The number of bits for the password (must be between 1 and 4096).
+//
+// Return value:
+//
+//	A randomly generated password string.
+//
+// [valkey.io]: https://valkey.io/commands/acl-genpass/
+func (client *baseClient) AclGenPassWithBits(ctx context.Context, bits int64) (string, error) {
+	result, err := client.executeCommand(ctx, C.AclGenPass, []string{utils.IntToString(bits)})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// AclGetUser returns all ACL rules for the specified user.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	username - The username to get ACL rules for.
+//
+// Return value:
+//
+//	A value describing the ACL rules for the user, or nil if user doesn't exist.
+//
+// [valkey.io]: https://valkey.io/commands/acl-getuser/
+func (client *baseClient) AclGetUser(ctx context.Context, username string) (any, error) {
+	result, err := client.executeCommand(ctx, C.AclGetUser, []string{username})
+	if err != nil {
+		return nil, err
+	}
+	return handleInterfaceResponse(result)
+}
+
+// AclList returns a list of all ACL users and their rules in ACL configuration file format.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	An array of ACL rules for all users.
+//
+// [valkey.io]: https://valkey.io/commands/acl-list/
+func (client *baseClient) AclList(ctx context.Context) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.AclList, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// AclLoad reloads ACL rules from the configured ACL configuration file.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	"OK" on success.
+//
+// [valkey.io]: https://valkey.io/commands/acl-load/
+func (client *baseClient) AclLoad(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.AclLoad, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// AclLog returns the ACL security events log.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	An array of ACL security events.
+//
+// [valkey.io]: https://valkey.io/commands/acl-log/
+func (client *baseClient) AclLog(ctx context.Context) ([]any, error) {
+	result, err := client.executeCommand(ctx, C.AclLog, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyArrayOrNilResponse(result)
+}
+
+// AclLogWithCount returns the specified number of ACL security events from the log.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	count - The number of entries to return.
+//
+// Return value:
+//
+//	An array of ACL security events.
+//
+// [valkey.io]: https://valkey.io/commands/acl-log/
+func (client *baseClient) AclLogWithCount(ctx context.Context, count int64) ([]any, error) {
+	result, err := client.executeCommand(ctx, C.AclLog, []string{utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+	return handleAnyArrayOrNilResponse(result)
+}
+
+// AclLogReset resets the ACL log.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	"OK" on success.
+//
+// [valkey.io]: https://valkey.io/commands/acl-log/
+func (client *baseClient) AclLogReset(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.AclLog, []string{"RESET"})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// AclSave saves the current ACL rules to the configured ACL configuration file.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	"OK" on success.
+//
+// [valkey.io]: https://valkey.io/commands/acl-save/
+func (client *baseClient) AclSave(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.AclSave, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// AclSetUser creates or modifies an ACL user and its rules.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	username - The username for the ACL user.
+//	rules - An array of ACL rules to apply to the user.
+//
+// Return value:
+//
+//	"OK" on success.
+//
+// [valkey.io]: https://valkey.io/commands/acl-setuser/
+func (client *baseClient) AclSetUser(ctx context.Context, username string, rules []string) (string, error) {
+	cmdArgs := append([]string{username}, rules...)
+	result, err := client.executeCommand(ctx, C.AclSetUser, cmdArgs)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// AclUsers returns a list of all ACL usernames.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	An array of ACL usernames.
+//
+// [valkey.io]: https://valkey.io/commands/acl-users/
+func (client *baseClient) AclUsers(ctx context.Context) ([]string, error) {
+	result, err := client.executeCommand(ctx, C.AclUsers, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// AclWhoAmI returns the username of the current connection.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	The username of the current connection.
+//
+// [valkey.io]: https://valkey.io/commands/acl-whoami/
+func (client *baseClient) AclWhoAmI(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.AclWhoami, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}

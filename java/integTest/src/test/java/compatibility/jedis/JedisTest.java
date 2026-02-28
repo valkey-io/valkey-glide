@@ -10,6 +10,7 @@ import glide.api.GlideClient;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import java.lang.reflect.Constructor;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -19,21 +20,42 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.GeoCoordinate;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.Protocol;
+import redis.clients.jedis.StreamEntryID;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.args.FlushMode;
+import redis.clients.jedis.args.GeoUnit;
 import redis.clients.jedis.args.ListDirection;
 import redis.clients.jedis.args.ListPosition;
+import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
 import redis.clients.jedis.params.HGetExParams;
 import redis.clients.jedis.params.HSetExParams;
+import redis.clients.jedis.params.LCSParams;
 import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.params.SortingParams;
+import redis.clients.jedis.params.XAddParams;
+import redis.clients.jedis.params.XTrimParams;
+import redis.clients.jedis.params.ZAddParams;
+import redis.clients.jedis.params.ZRangeParams;
+import redis.clients.jedis.resps.AccessControlLogEntry;
+import redis.clients.jedis.resps.AccessControlUser;
+import redis.clients.jedis.resps.LCSMatchResult;
 import redis.clients.jedis.resps.ScanResult;
+import redis.clients.jedis.resps.StreamConsumerInfo;
+import redis.clients.jedis.resps.StreamEntry;
+import redis.clients.jedis.resps.StreamGroupInfo;
+import redis.clients.jedis.resps.StreamInfo;
+import redis.clients.jedis.resps.StreamPendingEntry;
+import redis.clients.jedis.resps.StreamPendingSummary;
+import redis.clients.jedis.resps.Tuple;
 import redis.clients.jedis.util.KeyValue;
 
 /**
@@ -47,6 +69,20 @@ public class JedisTest {
     // Server configuration - dynamically resolved from CI environment
     private static final String valkeyHost;
     private static final int valkeyPort;
+
+    // Microseconds per second - used to validate TIME command response
+    // The TIME command returns [seconds, microseconds] where microseconds must be in [0, 999999]
+    private static final long MICROSECONDS_PER_SECOND = 1_000_000;
+    // Geo test constants
+    private static final double TEST_LONGITUDE_PALERMO = 13.361389;
+    private static final double TEST_LATITUDE_PALERMO = 38.115556;
+    private static final double TEST_LONGITUDE_CATANIA = 15.087269;
+    private static final double TEST_LATITUDE_CATANIA = 37.502669;
+    private static final double TEST_GEO_DISTANCE_MIN_METERS = 166000;
+    private static final double TEST_GEO_DISTANCE_MAX_METERS = 167000;
+    private static final double TEST_GEO_DISTANCE_MIN_KM = 166;
+    private static final double TEST_GEO_DISTANCE_MAX_KM = 167;
+    private static final double TEST_GEO_COORD_TOLERANCE = 0.01;
 
     // GLIDE compatibility layer instance
     private Jedis jedis;
@@ -307,6 +343,126 @@ public class JedisTest {
         assertEquals("value1", results.get(0), "First value should be correct");
         assertEquals("value2", results.get(1), "Second value should be correct");
         assertEquals("value3", results.get(2), "Third value should be correct");
+    }
+
+    @Test
+    void msetnx_command() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+
+        // Test MSETNX when all keys are new
+        long result = jedis.msetnx(key1, "value1", key2, "value2");
+        assertEquals(1L, result, "MSETNX should return 1 when all keys are new");
+        assertEquals("value1", jedis.get(key1), "First key should be set");
+        assertEquals("value2", jedis.get(key2), "Second key should be set");
+
+        // Test MSETNX when one key already exists
+        result = jedis.msetnx(key2, "newvalue2", key3, "value3");
+        assertEquals(0L, result, "MSETNX should return 0 when at least one key exists");
+        assertEquals("value2", jedis.get(key2), "Existing key should not be modified");
+        assertNull(jedis.get(key3), "New key should not be set when operation fails");
+
+        // Test binary version
+        byte[] bkey1 = ("bkey1:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] bkey2 = ("bkey2:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] bvalue1 = "bvalue1".getBytes(StandardCharsets.UTF_8);
+        byte[] bvalue2 = "bvalue2".getBytes(StandardCharsets.UTF_8);
+
+        result = jedis.msetnx(bkey1, bvalue1, bkey2, bvalue2);
+        assertEquals(1L, result, "MSETNX binary should return 1 when all keys are new");
+        assertArrayEquals(bvalue1, jedis.get(bkey1), "First binary key should be set");
+        assertArrayEquals(bvalue2, jedis.get(bkey2), "Second binary key should be set");
+    }
+
+    @Test
+    void setrange_getrange_commands() {
+        String key = UUID.randomUUID().toString();
+
+        // Test SETRANGE on non-existing key (creates key with zero-padding)
+        long length = jedis.setrange(key, 5, "world");
+        assertEquals(10L, length, "SETRANGE should return new string length");
+        String value = jedis.get(key);
+        assertTrue(value.endsWith("world"), "Value should end with 'world'");
+
+        // Test SETRANGE overwriting part of existing string
+        jedis.set(key, "Hello World");
+        length = jedis.setrange(key, 6, "Redis");
+        assertEquals(11L, length, "SETRANGE should return string length");
+        assertEquals("Hello Redis", jedis.get(key), "String should be modified correctly");
+
+        // Test GETRANGE
+        String substring = jedis.getrange(key, 0, 4);
+        assertEquals("Hello", substring, "GETRANGE should return correct substring");
+
+        substring = jedis.getrange(key, 6, 10);
+        assertEquals("Redis", substring, "GETRANGE should return correct substring");
+
+        // Test GETRANGE with negative indices
+        substring = jedis.getrange(key, -5, -1);
+        assertEquals("Redis", substring, "GETRANGE with negative indices should work");
+
+        // Test binary version
+        byte[] bkey = ("bkey:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] bvalue = "Hello".getBytes(StandardCharsets.UTF_8);
+        jedis.set(bkey, bvalue);
+
+        length = jedis.setrange(bkey, 6, "World".getBytes(StandardCharsets.UTF_8));
+        assertTrue(length >= 11, "SETRANGE binary should return string length");
+
+        byte[] bsubstring = jedis.getrange(bkey, 0, 4);
+        assertArrayEquals(
+                "Hello".getBytes(StandardCharsets.UTF_8),
+                bsubstring,
+                "GETRANGE binary should return correct substring");
+    }
+
+    @Test
+    void lcs_commands() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LCS requires Valkey 7.0.0+");
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        // Set up test data
+        jedis.set(key1, "ohmytext");
+        jedis.set(key2, "mynewtext");
+
+        // Test LCS - returns the longest common subsequence (default: returns string)
+        LCSParams defaultParams = LCSParams.LCSParams();
+        LCSMatchResult lcsResult = jedis.lcs(key1, key2, defaultParams);
+        assertNotNull(lcsResult, "LCS should return a result");
+        assertNotNull(lcsResult.getMatchString(), "LCS should return a match string");
+        assertTrue(lcsResult.getMatchString().contains("my"), "LCS should contain common subsequence");
+
+        // Test LCS with LEN option - returns only length
+        LCSParams lenParams = LCSParams.LCSParams().len();
+        LCSMatchResult lcsLenResult = jedis.lcs(key1, key2, lenParams);
+        assertNotNull(lcsLenResult, "LCS LEN should return a result");
+        assertTrue(lcsLenResult.getLen() > 0, "LCS length should be positive");
+
+        // Test LCS with IDX option - returns match indices with positions
+        LCSParams idxParams = LCSParams.LCSParams().idx();
+        LCSMatchResult lcsIdxResult = jedis.lcs(key1, key2, idxParams);
+        assertNotNull(lcsIdxResult, "LCS IDX should return a result");
+        assertTrue(lcsIdxResult.getLen() > 0, "LCS IDX should contain length");
+        assertNotNull(lcsIdxResult.getMatches(), "LCS IDX should contain matches");
+        assertFalse(
+                lcsIdxResult.getMatches().isEmpty(),
+                "LCS IDX matches should not be empty for 'ohmytext' vs 'mynewtext'");
+
+        // Test binary version
+        byte[] bkey1 = ("bkey1:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] bkey2 = ("bkey2:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.set(bkey1, "ohmytext".getBytes(StandardCharsets.UTF_8));
+        jedis.set(bkey2, "mynewtext".getBytes(StandardCharsets.UTF_8));
+
+        LCSMatchResult blcsResult = jedis.lcs(bkey1, bkey2, defaultParams);
+        assertNotNull(blcsResult, "LCS binary should return a result");
+        assertNotNull(blcsResult.getMatchString(), "LCS binary should return match string");
+
+        LCSMatchResult blcsLenResult = jedis.lcs(bkey1, bkey2, lenParams);
+        assertTrue(blcsLenResult.getLen() > 0, "LCS binary length should be positive");
     }
 
     @Test
@@ -1626,6 +1782,145 @@ public class JedisTest {
         assertTrue(resultSet.contains(member1), "SMEMBERS result should contain member1");
         assertTrue(resultSet.contains(member2), "SMEMBERS result should contain member2");
         assertTrue(resultSet.contains(member3), "SMEMBERS result should contain member3");
+    }
+
+    @Test
+    void sadd_srem_smembers_command() {
+        String key = UUID.randomUUID().toString();
+        String member1 = "member1";
+        String member2 = "member2";
+        String member3 = "member3";
+
+        long added = jedis.sadd(key, member1, member2, member3);
+        assertEquals(3L, added, "SADD should return 3 for three new members");
+
+        Set<String> members = jedis.smembers(key);
+        assertEquals(3, members.size(), "SMEMBERS should return 3 members");
+        assertTrue(members.contains(member1));
+        assertTrue(members.contains(member2));
+        assertTrue(members.contains(member3));
+
+        long removed = jedis.srem(key, member1);
+        assertEquals(1L, removed, "SREM should return 1 for one removed member");
+
+        members = jedis.smembers(key);
+        assertEquals(2, members.size(), "SMEMBERS should return 2 members after srem");
+
+        String keyBinary = UUID.randomUUID().toString();
+        byte[] keyBytes = keyBinary.getBytes(StandardCharsets.UTF_8);
+        byte[] m1 = "m1".getBytes(StandardCharsets.UTF_8);
+        byte[] m2 = "m2".getBytes(StandardCharsets.UTF_8);
+        jedis.sadd(keyBytes, m1, m2);
+        Set<byte[]> binaryMembers = jedis.smembers(keyBytes);
+        assertEquals(2, binaryMembers.size(), "SMEMBERS binary should return 2 members");
+        Set<String> memberStrings = new HashSet<>();
+        for (byte[] member : binaryMembers) {
+            memberStrings.add(new String(member, StandardCharsets.UTF_8));
+        }
+        Set<String> expectedBinaryMembers = new HashSet<>(Arrays.asList("m1", "m2"));
+        assertEquals(expectedBinaryMembers, memberStrings, "SMEMBERS binary should contain m1 and m2");
+    }
+
+    @Test
+    void set_commands_scard_sismember_smismember_spop_srandmember_smove() {
+        String key = UUID.randomUUID().toString();
+        jedis.sadd(key, "a", "b", "c");
+        assertEquals(3L, jedis.scard(key), "SCARD should return 3");
+        assertTrue(jedis.sismember(key, "a"), "SISMEMBER a should be true");
+        assertFalse(jedis.sismember(key, "z"), "SISMEMBER z should be false");
+
+        List<Boolean> smismember = jedis.smismember(key, "a", "b", "z");
+        assertEquals(
+                Arrays.asList(true, true, false),
+                smismember,
+                "SMISMEMBER should return [true, true, false]");
+
+        String popped = jedis.spop(key);
+        assertNotNull(popped, "SPOP should return a member");
+        Set<String> expectedMembers = new HashSet<>(Arrays.asList("a", "b", "c"));
+        assertTrue(expectedMembers.contains(popped), "SPOP should return one of a,b,c");
+        assertEquals(2L, jedis.scard(key), "SCARD should be 2 after spop");
+
+        String rand = jedis.srandmember(key);
+        assertNotNull(rand, "SRANDMEMBER should return a member");
+        List<String> randList = jedis.srandmember(key, 2);
+        assertEquals(2, randList.size(), "SRANDMEMBER count 2 should return 2");
+
+        String srcKey = UUID.randomUUID().toString();
+        String dstKey = UUID.randomUUID().toString();
+        jedis.sadd(srcKey, "x", "y");
+        jedis.sadd(dstKey, "z");
+        long moved = jedis.smove(srcKey, dstKey, "x");
+        assertEquals(1L, moved, "SMOVE should return 1");
+        assertFalse(jedis.sismember(srcKey, "x"), "x should be removed from source");
+        assertTrue(jedis.sismember(dstKey, "x"), "x should be in destination");
+    }
+
+    @Test
+    void set_commands_sinter_sintercard_sinterstore_sunion_sunionstore_sdiff_sdiffstore() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String dest = UUID.randomUUID().toString();
+        jedis.sadd(key1, "a", "b", "c");
+        jedis.sadd(key2, "b", "c", "d");
+
+        Set<String> inter = jedis.sinter(key1, key2);
+        Set<String> expectedInter = new HashSet<>(Arrays.asList("b", "c"));
+        assertEquals(expectedInter, inter, "SINTER should return b,c");
+
+        // SINTERCARD was added in Redis 7.0
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            long interCard = jedis.sintercard(key1, key2);
+            assertEquals(2L, interCard, "SINTERCARD should return 2");
+        }
+
+        long interStoreLen = jedis.sinterstore(dest, key1, key2);
+        assertEquals(2L, interStoreLen, "SINTERSTORE should store 2 elements");
+        Set<String> expectedInterStore = new HashSet<>(Arrays.asList("b", "c"));
+        assertEquals(expectedInterStore, jedis.smembers(dest), "SINTERSTORE result should be b,c");
+
+        Set<String> union = jedis.sunion(key1, key2);
+        Set<String> expectedUnion = new HashSet<>(Arrays.asList("a", "b", "c", "d"));
+        assertEquals(expectedUnion, union, "SUNION should return a,b,c,d");
+
+        String destUnion = UUID.randomUUID().toString();
+        long unionStoreLen = jedis.sunionstore(destUnion, key1, key2);
+        assertEquals(4L, unionStoreLen, "SUNIONSTORE should store 4 elements");
+
+        Set<String> diff = jedis.sdiff(key1, key2);
+        Set<String> expectedDiff = new HashSet<>(Arrays.asList("a"));
+        assertEquals(expectedDiff, diff, "SDIFF key1-key2 should return a");
+
+        String destDiff = UUID.randomUUID().toString();
+        long diffStoreLen = jedis.sdiffstore(destDiff, key1, key2);
+        assertEquals(1L, diffStoreLen, "SDIFFSTORE should store 1 element");
+        Set<String> expectedDiffStore = new HashSet<>(Arrays.asList("a"));
+        assertEquals(expectedDiffStore, jedis.smembers(destDiff), "SDIFFSTORE result should be a");
+    }
+
+    @Test
+    void set_commands_sscan() {
+        String key = UUID.randomUUID().toString();
+        jedis.sadd(key, "m1", "m2", "m3");
+        ScanResult<String> result = jedis.sscan(key, "0");
+        assertNotNull(result, "SSCAN result should not be null");
+        assertNotNull(result.getCursor(), "SSCAN cursor should not be null");
+        assertNotNull(result.getResult(), "SSCAN result list should not be null");
+        assertTrue(
+                result.getResult().size() >= 1 && result.getResult().size() <= 3,
+                "SSCAN should return 1-3 members in first iteration");
+        Set<String> expectedMembers = new HashSet<>(Arrays.asList("m1", "m2", "m3"));
+        for (String member : result.getResult()) {
+            assertTrue(expectedMembers.contains(member), "SSCAN should return valid members: " + member);
+        }
+
+        ScanResult<String> withParams = jedis.sscan(key, "0", new ScanParams().count(10));
+        assertNotNull(withParams.getResult(), "SSCAN with params should return result");
+        for (String member : withParams.getResult()) {
+            assertTrue(
+                    expectedMembers.contains(member),
+                    "SSCAN with params should return valid members: " + member);
+        }
     }
 
     @Test
@@ -3231,5 +3526,3002 @@ public class JedisTest {
                 0, jedis.lpushx("non_existent_key", "value"), "LPUSHX on non-existent key should return 0");
         assertEquals(
                 0, jedis.rpushx("non_existent_key", "value"), "RPUSHX on non-existent key should return 0");
+    }
+
+    // ========== Server Management Commands Tests ==========
+
+    @Test
+    void testInfo() {
+        // Test INFO without section
+        String info = jedis.info();
+        assertNotNull(info, "INFO should return server information");
+        assertTrue(info.length() > 0, "INFO should return non-empty string");
+        assertTrue(
+                info.contains("redis_version") || info.contains("valkey_version"),
+                "INFO should contain version information");
+
+        // Test INFO with specific section
+        String memoryInfo = jedis.info("memory");
+        assertNotNull(memoryInfo, "INFO memory should return memory information");
+        assertTrue(memoryInfo.contains("used_memory"), "INFO memory should contain used_memory");
+    }
+
+    @Test
+    void testConfigGetAndSet() {
+        // Test CONFIG GET
+        Map<String, String> timeoutConfig = jedis.configGet("timeout");
+        assertNotNull(timeoutConfig, "CONFIG GET should return configuration");
+        assertTrue(timeoutConfig.containsKey("timeout"), "CONFIG GET should return timeout parameter");
+
+        // Test CONFIG SET with single parameter
+        String originalTimeout = timeoutConfig.get("timeout");
+        String result = jedis.configSet("timeout", "300");
+        assertEquals("OK", result, "CONFIG SET should return OK");
+
+        // Verify the change
+        Map<String, String> newConfig = jedis.configGet("timeout");
+        assertEquals("300", newConfig.get("timeout"), "CONFIG SET should update the value");
+
+        // Restore original value
+        jedis.configSet("timeout", originalTimeout);
+
+        // Test CONFIG SET with multiple parameters
+        Map<String, String> params = new HashMap<>();
+        params.put("timeout", "400");
+        String multiResult = jedis.configSet(params);
+        assertEquals("OK", multiResult, "CONFIG SET with map should return OK");
+
+        // Restore original value again
+        jedis.configSet("timeout", originalTimeout);
+    }
+
+    @Test
+    void testConfigRewrite() {
+        // Note: This test may fail if the server is not configured with a config file
+        // or if the user doesn't have write permissions
+        try {
+            String result = jedis.configRewrite();
+            assertEquals("OK", result, "CONFIG REWRITE should return OK");
+        } catch (Exception e) {
+            // Expected if no config file is set or no write permissions
+            String errorMsg = e.getMessage();
+            assertTrue(
+                    errorMsg.contains("The server is running without a config file")
+                            || errorMsg.contains("rewriting config file")
+                            || errorMsg.contains("CONFIG REWRITE")
+                            || errorMsg.contains("config"),
+                    "Expected error about config file, got: " + errorMsg);
+        }
+    }
+
+    // ========== STREAM COMMANDS ==========
+
+    @Test
+    void stream_xadd_xlen_xdel() {
+        String key = "stream:" + UUID.randomUUID();
+        Map<String, String> hash = new HashMap<>();
+        hash.put("f1", "v1");
+        hash.put("f2", "v2");
+
+        StreamEntryID id = jedis.xadd(key, hash);
+        assertNotNull(id, "XADD should return entry ID");
+        assertTrue(id.getTime() > 0 || id.getSequence() >= 0, "XADD should return valid ID");
+
+        long len = jedis.xlen(key);
+        assertEquals(1, len, "XLEN should be 1 after one XADD");
+
+        long del = jedis.xdel(key, id.toString());
+        assertEquals(1, del, "XDEL should return 1");
+        assertEquals(0, jedis.xlen(key), "XLEN should be 0 after XDEL");
+    }
+
+    @Test
+    void stream_xrange_xrevrange() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("a", "1"));
+        jedis.xadd(key, Map.of("b", "2"));
+        jedis.xadd(key, Map.of("c", "3"));
+
+        List<StreamEntry> range = jedis.xrange(key, "-", "+");
+        assertNotNull(range);
+        assertTrue(range.size() >= 3, "XRANGE should return at least 3 entries");
+
+        List<StreamEntry> rev = jedis.xrevrange(key, "+", "-");
+        assertNotNull(rev);
+        assertTrue(rev.size() >= 3, "XREVRANGE should return at least 3 entries");
+
+        List<StreamEntry> limited = jedis.xrange(key, "-", "+", 2L);
+        assertNotNull(limited);
+        assertEquals(2, limited.size(), "XRANGE with COUNT 2 should return 2 entries");
+    }
+
+    @Test
+    void stream_xread() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("x", "1"));
+
+        Map<String, String> keysAndIds = new HashMap<>();
+        keysAndIds.put(key, "0-0");
+
+        Map<String, List<StreamEntry>> result = jedis.xread(keysAndIds);
+        assertNotNull(result);
+        assertTrue(result.containsKey(key));
+        assertFalse(result.get(key).isEmpty(), "XREAD should return entries from start");
+    }
+
+    @Test
+    void stream_xtrim() {
+        String key = "stream:" + UUID.randomUUID();
+        for (int i = 0; i < 10; i++) {
+            jedis.xadd(key, Map.of("i", String.valueOf(i)));
+        }
+        long lenBefore = jedis.xlen(key);
+        assertTrue(lenBefore >= 10, "Stream should have at least 10 entries");
+
+        long trimmed = jedis.xtrim(key, 5L);
+        assertTrue(trimmed >= 0, "XTRIM should return non-negative count");
+        long lenAfter = jedis.xlen(key);
+        assertTrue(lenAfter <= 5, "Stream length after XTRIM MAXLEN 5 should be <= 5");
+    }
+
+    @Test
+    void stream_xgroup_create_destroy() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("init", "1"));
+
+        String group = "g1";
+        String createResult = jedis.xgroupCreate(key, group, "0", true);
+        assertNotNull(createResult, "XGROUP CREATE should succeed");
+
+        boolean destroyed = jedis.xgroupDestroy(key, group);
+        assertTrue(destroyed, "XGROUP DESTROY should return true");
+    }
+
+    @Test
+    void stream_xgroup_setid_createconsumer_delconsumer() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("a", "1"));
+        String group = "g2";
+        jedis.xgroupCreate(key, group, "0", true);
+
+        String setidResult = jedis.xgroupSetId(key, group, "0");
+        assertNotNull(setidResult);
+
+        boolean created = jedis.xgroupCreateConsumer(key, group, "c1");
+        assertTrue(created, "XGROUP CREATECONSUMER should succeed");
+
+        long del = jedis.xgroupDelConsumer(key, group, "c1");
+        assertTrue(del >= 0, "XGROUP DELCONSUMER should return non-negative");
+    }
+
+    @Test
+    void stream_xreadgroup_xack() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("m1", "v1"));
+        jedis.xadd(key, Map.of("m2", "v2"));
+        String group = "g3";
+        jedis.xgroupCreate(key, group, "0", true);
+
+        Map<String, String> keysAndIds = new HashMap<>();
+        keysAndIds.put(key, ">");
+
+        Map<String, List<StreamEntry>> read = jedis.xreadgroup(group, "consumer1", keysAndIds);
+        assertNotNull(read);
+        assertTrue(read.containsKey(key));
+        List<StreamEntry> entries = read.get(key);
+        assertNotNull(entries);
+        assertFalse(entries.isEmpty(), "XREADGROUP should return entries");
+
+        String[] ids = entries.stream().map(e -> e.getID().toString()).toArray(String[]::new);
+        long ack = jedis.xack(key, group, ids);
+        assertEquals(entries.size(), ack, "XACK should acknowledge all read entries");
+    }
+
+    @Test
+    void stream_xpending() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("p", "1"));
+        String group = "g4";
+        jedis.xgroupCreate(key, group, "0", true);
+
+        StreamPendingSummary summary = jedis.xpending(key, group);
+        assertNotNull(summary);
+        assertTrue(summary.getTotal() >= 0, "XPENDING summary total should be non-negative");
+
+        List<StreamPendingEntry> pending = jedis.xpending(key, group, "-", "+", 10L);
+        assertNotNull(pending);
+    }
+
+    @Test
+    void stream_xinfo_stream_and_groups() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("i", "1"));
+        jedis.xgroupCreate(key, "ginfo", "0", true);
+
+        Map<String, Object> raw = jedis.xinfoStream(key);
+        assertNotNull(raw);
+        assertTrue(raw.containsKey("length") || raw.containsKey("last-generated-id"));
+
+        StreamInfo info = jedis.xinfoStreamAsInfo(key);
+        assertNotNull(info);
+        assertTrue(info.getLength() >= 1, "Stream should have at least 1 entry");
+
+        List<StreamGroupInfo> groups = jedis.xinfoGroups(key);
+        assertNotNull(groups);
+        assertFalse(groups.isEmpty(), "XINFO GROUPS should return at least one group");
+    }
+
+    @Test
+    void stream_xinfo_consumers() {
+        String key = "stream:" + UUID.randomUUID();
+        jedis.xadd(key, Map.of("c", "1"));
+        String group = "gcons";
+        jedis.xgroupCreate(key, group, "0", true);
+        jedis.xgroupCreateConsumer(key, group, "consumer1");
+
+        List<StreamConsumerInfo> consumers = jedis.xinfoConsumers(key, group);
+        assertNotNull(consumers);
+        assertFalse(consumers.isEmpty(), "XINFO CONSUMERS should return at least one consumer");
+    }
+
+    @Test
+    void stream_binary_xlen_xdel() {
+        byte[] key = ("stream:" + UUID.randomUUID()).getBytes();
+        Map<byte[], byte[]> hash = new HashMap<>();
+        hash.put("f1".getBytes(), "v1".getBytes());
+        hash.put("f2".getBytes(), "v2".getBytes());
+
+        // Use XAddParams to add entry
+        XAddParams params = XAddParams.xAddParams();
+        byte[] id = jedis.xadd(key, params, hash);
+        assertNotNull(id, "Binary XADD should return entry ID");
+
+        long len = jedis.xlen(key);
+        assertEquals(1, len, "Binary XLEN should be 1 after one XADD");
+
+        long del = jedis.xdel(key, id);
+        assertEquals(1, del, "Binary XDEL should return 1");
+        assertEquals(0, jedis.xlen(key), "Binary XLEN should be 0 after XDEL");
+    }
+
+    @Test
+    void stream_binary_xrange_xrevrange() {
+        byte[] key = ("stream:" + UUID.randomUUID()).getBytes();
+
+        // Add entries using XAddParams
+        XAddParams params = XAddParams.xAddParams();
+        Map<byte[], byte[]> hash1 = Map.of("a".getBytes(), "1".getBytes());
+        Map<byte[], byte[]> hash2 = Map.of("b".getBytes(), "2".getBytes());
+        Map<byte[], byte[]> hash3 = Map.of("c".getBytes(), "3".getBytes());
+
+        jedis.xadd(key, params, hash1);
+        jedis.xadd(key, params, hash2);
+        jedis.xadd(key, params, hash3);
+
+        List<StreamEntry> range = jedis.xrange(key, "-".getBytes(), "+".getBytes());
+        assertNotNull(range);
+        assertTrue(range.size() >= 3, "Binary XRANGE should return at least 3 entries");
+
+        List<StreamEntry> rev = jedis.xrevrange(key, "+".getBytes(), "-".getBytes());
+        assertNotNull(rev);
+        assertTrue(rev.size() >= 3, "Binary XREVRANGE should return at least 3 entries");
+
+        List<StreamEntry> limited = jedis.xrange(key, "-".getBytes(), "+".getBytes(), 2);
+        assertNotNull(limited);
+        assertEquals(2, limited.size(), "Binary XRANGE with COUNT 2 should return 2 entries");
+    }
+
+    @Test
+    void stream_binary_xtrim() {
+        byte[] key = ("stream:" + UUID.randomUUID()).getBytes();
+        XAddParams addParams = XAddParams.xAddParams();
+
+        for (int i = 0; i < 10; i++) {
+            Map<byte[], byte[]> hash = Map.of("i".getBytes(), String.valueOf(i).getBytes());
+            jedis.xadd(key, addParams, hash);
+        }
+        long lenBefore = jedis.xlen(key);
+        assertTrue(lenBefore >= 10, "Stream should have at least 10 entries");
+
+        long trimmed = jedis.xtrim(key, 5L);
+        assertTrue(trimmed >= 0, "Binary XTRIM should return non-negative count");
+        long lenAfter = jedis.xlen(key);
+        assertTrue(lenAfter <= 5, "Stream length after binary XTRIM MAXLEN 5 should be <= 5");
+    }
+
+    @Test
+    void stream_xadd_with_xaddparams() {
+        String key = "stream:" + UUID.randomUUID();
+        Map<String, String> hash = Map.of("field", "value");
+
+        // Test with custom ID
+        XAddParams params = XAddParams.xAddParams().id("1000-0");
+        StreamEntryID id = jedis.xadd(key, params, hash);
+        assertNotNull(id);
+        assertEquals("1000-0", id.toString());
+
+        // Test with NOMKSTREAM
+        String nonExistentKey = "stream:" + UUID.randomUUID();
+        params = XAddParams.xAddParams().noMkStream();
+        StreamEntryID result = jedis.xadd(nonExistentKey, params, hash);
+        assertNull(result, "XADD with NOMKSTREAM should return null for non-existent stream");
+
+        // Test with MAXLEN trimming (exact)
+        String trimKey = "stream:" + UUID.randomUUID();
+        for (int i = 0; i < 5; i++) {
+            jedis.xadd(trimKey, Map.of("i", String.valueOf(i)));
+        }
+        params = XAddParams.xAddParams().maxLenExact(3);
+        jedis.xadd(trimKey, params, Map.of("new", "entry"));
+        long len = jedis.xlen(trimKey);
+        assertTrue(len <= 3, "Stream should be trimmed to exactly 3 entries");
+    }
+
+    @Test
+    void stream_xtrim_with_xtrimparams() {
+        String key = "stream:" + UUID.randomUUID();
+        for (int i = 0; i < 10; i++) {
+            jedis.xadd(key, Map.of("i", String.valueOf(i)));
+        }
+
+        // Test MAXLEN with XTrimParams (exact trimming)
+        XTrimParams params = XTrimParams.xTrimParams().maxLenExact(5);
+        long trimmed = jedis.xtrim(key, params);
+        assertTrue(trimmed >= 0, "XTRIM with XTrimParams should return non-negative count");
+        long len = jedis.xlen(key);
+        assertTrue(len <= 5, "Stream should be trimmed to exactly 5 entries");
+
+        // Test MAXLEN with approximate trimming
+        String key3 = "stream:" + UUID.randomUUID();
+        for (int i = 0; i < 10; i++) {
+            jedis.xadd(key3, Map.of("i", String.valueOf(i)));
+        }
+        params = XTrimParams.xTrimParams().maxLen(5);
+        jedis.xtrim(key3, params);
+        len = jedis.xlen(key3);
+        assertTrue(
+                len <= 10 && len >= 5,
+                "Stream with approximate trim should be reduced but may not be exact");
+
+        // Test MINID with XTrimParams (exact trimming)
+        String key2 = "stream:" + UUID.randomUUID();
+        StreamEntryID firstId = jedis.xadd(key2, Map.of("a", "1"));
+        jedis.xadd(key2, Map.of("b", "2"));
+        StreamEntryID thirdId = jedis.xadd(key2, Map.of("c", "3"));
+
+        params = XTrimParams.xTrimParams().minIdExact(thirdId);
+        jedis.xtrim(key2, params);
+        len = jedis.xlen(key2);
+        assertTrue(len == 1, "Stream should be trimmed to exactly entries >= minId");
+    }
+
+    // --- ACL command integration tests ---
+
+    @Test
+    void acl_cat_without_category() {
+        List<String> categories = jedis.aclCat();
+        assertNotNull(categories);
+        assertTrue(categories.size() > 0);
+        assertTrue(categories.contains("string"));
+        assertTrue(categories.contains("list"));
+        assertTrue(categories.contains("hash"));
+    }
+
+    @Test
+    void acl_cat_with_category() {
+        List<String> stringCommands = jedis.aclCat("string");
+        assertNotNull(stringCommands);
+        assertTrue(stringCommands.size() > 0);
+        assertTrue(stringCommands.contains("get"));
+        assertTrue(stringCommands.contains("set"));
+
+        List<String> listCommands = jedis.aclCat("list");
+        assertNotNull(listCommands);
+        assertTrue(listCommands.size() > 0);
+        assertTrue(listCommands.contains("lpush"));
+        assertTrue(listCommands.contains("rpush"));
+    }
+
+    @Test
+    void acl_cat_invalid_category() {
+        JedisException exception =
+                assertThrows(JedisException.class, () -> jedis.aclCat("nonexistent"));
+        String message = exception.getMessage().toLowerCase();
+        assertTrue(
+                message.contains("unknown category")
+                        || message.contains("category")
+                        || (exception.getCause() != null
+                                && exception.getCause().getMessage().toLowerCase().contains("category")));
+    }
+
+    @Test
+    void acl_setuser_and_deluser() {
+        String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            String setResult = jedis.aclSetUser(username, "on", "+get", "~*");
+            assertEquals("OK", setResult);
+
+            List<String> users = jedis.aclUsers();
+            assertTrue(users.contains(username));
+
+            long deleteCount = jedis.aclDelUser(username);
+            assertEquals(1L, deleteCount);
+
+            users = jedis.aclUsers();
+            assertFalse(users.contains(username));
+        } finally {
+            try {
+                jedis.aclDelUser(username);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @Test
+    void testConfigResetStat() {
+        // Get initial stats
+        String statsBefore = jedis.info("stats");
+        assertNotNull(statsBefore, "INFO stats should return statistics");
+
+        // Reset statistics
+        String result = jedis.configResetStat();
+        assertEquals("OK", result, "CONFIG RESETSTAT should return OK");
+
+        // Verify stats were reset (some counters should be 0 or lower)
+        String statsAfter = jedis.info("stats");
+        assertNotNull(statsAfter, "INFO stats should return statistics after reset");
+    }
+
+    @Test
+    void testDbsize() {
+        // Clear database first
+        jedis.flushDB();
+
+        // Test DBSIZE on empty database
+        long initialSize = jedis.dbsize();
+        assertEquals(0, initialSize, "DBSIZE should return 0 for empty database");
+
+        // Add some keys
+        jedis.set("key1", "value1");
+        jedis.set("key2", "value2");
+        jedis.set("key3", "value3");
+
+        // Test DBSIZE with keys
+        long sizeWithKeys = jedis.dbsize();
+        assertEquals(3, sizeWithKeys, "DBSIZE should return 3 after adding 3 keys");
+
+        // Clean up
+        jedis.flushDB();
+    }
+
+    @Test
+    void testFlushDB() {
+        // Add some keys
+        jedis.set("test_key1", "value1");
+        jedis.set("test_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        // Test FLUSHDB
+        String result = jedis.flushDB();
+        assertEquals("OK", result, "FLUSHDB should return OK");
+
+        // Verify database is empty
+        assertEquals(0, jedis.dbsize(), "DBSIZE should return 0 after FLUSHDB");
+    }
+
+    @Test
+    void testFlushDBWithFlushMode() {
+        // Test FLUSHDB with SYNC mode
+        jedis.set("sync_key1", "value1");
+        jedis.set("sync_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        String syncResult = jedis.flushDB(FlushMode.SYNC);
+        assertEquals("OK", syncResult, "FLUSHDB with SYNC mode should return OK");
+        assertEquals(0, jedis.dbsize(), "Database should be empty after FLUSHDB SYNC");
+
+        // Test FLUSHDB with ASYNC mode
+        jedis.set("async_key1", "value1");
+        jedis.set("async_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        String asyncResult = jedis.flushDB(FlushMode.ASYNC);
+        assertEquals("OK", asyncResult, "FLUSHDB with ASYNC mode should return OK");
+        // Note: ASYNC mode may not complete immediately, but the command should succeed
+    }
+
+    @Test
+    void testFlushAll() {
+        // Clean up first to ensure consistent test state
+        jedis.flushAll();
+
+        // Add keys to database 0 (default database)
+        jedis.set("db0_key1", "value1");
+        jedis.set("db0_key2", "value2");
+        jedis.set("db0_key3", "value3");
+
+        // Move one key to database 1 to test multi-database flush
+        long moveResult = jedis.move("db0_key3", 1);
+        assertEquals(1L, moveResult, "MOVE should successfully move key to database 1");
+
+        // Verify database 0 has 2 keys (after moving one to db 1)
+        long db0Size = jedis.dbsize();
+        assertEquals(2, db0Size, "Database 0 should have 2 keys after moving one key");
+
+        // Test FLUSHALL - should remove keys from ALL databases
+        String result = jedis.flushAll();
+        assertEquals("OK", result, "FLUSHALL should return OK");
+
+        // Verify all keys are removed from database 0
+        assertEquals(0, jedis.dbsize(), "DBSIZE should return 0 after FLUSHALL in database 0");
+
+        // Note: Cannot verify database 1 is also flushed in the current GLIDE compatibility layer
+        // because SELECT is not fully implemented. In real Jedis, we would do:
+        // jedis.select(1);
+        // assertEquals(0, jedis.dbsize(), "Database 1 should also be empty after FLUSHALL");
+        // This limitation is acceptable as FLUSHALL is a server-wide operation that affects all
+        // databases.
+    }
+
+    @Test
+    void testFlushAllWithFlushMode() {
+        // Test FLUSHALL with SYNC mode
+        jedis.flushAll(); // Clean first
+        jedis.set("sync_key1", "value1");
+        jedis.set("sync_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        String syncResult = jedis.flushAll(FlushMode.SYNC);
+        assertEquals("OK", syncResult, "FLUSHALL with SYNC mode should return OK");
+        assertEquals(0, jedis.dbsize(), "All databases should be empty after FLUSHALL SYNC");
+
+        // Test FLUSHALL with ASYNC mode
+        jedis.set("async_key1", "value1");
+        jedis.set("async_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        String asyncResult = jedis.flushAll(FlushMode.ASYNC);
+        assertEquals("OK", asyncResult, "FLUSHALL with ASYNC mode should return OK");
+        // Note: ASYNC mode may not complete immediately, but the command should succeed
+    }
+
+    @Test
+    void testTime() {
+        // Test TIME command
+        String[] time = jedis.time();
+        assertNotNull(time, "TIME should return time array");
+        assertEquals(2, time.length, "TIME should return array with 2 elements");
+
+        // Verify first element is Unix timestamp (seconds)
+        long seconds = Long.parseLong(time[0]);
+        long currentTime = System.currentTimeMillis() / 1000;
+        assertTrue(seconds > 0, "Unix timestamp should be positive");
+        assertTrue(
+                seconds >= currentTime - 60 && seconds <= currentTime + 60,
+                "Unix timestamp should be within reasonable range of current time");
+
+        // Verify second element is microseconds
+        // Microseconds must be in the range [0, 999999] as there are 1,000,000 microseconds in a
+        // second
+        long microseconds = Long.parseLong(time[1]);
+        assertTrue(microseconds >= 0, "Microseconds should be non-negative");
+        assertTrue(
+                microseconds < MICROSECONDS_PER_SECOND,
+                "Microseconds should be less than " + MICROSECONDS_PER_SECOND);
+    }
+
+    @Test
+    void testLastsave() {
+        // Test LASTSAVE command
+        long timestamp = jedis.lastsave();
+        long currentTime = System.currentTimeMillis() / 1000;
+        assertTrue(timestamp > 0, "LASTSAVE should return positive timestamp");
+        assertTrue(
+                timestamp <= currentTime,
+                "LASTSAVE timestamp should not be in the future (current: "
+                        + currentTime
+                        + ", lastsave: "
+                        + timestamp
+                        + ")");
+    }
+
+    @Test
+    void testLolwut() {
+        // Test LOLWUT without parameters
+        String art = jedis.lolwut();
+        assertNotNull(art, "LOLWUT should return art");
+        assertTrue(art.length() > 0, "LOLWUT should return non-empty string");
+
+        // Test LOLWUT with parameters
+        String artWithParams = jedis.lolwut(5, 10);
+        assertNotNull(artWithParams, "LOLWUT with params should return art");
+        assertTrue(artWithParams.length() > 0, "LOLWUT with params should return non-empty string");
+    }
+
+    @Test
+    void acl_deluser_multiple_users() {
+        String username1 = "testuser1_" + UUID.randomUUID().toString().replace("-", "");
+        String username2 = "testuser2_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            jedis.aclSetUser(username1, "on");
+            jedis.aclSetUser(username2, "on");
+
+            long deleteCount = jedis.aclDelUser(username1, username2);
+            assertEquals(2L, deleteCount);
+
+            List<String> users = jedis.aclUsers();
+            assertFalse(users.contains(username1));
+            assertFalse(users.contains(username2));
+        } finally {
+            try {
+                jedis.aclDelUser(username1, username2);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @Test
+    void acl_getuser() {
+        String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            jedis.aclSetUser(username, "on", "+get", "+set", "~key*");
+
+            AccessControlUser userInfo = jedis.aclGetUser(username);
+            assertNotNull(userInfo);
+            assertFalse(userInfo.getFlags().isEmpty());
+            assertTrue(userInfo.getFlags().contains("on"));
+            assertNotNull(userInfo.getCommands());
+            assertTrue(userInfo.getCommands().contains("+get"));
+            assertTrue(userInfo.getCommands().contains("+set"));
+            assertFalse(userInfo.getKeys().isEmpty());
+
+            AccessControlUser nonExistent = jedis.aclGetUser("nonexistent_user_12345");
+            assertNull(nonExistent);
+        } finally {
+            try {
+                jedis.aclDelUser(username);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @Test
+    void acl_list() {
+        List<String> aclList = jedis.aclList();
+        assertNotNull(aclList);
+        assertTrue(aclList.size() > 0);
+
+        boolean hasDefaultUser = false;
+        for (String rule : aclList) {
+            if (rule.contains("user default")) {
+                hasDefaultUser = true;
+                break;
+            }
+        }
+        assertTrue(hasDefaultUser);
+    }
+
+    @Test
+    void acl_users() {
+        List<String> users = jedis.aclUsers();
+        assertNotNull(users);
+        assertTrue(users.size() > 0);
+        assertTrue(users.contains("default"));
+    }
+
+    @Test
+    void acl_whoami() {
+        String username = jedis.aclWhoAmI();
+        assertNotNull(username);
+        assertEquals("default", username);
+    }
+
+    @Test
+    void acl_dryrun() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "ACL DRYRUN added in version 7.0");
+
+        String username = "testuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            jedis.aclSetUser(username, "on", "+get", "~*", "nopass");
+
+            String result = jedis.aclDryRun(username, "get", "key");
+            assertEquals("OK", result);
+
+            String deniedResult = jedis.aclDryRun(username, "set", "key", "value");
+            String denied = deniedResult.toLowerCase();
+            assertTrue(
+                    denied.contains("permission")
+                            || denied.contains("denied")
+                            || denied.contains("noperm")
+                            || denied.contains("user")
+                            || denied.contains("command"));
+        } finally {
+            try {
+                jedis.aclDelUser(username);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @Test
+    void acl_genpass_default() {
+        String password = jedis.aclGenPass();
+        assertNotNull(password);
+        assertEquals(64, password.length());
+        assertTrue(password.matches("[0-9a-f]+"));
+    }
+
+    @Test
+    void acl_genpass_with_bits() {
+        String password = jedis.aclGenPass(128);
+        assertNotNull(password);
+        assertEquals(32, password.length());
+        assertTrue(password.matches("[0-9a-f]+"));
+
+        String password256 = jedis.aclGenPass(256);
+        assertNotNull(password256);
+        assertEquals(64, password256.length());
+        assertTrue(password256.matches("[0-9a-f]+"));
+    }
+
+    @Test
+    void acl_log() {
+        List<AccessControlLogEntry> log = jedis.aclLog();
+        assertNotNull(log);
+        assertTrue(log.size() >= 0);
+    }
+
+    @Test
+    void acl_log_with_count() {
+        List<AccessControlLogEntry> log = jedis.aclLog(5);
+        assertNotNull(log);
+        assertTrue(log.size() <= 5);
+    }
+
+    @Test
+    void acl_log_reset() {
+        String result = jedis.aclLogReset();
+        assertEquals("OK", result);
+
+        List<AccessControlLogEntry> log = jedis.aclLog();
+        assertNotNull(log);
+        assertEquals(0, log.size());
+    }
+
+    @Test
+    void acl_setuser_complex_rules() {
+        String username = "complexuser_" + UUID.randomUUID().toString().replace("-", "");
+
+        try {
+            String result = jedis.aclSetUser(username, "on", "+get", "+set", "+del", "~key:*", "nopass");
+            assertEquals("OK", result);
+
+            List<String> users = jedis.aclUsers();
+            assertTrue(users.contains(username));
+
+            AccessControlUser userInfo = jedis.aclGetUser(username);
+            assertNotNull(userInfo);
+        } finally {
+            try {
+                jedis.aclDelUser(username);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @Test
+    void acl_load() {
+        assumeTrue(isAclFileConfigured(), "Skipping test: ACL file not configured on server");
+
+        String result = jedis.aclLoad();
+        assertEquals("OK", result);
+    }
+
+    @Test
+    void acl_save() {
+        assumeTrue(isAclFileConfigured(), "Skipping test: ACL file not configured on server");
+
+        String result = jedis.aclSave();
+        assertEquals("OK", result);
+    }
+
+    private boolean isAclFileConfigured() {
+        try {
+            jedis.aclLoad();
+            return true;
+        } catch (JedisException e) {
+            String message = getFullExceptionMessage(e).toLowerCase();
+            if (message.contains("no acl file")
+                    || message.contains("aclfile")
+                    || message.contains("not configured")) {
+                return false;
+            }
+            throw e;
+        }
+    }
+
+    private static String getFullExceptionMessage(Throwable t) {
+        StringBuilder sb = new StringBuilder();
+        while (t != null) {
+            if (t.getMessage() != null) {
+                if (sb.length() > 0) sb.append(" ");
+                sb.append(t.getMessage());
+            }
+            t = t.getCause();
+        }
+        return sb.toString();
+    }
+
+    // ==================== SORT COMMANDS TESTS ====================
+
+    @Test
+    void sortReadonly_basic() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "SORT_RO requires Valkey 7.0.0+");
+
+        String key = "sortReadonlyList_" + UUID.randomUUID();
+        jedis.rpush(key, "3", "1", "2");
+
+        List<String> result = jedis.sortReadonly(key);
+        assertEquals(Arrays.asList("1", "2", "3"), result);
+    }
+
+    @Test
+    void sortReadonly_with_params() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "SORT_RO requires Valkey 7.0.0+");
+
+        String key = "sortReadonlyList_" + UUID.randomUUID();
+        jedis.rpush(key, "3", "1", "2");
+
+        SortingParams params = new SortingParams().desc().limit(0, 2);
+        List<String> result = jedis.sortReadonly(key, params);
+        assertEquals(Arrays.asList("3", "2"), result);
+    }
+
+    @Test
+    void sortReadonly_binary() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "SORT_RO requires Valkey 7.0.0+");
+
+        byte[] key = ("sortReadonlyListBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.rpush(key, "3".getBytes(), "1".getBytes(), "2".getBytes());
+
+        List<byte[]> result = jedis.sortReadonly(key);
+        assertEquals(3, result.size());
+        assertEquals("1", new String(result.get(0), StandardCharsets.UTF_8));
+        assertEquals("2", new String(result.get(1), StandardCharsets.UTF_8));
+        assertEquals("3", new String(result.get(2), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void sort_store_basic() {
+        String key = "sortStoreList_" + UUID.randomUUID();
+        String dest = "sortStoreDest_" + UUID.randomUUID();
+        jedis.rpush(key, "3", "1", "2");
+
+        long count = jedis.sort(key, dest);
+        assertEquals(3, count);
+
+        List<String> result = jedis.lrange(dest, 0, -1);
+        assertEquals(Arrays.asList("1", "2", "3"), result);
+    }
+
+    @Test
+    void sort_store_with_params() {
+        String key = "sortStoreList_" + UUID.randomUUID();
+        String dest = "sortStoreDest_" + UUID.randomUUID();
+        jedis.rpush(key, "3", "1", "2");
+
+        SortingParams params = new SortingParams().desc();
+        long count = jedis.sort(key, params, dest);
+        assertEquals(3, count);
+
+        List<String> result = jedis.lrange(dest, 0, -1);
+        assertEquals(Arrays.asList("3", "2", "1"), result);
+    }
+
+    @Test
+    void sort_store_binary() {
+        byte[] key = ("sortStoreListBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] dest = ("sortStoreDestBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.rpush(key, "3".getBytes(), "1".getBytes(), "2".getBytes());
+
+        long count = jedis.sort(key, dest);
+        assertEquals(3, count);
+    }
+
+    // ==================== WAIT COMMANDS TESTS ====================
+
+    @Test
+    void wait_basic() {
+        String key = "waitKey_" + UUID.randomUUID();
+        jedis.set(key, "value");
+
+        long replicas = jedis.wait(0L, 1000L);
+        assertTrue(replicas >= 0);
+    }
+
+    @Test
+    void waitaof_basic() {
+        // Skip if server version doesn't support WAITAOF (requires Valkey 7.2+)
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"), "WAITAOF requires Valkey 7.2.0 or higher");
+
+        String key = "waitaofKey_" + UUID.randomUUID();
+        jedis.set(key, "value");
+
+        KeyValue<Long, Long> result = jedis.waitAOF(0, 0, 1000);
+        assertNotNull(result);
+        assertTrue(result.getKey() >= 0);
+        assertTrue(result.getValue() >= 0);
+    }
+
+    // ==================== OBJECT COMMANDS TESTS ====================
+
+    @Test
+    void objectEncoding_string() {
+        String key = "objectEncodingKey_" + UUID.randomUUID();
+        jedis.set(key, "value");
+
+        String encoding = jedis.objectEncoding(key);
+        assertNotNull(encoding);
+        assertTrue(encoding.equals("embstr") || encoding.equals("raw") || encoding.equals("int"));
+    }
+
+    @Test
+    void objectEncoding_nonexistent() {
+        String key = "nonExistentKey_" + UUID.randomUUID();
+        String encoding = jedis.objectEncoding(key);
+        assertNull(encoding);
+    }
+
+    @Test
+    void objectEncoding_binary() {
+        byte[] key = ("objectEncodingKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.set(key, "value".getBytes());
+
+        byte[] encoding = jedis.objectEncoding(key);
+        assertNotNull(encoding);
+        String encodingStr = new String(encoding, StandardCharsets.UTF_8);
+        assertTrue(
+                encodingStr.equals("embstr") || encodingStr.equals("raw") || encodingStr.equals("int"));
+    }
+
+    @Test
+    void objectFreq_string() {
+        // Skip if server doesn't have maxmemory-policy=allkeys-lfu configured
+        String key = "objectFreqKey_" + UUID.randomUUID();
+        jedis.set(key, "value");
+        jedis.get(key); // Access to increase frequency
+
+        Long freq = jedis.objectFreq(key);
+        // freq can be null if LFU is not enabled
+        if (freq != null) {
+            assertTrue(freq >= 0);
+        }
+    }
+
+    @Test
+    void objectFreq_binary() {
+        byte[] key = ("objectFreqKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.set(key, "value".getBytes());
+        jedis.get(key);
+
+        Long freq = jedis.objectFreq(key);
+        // freq can be null if LFU is not enabled
+        if (freq != null) {
+            assertTrue(freq >= 0);
+        }
+    }
+
+    @Test
+    void objectIdletime_string() {
+        String key = "objectIdletimeKey_" + UUID.randomUUID();
+        jedis.set(key, "value");
+
+        Long idletime = jedis.objectIdletime(key);
+        assertNotNull(idletime);
+        assertTrue(idletime >= 0);
+    }
+
+    @Test
+    void objectIdletime_binary() {
+        byte[] key = ("objectIdletimeKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.set(key, "value".getBytes());
+
+        Long idletime = jedis.objectIdletime(key);
+        assertNotNull(idletime);
+        assertTrue(idletime >= 0);
+    }
+
+    @Test
+    void objectRefcount_string() {
+        String key = "objectRefcountKey_" + UUID.randomUUID();
+        jedis.set(key, "value");
+
+        Long refcount = jedis.objectRefcount(key);
+        assertNotNull(refcount);
+        assertTrue(refcount >= 1);
+    }
+
+    @Test
+    void objectRefcount_binary() {
+        byte[] key = ("objectRefcountKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.set(key, "value".getBytes());
+
+        Long refcount = jedis.objectRefcount(key);
+        assertNotNull(refcount);
+        assertTrue(refcount >= 1);
+    }
+
+    // ==================== GEO COMMANDS TESTS ====================
+
+    @Test
+    void geoadd_single_member() {
+        String key = "geoKey_" + UUID.randomUUID();
+        long result = jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        assertEquals(1, result);
+    }
+
+    @Test
+    void geoadd_multiple_members() {
+        String key = "geoKey_" + UUID.randomUUID();
+        Map<String, redis.clients.jedis.GeoCoordinate> members = new HashMap<>();
+        members.put(
+                "Palermo",
+                new redis.clients.jedis.GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO));
+        members.put(
+                "Catania",
+                new redis.clients.jedis.GeoCoordinate(TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA));
+
+        long result = jedis.geoadd(key, members);
+        assertEquals(2, result);
+    }
+
+    @Test
+    void geoadd_binary() {
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        long result =
+                jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        assertEquals(1, result);
+    }
+
+    @Test
+    void geopos_existing_members() {
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        List<redis.clients.jedis.GeoCoordinate> positions = jedis.geopos(key, "Palermo", "Catania");
+        assertEquals(2, positions.size());
+        assertNotNull(positions.get(0));
+        assertNotNull(positions.get(1));
+        assertTrue(
+                Math.abs(positions.get(0).getLongitude() - TEST_LONGITUDE_PALERMO)
+                        < TEST_GEO_COORD_TOLERANCE);
+        assertTrue(
+                Math.abs(positions.get(0).getLatitude() - TEST_LATITUDE_PALERMO)
+                        < TEST_GEO_COORD_TOLERANCE);
+    }
+
+    @Test
+    void geopos_nonexistent_member() {
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+
+        List<redis.clients.jedis.GeoCoordinate> positions = jedis.geopos(key, "Palermo", "NonExistent");
+        assertEquals(2, positions.size());
+        assertNotNull(positions.get(0));
+        assertNull(positions.get(1));
+    }
+
+    @Test
+    void geopos_binary() {
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+
+        List<redis.clients.jedis.GeoCoordinate> positions = jedis.geopos(key, "Palermo".getBytes());
+        assertEquals(1, positions.size());
+        assertNotNull(positions.get(0));
+    }
+
+    @Test
+    void geodist_meters() {
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        Double distance = jedis.geodist(key, "Palermo", "Catania");
+        assertNotNull(distance);
+        assertTrue(distance > TEST_GEO_DISTANCE_MIN_METERS && distance < TEST_GEO_DISTANCE_MAX_METERS);
+    }
+
+    @Test
+    void geodist_kilometers() {
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        Double distance = jedis.geodist(key, "Palermo", "Catania", GeoUnit.KM);
+        assertNotNull(distance);
+        assertTrue(distance > TEST_GEO_DISTANCE_MIN_KM && distance < TEST_GEO_DISTANCE_MAX_KM);
+    }
+
+    @Test
+    void geodist_binary() {
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
+
+        Double distance = jedis.geodist(key, "Palermo".getBytes(), "Catania".getBytes());
+        assertNotNull(distance);
+        assertTrue(distance > TEST_GEO_DISTANCE_MIN_METERS && distance < TEST_GEO_DISTANCE_MAX_METERS);
+    }
+
+    @Test
+    void geohash_existing_members() {
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        List<String> hashes = jedis.geohash(key, "Palermo", "Catania");
+        assertEquals(2, hashes.size());
+        assertNotNull(hashes.get(0));
+        assertNotNull(hashes.get(1));
+        assertTrue(hashes.get(0).length() > 0);
+        assertTrue(hashes.get(1).length() > 0);
+    }
+
+    @Test
+    void geohash_binary() {
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+
+        List<byte[]> hashes = jedis.geohash(key, "Palermo".getBytes());
+        assertEquals(1, hashes.size());
+        assertNotNull(hashes.get(0));
+        assertTrue(hashes.get(0).length > 0);
+    }
+
+    @Test
+    void geosearch_by_member() {
+        // Skip if server version doesn't support GEOSEARCH (requires Valkey 6.2+)
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, "Palermo", 200, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_binary() {
+        // Skip if server version doesn't support GEOSEARCH (requires Valkey 6.2+)
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
+
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, "Palermo".getBytes(), 200, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearchstore_by_member() {
+        // Skip if server version doesn't support GEOSEARCHSTORE (requires Valkey 6.2+)
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        String srcKey = "geoSrcKey_" + UUID.randomUUID();
+        String destKey = "geoDestKey_" + UUID.randomUUID();
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        long count = jedis.geosearchstore(destKey, srcKey, "Palermo", 200, GeoUnit.KM);
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void geosearchstore_binary() {
+        // Skip if server version doesn't support GEOSEARCHSTORE (requires Valkey 6.2+)
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        byte[] srcKey = ("geoSrcKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        byte[] destKey = ("geoDestKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
+
+        long count = jedis.geosearchstore(destKey, srcKey, "Palermo".getBytes(), 200, GeoUnit.KM);
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void sort_binary() {
+        byte[] key = ("sortList_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.rpush(key, "3".getBytes(), "1".getBytes(), "2".getBytes());
+
+        List<byte[]> sorted = jedis.sort(key);
+        assertNotNull(sorted);
+        assertEquals(3, sorted.size());
+        assertEquals("1", new String(sorted.get(0)));
+        assertEquals("2", new String(sorted.get(1)));
+        assertEquals("3", new String(sorted.get(2)));
+    }
+
+    @Test
+    void objectHelp() {
+        List<String> help = jedis.objectHelp();
+        assertNotNull(help);
+        assertFalse(help.isEmpty());
+        // Verify that the help contains information about object subcommands
+        assertTrue(
+                help.stream()
+                        .anyMatch(
+                                line ->
+                                        line.toLowerCase().contains("encoding")
+                                                || line.toLowerCase().contains("freq")));
+    }
+
+    @Test
+    void objectHelpBinary() {
+        List<byte[]> help = jedis.objectHelpBinary();
+        assertNotNull(help);
+        assertFalse(help.isEmpty());
+        // Convert first element to string to verify it contains help text
+        assertTrue(help.get(0) != null && help.get(0).length > 0);
+    }
+
+    @Test
+    void geosearch_by_coordinate() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        GeoCoordinate coord = new GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO);
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, coord, 200, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_by_coordinate_binary() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
+
+        GeoCoordinate coord = new GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO);
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, coord, 200, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_by_box() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, "Palermo", 400, 400, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_by_box_binary() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        byte[] key = ("geoKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo".getBytes());
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania".getBytes());
+
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, "Palermo".getBytes(), 400, 400, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_by_coordinate_box() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.GeoCoordinate coord =
+                new redis.clients.jedis.GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO);
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results =
+                jedis.geosearch(key, coord, 400, 400, GeoUnit.KM);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearch_with_params() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCH requires Valkey 6.2.0 or higher");
+
+        String key = "geoKey_" + UUID.randomUUID();
+        jedis.geoadd(key, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(key, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.params.GeoSearchParam params =
+                redis.clients.jedis.params.GeoSearchParam.fromMember("Palermo").byRadius(200, GeoUnit.KM);
+        List<redis.clients.jedis.resps.GeoRadiusResponse> results = jedis.geosearch(key, params);
+        assertNotNull(results);
+        assertTrue(results.size() >= 1);
+    }
+
+    @Test
+    void geosearchStore_by_coordinate() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        String srcKey = "geoSrcKey_" + UUID.randomUUID();
+        String destKey = "geoDestKey_" + UUID.randomUUID();
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.GeoCoordinate coord =
+                new redis.clients.jedis.GeoCoordinate(TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO);
+        long count = jedis.geosearchStore(destKey, srcKey, coord, 200, GeoUnit.KM);
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void geosearchStore_by_box() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        String srcKey = "geoSrcKey_" + UUID.randomUUID();
+        String destKey = "geoDestKey_" + UUID.randomUUID();
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        long count = jedis.geosearchStore(destKey, srcKey, "Palermo", 400, 400, GeoUnit.KM);
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void geosearchStore_with_params() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        String srcKey = "geoSrcKey_" + UUID.randomUUID();
+        String destKey = "geoDestKey_" + UUID.randomUUID();
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.params.GeoSearchParam params =
+                redis.clients.jedis.params.GeoSearchParam.fromMember("Palermo").byRadius(200, GeoUnit.KM);
+        long count = jedis.geosearchStore(destKey, srcKey, params);
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void geosearchStoreStoreDist() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GEOSEARCHSTORE requires Valkey 6.2.0 or higher");
+
+        String srcKey = "geoSrcKey_" + UUID.randomUUID();
+        String destKey = "geoDestKey_" + UUID.randomUUID();
+        jedis.geoadd(srcKey, TEST_LONGITUDE_PALERMO, TEST_LATITUDE_PALERMO, "Palermo");
+        jedis.geoadd(srcKey, TEST_LONGITUDE_CATANIA, TEST_LATITUDE_CATANIA, "Catania");
+
+        redis.clients.jedis.params.GeoSearchParam params =
+                redis.clients.jedis.params.GeoSearchParam.fromMember("Palermo").byRadius(200, GeoUnit.KM);
+        long count = jedis.geosearchStoreStoreDist(destKey, srcKey, params);
+        assertTrue(count >= 1);
+    }
+
+    // ========================================
+    // Sorted Set Commands Tests
+    // ========================================
+
+    @Test
+    void sortedset_zadd_single_member() {
+        String key = UUID.randomUUID().toString();
+
+        // Test ZADD with single member
+        long result = jedis.zadd(key, 1.0, "member1");
+        assertEquals(1, result, "ZADD should return 1 for new member");
+
+        // Verify member was added
+        Double score = jedis.zscore(key, "member1");
+        assertEquals(1.0, score, 0.001, "Member should have correct score");
+
+        // Test ZADD updating existing member
+        result = jedis.zadd(key, 2.0, "member1");
+        assertEquals(0, result, "ZADD should return 0 when updating existing member");
+
+        score = jedis.zscore(key, "member1");
+        assertEquals(2.0, score, 0.001, "Member score should be updated");
+    }
+
+    @Test
+    void sortedset_zadd_multiple_members() {
+        String key = UUID.randomUUID().toString();
+
+        // Test ZADD with multiple members
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+
+        long result = jedis.zadd(key, members);
+        assertEquals(3, result, "ZADD should return 3 for three new members");
+
+        // Verify all members were added
+        long cardinality = jedis.zcard(key);
+        assertEquals(3, cardinality, "Sorted set should have 3 members");
+
+        // Verify individual scores
+        assertEquals(1.0, jedis.zscore(key, "member1"), 0.001);
+        assertEquals(2.0, jedis.zscore(key, "member2"), 0.001);
+        assertEquals(3.0, jedis.zscore(key, "member3"), 0.001);
+    }
+
+    @Test
+    void sortedset_zadd_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member = "member1".getBytes();
+
+        // Test binary ZADD
+        long result = jedis.zadd(key, 5.5, member);
+        assertEquals(1, result, "Binary ZADD should return 1 for new member");
+
+        // Verify member was added
+        Double score = jedis.zscore(key, member);
+        assertEquals(5.5, score, 0.001, "Binary member should have correct score");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zaddIncr() {
+        String key = UUID.randomUUID().toString();
+
+        // Test ZADD INCR on non-existing member
+        double score = jedis.zaddIncr(key, 5.0, "member1");
+        assertEquals(5.0, score, 0.001, "ZADD INCR should return 5.0 for new member");
+
+        // Test ZADD INCR on existing member
+        score = jedis.zaddIncr(key, 2.5, "member1");
+        assertEquals(7.5, score, 0.001, "ZADD INCR should return 7.5 after increment");
+
+        // Verify final score
+        Double finalScore = jedis.zscore(key, "member1");
+        assertEquals(7.5, finalScore, 0.001, "Member should have incremented score");
+    }
+
+    @Test
+    void sortedset_zaddIncr_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member = "member1".getBytes();
+
+        // Test binary ZADD INCR
+        double score = jedis.zaddIncr(key, 3.14, member);
+        assertEquals(3.14, score, 0.001, "Binary ZADD INCR should return correct score");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrem() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        jedis.zadd(key, members);
+
+        // Test ZREM single member
+        long result = jedis.zrem(key, "member1");
+        assertEquals(1, result, "ZREM should return 1 for removed member");
+
+        // Test ZREM multiple members
+        result = jedis.zrem(key, "member2", "member3");
+        assertEquals(2, result, "ZREM should return 2 for two removed members");
+
+        // Verify all members removed
+        long cardinality = jedis.zcard(key);
+        assertEquals(0, cardinality, "Sorted set should be empty");
+
+        // Test ZREM on non-existing member
+        result = jedis.zrem(key, "nonexistent");
+        assertEquals(0, result, "ZREM should return 0 for non-existing member");
+    }
+
+    @Test
+    void sortedset_zrem_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member1 = "member1".getBytes();
+        byte[] member2 = "member2".getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put(member1, 1.0);
+        members.put(member2, 2.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZREM
+        long result = jedis.zrem(key, member1, member2);
+        assertEquals(2, result, "Binary ZREM should return 2 for two removed members");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zcard() {
+        String key = UUID.randomUUID().toString();
+
+        // Test ZCARD on non-existing key
+        long result = jedis.zcard(key);
+        assertEquals(0, result, "ZCARD should return 0 for non-existing key");
+
+        // Add members
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        jedis.zadd(key, members);
+
+        // Test ZCARD on existing sorted set
+        result = jedis.zcard(key);
+        assertEquals(3, result, "ZCARD should return 3 for three members");
+    }
+
+    @Test
+    void sortedset_zcard_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Test binary ZCARD
+        long result = jedis.zcard(key);
+        assertEquals(0, result, "Binary ZCARD should return 0 for non-existing key");
+
+        // Add member and test again
+        jedis.zadd(key, 1.0, "member1".getBytes());
+        result = jedis.zcard(key);
+        assertEquals(1, result, "Binary ZCARD should return 1");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zscore() {
+        String key = UUID.randomUUID().toString();
+
+        // Test ZSCORE on non-existing key
+        Double result = jedis.zscore(key, "member1");
+        assertNull(result, "ZSCORE should return null for non-existing key");
+
+        // Add member
+        jedis.zadd(key, 5.5, "member1");
+
+        // Test ZSCORE on existing member
+        result = jedis.zscore(key, "member1");
+        assertEquals(5.5, result, 0.001, "ZSCORE should return correct score");
+
+        // Test ZSCORE on non-existing member
+        result = jedis.zscore(key, "nonexistent");
+        assertNull(result, "ZSCORE should return null for non-existing member");
+    }
+
+    @Test
+    void sortedset_zscore_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member = "member1".getBytes();
+
+        // Add member
+        jedis.zadd(key, 7.7, member);
+
+        // Test binary ZSCORE
+        Double result = jedis.zscore(key, member);
+        assertEquals(7.7, result, 0.001, "Binary ZSCORE should return correct score");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zmscore() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "ZMSCORE command requires Valkey 6.2.0 or higher");
+
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        jedis.zadd(key, members);
+
+        // Test ZMSCORE
+        List<Double> scores = jedis.zmscore(key, "member1", "nonexistent", "member3");
+        assertEquals(3, scores.size(), "ZMSCORE should return 3 scores");
+        assertEquals(1.0, scores.get(0), 0.001, "First score should be correct");
+        assertNull(scores.get(1), "Non-existing member should have null score");
+        assertEquals(3.0, scores.get(2), 0.001, "Third score should be correct");
+    }
+
+    @Test
+    void sortedset_zmscore_binary() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "ZMSCORE command requires Valkey 6.2.0 or higher");
+
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member1 = "member1".getBytes();
+        byte[] member2 = "member2".getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put(member1, 1.5);
+        members.put(member2, 2.5);
+        jedis.zadd(key, members);
+
+        // Test binary ZMSCORE
+        List<Double> scores = jedis.zmscore(key, member1, member2);
+        assertEquals(2, scores.size(), "Binary ZMSCORE should return 2 scores");
+        assertEquals(1.5, scores.get(0), 0.001);
+        assertEquals(2.5, scores.get(1), 0.001);
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrange() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        members.put("member4", 4.0);
+        jedis.zadd(key, members);
+
+        // Test ZRANGE full range
+        List<String> range = jedis.zrange(key, 0, -1);
+        assertEquals(4, range.size(), "ZRANGE should return all 4 members");
+        assertEquals("member1", range.get(0), "First member should be lowest score");
+        assertEquals("member4", range.get(3), "Last member should be highest score");
+
+        // Test ZRANGE partial range
+        range = jedis.zrange(key, 1, 2);
+        assertEquals(2, range.size(), "ZRANGE should return 2 members");
+        assertEquals("member2", range.get(0));
+        assertEquals("member3", range.get(1));
+
+        // Test ZRANGE with negative indices
+        range = jedis.zrange(key, -2, -1);
+        assertEquals(2, range.size(), "ZRANGE should support negative indices");
+        assertEquals("member3", range.get(0));
+        assertEquals("member4", range.get(1));
+
+        // Test ZRANGE on non-existing key
+        range = jedis.zrange("nonexistent", 0, -1);
+        assertTrue(range.isEmpty(), "ZRANGE should return empty list for non-existing key");
+    }
+
+    @Test
+    void sortedset_zrange_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 1.0);
+        members.put("member2".getBytes(), 2.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZRANGE
+        List<byte[]> range = jedis.zrange(key, 0, -1);
+        assertEquals(2, range.size(), "Binary ZRANGE should return 2 members");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrangeWithScores() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        jedis.zadd(key, members);
+
+        // Test ZRANGE WITHSCORES
+        List<Tuple> rangeWithScores = jedis.zrangeWithScores(key, 0, -1);
+        assertEquals(3, rangeWithScores.size(), "ZRANGE WITHSCORES should return 3 members");
+        assertEquals("member1", rangeWithScores.get(0).getElement());
+        assertEquals(1.0, rangeWithScores.get(0).getScore(), 0.001);
+        assertEquals("member2", rangeWithScores.get(1).getElement());
+        assertEquals(2.0, rangeWithScores.get(1).getScore(), 0.001);
+        assertEquals("member3", rangeWithScores.get(2).getElement());
+        assertEquals(3.0, rangeWithScores.get(2).getScore(), 0.001);
+
+        // Test partial range with scores
+        List<Tuple> partialRange = jedis.zrangeWithScores(key, 0, 1);
+        assertEquals(2, partialRange.size(), "ZRANGE WITHSCORES should return 2 members");
+        assertEquals("member1", partialRange.get(0).getElement());
+        assertEquals("member2", partialRange.get(1).getElement());
+    }
+
+    @Test
+    void sortedset_zrangeWithScores_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 10.0);
+        members.put("member2".getBytes(), 20.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZRANGE WITHSCORES
+        List<Tuple> rangeWithScores = jedis.zrangeWithScores(key, 0, -1);
+        assertEquals(2, rangeWithScores.size(), "Binary ZRANGE WITHSCORES should return 2 members");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrank() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data with distinct scores
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        jedis.zadd(key, members);
+
+        // Test ZRANK
+        Long rank = jedis.zrank(key, "member1");
+        assertEquals(0L, rank, "member1 should have rank 0 (lowest score)");
+
+        rank = jedis.zrank(key, "member2");
+        assertEquals(1L, rank, "member2 should have rank 1");
+
+        rank = jedis.zrank(key, "member3");
+        assertEquals(2L, rank, "member3 should have rank 2 (highest score)");
+
+        // Test ZRANK on non-existing member
+        rank = jedis.zrank(key, "nonexistent");
+        assertNull(rank, "ZRANK should return null for non-existing member");
+
+        // Test ZRANK on non-existing key
+        rank = jedis.zrank("nonexistent_key", "member1");
+        assertNull(rank, "ZRANK should return null for non-existing key");
+    }
+
+    @Test
+    void sortedset_zrank_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member = "member1".getBytes();
+
+        // Setup
+        jedis.zadd(key, 1.0, member);
+        jedis.zadd(key, 2.0, "member2".getBytes());
+
+        // Test binary ZRANK
+        Long rank = jedis.zrank(key, member);
+        assertEquals(0L, rank, "Binary ZRANK should return correct rank");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrevrank() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        jedis.zadd(key, members);
+
+        // Test ZREVRANK (reverse order: high to low)
+        Long revrank = jedis.zrevrank(key, "member3");
+        assertEquals(0L, revrank, "member3 should have revrank 0 (highest score)");
+
+        revrank = jedis.zrevrank(key, "member2");
+        assertEquals(1L, revrank, "member2 should have revrank 1");
+
+        revrank = jedis.zrevrank(key, "member1");
+        assertEquals(2L, revrank, "member1 should have revrank 2 (lowest score)");
+
+        // Test ZREVRANK on non-existing member
+        revrank = jedis.zrevrank(key, "nonexistent");
+        assertNull(revrank, "ZREVRANK should return null for non-existing member");
+    }
+
+    @Test
+    void sortedset_zrevrank_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member = "member1".getBytes();
+
+        // Setup
+        jedis.zadd(key, 1.0, member);
+        jedis.zadd(key, 2.0, "member2".getBytes());
+
+        // Test binary ZREVRANK
+        Long revrank = jedis.zrevrank(key, "member2".getBytes());
+        assertEquals(0L, revrank, "Binary ZREVRANK should return 0 for highest score");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zcount() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        members.put("member4", 4.0);
+        members.put("member5", 5.0);
+        jedis.zadd(key, members);
+
+        // Test ZCOUNT with inclusive range
+        long count = jedis.zcount(key, 2.0, 4.0);
+        assertEquals(3, count, "ZCOUNT should return 3 for range [2.0, 4.0]");
+
+        // Test ZCOUNT with full range
+        count = jedis.zcount(key, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
+        assertEquals(5, count, "ZCOUNT should return 5 for full range");
+
+        // Test ZCOUNT with no matches
+        count = jedis.zcount(key, 10.0, 20.0);
+        assertEquals(0, count, "ZCOUNT should return 0 for range with no members");
+
+        // Test ZCOUNT on non-existing key
+        count = jedis.zcount("nonexistent", 0.0, 10.0);
+        assertEquals(0, count, "ZCOUNT should return 0 for non-existing key");
+    }
+
+    @Test
+    void sortedset_zcount_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 1.0);
+        members.put("member2".getBytes(), 2.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZCOUNT
+        long count = jedis.zcount(key, 1.0, 2.0);
+        assertEquals(2, count, "Binary ZCOUNT should return 2");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zincrby() {
+        String key = UUID.randomUUID().toString();
+
+        // Test ZINCRBY on non-existing member (creates with increment as score)
+        double score = jedis.zincrby(key, 5.0, "member1");
+        assertEquals(5.0, score, 0.001, "ZINCRBY should return 5.0 for new member");
+
+        // Test ZINCRBY on existing member
+        score = jedis.zincrby(key, 2.5, "member1");
+        assertEquals(7.5, score, 0.001, "ZINCRBY should return 7.5 after increment");
+
+        // Test ZINCRBY with negative increment
+        score = jedis.zincrby(key, -3.0, "member1");
+        assertEquals(4.5, score, 0.001, "ZINCRBY should support negative increments");
+
+        // Verify final score
+        Double finalScore = jedis.zscore(key, "member1");
+        assertEquals(4.5, finalScore, 0.001, "Member should have final incremented score");
+    }
+
+    @Test
+    void sortedset_zincrby_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+        byte[] member = "member1".getBytes();
+
+        // Test binary ZINCRBY
+        double score = jedis.zincrby(key, 10.5, member);
+        assertEquals(10.5, score, 0.001, "Binary ZINCRBY should return correct score");
+
+        score = jedis.zincrby(key, 5.0, member);
+        assertEquals(15.5, score, 0.001, "Binary ZINCRBY should increment correctly");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zpopmin() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("5.0.0"),
+                "ZPOPMIN command requires Valkey 5.0.0 or higher");
+
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        members.put("member4", 4.0);
+        jedis.zadd(key, members);
+
+        // Test ZPOPMIN with count
+        List<Tuple> popped = jedis.zpopmin(key, 2);
+        assertEquals(2, popped.size(), "ZPOPMIN should return 2 members");
+        assertEquals(
+                "member1", popped.get(0).getElement(), "ZPOPMIN should include lowest scored member");
+        assertEquals(1.0, popped.get(0).getScore(), 0.001);
+        assertEquals("member2", popped.get(1).getElement(), "ZPOPMIN should include second lowest");
+        assertEquals(2.0, popped.get(1).getScore(), 0.001);
+
+        // Verify members were removed
+        long cardinality = jedis.zcard(key);
+        assertEquals(2, cardinality, "Sorted set should have 2 members remaining");
+
+        // Test ZPOPMIN on non-existing key
+        List<Tuple> poppedEmpty = jedis.zpopmin("nonexistent", 1);
+        assertTrue(poppedEmpty.isEmpty(), "ZPOPMIN should return empty list for non-existing key");
+    }
+
+    @Test
+    void sortedset_zpopmin_binary() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("5.0.0"),
+                "ZPOPMIN command requires Valkey 5.0.0 or higher");
+
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 1.0);
+        members.put("member2".getBytes(), 2.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZPOPMIN
+        List<Tuple> popped = jedis.zpopmin(key, 1);
+        assertEquals(1, popped.size(), "Binary ZPOPMIN should return 1 member");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zpopmax() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("5.0.0"),
+                "ZPOPMAX command requires Valkey 5.0.0 or higher");
+
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        members.put("member4", 4.0);
+        jedis.zadd(key, members);
+
+        // Test ZPOPMAX with count
+        List<Tuple> popped = jedis.zpopmax(key, 2);
+        assertEquals(2, popped.size(), "ZPOPMAX should return 2 members");
+        assertEquals(
+                "member4", popped.get(0).getElement(), "ZPOPMAX should include highest scored member");
+        assertEquals(4.0, popped.get(0).getScore(), 0.001);
+        assertEquals("member3", popped.get(1).getElement(), "ZPOPMAX should include second highest");
+        assertEquals(3.0, popped.get(1).getScore(), 0.001);
+
+        // Verify members were removed
+        long cardinality = jedis.zcard(key);
+        assertEquals(2, cardinality, "Sorted set should have 2 members remaining");
+
+        // Test ZPOPMAX on non-existing key
+        List<Tuple> poppedEmpty = jedis.zpopmax("nonexistent", 1);
+        assertTrue(poppedEmpty.isEmpty(), "ZPOPMAX should return empty list for non-existing key");
+    }
+
+    @Test
+    void sortedset_zpopmax_binary() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("5.0.0"),
+                "ZPOPMAX command requires Valkey 5.0.0 or higher");
+
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 1.0);
+        members.put("member2".getBytes(), 2.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZPOPMAX
+        List<Tuple> popped = jedis.zpopmax(key, 1);
+        assertEquals(1, popped.size(), "Binary ZPOPMAX should return 1 member");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zunionstore() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members1 = new HashMap<>();
+        members1.put("member1", 1.0);
+        members1.put("member2", 2.0);
+        jedis.zadd(key1, members1);
+
+        Map<String, Double> members2 = new HashMap<>();
+        members2.put("member2", 3.0);
+        members2.put("member3", 4.0);
+        jedis.zadd(key2, members2);
+
+        // Test ZUNIONSTORE
+        long result = jedis.zunionstore(destKey, key1, key2);
+        assertEquals(3, result, "ZUNIONSTORE should return 3 (union has 3 unique members)");
+
+        // Verify union result
+        long cardinality = jedis.zcard(destKey);
+        assertEquals(3, cardinality, "Destination should have 3 members");
+
+        // Verify scores (default aggregation is SUM)
+        Double score = jedis.zscore(destKey, "member2");
+        assertEquals(5.0, score, 0.001, "member2 score should be sum of both sets (2.0 + 3.0)");
+
+        // Cleanup
+        jedis.del(key1, key2, destKey);
+    }
+
+    @Test
+    void sortedset_zunionstore_binary() {
+        byte[] key1 = UUID.randomUUID().toString().getBytes();
+        byte[] key2 = UUID.randomUUID().toString().getBytes();
+        byte[] destKey = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members1 = new HashMap<>();
+        members1.put("member1".getBytes(), 1.0);
+        jedis.zadd(key1, members1);
+
+        Map<byte[], Double> members2 = new HashMap<>();
+        members2.put("member2".getBytes(), 2.0);
+        jedis.zadd(key2, members2);
+
+        // Test binary ZUNIONSTORE
+        long result = jedis.zunionstore(destKey, key1, key2);
+        assertEquals(2, result, "Binary ZUNIONSTORE should return 2");
+
+        // Cleanup
+        jedis.del(key1);
+        jedis.del(key2);
+        jedis.del(destKey);
+    }
+
+    @Test
+    void sortedset_zinterstore() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members1 = new HashMap<>();
+        members1.put("member1", 1.0);
+        members1.put("member2", 2.0);
+        members1.put("member3", 3.0);
+        jedis.zadd(key1, members1);
+
+        Map<String, Double> members2 = new HashMap<>();
+        members2.put("member2", 4.0);
+        members2.put("member3", 5.0);
+        members2.put("member4", 6.0);
+        jedis.zadd(key2, members2);
+
+        // Test ZINTERSTORE
+        long result = jedis.zinterstore(destKey, key1, key2);
+        assertEquals(2, result, "ZINTERSTORE should return 2 (intersection has 2 common members)");
+
+        // Verify intersection result
+        long cardinality = jedis.zcard(destKey);
+        assertEquals(2, cardinality, "Destination should have 2 members");
+
+        // Verify scores (default aggregation is SUM)
+        Double score = jedis.zscore(destKey, "member2");
+        assertEquals(6.0, score, 0.001, "member2 score should be sum (2.0 + 4.0)");
+
+        score = jedis.zscore(destKey, "member3");
+        assertEquals(8.0, score, 0.001, "member3 score should be sum (3.0 + 5.0)");
+
+        // Verify non-common members are not in result
+        assertNull(jedis.zscore(destKey, "member1"), "member1 should not be in intersection");
+        assertNull(jedis.zscore(destKey, "member4"), "member4 should not be in intersection");
+
+        // Cleanup
+        jedis.del(key1, key2, destKey);
+    }
+
+    @Test
+    void sortedset_zinterstore_binary() {
+        byte[] key1 = UUID.randomUUID().toString().getBytes();
+        byte[] key2 = UUID.randomUUID().toString().getBytes();
+        byte[] destKey = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members1 = new HashMap<>();
+        members1.put("common".getBytes(), 1.0);
+        jedis.zadd(key1, members1);
+
+        Map<byte[], Double> members2 = new HashMap<>();
+        members2.put("common".getBytes(), 2.0);
+        jedis.zadd(key2, members2);
+
+        // Test binary ZINTERSTORE
+        long result = jedis.zinterstore(destKey, key1, key2);
+        assertEquals(1, result, "Binary ZINTERSTORE should return 1");
+
+        // Cleanup
+        jedis.del(key1);
+        jedis.del(key2);
+        jedis.del(destKey);
+    }
+
+    @Test
+    void sortedset_zremrangebyrank() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        members.put("member4", 4.0);
+        members.put("member5", 5.0);
+        jedis.zadd(key, members);
+
+        // Test ZREMRANGEBYRANK
+        long removed = jedis.zremrangebyrank(key, 0, 2);
+        assertEquals(3, removed, "ZREMRANGEBYRANK should remove 3 members (ranks 0, 1, 2)");
+
+        // Verify remaining members
+        long cardinality = jedis.zcard(key);
+        assertEquals(2, cardinality, "Sorted set should have 2 members remaining");
+
+        List<String> remaining = jedis.zrange(key, 0, -1);
+        assertEquals("member4", remaining.get(0), "member4 should remain");
+        assertEquals("member5", remaining.get(1), "member5 should remain");
+
+        // Test ZREMRANGEBYRANK with negative indices
+        jedis.del(key);
+        jedis.zadd(key, members);
+        removed = jedis.zremrangebyrank(key, -2, -1);
+        assertEquals(2, removed, "ZREMRANGEBYRANK should remove last 2 members");
+
+        // Test ZREMRANGEBYRANK on non-existing key
+        removed = jedis.zremrangebyrank("nonexistent", 0, 10);
+        assertEquals(0, removed, "ZREMRANGEBYRANK should return 0 for non-existing key");
+    }
+
+    @Test
+    void sortedset_zremrangebyrank_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 1.0);
+        members.put("member2".getBytes(), 2.0);
+        members.put("member3".getBytes(), 3.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZREMRANGEBYRANK
+        long removed = jedis.zremrangebyrank(key, 0, 1);
+        assertEquals(2, removed, "Binary ZREMRANGEBYRANK should remove 2 members");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zremrangebyscore() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        members.put("member4", 4.0);
+        members.put("member5", 5.0);
+        jedis.zadd(key, members);
+
+        // Test ZREMRANGEBYSCORE
+        long removed = jedis.zremrangebyscore(key, 2.0, 4.0);
+        assertEquals(3, removed, "ZREMRANGEBYSCORE should remove 3 members (scores 2.0, 3.0, 4.0)");
+
+        // Verify remaining members
+        long cardinality = jedis.zcard(key);
+        assertEquals(2, cardinality, "Sorted set should have 2 members remaining");
+
+        List<String> remaining = jedis.zrange(key, 0, -1);
+        assertEquals("member1", remaining.get(0), "member1 should remain");
+        assertEquals("member5", remaining.get(1), "member5 should remain");
+
+        // Test ZREMRANGEBYSCORE with no matches
+        removed = jedis.zremrangebyscore(key, 10.0, 20.0);
+        assertEquals(0, removed, "ZREMRANGEBYSCORE should return 0 for range with no members");
+
+        // Test ZREMRANGEBYSCORE on non-existing key
+        removed = jedis.zremrangebyscore("nonexistent", 0.0, 10.0);
+        assertEquals(0, removed, "ZREMRANGEBYSCORE should return 0 for non-existing key");
+    }
+
+    @Test
+    void sortedset_zremrangebyscore_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 1.0);
+        members.put("member2".getBytes(), 2.0);
+        members.put("member3".getBytes(), 3.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZREMRANGEBYSCORE
+        long removed = jedis.zremrangebyscore(key, 1.0, 2.0);
+        assertEquals(2, removed, "Binary ZREMRANGEBYSCORE should remove 2 members");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zscan() {
+        String key = UUID.randomUUID().toString();
+
+        // Setup test data
+        Map<String, Double> members = new HashMap<>();
+        members.put("member1", 1.0);
+        members.put("member2", 2.0);
+        members.put("member3", 3.0);
+        jedis.zadd(key, members);
+
+        // Test ZSCAN
+        ScanResult<Tuple> result = jedis.zscan(key, "0");
+        assertNotNull(result, "ZSCAN should return non-null result");
+        assertNotNull(result.getCursor(), "ZSCAN should return cursor");
+        assertNotNull(result.getResult(), "ZSCAN should return results");
+
+        List<Tuple> entries = result.getResult();
+        assertEquals(3, entries.size(), "ZSCAN should return 3 entries");
+
+        // Verify all members are present
+        Set<String> memberNames = new HashSet<>();
+        for (Tuple tuple : entries) {
+            memberNames.add(tuple.getElement());
+        }
+        assertTrue(memberNames.contains("member1"), "ZSCAN should include member1");
+        assertTrue(memberNames.contains("member2"), "ZSCAN should include member2");
+        assertTrue(memberNames.contains("member3"), "ZSCAN should include member3");
+
+        // Test ZSCAN on non-existing key
+        ScanResult<Tuple> resultEmpty = jedis.zscan("nonexistent", "0");
+        assertTrue(
+                resultEmpty.getResult().isEmpty(), "ZSCAN should return empty result for non-existing key");
+    }
+
+    @Test
+    void sortedset_zscan_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        // Setup
+        Map<byte[], Double> members = new HashMap<>();
+        members.put("member1".getBytes(), 1.0);
+        members.put("member2".getBytes(), 2.0);
+        jedis.zadd(key, members);
+
+        // Test binary ZSCAN
+        ScanResult<Tuple> result = jedis.zscan(key, "0".getBytes());
+        assertNotNull(result, "Binary ZSCAN should return non-null result");
+        assertEquals(2, result.getResult().size(), "Binary ZSCAN should return 2 entries");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_edge_cases() {
+        String key = UUID.randomUUID().toString();
+
+        // Test operations on non-existing sorted set
+        assertEquals(0, jedis.zcard(key), "ZCARD should return 0 for non-existing key");
+        assertNull(jedis.zscore(key, "member"), "ZSCORE should return null for non-existing key");
+        assertNull(jedis.zrank(key, "member"), "ZRANK should return null for non-existing key");
+        assertNull(jedis.zrevrank(key, "member"), "ZREVRANK should return null for non-existing key");
+
+        List<String> emptyRange = jedis.zrange(key, 0, -1);
+        assertTrue(emptyRange.isEmpty(), "ZRANGE should return empty list for non-existing key");
+
+        List<Tuple> emptyRangeWithScores = jedis.zrangeWithScores(key, 0, -1);
+        assertTrue(
+                emptyRangeWithScores.isEmpty(),
+                "ZRANGE WITHSCORES should return empty list for non-existing key");
+
+        // Test ZREM on non-existing key
+        long removed = jedis.zrem(key, "member1", "member2");
+        assertEquals(0, removed, "ZREM should return 0 for non-existing key");
+
+        // Test ZCOUNT on non-existing key
+        long count = jedis.zcount(key, 0.0, 10.0);
+        assertEquals(0, count, "ZCOUNT should return 0 for non-existing key");
+
+        // Test operations with duplicate members
+        jedis.zadd(key, 1.0, "member1");
+        jedis.zadd(key, 2.0, "member1"); // Update score
+        assertEquals(1, jedis.zcard(key), "Sorted set should still have 1 member after update");
+        assertEquals(2.0, jedis.zscore(key, "member1"), 0.001, "Score should be updated");
+
+        // Test ZINCRBY creating new member
+        double score = jedis.zincrby(key, 5.0, "new_member");
+        assertEquals(5.0, score, 0.001, "ZINCRBY should create member with increment as score");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_comprehensive_workflow() {
+        String key = UUID.randomUUID().toString();
+
+        // Build a leaderboard
+        jedis.zadd(key, 100.0, "player1");
+        jedis.zadd(key, 200.0, "player2");
+        jedis.zadd(key, 150.0, "player3");
+
+        // Check leaderboard size
+        assertEquals(3, jedis.zcard(key), "Leaderboard should have 3 players");
+
+        // Get top 2 players
+        List<String> topPlayers = jedis.zrange(key, -2, -1);
+        assertEquals(2, topPlayers.size(), "Should get top 2 players");
+        assertEquals("player3", topPlayers.get(0), "player3 should be second");
+        assertEquals("player2", topPlayers.get(1), "player2 should be first");
+
+        // Get rankings
+        assertEquals(0L, jedis.zrank(key, "player1"), "player1 should be rank 0");
+        assertEquals(1L, jedis.zrank(key, "player3"), "player3 should be rank 1");
+        assertEquals(2L, jedis.zrank(key, "player2"), "player2 should be rank 2");
+
+        // Reverse rankings
+        assertEquals(2L, jedis.zrevrank(key, "player1"), "player1 should be revrank 2");
+        assertEquals(0L, jedis.zrevrank(key, "player2"), "player2 should be revrank 0");
+
+        // Increment a player's score
+        double newScore = jedis.zincrby(key, 100.0, "player1");
+        assertEquals(200.0, newScore, 0.001, "player1 should now have score 200");
+
+        // Count players in score range
+        long count = jedis.zcount(key, 150.0, 250.0);
+        assertEquals(3, count, "Should have 3 players in range [150, 250]");
+
+        // Remove bottom player
+        List<Tuple> removed = jedis.zpopmin(key, 1);
+        assertEquals(1, removed.size(), "Should remove 1 player");
+        assertEquals("player3", removed.get(0).getElement(), "Should remove player3");
+
+        // Final verification
+        assertEquals(2, jedis.zcard(key), "Leaderboard should have 2 players remaining");
+
+        // Cleanup
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrangestore() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String sourceKey = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
+
+        // Setup source sorted set
+        jedis.zadd(sourceKey, 1.0, "one");
+        jedis.zadd(sourceKey, 2.0, "two");
+        jedis.zadd(sourceKey, 3.0, "three");
+
+        // Store range in destination
+        Long count = jedis.zrangestore(destKey, sourceKey, 0, 1);
+        assertEquals(2L, count, "Should store 2 elements");
+
+        // Verify destination
+        List<String> result = jedis.zrange(destKey, 0, -1);
+        assertEquals(2, result.size());
+        assertEquals("one", result.get(0));
+        assertEquals("two", result.get(1));
+
+        // Cleanup
+        jedis.del(sourceKey, destKey);
+    }
+
+    @Test
+    void sortedset_zrangestore_binary() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        byte[] sourceKey = UUID.randomUUID().toString().getBytes();
+        byte[] destKey = UUID.randomUUID().toString().getBytes();
+
+        jedis.zadd(sourceKey, 1.0, "one".getBytes());
+        jedis.zadd(sourceKey, 2.0, "two".getBytes());
+
+        Long count = jedis.zrangestore(destKey, sourceKey, 0, 1);
+        assertEquals(2L, count);
+
+        jedis.del(sourceKey, destKey);
+    }
+
+    @Test
+    void sortedset_zrankWithScore() {
+        String minVersion = "7.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        redis.clients.jedis.resps.KeyValue<Long, Double> result = jedis.zrankWithScore(key, "two");
+        assertNotNull(result);
+        assertEquals(1L, result.getKey());
+        assertEquals(2.0, result.getValue(), 0.001);
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrevrankWithScore() {
+        String minVersion = "7.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        redis.clients.jedis.resps.KeyValue<Long, Double> result = jedis.zrevrankWithScore(key, "two");
+        assertNotNull(result);
+        assertEquals(1L, result.getKey());
+        assertEquals(2.0, result.getValue(), 0.001);
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zlexcount() {
+        String key = UUID.randomUUID().toString();
+
+        // Add members with same score for lexicographical ordering
+        jedis.zadd(key, 0.0, "a");
+        jedis.zadd(key, 0.0, "b");
+        jedis.zadd(key, 0.0, "c");
+        jedis.zadd(key, 0.0, "d");
+
+        Long count = jedis.zlexcount(key, "[a", "[c");
+        assertEquals(3L, count, "Should count 3 members (a, b, c)");
+
+        count = jedis.zlexcount(key, "(a", "(d");
+        assertEquals(2L, count, "Should count 2 members (b, c)");
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zlexcount_binary() {
+        byte[] key = UUID.randomUUID().toString().getBytes();
+
+        jedis.zadd(key, 0.0, "a".getBytes());
+        jedis.zadd(key, 0.0, "b".getBytes());
+        jedis.zadd(key, 0.0, "c".getBytes());
+
+        Long count = jedis.zlexcount(key, "[a".getBytes(), "[c".getBytes());
+        assertEquals(3L, count);
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zdiff() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key1, 3.0, "three");
+
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 2.0, "two");
+
+        List<String> diff = jedis.zdiff(key1, key2);
+        assertEquals(1, diff.size());
+        assertEquals("three", diff.get(0));
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zdiffWithScores() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key1, 3.0, "three");
+
+        jedis.zadd(key2, 1.0, "one");
+
+        List<Tuple> diff = jedis.zdiffWithScores(key1, key2);
+        assertEquals(2, diff.size());
+        assertEquals("two", diff.get(0).getElement());
+        assertEquals(2.0, diff.get(0).getScore(), 0.001);
+        assertEquals("three", diff.get(1).getElement());
+        assertEquals(3.0, diff.get(1).getScore(), 0.001);
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zdiffstore() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+
+        Long count = jedis.zdiffstore(destKey, key1, key2);
+        assertEquals(1L, count);
+
+        List<String> result = jedis.zrange(destKey, 0, -1);
+        assertEquals(1, result.size());
+        assertEquals("two", result.get(0));
+
+        jedis.del(key1, key2, destKey);
+    }
+
+    @Test
+    void sortedset_zunion() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 3.0, "three");
+
+        List<String> union = jedis.zunion(key1, key2);
+        assertEquals(3, union.size());
+        assertTrue(union.contains("one"));
+        assertTrue(union.contains("two"));
+        assertTrue(union.contains("three"));
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zunionWithScores() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 3.0, "three");
+
+        List<Tuple> union = jedis.zunionWithScores(key1, key2);
+        assertEquals(3, union.size());
+        // Results are sorted by score
+        assertEquals("one", union.get(0).getElement());
+        assertEquals(2.0, union.get(0).getScore(), 0.001); // 1.0 + 1.0
+        assertEquals("two", union.get(1).getElement());
+        assertEquals(2.0, union.get(1).getScore(), 0.001);
+        assertEquals("three", union.get(2).getElement());
+        assertEquals(3.0, union.get(2).getScore(), 0.001);
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zinter() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 3.0, "three");
+
+        List<String> inter = jedis.zinter(key1, key2);
+        assertEquals(1, inter.size());
+        assertEquals("one", inter.get(0));
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zinterWithScores() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 3.0, "three");
+
+        List<Tuple> inter = jedis.zinterWithScores(key1, key2);
+        assertEquals(1, inter.size());
+        assertEquals("one", inter.get(0).getElement());
+        assertEquals(2.0, inter.get(0).getScore(), 0.001); // 1.0 + 1.0
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zintercard() {
+        String minVersion = "7.0.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key1, 3.0, "three");
+        jedis.zadd(key2, 1.0, "one");
+        jedis.zadd(key2, 2.0, "two");
+
+        Long cardinality = jedis.zintercard(key1, key2);
+        assertEquals(2L, cardinality);
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zmpop() {
+        String minVersion = "7.0.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        jedis.zadd(key1, 1.0, "one");
+        jedis.zadd(key1, 2.0, "two");
+        jedis.zadd(key2, 3.0, "three");
+
+        // Pop min from first non-empty key
+        redis.clients.jedis.resps.KeyValue<byte[], List<Tuple>> result =
+                jedis.zmpop(redis.clients.jedis.args.SortedSetOption.MIN, key1.getBytes(), key2.getBytes());
+        assertNotNull(result);
+        assertArrayEquals(key1.getBytes(), result.getKey());
+
+        jedis.del(key1, key2);
+    }
+
+    @Test
+    void sortedset_zremrangebylex() {
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 0.0, "a");
+        jedis.zadd(key, 0.0, "b");
+        jedis.zadd(key, 0.0, "c");
+        jedis.zadd(key, 0.0, "d");
+
+        Long removed = jedis.zremrangebylex(key, "[a", "[c");
+        assertEquals(3L, removed, "Should remove 3 members (a, b, c)");
+
+        Long remaining = jedis.zcard(key);
+        assertEquals(1L, remaining, "Should have 1 member remaining");
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrandmember() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        String member = jedis.zrandmember(key);
+        assertNotNull(member);
+        assertTrue(List.of("one", "two", "three").contains(member));
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrandmemberWithCount() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        List<String> members = jedis.zrandmemberWithCount(key, 2);
+        assertNotNull(members);
+        assertEquals(2, members.size());
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrandmemberWithCountWithScores() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        List<Tuple> membersWithScores = jedis.zrandmemberWithCountWithScores(key, 2);
+        assertNotNull(membersWithScores);
+        assertEquals(2, membersWithScores.size());
+
+        // Each tuple should have member and score
+        for (Tuple tuple : membersWithScores) {
+            assertNotNull(tuple.getElement()); // member
+            assertNotNull(tuple.getScore()); // score
+        }
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zadd_with_params() {
+        String key = UUID.randomUUID().toString();
+
+        // Test zadd with ZAddParams (NX - only add if doesn't exist)
+        ZAddParams nxParams = new ZAddParams().nx();
+        long added = jedis.zadd(key, 1.0, "one", nxParams);
+        assertEquals(1, added);
+
+        // Try adding same member with NX - should not update
+        added = jedis.zadd(key, 2.0, "one", nxParams);
+        assertEquals(0, added);
+        assertEquals(1.0, jedis.zscore(key, "one"));
+
+        // Test with XX - only update existing
+        ZAddParams xxParams = new ZAddParams().xx();
+        added = jedis.zadd(key, 2.0, "one", xxParams);
+        assertEquals(0, added); // 0 new members added, but updated
+        assertEquals(2.0, jedis.zscore(key, "one"));
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrevrange() {
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+
+        // Get range in reverse order (highest to lowest score)
+        List<String> result = jedis.zrevrange(key, 0, 1);
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertEquals("three", result.get(0)); // highest score
+        assertEquals("two", result.get(1));
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zscan_with_params() {
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "member1");
+        jedis.zadd(key, 2.0, "member2");
+        jedis.zadd(key, 3.0, "member3");
+        jedis.zadd(key, 4.0, "other1");
+
+        // Scan with pattern matching
+        ScanParams params = new ScanParams().match("member*").count(10);
+        ScanResult<Tuple> result = jedis.zscan(key, "0", params);
+
+        assertNotNull(result);
+        assertNotNull(result.getResult());
+        assertTrue(result.getResult().size() >= 3); // Should match member1, member2, member3
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrange_with_params() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String key = UUID.randomUUID().toString();
+
+        jedis.zadd(key, 1.0, "one");
+        jedis.zadd(key, 2.0, "two");
+        jedis.zadd(key, 3.0, "three");
+        jedis.zadd(key, 4.0, "four");
+
+        // Test range by score
+        ZRangeParams byScore = ZRangeParams.zrangeByScoreParams(1.5, 3.5);
+        List<String> result = jedis.zrange(key, byScore);
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertTrue(result.contains("two"));
+        assertTrue(result.contains("three"));
+
+        // Test range by index
+        ZRangeParams byIndex = ZRangeParams.zrangeParams(0, 1);
+        result = jedis.zrange(key, byIndex);
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertEquals("one", result.get(0));
+        assertEquals("two", result.get(1));
+
+        jedis.del(key);
+    }
+
+    @Test
+    void sortedset_zrangestore_with_params() {
+        String minVersion = "6.2.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        String srcKey = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
+
+        jedis.zadd(srcKey, 1.0, "one");
+        jedis.zadd(srcKey, 2.0, "two");
+        jedis.zadd(srcKey, 3.0, "three");
+        jedis.zadd(srcKey, 4.0, "four");
+
+        // Store range by score
+        ZRangeParams byScore = ZRangeParams.zrangeByScoreParams(1.5, 3.5);
+        long stored = jedis.zrangestore(destKey, srcKey, byScore);
+        assertEquals(2, stored);
+
+        // Verify destination has the correct members
+        List<String> result = jedis.zrange(destKey, 0, -1);
+        assertEquals(2, result.size());
+        assertTrue(result.contains("two"));
+        assertTrue(result.contains("three"));
+
+        jedis.del(srcKey, destKey);
     }
 }

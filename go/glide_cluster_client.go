@@ -2779,3 +2779,436 @@ func (client *ClusterClient) SUnsubscribeLazy(ctx context.Context, channels []st
 	_, err := client.executeCommand(ctx, C.SUnsubscribe, channels)
 	return err
 }
+
+// ClusterInfo returns information about the state of the cluster.
+// The command will be routed to a random node.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A string containing cluster information.
+//
+// [valkey.io]: https://valkey.io/commands/cluster-info/
+func (client *ClusterClient) ClusterInfo(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ClusterInfo, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// ClusterInfoWithRoute returns information about the state of the cluster with routing options.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A ClusterValue containing cluster information.
+//
+// [valkey.io]: https://valkey.io/commands/cluster-info/
+func (client *ClusterClient) ClusterInfoWithRoute(
+	ctx context.Context,
+	route options.RouteOption,
+) (models.ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.ClusterInfo, []string{}, route.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	if route.Route != nil && route.Route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// ClusterNodes returns the cluster configuration as seen by the node.
+// The command will be routed to a random node.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A string containing cluster nodes information in the cluster config format.
+//
+// [valkey.io]: https://valkey.io/commands/cluster-nodes/
+func (client *ClusterClient) ClusterNodes(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ClusterNodes, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// ClusterNodesWithRoute returns the cluster configuration with routing options.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A ClusterValue containing cluster nodes information.
+//
+// [valkey.io]: https://valkey.io/commands/cluster-nodes/
+func (client *ClusterClient) ClusterNodesWithRoute(
+	ctx context.Context,
+	route options.RouteOption,
+) (models.ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.ClusterNodes, []string{}, route.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	if route.Route != nil && route.Route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// ClusterShards returns the mapping of cluster slots to shards.
+// Each shard contains information about the primary and replicas.
+// The command will be routed to a random node.
+//
+// Since: Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	An array of maps representing each shard with slots and node information.
+//
+// [valkey.io]: https://valkey.io/commands/cluster-shards/
+func (client *ClusterClient) ClusterShards(ctx context.Context) ([]map[string]any, error) {
+	result, err := client.executeCommand(ctx, C.ClusterShards, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleArrayOfMapsResponse(result)
+}
+
+// ClusterShardsWithRoute returns the mapping of cluster slots to shards with routing options.
+//
+// Since: Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A ClusterValue containing shard information.
+//
+// [valkey.io]: https://valkey.io/commands/cluster-shards/
+func (client *ClusterClient) ClusterShardsWithRoute(
+	ctx context.Context,
+	route options.RouteOption,
+) (models.ClusterValue[[]map[string]any], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.ClusterShards, []string{}, route.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[[]map[string]any](), err
+	}
+	if route.Route != nil && route.Route.IsMultiNode() {
+		data, err := handleStringToArrayOfMapsMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[[]map[string]any](), err
+		}
+		return models.CreateClusterMultiValue[[]map[string]any](data), nil
+	}
+	data, err := handleArrayOfMapsResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[[]map[string]any](), err
+	}
+	return models.CreateClusterSingleValue[[]map[string]any](data), nil
+}
+
+// ClusterKeySlot returns the hash slot for a given key.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	key - The key to get the hash slot for.
+//
+// Return value:
+//
+//	The hash slot number for the key (0-16383).
+//
+// [valkey.io]: https://valkey.io/commands/cluster-keyslot/
+func (client *ClusterClient) ClusterKeySlot(ctx context.Context, key string) (int64, error) {
+	result, err := client.executeCommand(ctx, C.ClusterKeySlot, []string{key})
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// ClusterMyId returns the unique identifier of the node to which the command is routed.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	The unique identifier of the node to which the command is routed.
+//
+// [valkey.io]: https://valkey.io/commands/cluster-myid/
+func (client *ClusterClient) ClusterMyId(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ClusterMyId, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// ClusterMyIdWithRoute returns the node ID with routing options.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A ClusterValue containing the node ID.
+//
+// [valkey.io]: https://valkey.io/commands/cluster-myid/
+func (client *ClusterClient) ClusterMyIdWithRoute(
+	ctx context.Context,
+	route options.RouteOption,
+) (models.ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.ClusterMyId, []string{}, route.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	if route.Route != nil && route.Route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// ClusterMyShardId returns the shard ID of the current node.
+// The command will be routed to a random node.
+//
+// Since: Valkey 7.2 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	The shard ID of the current node.
+//
+// [valkey.io]: https://valkey.io/commands/cluster-myshardid/
+func (client *ClusterClient) ClusterMyShardId(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ClusterMyShardId, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// ClusterMyShardIdWithRoute returns the shard ID with routing options.
+//
+// Since: Valkey 7.2 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A ClusterValue containing the shard ID.
+//
+// [valkey.io]: https://valkey.io/commands/cluster-myshardid/
+func (client *ClusterClient) ClusterMyShardIdWithRoute(
+	ctx context.Context,
+	route options.RouteOption,
+) (models.ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.ClusterMyShardId, []string{}, route.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	if route.Route != nil && route.Route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// ClusterGetKeysInSlot returns an array of keys in the specified hash slot.
+// The command will be routed to the node responsible for the specified slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	slot - The hash slot number (0-16383).
+//	count - Maximum number of keys to return.
+//
+// Return value:
+//
+//	An array of keys in the specified slot.
+//
+// [valkey.io]: https://valkey.io/commands/cluster-getkeysinslot/
+func (client *ClusterClient) ClusterGetKeysInSlot(ctx context.Context, slot int64, count int64) ([]string, error) {
+	result, err := client.executeCommand(
+		ctx,
+		C.ClusterGetKeysInSlot,
+		[]string{utils.IntToString(slot), utils.IntToString(count)},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+// ClusterCountKeysInSlot returns the number of keys in the specified hash slot.
+// The command will be routed to the node responsible for the specified slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	slot - The hash slot number (0-16383).
+//
+// Return value:
+//
+//	The number of keys in the specified slot.
+//
+// [valkey.io]: https://valkey.io/commands/cluster-countkeysinslot/
+func (client *ClusterClient) ClusterCountKeysInSlot(ctx context.Context, slot int64) (int64, error) {
+	result, err := client.executeCommand(ctx, C.ClusterCountKeysInSlot, []string{utils.IntToString(slot)})
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// ClusterLinks returns information about all TCP links between cluster nodes.
+// The command will be routed to a random node.
+//
+// Since: Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	An array of maps containing link information.
+//
+// [valkey.io]: https://valkey.io/commands/cluster-links/
+func (client *ClusterClient) ClusterLinks(ctx context.Context) ([]map[string]any, error) {
+	result, err := client.executeCommand(ctx, C.ClusterLinks, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleArrayOfMapsResponse(result)
+}
+
+// ClusterLinksWithRoute returns link information with routing options.
+//
+// Since: Valkey 7.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	route - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A ClusterValue containing link information.
+//
+// [valkey.io]: https://valkey.io/commands/cluster-links/
+func (client *ClusterClient) ClusterLinksWithRoute(
+	ctx context.Context,
+	route options.RouteOption,
+) (models.ClusterValue[[]map[string]any], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.ClusterLinks, []string{}, route.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[[]map[string]any](), err
+	}
+	if route.Route != nil && route.Route.IsMultiNode() {
+		data, err := handleStringToArrayOfMapsMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[[]map[string]any](), err
+		}
+		return models.CreateClusterMultiValue[[]map[string]any](data), nil
+	}
+	data, err := handleArrayOfMapsResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[[]map[string]any](), err
+	}
+	return models.CreateClusterSingleValue[[]map[string]any](data), nil
+}
