@@ -644,13 +644,12 @@ mod tests {
         let region = "us-east-1".to_string();
 
         // Create a shared flag to track callback invocation
-        let callback_invoked = Arc::new(Mutex::new(false));
+        let callback_invoked = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let callback_invoked_clone = callback_invoked.clone();
 
         // Create a callback that sets the flag
         let callback = Arc::new(move |_token: String| {
-            let mut invoked = callback_invoked_clone.lock().unwrap();
-            *invoked = true;
+            callback_invoked_clone.store(true, std::sync::atomic::Ordering::SeqCst);
             log_info("Manual refresh callback invoked!", "");
         });
 
@@ -670,7 +669,7 @@ mod tests {
         manager.refresh_token().await;
 
         // Verify that the callback was invoked
-        let was_invoked = *callback_invoked.lock().unwrap();
+        let was_invoked = callback_invoked.load(std::sync::atomic::Ordering::SeqCst);
         assert!(
             was_invoked,
             "Callback should have been invoked during manual refresh"
