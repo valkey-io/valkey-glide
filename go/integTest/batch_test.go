@@ -322,14 +322,14 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 			XRevRange(key1, options.NewStreamBoundary("0-0", true), options.NewStreamBoundary("2-0", true)).
 			XRevRangeWithOptions(key1, options.NewStreamBoundary("0-0", true), options.NewStreamBoundary("2-0", true), *options.NewXRangeOptions().SetCount(2))
 
-		if suite.serverVersion >= "7.0.0" {
+		if suite.IsServerVersionAtLeast("7.0.0") {
 			transaction.
 				ZMPop([]string{key1}, constants.MAX).
 				ZMPopWithOptions([]string{key1}, constants.MAX, *options.NewZMPopOptions().SetCount(2)).
 				LMPop([]string{key1}, constants.Left).
 				LMPopCount([]string{key1}, constants.Left, 42)
 		}
-		if suite.serverVersion >= "7.2.0" {
+		if suite.IsServerVersionAtLeast("7.2.0") {
 			transaction.
 				ZRankWithScore(key1, "d").
 				ZRevRankWithScore(key1, "d")
@@ -341,7 +341,7 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 			suite.Equal("WRONGTYPE: Operation against a key holding the wrong kind of value", resp.(error).Error(), i)
 		}
 
-		if suite.serverVersion < "7.0.0" {
+		if suite.IsServerVersionLowerThan("7.0.0") {
 			return
 		}
 		// LCS has another error message
@@ -448,7 +448,7 @@ func (suite *GlideTestSuite) TestBatchStandaloneAndClusterPubSub() {
 			res, err := c.Exec(context.Background(), *batch, false)
 			suite.NoError(err)
 			suite.Equal(int64(0), res[0], "Publish")
-			if suite.serverVersion >= "7.0.0" {
+			if suite.IsServerVersionAtLeast("7.0.0") {
 				suite.Equal([]string{}, res[1], "PubSubShardChannels")
 				suite.Equal(map[string]int64{}, res[3], "PubSubShardNumSub")
 			} else {
