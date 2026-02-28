@@ -113,8 +113,8 @@ def acl_glide_sync_client(
 
 
 def create_sync_client(
-    request,
-    cluster_mode: bool,
+    request=None,
+    cluster_mode: bool = False,
     credentials: Optional[ServerCredentials] = None,
     database_id: int = 0,
     addresses: Optional[List[NodeAddress]] = None,

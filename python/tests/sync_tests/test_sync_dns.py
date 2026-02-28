@@ -22,15 +22,7 @@ from tests.test_constants import HOSTNAME_NO_TLS, HOSTNAME_TLS
 from tests.utils.utils import assert_connected_sync, get_ca_certificate
 
 
-def skip_if_dns_tests_not_enabled():
-    """Skip test if DNS tests are not enabled via environment variable."""
-    if not os.getenv("VALKEY_GLIDE_DNS_TESTS_ENABLED"):
-        pytest.skip("DNS tests disabled. Set VALKEY_GLIDE_DNS_TESTS_ENABLED to enable.")
-
-
-def create_client_with_hostname(
-    request, cluster_mode: bool, use_tls: bool, hostname: str
-):
+def create_client_with_hostname(cluster_mode: bool, use_tls: bool, hostname: str):
     """Helper to create sync client with hostname."""
     if use_tls and cluster_mode:
         cluster = pytest.valkey_tls_cluster  # type: ignore[attr-defined]
@@ -45,7 +37,6 @@ def create_client_with_hostname(
     address = NodeAddress(hostname, port)
 
     return create_sync_client(
-        request=request,
         cluster_mode=cluster_mode,
         use_tls=use_tls,
         root_pem_cacerts=get_ca_certificate() if use_tls else None,
@@ -53,16 +44,17 @@ def create_client_with_hostname(
     )
 
 
+@pytest.mark.skipif(
+    not os.getenv("VALKEY_GLIDE_DNS_TESTS_ENABLED"),
+    reason="DNS tests disabled. Set VALKEY_GLIDE_DNS_TESTS_ENABLED to enable.",
+)
+@pytest.mark.parametrize("cluster_mode", [True, False])
 class TestSyncDns:
     """Sync DNS resolution tests."""
 
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    def test_connect_with_valid_hostname_succeeds(self, request, cluster_mode: bool):
+    def test_connect_with_valid_hostname_succeeds(self, _, cluster_mode: bool):
         """Test connection with valid hostname (non-TLS)."""
-        skip_if_dns_tests_not_enabled()
-
         client = create_client_with_hostname(
-            request=request,
             cluster_mode=cluster_mode,
             use_tls=False,
             hostname=HOSTNAME_NO_TLS,
@@ -71,28 +63,18 @@ class TestSyncDns:
         assert_connected_sync(client)
         client.close()
 
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    def test_connect_with_invalid_hostname_fails(self, request, cluster_mode: bool):
+    def test_connect_with_invalid_hostname_fails(self, _, cluster_mode: bool):
         """Test connection with invalid hostname (non-TLS)."""
-        skip_if_dns_tests_not_enabled()
-
         with pytest.raises(Exception):
             create_client_with_hostname(
-                request=request,
                 cluster_mode=cluster_mode,
                 use_tls=False,
                 hostname="nonexistent.invalid",
             )
 
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    def test_tls_with_hostname_in_certificate_succeeds(
-        self, request, cluster_mode: bool
-    ):
+    def test_tls_with_hostname_in_certificate_succeeds(self, _, cluster_mode: bool):
         """Test TLS connection with hostname in certificate SAN."""
-        skip_if_dns_tests_not_enabled()
-
         client = create_client_with_hostname(
-            request=request,
             cluster_mode=cluster_mode,
             use_tls=True,
             hostname=HOSTNAME_TLS,
@@ -101,16 +83,11 @@ class TestSyncDns:
         assert_connected_sync(client)
         client.close()
 
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    def test_tls_with_hostname_not_in_certificate_fails(
-        self, request, cluster_mode: bool
-    ):
+    def test_tls_with_hostname_not_in_certificate_fails(self, _, cluster_mode: bool):
         """Test TLS connection with hostname not in certificate SAN."""
-        skip_if_dns_tests_not_enabled()
 
         with pytest.raises(Exception):
             create_client_with_hostname(
-                request=request,
                 cluster_mode=cluster_mode,
                 use_tls=True,
                 hostname=HOSTNAME_NO_TLS,

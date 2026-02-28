@@ -529,8 +529,8 @@ def delete_acl_username_and_password(client: TAnyGlideClient, username: str):
 
 
 def create_client_config(
-    request,
-    cluster_mode: bool,
+    request=None,
+    cluster_mode: bool = False,
     credentials: Optional[ServerCredentials] = None,
     database_id: int = 0,
     addresses: Optional[List[NodeAddress]] = None,
@@ -561,7 +561,7 @@ def create_client_config(
     if use_tls is not None:
         use_tls = use_tls
     else:
-        use_tls = request.config.getoption("--tls")
+        use_tls = request.config.getoption("--tls") if request else False
     tls_adv_conf = TlsAdvancedConfiguration(
         use_insecure_tls=tls_insecure,
         root_pem_cacerts=root_pem_cacerts,
@@ -574,7 +574,9 @@ def create_client_config(
     if enable_compression is not None:
         use_compression = enable_compression
     else:
-        use_compression = request.config.getoption("--compression")
+        use_compression = (
+            request.config.getoption("--compression") if request else False
+        )
 
     if use_compression:
         compression_config = CompressionConfiguration(
@@ -639,8 +641,8 @@ def create_client_config(
 
 
 def create_sync_client_config(
-    request,
-    cluster_mode: bool,
+    request=None,
+    cluster_mode: bool = False,
     credentials: Optional[ServerCredentials] = None,
     database_id: int = 0,
     addresses: Optional[List[NodeAddress]] = None,
@@ -670,7 +672,7 @@ def create_sync_client_config(
     if use_tls is not None:
         use_tls = use_tls
     else:
-        use_tls = request.config.getoption("--tls")
+        use_tls = request.config.getoption("--tls") if request else False
     tls_adv_conf = TlsAdvancedConfiguration(
         use_insecure_tls=tls_insecure,
         root_pem_cacerts=root_pem_cacerts,
@@ -683,7 +685,9 @@ def create_sync_client_config(
     if enable_compression is not None:
         use_compression = enable_compression
     else:
-        use_compression = request.config.getoption("--compression")
+        use_compression = (
+            request.config.getoption("--compression") if request else False
+        )
 
     if use_compression:
         compression_config = CompressionConfiguration(
