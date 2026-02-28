@@ -112,6 +112,13 @@ impl ::std::fmt::Display for NodeAddress {
     }
 }
 
+/// Initial connection metadata used as default OTel span attributes.
+#[derive(Clone, Debug)]
+pub struct OTelMetadata {
+    pub address: NodeAddress,
+    pub db_namespace: String,
+}
+
 #[derive(PartialEq, Eq, Clone, Default, Debug)]
 pub enum ReadFrom {
     #[default]

@@ -72,7 +72,7 @@ use tokio::task::JoinHandle;
 
 #[cfg(feature = "tokio-comp")]
 use crate::aio::DisconnectNotifier;
-use telemetrylib::{GlideOpenTelemetry, Telemetry};
+use telemetrylib::{GlideOpenTelemetry, GlideSpan, Telemetry};
 
 use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},
@@ -120,6 +120,23 @@ use self::{
     connections_logic::connect_and_check,
 };
 use crate::types::RetryMethod;
+
+/// Parses a `"host:port"` address string into its components.
+/// Returns `None` if the address has no `:` separator or the port is not a valid integer.
+fn parse_node_address(address: &str) -> Option<(&str, i64)> {
+    let (host, port_str) = address.rsplit_once(':')?;
+    let port = port_str.parse::<i64>().ok()?;
+    Some((host, port))
+}
+
+/// Sets the routed node's address on the command span for OTel reporting.
+/// Called after cluster routing resolves the actual target node.
+fn set_routed_node_on_span(span: &GlideSpan, address: &str) {
+    if let Some((host, port)) = parse_node_address(address) {
+        span.set_attribute("server.address", host.to_string());
+        span.set_attribute_i64("server.port", port);
+    }
+}
 
 pub(crate) const MUTEX_READ_ERR: &str = "Failed to obtain read lock. Poisoned mutex?";
 const MUTEX_WRITE_ERR: &str = "Failed to obtain write lock. Poisoned mutex?";
@@ -2587,6 +2604,10 @@ where
         let (address, mut conn) = Self::get_connection(routing, core, Some(cmd.clone()))
             .await
             .map_err(|err| (OperationTarget::NotFound, err))?;
+        // Update OTel span with actual routed node address
+        if let Some(span) = cmd.span() {
+            set_routed_node_on_span(&span, &address);
+        }
         conn.req_packed_command(&cmd)
             .await
             .map(Response::Single)
@@ -2601,6 +2622,10 @@ where
     ) -> OperationResult {
         trace!("try_pipeline_request");
         let (address, mut conn) = conn.await.map_err(|err| (OperationTarget::NotFound, err))?;
+        // Update OTel span with actual routed node address
+        if let Some(span) = pipeline.span() {
+            set_routed_node_on_span(&span, &address);
+        }
         conn.req_packed_commands(&pipeline, offset, count, None)
             .await
             .map(Response::Multiple)
@@ -4183,5 +4208,53 @@ mod pipeline_routing_tests {
             route_for_pipeline(&pipeline),
             Ok(Some(Route::new(12182, SlotAddr::Master)))
         );
+    }
+}
+
+#[cfg(test)]
+mod parse_node_address_tests {
+    use super::parse_node_address;
+
+    #[test]
+    fn host_and_port() {
+        assert_eq!(
+            parse_node_address("127.0.0.1:6379"),
+            Some(("127.0.0.1", 6379))
+        );
+    }
+
+    #[test]
+    fn hostname_and_port() {
+        assert_eq!(
+            parse_node_address("redis.example.com:6380"),
+            Some(("redis.example.com", 6380))
+        );
+    }
+
+    #[test]
+    fn ipv6_and_port() {
+        // rsplit_once splits on the last colon, giving the IPv6 prefix as host
+        assert_eq!(parse_node_address("::1:6379"), Some(("::1", 6379)));
+    }
+
+    #[test]
+    fn no_colon_returns_none() {
+        assert_eq!(parse_node_address("localhost"), None);
+    }
+
+    #[test]
+    fn invalid_port_returns_none() {
+        assert_eq!(parse_node_address("host:notaport"), None);
+    }
+
+    #[test]
+    fn empty_string_returns_none() {
+        assert_eq!(parse_node_address(""), None);
+    }
+
+    #[test]
+    fn port_only() {
+        // ":6379" → host="", port=6379
+        assert_eq!(parse_node_address(":6379"), Some(("", 6379)));
     }
 }

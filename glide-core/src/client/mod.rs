@@ -259,6 +259,7 @@ pub struct Client {
     // Optional compression manager for automatic compression/decompression
     compression_manager: Option<Arc<CompressionManager>>,
     pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
+    otel_metadata: types::OTelMetadata,
 }
 
 async fn run_with_timeout<T>(
@@ -429,12 +430,17 @@ impl Client {
 
     /// Handles SELECT command processing after successful execution.
     /// Updates database state for standalone, cluster, and lazy clients.
+    ///
+    /// Note: `db_namespace` is updated on `&mut self`, but `Client` is cloned
+    /// into each request handler. If concurrent tasks issue SELECT, a cloned
+    /// Client may report a stale `db_namespace` in OTel spans. This is an
+    /// acceptable trade-off since concurrent SELECTs are rare in practice.
     async fn handle_select_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
-        // Extract database ID from the SELECT command
         let database_id = self.extract_database_id_from_select(cmd)?;
 
-        // Update database state for all client types
         self.update_stored_database_id(database_id).await?;
+        // Keep OTel db.namespace in sync
+        self.otel_metadata.db_namespace = database_id.to_string();
         Ok(())
     }
 
@@ -1919,6 +1925,23 @@ impl Client {
             )
             .await;
 
+            // Extract connection metadata for OTel span attributes.
+            // Port 0 is normalized to the default (6379) for OTel reporting.
+            let otel_metadata = types::OTelMetadata {
+                address: request
+                    .addresses
+                    .first()
+                    .map(|addr| types::NodeAddress {
+                        host: addr.host.clone(),
+                        port: get_port(addr),
+                    })
+                    .unwrap_or_else(|| types::NodeAddress {
+                        host: "unknown".to_string(),
+                        port: 6379,
+                    }),
+                db_namespace: request.database_id.to_string(),
+            };
+
             // Create the Client first without IAM token manager
             let client = Self {
                 internal_client: internal_client_arc.clone(),
@@ -1927,6 +1950,7 @@ impl Client {
                 compression_manager: compression_manager.clone(),
                 iam_token_manager: None,
                 pubsub_synchronizer: pubsub_synchronizer.clone(),
+                otel_metadata,
             };
 
             let client_arc = Arc::new(RwLock::new(client));
@@ -2024,6 +2048,22 @@ impl Client {
             .map(|manager| manager.is_enabled())
             .unwrap_or(false)
     }
+
+    /// Returns the initial connection address, used as the default
+    /// OTel `server.address` span attribute.
+    pub fn server_address(&self) -> &str {
+        &self.otel_metadata.address.host
+    }
+
+    /// Returns the initial connection port, used as the default
+    /// OTel `server.port` span attribute.
+    pub fn server_port(&self) -> u16 {
+        self.otel_metadata.address.port
+    }
+
+    pub fn db_namespace(&self) -> &str {
+        &self.otel_metadata.db_namespace
+    }
 }
 
 pub trait GlideClientForTests {
@@ -2074,7 +2114,7 @@ mod tests {
 
     use redis::Cmd;
 
-    use crate::client::types::{ConnectionRequest, NodeAddress};
+    use crate::client::types::{ConnectionRequest, NodeAddress, OTelMetadata};
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, RequestTimeoutOption, TimeUnit, get_request_timeout,
     };
@@ -2340,6 +2380,13 @@ mod tests {
             iam_token_manager: None,
             compression_manager: None,
             pubsub_synchronizer,
+            otel_metadata: OTelMetadata {
+                address: NodeAddress {
+                    host: "localhost".to_string(),
+                    port: 6379,
+                },
+                db_namespace: "0".to_string(),
+            },
         }
     }
 
