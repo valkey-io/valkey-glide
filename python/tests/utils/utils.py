@@ -584,7 +584,11 @@ def create_client_config(
             min_compression_size=64,  # Only compress values >= 64 bytes
         )
     if cluster_mode:
-        valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
+        if valkey_cluster is None:
+            valkey_cluster = (
+                pytest.valkey_tls_cluster if use_tls else pytest.valkey_cluster
+            )  # type: ignore
+
         assert type(valkey_cluster) is ValkeyCluster
         k = min(3, len(valkey_cluster.nodes_addr))
         seed_nodes = random.sample(valkey_cluster.nodes_addr, k=k)
@@ -609,7 +613,11 @@ def create_client_config(
             compression=compression_config,
         )
     else:
-        valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
+        if valkey_cluster is None:
+            valkey_cluster = (
+                pytest.standalone_tls_cluster if use_tls else pytest.standalone_cluster
+            )  # type: ignore
+
         assert type(valkey_cluster) is ValkeyCluster
         return GlideClientConfiguration(
             addresses=(valkey_cluster.nodes_addr if addresses is None else addresses),
@@ -690,7 +698,8 @@ def create_sync_client_config(
         )
 
     if cluster_mode:
-        valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
+        if valkey_cluster is None:
+            valkey_cluster = pytest.valkey_tls_cluster if use_tls else pytest.valkey_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
         k = min(3, len(valkey_cluster.nodes_addr))
         seed_nodes = random.sample(valkey_cluster.nodes_addr, k=k)
@@ -713,7 +722,8 @@ def create_sync_client_config(
             compression=compression_config,
         )
     else:
-        valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
+        if valkey_cluster is None:
+            valkey_cluster = pytest.standalone_tls_cluster if use_tls else pytest.standalone_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
         return SyncGlideClientConfiguration(
             addresses=(valkey_cluster.nodes_addr if addresses is None else addresses),

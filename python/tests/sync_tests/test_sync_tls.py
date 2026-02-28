@@ -3,6 +3,7 @@
 import pytest
 from glide_shared.config import (
     ConfigurationError,
+    NodeAddress,
     ProtocolVersion,
 )
 from glide_sync.glide_client import TGlideClient
@@ -195,6 +196,29 @@ class TestSyncTls:
             client_key_pem=client_key,
         )
         client = create_sync_client_with_retry(config)
+
+        assert_connected_sync(client)
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("ip_address", ["127.0.0.1", "::1"])
+    def test_tls_with_ip_address_connection_succeeds(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion, ip_address: str
+    ):
+        """Test TLS connection with IPv4 and IPv6 addresses."""
+        cluster = pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
+        port = cluster.nodes_addr[0].port
+        address = NodeAddress(ip_address, port)
+
+        client = create_sync_client(
+            request=request,
+            cluster_mode=cluster_mode,
+            addresses=[address],
+            protocol=protocol,
+            use_tls=True,
+            root_pem_cacerts=get_ca_certificate(),
+        )
 
         assert_connected_sync(client)
         client.close()

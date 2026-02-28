@@ -4,6 +4,7 @@ import pytest
 from glide.glide_client import TGlideClient
 from glide_shared.config import (
     ConfigurationError,
+    NodeAddress,
     ProtocolVersion,
 )
 
@@ -138,6 +139,29 @@ class TestTls:
         ping the cluster without strict cert checks.
         """
         await assert_connected(glide_tls_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("ip_address", ["127.0.0.1", "::1"])
+    async def test_tls_with_ip_address_connection_succeeds(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion, ip_address: str
+    ):
+        """Test TLS connection with IPv4 and IPv6 addresses."""
+        cluster = pytest.valkey_tls_cluster if cluster_mode else pytest.standalone_tls_cluster  # type: ignore
+        port = cluster.nodes_addr[0].port
+        address = NodeAddress(ip_address, port)
+
+        client = await create_client(
+            request=request,
+            cluster_mode=cluster_mode,
+            addresses=[address],
+            protocol=protocol,
+            use_tls=True,
+            root_pem_cacerts=get_ca_certificate(),
+        )
+
+        await assert_connected(client)
+        await client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
