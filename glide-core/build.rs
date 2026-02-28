@@ -20,4 +20,11 @@ fn build_protobuf() {
 fn main() {
     #[cfg(feature = "proto")]
     build_protobuf();
+
+    // Create 'dns_tests_enabled' configuration flag.
+    // See 'dns_tests.rs' for more details.
+    println!("cargo::rustc-check-cfg=cfg(dns_tests_enabled)");
+    if std::env::var("VALKEY_GLIDE_DNS_TESTS_ENABLED").is_ok() {
+        println!("cargo:rustc-cfg=dns_tests_enabled");
+    }
 }

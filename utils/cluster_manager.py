@@ -330,19 +330,19 @@ def next_free_port(
 ) -> int:
     tic = time.perf_counter()
 
-    sock4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock6 = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-    sock6.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-
     timeout_start = time.time()
     while time.time() < timeout_start + timeout:
         try:
             port = random.randint(min_port, max_port)
 
-            # Check IPv4 and IPv6 ports.
+            # Check IPv4 address.
+            sock4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock4.bind((DEFAULT_HOST_IPV4, port))
             sock4.close()
 
+            # Check IPv6 address.
+            sock6 = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            sock6.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
             sock6.bind((DEFAULT_HOST_IPV6, port))
             sock6.close()
 
