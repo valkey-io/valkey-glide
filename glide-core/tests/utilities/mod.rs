@@ -89,7 +89,6 @@ pub enum Module {
 }
 
 pub fn get_available_port() -> u16 {
-
     let attempts = 100;
     for _ in 0..attempts {
         let port = rand::random::<u16>().max(6379);
