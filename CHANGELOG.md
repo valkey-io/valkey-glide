@@ -23,6 +23,7 @@
 * CORE: Track HELLO and AUTH state for reconnection ([#5145](https://github.com/valkey-io/valkey-glide/issues/5145))
 * CORE: Add support for ZRANGEBYLEX, ZRANGEBYSCORE, ZREVRANGE, ZREVRANGEBYLEX, and ZREVRANGEBYSCORE commands in request_type ([#5379](https://github.com/valkey-io/valkey-glide/pull/5379))
 * Go: Add CLUSTER management commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER SLOTS, CLUSTER KEYSLOT, CLUSTER MYID, CLUSTER MYSHARDID, CLUSTER GETKEYSINSLOT, CLUSTER COUNTKEYSINSLOT, CLUSTER LINKS) ([#5206](https://github.com/valkey-io/valkey-glide/issues/5206))
+* JAVA: Add cluster information and topology commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER SLOTS, CLUSTER LINKS, CLUSTER MYID, CLUSTER MYSHARDID) with batch support ([#5106](https://github.com/valkey-io/valkey-glide/issues/5106))
 
 #### Fixes
 * CORE: Fix empty hostname in CLUSTER SLOTS metadata causing AllConnectionsUnavailable ([#5367](https://github.com/valkey-io/valkey-glide/issues/5367)). AWS ElastiCache (plaintext, cluster mode) returns `hostname: ""` in node metadata, which was used as the connection address instead of falling back to the IP.
