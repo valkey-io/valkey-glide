@@ -493,7 +493,7 @@ public interface SortedSetBaseCommands {
      *     <ul>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZPOPMIN</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ul>
      *
@@ -523,7 +523,7 @@ public interface SortedSetBaseCommands {
      *     <ul>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZPOPMIN</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ul>
      *
@@ -629,7 +629,7 @@ public interface SortedSetBaseCommands {
      *     <ul>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZPOPMAX</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ul>
      *
@@ -659,7 +659,7 @@ public interface SortedSetBaseCommands {
      *     <ul>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZPOPMAX</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ul>
      *
@@ -2025,7 +2025,7 @@ public interface SortedSetBaseCommands {
      *     <ol>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZMPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
@@ -2059,7 +2059,7 @@ public interface SortedSetBaseCommands {
      *     <ol>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZMPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
@@ -2094,7 +2094,7 @@ public interface SortedSetBaseCommands {
      *     <ol>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZMPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
@@ -2131,7 +2131,7 @@ public interface SortedSetBaseCommands {
      *     <ol>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZMPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ol>
      *

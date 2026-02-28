@@ -103,8 +103,8 @@ import response.ResponseOuterClass.Response;
  * Use {@link #createClient} to request a client.
  *
  * @see For full documentation refer to <a
- *     href="https://github.com/valkey-io/valkey-glide/wiki/Java-Wrapper#cluster">Valkey Glide
- *     Wiki</a>.
+ *     href="https://glide.valkey.io/how-to/client-initialization/#cluster">Valkey GLIDE
+ *     Documentation</a>.
  */
 public class GlideClusterClient extends BaseClient
         implements ConnectionManagementClusterCommands,

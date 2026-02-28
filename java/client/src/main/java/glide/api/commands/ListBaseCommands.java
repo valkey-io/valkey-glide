@@ -751,7 +751,7 @@ public interface ListBaseCommands {
      *     <ul>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BLPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ul>
      *
@@ -781,7 +781,7 @@ public interface ListBaseCommands {
      *     <ul>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BLPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ul>
      *
@@ -811,7 +811,7 @@ public interface ListBaseCommands {
      *     <ul>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BRPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ul>
      *
@@ -841,7 +841,7 @@ public interface ListBaseCommands {
      *     <ul>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BRPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ul>
      *
@@ -1030,7 +1030,7 @@ public interface ListBaseCommands {
      *     <ol>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BLMPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
@@ -1064,7 +1064,7 @@ public interface ListBaseCommands {
      *     <ol>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BLMPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
@@ -1098,7 +1098,7 @@ public interface ListBaseCommands {
      *     <ol>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BLMPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
@@ -1131,7 +1131,7 @@ public interface ListBaseCommands {
      *     <ol>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BLMPOP</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
@@ -1265,7 +1265,7 @@ public interface ListBaseCommands {
      *       <li>When in cluster mode, all <code>source</code> and <code>destination</code> must map
      *           to the same hash slot.
      *       <li><code>BLMove</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
@@ -1311,7 +1311,7 @@ public interface ListBaseCommands {
      *       <li>When in cluster mode, all <code>source</code> and <code>destination</code> must map
      *           to the same hash slot.
      *       <li><code>BLMove</code> is a client blocking command, see <a
-     *           href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands">Blocking
+     *           href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ol>
      *

@@ -913,7 +913,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
     """
     Client used for connection to cluster servers.
     For full documentation, see
-    https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#cluster
+    https://glide.valkey.io/how-to/client-initialization/#cluster
     """
 
     def _build_cluster_scan_args(self, match, count, type, allow_non_covered_slots):
@@ -1001,7 +1001,7 @@ class GlideClient(BaseClient, StandaloneCommands):
     """
     Client used for connection to standalone servers.
     For full documentation, see
-    https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#standalone
+    https://glide.valkey.io/how-to/client-initialization/#standalone
     """
 
 

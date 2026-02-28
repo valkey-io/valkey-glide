@@ -20,9 +20,8 @@ public interface GenericClusterCommands {
      * subcommands, should be added as a separate value in <code>args</code>.<br>
      * The command will be routed automatically based on the passed command's default request policy.
      *
-     * @see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command">Valkey
-     *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
+     * @see <a href="https://glide.valkey.io/concepts/client-features/custom-commands/">Valkey GLIDE
+     *     Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command including the command name.
      * @return The returned value for the custom command.
      * @example
@@ -38,9 +37,8 @@ public interface GenericClusterCommands {
      * subcommands, should be added as a separate value in <code>args</code>.<br>
      * The command will be routed automatically based on the passed command's default request policy.
      *
-     * @see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command">Valkey
-     *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
+     * @see <a href="https://glide.valkey.io/concepts/client-features/custom-commands/">Valkey GLIDE
+     *     Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command including the command name.
      * @return The returned value for the custom command.
      * @example
@@ -55,9 +53,8 @@ public interface GenericClusterCommands {
      * Executes a single command, without checking inputs. Every part of the command, including
      * subcommands, should be added as a separate value in <code>args</code>.
      *
-     * @see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command">Valkey
-     *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
+     * @see <a href="https://glide.valkey.io/concepts/client-features/custom-commands/">Valkey GLIDE
+     *     Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command including the command name
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -76,9 +73,8 @@ public interface GenericClusterCommands {
      * Executes a single command, without checking inputs. Every part of the command, including
      * subcommands, should be added as a separate value in <code>args</code>.
      *
-     * @see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command">Valkey
-     *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
+     * @see <a href="https://glide.valkey.io/concepts/client-features/custom-commands/">Valkey GLIDE
+     *     Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command including the command name
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -171,8 +167,7 @@ public interface GenericClusterCommands {
      * <p>This command is similar to the <code>SCAN</code> command, but it is designed to work in a
      * Cluster environment. The main difference is that this command uses a {@link ClusterScanCursor}
      * object to manage iterations. For more information about the Cluster Scan implementation, see <a
-     * href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan">Cluster
-     * Scan</a>.
+     * href="https://glide.valkey.io/concepts/client-features/cluster-scan/">Cluster Scan</a>.
      *
      * <p>As with the <code>SCAN</code> command, this command is a cursor-based iterator. This means
      * that at every call of the command, the server returns an updated cursor ({@link
@@ -230,8 +225,7 @@ public interface GenericClusterCommands {
      * <p>This command is similar to the <code>SCAN</code> command, but it is designed to work in a
      * Cluster environment. The main difference is that this command uses a {@link ClusterScanCursor}
      * object to manage iterations. For more information about the Cluster Scan implementation, see <a
-     * href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan">Cluster
-     * Scan</a>.
+     * href="https://glide.valkey.io/concepts/client-features/cluster-scan/">Cluster Scan</a>.
      *
      * <p>As with the <code>SCAN</code> command, this command is a cursor-based iterator. This means
      * that at every call of the command, the server returns an updated cursor ({@link
@@ -288,8 +282,7 @@ public interface GenericClusterCommands {
      * <p>This command is similar to the <code>SCAN</code> command, but it is designed to work in a
      * Cluster environment. The main difference is that this command uses a {@link ClusterScanCursor}
      * object to manage iterations. For more information about the Cluster Scan implementation, see <a
-     * href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan">Cluster
-     * Scan</a>.
+     * href="https://glide.valkey.io/concepts/client-features/cluster-scan/">Cluster Scan</a>.
      *
      * <p>As with the <code>SCAN</code> command, this command is a cursor-based iterator. This means
      * that at every call of the command, the server returns an updated cursor ({@link
@@ -349,8 +342,7 @@ public interface GenericClusterCommands {
      * <p>This command is similar to the <code>SCAN</code> command, but it is designed to work in a
      * Cluster environment. The main difference is that this command uses a {@link ClusterScanCursor}
      * object to manage iterations. For more information about the Cluster Scan implementation, see <a
-     * href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan">Cluster
-     * Scan</a>.
+     * href="https://glide.valkey.io/concepts/client-features/cluster-scan/">Cluster Scan</a>.
      *
      * <p>As with the <code>SCAN</code> command, this command is a cursor-based iterator. This means
      * that at every call of the command, the server returns an updated cursor ({@link

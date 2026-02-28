@@ -34,7 +34,7 @@ class ClusterCommands(CoreCommands):
     ) -> TClusterResponse[TResult]:
         """
         Executes a single command, without checking inputs.
-        See the [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
+        See the [Valkey GLIDE Documentation](https://glide.valkey.io/concepts/client-features/custom-commands/)
         for details on the restrictions and limitations of the custom command API.
 
         This function should only be used for single-response commands. Commands that don't return complete response and awaits
@@ -1256,7 +1256,7 @@ class ClusterCommands(CoreCommands):
         For each iteration, the new cursor object should be used to continue the scan.
         Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
         For more information about the Cluster Scan implementation, see
-        [Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan).
+        [Cluster Scan](https://glide.valkey.io/concepts/client-features/cluster-scan/).
 
         Like the SCAN command, the method can be used to iterate over the keys in the database,
         returning all keys the database has from when the scan started until the scan ends.
