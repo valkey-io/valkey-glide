@@ -127,7 +127,10 @@ const MUTEX_WRITE_ERR: &str = "Failed to obtain write lock. Poisoned mutex?";
 /// underlying connections maintained for each node in the cluster, as well
 /// as common parameters for connecting to nodes and executing commands.
 #[derive(Clone)]
-pub struct ClusterConnection<C = MultiplexedConnection>(mpsc::Sender<Message<C>>);
+pub struct ClusterConnection<C = MultiplexedConnection> {
+    sender: mpsc::Sender<Message<C>>,
+    response_timeout: Duration,
+}
 
 impl<C> ClusterConnection<C>
 where
@@ -139,6 +142,7 @@ where
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
     ) -> RedisResult<ClusterConnection<C>> {
+        let response_timeout = cluster_params.response_timeout;
         ClusterConnInner::new(
             initial_nodes,
             cluster_params,
@@ -156,7 +160,10 @@ where
             };
             #[cfg(feature = "tokio-comp")]
             tokio::spawn(stream);
-            ClusterConnection(tx)
+            ClusterConnection {
+                sender: tx,
+                response_timeout,
+            }
         })
     }
 
@@ -224,7 +231,7 @@ where
         cluster_scan_args: ClusterScanArgs,
     ) -> RedisResult<(ScanStateRC, Vec<Value>)> {
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::ClusterScan { cluster_scan_args },
                 sender,
@@ -258,7 +265,7 @@ where
     ) -> RedisResult<Value> {
         trace!("route_command");
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::Cmd {
                     cmd: Arc::new(cmd.clone()),
@@ -273,26 +280,40 @@ where
                     format!("Cluster: Error occurred while trying to send command to internal sender. {e:?}"),
                 ))
             })?;
-        receiver
+
+        // Wrap receiver with timeout to prevent indefinite blocking during reconnects
+        #[cfg(feature = "tokio-comp")]
+        {
+            tokio::time::timeout(self.response_timeout, async move {
+                receiver
+                    .await
+                    .unwrap_or_else(|e| {
+                        Err(RedisError::from(io::Error::new(
+                            io::ErrorKind::BrokenPipe,
+                            format!(
+                                "Cluster: Failed to receive command response from internal sender. {e:?}"
+                            ),
+                        )))
+                    })
+                    .map(|response| match response {
+                        Response::Single(value) => value,
+                        Response::ClusterScanResult(..) | Response::Multiple(_) => unreachable!(),
+                    })
+            })
             .await
-            .unwrap_or_else(|e| {
-                Err(RedisError::from(io::Error::new(
-                    io::ErrorKind::BrokenPipe,
-                    format!(
-                        "Cluster: Failed to receive command response from internal sender. {e:?}"
-                    ),
-                )))
-            })
-            .map(|response| match response {
-                Response::Single(value) => value,
-                Response::ClusterScanResult(..) | Response::Multiple(_) => unreachable!(),
-            })
+            .map_err(|_| {
+                RedisError::from(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "Cluster: Request timed out",
+                ))
+            })?
+        }
     }
 
     /// Send commands in `pipeline` to the given `route`. If `route` is [None], it will be computed from `pipeline`.
-    /// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.  
-    ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
-    ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).  
+    /// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.
+    ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).
+    ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).
     ///     TODO: add wiki link.
     pub async fn route_pipeline<'a>(
         &'a mut self,
@@ -303,7 +324,7 @@ where
         pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisResult<Vec<Value>> {
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::Pipeline {
                     pipeline: Arc::new(pipeline.clone()),
@@ -320,18 +341,31 @@ where
                 RedisError::from(io::Error::new(io::ErrorKind::BrokenPipe, err.to_string()))
             })?;
 
-        receiver
+        // Wrap receiver with timeout to prevent indefinite blocking during reconnects
+        #[cfg(feature = "tokio-comp")]
+        {
+            tokio::time::timeout(self.response_timeout, async move {
+                receiver
+                    .await
+                    .unwrap_or_else(|err| {
+                        Err(RedisError::from(io::Error::new(
+                            io::ErrorKind::BrokenPipe,
+                            err.to_string(),
+                        )))
+                    })
+                    .map(|response| match response {
+                        Response::Multiple(values) => values,
+                        Response::ClusterScanResult(..) | Response::Single(_) => unreachable!(),
+                    })
+            })
             .await
-            .unwrap_or_else(|err| {
-                Err(RedisError::from(io::Error::new(
-                    io::ErrorKind::BrokenPipe,
-                    err.to_string(),
-                )))
-            })
-            .map(|response| match response {
-                Response::Multiple(values) => values,
-                Response::ClusterScanResult(..) | Response::Single(_) => unreachable!(),
-            })
+            .map_err(|_| {
+                RedisError::from(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "Cluster: Pipeline request timed out",
+                ))
+            })?
+        }
     }
     /// Update the password used to authenticate with all cluster servers
     pub async fn update_connection_password(
@@ -402,7 +436,7 @@ where
         operation_request: Operation,
     ) -> RedisResult<Value> {
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::OperationRequest(operation_request),
                 sender,
@@ -410,18 +444,31 @@ where
             .await
             .map_err(|_| RedisError::from(io::Error::from(io::ErrorKind::BrokenPipe)))?;
 
-        receiver
+        // Wrap receiver with timeout to prevent indefinite blocking during reconnects
+        #[cfg(feature = "tokio-comp")]
+        {
+            tokio::time::timeout(self.response_timeout, async move {
+                receiver
+                    .await
+                    .unwrap_or_else(|err| {
+                        Err(RedisError::from(io::Error::new(
+                            io::ErrorKind::BrokenPipe,
+                            err.to_string(),
+                        )))
+                    })
+                    .map(|response| match response {
+                        Response::Single(values) => values,
+                        Response::ClusterScanResult(..) | Response::Multiple(_) => unreachable!(),
+                    })
+            })
             .await
-            .unwrap_or_else(|err| {
-                Err(RedisError::from(io::Error::new(
-                    io::ErrorKind::BrokenPipe,
-                    err.to_string(),
-                )))
-            })
-            .map(|response| match response {
-                Response::Single(values) => values,
-                Response::ClusterScanResult(..) | Response::Multiple(_) => unreachable!(),
-            })
+            .map_err(|_| {
+                RedisError::from(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "Cluster: Operation request timed out",
+                ))
+            })?
+        }
     }
 }
 
@@ -704,9 +751,9 @@ enum CmdArg<C> {
         count: usize,
         route: Option<InternalSingleNodeRouting<C>>,
         sub_pipeline: bool,
-        /// Configures retry behavior for pipeline commands.  
-        ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
-        ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).  
+        /// Configures retry behavior for pipeline commands.
+        ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).
+        ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).
         pipeline_retry_strategy: PipelineRetryStrategy,
     },
     ClusterScan {
@@ -780,8 +827,8 @@ struct Message<C: Sized> {
 
 enum RecoverFuture {
     RefreshingSlots(JoinHandle<RedisResult<()>>),
-    ReconnectToInitialNodes(BoxFuture<'static, ()>),
-    Reconnect(BoxFuture<'static, ()>),
+    ReconnectToInitialNodes(JoinHandle<()>),
+    Reconnect(JoinHandle<Vec<Arc<Notify>>>),
 }
 
 enum ConnectionState {
@@ -3048,7 +3095,7 @@ where
         Ok((address, conn))
     }
 
-    fn poll_recover(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<(), RedisError>> {
+    fn poll_recover(&mut self, _cx: &mut task::Context<'_>) -> Poll<Result<(), RedisError>> {
         trace!("entered poll_recover");
 
         let recover_future = match &mut self.state {
@@ -3072,12 +3119,13 @@ where
 
                         if e.kind() == ErrorKind::AllConnectionsUnavailable {
                             // If all connections unavailable, try reconnect
-                            self.state =
-                                ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(
-                                    Box::pin(ClusterConnInner::reconnect_to_initial_nodes(
-                                        self.inner.clone(),
-                                    )),
-                                ));
+                            let inner = self.inner.clone();
+                            let handle = tokio::spawn(async move {
+                                ClusterConnInner::reconnect_to_initial_nodes(inner).await
+                            });
+                            self.state = ConnectionState::Recover(
+                                RecoverFuture::ReconnectToInitialNodes(handle),
+                            );
                             return Poll::Ready(Err(e));
                         } else {
                             // Retry refresh
@@ -3104,12 +3152,13 @@ where
                             // TODO - consider a gracefully closing of the client
                             // Since a panic indicates a bug in the refresh logic,
                             // it might be safer to close the client entirely
-                            self.state =
-                                ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(
-                                    Box::pin(ClusterConnInner::reconnect_to_initial_nodes(
-                                        self.inner.clone(),
-                                    )),
-                                ));
+                            let inner = self.inner.clone();
+                            let handle = tokio::spawn(async move {
+                                ClusterConnInner::reconnect_to_initial_nodes(inner).await
+                            });
+                            self.state = ConnectionState::Recover(
+                                RecoverFuture::ReconnectToInitialNodes(handle),
+                            );
 
                             // Report this critical error to clients
                             let err = RedisError::from((
@@ -3129,18 +3178,64 @@ where
                 // Always return Ready to not block poll_flush
                 Poll::Ready(Ok(()))
             }
-            // Other cases remain unchanged
-            RecoverFuture::ReconnectToInitialNodes(ref mut future) => {
-                ready!(future.as_mut().poll(cx));
-                trace!("Reconnected to initial nodes");
-                self.state = ConnectionState::PollComplete;
-                Poll::Ready(Ok(()))
+            RecoverFuture::ReconnectToInitialNodes(ref mut handle) => {
+                // Check if the task has completed
+                match handle.now_or_never() {
+                    Some(Ok(())) => {
+                        trace!("Reconnected to initial nodes");
+                        self.state = ConnectionState::PollComplete;
+                        Poll::Ready(Ok(()))
+                    }
+                    Some(Err(join_err)) => {
+                        if join_err.is_cancelled() {
+                            trace!("Reconnect to initial nodes task was aborted");
+                            self.state = ConnectionState::PollComplete;
+                            Poll::Ready(Ok(()))
+                        } else {
+                            warn!("Reconnect to initial nodes task panicked: {:?} - marking recovery as complete", join_err);
+                            self.state = ConnectionState::PollComplete;
+                            Poll::Ready(Ok(()))
+                        }
+                    }
+                    None => {
+                        // Task is still running - return error to indicate connections unavailable
+                        Poll::Ready(Err(RedisError::from((
+                            ErrorKind::AllConnectionsUnavailable,
+                            "Reconnecting to initial nodes",
+                        ))))
+                    }
+                }
             }
-            RecoverFuture::Reconnect(ref mut future) => {
-                ready!(future.as_mut().poll(cx));
-                trace!("Reconnected connections");
-                self.state = ConnectionState::PollComplete;
-                Poll::Ready(Ok(()))
+            RecoverFuture::Reconnect(ref mut handle) => {
+                // Check if the task has completed
+                match handle.now_or_never() {
+                    Some(Ok(_notifiers)) => {
+                        trace!("Reconnected connections");
+                        self.state = ConnectionState::PollComplete;
+                        Poll::Ready(Ok(()))
+                    }
+                    Some(Err(join_err)) => {
+                        if join_err.is_cancelled() {
+                            trace!("Reconnect task was aborted");
+                            self.state = ConnectionState::PollComplete;
+                            Poll::Ready(Ok(()))
+                        } else {
+                            warn!(
+                                "Reconnect task panicked: {:?} - marking recovery as complete",
+                                join_err
+                            );
+                            self.state = ConnectionState::PollComplete;
+                            Poll::Ready(Ok(()))
+                        }
+                    }
+                    None => {
+                        // Task is still running - return error to indicate connections unavailable
+                        Poll::Ready(Err(RedisError::from((
+                            ErrorKind::AllConnectionsUnavailable,
+                            "Reconnecting",
+                        ))))
+                    }
+                }
             }
         }
     }
@@ -3427,21 +3522,25 @@ where
                         ConnectionState::Recover(RecoverFuture::RefreshingSlots(task_handle));
                 }
                 PollFlushAction::ReconnectFromInitialConnections => {
+                    let inner = self.inner.clone();
+                    let handle = tokio::spawn(async move {
+                        ClusterConnInner::reconnect_to_initial_nodes(inner).await
+                    });
                     self.state =
-                        ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(Box::pin(
-                            ClusterConnInner::reconnect_to_initial_nodes(self.inner.clone()),
-                        )));
+                        ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(handle));
                 }
                 PollFlushAction::Reconnect(addresses) => {
-                    self.state = ConnectionState::Recover(RecoverFuture::Reconnect(Box::pin(
+                    let inner = self.inner.clone();
+                    let handle = tokio::spawn(async move {
                         ClusterConnInner::trigger_refresh_connection_tasks(
-                            self.inner.clone(),
+                            inner,
                             addresses,
                             RefreshConnectionType::OnlyUserConnection,
                             true,
                         )
-                        .map(|_| ()), // Convert Vec<Arc<Notify>> to () as it's not needed here
-                    )));
+                        .await
+                    });
+                    self.state = ConnectionState::Recover(RecoverFuture::Reconnect(handle));
                 }
             }
         }
