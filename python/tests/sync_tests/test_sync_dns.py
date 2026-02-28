@@ -18,6 +18,7 @@ import pytest
 from glide_shared.config import NodeAddress
 
 from tests.sync_tests.conftest import create_sync_client
+from tests.test_constants import HOSTNAME_NO_TLS, HOSTNAME_TLS
 from tests.utils.utils import assert_connected_sync, get_ca_certificate
 
 
@@ -64,7 +65,7 @@ class TestSyncDns:
             request=request,
             cluster_mode=cluster_mode,
             use_tls=False,
-            hostname="valkey.glide.test.no_tls.com",
+            hostname=HOSTNAME_NO_TLS,
         )
 
         assert_connected_sync(client)
@@ -94,7 +95,7 @@ class TestSyncDns:
             request=request,
             cluster_mode=cluster_mode,
             use_tls=True,
-            hostname="valkey.glide.test.tls.com",
+            hostname=HOSTNAME_TLS,
         )
 
         assert_connected_sync(client)
@@ -112,5 +113,5 @@ class TestSyncDns:
                 request=request,
                 cluster_mode=cluster_mode,
                 use_tls=True,
-                hostname="valkey.glide.test.no_tls.com",
+                hostname=HOSTNAME_NO_TLS,
             )

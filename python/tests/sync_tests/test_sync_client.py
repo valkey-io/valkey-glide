@@ -105,6 +105,7 @@ from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClien
 from glide_sync.sync_commands.script import Script
 
 from tests.sync_tests.conftest import create_sync_client
+from tests.test_constants import HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6
 from tests.utils.utils import (
     check_function_list_response,
     check_function_stats_response,
@@ -475,7 +476,7 @@ class TestGlideClients:
                 pytest.fail(f"Child process failed with status {status}")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("ip_address", ["127.0.0.1", "::1"])
+    @pytest.mark.parametrize("ip_address", [HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6])
     def test_connect_with_ip_address_succeeds(
         self, request, cluster_mode: bool, ip_address: str
     ):

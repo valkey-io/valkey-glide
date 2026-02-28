@@ -9,6 +9,7 @@ from glide_shared.config import (
 )
 
 from tests.async_tests.conftest import create_client
+from tests.test_constants import HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6
 from tests.utils.utils import (
     assert_connected,
     create_client_config,
@@ -142,7 +143,7 @@ class TestTls:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("ip_address", ["127.0.0.1", "::1"])
+    @pytest.mark.parametrize("ip_address", [HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6])
     async def test_tls_with_ip_address_connection_succeeds(
         self, request, cluster_mode: bool, protocol: ProtocolVersion, ip_address: str
     ):

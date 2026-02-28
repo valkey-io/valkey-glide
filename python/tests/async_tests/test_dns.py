@@ -18,6 +18,7 @@ import pytest
 from glide_shared.config import NodeAddress
 
 from tests.async_tests.conftest import create_client
+from tests.test_constants import HOSTNAME_NO_TLS, HOSTNAME_TLS
 from tests.utils.utils import assert_connected, get_ca_certificate
 
 
@@ -67,7 +68,7 @@ class TestDns:
             request=request,
             cluster_mode=cluster_mode,
             use_tls=False,
-            hostname="valkey.glide.test.no_tls.com",
+            hostname=HOSTNAME_NO_TLS,
         )
 
         await assert_connected(client)
@@ -99,7 +100,7 @@ class TestDns:
             request=request,
             cluster_mode=cluster_mode,
             use_tls=True,
-            hostname="valkey.glide.test.tls.com",
+            hostname=HOSTNAME_TLS,
         )
 
         await assert_connected(client)
@@ -117,5 +118,5 @@ class TestDns:
                 request=request,
                 cluster_mode=cluster_mode,
                 use_tls=True,
-                hostname="valkey.glide.test.no_tls.com",
+                hostname=HOSTNAME_NO_TLS,
             )
