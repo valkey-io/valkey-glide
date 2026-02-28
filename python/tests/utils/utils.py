@@ -554,12 +554,20 @@ def create_client_config(
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
     reconciliation_interval_ms: Optional[int] = None,
+    root_pem_cacerts: Optional[bytes] = None,
+    client_cert_pem: Optional[bytes] = None,
+    client_key_pem: Optional[bytes] = None,
 ) -> Union[GlideClusterClientConfiguration, GlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
     else:
         use_tls = request.config.getoption("--tls")
-    tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
+    tls_adv_conf = TlsAdvancedConfiguration(
+        use_insecure_tls=tls_insecure,
+        root_pem_cacerts=root_pem_cacerts,
+        client_cert_pem=client_cert_pem,
+        client_key_pem=client_key_pem,
+    )
 
     # Create compression configuration if enabled
     compression_config = None
@@ -1789,6 +1797,14 @@ async def create_client_with_retry(config, max_retries: int = 3):
             base_delay = 2**i
             jitter = base_delay * random.uniform(-0.25, 0.25)
             time.sleep(base_delay + jitter)
+
+
+async def assert_connected(client: TGlideClient) -> None:
+    """
+    Assert that the client is connected.
+    """
+    result = await client.ping()
+    assert result == b"PONG"
 
 
 class SubscriptionMethod(IntEnum):
