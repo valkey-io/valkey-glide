@@ -10,7 +10,6 @@ import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
-import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.PeriodicChecksConfig;
