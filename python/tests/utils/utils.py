@@ -585,9 +585,7 @@ def create_client_config(
         )
     if cluster_mode:
         if valkey_cluster is None:
-            valkey_cluster = (
-                pytest.valkey_tls_cluster if use_tls else pytest.valkey_cluster
-            )  # type: ignore
+            valkey_cluster = pytest.valkey_tls_cluster if use_tls else pytest.valkey_cluster  # type: ignore[attr-defined]
 
         assert type(valkey_cluster) is ValkeyCluster
         k = min(3, len(valkey_cluster.nodes_addr))
@@ -614,9 +612,7 @@ def create_client_config(
         )
     else:
         if valkey_cluster is None:
-            valkey_cluster = (
-                pytest.standalone_tls_cluster if use_tls else pytest.standalone_cluster
-            )  # type: ignore
+            valkey_cluster = pytest.standalone_tls_cluster if use_tls else pytest.standalone_cluster  # type: ignore[attr-defined]
 
         assert type(valkey_cluster) is ValkeyCluster
         return GlideClientConfiguration(
@@ -699,7 +695,7 @@ def create_sync_client_config(
 
     if cluster_mode:
         if valkey_cluster is None:
-            valkey_cluster = pytest.valkey_tls_cluster if use_tls else pytest.valkey_cluster  # type: ignore
+            valkey_cluster = pytest.valkey_tls_cluster if use_tls else pytest.valkey_cluster  # type: ignore[attr-defined]
         assert type(valkey_cluster) is ValkeyCluster
         k = min(3, len(valkey_cluster.nodes_addr))
         seed_nodes = random.sample(valkey_cluster.nodes_addr, k=k)
@@ -723,7 +719,7 @@ def create_sync_client_config(
         )
     else:
         if valkey_cluster is None:
-            valkey_cluster = pytest.standalone_tls_cluster if use_tls else pytest.standalone_cluster  # type: ignore
+            valkey_cluster = pytest.standalone_tls_cluster if use_tls else pytest.standalone_cluster  # type: ignore[attr-defined]
         assert type(valkey_cluster) is ValkeyCluster
         return SyncGlideClientConfiguration(
             addresses=(valkey_cluster.nodes_addr if addresses is None else addresses),
