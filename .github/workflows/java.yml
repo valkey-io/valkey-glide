@@ -344,6 +344,42 @@ jobs:
               working-directory: java/e2e/lambda-test
               run: docker compose down -v
 
+    test-dns-failover:
+        name: DNS Failover Test
+        timeout-minutes: 30
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up JDK 21
+              uses: actions/setup-java@v4
+              with:
+                  distribution: "temurin"
+                  java-version: 21
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ubuntu
+                  target: x86_64-unknown-linux-gnu
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  language: java
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "29.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Run Docker Test
+              working-directory: java/e2e/dns-failover-test
+              run: ./run-test.sh
+
+            - name: Cleanup Docker
+              if: always()
+              working-directory: java/e2e/dns-failover-test
+              run: docker compose down -v
+
     get-containers:
         runs-on: ubuntu-latest
         if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
