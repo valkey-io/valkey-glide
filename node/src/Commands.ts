@@ -4546,6 +4546,145 @@ export function createPubSubShardNumSub(
 /**
  * @internal
  */
+export function createSubscribeLazy(
+    channels: GlideString[],
+): command_request.Command {
+    return createCommand(RequestType.Subscribe, channels);
+}
+
+/**
+ * @internal
+ */
+export function createSubscribe(
+    channels: GlideString[],
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.SubscribeBlocking, [
+        ...channels,
+        timeout.toString(),
+    ]);
+}
+
+/**
+ * @internal
+ */
+export function createPSubscribeLazy(
+    patterns: GlideString[],
+): command_request.Command {
+    return createCommand(RequestType.PSubscribe, patterns);
+}
+
+/**
+ * @internal
+ */
+export function createPSubscribe(
+    patterns: GlideString[],
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.PSubscribeBlocking, [
+        ...patterns,
+        timeout.toString(),
+    ]);
+}
+
+/**
+ * @internal
+ */
+export function createUnsubscribeLazy(
+    channels?: GlideString[],
+): command_request.Command {
+    return createCommand(RequestType.Unsubscribe, channels ? channels : []);
+}
+
+/**
+ * @internal
+ */
+export function createUnsubscribe(
+    channels: GlideString[],
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.UnsubscribeBlocking, [
+        ...channels,
+        timeout.toString(),
+    ]);
+}
+
+/**
+ * @internal
+ */
+export function createPUnsubscribeLazy(
+    patterns?: GlideString[],
+): command_request.Command {
+    return createCommand(RequestType.PUnsubscribe, patterns ?? []);
+}
+
+/**
+ * @internal
+ */
+export function createPUnsubscribe(
+    patterns: GlideString[],
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.PUnsubscribeBlocking, [
+        ...patterns,
+        timeout.toString(),
+    ]);
+}
+
+/**
+ * @internal
+ */
+export function createSSubscribeLazy(
+    channels: GlideString[],
+): command_request.Command {
+    return createCommand(RequestType.SSubscribe, channels);
+}
+
+/**
+ * @internal
+ */
+export function createSSubscribe(
+    channels: GlideString[],
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.SSubscribeBlocking, [
+        ...channels,
+        timeout.toString(),
+    ]);
+}
+
+/**
+ * @internal
+ */
+export function createSUnsubscribeLazy(
+    channels?: GlideString[],
+): command_request.Command {
+    return createCommand(RequestType.SUnsubscribe, channels ? channels : []);
+}
+
+/**
+ * @internal
+ */
+export function createSUnsubscribe(
+    channels: GlideString[],
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.SUnsubscribeBlocking, [
+        ...channels,
+        timeout.toString(),
+    ]);
+}
+
+/**
+ * @internal
+ */
+export function createGetSubscriptions(): command_request.Command {
+    return createCommand(RequestType.GetSubscriptions, []);
+}
+
+/**
+ * @internal
+ */
 export function createBZPopMax(
     keys: GlideString[],
     timeout: number,

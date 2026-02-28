@@ -54,6 +54,14 @@ const MethodTesting = {
     Callback: 2, // Uses callback-based subscription method.
 };
 
+/**
+ * Enumeration for specifying the subscription mode.
+ */
+const Mode = {
+    Lazy: 0, // Non-blocking: returns immediately without waiting for confirmation
+    Blocking: 1, // Blocking: waits for subscription confirmation with timeout
+};
+
 const TIMEOUT = 120000;
 describe("PubSub", () => {
     let cmeCluster: ValkeyCluster;
@@ -4185,6 +4193,884 @@ describe("PubSub", () => {
                         ? clientCleanup(client2, pubSub!)
                         : Promise.resolve(),
                 ]);
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Tests dynamic subscription and unsubscription for exact channels.
+     *
+     * This test verifies that a client can dynamically subscribe to and unsubscribe from
+     * channels at runtime without pre-configuring subscriptions during client creation.
+     * Tests both lazy (non-blocking) and blocking (with timeout) modes for both operations.
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     * @param subscribeMode - Specifies lazy or blocking subscription mode.
+     * @param unsubscribeMode - Specifies lazy or blocking unsubscription mode.
+     */
+    it.each([
+        [true, Mode.Lazy, Mode.Lazy],
+        [true, Mode.Lazy, Mode.Blocking],
+        [true, Mode.Blocking, Mode.Lazy],
+        [true, Mode.Blocking, Mode.Blocking],
+        [false, Mode.Lazy, Mode.Lazy],
+        [false, Mode.Lazy, Mode.Blocking],
+        [false, Mode.Blocking, Mode.Lazy],
+        [false, Mode.Blocking, Mode.Blocking],
+    ])(
+        "dynamic_subscribe_unsubscribe_%p_%p_%p",
+        async (clusterMode, subscribeMode, unsubscribeMode) => {
+            let listener: TGlideClient | null = null;
+            let sender: TGlideClient | null = null;
+
+            try {
+                const channel = getRandomKey();
+                const message1 = getRandomKey();
+                const message2 = getRandomKey();
+
+                if (clusterMode) {
+                    listener = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                    sender = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    listener = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                    sender = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
+                const channels = [channel];
+
+                // Dynamically subscribe to channel
+                if (subscribeMode === Mode.Lazy) {
+                    await listener.subscribeLazy(channels);
+                    // Allow time for subscription to propagate
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                } else {
+                    await listener.subscribe(channels, 5000);
+                }
+
+                // Publish first message and verify reception
+                expect(await sender.publish(message1, channel)).toBeGreaterThan(
+                    0,
+                );
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                const pubsubMsg1 = await listener.getPubSubMessage();
+                expect(pubsubMsg1.message).toEqual(message1);
+                expect(pubsubMsg1.channel).toEqual(channel);
+                expect(pubsubMsg1.pattern).toBeNull();
+
+                // Dynamically unsubscribe from channel
+                if (unsubscribeMode === Mode.Lazy) {
+                    await listener.unsubscribeLazy(channels);
+
+                    // Wait for unsubscribe to propagate
+                    await new Promise((resolve) => setTimeout(resolve, 30000));
+                } else {
+                    await listener.unsubscribe(channels, 30000);
+                }
+
+                // Verify no message in queue before publishing
+                const msgBefore = listener.tryGetPubSubMessage();
+                expect(msgBefore).toBeNull();
+
+                // Publish second message AFTER unsubscribe
+                await sender.publish(message2, channel);
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Should not receive message after unsubscribe
+                const msg = listener.tryGetPubSubMessage();
+                expect(msg).toBeNull();
+            } finally {
+                if (listener) {
+                    listener.close();
+                }
+
+                if (sender) {
+                    sender.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Tests dynamic pattern subscription and unsubscription.
+     *
+     * This test verifies that a client can dynamically subscribe to and unsubscribe from
+     * patterns at runtime without pre-configuring subscriptions during client creation.
+     * Tests both lazy (non-blocking) and blocking (with timeout) modes for both operations.
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     * @param subscribeMode - Specifies lazy or blocking subscription mode.
+     * @param unsubscribeMode - Specifies lazy or blocking unsubscription mode.
+     */
+    it.each([
+        [true, Mode.Lazy, Mode.Lazy],
+        [true, Mode.Lazy, Mode.Blocking],
+        [true, Mode.Blocking, Mode.Lazy],
+        [true, Mode.Blocking, Mode.Blocking],
+        [false, Mode.Lazy, Mode.Lazy],
+        [false, Mode.Lazy, Mode.Blocking],
+        [false, Mode.Blocking, Mode.Lazy],
+        [false, Mode.Blocking, Mode.Blocking],
+    ])(
+        "dynamic_psubscribe_punsubscribe_%p_%p_%p",
+        async (clusterMode, subscribeMode, unsubscribeMode) => {
+            let listener: TGlideClient | null = null;
+            let sender: TGlideClient | null = null;
+
+            try {
+                const pattern = `${getRandomKey()}*`;
+                const channel1 = pattern.replace(/\*/g, getRandomKey());
+                const channel2 = pattern.replace(/\*/g, getRandomKey());
+                const message1 = getRandomKey();
+                const message2 = getRandomKey();
+
+                if (clusterMode) {
+                    listener = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                    sender = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    listener = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                    sender = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
+                const patterns = [pattern];
+
+                // Dynamically subscribe to pattern
+                if (subscribeMode === Mode.Lazy) {
+                    await listener.psubscribeLazy(patterns);
+
+                    // Allow time for subscription to propagate
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                } else {
+                    await listener.psubscribe(patterns, 5000);
+                }
+
+                // Publish first message to matching channel and verify reception
+                await sender.publish(message1, channel1);
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                const pubsubMsg1 = await listener.getPubSubMessage();
+                expect(pubsubMsg1.message).toEqual(message1);
+                expect(pubsubMsg1.channel).toEqual(channel1);
+                expect(pubsubMsg1.pattern).toEqual(pattern);
+
+                // Dynamically unsubscribe from pattern
+                if (unsubscribeMode === Mode.Lazy) {
+                    await listener.punsubscribeLazy(patterns);
+                    // Wait for unsubscribe to propagate
+                    await new Promise((resolve) => setTimeout(resolve, 30000));
+                } else {
+                    await listener.punsubscribe(patterns, 30000);
+                }
+
+                // Verify no message in queue before publishing
+                const msgBefore = listener.tryGetPubSubMessage();
+                expect(msgBefore).toBeNull();
+
+                // Publish second message AFTER unsubscribe
+                await sender.publish(message2, channel2);
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Should not receive message after unsubscribe
+                const msg = listener.tryGetPubSubMessage();
+                expect(msg).toBeNull();
+            } finally {
+                if (listener) {
+                    listener.close();
+                }
+
+                if (sender) {
+                    sender.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Tests dynamic sharded subscription and unsubscription (cluster only).
+     *
+     * This test verifies that a cluster client can dynamically subscribe to and unsubscribe from
+     * sharded channels at runtime. Sharded pubsub is tied to specific slots/shards.
+     * Tests both lazy (non-blocking) and blocking (with timeout) modes for both operations.
+     * Requires Valkey 7.0+.
+     *
+     * @param clusterMode - Must be true (cluster mode only).
+     * @param subscribeMode - Specifies lazy or blocking subscription mode.
+     * @param unsubscribeMode - Specifies lazy or blocking unsubscription mode.
+     */
+    it.each([
+        [true, Mode.Lazy, Mode.Lazy],
+        [true, Mode.Lazy, Mode.Blocking],
+        [true, Mode.Blocking, Mode.Lazy],
+        [true, Mode.Blocking, Mode.Blocking],
+    ])(
+        "dynamic_ssubscribe_sunsubscribe_%p_%p_%p",
+        async (clusterMode, subscribeMode, unsubscribeMode) => {
+            const minVersion = "7.0.0";
+
+            if (cmeCluster.checkIfServerVersionLessThan(minVersion)) {
+                return;
+            }
+
+            let listener: TGlideClient | null = null;
+            let sender: TGlideClient | null = null;
+
+            try {
+                const channel = getRandomKey();
+                const message1 = getRandomKey();
+                const message2 = getRandomKey();
+
+                listener = await GlideClusterClient.createClient(
+                    getOptions(clusterMode),
+                );
+                sender = await GlideClusterClient.createClient(
+                    getOptions(clusterMode),
+                );
+
+                const channels = [channel];
+
+                // Dynamically subscribe to sharded channel
+                if (subscribeMode === Mode.Lazy) {
+                    await (listener as GlideClusterClient).ssubscribeLazy(
+                        channels,
+                    );
+
+                    // Allow time for subscription to propagate
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                } else {
+                    await (listener as GlideClusterClient).ssubscribe(
+                        channels,
+                        5000,
+                    );
+                }
+
+                // Publish first message and verify reception
+                expect(
+                    await (sender as GlideClusterClient).publish(
+                        message1,
+                        channel,
+                        true,
+                    ),
+                ).toBeGreaterThan(0);
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                const pubsubMsg1 = await listener.getPubSubMessage();
+                expect(pubsubMsg1.message).toEqual(message1);
+                expect(pubsubMsg1.channel).toEqual(channel);
+                expect(pubsubMsg1.pattern).toBeNull();
+
+                // Dynamically unsubscribe from sharded channel
+                if (unsubscribeMode === Mode.Lazy) {
+                    await (listener as GlideClusterClient).sunsubscribeLazy(
+                        channels,
+                    );
+                    // Wait for unsubscribe to propagate
+                    await new Promise((resolve) => setTimeout(resolve, 30000));
+                } else {
+                    await (listener as GlideClusterClient).sunsubscribe(
+                        channels,
+                        30000,
+                    );
+                }
+
+                // Verify no message in queue before publishing
+                const msgBefore = listener.tryGetPubSubMessage();
+                expect(msgBefore).toBeNull();
+
+                // Publish second message AFTER unsubscribe
+                await (sender as GlideClusterClient).publish(
+                    message2,
+                    channel,
+                    true,
+                );
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Should not receive message after unsubscribe
+                const msg = listener.tryGetPubSubMessage();
+                expect(msg).toBeNull();
+            } finally {
+                if (listener) {
+                    listener.close();
+                }
+
+                if (sender) {
+                    sender.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Tests unsubscribing from pre-configured subscriptions.
+     *
+     * This test verifies that a client can dynamically unsubscribe from channels
+     * that were pre-configured during client creation.
+     * Tests both lazy (non-blocking) and blocking (with timeout) modes.
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     * @param unsubscribeMode - Specifies lazy or blocking unsubscription mode.
+     */
+    it.each([
+        [true, Mode.Lazy],
+        [true, Mode.Blocking],
+        [false, Mode.Lazy],
+        [false, Mode.Blocking],
+    ])(
+        "dynamic_unsubscribe_from_preconfigured_%p_%p",
+        async (clusterMode, unsubscribeMode) => {
+            let listener: TGlideClient | null = null;
+            let sender: TGlideClient | null = null;
+
+            try {
+                const channel = getRandomKey();
+                const message1 = getRandomKey();
+                const message2 = getRandomKey();
+
+                // Create client with pre-configured subscription
+                const pubSub = createPubSubSubscription(
+                    clusterMode,
+                    {
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set([channel as string]),
+                    },
+                    {
+                        [GlideClientConfiguration.PubSubChannelModes.Exact]:
+                            new Set([channel as string]),
+                    },
+                );
+
+                if (clusterMode) {
+                    listener = await GlideClusterClient.createClient({
+                        pubsubSubscriptions: pubSub,
+                        ...getOptions(clusterMode),
+                    });
+                    sender = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    listener = await GlideClient.createClient({
+                        pubsubSubscriptions: pubSub,
+                        ...getOptions(clusterMode),
+                    });
+                    sender = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
+                // Allow time for subscription to propagate
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Publish first message
+                expect(await sender.publish(message1, channel)).toBeGreaterThan(
+                    0,
+                );
+
+                // Allow time for message delivery
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Verify first message received
+                const pubsubMsg1 = await listener.getPubSubMessage();
+                expect(pubsubMsg1.message).toEqual(message1);
+                expect(pubsubMsg1.channel).toEqual(channel);
+
+                // Dynamically unsubscribe from pre-configured channel
+                if (unsubscribeMode === Mode.Lazy) {
+                    await listener.unsubscribeLazy([channel]);
+                } else {
+                    await listener.unsubscribe([channel], 30000);
+                }
+
+                // Wait for unsubscribe to propagate
+                await new Promise((resolve) => setTimeout(resolve, 5000));
+
+                // Drain any pending messages that were published before unsubscribe
+                while (listener.tryGetPubSubMessage() !== null) {
+                    // Keep draining
+                }
+
+                // Publish second message
+                await sender.publish(message2, channel);
+
+                // Allow time for potential message delivery
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Verify no message received after unsubscribe
+                const pubsubMsg2 = listener.tryGetPubSubMessage();
+                expect(pubsubMsg2).toBeNull();
+            } finally {
+                if (listener) {
+                    listener.close();
+                }
+
+                if (sender) {
+                    sender.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Tests pattern unsubscribing from pre-configured pattern subscriptions.
+     *
+     * This test verifies that a client can dynamically unsubscribe from patterns
+     * that were pre-configured during client creation.
+     * Tests both lazy (non-blocking) and blocking (with timeout) modes.
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     * @param unsubscribeMode - Specifies lazy or blocking unsubscription mode.
+     */
+    it.each([
+        [true, Mode.Lazy],
+        [true, Mode.Blocking],
+        [false, Mode.Lazy],
+        [false, Mode.Blocking],
+    ])(
+        "dynamic_punsubscribe_from_preconfigured_%p_%p",
+        async (clusterMode, unsubscribeMode) => {
+            let listener: TGlideClient | null = null;
+            let sender: TGlideClient | null = null;
+
+            try {
+                const pattern = `${getRandomKey()}*`;
+                const channel = pattern.replace(/\*/g, getRandomKey());
+                const message1 = getRandomKey();
+                const message2 = getRandomKey();
+
+                // Create client with pre-configured pattern subscription
+                const pubSub = createPubSubSubscription(
+                    clusterMode,
+                    {
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Pattern]: new Set([pattern as string]),
+                    },
+                    {
+                        [GlideClientConfiguration.PubSubChannelModes.Pattern]:
+                            new Set([pattern as string]),
+                    },
+                );
+
+                if (clusterMode) {
+                    listener = await GlideClusterClient.createClient({
+                        pubsubSubscriptions: pubSub,
+                        ...getOptions(clusterMode),
+                    });
+                    sender = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    listener = await GlideClient.createClient({
+                        pubsubSubscriptions: pubSub,
+                        ...getOptions(clusterMode),
+                    });
+                    sender = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
+                // Allow time for subscription to propagate
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Publish first message to matching channel
+                await sender.publish(message1, channel);
+
+                // Allow time for message delivery
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Verify first message received
+                const pubsubMsg1 = await listener.getPubSubMessage();
+                expect(pubsubMsg1.message).toEqual(message1);
+                expect(pubsubMsg1.channel).toEqual(channel);
+                expect(pubsubMsg1.pattern).toEqual(pattern);
+
+                // Dynamically unsubscribe from pre-configured pattern
+                if (unsubscribeMode === Mode.Lazy) {
+                    await listener.punsubscribeLazy([pattern]);
+                } else {
+                    await listener.punsubscribe([pattern], 30000);
+                }
+
+                // Wait for unsubscribe to propagate
+                await new Promise((resolve) => setTimeout(resolve, 5000));
+
+                // Drain any pending messages that were published before unsubscribe
+                while (listener.tryGetPubSubMessage() !== null) {
+                    // Keep draining
+                }
+
+                // Publish second message
+                await sender.publish(message2, channel);
+
+                // Allow time for potential message delivery
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Verify no message received after unsubscribe
+                const pubsubMsg2 = listener.tryGetPubSubMessage();
+                expect(pubsubMsg2).toBeNull();
+            } finally {
+                if (listener) {
+                    listener.close();
+                }
+
+                if (sender) {
+                    sender.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Tests sharded unsubscribing from pre-configured sharded subscriptions (cluster only).
+     *
+     * This test verifies that a cluster client can dynamically unsubscribe from sharded channels
+     * that were pre-configured during client creation.
+     * Tests both lazy (non-blocking) and blocking (with timeout) modes.
+     * Requires Valkey 7.0+.
+     *
+     * @param clusterMode - Must be true (cluster mode only).
+     * @param unsubscribeMode - Specifies lazy or blocking unsubscription mode.
+     */
+    it.each([
+        [true, Mode.Lazy],
+        [true, Mode.Blocking],
+    ])(
+        "dynamic_sunsubscribe_from_preconfigured_%p_%p",
+        async (clusterMode, unsubscribeMode) => {
+            const minVersion = "7.0.0";
+
+            if (cmeCluster.checkIfServerVersionLessThan(minVersion)) {
+                return;
+            }
+
+            let listener: TGlideClient | null = null;
+            let sender: TGlideClient | null = null;
+
+            try {
+                const channel = getRandomKey();
+                const message1 = getRandomKey();
+                const message2 = getRandomKey();
+
+                // Create client with pre-configured sharded subscription
+                const pubSub = createPubSubSubscription(
+                    clusterMode,
+                    {
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Sharded]: new Set([channel as string]),
+                    },
+                    {},
+                );
+
+                listener = await GlideClusterClient.createClient({
+                    pubsubSubscriptions: pubSub,
+                    ...getOptions(clusterMode),
+                });
+                sender = await GlideClusterClient.createClient(
+                    getOptions(clusterMode),
+                );
+
+                // Allow time for subscription to propagate
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Publish first message to sharded channel
+                expect(
+                    await (sender as GlideClusterClient).publish(
+                        message1,
+                        channel,
+                        true,
+                    ),
+                ).toBeGreaterThan(0);
+
+                // Allow time for message delivery
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Verify first message received
+                const pubsubMsg1 = await listener.getPubSubMessage();
+                expect(pubsubMsg1.message).toEqual(message1);
+                expect(pubsubMsg1.channel).toEqual(channel);
+                expect(pubsubMsg1.pattern).toBeNull();
+
+                // Dynamically unsubscribe from pre-configured sharded channel
+                if (unsubscribeMode === Mode.Lazy) {
+                    await (listener as GlideClusterClient).sunsubscribeLazy([
+                        channel,
+                    ]);
+                } else {
+                    await (listener as GlideClusterClient).sunsubscribe(
+                        [channel],
+                        30000,
+                    );
+                }
+
+                // Wait for unsubscribe to propagate
+                await new Promise((resolve) => setTimeout(resolve, 5000));
+
+                // Drain any pending messages that were published before unsubscribe
+                while (listener.tryGetPubSubMessage() !== null) {
+                    // Keep draining
+                }
+
+                // Publish second message
+                await (sender as GlideClusterClient).publish(
+                    message2,
+                    channel,
+                    true,
+                );
+
+                // Allow time for potential message delivery
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Verify no message received after unsubscribe
+                const pubsubMsg2 = listener.tryGetPubSubMessage();
+                expect(pubsubMsg2).toBeNull();
+            } finally {
+                if (listener) {
+                    listener.close();
+                }
+
+                if (sender) {
+                    sender.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Tests dynamic subscription with pre-configured callback but no channels.
+     *
+     * This test verifies that a client can be created with only a callback and context
+     * (no pre-configured channels), and then dynamically subscribe to channels where
+     * the callback will catch messages from those channels.
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     * @param subscribeMode - Specifies lazy or blocking subscription mode.
+     */
+    it.each([
+        [true, Mode.Lazy],
+        [true, Mode.Blocking],
+        [false, Mode.Lazy],
+        [false, Mode.Blocking],
+    ])(
+        "dynamic_subscribe_with_preconfigured_callback_no_channels_%p_%p",
+        async (clusterMode, subscribeMode) => {
+            let listener: TGlideClient | null = null;
+            let sender: TGlideClient | null = null;
+
+            try {
+                const channel = getRandomKey();
+                const message = getRandomKey();
+
+                // Create callback context to collect messages
+                const callbackMessages: PubSubMsg[] = [];
+                const callback = newMessage;
+
+                // Create client with pre-configured callback but NO channels
+                const pubSub = createPubSubSubscription(
+                    clusterMode,
+                    {}, // No channels configured
+                    {}, // No channels configured
+                    callback,
+                    callbackMessages,
+                );
+
+                if (clusterMode) {
+                    listener = await GlideClusterClient.createClient({
+                        pubsubSubscriptions: pubSub,
+                        ...getOptions(clusterMode),
+                    });
+                    sender = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    listener = await GlideClient.createClient({
+                        pubsubSubscriptions: pubSub,
+                        ...getOptions(clusterMode),
+                    });
+                    sender = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
+                // Verify no messages in callback initially
+                expect(callbackMessages.length).toBe(0);
+
+                // Dynamically subscribe to channel
+                if (subscribeMode === Mode.Lazy) {
+                    await listener.subscribeLazy([channel]);
+                    // Allow time for subscription to propagate
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                } else {
+                    await listener.subscribe([channel], 5000);
+                }
+
+                // Publish message
+                expect(await sender.publish(message, channel)).toBeGreaterThan(
+                    0,
+                );
+
+                // Allow time for message delivery
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Verify callback received the message
+                expect(callbackMessages.length).toBe(1);
+                expect(callbackMessages[0].message).toEqual(message);
+                expect(callbackMessages[0].channel).toEqual(channel);
+                expect(callbackMessages[0].pattern).toBeNull();
+            } finally {
+                if (listener) {
+                    listener.close();
+                }
+
+                if (sender) {
+                    sender.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Tests that subscription metrics exist in statistics.
+
+     *
+     * This test verifies that the getStatistics method returns subscription-related
+     * metrics including out-of-sync count and last sync timestamp.
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     */
+    it.each([true, false])(
+        "test_subscription_metrics_in_statistics_%p",
+        async (clusterMode) => {
+            let client: TGlideClient | null = null;
+
+            try {
+                const channel = getRandomKey();
+
+                // Create client WITHOUT any subscription configuration
+                if (clusterMode) {
+                    client = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    client = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
+                // Dynamically subscribe to channel (non-blocking)
+                await client.subscribeLazy([channel]);
+
+                // Allow time for subscription to propagate
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Get statistics
+                const stats = (await client.getStatistics()) as Record<
+                    string,
+                    string
+                >;
+
+                // Verify subscription metrics exist
+                expect(stats).toHaveProperty("subscription_out_of_sync_count");
+                expect(stats).toHaveProperty(
+                    "subscription_last_sync_timestamp",
+                );
+
+                // Verify metrics are valid (non-negative numbers)
+                const outOfSyncCount = parseInt(
+                    stats["subscription_out_of_sync_count"],
+                );
+                const lastSyncTimestamp = parseInt(
+                    stats["subscription_last_sync_timestamp"],
+                );
+
+                expect(outOfSyncCount).toBeGreaterThanOrEqual(0);
+                expect(lastSyncTimestamp).toBeGreaterThanOrEqual(0);
+            } finally {
+                if (client) {
+                    client.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Tests that subscription timestamp updates after subscribe.
+     *
+     * This test verifies that the subscription_last_sync_timestamp metric
+     * is updated after a subscription operation.
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     */
+    it.each([true, false])(
+        "test_subscription_timestamp_updates_after_subscribe_%p",
+        async (clusterMode) => {
+            let client: TGlideClient | null = null;
+
+            try {
+                const channel = getRandomKey();
+
+                // Create client WITHOUT any subscription configuration
+                if (clusterMode) {
+                    client = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    client = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
+                // Get initial statistics
+                const statsBefore = (await client.getStatistics()) as Record<
+                    string,
+                    string
+                >;
+                const timestampBefore = parseInt(
+                    statsBefore["subscription_last_sync_timestamp"],
+                );
+
+                // Dynamically subscribe to channel (non-blocking)
+                await client.subscribeLazy([channel]);
+
+                // Allow time for subscription to propagate
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Get updated statistics
+                const statsAfter = (await client.getStatistics()) as Record<
+                    string,
+                    string
+                >;
+                const timestampAfter = parseInt(
+                    statsAfter["subscription_last_sync_timestamp"],
+                );
+
+                // Verify timestamp was updated (increased or stayed the same)
+                expect(timestampAfter).toBeGreaterThanOrEqual(timestampBefore);
+            } finally {
+                if (client) {
+                    client.close();
+                }
             }
         },
         TIMEOUT,
