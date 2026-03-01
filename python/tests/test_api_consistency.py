@@ -54,7 +54,6 @@ EXCLUDED_TESTS = {
         "test_connection_timeout_on_unavailable_host",
         "test_invalid_tls_config_fails_fast",
         # Dynamic PubSub tests helper functions
-        "subscribe_by_method",
         "unsubscribe_by_method",
         "psubscribe_by_method",
         "punsubscribe_by_method",
@@ -82,13 +81,10 @@ EXCLUDED_TESTS = {
         "test_subscription_metrics",
         "test_sync_clients_support_pubsub_reconciliation_interval",
         "check_no_messages_left",
-        "client_cleanup",
         "create_simple_pubsub_config",
-        "create_two_clients_with_pubsub",
         "get_message_by_method",
         "wait_for_subscription_state",
         "poll_for_timestamp_change",
-        "sync_subscribe_by_method",
     ],
 }
 

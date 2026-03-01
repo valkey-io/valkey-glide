@@ -1,8 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import time
-from contextlib import contextmanager
-from typing import Any, Generator, List, Optional, Set
+from typing import Generator, List, Optional
 
 import pytest
 from glide_shared.config import (
@@ -22,6 +21,7 @@ from glide_sync.logger import Level as LogLevel
 from glide_sync.logger import Logger
 
 from tests.utils.cluster import ValkeyCluster
+from tests.utils.pubsub_test_utils import sync_pubsub_test_clients  # noqa: F401
 from tests.utils.utils import (
     DEFAULT_SYNC_TEST_LOG_LEVEL,
     INITIAL_PASSWORD,
@@ -283,137 +283,3 @@ def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
             raise TimeoutError(f"Connection timeout during teardown: {e}")
         else:
             raise e
-
-
-@contextmanager
-def sync_pubsub_test_clients(
-    request,
-    cluster_mode: bool,
-    subscription_method,
-    channels: Optional[Set[str]] = None,
-    patterns: Optional[Set[str]] = None,
-    sharded: Optional[Set[str]] = None,
-    callback: Optional[Any] = None,
-    context: Optional[Any] = None,
-    timeout: Optional[int] = None,
-):
-    """
-    Context manager for sync pubsub test clients.
-    Handles client creation, subscription, and cleanup.
-    """
-    from tests.sync_tests.test_sync_pubsub import (
-        client_cleanup,
-        create_two_clients_with_pubsub,
-        sync_subscribe_by_method,
-    )
-    from tests.utils.utils import create_pubsub_subscription
-
-    listening_client, publishing_client = None, None
-    pub_sub = None
-
-    try:
-        if subscription_method.value == 0:  # Config
-            pub_sub = create_pubsub_subscription(
-                cluster_mode,
-                channels=channels,
-                patterns=patterns,
-                sharded_channels=sharded,
-                callback=callback,
-                context=context,
-            )
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub, timeout=timeout
-            )
-        else:  # Lazy or Blocking
-            # For Lazy/Blocking with callback, create client with empty subscriptions
-            # For Lazy/Blocking without callback, create client with no pubsub config
-            if callback:
-                if cluster_mode:
-                    cluster_pubsub_config = (
-                        GlideClusterClientConfiguration.PubSubSubscriptions(
-                            channels_and_patterns={},
-                            callback=callback,
-                            context=context,
-                        )
-                    )
-                    listening_client = create_sync_client(
-                        request,
-                        cluster_mode,
-                        cluster_mode_pubsub=cluster_pubsub_config,
-                        request_timeout=timeout,
-                        connection_timeout=timeout,
-                    )
-                else:
-                    standalone_pubsub_config = (
-                        GlideClientConfiguration.PubSubSubscriptions(
-                            channels_and_patterns={},
-                            callback=callback,
-                            context=context,
-                        )
-                    )
-                    listening_client = create_sync_client(
-                        request,
-                        cluster_mode,
-                        standalone_mode_pubsub=standalone_pubsub_config,
-                        request_timeout=timeout,
-                        connection_timeout=timeout,
-                    )
-            else:
-                # No callback - create client with no pubsub config
-                listening_client = create_sync_client(
-                    request,
-                    cluster_mode,
-                    request_timeout=timeout,
-                    connection_timeout=timeout,
-                )
-
-            publishing_client = create_sync_client(
-                request,
-                cluster_mode,
-                request_timeout=timeout,
-                connection_timeout=timeout,
-            )
-            sync_subscribe_by_method(
-                listening_client,
-                subscription_method,
-                cluster_mode,
-                channels=channels,
-                patterns=patterns,
-                sharded=sharded,
-                timeout_ms=timeout if timeout else 5000,
-            )
-
-        yield listening_client, publishing_client
-
-    finally:
-        if subscription_method.value == 0:  # Config
-            client_cleanup(listening_client, pub_sub if cluster_mode else None)
-        else:
-            client_cleanup(listening_client, None)
-        client_cleanup(publishing_client, None)
-
-
-def sync_retrieve_message(client, method, callback_messages=None, timeout=3.0):
-    """
-    Retrieve a pubsub message based on the method type.
-
-    Args:
-        client: The sync client
-        method: MethodTesting enum value
-        callback_messages: List for callback messages (required for Callback method)
-        timeout: Timeout in seconds
-
-    Returns:
-        The retrieved PubSubMsg
-    """
-    from tests.utils.pubsub_test_utils import wait_for_messages
-    from tests.utils.utils import run_sync_func_with_timeout_in_thread
-
-    if method.value == 0:  # Async
-        return run_sync_func_with_timeout_in_thread(
-            lambda: client.get_pubsub_message(), timeout=timeout
-        )
-    elif method.value == 1:  # Sync
-        return client.try_get_pubsub_message()
-    else:  # Callback
-        return wait_for_messages(1, callback_messages, timeout=timeout)[0]

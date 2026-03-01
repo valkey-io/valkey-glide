@@ -19,17 +19,18 @@ from glide_shared.exceptions import TimeoutError as GlideTimeoutError
 from glide_shared.routes import AllNodes
 
 from tests.async_tests.conftest import create_client
-from tests.utils.pubsub_test_utils import PubSubTestConstants, new_message
-from tests.utils.utils import (
+from tests.utils.pubsub_test_utils import (
     MessageReadMethod,
+    PubSubTestConstants,
     SubscriptionMethod,
+    async_pubsub_test_clients,
     check_no_messages_left,
     create_pubsub_client,
     create_pubsub_subscription,
     decode_pubsub_msg,
     get_message_by_method,
     get_pubsub_modes,
-    kill_connections,
+    new_message,
     psubscribe_by_method,
     pubsub_client_cleanup,
     punsubscribe_by_method,
@@ -40,6 +41,7 @@ from tests.utils.utils import (
     wait_for_subscription_state,
     wait_for_subscription_state_if_needed,
 )
+from tests.utils.utils import kill_connections
 
 
 @pytest.mark.anyio
@@ -71,7 +73,6 @@ class TestPubSub:
         Async, Sync, and Callback. It verifies that a message published to a
         specific channel is correctly received by a subscriber.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         channel = "test_exact_channel"
         message = "test_exact_message"
@@ -137,7 +138,6 @@ class TestPubSub:
         and received using both async and sync methods to ensure that both methods
         can coexist and function correctly.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         channel = "test_exact_channel"
         message = "test_exact_message_1"
@@ -211,7 +211,6 @@ class TestPubSub:
         unique message. It verifies that messages are correctly published and received
         using different retrieval methods: async, sync, and callback.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         NUM_CHANNELS = 256
         shard_prefix = "{same-shard}"
@@ -294,7 +293,6 @@ class TestPubSub:
         both methods
         can coexist and function correctly.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         NUM_CHANNELS = 256
         shard_prefix = "{same-shard}"
@@ -376,7 +374,6 @@ class TestPubSub:
         Async, Sync, and Callback. It verifies that a message published to a
         specific sharded channel is correctly received by a subscriber.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         channel = "sharded_channel_1"
         message = "sharded_message_1"
@@ -449,7 +446,6 @@ class TestPubSub:
         both async and sync methods. This ensures that the asynchronous and synchronous message
         retrieval methods can coexist without interfering with each other and operate as expected.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         channel = "sharded_coexist_channel"
         message = "sharded_coexist_message_1"
@@ -534,7 +530,6 @@ class TestPubSub:
         across multiple sharded channels. It covers three different message retrieval methods:
         Async, Sync, and Callback.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         NUM_CHANNELS = 256
         shard_prefix = "{same-shard}"
@@ -623,7 +618,6 @@ class TestPubSub:
         This test verifies the behavior of PUBSUB when subscribing to a pattern and receiving
         messages using three different methods: Async, Sync, and Callback.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         PATTERN = "{channel}:*"
         channels: Dict[str, str] = {
@@ -697,7 +691,6 @@ class TestPubSub:
         and received using both async and sync methods to ensure that both methods
         can coexist and function correctly.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         PATTERN = "{channel}:*"
         channels: Dict[str, str] = {
@@ -775,7 +768,6 @@ class TestPubSub:
         and received. It verifies that messages are correctly published and received
         using different retrieval methods: async, sync, and callback.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         NUM_CHANNELS = 256
         PATTERN = "{channel}:*"
@@ -860,7 +852,6 @@ class TestPubSub:
         - Ensuring that messages are correctly published and received using different retrieval methods
         (async, sync, callback).
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         NUM_CHANNELS = 256
         PATTERN = "{pattern}:*"
@@ -1140,7 +1131,6 @@ class TestPubSub:
         - Ensuring that messages are correctly published and received using different retrieval methods
         (async, sync, callback).
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         NUM_CHANNELS = 256
         PATTERN = "{pattern}:*"
@@ -2886,7 +2876,6 @@ class TestPubSub:
         Test subscribing to sharded channels that explicitly hash to different slots.
         This is a targeted test to verify CrossSlot handling.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         channels = {
             "{slot1}channel_a",
@@ -2942,7 +2931,6 @@ class TestPubSub:
         """
         Test basic unsubscription from exact channels using lazy and blocking APIs.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         channel = "channel"
         message1 = "exact_message_1"
@@ -3013,7 +3001,6 @@ class TestPubSub:
         """
         Test basic pattern unsubscription using lazy and blocking APIs.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         pattern = "news_punsubscribe_test.*"
         channel = "news_punsubscribe_test.sports"
@@ -3086,7 +3073,6 @@ class TestPubSub:
         """
         Test basic sharded unsubscription using lazy and blocking APIs.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         channel = "sharded_sunsubscribe_test_channel"
         message1 = "sharded_msg_before"
@@ -3160,7 +3146,6 @@ class TestPubSub:
         Test unsubscribing from sharded channels that hash to different slots.
         This verifies the CrossSlot fix for SUNSUBSCRIBE.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         # Channels that hash to different slots
         channels = {
@@ -3227,7 +3212,6 @@ class TestPubSub:
         Test unsubscribing from all channels/patterns/sharded using unsubscribe with no arguments.
         Tests all three subscription types in a single test.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         exact_channels = {f"exact_unsub_all_{i}" for i in range(3)}
         patterns = {f"pattern_unsub_all_{i}.*" for i in range(3)}
@@ -3552,7 +3536,7 @@ class TestPubSub:
             await pubsub_client_cleanup(listening_client)
             await pubsub_client_cleanup(publishing_client)
 
-    @pytest.mark.skip_if_version_below("7.0.0")
+    #@pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "message_read_method",
@@ -3579,7 +3563,6 @@ class TestPubSub:
         Verifies that a lazy client can handle multiple subscription types
         being added via all subscription methods (Config, Lazy, Blocking).
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         exact_channel = "lazy_multi_exact"
         pattern = "lazy_multi_pattern_*"
@@ -4084,7 +4067,6 @@ class TestPubSub:
         This test mirrors test_pubsub_exact_happy_path but uses custom_command to send
         SUBSCRIBE (lazy) or SUBSCRIBE_BLOCKING (blocking) commands directly.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         channel = "test_exact_channel_custom"
         message = "test_exact_message_custom"
@@ -4196,7 +4178,6 @@ class TestPubSub:
         """
         Test that exact channel subscriptions are automatically restored after connection kill.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         channel = "reconnect_exact_channel_test"
         message_before = "message_before_kill"
@@ -4282,7 +4263,6 @@ class TestPubSub:
         """
         Test that pattern subscriptions are automatically restored after connection kill.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         pattern = "news_reconnect_pattern.*"
         channel = "news_reconnect_pattern.sports"
@@ -4371,7 +4351,6 @@ class TestPubSub:
         """
         Test that sharded subscriptions are automatically restored after connection kill.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         channel = "sharded_reconnect_test_channel"
         message_before = "message_before_kill"
@@ -4460,7 +4439,6 @@ class TestPubSub:
         """
         Test that 256 exact channel subscriptions are automatically restored after connection kill.
         """
-        from tests.async_tests.conftest import async_pubsub_test_clients
 
         NUM_CHANNELS = 256
         channels = {f"{{reconnect_exact_{i}}}channel" for i in range(NUM_CHANNELS)}

@@ -580,9 +580,9 @@ public class PubSubTests {
 
     /** Similar to `test_sharded_pubsub` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest
-    @EnumSource(MessageReadMethod.class)
-    public void sharded_pubsub(MessageReadMethod method) {
+    @ParameterizedTest(name = "read messages via {0}, subscribe via {1}")
+    @MethodSource("getClusterTestScenarios")
+    public void sharded_pubsub(MessageReadMethod method, SubscriptionMethod subscriptionMethod) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         GlideString channel = gs(UUID.randomUUID().toString());
@@ -595,7 +595,8 @@ public class PubSubTests {
                         method == MessageReadMethod.Callback,
                         1,
                         subscriptions,
-                        SubscriptionMethod.Config);
+                        subscriptionMethod);
+        subscribeByMethod(listener, subscriptionMethod, subscriptions);
         var sender = (GlideClusterClient) createClient(false);
 
         sender.publish(pubsubMessage, channel, true).get();
@@ -607,9 +608,9 @@ public class PubSubTests {
 
     /** Similar to `test_sharded_pubsub_many_channels` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest
-    @EnumSource(MessageReadMethod.class)
-    public void sharded_pubsub_many_channels(MessageReadMethod method) {
+    @ParameterizedTest(name = "read messages via {0}, subscribe via {1}")
+    @MethodSource("getClusterTestScenarios")
+    public void sharded_pubsub_many_channels(MessageReadMethod method, SubscriptionMethod subscriptionMethod) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         int numChannels = 16;
@@ -633,7 +634,8 @@ public class PubSubTests {
                         method == MessageReadMethod.Callback,
                         1,
                         subscriptions,
-                        SubscriptionMethod.Config);
+                        subscriptionMethod);
+        subscribeByMethod(listener, subscriptionMethod, subscriptions);
         var sender = (GlideClusterClient) createClient(false);
 
         for (var pubsubMessage : pubsubMessages) {
@@ -853,12 +855,27 @@ public class PubSubTests {
     }
 
     /**
+     * Permute all combinations of {@link MessageReadMethod} vs {@link SubscriptionMethod} for
+     * cluster-only tests.
+     */
+    private static Stream<Arguments> getClusterTestScenarios() {
+        List<Arguments> scenarios = new ArrayList<>();
+        for (MessageReadMethod readMethod : MessageReadMethod.values()) {
+            for (SubscriptionMethod subMethod : SubscriptionMethod.values()) {
+                scenarios.add(Arguments.of(readMethod, subMethod));
+            }
+        }
+        return scenarios.stream();
+    }
+
+    /**
      * Similar to `test_pubsub_combined_exact_pattern_and_sharded_one_client` in python client tests.
      */
     @SneakyThrows
-    @ParameterizedTest
-    @EnumSource(MessageReadMethod.class)
-    public void combined_exact_pattern_and_sharded_one_client(MessageReadMethod method) {
+    @ParameterizedTest(name = "read messages via {0}, subscribe via {1}")
+    @MethodSource("getClusterTestScenarios")
+    public void combined_exact_pattern_and_sharded_one_client(
+            MessageReadMethod method, SubscriptionMethod subscriptionMethod) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String prefix = "channel.";
@@ -899,7 +916,8 @@ public class PubSubTests {
                         method == MessageReadMethod.Callback,
                         1,
                         subscriptions,
-                        SubscriptionMethod.Config);
+                        subscriptionMethod);
+        subscribeByMethod(listener, subscriptionMethod, subscriptions);
         var sender = (GlideClusterClient) createClient(false);
 
         for (var pubsubMessage : messages) {
@@ -998,11 +1016,11 @@ public class PubSubTests {
      * tests.
      */
     @SneakyThrows
-    @ParameterizedTest
-    @EnumSource(MessageReadMethod.class)
-    public void combined_exact_pattern_and_sharded_multi_client(MessageReadMethod method) {
+    @ParameterizedTest(name = "read messages via {0}, subscribe via {1}")
+    @MethodSource("getClusterTestScenarios")
+    public void combined_exact_pattern_and_sharded_multi_client(
+            MessageReadMethod method, SubscriptionMethod subscriptionMethod) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        SubscriptionMethod subscriptionMethod = SubscriptionMethod.Config; // Default for this test
 
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");

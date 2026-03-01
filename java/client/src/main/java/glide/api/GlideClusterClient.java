@@ -1475,7 +1475,7 @@ public class GlideClusterClient extends BaseClient
     }
 
     /**
-     * Subscribes the client to the specified sharded channels.
+     * Subscribes the client to the specified sharded channels and doesn't wait for confirmation.
      *
      * <p>Sharded pubsub (available in Redis 7.0+) allows messages to be published to specific cluster
      * shards, reducing overhead compared to cluster-wide pubsub.
