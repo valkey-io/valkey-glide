@@ -23895,7 +23895,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: js-sys:0.3.90
+Package: js-sys:0.3.91
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24829,7 +24829,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: libredox:0.1.12
+Package: libredox:0.1.14
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -30379,7 +30379,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pin-project:1.1.10
+Package: pin-project:1.1.11
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -30608,7 +30608,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pin-project-internal:1.1.10
+Package: pin-project-internal:1.1.11
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -30837,7 +30837,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pin-project-lite:0.2.16
+Package: pin-project-lite:0.2.17
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -48245,7 +48245,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen:0.2.113
+Package: wasm-bindgen:0.2.114
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -48474,7 +48474,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-futures:0.4.63
+Package: wasm-bindgen-futures:0.4.64
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -48703,7 +48703,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro:0.2.113
+Package: wasm-bindgen-macro:0.2.114
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -48932,7 +48932,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro-support:0.2.113
+Package: wasm-bindgen-macro-support:0.2.114
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -49161,7 +49161,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-shared:0.2.113
+Package: wasm-bindgen-shared:0.2.114
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -50737,7 +50737,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: web-sys:0.3.90
+Package: web-sys:0.3.91
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -64743,7 +64743,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: @types:node:24.10.15
+Package: @types:node:24.11.0
 
 The following copyrights and licenses were found in the source code of this package:
 
