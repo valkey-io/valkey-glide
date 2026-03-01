@@ -128,6 +128,8 @@ jobs:
                 python: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
+        env:
+            VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
         steps:
             - uses: actions/checkout@v4
 
@@ -163,6 +165,19 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            - name: Configure DNS for tests
+              shell: bash
+              run: |
+                  ENTRIES="127.0.0.1 valkey.glide.test.tls.com
+                  127.0.0.1 valkey.glide.test.no_tls.com
+                  ::1 valkey.glide.test.tls.com
+                  ::1 valkey.glide.test.no_tls.com"
+                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                      echo "$ENTRIES" >> /c/Windows/System32/drivers/etc/hosts
+                  else
+                      echo "$ENTRIES" | sudo tee -a /etc/hosts
+                  fi
 
             - name: Test with pytest
               if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY == 'false' && env.RUN_ASYNC_ONLY == 'false' }}
@@ -383,6 +398,8 @@ jobs:
                 # python: ${{ fromJson(needs.get-containers.outputs.version-matrix-output) }}
                 engine: ${{ fromJson(needs.get-containers.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
+        env:
+            VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
         container:
             image: ${{ matrix.host.IMAGE }}
             options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
@@ -413,6 +430,15 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            - name: Configure DNS for tests
+              shell: bash
+              run: |
+                  ENTRIES="127.0.0.1 valkey.glide.test.tls.com
+                  127.0.0.1 valkey.glide.test.no_tls.com
+                  ::1 valkey.glide.test.tls.com
+                  ::1 valkey.glide.test.no_tls.com"
+                  echo "$ENTRIES" | tee -a /etc/hosts
 
             - name: Test with pytest (asyncio only)
               if: ${{ env.RUN_FULL_MATRIX != 'true' }}
