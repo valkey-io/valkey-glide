@@ -717,6 +717,10 @@ pub fn process_command_args_for_compression(
 
     match request_type {
         RequestType::Set => compress_single_value_command(args, manager, 1),
+        RequestType::MSet => compress_mset_command(args, manager),
+        RequestType::SetEx => compress_single_value_command(args, manager, 2),
+        RequestType::PSetEx => compress_single_value_command(args, manager, 2),
+        RequestType::SetNX => compress_single_value_command(args, manager, 1),
         _ => Ok(()),
     }
 }
@@ -732,6 +736,21 @@ fn compress_single_value_command(
 
     let compressed_value = manager.compress_value(&args[value_index]);
     args[value_index] = compressed_value.into_owned();
+    Ok(())
+}
+
+fn compress_mset_command(
+    args: &mut [Vec<u8>],
+    manager: &CompressionManager,
+) -> CompressionResult<()> {
+    // MSET format: key1 value1 key2 value2 ...
+    // Values are at indices 1, 3, 5, etc. (odd indices starting from 1)
+    let mut i = 1;
+    while i < args.len() {
+        let compressed_value = manager.compress_value(&args[i]);
+        args[i] = compressed_value.into_owned();
+        i += 2; // Skip to next value (skip the key)
+    }
     Ok(())
 }
 
@@ -761,6 +780,10 @@ pub fn process_response_for_decompression(
 
     match request_type {
         RequestType::Get => decompress_single_value_response(value, manager),
+        RequestType::MGet => decompress_mget_response(value, manager),
+        RequestType::GetEx => decompress_single_value_response(value, manager),
+        RequestType::GetDel => decompress_single_value_response(value, manager),
+        RequestType::GetSet => decompress_single_value_response(value, manager),
         _ => Ok(value),
     }
 }
@@ -782,6 +805,24 @@ pub fn decompress_single_value_response(
                 Ok(decompressed_string) => Ok(Value::SimpleString(decompressed_string)),
                 Err(e) => Ok(Value::BulkString(e.into_bytes())),
             }
+        }
+        _ => Ok(value),
+    }
+}
+
+pub fn decompress_mget_response(
+    value: redis::Value,
+    manager: &CompressionManager,
+) -> CompressionResult<redis::Value> {
+    use redis::Value;
+
+    match value {
+        Value::Array(values) => {
+            let decompressed_values: Result<Vec<_>, _> = values
+                .into_iter()
+                .map(|v| decompress_single_value_response(v, manager))
+                .collect();
+            Ok(Value::Array(decompressed_values?))
         }
         _ => Ok(value),
     }

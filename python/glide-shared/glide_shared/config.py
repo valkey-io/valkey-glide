@@ -144,6 +144,15 @@ class CompressionConfiguration:
     """
     Represents the compression configuration for automatic compression of values.
 
+    ⚠️ WARNING: This feature is experimental and not recommended for production use.
+
+    Compression is NOT compatible with commands that manipulate string data on the server side:
+    - APPEND, GETRANGE, SETRANGE, STRLEN, LCS
+    - INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY
+    - GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP
+
+    Using these commands with compressed values will result in incorrect behavior or errors.
+
     Attributes:
         enabled (bool): Whether compression is enabled. Defaults to False.
         backend (CompressionBackend): The compression backend to use. Defaults to CompressionBackend.ZSTD.
@@ -635,8 +644,10 @@ class BaseClientConfiguration:
             If not set, connections are established immediately during client creation (equivalent to `False`).
 
         compression (Optional[CompressionConfiguration]): Configuration for automatic compression of values.
+            ⚠️ WARNING: This feature is experimental and not recommended for production use.
             When enabled, the client will automatically compress values for set-type commands and decompress
             values for get-type commands. This can reduce bandwidth usage and storage requirements.
+            Compression is NOT compatible with server-side string manipulation commands (APPEND, GETRANGE, etc.).
             If not set, compression is disabled.
     """
 
