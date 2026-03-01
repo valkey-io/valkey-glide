@@ -72,7 +72,12 @@ from glide_shared.commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
-from glide_shared.config import BackoffStrategy, ProtocolVersion, ServerCredentials
+from glide_shared.config import (
+    BackoffStrategy,
+    NodeAddress,
+    ProtocolVersion,
+    ServerCredentials,
+)
 from glide_shared.constants import (
     OK,
     TEncodable,
@@ -100,6 +105,7 @@ from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClien
 from glide_sync.sync_commands.script import Script
 
 from tests.sync_tests.conftest import create_sync_client
+from tests.test_constants import HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6
 from tests.utils.utils import (
     check_function_list_response,
     check_function_stats_response,
@@ -468,6 +474,28 @@ class TestGlideClients:
             _, status = os.waitpid(pid, 0)
             if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
                 pytest.fail(f"Child process failed with status {status}")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("ip_address", [HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6])
+    def test_connect_with_ip_address_succeeds(
+        self, request, cluster_mode: bool, ip_address: str
+    ):
+        """Test connection with IPv4 and IPv6 addresses."""
+        cluster = pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
+
+        port = cluster.nodes_addr[0].port
+        address = NodeAddress(ip_address, port)
+
+        client = create_sync_client(
+            request=request,
+            cluster_mode=cluster_mode,
+            addresses=[address],
+        )
+
+        result = client.ping()
+        assert result == b"PONG"
+
+        client.close()
 
 
 class TestCommands:

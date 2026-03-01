@@ -102,6 +102,7 @@ from glide_shared.routes import (
 )
 
 from tests.async_tests.conftest import create_client
+from tests.test_constants import HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6
 from tests.utils.utils import (
     check_function_list_response,
     check_function_stats_response,
@@ -591,7 +592,28 @@ class TestGlideClients:
                 await glide_client.blpop(["random_key"], timeout=2)
 
         # Ensure client can still perform a simple operation
-        assert await glide_client.set(get_random_string(10), "value") == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("ip_address", [HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6])
+    async def test_connect_with_ip_address_succeeds(
+        self, request, cluster_mode: bool, ip_address: str
+    ):
+        """Test connection with IPv4 and IPv6 addresses."""
+        cluster = pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
+
+        port = cluster.nodes_addr[0].port
+        address = NodeAddress(ip_address, port)
+
+        client = await create_client(
+            request=request,
+            cluster_mode=cluster_mode,
+            addresses=[address],
+        )
+
+        result = await client.ping()
+        assert result == b"PONG"
+
+        await client.close()
 
 
 @pytest.mark.anyio

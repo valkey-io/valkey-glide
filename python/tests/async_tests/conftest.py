@@ -143,8 +143,8 @@ async def glide_tls_client(
 
 
 async def create_client(
-    request,
-    cluster_mode: bool,
+    request=None,
+    cluster_mode: bool = False,
     credentials: Optional[ServerCredentials] = None,
     database_id: int = 0,
     addresses: Optional[List[NodeAddress]] = None,
@@ -168,6 +168,9 @@ async def create_client(
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
     reconciliation_interval_ms: Optional[int] = None,
+    root_pem_cacerts: Optional[bytes] = None,
+    client_cert_pem: Optional[bytes] = None,
+    client_key_pem: Optional[bytes] = None,
 ) -> Union[GlideClient, GlideClusterClient]:
     config = create_client_config(
         request,
@@ -191,6 +194,9 @@ async def create_client(
         lazy_connect,
         enable_compression,
         reconciliation_interval_ms,
+        root_pem_cacerts=root_pem_cacerts,
+        client_cert_pem=client_cert_pem,
+        client_key_pem=client_key_pem,
     )
     if cluster_mode:
         return await GlideClusterClient.create(config)

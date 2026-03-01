@@ -529,8 +529,8 @@ def delete_acl_username_and_password(client: TAnyGlideClient, username: str):
 
 
 def create_client_config(
-    request,
-    cluster_mode: bool,
+    request=None,
+    cluster_mode: bool = False,
     credentials: Optional[ServerCredentials] = None,
     database_id: int = 0,
     addresses: Optional[List[NodeAddress]] = None,
@@ -554,19 +554,29 @@ def create_client_config(
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
     reconciliation_interval_ms: Optional[int] = None,
+    root_pem_cacerts: Optional[bytes] = None,
+    client_cert_pem: Optional[bytes] = None,
+    client_key_pem: Optional[bytes] = None,
 ) -> Union[GlideClusterClientConfiguration, GlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
     else:
-        use_tls = request.config.getoption("--tls")
-    tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
+        use_tls = request.config.getoption("--tls") if request else False
+    tls_adv_conf = TlsAdvancedConfiguration(
+        use_insecure_tls=tls_insecure,
+        root_pem_cacerts=root_pem_cacerts,
+        client_cert_pem=client_cert_pem,
+        client_key_pem=client_key_pem,
+    )
 
     # Create compression configuration if enabled
     compression_config = None
     if enable_compression is not None:
         use_compression = enable_compression
     else:
-        use_compression = request.config.getoption("--compression")
+        use_compression = (
+            request.config.getoption("--compression") if request else False
+        )
 
     if use_compression:
         compression_config = CompressionConfiguration(
@@ -576,7 +586,9 @@ def create_client_config(
             min_compression_size=64,  # Only compress values >= 64 bytes
         )
     if cluster_mode:
-        valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
+        if valkey_cluster is None:
+            valkey_cluster = pytest.valkey_tls_cluster if use_tls else pytest.valkey_cluster  # type: ignore[attr-defined]
+
         assert type(valkey_cluster) is ValkeyCluster
         k = min(3, len(valkey_cluster.nodes_addr))
         seed_nodes = random.sample(valkey_cluster.nodes_addr, k=k)
@@ -601,7 +613,9 @@ def create_client_config(
             compression=compression_config,
         )
     else:
-        valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
+        if valkey_cluster is None:
+            valkey_cluster = pytest.standalone_tls_cluster if use_tls else pytest.standalone_cluster  # type: ignore[attr-defined]
+
         assert type(valkey_cluster) is ValkeyCluster
         return GlideClientConfiguration(
             addresses=(valkey_cluster.nodes_addr if addresses is None else addresses),
@@ -627,8 +641,8 @@ def create_client_config(
 
 
 def create_sync_client_config(
-    request,
-    cluster_mode: bool,
+    request=None,
+    cluster_mode: bool = False,
     credentials: Optional[ServerCredentials] = None,
     database_id: int = 0,
     addresses: Optional[List[NodeAddress]] = None,
@@ -651,19 +665,29 @@ def create_sync_client_config(
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
     inflight_requests_limit: Optional[int] = None,
+    root_pem_cacerts: Optional[bytes] = None,
+    client_cert_pem: Optional[bytes] = None,
+    client_key_pem: Optional[bytes] = None,
 ) -> Union[SyncGlideClusterClientConfiguration, SyncGlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
     else:
-        use_tls = request.config.getoption("--tls")
-    tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
+        use_tls = request.config.getoption("--tls") if request else False
+    tls_adv_conf = TlsAdvancedConfiguration(
+        use_insecure_tls=tls_insecure,
+        root_pem_cacerts=root_pem_cacerts,
+        client_cert_pem=client_cert_pem,
+        client_key_pem=client_key_pem,
+    )
 
     # Create compression configuration if enabled
     compression_config = None
     if enable_compression is not None:
         use_compression = enable_compression
     else:
-        use_compression = request.config.getoption("--compression")
+        use_compression = (
+            request.config.getoption("--compression") if request else False
+        )
 
     if use_compression:
         compression_config = CompressionConfiguration(
@@ -674,7 +698,8 @@ def create_sync_client_config(
         )
 
     if cluster_mode:
-        valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
+        if valkey_cluster is None:
+            valkey_cluster = pytest.valkey_tls_cluster if use_tls else pytest.valkey_cluster  # type: ignore[attr-defined]
         assert type(valkey_cluster) is ValkeyCluster
         k = min(3, len(valkey_cluster.nodes_addr))
         seed_nodes = random.sample(valkey_cluster.nodes_addr, k=k)
@@ -697,7 +722,8 @@ def create_sync_client_config(
             compression=compression_config,
         )
     else:
-        valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
+        if valkey_cluster is None:
+            valkey_cluster = pytest.standalone_tls_cluster if use_tls else pytest.standalone_cluster  # type: ignore[attr-defined]
         assert type(valkey_cluster) is ValkeyCluster
         return SyncGlideClientConfiguration(
             addresses=(valkey_cluster.nodes_addr if addresses is None else addresses),
@@ -1789,6 +1815,53 @@ async def create_client_with_retry(config, max_retries: int = 3):
             base_delay = 2**i
             jitter = base_delay * random.uniform(-0.25, 0.25)
             time.sleep(base_delay + jitter)
+
+
+def create_sync_client_with_retry(config, max_retries: int = 3):
+    """
+    Create a SyncGlideClient or SyncGlideClusterClient with exponential backoff retry and jitter.
+
+    Args:
+        config: The client configuration (SyncGlideClientConfiguration or SyncGlideClusterClientConfiguration).
+        max_retries: Maximum number of retry attempts (default: 3).
+
+    Returns:
+        SyncGlideClient or SyncGlideClusterClient: The created client instance.
+
+    Raises:
+        Exception: If all retry attempts fail.
+    """
+    import time
+
+    is_cluster = isinstance(config, SyncGlideClusterClientConfiguration)
+    client_class = SyncGlideClusterClient if is_cluster else SyncGlideClient
+
+    for i in range(max_retries):
+        try:
+            return client_class.create(config)
+        except Exception:
+            if i == max_retries - 1:
+                raise
+            # Exponential backoff with jitter (±25%)
+            base_delay = 2**i
+            jitter = base_delay * random.uniform(-0.25, 0.25)
+            time.sleep(base_delay + jitter)
+
+
+async def assert_connected(client: TGlideClient) -> None:
+    """
+    Assert that the client is connected.
+    """
+    result = await client.ping()
+    assert result == b"PONG"
+
+
+def assert_connected_sync(client: TSyncGlideClient) -> None:
+    """
+    Assert that the sync client is connected.
+    """
+    result = client.ping()
+    assert result == b"PONG"
 
 
 class SubscriptionMethod(IntEnum):
