@@ -205,7 +205,7 @@ class TestSyncTls:
         self, request, cluster_mode: bool, protocol: ProtocolVersion, ip_address: str
     ):
         """Test TLS connection with IPv4 and IPv6 addresses."""
-        cluster = pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
+        cluster = pytest.valkey_tls_cluster if cluster_mode else pytest.standalone_tls_cluster  # type: ignore
         port = cluster.nodes_addr[0].port
         address = NodeAddress(ip_address, port)
 
